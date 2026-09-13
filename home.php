@@ -6,6 +6,14 @@
 define("ALLOW_ANONYMOUS",true);
 require_once("common.php");
 require_once("lib/http.php");
+if (isset($_POST['template'])) {
+    resurrection_require_post();
+    $skin = \Resurrection\Http\Input::string($_POST, 'template');
+    if (!preg_match('/\A[A-Za-z0-9_-]+\.htm\z/', $skin) || !is_file('templates/' . $skin)) { http_response_code(400); exit('Invalid skin.'); }
+    setcookie('template', $skin, ['expires' => time() + 3888000, 'httponly' => true, 'samesite' => 'Lax']);
+    $_COOKIE['template'] = $skin;
+}
+
 
 
 if (!isset($session['loggedin'])) $session['loggedin']=false;
@@ -33,12 +41,12 @@ if (getsetting("homenewdaytime", 1)) {
 
 if (getsetting("homenewestplayer", 1)) {
 	$name = "";
-	$newplayer = getsetting("newestplayer", "");
+	$newplayer = (int)getsetting("newestplayer", 0);
 	if ($newplayer != 0) {
 		$sql = "SELECT name FROM " . db_prefix("accounts") . " WHERE acctid='$newplayer'";
 		$result = db_query_cached($sql, "newest");
 		$row = db_fetch_assoc($result);
-		$name = $row['name'];
+		$name = $row['name'] ?? '';
 	} else {
 		$name = $newplayer;
 	}
@@ -108,10 +116,10 @@ $session['message']="";
 output("`c`2Game server running version: `@%s`0`c", $logd_version);
 
 if (getsetting("homeskinselect", 1)) {
-	rawoutput("<form action='home.php' method='POST'>");
+	rawoutput("<form action='home.php' method='POST'>" . resurrection_csrf_field());
 	rawoutput("<table align='center'><tr><td>");
 	$form = array("template"=>"Choose a different display skin:,theme");
-	$prefs['template'] = $_COOKIE['template'];
+	$prefs['template'] = $_COOKIE['template'] ?? '';
 	if ($prefs['template'] == "")
 		$prefs['template'] = getsetting("defaultskin", "jade.htm");
 	require_once("lib/showform.php");

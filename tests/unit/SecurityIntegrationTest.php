@@ -51,6 +51,20 @@ final class SecurityIntegrationTest extends TestCase
         $rows = db_query('SELECT comment FROM moderatedcomments ORDER BY modid DESC LIMIT 1');
         $audit = unserialize(db_fetch_assoc($rows)['comment'], ['allowed_classes' => false]);
         self::assertSame($text, $audit['comment']);
+        $auditRows = db_query('SELECT modid FROM moderatedcomments ORDER BY modid DESC LIMIT 1');
+        $auditId = db_fetch_assoc($auditRows)['modid'];
+        $restore = ['modid' => $auditId, 'csrf_token' => $token];
+        try { resurrection_restore_comment($moderator, $csrf, 'POST', $restore); self::fail('Non-auditor restored.'); }
+        catch (\DomainException $error) { self::assertSame('Comment auditing is not authorized.', $error->getMessage()); }
+        $moderator['user']['superuser'] |= SU_AUDIT_MODERATION;
+        self::assertTrue(resurrection_restore_comment($moderator, $csrf, 'POST', $restore));
+        self::assertFalse(resurrection_restore_comment($moderator, $csrf, 'POST', $restore));
+        self::assertSame([(int)$id], resurrection_comment_ids([$id => '1']));
+        foreach (['1', ['1 OR 1=1' => 1], [-1 => 1]] as $invalid) {
+            try { resurrection_comment_ids($invalid); self::fail('Invalid selection accepted.'); }
+            catch (\InvalidArgumentException $error) { self::assertNotEmpty($error->getMessage()); }
+        }
+
     }
 
     public function testActualModuleInjectionEnforcesStateAndDependencies(): void

@@ -164,6 +164,11 @@ function commentdisplay($intro, $section, $message="Interject your own commentar
 function viewcommentary($section,$message="Interject your own commentary?",$limit=10,$talkline="says",$schema=false) {
  	global $session,$REQUEST_URI,$doublepost, $translation_namespace;
 	global $emptypost;
+    if (!is_string($section) || !preg_match('/\A[A-Za-z0-9_-]{1,20}\z/', $section)) { throw new InvalidArgumentException('Invalid commentary section.'); }
+    if ($section === '__all__' && (empty($session['loggedin']) || !($session['user']['superuser'] & SU_EDIT_COMMENTS))) { throw new DomainException('Comment moderation is not authorized.'); }
+    $sectionWhere = $section === '__all__' ? '1=1' : 'section=?';
+    $sectionParameters = $section === '__all__' ? [] : [$section];
+    $limit = max(1, min(100, (int)$limit));
 
 	rawoutput("<a name='$section'></a>");
 	// Let's add a hook for modules to block commentary sections
@@ -191,10 +196,10 @@ function viewcommentary($section,$message="Interject your own commentary?",$limi
 
 	// Needs to be here because scrolling through the commentary pages, entering a bio, then scrolling again forward
 	// then re-entering another bio will lead to $com being smaller than 0 and this will lead to an SQL error later on.
-	$com=(int)httpget("comscroll");
+	$com=\Resurrection\Http\Input::integer($_GET, 'comscroll');
 	if ($com < 0) $com = 0;
 	$cc = false;
-	if (httpget("comscroll") !==false && (int)$session['lastcom']==$com+1)
+	if (httpget("comscroll") !==false && (int)($session['lastcom'] ?? -1)==$com+1)
 		$cid = (int)$session['lastcommentid'];
 	else
 		$cid = 0;
@@ -207,9 +212,9 @@ function viewcommentary($section,$message="Interject your own commentary?",$limi
 			db_prefix("commentary") . " LEFT JOIN " .
 			db_prefix("accounts") . " ON " .
 			db_prefix("accounts") . ".acctid = " .
-			db_prefix("commentary"). ".author WHERE section='$section' AND " .
+			db_prefix("commentary"). ".author WHERE $sectionWhere AND " .
 			"(".db_prefix("accounts").".locked=0 or ".db_prefix('accounts').".locked is null) AND commentid > '$cid'";
-		$result = db_query($sql);
+		$result = db_query($sql, true, $sectionParameters);
 		$row = db_fetch_assoc($result);
 		$newadded = $row['newadded'];
 	} else {
@@ -230,14 +235,14 @@ function viewcommentary($section,$message="Interject your own commentary?",$limi
 			db_prefix("clans") . " ON " .
 			db_prefix("clans") . ".clanid=" .
 			db_prefix("accounts") .
-			".clanid WHERE section = '$section' AND " .
+			".clanid WHERE $sectionWhere AND " .
 			"( ".db_prefix("accounts") . ".locked=0 OR ".db_prefix("accounts") .".locked is null ) ".
 			"ORDER BY commentid DESC LIMIT " .
 			($com*$limit).",$limit";
 		if ($com==0 && strstr( $_SERVER['REQUEST_URI'], "/moderate.php" ) !== $_SERVER['REQUEST_URI'] )
-			$result = db_query_cached($sql,"comments-{$section}");
+			$result = db_query($sql, true, $sectionParameters);
 		else
-			$result = db_query($sql);
+			$result = db_query($sql, true, $sectionParameters);
 		while($row = db_fetch_assoc($result)) $commentbuffer[] = $row;
 	} else {
 		$sql = "SELECT " . db_prefix("commentary") . ".*, " .
@@ -251,11 +256,11 @@ function viewcommentary($section,$message="Interject your own commentary?",$limi
 			db_prefix("commentary"). ".author LEFT JOIN " .
 			db_prefix("clans") . " ON " . db_prefix("clans") . ".clanid=" .
 			db_prefix("accounts") .
-			".clanid WHERE section = '$section' AND " .
+			".clanid WHERE $sectionWhere AND " .
 			"( ".db_prefix("accounts") . ".locked=0 OR ".db_prefix("accounts") .".locked is null ) ".
 			"AND commentid > '$cid' " .
 			"ORDER BY commentid ASC LIMIT $limit";
-		$result = db_query($sql);
+		$result = db_query($sql, true, $sectionParameters);
 		while ($row = db_fetch_assoc($result)) $commentbuffer[] = $row;
 		$commentbuffer = array_reverse($commentbuffer);
 	}
@@ -408,6 +413,7 @@ function viewcommentary($section,$message="Interject your own commentary?",$limi
 		$mod_reason_desc = htmlentities(translate_inline("Banned for comments you posted."), ENT_COMPAT, getsetting("charset", "ISO-8859-1"));
 
 		output_notl("<form action='$scriptname?op=commentdelete&return=".URLEncode($_SERVER['REQUEST_URI'])."' method='POST'>",true);
+		rawoutput(resurrection_csrf_field());
 		output_notl("<input type='submit' class='button' value=\"$mod_Del1\">",true);
 		output_notl("<input type='submit' class='button' name='delnban' value=\"$mod_Del2\" onClick=\"return confirm('$mod_Del_confirm');\">",true);
 		output_notl("`n$mod_reason <input name='reason0' size='40' value=\"$mod_reason_desc\" onChange=\"document.getElementById('reason').value=this.value;\">",true);
@@ -487,8 +493,8 @@ function viewcommentary($section,$message="Interject your own commentary?",$limi
 	$next = translate_inline("Next &gt;");
 	$lastu = translate_inline("Last Page &gt;&gt;");
 	if ($rowcount>=$limit || $cid>0){
-		$sql = "SELECT count(commentid) AS c FROM " . db_prefix("commentary") . " WHERE section='$section' AND postdate > '{$session['user']['recentcomments']}'";
-		$r = db_query($sql);
+		$sql = "SELECT count(commentid) AS c FROM " . db_prefix("commentary") . " WHERE $sectionWhere AND postdate > ?";
+		$r = db_query($sql, true, [...$sectionParameters, $session['user']['recentcomments'] ?? '1970-01-01 00:00:00']);
 		$val = db_fetch_assoc($r);
 		$val = round($val['c'] / $limit + 0.5,0) - 1;
 		if ($val>0){
@@ -564,8 +570,8 @@ function talkform($section,$talkline,$limit=10,$schema=false){
 
 	$counttoday=0;
 	if (substr($section,0,5)!="clan-"){
-		$sql = "SELECT author FROM " . db_prefix("commentary") . " WHERE section='$section' AND postdate>'".date("Y-m-d 00:00:00")."' ORDER BY commentid DESC LIMIT $limit";
-		$result = db_query($sql);
+		$sql = "SELECT author FROM " . db_prefix("commentary") . " WHERE section=? AND postdate>? ORDER BY commentid DESC LIMIT " . max(1, min(100, (int)$limit)) . "";
+		$result = db_query($sql, true, [$section, date("Y-m-d 00:00:00")]);
 		while ($row=db_fetch_assoc($result)){
 			if ($row['author']==$session['user']['acctid']) $counttoday++;
 		}

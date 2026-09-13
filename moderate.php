@@ -18,7 +18,7 @@ superusernav();
 
 addnav("Other");
 addnav("Commentary Overview","moderate.php");
-addnav("Reset Seen Comments","moderate.php?seen=".rawurlencode(date("Y-m-d H:i:s")));
+
 addnav("B?Player Bios","bios.php");
 if ($session['user']['superuser'] & SU_AUDIT_MODERATION){
 	addnav("Audit Moderation","moderate.php?op=audit");
@@ -31,80 +31,36 @@ addnav("Clan Halls");
 
 $op = httpget("op");
 if ($op=="commentdelete"){
-	$comment = httppost('comment');
-	if (httppost('delnban')>''){
-		$sql = "SELECT DISTINCT uniqueid,author FROM " . db_prefix("commentary") . " INNER JOIN " . db_prefix("accounts") . " ON acctid=author WHERE commentid IN ('" . join("','",array_keys($comment)) . "')";
-		$result = db_query($sql);
-		$untildate = date("Y-m-d H:i:s",strtotime("+3 days"));
-		$reason = httppost("reason");
-		$reason0 = httppost("reason0");
-		$default = "Banned for comments you posted.";
-		if ($reason0 != $reason && $reason0 != $default) $reason = $reason0;
-		if ($reason=="") $reason = $default;
-		while ($row = db_fetch_assoc($result)){
-			$sql = "SELECT * FROM " . db_prefix("bans") . " WHERE uniqueid = '{$row['uniqueid']}'";
-			$result2 = db_query($sql);
-			$sql = "INSERT INTO " . db_prefix("bans") . " (uniqueid,banexpire,banreason,banner) VALUES ('{$row['uniqueid']}','$untildate','$reason','".addslashes($session['user']['name'])."')";
-			$sql2 = "UPDATE " . db_prefix("accounts") . " SET loggedin=0 WHERE acctid={$row['author']}";
-			if (db_num_rows($result2)>0){
-				$row2 = db_fetch_assoc($result2);
-				if ($row2['banexpire'] < $untildate){
-					//don't enter a new ban if a longer lasting one is
-					//already here.
-					db_query($sql);
-					db_query($sql2);
-				}
-			}else{
-				db_query($sql);
-				db_query($sql2);
-			}
-		}
-	}
-	if (!isset($comment) || !is_array($comment)) $comment = array();
-	$sql = "SELECT " .
-		db_prefix("commentary").".*,".db_prefix("accounts").".name,".
-		db_prefix("accounts").".login, ".db_prefix("accounts").".clanrank,".
-		db_prefix("clans").".clanshort FROM ".db_prefix("commentary").
-		" INNER JOIN ".db_prefix("accounts")." ON ".
-		db_prefix("accounts").".acctid = " . db_prefix("commentary").
-		".author LEFT JOIN ".db_prefix("clans")." ON ".
-		db_prefix("clans").".clanid=".db_prefix("accounts").
-		".clanid WHERE commentid IN ('".join("','",array_keys($comment))."')";
-	$result = db_query($sql);
-	$invalsections = array();
-	while ($row = db_fetch_assoc($result)){
-		$sql = "INSERT LOW_PRIORITY INTO ".db_prefix("moderatedcomments").
-			" (moderator,moddate,comment) VALUES ('{$session['user']['acctid']}','".date("Y-m-d H:i:s")."','".addslashes(serialize($row))."')";
-		db_query($sql);
-		$invalsections[$row['section']] = 1;
-	}
-	$sql = "DELETE FROM " . db_prefix("commentary") . " WHERE commentid IN ('" . join("','",array_keys($comment)) . "')";
-	db_query($sql);
-	$return = httpget('return');
-	$return = cmd_sanitize($return);
-	$return = substr($return,strrpos($return,"/")+1);
-	if (strpos($return,"?")===false && strpos($return,"&")!==false){
-		$x = strpos($return,"&");
-		$return = substr($return,0,$x-1)."?".substr($return,$x+1);
-	}
-	foreach($invalsections as $key=>$dummy) {
-		invalidatedatacache("comments-$key");
-	}
-	//update moderation cache
-	invalidatedatacache("comments-or11");
-	redirect($return);
-}
-
-$seen = httpget("seen");
-if ($seen>""){
-	$session['user']['recentcomments']=$seen;
+    resurrection_require_post();
+    try {
+        $ids = resurrection_comment_ids($_POST['comment'] ?? []);
+        if (!empty($_POST['delnban'])) {
+            check_su_access(SU_EDIT_USERS);
+            $reason = \Resurrection\Http\Input::string($_POST, 'reason', 'Banned for comments you posted.');
+            if (strlen($reason) > 255) { throw new InvalidArgumentException('Invalid reason.'); }
+            foreach ($ids as $id) {
+                $rows = db_query('SELECT a.uniqueid,a.acctid FROM ' . db_prefix('commentary') . ' c JOIN ' . db_prefix('accounts') . ' a ON a.acctid=c.author WHERE c.commentid=?', true, [$id]);
+                $account = db_fetch_assoc($rows);
+                if ($account && $account['uniqueid'] !== '') {
+                    db_query('INSERT INTO ' . db_prefix('bans') . ' (uniqueid,banexpire,banreason,banner) VALUES (?,?,?,?)', true,
+                        [$account['uniqueid'], date('Y-m-d H:i:s', strtotime('+3 days')), $reason, $session['user']['name']]);
+                    db_query('UPDATE ' . db_prefix('accounts') . ' SET loggedin=0 WHERE acctid=?', true, [(int)$account['acctid']]);
+                }
+            }
+        }
+        foreach ($ids as $id) {
+            resurrection_delete_comment($session, $_SESSION, 'POST', ['removecomment' => (string)$id, 'csrf_token' => $_POST['csrf_token']]);
+        }
+    } catch (InvalidArgumentException | DomainException $error) { http_response_code(400); exit('Invalid moderation request.'); }
+    redirect('moderate.php');
 }
 
 page_header("Comment Moderation");
 
 
 if ($op==""){
-	$area = httpget('area');
+	$area = \Resurrection\Http\Input::string($_GET, 'area');
+    if ($area !== '' && !preg_match('/\A[A-Za-z0-9_-]{1,20}\z/', $area)) { http_response_code(400); exit('Invalid section.'); }
 	$link = "moderate.php" . ($area ? "?area=$area" : "");
 	$refresh = translate_inline("Refresh");
 	rawoutput("<form action='$link' method='POST'>");
@@ -113,35 +69,23 @@ if ($op==""){
 	addnav("", "$link");
 	if ($area==""){
 		talkform("X","says");
-		commentdisplay("", "' or '1'='1","X",100);
+		commentdisplay("", "__all__","X",100);
 	}else{
 		commentdisplay("", $area,"X",100);
 		talkform($area,"says");
 	}
 }elseif ($op=="audit"){
+	check_su_access(SU_AUDIT_MODERATION);
 	$subop = httpget("subop");
-	if ($subop=="undelete") {
-		$unkeys = httppost("mod");
-		if ($unkeys && is_array($unkeys)) {
-			$sql = "SELECT * FROM ".db_prefix("moderatedcomments")." WHERE modid IN ('".join("','",array_keys($unkeys))."')";
-			$result = db_query($sql);
-			while ($row = db_fetch_assoc($result)){
-				$comment = unserialize($row['comment']);
-				$id = addslashes($comment['commentid']);
-				$postdate = addslashes($comment['postdate']);
-				$section = addslashes($comment['section']);
-				$author = addslashes($comment['author']);
-				$comment = addslashes($comment['comment']);
-				$sql = "INSERT LOW_PRIORITY INTO ".db_prefix("commentary")." (commentid,postdate,section,author,comment) VALUES ('$id','$postdate','$section','$author','$comment')";
-				db_query($sql);
-				invalidatedatacache("comments-$section");
-			}
-			$sql = "DELETE FROM ".db_prefix("moderatedcomments")." WHERE modid IN ('".join("','",array_keys($unkeys))."')";
-			db_query($sql);
-		} else {
-			output("No items selected to undelete -- Please try again`n`n");
-		}
-	}
+    if ($subop=="undelete") {
+        resurrection_require_post();
+        try {
+            foreach (resurrection_comment_ids($_POST['mod'] ?? []) as $id) {
+                resurrection_restore_comment($session, $_SESSION, 'POST', ['modid' => (string)$id, 'csrf_token' => $_POST['csrf_token']]);
+            }
+        } catch (InvalidArgumentException | DomainException $error) { http_response_code(400); exit('Invalid moderation request.'); }
+    }
+
 	$sql = "SELECT DISTINCT acctid, name FROM ".db_prefix("accounts").
 		" INNER JOIN ".db_prefix("moderatedcomments").
 		" ON acctid=moderator ORDER BY name";
@@ -163,19 +107,19 @@ if ($op==""){
 	$when = translate_inline("When");
 	$com = translate_inline("Comment");
 	$unmod = translate_inline("Unmoderate");
-	rawoutput("<form action='moderate.php?op=audit&subop=undelete' method='POST'>");
+	rawoutput("<form action='moderate.php?op=audit&subop=undelete' method='POST'>" . resurrection_csrf_field());
 	addnav("","moderate.php?op=audit&subop=undelete");
 	rawoutput("<table border='0' cellpadding='2' cellspacing='0'>");
 	rawoutput("<tr class='trhead'><td>$ops</td><td>$mod</td><td>$when</td><td>$com</td></tr>");
 	$limit = "75";
 	$where = "1=1 ";
-	$moderator = httpget("moderator");
-	if ($moderator>"") $where.="AND moderator=$moderator ";
+	$moderator = \Resurrection\Http\Input::integer($_GET, 'moderator');
+	if ($moderator > 0) $where.='AND moderator=? ';
 	$sql = "SELECT name, ".db_prefix("moderatedcomments").
 		".* FROM ".db_prefix("moderatedcomments")." LEFT JOIN ".
 		db_prefix("accounts").
 		" ON acctid=moderator WHERE $where ORDER BY moddate DESC LIMIT $limit";
-	$result = db_query($sql);
+	$result = db_query($sql, true, $moderator > 0 ? [$moderator] : []);
 	$i=0;
 	$clanrankcolors=array("`!","`#","`^","`&");
 	while ($row = db_fetch_assoc($result)){
@@ -189,14 +133,14 @@ if ($op==""){
 		output_notl("%s", $row['moddate']);
 		rawoutput("</td>");
 		rawoutput("<td>");
-		$comment = unserialize($row['comment']);
+		$comment = unserialize($row['comment'], ['allowed_classes' => false]);
 		output_notl("`0(%s)", $comment['section']);
 
-		if ($comment['clanrank']>0)
+		if (($comment['clanrank'] ?? 0)>0)
 			output_notl("%s<%s%s>`0", $clanrankcolors[ceil($comment['clanrank']/10)],
 					$comment['clanshort'],
 					$clanrankcolors[ceil($comment['clanrank']/10)]);
-		output_notl("%s", $comment['name']);
+		output_notl("%s", $comment['name'] ?? 'Unknown');
 		output_notl("-");
 		output_notl("%s", comment_sanitize($comment['comment']));
 		rawoutput("</td>");

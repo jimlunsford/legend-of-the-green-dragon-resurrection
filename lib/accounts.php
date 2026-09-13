@@ -61,3 +61,13 @@ function resurrection_authenticate(string $login, #[\SensitiveParameter] mixed $
     }
     return $row;
 }
+
+/** Self-service changes require the current password; the caller rotates its session. */
+function resurrection_change_password(int $id, #[\SensitiveParameter] string $current, #[\SensitiveParameter] string $next): void {
+    $rows = db_query('SELECT password FROM ' . db_prefix('accounts') . ' WHERE acctid=?', true, [$id]);
+    $account = db_fetch_assoc($rows);
+    if (!$account || !\Resurrection\Security\Passwords::verify($current, $account['password'])) { throw new DomainException('Password change rejected.'); }
+    $hash = \Resurrection\Security\Passwords::hash($next);
+    db_query('UPDATE ' . db_prefix('accounts') . ' SET password=? WHERE acctid=? AND password=?', true, [$hash, $id, $account['password']]);
+    if (db_affected_rows() !== 1) { throw new DomainException('Password change rejected.'); }
+}

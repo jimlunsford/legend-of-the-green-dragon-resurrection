@@ -132,9 +132,9 @@ function page_footer($saveuser=true){
 	$row = db_fetch_assoc($result);
 	db_free_result($result);
 	$headscript = "";
-	if (isset($session['user']['lastmotd']) &&
+	if ($row && isset($session['user']['lastmotd']) &&
 			($row['motddate']>$session['user']['lastmotd']) &&
-			(!isset($nopopup[$SCRIPT_NAME]) || $nopopups[$SCRIPT_NAME]!=1) &&
+			(!isset($nopopups[$SCRIPT_NAME]) || $nopopups[$SCRIPT_NAME]!=1) &&
 			$session['user']['loggedin']){
 		$headscript.=popup("motd.php");
 		$session['needtoviewmotd']=true;
