@@ -546,19 +546,14 @@ function get_module_setting($name,$module=false){
 }
 
 function set_module_setting($name,$value,$module=false){
-	if ($name == "showFormTabIndex") return true;
-	global $module_settings,$mostrecentmodule;
-	if ($module === false) $module = $mostrecentmodule;
-	load_module_settings($module);
-	if (isset($module_settings[$module][$name])){
-		$sql = "UPDATE " . db_prefix("module_settings") . " SET value='".addslashes($value)."' WHERE modulename='$module' AND setting='".addslashes($name)."'";
-		db_query($sql);
-	}else{
-		$sql = "INSERT INTO " . db_prefix("module_settings") . " (modulename,setting,value) VALUES ('$module','".addslashes($name)."','".addslashes($value)."')";
-		db_query($sql);
-	}
-	invalidatedatacache("modulesettings-$module");
-	$module_settings[$module][$name] = $value;
+    if ($name === 'showFormTabIndex') return true;
+    global $module_settings,$mostrecentmodule;
+    if ($module === false) $module = $mostrecentmodule;
+    load_module_settings($module);
+    db_query('INSERT INTO ' . db_prefix('module_settings') . ' (modulename,setting,value) VALUES (?,?,?) ON DUPLICATE KEY UPDATE value=?', true,
+        [$module, $name, (string)$value, (string)$value]);
+    invalidatedatacache('modulesettings-' . $module);
+    $module_settings[$module][$name] = $value;
 }
 
 function increment_module_setting($name, $value=1, $module=false){
@@ -588,16 +583,14 @@ function clear_module_settings($module=false){
 }
 
 function load_module_settings($module){
-	global $module_settings;
-	if (!isset($module_settings[$module])){
-		$module_settings[$module] = array();
-		$sql = "SELECT * FROM " . db_prefix("module_settings") . " WHERE modulename='$module'";
-		$result = db_query_cached($sql,"modulesettings-$module");
-		while ($row = db_fetch_assoc($result)){
-			$module_settings[$module][$row['setting']] = $row['value'];
-		}//end while
-	}//end if
-}//end function
+    global $module_settings;
+    if (!is_string($module) || !preg_match('/\A[A-Za-z][A-Za-z0-9_]*\z/', $module)) { throw new InvalidArgumentException('Invalid module name.'); }
+    if (!isset($module_settings[$module])) {
+        $module_settings[$module] = [];
+        $rows = db_query('SELECT setting,value FROM ' . db_prefix('module_settings') . ' WHERE modulename=?', true, [$module]);
+        foreach ($rows as $row) { $module_settings[$module][$row['setting']] = $row['value']; }
+    }
+}
 
 
 function module_delete_objprefs($objtype, $objid)
@@ -724,13 +717,8 @@ function set_module_pref($name,$value,$module=false,$user=false){
 		return;
 	}
 
-	if (isset($module_prefs[$uid][$module][$name])){
-		$sql = "UPDATE " . db_prefix("module_userprefs") . " SET value='".addslashes($value)."' WHERE modulename='$module' AND setting='$name' AND userid='$uid'";
-		db_query($sql);
-	}else{
-		$sql = "INSERT INTO " . db_prefix("module_userprefs"). " (modulename,setting,userid,value) VALUES ('$module','$name','$uid','".addslashes($value)."')";
-		db_query($sql);
-	}
+    db_query('INSERT INTO ' . db_prefix('module_userprefs') . ' (modulename,setting,userid,value) VALUES (?,?,?,?) ON DUPLICATE KEY UPDATE value=?', true,
+        [$module, $name, (int)$uid, (string)$value, (string)$value]);
 	$module_prefs[$uid][$module][$name] = $value;
 }
 
@@ -781,19 +769,16 @@ function clear_module_pref($name,$module=false,$user=false){
 	unset($module_prefs[$uid][$module][$name]);
 }
 
-function load_module_prefs($module, $user=false){
-	global $module_prefs,$session;
-	if ($user===false) $user = $session['user']['acctid'];
-	if (!isset($module_prefs[$user])) $module_prefs[$user] = array();
-	if (!isset($module_prefs[$user][$module])){
-		$module_prefs[$user][$module] = array();
-		$sql = "SELECT setting,value FROM " . db_prefix("module_userprefs") . " WHERE modulename='$module' AND userid='$user'";
-		$result = db_query($sql);
-		while ($row = db_fetch_assoc($result)){
-			$module_prefs[$user][$module][$row['setting']] = $row['value'];
-		}//end while
-	}//end if
-}//end function
+function load_module_prefs($module,$user=false){
+    global $module_prefs,$session;
+    if ($user === false) $user = $session['user']['acctid'];
+    if (!is_string($module) || !preg_match('/\A[A-Za-z][A-Za-z0-9_]*\z/', $module)) { throw new InvalidArgumentException('Invalid module name.'); }
+    if (!isset($module_prefs[$user][$module])) {
+        $module_prefs[$user][$module] = [];
+        $rows = db_query('SELECT setting,value FROM ' . db_prefix('module_userprefs') . ' WHERE modulename=? AND userid=?', true, [$module, (int)$user]);
+        foreach ($rows as $row) { $module_prefs[$user][$module][$row['setting']] = $row['value']; }
+    }
+}
 
 function get_module_info($shortname){
 	global $mostrecentmodule;

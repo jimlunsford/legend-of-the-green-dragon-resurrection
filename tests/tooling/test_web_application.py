@@ -185,6 +185,20 @@ class WebApplicationTests(unittest.TestCase):
         status, _, _ = request(action, {'csrf_token': fields['csrf_token'], 'removecomment': rows[0]['commentid']})
         self.assertEqual(403, status)
         self.assertEqual(1, len(self.query('SELECT commentid FROM commentary WHERE commentid=?', [rows[0]['commentid']])))
+        # Grant only the documented moderator bit in this disposable fixture.
+        self.query('UPDATE accounts SET superuser=16 WHERE login=?', ['WebPlayer'])
+        before_privilege_change = session_id()
+        status, _, _ = request(action, {'csrf_token': fields['csrf_token'], 'removecomment': rows[0]['commentid']})
+        self.assertEqual(403, status)  # privilege refresh rotated the old CSRF token
+        self.assertNotEqual(before_privilege_change, session_id())
+        status, _, body = request(action)
+        self.assertEqual(200, status)
+        action, fields = comment_form(body)
+        status, _, body = request(action, {'csrf_token': fields['csrf_token'], 'removecomment': rows[0]['commentid']})
+        self.assertEqual(200, status)
+        self.assertEqual([], self.query('SELECT commentid FROM commentary WHERE commentid=?', [rows[0]['commentid']]))
+        authenticated_id = session_id()
+
 
         status, _, body = request('login.php?op=logout')
         self.assertEqual(200, status, headers.get('Location', 'Unexpected HTTP status'))

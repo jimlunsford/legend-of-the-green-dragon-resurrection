@@ -16,7 +16,7 @@ function translator_setup(){
 	}elseif(isset($_COOKIE['language'])){
 		$language = $_COOKIE['language'];
 	}
-	if ($language=="") {
+	if (!is_string($language) || !preg_match("/\\A[a-z]{2,8}\\z/i", $language)) {
 		$language=getsetting("defaultlanguage","en");
 	}
 

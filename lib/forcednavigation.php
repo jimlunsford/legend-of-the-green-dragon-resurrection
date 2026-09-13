@@ -48,6 +48,7 @@ function do_forced_nav($anonymous,$overrideforced){
 		}
 	}else{
 		if (!$anonymous){
+            translator_setup();
 			$session['message']=translate_inline("You are not logged in, this may be because your session timed out.","login");
 			redirect("index.php?op=timeout","Not logged in: $REQUEST_URI");
 		}
