@@ -325,8 +325,9 @@ function resurrectionhttpfixture_run() { echo 'fixture-executed'; exit; }
         # Lifecycle/cache transitions are tested through the real API in PHPUnit.
         self.query('UPDATE modules SET active=1')
         try:
-            status, _, body = request('village.php')
-            self.assertEqual(200, status)
+            village_action, _ = comment_form(body)
+            status, headers, body = request(village_action)
+            self.assertEqual(200, status, headers.get('Location', 'Village render failed'))
             status, _, body = request(issued_link(body, 'inn.php'))
             self.assertEqual(200, status)
             for module in ['dag', 'lovers', 'sethsong']:

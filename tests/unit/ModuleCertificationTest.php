@@ -13,7 +13,7 @@ final class ModuleCertificationTest extends TestCase
         self::assertSame('resurrection_test', getenv('RESURRECTION_TEST_DB_NAME'));
         self::assertTrue(db_connect(getenv('RESURRECTION_TEST_DB_HOST'), getenv('RESURRECTION_TEST_DB_USER'), getenv('RESURRECTION_TEST_DB_PASSWORD')));
         self::assertTrue(db_select_db('resurrection_test'));
-        foreach (['modules','output','translator','sanitize','holiday_texts','http','datetime','e_rand','buffs','tempstat','pageparts','debuglog','addnews'] as $library) require_once 'lib/' . $library . '.php';
+        foreach (['modules','output','translator','sanitize','holiday_texts','http','datetime','e_rand','buffs','tempstat','pageparts','debuglog','addnews','arrayutil'] as $library) require_once 'lib/' . $library . '.php';
         $GLOBALS['DB_PREFIX'] = '';
         $GLOBALS['DB_USEDATACACHE'] = 0;
         $GLOBALS['settings'] = null;
@@ -32,6 +32,7 @@ final class ModuleCertificationTest extends TestCase
         $GLOBALS['resline'] = '';
         $GLOBALS['navsection'] = '';
         $GLOBALS['output'] = '';
+        $GLOBALS['companions'] = [];
         $_GET = [];
         $_SESSION = [];
         $_POST = ['csrf_token'=>Csrf::token($_SESSION)];
@@ -102,6 +103,9 @@ final class ModuleCertificationTest extends TestCase
         try {
             self::assertSame(['Dwarf'=>'Dwarf','Elf'=>'Elf','Human'=>'Human','Troll'=>'Troll'], modulehook('racenames', []));
             self::assertSame(['DA'=>'specialtydarkarts','MP'=>'specialtymysticpower','TS'=>'specialtythiefskills'], modulehook('specialtymodules', []));
+            $GLOBALS['session']['user']['specialty'] = '';
+            modulehook('choose-specialty', []);
+            foreach (['DA','MP','TS'] as $spec) self::assertStringContainsString('setspecialty=' . $spec, $GLOBALS['output']);
             foreach (['DA'=>'specialtydarkarts','MP'=>'specialtymysticpower','TS'=>'specialtythiefskills'] as $spec=>$module) {
                 $GLOBALS['session']['user']['specialty'] = $spec;
                 set_module_pref('skill', 2, $module);
@@ -117,6 +121,17 @@ final class ModuleCertificationTest extends TestCase
                     $_GET = ['skill'=>$spec, 'l'=>$invalid];
                     modulehook('apply-specialties', [], false, $module);
                     self::assertSame(2, get_module_pref('uses', $module));
+                }
+                foreach (['1','2','3','5'] as $level) {
+                    set_module_pref('uses', 10, $module);
+                    $_GET = ['skill'=>$spec, 'l'=>$level];
+                    modulehook('apply-specialties', [], false, $module);
+                    self::assertSame(10 - (int)$level, get_module_pref('uses', $module));
+                    if ($spec === 'DA' && $level === '1') {
+                        self::assertGreaterThan(0, $GLOBALS['companions']['skeleton_warrior']['hitpoints']);
+                    } else {
+                        self::assertArrayHasKey(strtolower($spec) . $level, $GLOBALS['session']['bufflist']);
+                    }
                 }
                 $_GET = [];
                 modulehook('dragonkill', [], false, $module);
@@ -142,6 +157,10 @@ final class ModuleCertificationTest extends TestCase
                 self::assertSame(1.3, $GLOBALS['session']['bufflist']['racialbenefit'][$field]);
                 self::assertSame(1, $GLOBALS['session']['bufflist']['racialbenefit']['allowinpvp']);
                 self::assertSame(1, $GLOBALS['session']['bufflist']['racialbenefit']['allowintrain']);
+                $pvpField = $race === 'Elf' ? 'creaturedefense' : 'creatureattack';
+                self::assertSame(13.0, modulehook('pvpadjust', ['race'=>$race, 'creaturelevel'=>10, $pvpField=>10], false, $module)[$pvpField]);
+                $stat = $race === 'Elf' ? 'defense' : 'attack';
+                self::assertSame(13.0, modulehook('adjuststats', ['race'=>$race, 'level'=>10, $stat=>10], false, $module)[$stat]);
             }
             $GLOBALS['session']['user']['race'] = 'Human';
             $GLOBALS['session']['user']['turns'] = 10;
@@ -151,6 +170,9 @@ final class ModuleCertificationTest extends TestCase
             self::assertSame(120.0, modulehook('creatureencounter', ['creaturegold'=>100], false, 'racedwarf')['creaturegold']);
             foreach (['Dwarf'=>'racedwarf','Elf'=>'raceelf','Human'=>'racehuman','Troll'=>'racetroll'] as $race=>$module) {
                 $GLOBALS['session']['user']['race'] = $race;
+                $GLOBALS['output'] = '';
+                modulehook('chooserace', [], false, $module);
+                self::assertStringContainsString('setrace=' . $race, $GLOBALS['output']);
                 modulehook('setrace', [], false, $module);
                 $old = get_module_setting('villagename', $module);
                 $new = "O'Reilly \\ village 🐉";
