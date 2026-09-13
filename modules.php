@@ -98,6 +98,7 @@ foreach ($seencats as $cat=>$count) {
 }
 
 $cat = \Resurrection\Http\Input::string($_GET, 'cat');
+if ($cat !== '' && !isset($seencats[$cat])) { $cat = ''; }
 $catHtml = htmlspecialchars($cat, ENT_QUOTES, 'UTF-8');
 
 if ($op==""){

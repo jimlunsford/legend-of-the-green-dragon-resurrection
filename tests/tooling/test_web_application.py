@@ -1,5 +1,6 @@
 """Real loopback application requests against the preceding clean CI install."""
 import base64
+import html
 import http.cookiejar
 import json
 import os
@@ -95,22 +96,27 @@ class WebApplicationTests(unittest.TestCase):
             match = re.search(r'name=[\'"]csrf_token[\'"] value=[\'"]([a-f0-9]{64})', body)
             self.assertIsNotNone(match, body[:500])
             return match.group(1)
+        def issued_link(body, prefix):
+            links = re.findall(r'href=[\'"]([^\'"]+)', body)
+            found = next((html.unescape(link) for link in links if link.startswith(prefix)), None)
+            self.assertIsNotNone(found, 'Missing issued navigation: ' + prefix)
+            return found
         def session_id():
             return next(c.value for c in jar if c.name == 'PHPSESSID')
 
         status, headers, body = request('home.php', extra_headers={'Cookie': 'PHPSESSID=attackerchosenid1234567890123456'})
-        self.assertEqual(200, status)
+        self.assertEqual(200, status, headers.get('Location', 'Unexpected HTTP status'))
         initial_id = session_id()
         self.assertNotEqual('attackerchosenid1234567890123456', initial_id)
         self.assertIn('HttpOnly', headers.get('Set-Cookie', ''))
         self.assertIn('SameSite=Lax', headers.get('Set-Cookie', ''))
         status, _, body = request('create.php')
-        self.assertEqual(200, status)
+        self.assertEqual(200, status, headers.get('Location', 'Unexpected HTTP status'))
         csrf = token(body)
         password = "Synthetic web O'Reilly \\ password"
         status, _, body = request('create.php?op=create', {'csrf_token': csrf, 'name': 'WebPlayer',
                                     'pass1': password, 'pass2': password, 'email': 'web@example.invalid', 'sex': '0'})
-        self.assertEqual(200, status)
+        self.assertEqual(200, status, headers.get('Location', 'Unexpected HTTP status'))
         self.assertIn('Your account was created', body)
         self.assertNotIn(password, body)
         stored_hash = self.query('SELECT password FROM accounts WHERE login=?', ['WebPlayer'])[0]['password']
@@ -138,17 +144,17 @@ class WebApplicationTests(unittest.TestCase):
         # fallback choices when no races or specialties have been activated.
         if status in (302, 303) and headers['Location'] == 'newday.php':
             status, _, body = request('newday.php')
-            self.assertEqual(200, status)
+            self.assertEqual(200, status, headers.get('Location', 'Unexpected HTTP status'))
             for _ in range(3):
                 if 'No Races Installed' not in body and 'No Specialties Installed' not in body:
                     break
-                status, _, body = request('newday.php?continue=1')
-                self.assertEqual(200, status)
-            status, _, body = request('village.php')
-        self.assertEqual(200, status)
+                status, headers, body = request(issued_link(body, 'newday.php?continue=1'))
+                self.assertEqual(200, status, headers.get('Location', 'Unexpected HTTP status'))
+            status, headers, body = request(issued_link(body, 'village.php'))
+        self.assertEqual(200, status, headers.get('Location', 'Unexpected HTTP status'))
         self.assertIn('WebPlayer', body)
         status, _, body = request('login.php?op=logout')
-        self.assertEqual(200, status)
+        self.assertEqual(200, status, headers.get('Location', 'Unexpected HTTP status'))
         status, headers, _ = request('login.php?op=logout', {'csrf_token': token(body)})
         self.assertEqual(303, status)
         self.assertFalse(any(c.name == 'PHPSESSID' for c in jar))

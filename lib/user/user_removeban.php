@@ -24,17 +24,16 @@ if ($subop=="xml"){
 	echo "</xml>";
 	exit();
 }
-	db_query("DELETE FROM " . db_prefix("bans") . " WHERE banexpire < \"".date("Y-m-d")."\" AND banexpire>'0000-00-00'");
 $duration =  httpget("duration");
 if ($duration=="") {
-	$since = " WHERE banexpire <= '".date("Y-m-d H:i:s",strtotime("+2 weeks"))."' AND banexpire > '0000-00-00'";
+	$since = " WHERE banexpire <= '".date("Y-m-d H:i:s",strtotime("+2 weeks"))."' AND banexpire IS NOT NULL";
 		output("`bShowing bans that will expire within 2 weeks.`b`n`n");
 }else{
 	if ($duration=="forever") {
 		$since="";
 		output("`bShowing all bans`b`n`n");
 	}else{
-		$since = " WHERE banexpire <= '".date("Y-m-d H:i:s",strtotime("+".$duration))."' AND banexpire > '0000-00-00'";
+		$since = " WHERE banexpire <= '".date("Y-m-d H:i:s",strtotime("+".$duration))."' AND banexpire IS NOT NULL";
 		output("`bShowing bans that will expire within %s.`b`n`n",$duration);
 	}
 }
@@ -91,10 +90,12 @@ while ($row = db_fetch_assoc($result)) {
 	$liftban = translate_inline("Lift&nbsp;ban");
 	$showuser = translate_inline("Click&nbsp;to&nbsp;show&nbsp;users");
 	rawoutput("<tr class='".($i%2?"trlight":"trdark")."'>");
-	rawoutput("<td><a href='user.php?op=delban&ipfilter=".URLEncode($row['ipfilter'])."&uniqueid=".URLEncode($row['uniqueid'])."'>");
-	output_notl("%s", $liftban, true);
-	rawoutput("</a>");
-	addnav("","user.php?op=delban&ipfilter=".URLEncode($row['ipfilter'])."&uniqueid=".URLEncode($row['uniqueid']));
+    rawoutput('<td><form action="user.php?op=delban" method="POST">' . resurrection_csrf_field());
+    rawoutput('<input type="hidden" name="ipfilter" value="' . htmlspecialchars($row['ipfilter'], ENT_QUOTES, 'UTF-8') . '">');
+    rawoutput('<input type="hidden" name="uniqueid" value="' . htmlspecialchars($row['uniqueid'], ENT_QUOTES, 'UTF-8') . '"><button class="button" type="submit">');
+    output_notl('%s', $liftban, true);
+    rawoutput('</button></form>');
+    addnav('', 'user.php?op=delban');
 	rawoutput("</td><td>");
 	output_notl("`&%s`0", $row['banner']);
 	rawoutput("</td><td>");
@@ -103,12 +104,12 @@ while ($row = db_fetch_assoc($result)) {
 	rawoutput("</td><td>");
 		// "43200" used so will basically round to nearest day rather than floor number of days
 	$expire= sprintf_translate("%s days",
-			round((strtotime($row['banexpire'])+43200-strtotime("now"))/86400,0));
+			round((strtotime($row['banexpire'] ?? '9999-12-31')+43200-strtotime("now"))/86400,0));
 	if (substr($expire,0,2)=="1 ")
 		$expire= translate_inline("1 day");
-	if (date("Y-m-d",strtotime($row['banexpire'])) == date("Y-m-d"))
+	if (date("Y-m-d",strtotime($row['banexpire'] ?? '9999-12-31')) == date("Y-m-d"))
 		$expire=translate_inline("Today");
-	if (date("Y-m-d",strtotime($row['banexpire'])) ==
+	if (date("Y-m-d",strtotime($row['banexpire'] ?? '9999-12-31')) ==
 			date("Y-m-d",strtotime("1 day")))
 		$expire=translate_inline("Tomorrow");
 	if ($row['banexpire']=="0000-00-00")

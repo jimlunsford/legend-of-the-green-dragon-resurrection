@@ -14,7 +14,7 @@ check_su_access(SU_EDIT_USERS);
 $op = httpget('op');
 try { $userid = \Resurrection\Http\Input::integer($_GET, 'userid'); }
 catch (InvalidArgumentException $error) { http_response_code(400); exit('Invalid account ID.'); }
-if (in_array($op, ['savemodule', 'special', 'save', 'del', 'saveban', 'delban', 'removeban'], true)) {
+if (in_array($op, ['savemodule', 'special', 'save', 'del', 'saveban', 'delban'], true)) {
     resurrection_require_post();
 }
 

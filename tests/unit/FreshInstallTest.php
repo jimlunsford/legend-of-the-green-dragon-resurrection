@@ -114,7 +114,7 @@ final class FreshInstallTest extends TestCase
             self::assertIsArray(resurrection_authenticate('FixturePlayer', 'Changed synthetic password'));
 
             db_query('UPDATE accounts SET locked=1 WHERE acctid=?', true, [$id]);
-            self::assertFalse(resurrection_authenticate('FixturePlayer', "Synthetic O'Reilly \\ password"));
+            self::assertFalse(resurrection_authenticate('FixturePlayer', 'Changed synthetic password'));
             try {
                 resurrection_create_account('fixtureplayer', 'Another synthetic password');
                 self::fail('Case-insensitive duplicate login was allowed.');
