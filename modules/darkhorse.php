@@ -97,7 +97,8 @@ function darkhorse_checkday(){
 function darkhorse_bartender($from){
 	global $session;
 	require_once 'lib/darkhorse_game.php';
-	$what = \Resurrection\Http\Input::choice($_GET, 'what', ['', 'colors', 'enemies'], '');
+	try { $what = \Resurrection\Http\Input::choice($_GET, 'what', ['', 'colors', 'enemies'], ''); }
+    catch (InvalidArgumentException $error) { http_response_code(400); exit('Invalid request.'); }
 	if ($what==""){
 		output("The grizzled old man behind the bar reminds you very much of a strip of beef jerky.`n`n");
 		$dname = translate_inline($session['user']['sex']?"lasshie":"shon");
@@ -122,7 +123,8 @@ function darkhorse_bartender($from){
 		}
 		output("`0`n`nThese colors can be used in your name, and in any conversations you have.");
 	}else if($what=="enemies"){
-		$who = \Resurrection\Http\Input::string($_GET, 'who');
+		try { $who = \Resurrection\Http\Input::string($_GET, 'who'); }
+        catch (InvalidArgumentException $error) { http_response_code(400); exit('Invalid name.'); }
         if (strlen($who)>25) { http_response_code(400); exit('Invalid name.'); }
 		if ($who==""){
 			output("\"`7Sho, you want to learn about your enemiesh, do you?  Who do you want to know about?  Well?  Shpeak up!  It only costs `^100`7 gold per person for information.`0\"");
@@ -135,7 +137,8 @@ function darkhorse_bartender($from){
 			}else{
 				addnav("Search Again",$from."op=bartender&what=enemies");
 				$search = "%";
-				$name = \Resurrection\Http\Input::string($_POST, 'name');
+				try { $name = \Resurrection\Http\Input::string($_POST, 'name'); }
+                catch (InvalidArgumentException $error) { http_response_code(400); exit('Invalid search.'); }
                 if (mb_strlen($name, 'UTF-8')>50) { http_response_code(400); exit('Invalid search.'); }
 				for ($i=0;$i<strlen($name);$i++){
 					$search.=substr($name,$i,1)."%";
@@ -349,13 +352,14 @@ function darkhorse_runevent($type, $link){
 }
 
 function darkhorse_run(){
+    global $session;
+    if (empty($session['loggedin']) || !darkhorse_tavernmount()) { http_response_code(403); exit('Tavern unavailable.'); }
 	$op = httpget('op');
 	if ($op == "enter") {
 		httpset("op", "tavern");
 		page_header(get_module_setting("tavernname"));
 		darkhorse_runevent("forest", "forest.php?");
-		// Clear the specialinc, just in case.
-		$session['user']['specialinc']="";
+		// Preserve the server-selected tavern event while the player is inside.
 		page_footer();
 	}
 }

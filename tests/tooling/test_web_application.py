@@ -199,6 +199,89 @@ function resurrectionhttpfixture_run() { echo 'fixture-executed'; exit; }
             self.query('DELETE FROM modules WHERE modulename=?', [module])
             self.query('DELETE FROM settings WHERE setting=?', ['fixture_dependency'])
 
+    def test_darkhorse_shared_jackpot_concurrency(self):
+        from concurrent.futures import ThreadPoolExecutor
+        import threading
+        class NoRedirect(urllib.request.HTTPRedirectHandler):
+            def redirect_request(self, *args): return None
+        with socket.socket() as sock:
+            sock.bind(('127.0.0.1',0)); second_port=sock.getsockname()[1]
+        server=subprocess.Popen([shutil.which('php'),'-d','display_errors=1','-S',f'127.0.0.1:{second_port}','-t',str(ROOT)],
+            cwd=ROOT,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
+        def client(port):
+            opener=urllib.request.build_opener(urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar()),NoRedirect)
+            def request(url,fields=None):
+                req=urllib.request.Request(f'http://127.0.0.1:{port}/'+url,data=None if fields is None else urllib.parse.urlencode(fields).encode())
+                try: response=opener.open(req,timeout=20)
+                except urllib.error.HTTPError as error: response=error
+                body=response.read().decode('utf-8',errors='replace')
+                self.assertNotRegex(body,r'(?i)(fatal error|warning:|deprecated:|notice:)',body[:1000])
+                return response.status,body
+            return request
+        def token(body,key):
+            match=re.search(r'name=[\'"]'+key+r'[\'"] value=[\'"]([a-f0-9]{64})',body)
+            self.assertIsNotNone(match,body[:1000]); return match.group(1)
+        players=self.query('SELECT acctid,gold,specialinc,specialmisc FROM accounts WHERE login IN (?,?) ORDER BY login',['FixtureAdmin','WebPlayer'])
+        settings=self.query('SELECT setting,value FROM module_settings WHERE modulename=?',['game_fivesix'])
+        prefs=self.query('SELECT userid,value FROM module_userprefs WHERE modulename=? AND setting=?',['game_fivesix','playstoday'])
+        url='runmodule.php?module=game_fivesix'
+        requests=[client(second_port),client(self.port)]
+        try:
+            for _ in range(100):
+                try:
+                    with socket.create_connection(('127.0.0.1',second_port),timeout=.1): break
+                except OSError: time.sleep(.05)
+            else: self.fail('Second loopback server did not start')
+            self.query('UPDATE modules SET active=1')
+            forms=[]
+            for row,request,login,password in zip(players,requests,['FixtureAdmin','WebPlayer'],['Synthetic administrator password',"Synthetic web O'Reilly \\ password"]):
+                status,body=request('home.php'); self.assertEqual(200,status)
+                status,_=request('login.php',{'csrf_token':token(body,'csrf_token'),'name':login,'password':password}); self.assertEqual(303,status)
+                event='forest.php?op=oldman'; allowed='a:1:{s:'+str(len(event))+':"'+event+'";b:1;}'
+                self.query('UPDATE accounts SET gold=2000,specialinc=?,specialmisc=?,allowednavs=? WHERE acctid=?',['module:darkhorse','',allowed,row['acctid']])
+                status,body=request(event); self.assertEqual(200,status)
+                links=[html.unescape(x) for x in re.findall(r'href=[\'"]([^\'"]+)',body)]
+                link=next(x for x in links if x.startswith(url))
+                status,body=request(link); self.assertEqual(200,status)
+                forms.append({'csrf_token':token(body,'csrf_token'),'action_token':token(body,'action_token'),'action':'roll'})
+                self.query('INSERT INTO module_userprefs (modulename,setting,userid,value) VALUES (?,?,?,?) ON DUPLICATE KEY UPDATE value=VALUES(value)',['game_fivesix','playstoday',row['acctid'],'0'])
+            for key,value in [('cost','5'),('dailyuses','0'),('jackpot','1000'),('maxjackpot','5000')]:
+                self.query('INSERT INTO module_settings (modulename,setting,value) VALUES (?,?,?) ON DUPLICATE KEY UPDATE value=VALUES(value)',['game_fivesix',key,value])
+            gate=threading.Barrier(2)
+            def roll(i): gate.wait(timeout=5); return requests[i](url,forms[i])
+            with ThreadPoolExecutor(max_workers=2) as pool:
+                futures=[pool.submit(roll,i) for i in range(2)]
+                for future in futures: self.assertEqual(200,future.result()[0])
+            results=[self.query('SELECT gold,specialmisc FROM accounts WHERE acctid=?',[row['acctid']])[0] for row in players]
+            actual=[int(row['gold'])-1995 for row in results]
+            states=[json.loads(row['specialmisc']) for row in results]
+            sixes=[json.loads(state['data']).count(6) for state in states]
+            jackpot=int(self.query('SELECT value FROM module_settings WHERE modulename=? AND setting=?',['game_fivesix','jackpot'])[0]['value'])
+            possible=[]
+            for order in [(0,1),(1,0)]:
+                pot=1000; paid=[0,0]
+                for i in order:
+                    pot=min(5000,pot+5)
+                    paid[i]=pot if sixes[i]==5 else ((pot+5)//10 if sixes[i]==4 else ((pot+10)//20 if sixes[i]==3 else 0))
+                    pot=100 if sixes[i]==5 else pot-paid[i]
+                possible.append((paid,pot))
+            self.assertIn((actual,jackpot),possible,'Concurrent results must equal one serial execution, with no lost update')
+            for i,row in enumerate(players):
+                self.assertEqual(int(row['acctid']),states[i]['owner']); self.assertTrue(states[i]['settled'])
+                self.assertEqual('1',self.query('SELECT value FROM module_userprefs WHERE modulename=? AND setting=? AND userid=?',['game_fivesix','playstoday',row['acctid']])[0]['value'])
+                status,_=requests[i](url,forms[i]); self.assertEqual(409,status)
+                self.assertEqual(results[i],self.query('SELECT gold,specialmisc FROM accounts WHERE acctid=?',[row['acctid']])[0])
+            self.assertEqual(str(jackpot),self.query('SELECT value FROM module_settings WHERE modulename=? AND setting=?',['game_fivesix','jackpot'])[0]['value'])
+        finally:
+            server.terminate(); server.wait(timeout=5)
+            for row in players:
+                self.query('UPDATE accounts SET gold=?,specialinc=?,specialmisc=? WHERE acctid=?',[row['gold'],row['specialinc'],row['specialmisc'],row['acctid']])
+            self.query('DELETE FROM module_settings WHERE modulename=?',['game_fivesix'])
+            for row in settings: self.query('INSERT INTO module_settings (modulename,setting,value) VALUES (?,?,?)',['game_fivesix',row['setting'],row['value']])
+            self.query('DELETE FROM module_userprefs WHERE modulename=? AND setting=?',['game_fivesix','playstoday'])
+            for row in prefs: self.query('INSERT INTO module_userprefs (modulename,setting,userid,value) VALUES (?,?,?,?)',['game_fivesix','playstoday',row['userid'],row['value']])
+            self.query('UPDATE modules SET active=0')
+
     def test_darkhorse_wagers_abandonment_and_information(self):
         class NoRedirect(urllib.request.HTTPRedirectHandler):
             def redirect_request(self, *args): return None
@@ -255,7 +338,7 @@ function resurrectionhttpfixture_run() { echo 'fixture-executed'; exit; }
                 saved=snapshot()
                 body=page(oldman)
                 self.assertEqual(saved,snapshot())  # GET oldman cannot erase risk
-                self.assertIn('Resume game',body)
+                self.assertIn('Resume game',re.sub('<[^>]+>','',body))
                 other='runmodule.php?module='+('game_dice' if module=='game_stones' else 'game_stones')
                 allow(other); status,_=request(other); self.assertEqual(409,status); self.assertEqual(saved,snapshot())
                 body=page(oldman)

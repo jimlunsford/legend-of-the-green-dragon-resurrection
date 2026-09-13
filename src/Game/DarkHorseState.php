@@ -47,11 +47,19 @@ final class DarkHorseState
         }
         if ($state['game'] === 'game_stones') {
             $stones = StonesState::decode($state['data']);
-            if ($live && ($stones === [] || ($stones['bet'] ?? 0) !== $state['wager'])) {
+            if ($live && ($stones === [] || !isset($stones['side']) || ($stones['bet'] ?? 0) !== $state['wager'])) {
                 throw new \DomainException('Inconsistent Stones wager.');
             }
         }
-        if ($state['game'] === 'game_dice') DiceGame::decode($state['data']);
+        if ($state['game'] === 'game_dice') {
+            $dice=DiceGame::decode($state['data']);
+            if (($live && $dice['opponent']!==0) || ($state['stage']==='complete' && $dice['opponent']===0)) throw new \DomainException('Inconsistent dice result.');
+            if ($state['stage']==='complete') {
+                $comparison=$dice['roll']<=>$dice['opponent'];
+                $result=$comparison>0 ? 'win' : ($comparison<0 ? 'loss' : 'tie');
+                if ($result!==$state['result']) throw new \DomainException('Inconsistent dice result.');
+            }
+        }
         if ($state['game'] === 'game_fivesix') FiveSixGame::decode($state['data']);
     }
 
