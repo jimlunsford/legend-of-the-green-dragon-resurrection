@@ -88,7 +88,7 @@ function good_word_list(){
 	$sql = "SELECT * FROM " . db_prefix("nastywords") . " WHERE type='good'";
 	$result = db_query_cached($sql,"goodwordlist");
 	$row = db_fetch_assoc($result);
-	return explode(" ",$row['words']);
+	return $row ? explode(" ",$row['words']) : [];
 }
 
 function nasty_word_list(){
@@ -98,7 +98,7 @@ function nasty_word_list(){
 	$sql = "SELECT * FROM " . db_prefix("nastywords") . " WHERE type='nasty'";
 	$result = db_query($sql);
 	$row = db_fetch_assoc($result);
-	$search = " ".$row['words']." ";
+	$search = " ".($row['words'] ?? "")." ";
 	$search = preg_replace('/(?<=.)(?<!\\\\)\'(?=.)/', '\\\'', $search);
 	$search = str_replace("a",'[a4@ªÀÁÂÃÄÅàáâãäå]',$search);
 	$search = str_replace("b",'[bß]',$search);

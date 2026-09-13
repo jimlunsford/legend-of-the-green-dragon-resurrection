@@ -25,6 +25,11 @@ function db_connect($host, $user, $pass) {
             PDO::ATTR_STRINGIFY_FETCHES => true,
             \Pdo\Mysql::ATTR_MULTI_STATEMENTS => false,
         ]);
+        // Strengthen each application connection while retaining server-specific modes.
+        $modes = explode(',', (string)$dbinfo['connection']->query('SELECT @@SESSION.sql_mode')->fetchColumn());
+        $modes = array_unique([...$modes, 'STRICT_TRANS_TABLES', 'NO_ZERO_DATE', 'NO_ZERO_IN_DATE', 'ERROR_FOR_DIVISION_BY_ZERO', 'NO_ENGINE_SUBSTITUTION']);
+        $statement = $dbinfo['connection']->prepare('SET SESSION sql_mode=?');
+        $statement->execute([implode(',', $modes)]);
         return true; // LINK is a legacy boolean marker, never the PDO object.
     } catch (PDOException $error) {
         $dbinfo['error'] = 'Database connection failed.';

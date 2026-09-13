@@ -58,6 +58,14 @@ class WebApplicationTests(unittest.TestCase):
         cls.server.wait(timeout=5)
         cls.config.unlink()
 
+    def test_cli_maintenance_is_once_per_game_day(self):
+        first = subprocess.run([shutil.which('php'), 'cron.php'], cwd=ROOT, capture_output=True, text=True, timeout=60)
+        self.assertEqual(0, first.returncode, first.stderr)
+        self.assertEqual('complete', json.loads(first.stdout)['maintenance'])
+        second = subprocess.run([shutil.which('php'), 'cron.php'], cwd=ROOT, capture_output=True, text=True, timeout=60)
+        self.assertEqual(0, second.returncode, second.stderr)
+        self.assertEqual('already-complete', json.loads(second.stdout)['maintenance'])
+
     def test_create_login_rotate_render_logout(self):
         class NoRedirect(urllib.request.HTTPRedirectHandler):
             def redirect_request(self, *args):

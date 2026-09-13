@@ -27,6 +27,10 @@ final class FreshInstallTest extends TestCase
         self::assertTrue(db_connect($host, getenv('RESURRECTION_TEST_DB_USER'), getenv('RESURRECTION_TEST_DB_PASSWORD')));
         self::assertTrue(db_select_db($name));
         self::assertSame('empty', resurrection_install_state());
+        $modes = $GLOBALS['dbinfo']['connection']->query('SELECT @@SESSION.sql_mode')->fetchColumn();
+        self::assertStringContainsString('STRICT_TRANS_TABLES', $modes);
+        self::assertStringContainsString('NO_ZERO_DATE', $modes);
+        self::assertStringContainsString('NO_ZERO_IN_DATE', $modes);
         $config = tempnam(sys_get_temp_dir(), 'resurrection-config-');
         file_put_contents($config, LegacyConfig::render([
             'DB_HOST' => $host, 'DB_USER' => getenv('RESURRECTION_TEST_DB_USER'),
@@ -113,7 +117,7 @@ final class FreshInstallTest extends TestCase
             self::assertSame(1, $code);
             self::assertSame('2', $GLOBALS['dbinfo']['connection']->query('SELECT COUNT(*) FROM accounts')->fetchColumn());
             self::assertSame('installed', resurrection_install_state());
-            fwrite(STDERR, 'Fresh install: ' . json_encode(['php' => PHP_VERSION, 'database' => db_get_server_version(), 'tables' => count($tables), 'admin' => 'modern hash', 'repeat' => 'locked']) . "\n");
+            fwrite(STDERR, 'Fresh install: ' . json_encode(['php' => PHP_VERSION, 'database' => db_get_server_version(), 'tables' => count($tables), 'sql_mode' => $modes, 'admin' => 'modern hash', 'repeat' => 'locked']) . "\n");
         } finally { unlink($config); }
     }
 }

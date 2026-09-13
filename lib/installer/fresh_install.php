@@ -86,6 +86,7 @@ function resurrection_fresh_install(string $login, #[\SensitiveParameter] string
         }
         $GLOBALS['settings'] = null;
         savesetting('charset', 'UTF-8');
+        savesetting('newdaycron', 1);
         savesetting('serverlanguages', 'en,English,fr,Français,dk,Danish,de,Deutsch,es,Español,it,Italian');
         // No external mail or payments are required by a fresh installation.
         $db->beginTransaction();
