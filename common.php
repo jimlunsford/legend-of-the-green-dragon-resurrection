@@ -103,6 +103,8 @@ foreach (get_all_tables()['accounts'] as $name => $column) {
 }
 $session['user']['superuser'] = (int)($session['user']['superuser'] ?? 0);
 $session['user']['loggedin'] = (bool)($session['user']['loggedin'] ?? false);
+if (!is_array($session['user']['prefs'])) { $session['user']['prefs'] = []; }
+if (!$session['loggedin']) { $session['user']['superuser'] = 0; }
 
 
 // lets us provide output in dbconnect.php that only appears if there's a

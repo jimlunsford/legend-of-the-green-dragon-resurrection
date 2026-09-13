@@ -38,14 +38,12 @@ function injectmodule($modulename,$force=false){
 			//or doesn't meet the prerequisites.
 			if (db_num_rows($result)==0) {
 				tlschema();
-			 	output_notl("`n`3Module `#%s`3 is not installed, but was attempted to be injected.`n",$modulename);
 				$injected_modules[$force][$modulename]=false;
 				return false;
 			}
 			$row = db_fetch_assoc($result);
 			if ($row['active']){ } else {
 				tlschema();
-			 	output("`n`3Module `#%s`3 is not active, but was attempted to be injected.`n",$modulename);
 				$injected_modules[$force][$modulename]=false;
 				return false;
 			}
@@ -64,7 +62,6 @@ function injectmodule($modulename,$force=false){
 			if (!module_check_requirements($info['requires'])) {
 				$injected_modules[$force][$modulename]=false;
 				tlschema();
-				output("`n`3Module `#%s`3 does not meet its prerequisites.`n",$modulename);
 				return false;
 			}
 		}
@@ -75,7 +72,6 @@ function injectmodule($modulename,$force=false){
 		$injected_modules[$force][$modulename]=true;
 		return true;
 	}else{
-	 	output("`n`\$Module `^%s`\$ was not found in the modules directory.`n",$modulename);
 		$injected_modules[$force][$modulename]=false;
 		return false;
 	}
@@ -160,8 +156,7 @@ function is_module_active($modulename){
 function is_module_installed($modulename,$version=false){
 	// Status will say the version is okay if we don't care about the
 	// version or if the version is actually correct
-	return (module_status($modulename, $version) &
-			(MODULE_INSTALLED|MODULE_VERSION_OK));
+	return (module_status($modulename, $version) & (MODULE_INSTALLED|MODULE_VERSION_OK)) === (MODULE_INSTALLED|MODULE_VERSION_OK);
 }
 
 /**
