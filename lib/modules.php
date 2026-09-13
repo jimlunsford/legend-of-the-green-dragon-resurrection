@@ -1016,7 +1016,7 @@ function module_collect_events($type, $allowinactive=false)
 function module_events($eventtype, $basechance, $baseLink = false) {
 	if ($baseLink === false){
 		global $PHP_SELF;
-		$baseLink = substr($PHP_SELF,strrpos($PHP_SELF,"/")+1)."?";
+		$baseLink = basename($_SERVER['SCRIPT_NAME'] ?? '') . '?';
 	}else{
 		//debug("Base link was specified as $baseLink");
 		//debug(debug_backtrace());
@@ -1054,7 +1054,7 @@ function module_do_event($type, $module, $allowinactive=false, $baseLink=false)
 
 	if ($baseLink === false){
 		global $PHP_SELF;
-		$baseLink = substr($PHP_SELF,strrpos($PHP_SELF,"/")+1)."?";
+		$baseLink = basename($_SERVER['SCRIPT_NAME'] ?? '') . '?';
 	}else{
 		//debug("Base link was specified as $baseLink");
 		//debug(debug_backtrace());
@@ -1088,7 +1088,7 @@ function module_display_events($eventtype, $forcescript=false) {
 	global $PHP_SELF, $session;
 	if (!($session['user']['superuser'] & SU_DEVELOPER)) return;
 	if ($forcescript === false)
-		$script = substr($PHP_SELF,strrpos($PHP_SELF,"/")+1);
+		$script = basename($_SERVER['SCRIPT_NAME'] ?? '');
 	else
 		$script = $forcescript;
 	$events = module_collect_events($eventtype,true);

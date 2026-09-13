@@ -1,6 +1,7 @@
 """Real loopback application requests against the preceding clean CI install."""
 import base64
 import html
+from html.parser import HTMLParser
 import http.cookiejar
 import json
 import os
@@ -96,6 +97,25 @@ class WebApplicationTests(unittest.TestCase):
             match = re.search(r'name=[\'"]csrf_token[\'"] value=[\'"]([a-f0-9]{64})', body)
             self.assertIsNotNone(match, body[:500])
             return match.group(1)
+        def comment_form(body):
+            class Forms(HTMLParser):
+                def __init__(self):
+                    super().__init__()
+                    self.forms = []
+                    self.current = None
+                def handle_starttag(self, tag, attrs):
+                    attributes = dict(attrs)
+                    if tag == 'form':
+                        self.current = [attributes.get('action', ''), {}]
+                    elif tag == 'input' and self.current is not None and 'name' in attributes:
+                        self.current[1][attributes['name']] = attributes.get('value', '')
+                def handle_endtag(self, tag):
+                    if tag == 'form' and self.current is not None:
+                        self.forms.append(self.current)
+                        self.current = None
+            forms = Forms()
+            forms.feed(body)
+            return next(form for form in forms.forms if 'insertcommentary' in form[1])
         def issued_link(body, prefix):
             links = re.findall(r'href=[\'"]([^\'"]+)', body)
             found = next((html.unescape(link) for link in links if link.startswith(prefix)), None)
@@ -153,6 +173,19 @@ class WebApplicationTests(unittest.TestCase):
             status, headers, body = request(issued_link(body, 'village.php'))
         self.assertEqual(200, status, headers.get('Location', 'Unexpected HTTP status'))
         self.assertIn('WebPlayer', body)
+        action, fields = comment_form(body)
+        comment = "O'Reilly \\ <script>alert(8675309)</script>"
+        fields['insertcommentary'] = comment
+        status, _, body = request(action, fields)
+        self.assertEqual(200, status)
+        self.assertNotIn('<script>alert(8675309)</script>', body)
+        rows = self.query('SELECT commentid,comment FROM commentary WHERE author=(SELECT acctid FROM accounts WHERE login=?) ORDER BY commentid DESC LIMIT 1', ['WebPlayer'])
+        self.assertEqual(comment, rows[0]['comment'])
+        action, fields = comment_form(body)
+        status, _, _ = request(action, {'csrf_token': fields['csrf_token'], 'removecomment': rows[0]['commentid']})
+        self.assertEqual(403, status)
+        self.assertEqual(1, len(self.query('SELECT commentid FROM commentary WHERE commentid=?', [rows[0]['commentid']])))
+
         status, _, body = request('login.php?op=logout')
         self.assertEqual(200, status, headers.get('Location', 'Unexpected HTTP status'))
         status, headers, _ = request('login.php?op=logout', {'csrf_token': token(body)})
