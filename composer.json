@@ -1,0 +1,27 @@
+{
+    "name": "jimlunsford/legend-of-the-green-dragon-resurrection",
+    "description": "Modernization of the preserved Legend of the Green Dragon 1.1.2 Dragonprime Edition core",
+    "type": "project",
+    "license": "CC-BY-NC-SA-2.0",
+    "require": {
+        "php": "~8.4.0 || ~8.5.0",
+        "ext-pdo": "*",
+        "ext-pdo_mysql": "*",
+        "ext-mbstring": "*",
+        "ext-json": "*"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^12.5",
+        "phpstan/phpstan": "^2.1"
+    },
+    "autoload": {"psr-4": {"Resurrection\\": "src/"}},
+    "autoload-dev": {"psr-4": {"Resurrection\\Tests\\": "tests/unit/"}},
+    "config": {"sort-packages": true, "allow-plugins": false},
+    "scripts": {
+        "lint": "python3 scripts/lint-php.py",
+        "test": "phpunit",
+        "analyse": "phpstan analyse --memory-limit=1G",
+        "baseline": "python3 scripts/verify-historical-baseline.py",
+        "check": ["@lint", "@test", "@analyse", "@baseline"]
+    }
+}

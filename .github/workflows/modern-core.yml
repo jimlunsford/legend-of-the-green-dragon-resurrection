@@ -1,0 +1,64 @@
+name: Modern core
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: modern-core-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  engineering:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - php: '8.4'
+            database: 'mariadb:11.4'
+          - php: '8.5'
+            database: 'mysql:8.4'
+    services:
+      database:
+        image: ${{ matrix.database }}
+        env:
+          MYSQL_ROOT_PASSWORD: disposable-root-only
+          MYSQL_DATABASE: resurrection_test
+          MYSQL_USER: resurrection_test
+          MYSQL_PASSWORD: disposable-test-only
+        ports:
+          - 3306/tcp
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -pdisposable-root-only || mariadb-admin ping -h 127.0.0.1 -uroot -pdisposable-root-only"
+          --health-interval=10s --health-timeout=5s --health-retries=10
+    env:
+      RESURRECTION_TEST_DB_HOST: 127.0.0.1:${{ job.services.database.ports[3306] }}
+      RESURRECTION_TEST_DB_USER: resurrection_test
+      RESURRECTION_TEST_DB_PASSWORD: disposable-test-only
+      RESURRECTION_TEST_DB_NAME: resurrection_test
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+          persist-credentials: false
+      - uses: shivammathur/setup-php@bf6b4fbd49ca58e4608c9c89fba0b8d90bd2a39f # 2.35.5
+        with:
+          php-version: ${{ matrix.php }}
+          extensions: pdo_mysql, mbstring, dom, xml, xmlwriter
+          coverage: none
+          tools: composer:v2
+          ini-values: error_reporting=-1, display_errors=1
+      - run: composer validate --strict
+      - run: composer install --no-interaction --prefer-dist --no-progress
+      - run: composer audit
+      - run: composer lint
+      - run: composer test
+      - run: composer analyse
+      - run: vendor/bin/phpstan analyse -c phpstan-new.neon --no-progress --memory-limit=1G
+      - run: python3 scripts/verify-historical-baseline.py
+      - run: python3 scripts/validate-project.py
+      - run: python3 -m unittest discover -s tests/tooling -v
