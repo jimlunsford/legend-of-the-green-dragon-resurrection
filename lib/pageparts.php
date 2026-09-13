@@ -193,114 +193,19 @@ function page_footer($saveuser=true){
 	//-->
 	</script>";
 
-	//handle paypal
-	if (strpos($footer,"{paypal}") || strpos($header,"{paypal}")){ $palreplace="{paypal}"; }else{ $palreplace="{stats}"; }
-
 	//NOTICE |
 	//NOTICE | Although under the license, you're not required to keep this
 	//NOTICE | paypal link, I do request, as the author of this software
 	//NOTICE | which I have made freely available to you, that you leave it in.
 	//NOTICE |
-	$paypalstr = '<table align="center"><tr><td>';
-	$currency = getsetting("paypalcurrency", "USD");
-
-	if (!isset($_SESSION['logdnet']) || !isset($_SESSION['logdnet']['']) || $_SESSION['logdnet']['']=="" || !isset($session['user']['laston']) || date("Y-m-d H:i:s",strtotime("-1 hour"))>$session['user']['laston']){
-		$already_registered_logdnet = false;
-	}else{
-		$already_registered_logdnet = true;
-	}
-
-	if (getsetting("logdnet",0) && $session['user']['loggedin'] && !$already_registered_logdnet){
-		//account counting, just for my own records, I don't use this in the calculation for server order.
-		$sql = "SELECT count(*) AS c FROM " . db_prefix("accounts");
-		$result = db_query_cached($sql,"acctcount",600);
-		$row = db_fetch_assoc($result);
-		$c = $row['c'];
-		$a = getsetting("serverurl","http://".$_SERVER['SERVER_NAME'].($_SERVER['SERVER_PORT'] == 80?"":":".$_SERVER['SERVER_PORT']).dirname($_SERVER['REQUEST_URI']));
-		if (!preg_match("/\\/$/", $a)) {
-			$a = $a . "/";
-			savesetting("serverurl", $a);
-		}
-
-		$l = getsetting("defaultlanguage","en");
-		$d = getsetting("serverdesc","Another LoGD Server");
-		$e = getsetting("gameadminemail", "postmaster@localhost.com");
-		$u = getsetting("logdnetserver","http://logdnet.logd.com/");
-		if (!preg_match("/\\/$/", $u)) {
-			$u = $u . "/";
-			savesetting("logdnetserver", $u);
-		}
-
-
-		global $logd_version;
-		$v = $logd_version;
-		$c = rawurlencode($c);
-		$a = rawurlencode($a);
-		$l = rawurlencode($l);
-		$d = rawurlencode($d);
-		$e = rawurlencode($e);
-		$v = rawurlencode($v);
-		$u = rawurlencode($u);
-		$paypalstr .= "<script language='JavaScript' src='images/logdnet.php?op=register&c=$c&l=$l&v=$v&a=$a&d=$d&e=$e&u=$u'></script>";
-	}else{
-		$paypalstr .= '<form action="https://www.paypal.com/cgi-bin/webscr" method="post" target="_blank">
-<input type="hidden" name="cmd" value="_xclick">
-<input type="hidden" name="business" value="logd@mightye.org">
-<input type="hidden" name="item_name" value="Legend of the Green Dragon Author Donation from '.full_sanitize($session['user']['name']).'">
-<input type="hidden" name="item_number" value="'.htmlentities($session['user']['login'].":".$_SERVER['HTTP_HOST'].$_SERVER['REQUEST_URI'], ENT_COMPAT, getsetting("charset", "ISO-8859-1")).'">
-<input type="hidden" name="no_shipping" value="1">
-<input type="hidden" name="notify_url" value="http://lotgd.net/payment.php">
-<input type="hidden" name="cn" value="Your Character Name">
-<input type="hidden" name="cs" value="1">
-<input type="hidden" name="currency_code" value="USD">
-<input type="hidden" name="tax" value="0">
-<input type="image" src="images/paypal1.gif" border="0" name="submit" alt="Donate!">
-</form>';
-	}
-	// DP Donation button
-	$paypalstr .= '</td><td>';
-	$paypalstr .= '<form action="https://www.paypal.com/cgi-bin/webscr" method="post" target="_blank">
-<input type="hidden" name="cmd" value="_xclick">
-<input type="hidden" name="business" value="derbugmeister@shaw.ca">
-<input type="hidden" name="item_name" value="Legend of the Green Dragon DP Donation from '.full_sanitize($session['user']['name']).'">
-<input type="hidden" name="item_number" value="'.htmlentities($session['user']['login'].":".$_SERVER['HTTP_HOST'].$_SERVER['REQUEST_URI'], ENT_COMPAT, getsetting("charset", "ISO-8859-1")).'">
-<input type="hidden" name="no_shipping" value="1">
-<input type="hidden" name="notify_url" value="http://dragonprimelogd.net/payment.php">
-<input type="hidden" name="cn" value="Your Character Name">
-<input type="hidden" name="cs" value="1">
-<input type="hidden" name="currency_code" value="USD">
-<input type="hidden" name="tax" value="0">
-<input type="image" src="images/paypal3.gif" border="0" name="submit" alt="Donate!">
-</form>';
-	$paysite = getsetting("paypalemail", "");
-	if ($paysite != "") {
-		$paypalstr .= '</td></tr><tr><td colspan=\'2\' align=\'center\'>';
-		$paypalstr .= '<form action="https://www.paypal.com/cgi-bin/webscr" method="post" target="_blank">
-<input type="hidden" name="cmd" value="_xclick">
-<input type="hidden" name="business" value="'.$paysite.'">
-<input type="hidden" name="item_name" value="'.getsetting("paypaltext","Legend of the Green Dragon Site Donation from").' '.full_sanitize($session['user']['name']).'">
-<input type="hidden" name="item_number" value="'.htmlentities($session['user']['login'].":".$_SERVER['HTTP_HOST'].$_SERVER['REQUEST_URI'], ENT_COMPAT, getsetting("charset", "ISO-8859-1")).'">
-<input type="hidden" name="no_shipping" value="1">';
-		if (file_exists("payment.php")) {
-			$paypalstr .= '<input type="hidden" name="notify_url" value="http://'.$_SERVER["HTTP_HOST"].dirname($_SERVER['REQUEST_URI']).'/payment.php">';
-		}
-		$paypalstr .= '<input type="hidden" name="cn" value="Your Character Name">
-<input type="hidden" name="cs" value="1">
-<input type="hidden" name="currency_code" value="'.$currency.'">
-<input type="hidden" name="lc" value="'.getsetting("paypalcountry-code","US").'">
-<input type="hidden" name="bn" value="PP-DonationsBF">
-<input type="hidden" name="tax" value="0">
-<input type="image" src="images/paypal2.gif" border="0" name="submit" alt="Donate!">
-</form>';
-	}
-	$paypalstr .= '</td></tr></table>';
-	$footer=str_replace($palreplace,(strpos($palreplace,"paypal")?"":"{stats}").$paypalstr,$footer);
-	$header=str_replace($palreplace,(strpos($palreplace,"paypal")?"":"{stats}").$paypalstr,$header);
 	//NOTICE |
 	//NOTICE | Although I will not deny you the ability to remove the above
 	//NOTICE | paypal link, I do request, as the author of this software
 	//NOTICE | which I made available for free to you that you leave it in.
 	//NOTICE |
+	// Legacy payment and remote LoGDnet registration are disabled.
+	$footer = str_replace('{paypal}', '', $footer);
+	$header = str_replace('{paypal}', '', $header);
 
 	//output the nav
 	$footer = str_replace("{".($z)."}",$$z,$footer);

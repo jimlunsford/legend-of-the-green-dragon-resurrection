@@ -1,15 +1,13 @@
 <?php
-
-define("ALLOW_ANONYMOUS",true);
-//enter your directory HERE! i.e. /home/myname/lotgd
-$dir='/yourdir';
-//end of admin modifications
-chdir($dir);
-require_once("common.php");
-savesetting("newdaySemaphore",gmdate("Y-m-d H:i:s"));
-if ($dir!='') {
-	require("lib/newday/newday_runonce.php");
+// Global maintenance is a CLI operation. Player New Day routes are unchanged.
+if (PHP_SAPI !== 'cli') {
+    http_response_code(404);
+    header('Content-Type: text/plain; charset=UTF-8');
+    header('Cache-Control: no-store');
+    exit("Not found.\n");
 }
-/* Prevent execution if no value has been entered... if it is a wrong value, it will still break!*/
-
-?>
+chdir(__DIR__);
+define('ALLOW_ANONYMOUS', true);
+require_once 'common.php';
+savesetting('newdaySemaphore', gmdate('Y-m-d H:i:s'));
+require 'lib/newday/newday_runonce.php';
