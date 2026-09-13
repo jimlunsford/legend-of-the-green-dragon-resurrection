@@ -39,6 +39,6 @@ try {
 } catch (Throwable $error) {
     while (ob_get_level()) { ob_end_clean(); }
     // Fixed source location identifies code failures without disclosing SQL or secrets.
-    fwrite(STDERR, 'Maintenance refused or failed at ' . basename($error->getFile()) . ':' . $error->getLine() . ".\n");
+    fwrite(STDERR, 'Maintenance refused or failed at ' . basename($error->getFile()) . ':' . $error->getLine() . ' ' . ($GLOBALS['dbinfo']['error_context'] ?? '') . ".\n");
     exit(1);
 }

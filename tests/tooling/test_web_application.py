@@ -58,6 +58,15 @@ class WebApplicationTests(unittest.TestCase):
         cls.server.wait(timeout=5)
         cls.config.unlink()
 
+    @staticmethod
+    def query(sql, parameters=()):
+        code = "require 'dbconnect.php'; require 'lib/dbwrapper_pdo.php'; db_connect($DB_HOST,$DB_USER,$DB_PASS); db_select_db($DB_NAME); $input=json_decode(stream_get_contents(STDIN),true,512,JSON_THROW_ON_ERROR); echo json_encode(db_query($input[0],true,$input[1]),JSON_THROW_ON_ERROR);"
+        result = subprocess.run([shutil.which('php'), '-r', code], input=json.dumps([sql, parameters]), cwd=ROOT,
+                                capture_output=True, text=True, timeout=20)
+        if result.returncode != 0:
+            raise AssertionError('Fixture database operation failed')
+        return json.loads(result.stdout)
+
     def test_cli_maintenance_is_once_per_game_day(self):
         first = subprocess.run([shutil.which('php'), 'cron.php'], cwd=ROOT, capture_output=True, text=True, timeout=60)
         self.assertEqual(0, first.returncode, first.stderr)
@@ -72,9 +81,9 @@ class WebApplicationTests(unittest.TestCase):
                 return None
         jar = http.cookiejar.CookieJar()
         client = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(jar), NoRedirect)
-        def request(path, fields=None):
+        def request(path, fields=None, extra_headers=None):
             data = None if fields is None else urllib.parse.urlencode(fields).encode()
-            req = urllib.request.Request(f'http://127.0.0.1:{self.port}/' + path, data=data)
+            req = urllib.request.Request(f'http://127.0.0.1:{self.port}/' + path, data=data, headers=extra_headers or {})
             try:
                 response = client.open(req, timeout=15)
             except urllib.error.HTTPError as response_error:
@@ -89,9 +98,10 @@ class WebApplicationTests(unittest.TestCase):
         def session_id():
             return next(c.value for c in jar if c.name == 'PHPSESSID')
 
-        status, headers, body = request('home.php')
+        status, headers, body = request('home.php', extra_headers={'Cookie': 'PHPSESSID=attackerchosenid1234567890123456'})
         self.assertEqual(200, status)
         initial_id = session_id()
+        self.assertNotEqual('attackerchosenid1234567890123456', initial_id)
         self.assertIn('HttpOnly', headers.get('Set-Cookie', ''))
         self.assertIn('SameSite=Lax', headers.get('Set-Cookie', ''))
         status, _, body = request('create.php')
@@ -103,11 +113,38 @@ class WebApplicationTests(unittest.TestCase):
         self.assertEqual(200, status)
         self.assertIn('Your account was created', body)
         self.assertNotIn(password, body)
+        stored_hash = self.query('SELECT password FROM accounts WHERE login=?', ['WebPlayer'])[0]['password']
+        for rejected in ['wrong password', stored_hash]:
+            status, headers, _ = request('login.php', {'csrf_token': csrf, 'name': 'WebPlayer', 'password': rejected})
+            self.assertEqual(303, status)
+            self.assertEqual('index.php', headers['Location'])
+            self.assertEqual(initial_id, session_id())
+        status, _, _ = request('login.php', {'csrf_token': csrf, 'name': 'WebPlayer', 'password[]': password})
+        self.assertEqual(400, status)
+        logs = self.query('SELECT info,id FROM faillog')
+        self.assertTrue(logs)
+        for record in logs:
+            self.assertEqual('invalid_credentials', record['info'])
+            self.assertEqual('', record['id'])
+        for secret in [password, stored_hash, initial_id, csrf]:
+            self.assertNotIn(secret, json.dumps(logs))
         status, headers, _ = request('login.php', {'csrf_token': csrf, 'name': 'WebPlayer', 'password': password})
         self.assertEqual(303, status)
         self.assertEqual('village.php', headers['Location'])
         self.assertNotEqual(initial_id, session_id())
-        status, _, body = request('village.php')
+        authenticated_id = session_id()
+        status, headers, body = request('village.php')
+        # First login follows the game's existing character onboarding, including
+        # fallback choices when no races or specialties have been activated.
+        if status in (302, 303) and headers['Location'] == 'newday.php':
+            status, _, body = request('newday.php')
+            self.assertEqual(200, status)
+            for _ in range(3):
+                if 'No Races Installed' not in body and 'No Specialties Installed' not in body:
+                    break
+                status, _, body = request('newday.php?continue=1')
+                self.assertEqual(200, status)
+            status, _, body = request('village.php')
         self.assertEqual(200, status)
         self.assertIn('WebPlayer', body)
         status, _, body = request('login.php?op=logout')
@@ -118,5 +155,12 @@ class WebApplicationTests(unittest.TestCase):
         status, headers, _ = request('village.php')
         self.assertIn(status, (302, 303))
         self.assertIn('index.php', headers['Location'])
+        status, headers, _ = request('village.php', extra_headers={'Cookie': 'PHPSESSID=' + authenticated_id})
+        self.assertIn(status, (302, 303))
+        self.assertIn('index.php', headers['Location'])
+        status, _, _ = request('create.php?op=forgot')
+        self.assertEqual(410, status)
+        status, _, _ = request('runmodule.php?module[]=drinks&admin=true')
+        self.assertEqual(400, status)
         status, _, _ = request('installer.php?stage=9')
         self.assertEqual(403, status)

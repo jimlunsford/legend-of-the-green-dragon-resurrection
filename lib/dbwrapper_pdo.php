@@ -88,6 +88,8 @@ function db_query($sql, $die = true, array $parameters = []) {
     } catch (PDOException $error) {
         // Never render/log SQL, bound values, connection details, or the driver trace.
         $dbinfo['error'] = 'Database operation failed.';
+        $caller = debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 1)[0];
+        $dbinfo['error_context'] = basename($caller['file'] ?? '') . ':' . ($caller['line'] ?? 0) . ' SQLSTATE ' . $error->getCode() . ' driver ' . (int)($error->errorInfo[1] ?? 0);
         if (!$die) { return false; }
         throw new RuntimeException($dbinfo['error']);
     } finally {

@@ -29,13 +29,14 @@ function do_forced_nav($anonymous,$overrideforced){
 				$session['allowednavs']=array($session['user']['allowednavs']);
 			}
 			if ($session['user']['locked'] || !$session['user']['loggedin'] || ( (date("U") - strtotime($session['user']['laston'])) > getsetting("LOGINTIMEOUT",900)) ){
-				$session=array();
-				redirect("index.php?op=timeout","Account not logged in but session thinks they are.");
+				resurrection_end_session();
+                header('Location: index.php?op=timeout', true, 303);
+                exit();
 			}
 		}else{
-			$session=array();
-			$session['message']=translate_inline("`4Error, your login was incorrect`0","login");
-			redirect("index.php","Account Disappeared!");
+			resurrection_end_session();
+            header('Location: index.php', true, 303);
+            exit();
 		}
 		db_free_result($result);
 		if (isset($session['allowednavs'][$REQUEST_URI]) && $session['allowednavs'][$REQUEST_URI] && $overrideforced!==true){

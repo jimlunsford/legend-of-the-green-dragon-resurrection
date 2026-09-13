@@ -12,7 +12,8 @@ function handle_event($location, $baseLink=false, $needHeader=false)
 {
 	if ($baseLink === false){
 		global $PHP_SELF;
-		$baseLink = substr($PHP_SELF,strrpos($PHP_SELF,"/")+1)."?";
+		$script = $_SERVER['SCRIPT_NAME'] ?? '';
+        $baseLink = basename($script) . '?';
 	}else{
 		//debug("Base link was specified as $baseLink");
 		//debug(debug_backtrace());

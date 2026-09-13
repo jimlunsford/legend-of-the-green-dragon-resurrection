@@ -94,7 +94,7 @@ require_once 'lib/web_security.php';
 resurrection_start_session();
 $_SESSION['session'] ??= [];
 $session =& $_SESSION['session'];
-$session += ['loggedin' => false, 'lasthit' => 0, 'message' => '', 'allowednavs' => [], 'bufflist' => [], 'templatename' => '', 'templatemtime' => 0];
+$session += ['loggedin' => false, 'lasthit' => 0, 'message' => '', 'debug' => '', 'allowednavs' => [], 'bufflist' => [], 'templatename' => '', 'templatemtime' => 0];
 $session['user'] ??= [];
 require_once 'lib/all_tables.php';
 foreach (get_all_tables()['accounts'] as $name => $column) {
@@ -189,14 +189,10 @@ if (!defined("IS_INSTALLER") && $logd_version == getsetting("installer_version",
 header("Content-Type: text/html; charset=".getsetting('charset','ISO-8859-1'));
 
 if (strtotime("-".getsetting("LOGINTIMEOUT",900)." seconds") > $session['lasthit'] && $session['lasthit']>0 && $session['loggedin']){
-	// force the abandoning of the session when the user should have been
-	// sent to the fields.
-	$session=array();
-	// technically we should be able to translate this, but for now,
-	// ignore it.
-	// 1.1.1 now should be a good time to get it on with it, added tl-inline
-	translator_setup();
-	$session['message'].=translate_inline("`nYour session has expired!`n","common");
+    db_query('UPDATE ' . db_prefix('accounts') . ' SET loggedin=0 WHERE acctid=?', true, [(int)$session['user']['acctid']]);
+    resurrection_end_session();
+    header('Location: index.php?op=timeout', true, 303);
+    exit();
 }
 $session['lasthit']=strtotime("now");
 
