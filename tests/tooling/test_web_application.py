@@ -69,6 +69,16 @@ class WebApplicationTests(unittest.TestCase):
             raise AssertionError('Fixture database operation failed')
         return json.loads(result.stdout)
 
+    def wager_failure(self, module, player):
+        # DDL is fixture setup, before the real request transaction. No SUPER/trigger privilege.
+        self.assertIn(module,['game_stones','game_dice','game_fivesix'])
+        pattern='%"game":"'+module+'"%"stage":"complete"%'
+        self.query("ALTER TABLE accounts ADD CONSTRAINT fixture_wager_failure CHECK (acctid<>"+str(int(player))+" OR specialmisc NOT LIKE '"+pattern+"')")
+
+    def remove_wager_failure(self):
+        if self.query("SELECT CONSTRAINT_NAME FROM information_schema.TABLE_CONSTRAINTS WHERE CONSTRAINT_SCHEMA=DATABASE() AND TABLE_NAME='accounts' AND CONSTRAINT_NAME='fixture_wager_failure'"):
+            self.query('ALTER TABLE accounts DROP CONSTRAINT fixture_wager_failure')
+
     def test_active_maintenance_failures_retries_and_concurrency(self):
         path = ROOT / 'modules' / 'resurrectionmaintenancefixture.php'
         signal = ROOT / 'tests' / 'fixtures' / 'maintenance-running'
@@ -221,7 +231,7 @@ function resurrectionhttpfixture_run() { echo 'fixture-executed'; exit; }
         def token(body,key):
             match=re.search(r'name=[\'"]'+key+r'[\'"] value=[\'"]([a-f0-9]{64})',body)
             self.assertIsNotNone(match,body[:1000]); return match.group(1)
-        players=self.query('SELECT acctid,gold,specialinc,specialmisc FROM accounts WHERE login IN (?,?) ORDER BY login',['FixtureAdmin','WebPlayer'])
+        players=self.query('SELECT acctid,gold,specialinc,specialmisc,lasthit FROM accounts WHERE login IN (?,?) ORDER BY login',['FixtureAdmin','WebPlayer'])
         settings=self.query('SELECT setting,value FROM module_settings WHERE modulename=?',['game_fivesix'])
         prefs=self.query('SELECT userid,value FROM module_userprefs WHERE modulename=? AND setting=?',['game_fivesix','playstoday'])
         url='runmodule.php?module=game_fivesix'
@@ -238,7 +248,7 @@ function resurrectionhttpfixture_run() { echo 'fixture-executed'; exit; }
                 status,body=request('home.php'); self.assertEqual(200,status)
                 status,_=request('login.php',{'csrf_token':token(body,'csrf_token'),'name':login,'password':password}); self.assertEqual(303,status)
                 event='forest.php?op=oldman'; allowed='a:1:{s:'+str(len(event))+':"'+event+'";b:1;}'
-                self.query('UPDATE accounts SET gold=2000,specialinc=?,specialmisc=?,allowednavs=? WHERE acctid=?',['module:darkhorse','',allowed,row['acctid']])
+                self.query('UPDATE accounts SET gold=2000,lasthit=UTC_TIMESTAMP(),specialinc=?,specialmisc=?,allowednavs=? WHERE acctid=?',['module:darkhorse','',allowed,row['acctid']])
                 status,body=request(event); self.assertEqual(200,status)
                 links=[html.unescape(x) for x in re.findall(r'href=[\'"]([^\'"]+)',body)]
                 link=next(x for x in links if x.startswith(url))
@@ -275,7 +285,7 @@ function resurrectionhttpfixture_run() { echo 'fixture-executed'; exit; }
         finally:
             server.terminate(); server.wait(timeout=5)
             for row in players:
-                self.query('UPDATE accounts SET gold=?,specialinc=?,specialmisc=? WHERE acctid=?',[row['gold'],row['specialinc'],row['specialmisc'],row['acctid']])
+                self.query('UPDATE accounts SET gold=?,specialinc=?,specialmisc=?,lasthit=? WHERE acctid=?',[row['gold'],row['specialinc'],row['specialmisc'],row['lasthit'],row['acctid']])
             self.query('DELETE FROM module_settings WHERE modulename=?',['game_fivesix'])
             for row in settings: self.query('INSERT INTO module_settings (modulename,setting,value) VALUES (?,?,?)',['game_fivesix',row['setting'],row['value']])
             self.query('DELETE FROM module_userprefs WHERE modulename=? AND setting=?',['game_fivesix','playstoday'])
@@ -366,9 +376,9 @@ function resurrectionhttpfixture_run() { echo 'fixture-executed'; exit; }
             for extra in [{'bet':'20'},{'try':'1'},{'what':'keep'},{'result':'win'}]:
                 status,_=request(url,fields(body,action='keep',**extra)); self.assertEqual(400,status); self.assertEqual(saved,snapshot()); body=page(url)
             # Actual DML failure at final account write rolls settlement back.
-            self.query("CREATE TRIGGER fixture_wager_failure BEFORE UPDATE ON accounts FOR EACH ROW BEGIN IF NEW.acctid="+str(player)+" AND NEW.specialmisc LIKE '%\"stage\":\"complete\"%' THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='fixture settlement failure'; END IF; END")
+            self.wager_failure('game_dice',player)
             post=fields(body,action='keep'); status,_=request(url,post); self.assertGreaterEqual(status,500)
-            self.assertEqual(saved,snapshot()); self.query('DROP TRIGGER fixture_wager_failure')
+            self.assertEqual(saved,snapshot()); self.remove_wager_failure()
             body=page(url); post=fields(body,action='keep'); status,body=request(url,post); self.assertEqual(200,status)
             dice=json.loads(state()['data']); comparison=(dice['roll']>dice['opponent'])-(dice['roll']<dice['opponent'])
             self.assertEqual(before+comparison*10,int(snapshot()['gold'])); self.assertTrue(state()['settled'])
@@ -379,12 +389,12 @@ function resurrectionhttpfixture_run() { echo 'fixture-executed'; exit; }
                 self.query('INSERT INTO module_settings (modulename,setting,value) VALUES (?,?,?) ON DUPLICATE KEY UPDATE value=VALUES(value)',['game_fivesix',key,value])
             self.query('INSERT INTO module_userprefs (modulename,setting,userid,value) VALUES (?,?,?,?) ON DUPLICATE KEY UPDATE value=VALUES(value)',['game_fivesix','playstoday',player,'0'])
             url='runmodule.php?module=game_fivesix'; body=page(url); before=snapshot()
-            self.query("CREATE TRIGGER fixture_wager_failure BEFORE UPDATE ON accounts FOR EACH ROW BEGIN IF NEW.acctid="+str(player)+" AND NEW.specialmisc<>OLD.specialmisc THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='fixture jackpot failure'; END IF; END")
+            self.wager_failure('game_fivesix',player)
             status,_=request(url,fields(body,action='roll')); self.assertGreaterEqual(status,500)
             self.assertEqual(before,snapshot())
             self.assertEqual('100',self.query('SELECT value FROM module_settings WHERE modulename=? AND setting=?',['game_fivesix','jackpot'])[0]['value'])
             self.assertEqual('0',self.query('SELECT value FROM module_userprefs WHERE modulename=? AND setting=? AND userid=?',['game_fivesix','playstoday',player])[0]['value'])
-            self.query('DROP TRIGGER fixture_wager_failure')
+            self.remove_wager_failure()
             body=page(url); post=fields(body,action='roll'); status,body=request(url,post); self.assertEqual(200,status)
             sixes=json.loads(state()['data']).count(6)
             payout={5:105,4:11,3:5}.get(sixes,0)
@@ -397,7 +407,7 @@ function resurrectionhttpfixture_run() { echo 'fixture-executed'; exit; }
                 attack='runmodule.php?module='+suffix; allow(attack)
                 status,_=request(attack); self.assertEqual(403,status); self.assertEqual(saved,snapshot())
             # Bartender search binds quote/backslash/UTF-8; paid GET only confirms.
-            url='forest.php?op=bartender&what=enemies&subop=search'; page(url)
+            url='forest.php?op=bartender&what=enemies'; page(url); url+='&subop=search'
             status,body=request(url,{'name':"O'Reilly \\ 雪"}); self.assertEqual(200,status); self.assertEqual(saved,snapshot())
             url='forest.php?op=bartender&what=enemies&who=WebPlayer'; body=page(url)
             self.assertEqual(saved,snapshot()); post=fields(body)
@@ -408,12 +418,16 @@ function resurrectionhttpfixture_run() { echo 'fixture-executed'; exit; }
             for who in ['Nonexistent',"O'Reilly\\"]:
                 url='forest.php?op=bartender&what=enemies&who='+urllib.parse.quote(who)
                 body=page(url); status,_=request(url,fields(body)); self.assertEqual(200,status); self.assertEqual(after,snapshot())
+            url='forest.php?op=bartender&what=enemies&who=WebPlayer'
+            body=page(url); status,_=request(url,{**fields(body),'cost':'0'}); self.assertEqual(400,status); self.assertEqual(after,snapshot())
+            self.query('UPDATE accounts SET gold=99 WHERE acctid=?',[player]); body=page(url)
+            status,_=request(url,fields(body)); self.assertEqual(200,status); self.assertEqual('99',snapshot()['gold'])
             # Persisted malformed/foreign-owner state never silently becomes a new wager.
             for value in ['O:8:"stdClass":0:{}','{}',json.dumps({**state(),'owner':int(player)+999})]:
                 self.query('UPDATE accounts SET specialmisc=? WHERE acctid=?',[value,player]); allow(oldman)
                 status,_=request(oldman); self.assertEqual(409,status); self.assertEqual(value,snapshot()['specialmisc'])
         finally:
-            self.query('DROP TRIGGER IF EXISTS fixture_wager_failure')
+            self.remove_wager_failure()
             self.query('UPDATE accounts SET gold=?,specialmisc=?,specialinc=? WHERE acctid=?',[prior['gold'],prior['specialmisc'],prior['specialinc'],player])
             self.query('DELETE FROM module_settings WHERE modulename=?',['game_fivesix'])
             for row in settings:
@@ -858,6 +872,15 @@ function resurrectionhttpfixture_run() { echo 'fixture-executed'; exit; }
                 state = json.loads(wager['data'])
                 action = 'settle' if state['red']+state['blue']==0 or state['player']>8 or state['oldman']>8 else 'draw'
                 fields = game_fields(body, action=action)
+                if action == 'settle':
+                    before_failure=self.query('SELECT gold,specialmisc FROM accounts WHERE acctid=?',[player_id])[0]
+                    self.wager_failure('game_stones',player_id)
+                    try:
+                        status,_,_=request(game_url,fields); self.assertEqual(503,status)
+                        self.assertEqual(before_failure,self.query('SELECT gold,specialmisc FROM accounts WHERE acctid=?',[player_id])[0])
+                    finally: self.remove_wager_failure()
+                    status,_,body=request(game_url); self.assertEqual(200,status)
+                    fields=game_fields(body,action=action)
                 status, _, body = request(game_url, fields)
                 self.assertEqual(200, status)
                 saved = self.query('SELECT gold,specialmisc FROM accounts WHERE acctid=?', [player_id])[0]

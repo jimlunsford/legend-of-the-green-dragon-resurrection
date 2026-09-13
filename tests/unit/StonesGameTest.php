@@ -47,6 +47,18 @@ final class StonesGameTest extends TestCase
         }
     }
 
+    public function testCommittedAllInStakeCanFinishWithoutRemainingCash(): void
+    {
+        $random=static fn(int $min,int $max):int=>$min;
+        $result=StonesGame::act([],100,'choose','unlikepair',0,$random);
+        $result=StonesGame::act($result['state'],100,'bet','',100,$random);
+        self::assertSame(0,$result['gold']);
+        for ($i=0;$i<5;$i++) $result=StonesGame::act($result['state'],0,'draw','',0,$random);
+        self::assertSame(10,$result['state']['oldman']);
+        $result=StonesGame::act($result['state'],0,'settle','',0,$random);
+        self::assertSame(0,$result['gold']); self::assertSame(-100,$result['change']); self::assertTrue($result['settled']);
+    }
+
     public function testOneTimeIntentRequiresMatchingScopeContextAndCsrf(): void
     {
         $session=[]; $csrf=Csrf::token($session);

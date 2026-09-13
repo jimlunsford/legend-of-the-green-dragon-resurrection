@@ -17,6 +17,9 @@ final class DarkHorseGameTest extends TestCase
             fn()=>DarkHorseState::abandon($s,7,'game_stones')] as $act) {
             try { $act(); self::fail('Accepted invalid wager transition.'); } catch (\DomainException) { self::assertTrue(true); }
         }
+        $completed=$s; $completed['stage']='complete'; $completed['active']=false; $completed['settled']=true; $completed['result']='tie';
+        $completed['data']='{"roll":2,"tries":1,"opponent":2}';
+        try { DarkHorseState::abandon($completed,7,'game_dice'); self::fail('Abandoned completed wager.'); } catch (\DomainException) { self::assertTrue(true); }
         $ended=DarkHorseState::abandon($s,7,'game_dice');
         self::assertSame(10,$ended['wager']);
         self::assertSame('abandoned',$ended['result']);

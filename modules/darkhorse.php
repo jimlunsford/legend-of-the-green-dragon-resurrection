@@ -96,6 +96,8 @@ function darkhorse_checkday(){
 
 function darkhorse_bartender($from){
 	global $session;
+    // Internal event-dispatch marker is not a player form field.
+    unset($_POST['i_am_a_hack']);
 	require_once 'lib/darkhorse_game.php';
 	try { $what = \Resurrection\Http\Input::choice($_GET, 'what', ['', 'colors', 'enemies'], ''); }
     catch (InvalidArgumentException $error) { http_response_code(400); exit('Invalid request.'); }
