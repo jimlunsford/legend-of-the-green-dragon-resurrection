@@ -33,6 +33,7 @@ final class ModuleCertificationTest extends TestCase
         $GLOBALS['navsection'] = '';
         $GLOBALS['output'] = '';
         $GLOBALS['companions'] = [];
+        $GLOBALS['blockednavs'] = ['blockpartial'=>[], 'unblockpartial'=>[], 'blockfull'=>[], 'unblockfull'=>[]];
         $_GET = [];
         $_SESSION = [];
         $_POST = ['csrf_token'=>Csrf::token($_SESSION)];
