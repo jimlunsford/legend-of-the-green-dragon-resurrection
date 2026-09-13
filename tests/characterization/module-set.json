@@ -1,0 +1,602 @@
+{
+  "schema_version": 1,
+  "baseline": "historical-source-1.1.2",
+  "evidence_type": "static source inventory, not runtime activation evidence",
+  "entrypoint_count": 24,
+  "support_file_count": 13,
+  "installer_recommendation_count": 59,
+  "bundled_recommended_count": 23,
+  "recommended_but_absent": [
+    "abigail",
+    "breakin",
+    "calendar",
+    "collapse",
+    "crying",
+    "distress",
+    "dragonattack",
+    "drunkard",
+    "expbar",
+    "forestturn",
+    "gardenparty",
+    "ghosttown",
+    "grassyfield",
+    "haberdasher",
+    "healthbar",
+    "innchat",
+    "kitchen",
+    "klutz",
+    "lottery",
+    "newbieisland",
+    "oldman",
+    "peerpressure",
+    "petra",
+    "riddles",
+    "salesman",
+    "smith",
+    "soulgem",
+    "spa",
+    "statue",
+    "stocks",
+    "stonehenge",
+    "strategyhut",
+    "thieves",
+    "tutor",
+    "tynan",
+    "waterfall"
+  ],
+  "not_recommended_but_bundled": [
+    "game_fivesix"
+  ],
+  "archive_imports": 0,
+  "modules": [
+    {
+      "name": "cedrikspotions",
+      "entrypoint": "modules/cedrikspotions.php",
+      "support_files": [],
+      "installer_recommended": true,
+      "status": [
+        "HISTORICAL",
+        "UNDER REVIEW"
+      ],
+      "planned_characterization": [
+        "daily run-once",
+        "health recalculation"
+      ],
+      "characterized": false,
+      "hooks_statically_declared": [
+        "header-inn",
+        "hprecalc",
+        "newday-runonce"
+      ],
+      "event_hooks_statically_declared": [],
+      "rights_cleared_for_release": false
+    },
+    {
+      "name": "crazyaudrey",
+      "entrypoint": "modules/crazyaudrey.php",
+      "support_files": [],
+      "installer_recommended": true,
+      "status": [
+        "HISTORICAL"
+      ],
+      "planned_characterization": [],
+      "characterized": false,
+      "hooks_statically_declared": [
+        "newday",
+        "newday-runonce",
+        "village",
+        "village-desc"
+      ],
+      "event_hooks_statically_declared": [
+        "forest"
+      ],
+      "rights_cleared_for_release": false
+    },
+    {
+      "name": "dag",
+      "entrypoint": "modules/dag.php",
+      "support_files": [
+        "modules/dag/dohook.php",
+        "modules/dag/install.php",
+        "modules/dag/misc_functions.php",
+        "modules/dag/run.php"
+      ],
+      "installer_recommended": true,
+      "status": [
+        "HISTORICAL",
+        "UNDER REVIEW"
+      ],
+      "planned_characterization": [
+        "table creation",
+        "settings",
+        "inn routing"
+      ],
+      "characterized": false,
+      "hooks_statically_declared": [
+        "delete_character",
+        "dragonkill",
+        "inn",
+        "inn-desc",
+        "newday",
+        "pvpwin",
+        "showsettings",
+        "superuser"
+      ],
+      "event_hooks_statically_declared": [],
+      "rights_cleared_for_release": false
+    },
+    {
+      "name": "darkhorse",
+      "entrypoint": "modules/darkhorse.php",
+      "support_files": [],
+      "installer_recommended": true,
+      "status": [
+        "HISTORICAL",
+        "UNDER REVIEW"
+      ],
+      "planned_characterization": [
+        "event hook",
+        "direct routing"
+      ],
+      "characterized": false,
+      "hooks_statically_declared": [
+        "forest",
+        "moderate",
+        "mountfeatures"
+      ],
+      "event_hooks_statically_declared": [
+        "forest",
+        "travel"
+      ],
+      "rights_cleared_for_release": false
+    },
+    {
+      "name": "drinks",
+      "entrypoint": "modules/drinks.php",
+      "support_files": [
+        "modules/drinks/dohook.php",
+        "modules/drinks/drunkenize.php",
+        "modules/drinks/install.php",
+        "modules/drinks/misc_functions.php",
+        "modules/drinks/run.php"
+      ],
+      "installer_recommended": true,
+      "status": [
+        "HISTORICAL",
+        "UNDER REVIEW"
+      ],
+      "planned_characterization": [
+        "table creation",
+        "settings",
+        "preferences",
+        "inn routing"
+      ],
+      "characterized": false,
+      "hooks_statically_declared": [
+        "ale",
+        "commentary",
+        "dragonkill",
+        "header-graveyard",
+        "newday",
+        "soberup",
+        "superuser"
+      ],
+      "event_hooks_statically_declared": [],
+      "rights_cleared_for_release": false
+    },
+    {
+      "name": "fairy",
+      "entrypoint": "modules/fairy.php",
+      "support_files": [],
+      "installer_recommended": true,
+      "status": [
+        "HISTORICAL"
+      ],
+      "planned_characterization": [],
+      "characterized": false,
+      "hooks_statically_declared": [
+        "hprecalc"
+      ],
+      "event_hooks_statically_declared": [
+        "forest"
+      ],
+      "rights_cleared_for_release": false
+    },
+    {
+      "name": "findgem",
+      "entrypoint": "modules/findgem.php",
+      "support_files": [],
+      "installer_recommended": true,
+      "status": [
+        "HISTORICAL"
+      ],
+      "planned_characterization": [],
+      "characterized": false,
+      "hooks_statically_declared": [],
+      "event_hooks_statically_declared": [
+        "forest",
+        "travel"
+      ],
+      "rights_cleared_for_release": false
+    },
+    {
+      "name": "findgold",
+      "entrypoint": "modules/findgold.php",
+      "support_files": [],
+      "installer_recommended": true,
+      "status": [
+        "HISTORICAL",
+        "UNDER REVIEW"
+      ],
+      "planned_characterization": [
+        "forest event",
+        "gold reward"
+      ],
+      "characterized": false,
+      "hooks_statically_declared": [],
+      "event_hooks_statically_declared": [
+        "forest",
+        "travel"
+      ],
+      "rights_cleared_for_release": false
+    },
+    {
+      "name": "foilwench",
+      "entrypoint": "modules/foilwench.php",
+      "support_files": [],
+      "installer_recommended": true,
+      "status": [
+        "HISTORICAL"
+      ],
+      "planned_characterization": [],
+      "characterized": false,
+      "hooks_statically_declared": [],
+      "event_hooks_statically_declared": [
+        "forest"
+      ],
+      "rights_cleared_for_release": false
+    },
+    {
+      "name": "game_dice",
+      "entrypoint": "modules/game_dice.php",
+      "support_files": [],
+      "installer_recommended": true,
+      "status": [
+        "HISTORICAL"
+      ],
+      "planned_characterization": [],
+      "characterized": false,
+      "hooks_statically_declared": [
+        "darkhorsegame"
+      ],
+      "event_hooks_statically_declared": [],
+      "rights_cleared_for_release": false
+    },
+    {
+      "name": "game_fivesix",
+      "entrypoint": "modules/game_fivesix.php",
+      "support_files": [],
+      "installer_recommended": false,
+      "status": [
+        "HISTORICAL"
+      ],
+      "planned_characterization": [],
+      "characterized": false,
+      "hooks_statically_declared": [
+        "darkhorsegame",
+        "newday"
+      ],
+      "event_hooks_statically_declared": [],
+      "rights_cleared_for_release": false
+    },
+    {
+      "name": "game_stones",
+      "entrypoint": "modules/game_stones.php",
+      "support_files": [],
+      "installer_recommended": true,
+      "status": [
+        "HISTORICAL"
+      ],
+      "planned_characterization": [],
+      "characterized": false,
+      "hooks_statically_declared": [
+        "darkhorsegame"
+      ],
+      "event_hooks_statically_declared": [],
+      "rights_cleared_for_release": false
+    },
+    {
+      "name": "glowingstream",
+      "entrypoint": "modules/glowingstream.php",
+      "support_files": [],
+      "installer_recommended": true,
+      "status": [
+        "HISTORICAL"
+      ],
+      "planned_characterization": [],
+      "characterized": false,
+      "hooks_statically_declared": [],
+      "event_hooks_statically_declared": [
+        "forest",
+        "travel"
+      ],
+      "rights_cleared_for_release": false
+    },
+    {
+      "name": "goldmine",
+      "entrypoint": "modules/goldmine.php",
+      "support_files": [],
+      "installer_recommended": true,
+      "status": [
+        "HISTORICAL"
+      ],
+      "planned_characterization": [],
+      "characterized": false,
+      "hooks_statically_declared": [],
+      "event_hooks_statically_declared": [
+        "forest"
+      ],
+      "rights_cleared_for_release": false
+    },
+    {
+      "name": "lovers",
+      "entrypoint": "modules/lovers.php",
+      "support_files": [
+        "modules/lovers/lovers_chat_seth.php",
+        "modules/lovers/lovers_chat_violet.php",
+        "modules/lovers/lovers_seth.php",
+        "modules/lovers/lovers_violet.php"
+      ],
+      "installer_recommended": true,
+      "status": [
+        "HISTORICAL",
+        "UNDER REVIEW"
+      ],
+      "planned_characterization": [
+        "inn routing",
+        "daily hook"
+      ],
+      "characterized": false,
+      "hooks_statically_declared": [
+        "inn",
+        "newday"
+      ],
+      "event_hooks_statically_declared": [],
+      "rights_cleared_for_release": false
+    },
+    {
+      "name": "outhouse",
+      "entrypoint": "modules/outhouse.php",
+      "support_files": [],
+      "installer_recommended": true,
+      "status": [
+        "HISTORICAL"
+      ],
+      "planned_characterization": [],
+      "characterized": false,
+      "hooks_statically_declared": [
+        "forest",
+        "newday"
+      ],
+      "event_hooks_statically_declared": [],
+      "rights_cleared_for_release": false
+    },
+    {
+      "name": "racedwarf",
+      "entrypoint": "modules/racedwarf.php",
+      "support_files": [],
+      "installer_recommended": true,
+      "status": [
+        "HISTORICAL",
+        "UNDER REVIEW"
+      ],
+      "planned_characterization": [
+        "race selection",
+        "creature encounter"
+      ],
+      "characterized": false,
+      "hooks_statically_declared": [
+        "camplocs",
+        "changesetting",
+        "chooserace",
+        "creatureencounter",
+        "drinks-check",
+        "drinks-text",
+        "mercenarycamptext",
+        "moderate",
+        "raceminedeath",
+        "racenames",
+        "setrace",
+        "travel",
+        "validforestloc",
+        "validlocation",
+        "village",
+        "villagetext"
+      ],
+      "event_hooks_statically_declared": [],
+      "rights_cleared_for_release": false
+    },
+    {
+      "name": "raceelf",
+      "entrypoint": "modules/raceelf.php",
+      "support_files": [],
+      "installer_recommended": true,
+      "status": [
+        "HISTORICAL"
+      ],
+      "planned_characterization": [],
+      "characterized": false,
+      "hooks_statically_declared": [
+        "adjuststats",
+        "changesetting",
+        "chooserace",
+        "moderate",
+        "newday",
+        "pvpadjust",
+        "raceminedeath",
+        "racenames",
+        "setrace",
+        "travel",
+        "validforestloc",
+        "validlocation",
+        "villagetext",
+        "weaponstext"
+      ],
+      "event_hooks_statically_declared": [],
+      "rights_cleared_for_release": false
+    },
+    {
+      "name": "racehuman",
+      "entrypoint": "modules/racehuman.php",
+      "support_files": [],
+      "installer_recommended": true,
+      "status": [
+        "HISTORICAL"
+      ],
+      "planned_characterization": [],
+      "characterized": false,
+      "hooks_statically_declared": [
+        "changesetting",
+        "chooserace",
+        "moderate",
+        "newday",
+        "raceminedeath",
+        "racenames",
+        "setrace",
+        "stablelocs",
+        "stabletext",
+        "travel",
+        "validforestloc",
+        "validlocation",
+        "villagetext"
+      ],
+      "event_hooks_statically_declared": [],
+      "rights_cleared_for_release": false
+    },
+    {
+      "name": "racetroll",
+      "entrypoint": "modules/racetroll.php",
+      "support_files": [],
+      "installer_recommended": true,
+      "status": [
+        "HISTORICAL"
+      ],
+      "planned_characterization": [],
+      "characterized": false,
+      "hooks_statically_declared": [
+        "adjuststats",
+        "changesetting",
+        "chooserace",
+        "moderate",
+        "newday",
+        "pvpadjust",
+        "raceminedeath",
+        "racenames",
+        "setrace",
+        "travel",
+        "validforestloc",
+        "validlocation",
+        "villagetext"
+      ],
+      "event_hooks_statically_declared": [],
+      "rights_cleared_for_release": false
+    },
+    {
+      "name": "sethsong",
+      "entrypoint": "modules/sethsong.php",
+      "support_files": [],
+      "installer_recommended": true,
+      "status": [
+        "HISTORICAL"
+      ],
+      "planned_characterization": [],
+      "characterized": false,
+      "hooks_statically_declared": [
+        "inn",
+        "newday"
+      ],
+      "event_hooks_statically_declared": [],
+      "rights_cleared_for_release": false
+    },
+    {
+      "name": "specialtydarkarts",
+      "entrypoint": "modules/specialtydarkarts.php",
+      "support_files": [],
+      "installer_recommended": true,
+      "status": [
+        "HISTORICAL",
+        "UNDER REVIEW"
+      ],
+      "planned_characterization": [
+        "specialty selection",
+        "combat hook",
+        "daily uses"
+      ],
+      "characterized": false,
+      "hooks_statically_declared": [
+        "apply-specialties",
+        "choose-specialty",
+        "dragonkill",
+        "fightnav-specialties",
+        "incrementspecialty",
+        "newday",
+        "set-specialty",
+        "specialtycolor",
+        "specialtymodules",
+        "specialtynames"
+      ],
+      "event_hooks_statically_declared": [],
+      "rights_cleared_for_release": false
+    },
+    {
+      "name": "specialtymysticpower",
+      "entrypoint": "modules/specialtymysticpower.php",
+      "support_files": [],
+      "installer_recommended": true,
+      "status": [
+        "HISTORICAL"
+      ],
+      "planned_characterization": [],
+      "characterized": false,
+      "hooks_statically_declared": [
+        "apply-specialties",
+        "choose-specialty",
+        "dragonkill",
+        "fightnav-specialties",
+        "incrementspecialty",
+        "newday",
+        "set-specialty",
+        "specialtycolor",
+        "specialtymodules",
+        "specialtynames"
+      ],
+      "event_hooks_statically_declared": [],
+      "rights_cleared_for_release": false
+    },
+    {
+      "name": "specialtythiefskills",
+      "entrypoint": "modules/specialtythiefskills.php",
+      "support_files": [],
+      "installer_recommended": true,
+      "status": [
+        "HISTORICAL"
+      ],
+      "planned_characterization": [],
+      "characterized": false,
+      "hooks_statically_declared": [
+        "apply-specialties",
+        "choose-specialty",
+        "dragonkill",
+        "fightnav-specialties",
+        "incrementspecialty",
+        "newday",
+        "set-specialty",
+        "specialtycolor",
+        "specialtymodules",
+        "specialtynames"
+      ],
+      "event_hooks_statically_declared": [],
+      "rights_cleared_for_release": false
+    }
+  ]
+}

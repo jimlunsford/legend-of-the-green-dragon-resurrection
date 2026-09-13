@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "status": "UNTESTED_CANDIDATES",
+  "php_image": null,
+  "database_image": null,
+  "php_candidate": "PHP 5.6.40 CLI with mysql and mysqli extensions",
+  "database_candidate": "Start with a supported MariaDB candidate; test compatibility before selecting",
+  "selected_versions": null,
+  "installation_verified": false,
+  "notes": "Resolve reviewed official image digests in a Docker-capable environment. No image or database combination was executed in the foundation workspace."
+}

@@ -1,0 +1,293 @@
+{
+  "schema_version": 1,
+  "date": "2026-09-13",
+  "baseline_commit": "bdc29df9bc344774b41e0ad7cae7f6ed2f7512e2",
+  "evidence_class": "foundation capability check; no application execution",
+  "runtime": null,
+  "database": null,
+  "clean_install_succeeded": false,
+  "application_executed": false,
+  "synthetic_player_names": [
+    "FixtureWarrior",
+    "FixtureMage"
+  ],
+  "synthetic_accounts_created": 0,
+  "security_defects_are_compatibility_requirements": false,
+  "blocker_reference": "lab/historical-1.1.2/RUNTIME-INVESTIGATION.md",
+  "journeys": [
+    {
+      "id": "installation",
+      "status": "BLOCKED",
+      "attempt_scope": "fixture planning and prerequisite investigation only",
+      "reason": "Runtime prerequisites blocked; no HTTP or SQL journey executed",
+      "tables_to_capture": [
+        "settings",
+        "modules",
+        "module_hooks",
+        "module_event_hooks",
+        "module_settings",
+        "creatures",
+        "weapons",
+        "armor",
+        "masters",
+        "mounts"
+      ],
+      "observations_required": [
+        "stage outcomes",
+        "schema definitions",
+        "seed counts",
+        "installed versus active modules",
+        "installer version"
+      ],
+      "observed_before": null,
+      "observed_after": null,
+      "assertions_passed": 0
+    },
+    {
+      "id": "account_creation",
+      "status": "BLOCKED",
+      "attempt_scope": "fixture planning and prerequisite investigation only",
+      "reason": "Runtime prerequisites blocked; no HTTP or SQL journey executed",
+      "tables_to_capture": [
+        "accounts",
+        "module_userprefs"
+      ],
+      "observations_required": [
+        "starting stats",
+        "gold",
+        "turns",
+        "location",
+        "race",
+        "specialty"
+      ],
+      "observed_before": null,
+      "observed_after": null,
+      "assertions_passed": 0
+    },
+    {
+      "id": "login",
+      "status": "BLOCKED",
+      "attempt_scope": "fixture planning and prerequisite investigation only",
+      "reason": "Runtime prerequisites blocked; no HTTP or SQL journey executed",
+      "tables_to_capture": [
+        "accounts"
+      ],
+      "observations_required": [
+        "logged-in flag without session ID",
+        "laston transition",
+        "navigation destinations"
+      ],
+      "observed_before": null,
+      "observed_after": null,
+      "assertions_passed": 0
+    },
+    {
+      "id": "village",
+      "status": "BLOCKED",
+      "attempt_scope": "fixture planning and prerequisite investigation only",
+      "reason": "Runtime prerequisites blocked; no HTTP or SQL journey executed",
+      "tables_to_capture": [
+        "accounts"
+      ],
+      "observations_required": [
+        "navigation destinations",
+        "module-added locations"
+      ],
+      "observed_before": null,
+      "observed_after": null,
+      "assertions_passed": 0
+    },
+    {
+      "id": "forest_and_flee",
+      "status": "BLOCKED",
+      "attempt_scope": "fixture planning and prerequisite investigation only",
+      "reason": "Runtime prerequisites blocked; no HTTP or SQL journey executed",
+      "tables_to_capture": [
+        "accounts"
+      ],
+      "observations_required": [
+        "turn delta",
+        "creature state",
+        "fight start",
+        "flee outcome"
+      ],
+      "observed_before": null,
+      "observed_after": null,
+      "assertions_passed": 0
+    },
+    {
+      "id": "combat",
+      "status": "BLOCKED",
+      "attempt_scope": "fixture planning and prerequisite investigation only",
+      "reason": "Runtime prerequisites blocked; no HTTP or SQL journey executed",
+      "tables_to_capture": [
+        "accounts",
+        "module_userprefs"
+      ],
+      "observations_required": [
+        "player before/after",
+        "creature before/after",
+        "attack",
+        "defense",
+        "damage",
+        "buff summary",
+        "reward",
+        "observed random outcomes"
+      ],
+      "observed_before": null,
+      "observed_after": null,
+      "assertions_passed": 0
+    },
+    {
+      "id": "training",
+      "status": "BLOCKED",
+      "attempt_scope": "fixture planning and prerequisite investigation only",
+      "reason": "Runtime prerequisites blocked; no HTTP or SQL journey executed",
+      "tables_to_capture": [
+        "accounts",
+        "masters"
+      ],
+      "observations_required": [
+        "eligibility",
+        "master fight",
+        "level and stat deltas"
+      ],
+      "observed_before": null,
+      "observed_after": null,
+      "assertions_passed": 0
+    },
+    {
+      "id": "new_day",
+      "status": "BLOCKED",
+      "attempt_scope": "fixture planning and prerequisite investigation only",
+      "reason": "Runtime prerequisites blocked; no HTTP or SQL journey executed",
+      "tables_to_capture": [
+        "accounts",
+        "settings",
+        "module_userprefs",
+        "module_settings",
+        "mounts"
+      ],
+      "observations_required": [
+        "day boundary",
+        "turns",
+        "health",
+        "interest",
+        "buffs",
+        "mount state",
+        "daily hooks"
+      ],
+      "observed_before": null,
+      "observed_after": null,
+      "assertions_passed": 0
+    },
+    {
+      "id": "death",
+      "status": "BLOCKED",
+      "attempt_scope": "fixture planning and prerequisite investigation only",
+      "reason": "Runtime prerequisites blocked; no HTTP or SQL journey executed",
+      "tables_to_capture": [
+        "accounts"
+      ],
+      "observations_required": [
+        "gold/experience loss",
+        "persistent fields",
+        "alive/location transition"
+      ],
+      "observed_before": null,
+      "observed_after": null,
+      "assertions_passed": 0
+    },
+    {
+      "id": "graveyard_ramius",
+      "status": "BLOCKED",
+      "attempt_scope": "fixture planning and prerequisite investigation only",
+      "reason": "Runtime prerequisites blocked; no HTTP or SQL journey executed",
+      "tables_to_capture": [
+        "accounts"
+      ],
+      "observations_required": [
+        "favor/soulpoints changes",
+        "spirit state",
+        "resurrection"
+      ],
+      "observed_before": null,
+      "observed_after": null,
+      "assertions_passed": 0
+    },
+    {
+      "id": "dragon_progression",
+      "status": "NOT ATTEMPTED",
+      "attempt_scope": "fixture planning and prerequisite investigation only",
+      "reason": "No usable isolated container runtime; dragon state fixture remains a plan",
+      "tables_to_capture": [
+        "accounts",
+        "module_userprefs",
+        "news"
+      ],
+      "observations_required": [
+        "eligibility",
+        "controlled level-15 fixture",
+        "victory and death branches",
+        "dragonkill increment",
+        "dragon points",
+        "stat resets",
+        "post-dragon newday"
+      ],
+      "observed_before": null,
+      "observed_after": null,
+      "assertions_passed": 0
+    },
+    {
+      "id": "economy",
+      "status": "BLOCKED",
+      "attempt_scope": "fixture planning and prerequisite investigation only",
+      "reason": "Runtime prerequisites blocked; no HTTP or SQL journey executed",
+      "tables_to_capture": [
+        "accounts",
+        "weapons",
+        "armor"
+      ],
+      "observations_required": [
+        "deposit",
+        "withdrawal",
+        "interest",
+        "weapon purchase",
+        "armor purchase",
+        "trade-in"
+      ],
+      "observed_before": null,
+      "observed_after": null,
+      "assertions_passed": 0
+    },
+    {
+      "id": "bundled_module_hooks",
+      "status": "BLOCKED",
+      "attempt_scope": "fixture planning and prerequisite investigation only",
+      "reason": "Runtime prerequisites blocked; no HTTP or SQL journey executed",
+      "tables_to_capture": [
+        "modules",
+        "module_hooks",
+        "module_event_hooks",
+        "module_settings",
+        "module_userprefs",
+        "module_objprefs"
+      ],
+      "observations_required": [
+        "installation lifecycle",
+        "activation",
+        "hook order",
+        "race/specialty",
+        "event",
+        "inn",
+        "direct page",
+        "daily",
+        "combat",
+        "extra tables"
+      ],
+      "observed_before": null,
+      "observed_after": null,
+      "assertions_passed": 0
+    }
+  ]
+}

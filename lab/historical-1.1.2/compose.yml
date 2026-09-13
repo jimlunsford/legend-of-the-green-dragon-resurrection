@@ -1,0 +1,49 @@
+# UNTESTED. lab.py supplies digest-pinned inputs only after explicit selection.
+name: resurrection-historical-lab
+services:
+  app:
+    build:
+      context: .
+      network: none
+      args:
+        PHP_BASE: ${PHP_BASE:?Run lab.py prepare with reviewed runtime-lock.json}
+    user: "10001:10001"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    pids_limit: 128
+    mem_limit: 512m
+    cpus: 1
+    volumes:
+      - ./.runtime/source:/baseline:ro
+    tmpfs:
+      - /srv/game:rw,nosuid,nodev,uid=10001,gid=10001,mode=0700,size=64m
+      - /tmp:rw,nosuid,nodev,noexec,uid=10001,gid=10001,mode=0700,size=64m
+    networks: [lab]
+    depends_on:
+      - db
+  db:
+    image: ${DB_IMAGE:?Run lab.py prepare with reviewed runtime-lock.json}
+    user: "999:999"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    pids_limit: 256
+    mem_limit: 1g
+    cpus: 1
+    environment:
+      MARIADB_DATABASE: lotgd_fixture
+      MARIADB_USER: lotgd_fixture
+      MARIADB_PASSWORD: ${LAB_DB_PASSWORD:?Generated only in ignored runtime}
+      MARIADB_ROOT_PASSWORD: ${LAB_DB_ROOT_PASSWORD:?Generated only in ignored runtime}
+    # Initial strict defaults retained. Record observed failures before lab-only changes.
+    tmpfs:
+      - /var/lib/mysql:rw,nosuid,nodev,noexec,uid=999,gid=999,mode=0700,size=512m
+      - /run/mysqld:rw,nosuid,nodev,noexec,uid=999,gid=999,mode=0750,size=16m
+      - /tmp:rw,nosuid,nodev,noexec,uid=999,gid=999,mode=0700,size=64m
+    networks: [lab]
+networks:
+  lab:
+    internal: true
+    enable_ipv6: false
+# Deliberately no ports, host network, privileged mode, Docker socket or host DB.
