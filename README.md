@@ -66,3 +66,7 @@ Resurrection is a **noncommercial project**. The inherited [LICENSE.txt](LICENSE
 Original game design and code: **Eric Stevens and JT Traub**. Continued development: the **DragonPrime Development Team** and individually credited contributors/module authors.
 
 **Jim Lunsford** preserved these files on GitHub in 2019 and is the Resurrection project's preservation/modernization maintainer. He is not an original LoGD author. The 2019 uploads are preservation history, not the original software's development dates.
+
+## Modern core work
+
+Modernization is in progress on `modernization/core-modernization`. The engineering/driver tests do not establish an installable or publicly hostable game. See [platform targets](docs/SUPPORTED-PLATFORMS.md) and [validation scope](docs/ENGINEERING-VALIDATION.md). PHP 5 characterization is deferred during this phase.

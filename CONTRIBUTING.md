@@ -1,6 +1,6 @@
 # Contributing
 
-Resurrection is in foundation / historical characterization, not a released product. Preserve the game while modernizing deliberately.
+Resurrection is in modern core engineering, not a released product. See docs/ENGINEERING-VALIDATION.md for tooling and current limits. Preserve the game while modernizing deliberately.
 
 - Keep original notices, author credits and source provenance. Do not modify the preservation repositories or historical baseline tag.
 - Respect the inherited license and noncommercial working position. Do not introduce an incompatible blanket license or copy uncleared modules/assets from another fork.
