@@ -897,7 +897,7 @@
       "warnings_errors": "No PHP warnings/errors in the passing matrix tests; unexecuted paths unverified.",
       "security_notes": "Shared current-event POST/CSRF, mine action and consumed reward pass. Remaining: alternate reward/loss and optional mount-specific branches, configured amounts and settings-editor validation.",
       "final_certification": "BLOCKED",
-      "continuation_evidence": "See CORE-ROUTE-SECURITY.md for component gates and exact test names; prior lifecycle evidence is retained."
+      "continuation_evidence": "See CORE-ROUTE-SECURITY.md for component gates and exact test names; prior lifecycle evidence is retained. Final-run seeded callback test proves no-mount death with configured gold/gem losses and experience; initialized horsedead fixes the intermittent HTTP branch error. Other outcome/mount/editor gates remain BLOCKED."
     },
     {
       "module": "lovers",

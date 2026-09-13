@@ -101,6 +101,7 @@ function goldmine_runevent($type)
 
 	$hashorse = $session['user']['hashorse'];
 	$horsecanenter = 0;
+	$horsedead = 0;
 	$horsecandie = 0;
 	$horsecansave = 0;
 	if ($hashorse) {

@@ -136,7 +136,7 @@ Shared current-event POST/CSRF and consumed drink action pass. Historical effect
 
 ### goldmine (1.0): BLOCKED
 
-Shared current-event POST/CSRF, mine action and consumed reward pass. Remaining: alternate reward/loss and optional mount-specific branches, configured amounts and settings-editor validation.
+Shared current-event POST/CSRF, mine action and consumed reward pass. A seeded no-mount death regression fixes an uninitialized outcome flag and verifies configured currency losses/experience. Remaining: alternate reward/loss and optional mount-specific branches, configured amounts and settings-editor validation.
 
 - Component route result: PARTIAL.
 - Exact metadata, descriptors, hooks, dependencies, database tables and prior lifecycle evidence remain in [the JSON record](BUNDLED-MODULE-CERTIFICATION.json).

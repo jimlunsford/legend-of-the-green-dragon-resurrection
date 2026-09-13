@@ -41,6 +41,43 @@ final class ModuleCertificationTest extends TestCase
         translator_setup();
     }
 
+    public function testGoldmineDeathWithoutMountHasDefinedOutcome(): void
+    {
+        self::assertTrue(activate_module('racehuman'));
+        self::assertTrue(activate_module('goldmine'));
+        $goldLoss=get_module_setting('percentgoldloss','goldmine');
+        $gemLoss=get_module_setting('percentgemloss','goldmine');
+        $chance=get_module_setting('minedeathchance','racehuman');
+        try {
+            set_module_setting('percentgoldloss',50,'goldmine');
+            set_module_setting('percentgemloss',25,'goldmine');
+            set_module_setting('minedeathchance',90,'racehuman');
+            $GLOBALS['session']['user']=array_replace($GLOBALS['session']['user'],[
+                'hashorse'=>0,'race'=>'Human','alive'=>true,'hitpoints'=>100,'experience'=>100,
+                'gold'=>1000,'gems'=>20,'turns'=>10,'specialinc'=>'module:goldmine']);
+            injectmodule('goldmine');
+            $_GET=['op'=>'mine'];
+            // Seed zero gives 45 (entry), 20 (collapse), 34 (human death), with no mount.
+            // No production random hook or probability changes are introduced.
+            mt_srand(0);
+            goldmine_runevent('forest');
+            self::assertFalse($GLOBALS['session']['user']['alive']);
+            self::assertSame(0,$GLOBALS['session']['user']['hitpoints']);
+            self::assertSame(0,$GLOBALS['session']['user']['hashorse']);
+            self::assertEquals(500,$GLOBALS['session']['user']['gold']);
+            self::assertEquals(15,$GLOBALS['session']['user']['gems']);
+            self::assertEquals(110,$GLOBALS['session']['user']['experience']);
+            self::assertSame('',$GLOBALS['session']['user']['specialinc']);
+            self::assertStringContainsString('crushed under a ton of rock',$GLOBALS['output']);
+        } finally {
+            mt_srand(); $_GET=[];
+            set_module_setting('percentgoldloss',$goldLoss,'goldmine');
+            set_module_setting('percentgemloss',$gemLoss,'goldmine');
+            set_module_setting('minedeathchance',$chance,'racehuman');
+            deactivate_module('goldmine'); deactivate_module('racehuman');
+        }
+    }
+
     public function testEveryBundledLifecycleAndMetadataRoundTrip(): void
     {
         $expected = resurrection_bundled_modules();
