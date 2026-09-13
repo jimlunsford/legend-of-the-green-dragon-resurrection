@@ -265,6 +265,7 @@ function resurrectionhttpfixture_run() { echo 'fixture-executed'; exit; }
                                   ('glowingstream','drink'),('goldmine','mine'),('crazyaudrey','play')]:
                 self.query('UPDATE accounts SET specialinc=?,specialmisc=?,gems=20,gold=1000,hitpoints=100,maxhitpoints=100,turns=30,alive=1,race=?,specialty=? WHERE acctid=?',
                            ['module:'+module,'','Human','DA',player])
+                skill_before=self.query('SELECT setting,value FROM module_userprefs WHERE modulename=? AND userid=? ORDER BY setting',['specialtydarkarts',player])
                 event_url='forest.php?op='
                 allow(event_url); before=snapshot(); status,body=request(event_url)
                 self.assertEqual(200,status); self.assertEqual(before,snapshot())
@@ -287,13 +288,19 @@ function resurrectionhttpfixture_run() { echo 'fixture-executed'; exit; }
                     level=int(self.query('SELECT level FROM accounts WHERE acctid=?',[player])[0]['level'])
                     self.assertGreaterEqual(int(after['gold'])-int(before['gold']),10*level)
                     self.assertLessEqual(int(after['gold'])-int(before['gold']),50*level)
-                if module=='foilwench': self.assertEqual(int(before['gems'])-1,int(after['gems']))
+                if module=='foilwench':
+                    self.assertEqual(int(before['gems'])-1,int(after['gems']))
+                    prior_skill=int(next((r['value'] for r in skill_before if r['setting']=='skill'),'0'))
+                    skill_after=self.query('SELECT setting,value FROM module_userprefs WHERE modulename=? AND userid=? ORDER BY setting',['specialtydarkarts',player])
+                    self.assertEqual(prior_skill+1,int(next(r['value'] for r in skill_after if r['setting']=='skill'))
                 if module=='fairy': self.assertIn(int(after['gems'])-int(before['gems']),[-1,1])
                 self.assertEqual('',self.query('SELECT specialinc FROM accounts WHERE acctid=?',[player])[0]['specialinc'])
                 # A replay after completion cannot re-enter the consumed event.
                 allow(event_url); status,_=request(event_url,event_post)
                 self.assertIn(status,(200,302,303,403,409))
                 self.assertEqual(after,snapshot())
+                if module=='foilwench':
+                    self.assertEqual(skill_after,self.query('SELECT setting,value FROM module_userprefs WHERE modulename=? AND userid=? ORDER BY setting',['specialtydarkarts',player]))
             self.query('UPDATE accounts SET alive=1,hitpoints=100,turns=30,specialinc=? WHERE acctid=?',['',player])
             # Server availability applies even when a forged form selects a hidden potion.
             self.query('UPDATE module_settings SET value=? WHERE modulename=? AND setting=?',['0','cedrikspotions','ischarm'])
