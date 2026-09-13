@@ -2,28 +2,36 @@
 tlschema("petition");
 popup_header("Petition for Help");
 $post = httpallpost();
-if (count($post)>0){
-	$ip = explode(".",$_SERVER['REMOTE_ADDR']);
-	array_pop($ip);
-	$ip = join(".",$ip).".";
-	$sql = "SELECT count(petitionid) AS c FROM ".db_prefix("petitions")." WHERE (ip LIKE '$ip%' OR id = '".addslashes($_COOKIE['lgi'])."') AND date > '".date("Y-m-d H:i:s",strtotime("-1 day"))."'";
-	$result = db_query($sql);
-	$row = db_fetch_assoc($result);
+if ($op === 'submit' || count($post)>0){
+    resurrection_require_post();
+    try {
+        $submitted = [];
+        foreach (['charname'=>64, 'email'=>254, 'description'=>4096, 'abuse'=>4096] as $key=>$limit) {
+            $submitted[$key] = \Resurrection\Http\Input::string($post, $key);
+            if (strlen($submitted[$key]) > $limit) throw new InvalidArgumentException('Petition field too long.');
+        }
+        if (trim($submitted['description']) === '') throw new InvalidArgumentException('Description required.');
+    } catch (InvalidArgumentException $error) { http_response_code(400); exit('Invalid petition.'); }
+    $post = $submitted;
+    if (!empty($session['loggedin'])) {
+        $post['charname'] = $session['user']['name'];
+        $post['email'] = $session['user']['emailaddress'];
+    } else { $post['unverified'] = 'Character is not logged in.'; }
+    $address = $_SERVER['REMOTE_ADDR'] ?? '';
+    $ip = filter_var($address, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4)
+        ? substr($address, 0, strrpos($address, '.') + 1) . '%' : $address;
+    $rows = db_query('SELECT COUNT(petitionid) AS c FROM ' . db_prefix('petitions') . ' WHERE (ip LIKE ? OR (author=? AND author<>0)) AND date>?', true,
+        [$ip, (int)$session['user']['acctid'], date('Y-m-d H:i:s', strtotime('-1 day'))]);
+    $row = $rows[0];
 	if ($row['c'] < 5 || (isset($session['user']['superuser']) && $session['user']['superuser']&~SU_DOESNT_GIVE_GROTTO)){
-		if (!isset($session['user']['acctid']))
-			$session['user']['acctid']=0;
-		if (!isset($session['user']['password']))
-			$session['user']['password']="";
-		$p = $session['user']['password'];
-		unset($session['user']['password']);
 		$date = date("Y-m-d H:i:s");
 		$post['cancelpetition'] = false;
 		$post['cancelreason'] = 'The admins here decided they didn\'t like something about how you submitted your petition.  They were also too lazy to give a real reason.';
 		$post = modulehook("addpetition",$post);
 		if (!$post['cancelpetition']){
 			unset($post['cancelpetition'], $post['cancelreason']);
-			$sql = "INSERT INTO " . db_prefix("petitions") . " (author,date,body,pageinfo,ip,id) VALUES (".(int)$session['user']['acctid'].",'$date',\"".addslashes(output_array($post))."\",\"".addslashes(output_array($session,"Session:"))."\",'{$_SERVER['REMOTE_ADDR']}','".addslashes($_COOKIE['lgi'])."')";
-			db_query($sql);
+            db_query('INSERT INTO ' . db_prefix('petitions') . ' (author,date,body,pageinfo,ip,id) VALUES (?,?,?,?,?,?)', true,
+                [(int)$session['user']['acctid'], $date, output_array($post), 'Session diagnostics intentionally omitted.', $address, '']);
 			// Fix the counter
 			invalidatedatacache("petitioncounts");
 			// If the admin wants it, email the petitions to them.
@@ -51,7 +59,6 @@ if (count($post)>0){
 				$msg .= "$tl_body :\n".output_array($post)."\n";
 				mail(getsetting("gameadminemail","postmaster@localhost.com"),$tl_subject, $msg);
 			}
-			$session['user']['password']=$p;
 			output("Your petition has been sent to the server admin.");
 			output("Please be patient, most server admins have jobs and obligations beyond their game, so sometimes responses will take a while to be received.");
 		} else {
@@ -69,6 +76,7 @@ if (count($post)>0){
 	output("`c`b`\$Before sending a petition, please make sure you have read the motd.`n");
 	output("Petitions about problems we already know about just take up time we could be using to fix those problems.`b`c`n");
 	rawoutput("<form action='petition.php?op=submit' method='POST'>");
+    rawoutput(resurrection_csrf_field());
 	if ($session['user']['loggedin']) {
 		output("Your Character's Name: ");
 		output_notl("%s", $session['user']['name']);
@@ -85,13 +93,15 @@ if (count($post)>0){
 		rawoutput("<input name='unverified' type='hidden' value='$nolog'>");
 	}
 	output("`nDescription of the problem:`n");
-	$abuse = httpget("abuse");
-	if ($abuse == "yes") {
-		rawoutput("<textarea name='description' cols='55' rows='7' class='input'></textarea>");
-		rawoutput("<input type='hidden' name='abuse' value=\"".stripslashes_deep(htmlentities(httpget("problem"), ENT_COMPAT, getsetting("charset", "ISO-8859-1")))."\"><br><hr><pre>".stripslashes(htmlentities(httpget("problem")))."</pre><hr><br>");
-	} else {
-		rawoutput("<textarea name='description' cols='55' rows='7' class='input'>".stripslashes_deep(htmlentities(httpget("problem"), ENT_COMPAT, getsetting("charset", "ISO-8859-1")))."</textarea>");
-	}
+    try { $problem = \Resurrection\Http\Input::string($_GET, 'problem'); }
+    catch (InvalidArgumentException $error) { http_response_code(400); exit('Invalid petition.'); }
+    $problem = htmlspecialchars($problem, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+    if (httpget('abuse') === 'yes') {
+        rawoutput("<textarea name='description' cols='55' rows='7' class='input'></textarea>");
+        rawoutput("<input type='hidden' name='abuse' value=\"$problem\"><br><hr><pre>$problem</pre><hr><br>");
+    } else {
+        rawoutput("<textarea name='description' cols='55' rows='7' class='input'>$problem</textarea>");
+    }
 	modulehook("petitionform",array());
 	$submit = translate_inline("Submit");
 	rawoutput("<br/><input type='submit' class='button' value='$submit'><br/>");

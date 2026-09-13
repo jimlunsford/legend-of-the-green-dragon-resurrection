@@ -342,6 +342,26 @@ function resurrectionhttpfixture_run() { echo 'fixture-executed'; exit; }
         self.assertEqual(303, status)
         self.assertEqual([], self.query('SELECT messageid FROM mail WHERE messageid=?', [message_id]))
 
+        status, _, body = request('petition.php')
+        self.assertEqual(200, status)
+        petition_token = token(body)
+        status, _, _ = request('petition.php?op=submit')
+        self.assertEqual(403, status)
+        status, _, _ = request('petition.php?op=submit', {'description':'missing token'})
+        self.assertEqual(403, status)
+        description = "Petition O'Reilly \\ <script>synthetic</script>"
+        status, _, body = request('petition.php?op=submit', {'csrf_token':petition_token, 'description':description,
+            'password':'SYNTHETIC-UNEXPECTED-FIELD', 'charname':'Forged identity'})
+        self.assertEqual(200, status)
+        self.assertIn('Your petition has been sent', body)
+        saved = self.query('SELECT body,pageinfo,id FROM petitions WHERE author=? ORDER BY petitionid DESC LIMIT 1', [player_id])[0]
+        self.assertIn(description, saved['body'])
+        self.assertNotIn('Forged identity', saved['body'])
+        self.assertEqual('Session diagnostics intentionally omitted.', saved['pageinfo'])
+        self.assertEqual('', saved['id'])
+        for secret in [password, stored_hash, session_id(), petition_token, 'SYNTHETIC-UNEXPECTED-FIELD']:
+            self.assertNotIn(secret, json.dumps(saved))
+
         status, _, body = request('login.php?op=logout')
         self.assertEqual(200, status, headers.get('Location', 'Unexpected HTTP status'))
         status, headers, _ = request('login.php?op=logout', {'csrf_token': token(body)})
