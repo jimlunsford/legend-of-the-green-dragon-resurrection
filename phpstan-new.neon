@@ -3,6 +3,9 @@ parameters:
     paths:
         - src
         - lib/accounts.php
+        - lib/player_mutation.php
+        - modules/dag/security.php
+        - modules/drinks/security.php
         - lib/mail_security.php
         - lib/web_security.php
         - lib/commentary_security.php
@@ -12,6 +15,8 @@ parameters:
     bootstrapFiles:
         - lib/constants.php
     scanFiles:
+        - lib/buffs.php
+        - lib/e_rand.php
         - lib/dbwrapper_pdo.php
         - lib/constants.php
         - lib/datacache.php

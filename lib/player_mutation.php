@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/web_security.php';
+require_once __DIR__ . '/buffs.php';
 require_once __DIR__ . '/../src/Security/ActionToken.php';
 
 /** Issue an intent for an explicitly named action and authoritative state. */
@@ -21,7 +22,8 @@ function resurrection_consume_action(string $scope, string $context): void {
 /**
  * Enclose trusted DML-only gameplay callbacks and their player writes in one transaction.
  * Lock/recheck the hydrated account before calling gameplay code, preventing stale balances.
- * No DDL, network effects, rendering, saveuser(), or exit is allowed inside a callback.
+ * No DDL, network effects, output flushing, saveuser(), or exit is allowed inside a callback.
+ * Legacy output() may append to the page buffer; that buffer is restored on failure.
  */
 function resurrection_player_mutation(callable $action): mixed {
     global $session, $baseaccount, $dbinfo, $companions;
@@ -32,6 +34,7 @@ function resurrection_player_mutation(callable $action): mixed {
     if ($connection->inTransaction()) { throw new LogicException('Nested player mutation.'); }
     restore_buff_fields();
     $before = $session;
+    $beforeOutput = $GLOBALS['output'] ?? '';
     $beforeCompanions = $companions;
     $beforeBase = $baseaccount;
     $connection->beginTransaction();
@@ -42,7 +45,7 @@ function resurrection_player_mutation(callable $action): mixed {
         foreach ($baseaccount as $key => $value) {
             // Metrics and access timestamps do not authorize or fund an action.
             if (in_array($key, ['laston','gentime','gentimecount','gensize','allowednavs','restorepage'], true)) { continue; }
-            if ($rows[0][$key] !== $value) { throw new DomainException('Player state changed. Reload before acting.'); }
+            if ((string)$rows[0][$key] !== (string)$value) { throw new DomainException('Player state changed. Reload before acting.'); }
         }
         $result = $action();
         $values = $session['user'];
@@ -69,9 +72,15 @@ function resurrection_player_mutation(callable $action): mixed {
         }
         return $result;
     } catch (Throwable $error) {
-        if ($connection->inTransaction()) { $connection->rollBack(); }
+        resurrection_rollback_player_transaction($connection);
+        $GLOBALS['output'] = $beforeOutput;
         $session = $before; $companions = $beforeCompanions; $baseaccount = $beforeBase;
         $GLOBALS['module_prefs'] = []; $GLOBALS['module_settings'] = [];
         throw $error;
     }
+}
+
+/** A deadlock can already have rolled back the transaction at the database. */
+function resurrection_rollback_player_transaction(PDO $connection): void {
+    if ($connection->inTransaction()) { $connection->rollBack(); }
 }

@@ -199,6 +199,95 @@ function resurrectionhttpfixture_run() { echo 'fixture-executed'; exit; }
             self.query('DELETE FROM modules WHERE modulename=?', [module])
             self.query('DELETE FROM settings WHERE setting=?', ['fixture_dependency'])
 
+    def test_module_purchases_post_csrf_replay_and_effects(self):
+        class NoRedirect(urllib.request.HTTPRedirectHandler):
+            def redirect_request(self, *args): return None
+        jar=http.cookiejar.CookieJar()
+        client=urllib.request.build_opener(urllib.request.HTTPCookieProcessor(jar),NoRedirect)
+        def request(path, fields=None):
+            req=urllib.request.Request(f'http://127.0.0.1:{self.port}/'+path,
+                data=None if fields is None else urllib.parse.urlencode(fields).encode())
+            try: response=client.open(req,timeout=15)
+            except urllib.error.HTTPError as error: response=error
+            body=response.read().decode('utf-8',errors='replace')
+            self.assertNotRegex(body,r'(?i)(fatal error|warning:|deprecated:|notice:)',body[:1500])
+            return response.status,body
+        def fields(body):
+            return {key:re.search(r'name=[\'"]'+key+r'[\'"] value=[\'"]([a-f0-9]{64})',body).group(1)
+                    for key in ['csrf_token','action_token']}
+        def allow(url):
+            value='a:1:{s:'+str(len(url))+':"'+url+'";b:1;}'
+            self.query('UPDATE accounts SET allowednavs=? WHERE acctid=?',[value,player])
+        def snapshot():
+            return self.query('SELECT gold,gems,charm,hitpoints,maxhitpoints,specialty,race,bufflist FROM accounts WHERE acctid=?',[player])[0]
+        status,body=request('home.php')
+        csrf=re.search(r'name=[\'"]csrf_token[\'"] value=[\'"]([a-f0-9]{64})',body).group(1)
+        status,_=request('login.php',{'csrf_token':csrf,'name':'WebPlayer','password':"Synthetic web O'Reilly \\ password"})
+        self.assertEqual(303,status)
+        player=self.query('SELECT acctid FROM accounts WHERE login=?',['WebPlayer'])[0]['acctid']
+        self.query('UPDATE modules SET active=1')
+        original=snapshot()
+        self.query('UPDATE accounts SET gold=10000,gems=100,charm=10,hitpoints=10,maxhitpoints=10,race=?,specialty=? WHERE acctid=?',['Human','DA',player])
+        try:
+            url='runmodule.php?module=cedrikspotions&op=gems'
+            for wish in range(1,6):
+                allow(url); before=snapshot()
+                status,body=request(url)
+                self.assertEqual(200,status)
+                post=fields(body)
+                action=html.unescape(re.search(r'<form action=[\'"]([^\'"]+)[\'"] method=[\'"]POST',body).group(1))
+                self.assertEqual(before,snapshot())
+                status,_=request(action,{'wish':str(wish),'gemcount':'2'})
+                self.assertEqual(403,status)
+                status,body=request(action,{**post,'wish':str(wish),'gemcount':'2'})
+                self.assertEqual(200,status)
+                after=snapshot()
+                self.assertEqual(int(before['gems'])-2,int(after['gems']))
+                if wish==1: self.assertEqual(int(before['charm'])+1,int(after['charm']))
+                if wish==2: self.assertEqual(int(before['maxhitpoints'])+1,int(after['maxhitpoints']))
+                if wish==3: self.assertEqual(max(int(before['hitpoints']),int(before['maxhitpoints']))+20,int(after['hitpoints']))
+                if wish==4: self.assertEqual('',after['specialty'])
+                if wish==5:
+                    self.assertEqual('Horrible Gelatinous Blob',after['race'])
+                    self.assertIn('transmute',after['bufflist'])
+                    self.assertIn('survivenewday',after['bufflist'])
+                allow(action)
+                status,_=request(action,{**post,'wish':str(wish),'gemcount':'2'})
+                self.assertEqual(409,status)
+                self.assertEqual(after,snapshot())
+            for invalid in ['-2','0','2e1','99999999999999999999999']:
+                allow(url); status,body=request(url); post=fields(body)
+                action=html.unescape(re.search(r'<form action=[\'"]([^\'"]+)[\'"] method=[\'"]POST',body).group(1))
+                before=snapshot(); status,_=request(action,{**post,'wish':'1','gemcount':invalid})
+                self.assertEqual(400,status); self.assertEqual(before,snapshot())
+            # Server availability applies even when a forged form selects a hidden potion.
+            self.query('UPDATE module_settings SET value=? WHERE modulename=? AND setting=?',['0','cedrikspotions','ischarm'])
+            allow(url); status,body=request(url); post=fields(body)
+            action=html.unescape(re.search(r'<form action=[\'"]([^\'"]+)[\'"] method=[\'"]POST',body).group(1))
+            before=snapshot(); status,_=request(action,{**post,'wish':'1','gemcount':'2'})
+            self.assertEqual(400,status); self.assertEqual(before,snapshot())
+            self.query('UPDATE module_settings SET value=? WHERE modulename=? AND setting=?',['1','cedrikspotions','ischarm'])
+            drink=self.query('SELECT drinkid,costperlevel FROM drinks WHERE harddrink=1 ORDER BY drinkid LIMIT 1')[0]
+            url='runmodule.php?module=drinks&act=buy&id='+drink['drinkid']
+            allow(url); before=snapshot(); status,body=request(url)
+            self.assertEqual(200,status); self.assertEqual(before,snapshot()); post=fields(body)
+            status,_=request(url,{})
+            self.assertEqual(403,status)
+            status,body=request(url,post)
+            self.assertEqual(200,status)
+            after=snapshot(); level=int(self.query('SELECT level FROM accounts WHERE acctid=?',[player])[0]['level'])
+            self.assertEqual(int(before['gold'])-level*int(drink['costperlevel']),int(after['gold']))
+            allow(url); status,_=request(url,post)
+            self.assertEqual(409,status); self.assertEqual(after,snapshot())
+            self.query('UPDATE module_userprefs SET value=? WHERE modulename=? AND setting=? AND userid=?',['3','drinks','harddrinks',player])
+            allow(url); status,body=request(url); post=fields(body)
+            status,_=request(url,post)
+            self.assertEqual(400,status); self.assertEqual(after,snapshot())
+        finally:
+            self.query('UPDATE modules SET active=0')
+            self.query('UPDATE module_settings SET value=? WHERE modulename=? AND setting=?',['1','cedrikspotions','ischarm'])
+            self.query('UPDATE accounts SET '+','.join(key+'=?' for key in original)+' WHERE acctid=?', [*original.values(),player])
+
     def test_create_login_rotate_render_logout(self):
         class NoRedirect(urllib.request.HTTPRedirectHandler):
             def redirect_request(self, *args):
@@ -334,6 +423,47 @@ function resurrectionhttpfixture_run() { echo 'fixture-executed'; exit; }
                 status, _, body = request(issued_link(body, 'runmodule.php?module=' + module))
                 self.assertEqual(200, status)
                 self.assertIn('WebPlayer', body)
+                if module == 'dag':
+                    player_id = self.query('SELECT acctid FROM accounts WHERE login=?', ['WebPlayer'])[0]['acctid']
+                    target = self.query('SELECT acctid,name,level,age FROM accounts WHERE login=?', ['FixtureAdmin'])[0]
+                    gold = self.query('SELECT gold FROM accounts WHERE acctid=?', [player_id])[0]['gold']
+                    self.query('UPDATE accounts SET gold=1000 WHERE acctid=?', [player_id])
+                    self.query('UPDATE accounts SET level=5,age=10 WHERE acctid=?', [target['acctid']])
+                    try:
+                        status, _, body = request(issued_link(body, 'runmodule.php?module=dag&op=addbounty'))
+                        self.assertEqual(200, status)
+                        nonce = re.search(r'name="action_token" value="([a-f0-9]{64})"', body).group(1)
+                        fields = {'csrf_token':token(body),'action_token':nonce,'contractname':'FixtureAdmin','amount':'250'}
+                        url = 'runmodule.php?module=dag&op=finalize'
+                        status, _, _ = request(url)
+                        self.assertEqual(403,status)
+                        status, _, _ = request(url, {'contractname':'FixtureAdmin','amount':'250'})
+                        self.assertEqual(403,status)
+                        self.assertEqual('1000',self.query('SELECT gold FROM accounts WHERE acctid=?',[player_id])[0]['gold'])
+                        status, _, body = request(url,fields)
+                        self.assertEqual(200,status)
+                        self.assertEqual('725',self.query('SELECT gold FROM accounts WHERE acctid=?',[player_id])[0]['gold'])
+                        bounties = self.query('SELECT bountyid,amount FROM bounty WHERE setter=? AND target=?',[player_id,target['acctid']])
+                        self.assertEqual(1,len(bounties))
+                        status, _, _ = request(url,fields)
+                        self.assertIn(status,(302,303,409))
+                        self.assertEqual(bounties,self.query('SELECT bountyid,amount FROM bounty WHERE setter=? AND target=?',[player_id,target['acctid']]))
+                        self.assertEqual('725',self.query('SELECT gold FROM accounts WHERE acctid=?',[player_id])[0]['gold'])
+                        status, _, body = request('runmodule.php?module=dag')
+                        # Force a valid navigation fixture to prove the capability boundary itself.
+                        admin_url = 'runmodule.php?module=dag&manage=true'
+                        allowed = 'a:1:{s:'+str(len(admin_url))+':"'+admin_url+'";b:1;}'
+                        self.query('UPDATE accounts SET allowednavs=? WHERE acctid=?',[allowed,player_id])
+                        status, _, _ = request(admin_url)
+                        self.assertEqual(403,status)
+                        allowed = 'a:1:{s:7:"inn.php";b:1;}'
+                        self.query('UPDATE accounts SET allowednavs=? WHERE acctid=?',[allowed,player_id])
+                        status, _, body = request('inn.php')
+                        status, _, body = request(issued_link(body,'runmodule.php?module=dag'))
+                    finally:
+                        self.query('DELETE FROM bounty WHERE setter=? AND target=?',[player_id,target['acctid']])
+                        self.query('UPDATE accounts SET gold=? WHERE acctid=?',[gold,player_id])
+                        self.query('UPDATE accounts SET level=?,age=? WHERE acctid=?',[target['level'],target['age'],target['acctid']])
                 status, _, body = request(issued_link(body, 'inn.php'))
                 self.assertEqual(200, status)
             status, _, body = request(issued_link(body, 'village.php'))

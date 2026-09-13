@@ -94,7 +94,18 @@ function cedrikspotions_dohook($hookname,$args){
 }
 
 function cedrikspotions_run(){
-	global $session;
+    global $session;
+    require_once 'lib/player_mutation.php';
+    if ($_SERVER['REQUEST_METHOD'] === 'POST' || isset($_POST['gemcount'])) {
+        resurrection_consume_action('cedrik-purchase',(string)$session['user']['acctid']);
+        try {
+            $wish=\Resurrection\Http\Input::integer($_POST,'wish',0,1);
+            $quantity=\Resurrection\Http\Input::integer($_POST,'gemcount',0,1);
+            if ($wish>5 || $wish<1 || $quantity<1 || $quantity>2147483647) throw new InvalidArgumentException();
+        } catch (InvalidArgumentException $error) { http_response_code(400); exit('Invalid potion request.'); }
+        $availability=[1=>'ischarm',2=>'ismax',3=>'istemp',4=>'isforget',5=>'istrans'];
+        if (!get_module_setting($availability[$wish],'cedrikspotions')) { http_response_code(400); exit('Potion unavailable.'); }
+    }
 	$wish = httppost('wish');
 	$op = httpget("op");
 	$iname = getsetting("innname", LOCATION_INN);
@@ -177,6 +188,7 @@ function cedrikspotions_run(){
 			$link = appendcount("runmodule.php?module=cedrikspotions&op=gems");
 			addnav("", $link);
 			rawoutput("<form action='$link' method='POST'>");
+            rawoutput(resurrection_action_fields('cedrik-purchase',(string)$session['user']['acctid']));
 			rawoutput("<input name='gemcount' value='0'>");
 			rawoutput("<input type='submit' class='button' value='$give'>");
 			output("`nAnd what do you wish for?`n");
@@ -239,7 +251,11 @@ function cedrikspotions_run(){
 			}
 			rawoutput("</form>");
 		}else{
-			$gemcount = abs((int)$gemcount);
+            $gemcount=$quantity;
+            if (!is_numeric($cost) || $cost<=0 || $cost>2147483647) { http_response_code(400); exit('Invalid potion cost.'); }
+            try {
+                resurrection_player_mutation(function () use ($gemcount,$cost,$wish,$barkeep) {
+                    global $session;
 			if ($gemcount>$session['user']['gems']){
 				output("%s`0 stares at you blankly.",$barkeep);
 				output("\"`%You don't have that many gems, `bgo get some more gems!`b`0\" he says.");
@@ -344,6 +360,13 @@ function cedrikspotions_run(){
 					output("`n`nYou feel as though your gems would be better used elsewhere, not on some smelly potion.");
 				}
 			}
+                    foreach (['gems'=>2147483647,'hitpoints'=>2147483647,'maxhitpoints'=>4294967295] as $field=>$maximum) {
+                        if ($session['user'][$field]<0 || $session['user'][$field]>$maximum) throw new DomainException('Potion state exceeds bounds.');
+                    }
+                    if ($session['user']['charm']<0 || $session['user']['charm']>4294967295) throw new DomainException('Charm exceeds bounds.');
+                    if (isset($session['bufflist']['transmute']['rounds']) && $session['bufflist']['transmute']['rounds']>2147483647) throw new DomainException('Potion duration exceeds bounds.');
+                });
+            } catch (DomainException $error) { http_response_code(400); exit('Potion purchase rejected.'); }
 		}
 		addnav("I?Return to the Inn","inn.php");
 		villagenav();
