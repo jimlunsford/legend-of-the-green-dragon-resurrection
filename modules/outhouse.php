@@ -37,6 +37,7 @@ function outhouse_getmoduleinfo(){
 		"download"=>"core_module",
 		"prefs"=>array(
 			"Gnomish Outhouse User Preferences,title",
+			"stage"=>"Current visit stage,viewonly|0",
 			"usedouthouse"=>"Used Outhouse Today,bool|0"
 		),
 		"settings"=>array(
@@ -91,11 +92,12 @@ function outhouse_dohook($hookname, $args){
 		addnav("O?The Outhouse","runmodule.php?module=outhouse");
 	}elseif ($hookname=="newday"){
 		set_module_pref("usedouthouse",0);
+        set_module_pref("stage",0);
 	}
 	return $args;
 }
 
-function outhouse_run(){
+function outhouse_action(){
 	global $session;
 	$cost = get_module_setting("cost");
 	$goldinhand = get_module_setting("goldinhand");
@@ -106,6 +108,7 @@ function outhouse_run(){
 	$givegempercent = get_module_setting("givegempercent");
 	$giveturnchance= get_module_setting("giveturnchance");
 	$returnto = get_module_setting("returnto");
+	$canpay = false;
 	// Does the player have enough gold to use the Private Toilet?
 	if ($session['user']['gold'] >= $cost)
 		$canpay = true;
@@ -118,7 +121,7 @@ function outhouse_run(){
 			output("Dejected, you return to the forest.");
 			require_once("lib/forest.php");
 			forest(true);
-			page_footer();
+			return;
 		}
 
 		page_header("Private Toilet");
@@ -188,7 +191,7 @@ function outhouse_run(){
 		$takeaway = e_rand(1, 100);
 		if ($takeaway >= $badmusthit){
 			if ($session['user']['gold'] >= $goldinhand){
-				$session['user']['gold'] -= $takeback;
+				$session['user']['gold'] -= min($session['user']['gold'],$takeback);
 				debuglog("lost $takeback gold in the outhouse for not washing");
 				output("`nThe Toilet Paper Gnome has thrown you to the slimy, filthy floor and extracted `\$%s gold`2 %s from you due to your slovenliness!`n", $takeback, translate_inline($takeback ==1?"piece":"pieces"));
 			}
@@ -236,6 +239,41 @@ function outhouse_run(){
 			forest(true);
 		}
 	}
-	page_footer();
+	return;
+}
+function outhouse_run(){
+    global $session;
+    require_once 'lib/player_mutation.php';
+    try { $op=\Resurrection\Http\Input::choice($_GET,'op',['','pay','free','washpay','washfree','nowash'],''); }
+    catch (InvalidArgumentException $error) { http_response_code(400); exit('Invalid outhouse action.'); }
+    if ($op==='') { outhouse_action(); page_footer(); }
+    $url='runmodule.php?module=outhouse&op='.$op;
+    if ($_SERVER['REQUEST_METHOD']!=='POST') {
+        page_header('The Outhouses');
+        output('Continue?');
+        addnav('',$url);
+        rawoutput('<form method="POST" action="'.htmlspecialchars($url,ENT_QUOTES,'UTF-8').'">'.resurrection_action_fields('outhouse',$op).'<button class="button">Continue</button></form>');
+        addnav('Return to the Forest','forest.php');
+        page_footer();
+    }
+    resurrection_consume_action('outhouse',$op);
+    try {
+        resurrection_player_mutation(function () use ($op) {
+            global $session;
+            unset($GLOBALS['module_prefs'][(int)$session['user']['acctid']]['outhouse']);
+            $used=(int)get_module_pref('usedouthouse','outhouse');
+            $stage=(int)get_module_pref('stage','outhouse');
+            if (in_array($op,['pay','free'],true)) {
+                $cost=(int)get_module_setting('cost','outhouse');
+                if ($used!==0 || $stage!==0 || $cost<0 || ($op==='pay' && $session['user']['gold']<$cost)) throw new DomainException('Outhouse unavailable.');
+                set_module_pref('stage',$op==='pay'?1:2,'outhouse');
+            } else {
+                if ($used!==1 || ($op==='washpay' && $stage!==1) || ($op==='washfree' && $stage!==2) || ($op==='nowash' && !in_array($stage,[1,2],true))) throw new DomainException('No current outhouse visit.');
+                set_module_pref('stage',0,'outhouse');
+            }
+            outhouse_action();
+        });
+    } catch (DomainException $error) { http_response_code(409); exit('Outhouse action rejected.'); }
+    page_footer();
 }
 ?>

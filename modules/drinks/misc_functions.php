@@ -31,6 +31,7 @@ function drinks_editor(){
     global $mostrecentmodule, $session;
     require_once 'lib/player_mutation.php';
     require_once 'src/Http/DrinkInput.php';
+    if (httpget('subop') !== '') { http_response_code(400); exit('No supported drink object preferences.'); }
     if (empty($session['loggedin'])) { http_response_code(403); exit('Not authorized.'); }
     if (!get_module_pref('canedit','drinks')) check_su_access(SU_EDIT_USERS);
     try {

@@ -27,6 +27,8 @@ function dag_manage(){
         \Resurrection\Http\Input::choice($_GET,'type',['','1','2','3','search'],'');
         \Resurrection\Http\Input::choice($_GET,'sort',['','1','2','3','4','5','6','7','8'],'');
         \Resurrection\Http\Input::choice($_GET,'dir',['','1','2'],'');
+        \Resurrection\Http\Input::choice($_POST,'s',['','1','2','3','4','5','6','7','8'],'');
+        \Resurrection\Http\Input::choice($_POST,'d',['','1','2'],'');
         foreach (['setter','getter','target'] as $field) {
             if (strlen(\Resurrection\Http\Input::string($_POST,$field)) > 100) throw new InvalidArgumentException();
         }

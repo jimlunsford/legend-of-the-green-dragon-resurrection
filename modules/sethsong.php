@@ -92,6 +92,9 @@ function sethsong_dohook($hookname,$args){
 }
 
 function sethsong_run(){
+    global $session;
+    require_once 'lib/player_mutation.php';
+    if ($_SERVER['REQUEST_METHOD']==='POST') resurrection_consume_action('sethsong',(string)$session['user']['acctid']);
 	$op=httpget('op');
 	$visits=get_module_setting("visits");
 	$been=get_module_pref("been");
@@ -110,7 +113,19 @@ function sethsong_run(){
 		output("%s`0 clears his throat and drinks some water.", getsetting("bard", "`^Seth"));
 		output("\"I'm sorry, my throat is just too dry.\"");
 	} else {
-		sethsong_sing();
+        if ($_SERVER['REQUEST_METHOD']==='POST') {
+            resurrection_player_mutation(function () {
+                global $session;
+                unset($GLOBALS['module_prefs'][(int)$session['user']['acctid']]['sethsong']);
+                if (get_module_pref('been','sethsong') >= get_module_setting('visits','sethsong')) throw new DomainException('Visit limit reached.');
+                sethsong_sing();
+            });
+        } else {
+            output('Listen to %s`0 the Bard?',getsetting('bard','`^Seth'));
+            $url='runmodule.php?module=sethsong';
+            addnav('',$url);
+            rawoutput('<form method="POST" action="'.$url.'">'.resurrection_action_fields('sethsong',(string)$session['user']['acctid']).'<button class="button">Listen</button></form>');
+        }
 	}
 
 	addnav("Where to?");

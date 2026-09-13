@@ -318,7 +318,70 @@ function resurrectionhttpfixture_run() { echo 'fixture-executed'; exit; }
             allow(url); status,body=request(url); post=fields(body)
             status,_=request(url,post)
             self.assertEqual(400,status); self.assertEqual(after,snapshot())
+            url='runmodule.php?module=sethsong'
+            allow(url); before=snapshot(); status,body=request(url)
+            self.assertEqual(200,status); self.assertEqual(before,snapshot()); post=fields(body)
+            status,_=request(url,{})
+            self.assertEqual(403,status)
+            status,_=request(url,post)
+            self.assertEqual(200,status)
+            after=snapshot()
+            self.assertEqual('1',self.query('SELECT value FROM module_userprefs WHERE modulename=? AND setting=? AND userid=?',['sethsong','been',player])[0]['value'])
+            allow(url); status,_=request(url,post)
+            self.assertEqual(409,status); self.assertEqual(after,snapshot())
+            for visit in ['pay','free']:
+                for setting in ['usedouthouse','stage']:
+                    self.query('INSERT INTO module_userprefs (modulename,setting,userid,value) VALUES (?,?,?,?) ON DUPLICATE KEY UPDATE value=?',['outhouse',setting,player,'0','0'])
+                url='runmodule.php?module=outhouse&op='+visit
+                allow(url); before=snapshot(); status,body=request(url)
+                self.assertEqual(200,status); self.assertEqual(before,snapshot()); post=fields(body)
+                status,_=request(url,{})
+                self.assertEqual(403,status)
+                status,_=request(url,post)
+                self.assertEqual(200,status)
+                used=snapshot()
+                cost=int(self.query('SELECT value FROM module_settings WHERE modulename=? AND setting=?',['outhouse','cost'])[0]['value']) if visit=='pay' else 0
+                self.assertEqual(int(before['gold'])-cost,int(used['gold']))
+                allow(url); status,_=request(url,post)
+                self.assertEqual(409,status); self.assertEqual(used,snapshot())
+                url='runmodule.php?module=outhouse&op=wash'+visit
+                allow(url); status,body=request(url); post=fields(body)
+                status,_=request(url,post)
+                self.assertEqual(200,status)
+                washed=snapshot()
+                self.assertEqual('0',self.query('SELECT value FROM module_userprefs WHERE modulename=? AND setting=? AND userid=?',['outhouse','stage',player])[0]['value'])
+                allow(url); status,_=request(url,post)
+                self.assertEqual(409,status); self.assertEqual(washed,snapshot())
+                # Even a freshly obtained CSRF/intent cannot repeat a completed visit.
+                allow(url); status,body=request(url); post=fields(body)
+                status,_=request(url,post)
+                self.assertEqual(409,status); self.assertEqual(washed,snapshot())
+            # Editor authorization is checked even with an issued route fixture.
+            editor='runmodule.php?module=drinks&act=editor&op=edit&drinkid='+drink['drinkid']+'&admin=true'
+            self.query('UPDATE accounts SET superuser=0 WHERE acctid=?',[player])
+            allow(editor); status,_=request(editor)
+            self.assertEqual(403,status)
+            self.query('UPDATE accounts SET superuser=64 WHERE acctid=?',[player])
+            allow(editor); status,body=request(editor)
+            self.assertEqual(200,status); post=fields(body)
+            original_drink=self.query('SELECT * FROM drinks WHERE drinkid=?',[drink['drinkid']])[0]
+            values={key:value for key,value in original_drink.items() if key!='active'}
+            values.update(post); values['name']="`2O'Reilly <img>"; values['remarks']="UTF-8 🐉 \\ apostrophe's"
+            save='runmodule.php?module=drinks&act=editor&op=save&admin=true'
+            status,_=request(save)
+            self.assertEqual(403,status)
+            status,_=request(save,{**values,'csrf_token':''})
+            self.assertEqual(403,status)
+            status,body=request(save,values)
+            self.assertEqual(200,status)
+            self.assertNotIn("O'Reilly <img>",body)
+            saved=self.query('SELECT name,remarks FROM drinks WHERE drinkid=?',[drink['drinkid']])[0]
+            self.assertEqual(values['name'],saved['name']); self.assertEqual(values['remarks'],saved['remarks'])
+            allow(save); status,_=request(save,values)
+            self.assertEqual(409,status)
+            self.query('UPDATE drinks SET name=?,remarks=? WHERE drinkid=?',[original_drink['name'],original_drink['remarks'],drink['drinkid']])
         finally:
+            self.query('UPDATE accounts SET superuser=0 WHERE acctid=?',[player])
             self.query('UPDATE modules SET active=0')
             self.query('UPDATE module_settings SET value=? WHERE modulename=? AND setting=?',['1','cedrikspotions','ischarm'])
             self.query('UPDATE accounts SET '+','.join(key+'=?' for key in original)+' WHERE acctid=?', [*original.values(),player])
