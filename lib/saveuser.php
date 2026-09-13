@@ -16,29 +16,24 @@ function saveuser(){
 		$session['user']['allowednavs']=serialize($session['allowednavs']);
 		$session['user']['bufflist']=serialize($session['bufflist']);
 		if (isset($companions) && is_array($companions)) $session['user']['companions']=serialize($companions);
-		$sql="";
-		reset($session['user']);
-		while(list($key,$val)=resurrection_array_next($session['user'])){
-			if (is_array($val)) $val = serialize($val);
-			//only update columns that have changed.
-			if ($baseaccount[$key]!=$val){
-				$sql.="$key='".addslashes($val)."', ";
-			}
-		}
-		//due to the change in the accounts table -> moved output -> save everyhit
-		$sql.="laston='".date("Y-m-d H:i:s")."', ";
-		$sql = substr($sql,0,strlen($sql)-2);
-		$sql="UPDATE " . db_prefix("accounts") . " SET " . $sql .
-			" WHERE acctid = ".$session['user']['acctid'];
-		db_query($sql);
-		if (isset($session['output']) && $session['output']) {
-			$sql_output="UPDATE " . db_prefix("accounts_output") . " SET output='".addslashes($session['output'])."' WHERE acctid={$session['user']['acctid']};";
-			$result=db_query($sql_output);
-			if (db_affected_rows($result)<1) {
-				$sql_output="REPLACE INTO " . db_prefix("accounts_output") . " VALUES ({$session['user']['acctid']},'".addslashes($session['output'])."');";
-				db_query($sql_output);
-			}
-		}
+        $assignments = [];
+        $parameters = [];
+        foreach ($session['user'] as $key => $value) {
+            if ($key === 'password' || !array_key_exists($key, $baseaccount)) { continue; }
+            if (is_array($value)) { $value = serialize($value); }
+            if ($baseaccount[$key] != $value) {
+                $assignments[] = db_identifier($key) . '=?';
+                $parameters[] = $value;
+            }
+        }
+        $assignments[] = 'laston=?';
+        $parameters[] = date('Y-m-d H:i:s');
+        $parameters[] = (int)$session['user']['acctid'];
+        db_query('UPDATE ' . db_prefix('accounts') . ' SET ' . implode(',', $assignments) . ' WHERE acctid=?', true, $parameters);
+        if (!empty($session['output'])) {
+            db_query('INSERT INTO ' . db_prefix('accounts_output') . ' (acctid,output) VALUES (?,?) ON DUPLICATE KEY UPDATE output=?', true,
+                [(int)$session['user']['acctid'], $session['output'], $session['output']]);
+        }
 		unset($session['bufflist']);
 		$session['user'] = array(
 			"acctid"=>$session['user']['acctid'],

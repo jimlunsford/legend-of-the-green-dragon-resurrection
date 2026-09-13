@@ -19,12 +19,6 @@ parameters:
 			path: lib/arraytourl.php
 
 		-
-			message: '#^Function get_magic_quotes_gpc not found\.$#'
-			identifier: function.notFound
-			count: 1
-			path: lib/errorhandling.php
-
-		-
 			message: '#^Undefined variable\: \$hookname$#'
 			identifier: variable.undefined
 			count: 1

@@ -33,7 +33,7 @@ function prepare_template($force=false){
 	 if (!isset($_COOKIE['template'])) $_COOKIE['template']="";
 	$templatename="";
 	$templatemessage="";
-	if ($_COOKIE['template']!="")
+	if (is_string($_COOKIE['template']) && preg_match('/\\A[A-Za-z0-9_-]+\\.htm\\z/', $_COOKIE['template']))
 		$templatename=$_COOKIE['template'];
 	if ($templatename=="" || !file_exists("templates/$templatename"))
 		$templatename=getsetting("defaultskin", "jade.htm");

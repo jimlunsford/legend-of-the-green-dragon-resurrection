@@ -39,43 +39,25 @@ function commentarylocs() {
 
 function addcommentary() {
 	global $session, $emptypost;
-	$section = httppost('section');
-	$talkline = httppost('talkline');
-	$schema = httppost('schema');
-	$comment = trim(httppost('insertcommentary'));
-	$counter = httppost('counter');
-	$remove = URLDecode(httpget('removecomment'));
-	if ($remove>0) {
-		$return = '/' . httpget('returnpath');
-		$section = httpget('section');
-        $sql = "SELECT " .
-                db_prefix("commentary").".*,".db_prefix("accounts").".name,".
-                db_prefix("accounts").".acctid, ".db_prefix("accounts").".clanrank,".
-                db_prefix("clans").".clanshort FROM ".db_prefix("commentary").
-                " INNER JOIN ".db_prefix("accounts")." ON ".
-                db_prefix("accounts").".acctid = " . db_prefix("commentary").
-                ".author LEFT JOIN ".db_prefix("clans")." ON ".
-                db_prefix("clans").".clanid=".db_prefix("accounts").
-                ".clanid WHERE commentid=$remove";
-		$singleRowResult = db_query($sql);
-		$row = db_fetch_assoc($singleRowResult);
-		$sql = "INSERT LOW_PRIORITY INTO ".db_prefix("moderatedcomments").
-			" (moderator,moddate,comment) VALUES ('{$session['user']['acctid']}','".date("Y-m-d H:i:s")."','".addslashes(serialize($row))."')";
-		db_query($sql);
-		$sql = "DELETE FROM ".db_prefix("commentary")." WHERE commentid='$remove';";
-		db_query($sql);
-		invalidatedatacache("comments-$section");
-		invalidatedatacache("comments-or11");
-		$session['user']['specialinc']==''; //just to make sure he was not in a special
-		$return = cmd_sanitize($return);
-		$return = substr($return,strrpos($return,"/")+1);
-		if (strpos($return,"?")===false && strpos($return,"&")!==false){
-			$x = strpos($return,"&");
-			$return = substr($return,0,$x-1)."?".substr($return,$x+1);
-		}
-		debug($return);
-		redirect($return);
-	}
+    require_once 'lib/web_security.php';
+    require_once 'lib/commentary_security.php';
+    if (isset($_GET['removecomment'])) { http_response_code(405); exit('Use POST for moderation.'); }
+    if (isset($_POST['removecomment'])) {
+        try { resurrection_delete_comment($session, $_SESSION, $_SERVER['REQUEST_METHOD'] ?? '', $_POST); }
+        catch (DomainException|InvalidArgumentException $error) { http_response_code(403); exit('Invalid moderation request.'); }
+    }
+    if (!isset($_POST['insertcommentary'])) { return; }
+    resurrection_require_post();
+    if (!$session['loggedin']) { http_response_code(403); exit('Sign in to comment.'); }
+    try {
+        $section = \Resurrection\Http\Input::string($_POST, 'section');
+        $comment = trim(\Resurrection\Http\Input::string($_POST, 'insertcommentary'));
+        $counter = \Resurrection\Http\Input::integer($_POST, 'counter');
+        if (!isset($_SESSION['commentary_sections'][$section])) { throw new DomainException('Section not available.'); }
+        $talkline = $_SESSION['commentary_sections'][$section]['talkline'];
+        $schema = $_SESSION['commentary_sections'][$section]['schema'];
+    } catch (DomainException|InvalidArgumentException $error) { http_response_code(400); exit('Invalid comment.'); }
+
 	if (array_key_exists('commentcounter',$session) &&
 			$session['commentcounter']==$counter) {
 		if ($section || $talkline || $comment) {
@@ -97,8 +79,11 @@ function injectsystemcomment($section,$comment) {
 
 function injectrawcomment($section, $author, $comment)
 {
-	$sql = "INSERT INTO " . db_prefix("commentary") . " (postdate,section,author,comment) VALUES ('".date("Y-m-d H:i:s")."','$section',$author,\"$comment\")";
-	db_query($sql);
+    if (!preg_match('/\\A[A-Za-z0-9_-]{1,20}\\z/', $section) || mb_strlen($comment, 'UTF-8') > 200) {
+        throw new InvalidArgumentException('Invalid commentary section or length.');
+    }
+    db_query('INSERT INTO ' . db_prefix('commentary') . ' (postdate,section,author,comment) VALUES (?,?,?,?)', true,
+        [date('Y-m-d H:i:s'), $section, (int)$author, $comment]);
 	invalidatedatacache("comments-{$section}");
 	// invalidate moderation screen also.
 	invalidatedatacache("comments-or11");
@@ -108,7 +93,7 @@ function injectcommentary($section, $talkline, $comment, $schema=false) {
 	global $session,$doublepost, $translation_namespace;
 	if ($schema===false) $schema=$translation_namespace;
 	// Make the comment pristine so that we match on it correctly.
-	$comment = stripslashes($comment);
+	// Already raw input, including literal backslashes.
 	tlschema("commentary");
 	$doublepost=0;
 	$emptypost = 0;
@@ -136,7 +121,7 @@ function injectcommentary($section, $talkline, $comment, $schema=false) {
 		tlschema();
 
 		$commentary = preg_replace("'([^[:space:]]{45,45})([^[:space:]])'","\\1 \\2",$commentary);
-		$commentary = addslashes($commentary);
+		// Bind the raw comment below.
 		// do an emote if the area has a custom talkline and the user
 		// isn't trying to emote already.
 		if ($talkline!="says" && substr($commentary,0,1)!=":" &&
@@ -149,11 +134,11 @@ function injectcommentary($section, $talkline, $comment, $schema=false) {
 			//handle game master inserts now, allow double posts
 			injectsystemcomment($section,$commentary);
 		} else {
-			$sql = "SELECT comment,author FROM " . db_prefix("commentary") . " WHERE section='$section' ORDER BY commentid DESC LIMIT 1";
-			$result = db_query($sql);
+			$sql = "SELECT comment,author FROM " . db_prefix("commentary") . " WHERE section=? ORDER BY commentid DESC LIMIT 1";
+			$result = db_query($sql, true, [$section]);
 			$row = db_fetch_assoc($result);
 			db_free_result($result);
-			if ($row['comment']!=stripslashes($commentary) ||
+			if (!$row || $row['comment']!=$commentary ||
 					$row['author']!=$session['user']['acctid']){
 				injectrawcomment($section, $session['user']['acctid'],
 						$commentary);
@@ -401,8 +386,10 @@ function viewcommentary($section,$message="Interject your own commentary?",$limi
 			}
 		}else{
 			if ($session['user']['superuser'] & SU_EDIT_COMMENTS) {
-				$out.="`2[<a href='".$return.$one."removecomment={$commentids[$i]}&section=$section&returnpath=".URLEncode($return)."'>$del</a>`2]`0&nbsp;";
-				addnav("",$return.$one."removecomment={$commentids[$i]}&section=$section&returnpath=".URLEncode($return)."");
+                $action = htmlspecialchars($return, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+                $out .= '<form action="' . $action . '" method="POST" style="display:inline">' . resurrection_csrf_field()
+                    . '<input type="hidden" name="removecomment" value="' . (int)$commentids[$i] . '"><button class="button" type="submit">' . htmlspecialchars($del, ENT_QUOTES, 'UTF-8') . '</button></form>';
+                addnav('', $return);
 			}
 			$out.=$op[$i];
 			if (!array_key_exists($sect,$outputcomments) || !is_array($outputcomments[$sect]))
@@ -602,6 +589,8 @@ function talkform($section,$talkline,$limit=10,$schema=false){
 	}
 	addnav("",$req);
 	output_notl("<form action=\"$req\" method='POST' autocomplete='false'>",true);
+    rawoutput(resurrection_csrf_field());
+    $_SESSION['commentary_sections'][$section] = ['talkline' => $talkline, 'schema' => $schema];
 	previewfield("insertcommentary", $session['user']['name'], $talkline, true, array("size"=>"40", "maxlength"=>200-$tll));
 	rawoutput("<input type='hidden' name='talkline' value='$talkline'>");
 	rawoutput("<input type='hidden' name='schema' value='$schema'>");

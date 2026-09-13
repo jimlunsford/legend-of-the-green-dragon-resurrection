@@ -3,14 +3,6 @@
 // addnews ready
 // mail ready
 
-if (isset($_POST['template'])){
-	$skin = $_POST['template'];
-	if ($skin > "") {
-		setcookie("template",$skin ,strtotime("+45 days"));
-		$_COOKIE['template']=$skin;
-	}
-}
-
 define("ALLOW_ANONYMOUS",true);
 require_once("common.php");
 require_once("lib/http.php");
@@ -90,22 +82,10 @@ if ($onlinecount<getsetting("maxonline",0) || getsetting("maxonline",0)==0){
 	}
 	if (isset($session['message']) && $session['message']>"")
 		output_notl("`b`\$%s`b`n", $session['message'],true);
-	rawoutput("<script language='JavaScript' src='lib/md5.js'></script>");
-	rawoutput("<script language='JavaScript'>
-	<!--
-	function md5pass(){
-		//encode passwords before submission to protect them even from network sniffing attacks.
-		var passbox = document.getElementById('password');
-		if (passbox.value.substring(0, 5) != '!md5!') {
-			passbox.value = '!md5!' + hex_md5(passbox.value);
-		}
-	}
-	//-->
-	</script>");
 	$uname = translate_inline("<u>U</u>sername");
 	$pass = translate_inline("<u>P</u>assword");
 	$butt = translate_inline("Log in");
-	rawoutput("<form action='login.php' method='POST' onSubmit=\"md5pass();\">".templatereplace("login",array("username"=>$uname,"password"=>$pass,"button"=>$butt))."</form>");
+	rawoutput("<form action='login.php' method='POST'>".resurrection_csrf_field().templatereplace("login",array("username"=>$uname,"password"=>$pass,"button"=>$butt))."</form>");
 	output_notl("`c");
 	addnav("","login.php");
 } else {

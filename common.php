@@ -88,10 +88,22 @@ require_once("lib/debuglog.php");
 require_once("lib/forcednavigation.php");
 require_once("lib/php_generic_environment.php");
 
+php_generic_environment();
 //session_register("session");
-session_start();
-$session = array();
+require_once 'lib/web_security.php';
+resurrection_start_session();
+$_SESSION['session'] ??= [];
 $session =& $_SESSION['session'];
+$session += ['loggedin' => false, 'lasthit' => 0, 'message' => '', 'allowednavs' => [], 'bufflist' => [], 'templatename' => '', 'templatemtime' => 0];
+$session['user'] ??= [];
+require_once 'lib/all_tables.php';
+foreach (get_all_tables()['accounts'] as $name => $column) {
+    if (str_contains($column['type'], 'key')) { continue; }
+    $session['user'][$name] ??= $column['default'] ?? '';
+}
+$session['user']['superuser'] = (int)($session['user']['superuser'] ?? 0);
+$session['user']['loggedin'] = (bool)($session['user']['loggedin'] ?? false);
+
 
 // lets us provide output in dbconnect.php that only appears if there's a
 // problem connecting to the database server.  Useful for migration moves
@@ -168,7 +180,7 @@ if (!DB_CONNECTED || !db_select_db ($DB_NAME)){
 	define("LINK",$link);
 	define("DB_CHOSEN",true);
 }
-if ($logd_version == getsetting("installer_version","-1")) {
+if (!defined("IS_INSTALLER") && $logd_version == getsetting("installer_version","-1")) {
 	define("IS_INSTALLER", false);
 }
 
@@ -247,9 +259,9 @@ else
 	$session['bufflist'] = array();
 if (!is_array($session['bufflist'])) $session['bufflist']=array();
 $session['user']['lastip']=$REMOTE_ADDR;
-if (strlen($_COOKIE['lgi'])<32){
+if (strlen(is_string($_COOKIE['lgi'] ?? null) ? $_COOKIE['lgi'] : '')<32){
 	if (strlen($session['user']['uniqueid'])<32){
-		$u=md5(microtime());
+		$u=bin2hex(random_bytes(16));
 		setcookie("lgi",$u,strtotime("+365 days"));
 		$_COOKIE['lgi']=$u;
 		$session['user']['uniqueid']=$u;
@@ -280,22 +292,16 @@ if (
 	$host = str_replace(":80","",$_SERVER['HTTP_HOST']);
 
 	if ($site != $host){
-		$sql = "SELECT * FROM " . db_prefix("referers") . " WHERE uri='{$_SERVER['HTTP_REFERER']}'";
-		$result = db_query($sql);
-		$row = db_fetch_assoc($result);
-		db_free_result($result);
-		if ($row['refererid']>""){
-			$sql = "UPDATE " . db_prefix("referers") . " SET count=count+1,last='".date("Y-m-d H:i:s")."',site='".addslashes($site)."',dest='".addslashes($host)."/".addslashes($REQUEST_URI)."',ip='{$_SERVER['REMOTE_ADDR']}' WHERE refererid='{$row['refererid']}'";
-		}else{
-			$sql = "INSERT INTO " . db_prefix("referers") . " (uri,count,last,site,dest,ip) VALUES ('{$_SERVER['HTTP_REFERER']}',1,'".date("Y-m-d H:i:s")."','".addslashes($site)."','".addslashes($host)."/".addslashes($REQUEST_URI)."','{$_SERVER['REMOTE_ADDR']}')";
-			if (e_rand(1,100)==2){
-				$timestamp = date("Y-m-d H:i:s",strtotime("-1 month"));
-				db_query("DELETE FROM ".db_prefix("referers")." WHERE last < '$timestamp' LIMIT 300");
-				require_once("lib/gamelog.php");
-				gamelog("Deleted ".db_affected_rows()." records from ".db_prefix("referers")." older than $timestamp.","maintenance");
-			}
-		}
-		db_query($sql);
+        $result = db_query('SELECT refererid FROM ' . db_prefix('referers') . ' WHERE uri=?', true, [$_SERVER['HTTP_REFERER']]);
+        $row = db_fetch_assoc($result);
+        $values = [date('Y-m-d H:i:s'), $site, $host . '/' . $REQUEST_URI, $_SERVER['REMOTE_ADDR']];
+        if ($row) {
+            $values[] = (int)$row['refererid'];
+            db_query('UPDATE ' . db_prefix('referers') . ' SET count=count+1,last=?,site=?,dest=?,ip=? WHERE refererid=?', true, $values);
+        } else {
+            array_unshift($values, $_SERVER['HTTP_REFERER']);
+            db_query('INSERT INTO ' . db_prefix('referers') . ' (uri,last,site,dest,ip,count) VALUES (?,?,?,?,?,1)', true, $values);
+        }
 	}
 }
 

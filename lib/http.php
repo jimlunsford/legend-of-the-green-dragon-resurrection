@@ -3,15 +3,7 @@ require_once __DIR__ . '/../src/Compatibility/array_cursor.php';
 // translator ready
 // addnews ready
 // mail ready
-function httpget($var){
-	global $HTTP_GET_VARS;
-
-	$res = isset($_GET[$var]) ? $_GET[$var] : false;
-	if ($res === false) {
-		$res = isset($HTTP_GET_VARS[$var]) ? $HTTP_GET_VARS[$var] : false;
-	}
-	return $res;
-}
+function httpget($var){ return $_GET[$var] ?? false; }
 
 function httpallget() {
 	return $_GET;
@@ -23,16 +15,7 @@ function httpset($var, $val,$force=false){
 	if (isset($HTTP_GET_VARS[$var])) $HTTP_GET_VARS[$var] = $val;
 }
 
-function httppost($var){
-	global $HTTP_POST_VARS;
-
-	$res = isset($_POST[$var]) ? $_POST[$var] : false;
-	if ($res === false) {
-		$res = isset($HTTP_POST_VARS[$var]) ?
-			$HTTP_POST_VARS[$var] : false;
-	}
-	return $res;
-}
+function httppost($var){ return $_POST[$var] ?? false; }
 
 function httppostisset($var) {
 	global $HTTP_POST_VARS;
@@ -72,7 +55,9 @@ function postparse($verify=false, $subval=false){
 	$i = 0;
 	while(list($key, $val) = resurrection_array_next($var)) {
 		if ($verify === false || isset($verify[$key])) {
-			if (is_array($val)) $val = addslashes(serialize($val));
+			if (is_array($val)) $val = serialize($val);
+            $key = db_identifier($key);
+            $val = db_escape((string)$val);
 			$sql .= (($i > 0) ? "," : "") . "$key='$val'";
 			$keys .= (($i > 0) ? "," : "") . "$key";
 			$vals .= (($i > 0) ? "," : "") . "'$val'";

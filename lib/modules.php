@@ -8,9 +8,16 @@ require_once("lib/arraytourl.php");
 
 $injected_modules = array(1=>array(),0=>array());
 
+function resurrection_module_manager(): bool {
+    global $session;
+    return !empty($session['loggedin']) && (((int)($session['user']['superuser'] ?? 0) & SU_MANAGE_MODULES) !== 0);
+}
+
 function injectmodule($modulename,$force=false){
 	global $mostrecentmodule,$injected_modules;
-	//try to circumvent the array_key_exists() problem we've been having.
+	if (!is_string($modulename) || !preg_match('/\\A[A-Za-z][A-Za-z0-9_]*\\z/', $modulename)) { return false; }
+    $force = $force && resurrection_module_manager();
+    // Only trusted management calls may inspect an inactive module.
 	if ($force) $force = 1; else $force = 0;
 
 	//early escape if we already called injectmodule this hit with the
@@ -61,65 +68,9 @@ function injectmodule($modulename,$force=false){
 				return false;
 			}
 		}
-		//check to see if the module needs to be upgraded.
-		if (db_num_rows($result)>0){
-			if (!isset($row)) $row = db_fetch_assoc($result);
-			$filemoddate = date("Y-m-d H:i:s",filemtime($modulefilename));
-			if ($row['filemoddate']!=$filemoddate || $row['infokeys']=="" ||
-					$row['infokeys'][0] != '|' || $row['version']==''){
-				//The file has recently been modified, lock tables and
-				//check again (knowing we're the only one who can do this
-				//at one shot)
-				$sql = "LOCK TABLES " . db_prefix("modules") . " WRITE";
-				db_query($sql);
-				//check again after the table has been locked.
-				$sql = "SELECT filemoddate FROM " . db_prefix("modules") . " WHERE modulename='$modulename'";
-				$result = db_query($sql);
-				$row = db_fetch_assoc($result);
-				if ($row['filemoddate']!=$filemoddate ||
-						!isset($row['infokeys']) || $row['infokeys']=="" || $row['infokeys'][0] != '|' ||
-						$row['version']==''){
-					//the file mod time is still different from that
-					//recorded in the database, time to update the database
-					//and upgrade the module.
-					debug("The module $modulename was found to have updated, upgrading the module now.");
-					if (!is_array($info)){
-						//we might have gotten this info above, if not,
-						//we need it now.
-						$fname = $modulename."_getmoduleinfo";
-						$info = $fname();
-						if (!isset($info['download']))
-							$info['download']="";
-						if (!isset($info['version']))
-							$info['version']="0.0";
-						if (!isset($info['description']))
-							$info['description'] = '';
-					}
-					//Everyone else will block at the initial lock tables,
-					//we'll update, and on their second check, they'll fail.
-					//Only we will update the table.
+        // Runtime injection must never install or upgrade code as a side effect.
+        // Explicit authorized module lifecycle operations own those changes.
 
-					$keys = "|".join("|", array_keys($info))."|";
-
-					$sql = "UPDATE ". db_prefix("modules") . " SET moduleauthor='".addslashes($info['author'])."', category='".addslashes($info['category'])."', formalname='".addslashes($info['name'])."', description='".addslashes($info['description'])."', filemoddate='$filemoddate', infokeys='$keys',version='".addslashes($info['version'])."',download='".addslashes($info['download'])."' WHERE modulename='$modulename'";
-					db_query($sql);
-					debug($sql);
-					$sql = "UNLOCK TABLES";
-					db_query($sql);
-					// Remove any old hooks (install will reset them)
-					module_wipehooks();
-					$fname = $modulename."_install";
-					if ($fname() === false) {
-						return false;
-					}
-					invalidatedatacache("inject-$modulename");
-
-				}else{
-					$sql = "UNLOCK TABLES";
-					db_query($sql);
-				}
-			}
-		}
 		tlschema();
 		$injected_modules[$force][$modulename]=true;
 		return true;
@@ -233,7 +184,7 @@ function module_check_requirements($reqs, $forceinject=false){
 	reset($reqs);
 	while (list($key,$val)=resurrection_array_next($reqs)){
 		$info = explode("|",$val);
-		if (!is_module_installed($key,$info[0])) {
+		if (!is_module_installed($key,$info[0]) || !is_module_active($key)) {
 			return false;
 		}
 		// This is actually cheap since we cache the result
@@ -1245,11 +1196,17 @@ function module_compare_versions($a,$b){
 }
 
 function activate_module($module){
+    if (!resurrection_module_manager()) { return false; }
+    require_once 'lib/web_security.php';
+    resurrection_require_post();
+    if (!is_string($module) || !preg_match('/\\A[A-Za-z][A-Za-z0-9_]*\\z/', $module)) { return false; }
 	if (!is_module_installed($module)){
 		if (!install_module($module)){
 			return false;
 		}
 	}
+    $info = get_module_info($module);
+    if (!module_check_requirements($info['requires'] ?? [])) { return false; }
 	$sql = "UPDATE " . db_prefix("modules") . " SET active=1 WHERE modulename='$module'";
 	db_query($sql);
 	invalidatedatacache("inject-$module");
@@ -1262,6 +1219,10 @@ function activate_module($module){
 }
 
 function deactivate_module($module){
+    if (!resurrection_module_manager()) { return false; }
+    require_once 'lib/web_security.php';
+    resurrection_require_post();
+    if (!is_string($module) || !preg_match('/\\A[A-Za-z][A-Za-z0-9_]*\\z/', $module)) { return false; }
 	if (!is_module_installed($module)){
 		if (!install_module($module)){
 			return false;
@@ -1282,6 +1243,10 @@ function deactivate_module($module){
 }
 
 function uninstall_module($module){
+    if (!resurrection_module_manager()) { return false; }
+    require_once 'lib/web_security.php';
+    resurrection_require_post();
+    if (!is_string($module) || !preg_match('/\\A[A-Za-z][A-Za-z0-9_]*\\z/', $module)) { return false; }
 	if (injectmodule($module,true)) {
 		$fname = $module."_uninstall";
 		output("Running module uninstall script`n");
@@ -1321,6 +1286,10 @@ function uninstall_module($module){
 }
 
 function install_module($module, $force=true){
+    if (!resurrection_module_manager()) { return false; }
+    require_once 'lib/web_security.php';
+    resurrection_require_post();
+    if (!is_string($module) || !preg_match('/\\A[A-Za-z][A-Za-z0-9_]*\\z/', $module)) { return false; }
  	global $mostrecentmodule, $session;
 	$name = $session['user']['name'];
 	if (!$name) $name = '`@System`0';

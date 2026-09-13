@@ -11,19 +11,8 @@ function sanitize_uri(){
 	}
 	if ($REQUEST_URI==""){
 		//necessary for some IIS installations (CGI in particular)
-		$get = httpallget();
-		if (count($get) > 0) {
-			$REQUEST_URI=$SCRIPT_NAME."?";
-			reset($get);
-			$i=0;
-			while (list($key,$val)=resurrection_array_next($get)){
-				if ($i>0) $REQUEST_URI.="&";
-				$REQUEST_URI.="$key=".URLEncode($val);
-				$i++;
-			}
-		}else{
-			$REQUEST_URI=$SCRIPT_NAME;
-		}
+        $query = http_build_query(httpallget(), '', '&', PHP_QUERY_RFC3986);
+        $REQUEST_URI = $SCRIPT_NAME . ($query !== '' ? '?' . $query : '');
 		$_SERVER['REQUEST_URI'] = $REQUEST_URI;
 	}
 	$SCRIPT_NAME=substr($SCRIPT_NAME,strrpos($SCRIPT_NAME,"/")+1);
@@ -34,8 +23,9 @@ function sanitize_uri(){
 	}
 }
 function php_generic_environment(){
-	require_once("lib/register_global.php");
-	register_global($_SERVER);
-	sanitize_uri();
+    // Explicit server metadata bridge only. Never export GET/POST/cookies into globals.
+    foreach (['SCRIPT_NAME', 'REQUEST_URI', 'PATH_INFO', 'REMOTE_ADDR', 'SERVER_NAME', 'SERVER_PORT', 'QUERY_STRING', 'REQUEST_METHOD', 'HTTP_HOST', 'HTTP_REFERER', 'HTTP_USER_AGENT'] as $name) {
+        $GLOBALS[$name] = $_SERVER[$name] ?? '';
+    }
+    sanitize_uri();
 }
-?>
