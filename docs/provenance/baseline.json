@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "tag": "historical-source-1.1.2",
+  "commit": "bdc29df9bc344774b41e0ad7cae7f6ed2f7512e2",
+  "tree": "4013a0ccc5227e87cd7a22de00b7c322d7aa237c",
+  "files": 417,
+  "commits": 11,
+  "manifest": "docs/provenance/historical-core-manifest.sha256",
+  "source_repository": "https://github.com/jimlunsford/lotgd",
+  "identity": "Legend of the Green Dragon 1.1.2 Dragonprime Edition with bundled maintenance fixes"
+}

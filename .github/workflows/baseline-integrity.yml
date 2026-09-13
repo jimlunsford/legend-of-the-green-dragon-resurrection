@@ -1,0 +1,28 @@
+name: Baseline integrity
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: baseline-integrity-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  provenance:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out complete history and tags
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4, verified 2026-09-13
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+          persist-credentials: false
+      - name: Verify immutable historical objects
+        run: python3 scripts/verify-historical-baseline.py
+      - name: Validate project metadata and tracked-file hygiene
+        run: python3 scripts/validate-project.py
+      - name: Test integrity rejection cases
+        run: python3 -m unittest discover -s tests/tooling -v
