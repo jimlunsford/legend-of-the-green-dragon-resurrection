@@ -108,7 +108,7 @@ function &db_query_cached($sql, $name, $duration = 900) {
 function db_fetch_assoc(&$result) {
     if (!is_array($result)) { return false; }
     $item = resurrection_array_next($result);
-    return $item === false ? false : $item[1];
+    return $item === null ? false : $item[1];
 }
 
 function db_num_rows($result) { return is_array($result) ? count($result) : 0; }

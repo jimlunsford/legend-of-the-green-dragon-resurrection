@@ -17,8 +17,8 @@ final class ArrayCursorTest extends TestCase
         self::assertSame([0, null], resurrection_array_next($items));
         self::assertSame(['zero', 0], resurrection_array_next($items));
         self::assertSame(['empty', ''], resurrection_array_next($items));
-        self::assertFalse(resurrection_array_next($items));
-        self::assertFalse(resurrection_array_next($items));
+        self::assertNull(resurrection_array_next($items));
+        self::assertNull(resurrection_array_next($items));
     }
 
     public function testPartialTraversalAndResetUseCallersPointer(): void
@@ -58,7 +58,20 @@ final class ArrayCursorTest extends TestCase
     public function testEmptyArray(): void
     {
         $items = [];
-        self::assertFalse(resurrection_array_next($items));
+        self::assertNull(resurrection_array_next($items));
+    }
+
+    public function testExhaustionClearsLoopVariablesWithoutWarnings(): void
+    {
+        $items = ['last' => false];
+        $seen = [];
+        while ([$key, $value] = resurrection_array_next($items)) {
+            $seen[] = [$key, $value];
+        }
+        self::assertSame([['last', false]], $seen);
+        self::assertNull($key);
+        self::assertNull($value);
+        self::assertNull(key($items));
     }
 
     public function testInvalidInputIsNotSilentlyDiscarded(): void
