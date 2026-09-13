@@ -127,4 +127,59 @@ final class ModuleCertificationTest extends TestCase
             foreach (resurrection_bundled_modules() as $module) deactivate_module($module);
         }
     }
+    public function testRaceStatisticsLocationsAndBundledEvents(): void
+    {
+        foreach (resurrection_bundled_modules() as $module) self::assertTrue(activate_module($module));
+        try {
+            $GLOBALS['session']['user']['level'] = 10;
+            $GLOBALS['session']['user']['attack'] = 10;
+            $GLOBALS['session']['user']['defense'] = 10;
+            foreach (['Elf'=>'raceelf', 'Troll'=>'racetroll'] as $race=>$module) {
+                $GLOBALS['session']['user']['race'] = $race;
+                $GLOBALS['session']['bufflist'] = [];
+                modulehook('newday', ['turnstoday'=>''], false, $module);
+                $field = $race === 'Elf' ? 'defmod' : 'atkmod';
+                self::assertSame(1.3, $GLOBALS['session']['bufflist']['racialbenefit'][$field]);
+                self::assertSame(1, $GLOBALS['session']['bufflist']['racialbenefit']['allowinpvp']);
+                self::assertSame(1, $GLOBALS['session']['bufflist']['racialbenefit']['allowintrain']);
+            }
+            $GLOBALS['session']['user']['race'] = 'Human';
+            $GLOBALS['session']['user']['turns'] = 10;
+            modulehook('newday', ['turnstoday'=>''], false, 'racehuman');
+            self::assertSame(12, $GLOBALS['session']['user']['turns']);
+            $GLOBALS['session']['user']['race'] = 'Dwarf';
+            self::assertSame(120.0, modulehook('creatureencounter', ['creaturegold'=>100], false, 'racedwarf')['creaturegold']);
+            foreach (['Dwarf'=>'racedwarf','Elf'=>'raceelf','Human'=>'racehuman','Troll'=>'racetroll'] as $race=>$module) {
+                $GLOBALS['session']['user']['race'] = $race;
+                modulehook('setrace', [], false, $module);
+                $old = get_module_setting('villagename', $module);
+                $new = "O'Reilly \\ village 🐉";
+                db_query('UPDATE accounts SET location=? WHERE acctid=?', true, [$old, $GLOBALS['session']['user']['acctid']]);
+                modulehook('changesetting', ['setting'=>'villagename','module'=>$module,'old'=>$old,'new'=>$new], false, $module);
+                self::assertSame($new, db_query('SELECT location FROM accounts WHERE acctid=?', true, [$GLOBALS['session']['user']['acctid']])[0]['location']);
+                modulehook('changesetting', ['setting'=>'villagename','module'=>$module,'old'=>$new,'new'=>$old], false, $module);
+                self::assertSame([], modulehook('validlocation', [], false, $module)); // Cities is intentionally absent.
+                self::assertSame([], modulehook('validforestloc', [], false, $module));
+            }
+            $GLOBALS['playermount'] = ['mountid'=>1];
+            set_module_objpref('mounts', 1, 'findtavern', 0, 'darkhorse');
+            $events = module_collect_events('forest');
+            self::assertCount(8, $events);
+            self::assertSame(100, array_column($events, 'rawchance', 'modulename')['darkhorse']);
+            set_module_objpref('mounts', 1, 'findtavern', 1, 'darkhorse');
+            self::assertSame(0, array_column(module_collect_events('forest'), 'rawchance', 'modulename')['darkhorse']);
+            self::assertCount(4, module_collect_events('travel'));
+            self::assertSame(0, resurrection_event_chance('darkhorse', 'require_once("modules/darkhorse.php"); return (darkhorse_tavernmount() ? 0 : 100);'));
+            set_module_objpref('mounts', 1, 'findtavern', 0, 'darkhorse');
+            modulehook('darkhorsegame', ['return'=>'runmodule.php?module=darkhorse']);
+            self::assertNotEmpty($GLOBALS['navbysection']);
+            $scripts = db_query("SELECT DISTINCT creatureaiscript FROM creatures WHERE creatureaiscript IS NOT NULL AND creatureaiscript<>''");
+            self::assertCount(1, $scripts);
+            self::assertTrue(\Resurrection\Game\CreatureAi::supported($scripts[0]['creatureaiscript']));
+        } finally {
+            db_query('UPDATE accounts SET location=? WHERE acctid=?', true, [LOCATION_FIELDS, $GLOBALS['session']['user']['acctid']]);
+            foreach (resurrection_bundled_modules() as $module) deactivate_module($module);
+        }
+    }
+
 }

@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/../src/Game/Expression.php';
 require_once __DIR__ . '/../src/Compatibility/array_cursor.php';
 // addnews ready
 // translator ready
@@ -23,82 +24,18 @@ function calculate_buff_fields(){
 		}//end if
 	}//end while
 
-	//process calculated buff fields.
-	reset($session['bufflist']);
-	if (!is_array($buffreplacements)) $buffreplacements = array();
-	while (list($buffname,$buff)=resurrection_array_next($session['bufflist'])){
-		if (!isset($buff['fields_calculated'])){
-			while (list($property,$value)=resurrection_array_next($buff)){
-				//calculate dynamic buff fields
-				$origstring = $value;
-				//Simple <module|variable> replacements for get_module_pref('variable','module')
-				$value = preg_replace("/<([A-Za-z0-9]+)\\|([A-Za-z0-9]+)>/","get_module_pref('\\2','\\1')",$value);
-				//simple <variable> replacements for $session['user']['variable']
-				$value = preg_replace("/<([A-Za-z0-9]+)>/","\$session['user']['\\1']",$value);
-
-				if (!defined("OLDSU")) {
-					define("OLDSU", $session['user']['superuser']);
-				}
-				if ($value != $origstring){
-					if (strtolower(substr($value,0,6))=="debug:"){
-						$errors="";
-						$origstring = substr($origstring,6);
-						$value = substr($value,6);
-						if (!isset($debuggedbuffs[$buffname])) $debuggedbuffs[$buffname]=array();
-
-						ob_start();
-						$val = eval("return $value;");
-						$errors = ob_get_contents();
-						ob_end_clean();
-
-						if (!isset($debuggedbuffs[$buffname][$property])){
-							if ($errors==""){
-								debug("Buffs[$buffname][$property] evaluates successfully to $val");
-							}else{
-								debug("Buffs[$buffname][$property] has an evaluation error<br>"
-								.htmlentities($origstring, ENT_COMPAT, getsetting("charset", "ISO-8859-1"))." becomes <br>"
-								.htmlentities($value, ENT_COMPAT, getsetting("charset", "ISO-8859-1"))."<br>"
-								.$errors);
-								$val="";
-							}
-							$debuggedbuffs[$buffname][$property]=true;
-						}
-
-						$origstring="debug:".$origstring;
-						$value="debug".$value;
-					}else{
-						$val = eval("return $value;");
-					}
-				}else{
-					$val = $value;
-				}
-
-				$session['user']['superuser'] = OLDSU;
-
-				//Avoiding PHP bug 27646
-				// (http://bugs.php.net/bug.php?id=27646&edit=2) -
-				// Unserialize doesn't recognize NAN, -INF and INF
-				if (function_exists('is_nan')) {
-					if (is_numeric($val) &&
-							(is_nan($val) || is_infinite($val)))
-						$val=$value;
-				} else {
-					// We have an older version of PHP, so, let's try
-					// something else.
-					$l = strtolower("$val");
-					if ((substr($l, 3) == "nan") || (substr($l, -3) == "inf"))
-						$val = $value;
-				}
-				if (!isset($output)) $output = "";
-				if ($output == "" && (string)$val != (string)$origstring){
-					$buffreplacements[$buffname][$property] = $origstring;
-					$session['bufflist'][$buffname][$property] = $val;
-				}//end if
-				unset($val);
-			}//end while
-			$session['bufflist'][$buffname]['fields_calculated']=true;
-		}//end if
-	}//end while
+	// Only the fixed bundled numeric vocabulary is interpreted. Text and
+    // scalar metadata retain their type and never pass through PHP execution.
+    foreach ($session['bufflist'] as $buffname => $buff) {
+        if (isset($buff['fields_calculated'])) continue;
+        foreach ($buff as $property => $value) {
+            if (!is_string($value) || !preg_match('/<[A-Za-z][A-Za-z0-9_|]*>/', $value)) continue;
+            $calculated = \Resurrection\Game\Expression::evaluate($value, $session['user']);
+            $buffreplacements[$buffname][$property] = $value;
+            $session['bufflist'][$buffname][$property] = $calculated;
+        }
+        $session['bufflist'][$buffname]['fields_calculated'] = true;
+    }
 
 }//end function
 

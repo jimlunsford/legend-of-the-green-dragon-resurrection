@@ -956,17 +956,8 @@ function module_collect_events($type, $allowinactive=false)
 	$sql = "SELECT " . db_prefix("module_event_hooks") . ".* FROM " . db_prefix("module_event_hooks") . " INNER JOIN " . db_prefix("modules") . " ON ". db_prefix("modules") . ".modulename = " . db_prefix("module_event_hooks") . ".modulename WHERE $active event_type='$type' ORDER BY RAND(".e_rand().")";
 	$result = db_query_cached($sql,"event-".$type);
 	while ($row = db_fetch_assoc($result)){
-		// The event_chance bit needs to return a value, but it can do that
-		// in any way it wants, and can have if/then or other logical
-		// structures, so we cannot just force the 'return' syntax unlike
-		// with buffs.
-		ob_start();
-		$chance = eval($row['event_chance'].";");
-		$err = ob_get_contents();
-		ob_end_clean();
-		if ($err > ""){
-			debug(array("error"=>$err,"Eval code"=>$row['event_chance']));
-		}
+        if (!injectmodule($row['modulename'], $allowinactive)) continue;
+        $chance = resurrection_event_chance($row['modulename'], $row['event_chance']);
 		if ($chance < 0) $chance = 0;
 		if ($chance > 100) $chance = 100;
 		if (($block_all_modules || array_key_exists($row['modulename'],$blocked_modules) && $blocked_modules[$row['modulename']]) &&
@@ -1324,9 +1315,22 @@ function install_module($module, $force=true){
   * @return bool The result of the evaluated expression
   */
 function module_condition($condition) {
-	global $session;
-	$result = eval($condition);
-	return (bool)$result;
+    global $session;
+    require_once 'src/Game/Expression.php';
+    return (bool)\Resurrection\Game\Expression::evaluate($condition, $session['user'] ?? []);
+}
+
+/** Fixed named event condition; persisted strings cannot select PHP functions. */
+function resurrection_event_chance($module, $expression) {
+    require_once 'src/Game/Expression.php';
+    if ($module === 'darkhorse') {
+        $legacy = 'require_once("modules/darkhorse.php");return(darkhorse_tavernmount()?0:100);';
+        $normalized = preg_replace('/\\s+/', '', $expression);
+        if ($expression === 'bundled:darkhorse-without-tavern-mount' || $normalized === $legacy) {
+            return darkhorse_tavernmount() ? 0 : 100;
+        }
+    }
+    return \Resurrection\Game\Expression::evaluate($expression);
 }
 
 function get_module_install_status(){

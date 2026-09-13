@@ -30,19 +30,15 @@ function darkhorse_tavernmount() {
 		$id = 0;
 	}
 	// We need the module parameter here because this function can be
-	// called from the eventchance eval and this module might not be loaded
+	// called from the named event condition and this module might not be loaded
 	// at that point.
 	$tavern = get_module_objpref("mounts", $id, "findtavern", "darkhorse");
 	return $tavern;
 }
 
 function darkhorse_install(){
-	module_addeventhook("forest",
-			"require_once(\"modules/darkhorse.php\");
-			return (darkhorse_tavernmount() ? 0 : 100);");
-	module_addeventhook("travel",
-			"require_once(\"modules/darkhorse.php\");
-			return (darkhorse_tavernmount() ? 0 : 100);");
+    module_addeventhook('forest', 'bundled:darkhorse-without-tavern-mount');
+    module_addeventhook('travel', 'bundled:darkhorse-without-tavern-mount');
 	$sql = "DESCRIBE " . db_prefix("mounts");
 	$result = db_query($sql);
 	while($row = db_fetch_assoc($result)) {
