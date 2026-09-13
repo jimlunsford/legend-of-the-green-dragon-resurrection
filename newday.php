@@ -289,32 +289,9 @@ if ($dp < $dkills) {
 	require_once("lib/extended-battle.php");
 	unsuspend_companions("allowinshades");
 
-	if (!getsetting("newdaycron",0)) {
-		//check last time we did this vs now to see if it was a different game day.
-		$lastnewdaysemaphore = convertgametime(strtotime(getsetting("newdaySemaphore","0000-00-00 00:00:00") . " +0000"));
-		$gametoday = gametime();
-		if (gmdate("Ymd",$gametoday)!=gmdate("Ymd",$lastnewdaysemaphore)){
-				// it appears to be a different game day, acquire semaphore and
-				// check again.
-            $sql = "LOCK TABLES " . db_prefix("settings") . " WRITE";
-            db_query($sql);
-            clearsettings();
-            $lastnewdaysemaphore = convertgametime(strtotime(getsetting("newdaySemaphore","0000-00-00 00:00:00") . " +0000"));
-                $gametoday = gametime();
-            if (gmdate("Ymd",$gametoday)!=gmdate("Ymd",$lastnewdaysemaphore)){
-                //we need to run the hook, update the setting, and unlock.
-                savesetting("newdaySemaphore",gmdate("Y-m-d H:i:s"));
-                $sql = "UNLOCK TABLES";
-                db_query($sql);
-				require("lib/newday/newday_runonce.php");
-			}else{
-	            //someone else beat us to it, unlock.
-                $sql = "UNLOCK TABLES";
-                db_query($sql);
-			}
-		}
+    // Global maintenance is exclusively owned by cron.php and its advisory lock.
+    // A legacy setting must never reopen maintenance from a player HTTP request.
 
-	}
 	$args = modulehook("newday",
 			array("resurrection"=>$resurrection, "turnstoday"=>$turnstoday));
 	$turnstoday = $args['turnstoday'];

@@ -28,7 +28,7 @@ This finite vocabulary deliberately does not implement arbitrary arithmetic, arb
 
 ## Other execution mechanisms reviewed
 
-Search covered literal eval, assert, create_function, regular-expression replacement calls, callback dispatch, event/buff metadata, dynamic configuration generation, AI scripts, and include/require construction. No evaluated `/e` regular expression or string assertion execution remains in shipped source. Dag/Drinks use static call_user_func_array wrapper targets for their support files. Module PHP entrypoints remain trusted installed source, loaded through the module-name/activation/dependency boundary, not a scripting sandbox. Database-backed hook function selection remains a separate dispatch boundary and must be restricted/tested before the entire security gate closes.
+Search covered literal eval, assert, create_function, regular-expression replacement calls, callback dispatch, event/buff metadata, dynamic configuration generation, AI scripts, and include/require construction. No evaluated `/e` regular expression or string assertion execution remains in shipped source. Dag/Drinks use static call_user_func_array wrapper targets for their support files. Module PHP entrypoints remain trusted installed source, loaded through the module-name/activation/dependency boundary, not a scripting sandbox. Database-backed hook function selection now permits only the conventional module-name `_dohook` entrypoint. Arbitrary database-selected PHP function names are rejected.
 
 Phase 1/2 disabled SQL/PHP console, source viewer, LoGDnet, payments, and historical recovery remain disabled. No disabled endpoint was reactivated for compatibility.
 

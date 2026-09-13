@@ -69,6 +69,86 @@ class WebApplicationTests(unittest.TestCase):
             raise AssertionError('Fixture database operation failed')
         return json.loads(result.stdout)
 
+    def test_active_maintenance_failures_retries_and_concurrency(self):
+        path = ROOT / 'modules' / 'resurrectionmaintenancefixture.php'
+        signal = ROOT / 'tests' / 'fixtures' / 'maintenance-running'
+        module = 'resurrectionmaintenancefixture'
+        with path.open('x') as file:
+            file.write('''<?php
+function resurrectionmaintenancefixture_getmoduleinfo() {
+    return ['name'=>'Maintenance fixture','version'=>'1.0','author'=>'Synthetic','category'=>'Tests'];
+}
+function resurrectionmaintenancefixture_dohook($hook, $args) {
+    $mode = getsetting('fixture_maintenance_mode', 'ok');
+    db_query("UPDATE settings SET value=value+1 WHERE setting='fixture_maintenance_count'");
+    if ($mode === 'throw') throw new RuntimeException('SYNTHETIC-SECRET-MUST-NOT-LOG');
+    if ($mode === 'malformed') return 'invalid';
+    if ($mode === 'database') db_query('INSERT INTO nonexistent_fixture_table VALUES (1)');
+    if ($mode === 'slow') {
+        file_put_contents('tests/fixtures/maintenance-running', 'running');
+        usleep(2000000);
+    }
+    return $args;
+}
+''')
+        def setting(name, value):
+            self.query('INSERT INTO settings (setting,value) VALUES (?,?) ON DUPLICATE KEY UPDATE value=VALUES(value)', [name, str(value)])
+        def run():
+            return subprocess.run([shutil.which('php'), 'cron.php'], cwd=ROOT, capture_output=True, text=True, timeout=60)
+        try:
+            self.query('DELETE FROM settings WHERE setting=? OR setting LIKE ?', ['maintenance_day', 'maintenance-hook-%'])
+            self.query('UPDATE modules SET active=1')  # Lifecycle independently exercised by PHPUnit.
+            self.query('INSERT INTO modules (modulename,active,version) VALUES (?,1,?)', [module, '1.0'])
+            self.query('INSERT INTO module_hooks (modulename,location,`function`,whenactive,priority) VALUES (?,?,?,?,?)',
+                       [module, 'newday-runonce', module + '_dohook', '', 100])
+            self.query('UPDATE module_settings SET value=3 WHERE modulename=? AND setting=?', ['crazyaudrey', 'gamedaysremaining'])
+            setting('fixture_maintenance_count', 0)
+            for mode in ['throw', 'malformed', 'database']:
+                setting('fixture_maintenance_mode', mode)
+                failed = run()
+                self.assertEqual(1, failed.returncode, failed.stdout)
+                self.assertNotIn('SYNTHETIC-SECRET', failed.stdout + failed.stderr)
+                self.assertNotIn('nonexistent_fixture_table', failed.stdout + failed.stderr)
+                self.assertEqual([], self.query('SELECT value FROM settings WHERE setting=?', ['maintenance_day']))
+                self.assertEqual('0', self.query('SELECT value FROM settings WHERE setting=?', ['fixture_maintenance_count'])[0]['value'])
+                # Earlier committed active module is not repeated when a later one fails.
+                self.assertEqual('2', self.query('SELECT value FROM module_settings WHERE modulename=? AND setting=?', ['crazyaudrey', 'gamedaysremaining'])[0]['value'])
+            setting('fixture_maintenance_mode', 'ok')
+            finished = run()
+            self.assertEqual(0, finished.returncode, finished.stderr)
+            self.assertEqual('complete', json.loads(finished.stdout)['maintenance'])
+            self.assertEqual('1', self.query('SELECT value FROM settings WHERE setting=?', ['fixture_maintenance_count'])[0]['value'])
+            duplicate = run()
+            self.assertEqual('already-complete', json.loads(duplicate.stdout)['maintenance'])
+            self.assertEqual('1', self.query('SELECT value FROM settings WHERE setting=?', ['fixture_maintenance_count'])[0]['value'])
+            self.query('DELETE FROM settings WHERE setting=? OR setting LIKE ?', ['maintenance_day', 'maintenance-hook-%'])
+            setting('fixture_maintenance_mode', 'slow')
+            first = subprocess.Popen([shutil.which('php'), 'cron.php'], cwd=ROOT, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+            try:
+                for _ in range(100):
+                    if signal.exists() or first.poll() is not None:
+                        break
+                    time.sleep(.05)
+                self.assertTrue(signal.exists(), 'First scheduler did not enter its locked active hook')
+                second = run()
+                self.assertEqual(1, second.returncode)
+                out, err = first.communicate(timeout=60)
+                self.assertEqual(0, first.returncode, err)
+                self.assertEqual('complete', json.loads(out)['maintenance'])
+                self.assertEqual('2', self.query('SELECT value FROM settings WHERE setting=?', ['fixture_maintenance_count'])[0]['value'])
+            finally:
+                if first.poll() is None:
+                    first.terminate()
+                    first.wait(timeout=5)
+        finally:
+            path.unlink()
+            signal.unlink(missing_ok=True)
+            self.query('DELETE FROM module_hooks WHERE modulename=?', [module])
+            self.query('DELETE FROM modules WHERE modulename=?', [module])
+            self.query('UPDATE modules SET active=0')
+            self.query('DELETE FROM settings WHERE setting=? OR setting LIKE ? OR setting LIKE ?',
+                       ['maintenance_day', 'maintenance-hook-%', 'fixture_maintenance_%'])
+
     def test_cli_maintenance_is_once_per_game_day(self):
         first = subprocess.run([shutil.which('php'), 'cron.php'], cwd=ROOT, capture_output=True, text=True, timeout=60)
         self.assertEqual(0, first.returncode, first.stderr)

@@ -28,6 +28,7 @@ try {
         $today = gmdate('Y-m-d', gametime());
         if (getsetting('maintenance_day', '') === $today) { $status = 'already-complete'; }
         else {
+            define('RESURRECTION_MAINTENANCE_DAY', $today);
             require 'lib/newday/newday_runonce.php';
             savesetting('newdaySemaphore', gmdate('Y-m-d H:i:s'));
             savesetting('maintenance_day', $today);

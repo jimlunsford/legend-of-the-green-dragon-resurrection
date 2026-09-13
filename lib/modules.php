@@ -457,11 +457,16 @@ function modulehook($hookname, $args=false, $allowinactive=false, $only=false){
 /*******************************************************/
 				$starttime = getmicrotime();
 /*******************************************************/
-				if (function_exists($row['function'])) {
-					$res = $row['function']($hookname, $args);
-				} else {
-					trigger_error("Unknown function {$row['function']} for hoookname $hookname in module {$row['module']}.", E_USER_WARNING);
-				}
+                try {
+                    $res = resurrection_invoke_module_hook($row, $hookname, $args);
+                } catch (Throwable $error) {
+                    $output = $outputbeforehook;
+                    $navsection = $oldnavsection;
+                    $mostrecentmodule = $mod;
+                    $currenthook = $lasthook;
+                    tlschema();
+                    throw $error;
+                }
 /*******************************************************/
 				$endtime = getmicrotime();
 				if (($endtime - $starttime >= 1.00 && ($session['user']['superuser'] & SU_DEBUG_OUTPUT))){
@@ -519,6 +524,38 @@ function get_all_module_settings($module=false){
 
 	load_module_settings($module);
 	return $module_settings[$module];
+}
+
+/** Database hook rows may select only the conventional bundled hook entrypoint. */
+function resurrection_invoke_module_hook($row, $hookname, $args) {
+    $callback = $row['modulename'] . '_dohook';
+    if ($row['function'] !== $callback || !is_callable($callback)) {
+        throw new DomainException('Unsupported module hook callback.');
+    }
+    $daily = $hookname === 'newday-runonce' && defined('RESURRECTION_MAINTENANCE_DAY');
+    $receipt = 'maintenance-hook-' . md5($callback);
+    if ($daily) {
+        $rows = db_query('SELECT value FROM ' . db_prefix('settings') . ' WHERE setting=?', true, [$receipt]);
+        if (($rows[0]['value'] ?? '') === RESURRECTION_MAINTENANCE_DAY) return $args;
+        $GLOBALS['dbinfo']['connection']->beginTransaction();
+    }
+    try {
+        $result = $callback($hookname, $args);
+        if (!is_array($result)) throw new UnexpectedValueException('Module hook returned invalid state.');
+        if ($daily) {
+            db_query('INSERT INTO ' . db_prefix('settings') . ' (setting,value) VALUES (?,?) ON DUPLICATE KEY UPDATE value=VALUES(value)', true, [$receipt, RESURRECTION_MAINTENANCE_DAY]);
+            $GLOBALS['dbinfo']['connection']->commit();
+        }
+        return $result;
+    } catch (Throwable $error) {
+        if ($daily && $GLOBALS['dbinfo']['connection']->inTransaction()) $GLOBALS['dbinfo']['connection']->rollBack();
+        if ($daily) {
+            clearsettings();
+            $GLOBALS['module_settings'] = [];
+            $GLOBALS['module_prefs'] = [];
+        }
+        throw $error;
+    }
 }
 
 function get_module_setting($name,$module=false){
