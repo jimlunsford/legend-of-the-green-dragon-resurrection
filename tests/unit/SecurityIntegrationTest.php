@@ -111,10 +111,10 @@ final class SecurityIntegrationTest extends TestCase
             $_SERVER['REQUEST_METHOD'] = 'POST';
             $clear(); self::assertFalse(activate_module('resurrectionfixture'));
             self::assertFalse(install_module('resurrectionfixture'));
-            self::assertSame('1', db_fetch_assoc(db_query('SELECT active FROM modules WHERE modulename=?', true, ['resurrectionfixture']))['active']);
+            self::assertSame('1', db_query('SELECT active FROM modules WHERE modulename=?', true, ['resurrectionfixture'])[0]['active']);
             $GLOBALS['fixture_requirements'] = [];
             self::assertTrue(install_module('resurrectionfixture'));
-            self::assertSame('0', db_fetch_assoc(db_query('SELECT active FROM modules WHERE modulename=?', true, ['resurrectionfixture']))['active']);
+            self::assertSame('0', db_query('SELECT active FROM modules WHERE modulename=?', true, ['resurrectionfixture'])[0]['active']);
             $clear(); self::assertTrue(activate_module('resurrectionfixture'));
             $clear(); self::assertTrue(injectmodule('resurrectionfixture', false));
             self::assertTrue(deactivate_module('resurrectionfixture'));
