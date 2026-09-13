@@ -15,7 +15,7 @@ while (list($key,$val)=resurrection_array_next($post)){
         if ($key !== 'superuser' && !is_string($val)) { http_response_code(400); exit('Invalid account field.'); }
 		if ($key=="newpassword" ){
 			if ($val>"") {
-				$sql.='password=?,';
+				$sql.='password=?,authversion=authversion+1,';
                 $parameters[] = \Resurrection\Security\Passwords::hash($val);
 				$updates++;
 				output("Password value has been updated.`n");
@@ -145,6 +145,11 @@ if ($petition!="")
 addnav("","user.php");
 	if ($updates>0){
 	db_query($sql, true, $parameters);
+    if ((int)$session['user']['acctid'] === (int)$userid) {
+        $rows = db_query('SELECT authversion FROM ' . db_prefix('accounts') . ' WHERE acctid=?', true, [(int)$userid]);
+        $_SESSION['auth_version'] = (int)db_fetch_assoc($rows)['authversion'];
+        resurrection_rotate_session();
+    }
 	
 	output("%s fields in the user's record were updated.", $updates);
 }else{

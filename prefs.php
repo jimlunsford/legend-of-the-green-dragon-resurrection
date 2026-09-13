@@ -67,7 +67,7 @@ if ($op=="suicide" && getsetting("selfdelete",0)!=0) {
         if ($pass1 !== $pass2) { output('Your passwords do not match.`n'); }
         elseif ($pass1 !== '') {
             try {
-                resurrection_change_password((int)$session['user']['acctid'], $_POST['currentpassword'] ?? '', $pass1);
+                $_SESSION['auth_version'] = resurrection_change_password((int)$session['user']['acctid'], $_POST['currentpassword'] ?? '', $pass1);
                 resurrection_rotate_session();
                 output('Your password has been changed.`n');
             } catch (InvalidArgumentException | DomainException $error) { output('Password change rejected. Check your current password and use 12 to 72 bytes for the new password.`n'); }

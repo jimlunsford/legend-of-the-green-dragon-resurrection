@@ -28,7 +28,7 @@ function do_forced_nav($anonymous,$overrideforced){
 			}else{
 				$session['allowednavs']=array($session['user']['allowednavs']);
 			}
-			if ($session['user']['locked'] || !$session['user']['loggedin'] || ( (date("U") - strtotime($session['user']['laston'])) > getsetting("LOGINTIMEOUT",900)) ){
+			if (!isset($_SESSION['auth_version']) || $_SESSION['auth_version'] !== (int)$session['user']['authversion'] || $session['user']['locked'] || !$session['user']['loggedin'] || ( (date("U") - strtotime($session['user']['laston'])) > getsetting("LOGINTIMEOUT",900)) ){
 				resurrection_end_session();
                 header('Location: index.php?op=timeout', true, 303);
                 exit();

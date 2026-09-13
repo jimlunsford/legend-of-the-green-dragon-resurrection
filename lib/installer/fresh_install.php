@@ -39,6 +39,7 @@ function resurrection_fresh_schema(): array {
     }
     unset($columns);
     $tables['accounts']['password']['type'] = 'varchar(255)';
+    $tables['accounts']['authversion'] = ['name' => 'authversion', 'type' => 'int unsigned', 'default' => '0'];
     $tables['accounts']['key-login']['type'] = 'unique key';
     $tables['accounts']['superuser']['default'] = '0';
     return $tables;

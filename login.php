@@ -20,7 +20,7 @@ try {
         resurrection_require_post();
         if ($session['loggedin']) {
             modulehook('player-logout');
-            db_query('UPDATE ' . db_prefix('accounts') . ' SET loggedin=0 WHERE acctid=?', true, [(int)$session['user']['acctid']]);
+            db_query('UPDATE ' . db_prefix('accounts') . ' SET loggedin=0,authversion=authversion+1 WHERE acctid=?', true, [(int)$session['user']['acctid']]);
             invalidatedatacache('charlisthomepage');
             invalidatedatacache('list.php-warsonline');
         }
@@ -35,7 +35,7 @@ try {
     unset($password, $_POST['password']);
     if (!$account) {
         // Fixed event vocabulary only, never a request/session serialization.
-        db_query('INSERT INTO ' . db_prefix('faillog') . ' (date,info,ip,acctid,id) VALUES (?,?,?,?,?)', true,
+        db_query('INSERT INTO ' . db_prefix('faillog') . ' (date,post,ip,acctid,id) VALUES (?,?,?,?,?)', true,
             [date('Y-m-d H:i:s'), 'invalid_credentials', $_SERVER['REMOTE_ADDR'] ?? '', 0, '']);
         $session['message'] = '`4Error, your login was incorrect`0';
         header('Location: index.php', true, 303);
@@ -43,7 +43,9 @@ try {
     }
     checkban($account['login']);
     checkban();
+    $version = resurrection_begin_login((int)$account['acctid'], $account['password']);
     resurrection_rotate_session();
+    $_SESSION['auth_version'] = $version;
     unset($account['password']);
     $session['user'] = $account;
     $baseaccount = $account;
@@ -59,8 +61,6 @@ try {
     $session['lasthit'] = time();
     $session['sentnotice'] = 0;
     $_SESSION['auth_privileges'] = (int)$account['superuser'];
-    db_query('UPDATE ' . db_prefix('accounts') . ' SET loggedin=1,laston=? WHERE acctid=?', true,
-        [date('Y-m-d H:i:s'), (int)$account['acctid']]);
     invalidatedatacache('charlisthomepage');
     invalidatedatacache('list.php-warsonline');
     modulehook('player-login');

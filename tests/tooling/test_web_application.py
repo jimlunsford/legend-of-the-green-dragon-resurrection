@@ -121,10 +121,10 @@ class WebApplicationTests(unittest.TestCase):
             self.assertEqual(initial_id, session_id())
         status, _, _ = request('login.php', {'csrf_token': csrf, 'name': 'WebPlayer', 'password[]': password})
         self.assertEqual(400, status)
-        logs = self.query('SELECT info,id FROM faillog')
+        logs = self.query('SELECT post,id FROM faillog')
         self.assertTrue(logs)
         for record in logs:
-            self.assertEqual('invalid_credentials', record['info'])
+            self.assertEqual('invalid_credentials', record['post'])
             self.assertEqual('', record['id'])
         for secret in [password, stored_hash, initial_id, csrf]:
             self.assertNotIn(secret, json.dumps(logs))

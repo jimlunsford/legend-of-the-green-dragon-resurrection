@@ -63,11 +63,40 @@ function resurrection_authenticate(string $login, #[\SensitiveParameter] mixed $
 }
 
 /** Self-service changes require the current password; the caller rotates its session. */
-function resurrection_change_password(int $id, #[\SensitiveParameter] string $current, #[\SensitiveParameter] string $next): void {
+function resurrection_change_password(int $id, #[\SensitiveParameter] string $current, #[\SensitiveParameter] string $next): int {
     $rows = db_query('SELECT password FROM ' . db_prefix('accounts') . ' WHERE acctid=?', true, [$id]);
     $account = db_fetch_assoc($rows);
     if (!$account || !\Resurrection\Security\Passwords::verify($current, $account['password'])) { throw new DomainException('Password change rejected.'); }
     $hash = \Resurrection\Security\Passwords::hash($next);
-    db_query('UPDATE ' . db_prefix('accounts') . ' SET password=? WHERE acctid=? AND password=?', true, [$hash, $id, $account['password']]);
+    $db = $GLOBALS['dbinfo']['connection'];
+    $db->beginTransaction();
+    try {
+    db_query('UPDATE ' . db_prefix('accounts') . ' SET password=?,authversion=authversion+1 WHERE acctid=? AND password=?', true, [$hash, $id, $account['password']]);
     if (db_affected_rows() !== 1) { throw new DomainException('Password change rejected.'); }
+    $rows = db_query('SELECT authversion FROM ' . db_prefix('accounts') . ' WHERE acctid=?', true, [$id]);
+    $version = (int)db_fetch_assoc($rows)['authversion'];
+    $db->commit();
+    return $version;
+    } catch (Throwable $error) {
+        if ($db->inTransaction()) { $db->rollBack(); }
+        throw $error;
+    }
+}
+
+/** Atomically establish a new login generation and revoke earlier sessions. */
+function resurrection_begin_login(int $id, #[\SensitiveParameter] string $verifiedHash): int {
+    $db = $GLOBALS['dbinfo']['connection'];
+    $db->beginTransaction();
+    try {
+        db_query('UPDATE ' . db_prefix('accounts') . ' SET loggedin=1,laston=?,authversion=authversion+1 WHERE acctid=? AND password=? AND locked=0', true,
+            [date('Y-m-d H:i:s'), $id, $verifiedHash]);
+        if (db_affected_rows() !== 1) { throw new DomainException('Login state changed. Please sign in again.'); }
+        $rows = db_query('SELECT authversion FROM ' . db_prefix('accounts') . ' WHERE acctid=?', true, [$id]);
+        $version = (int)db_fetch_assoc($rows)['authversion'];
+        $db->commit();
+        return $version;
+    } catch (Throwable $error) {
+        if ($db->inTransaction()) { $db->rollBack(); }
+        throw $error;
+    }
 }

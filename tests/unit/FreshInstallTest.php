@@ -105,6 +105,14 @@ final class FreshInstallTest extends TestCase
             self::assertTrue(Passwords::verify("Synthetic O'Reilly \\ password", $player['password']));
             self::assertFalse(resurrection_authenticate('FixturePlayer', $player['password']));
             self::assertFalse(resurrection_authenticate('MissingPlayer', 'synthetic password'));
+            $firstVersion = resurrection_begin_login($id, $player['password']);
+            self::assertSame($firstVersion + 1, resurrection_begin_login($id, $player['password']));
+            try { resurrection_change_password($id, 'wrong current password', 'Changed synthetic password'); self::fail('Wrong current password accepted.'); }
+            catch (\DomainException $error) { self::assertSame('Password change rejected.', $error->getMessage()); }
+            self::assertSame($firstVersion + 2, resurrection_change_password($id, "Synthetic O'Reilly \\ password", 'Changed synthetic password'));
+            self::assertFalse(resurrection_authenticate('FixturePlayer', "Synthetic O'Reilly \\ password"));
+            self::assertIsArray(resurrection_authenticate('FixturePlayer', 'Changed synthetic password'));
+
             db_query('UPDATE accounts SET locked=1 WHERE acctid=?', true, [$id]);
             self::assertFalse(resurrection_authenticate('FixturePlayer', "Synthetic O'Reilly \\ password"));
             try {

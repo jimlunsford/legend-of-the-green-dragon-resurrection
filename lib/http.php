@@ -10,33 +10,19 @@ function httpallget() {
 }
 
 function httpset($var, $val,$force=false){
-	global $HTTP_GET_VARS;
 	if (isset($_GET[$var]) || $force) $_GET[$var] = $val;
-	if (isset($HTTP_GET_VARS[$var])) $HTTP_GET_VARS[$var] = $val;
 }
 
 function httppost($var){ return $_POST[$var] ?? false; }
 
-function httppostisset($var) {
-	global $HTTP_POST_VARS;
-
-	$res = isset($_POST[$var]) ? 1 : 0;
-	if ($res === 0) {
-		$res = isset($HTTP_POST_VARS[$var]) ? 1 : 0;
-	}
-	return $res;
-}
+function httppostisset($var) { return isset($_POST[$var]) ? 1 : 0; }
 
 function httppostset($var, $val, $sub=false){
-	global $HTTP_POST_VARS;
 	if ($sub === false) {
 		if (isset($_POST[$var])) $_POST[$var] = $val;
-		if (isset($HTTP_POST_VARS[$var])) $HTTP_POST_VARS[$var] = $val;
 	} else {
 		if (isset($_POST[$var]) && isset($_POST[$var][$sub]))
 			$_POST[$var][$sub]=$val;
-		if (isset($HTTP_POST_VARS[$var]) && isset($HTTP_POST_VARS[$var][$sub]))
-			$HTTP_POST_VARS[$var][$sub]=$val;
 	}
 }
 

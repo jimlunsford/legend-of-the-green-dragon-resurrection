@@ -26,11 +26,11 @@ try {
     try {
         clearsettings();
         $today = gmdate('Y-m-d', gametime());
-        if (getsetting('resurrection_maintenance_day', '') === $today) { $status = 'already-complete'; }
+        if (getsetting('maintenance_day', '') === $today) { $status = 'already-complete'; }
         else {
             require 'lib/newday/newday_runonce.php';
             savesetting('newdaySemaphore', gmdate('Y-m-d H:i:s'));
-            savesetting('resurrection_maintenance_day', $today);
+            savesetting('maintenance_day', $today);
             $status = 'complete';
         }
     } finally { db_query('SELECT RELEASE_LOCK(?)', false, [$lock]); }

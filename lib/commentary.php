@@ -128,7 +128,7 @@ function injectcommentary($section, $talkline, $comment, $schema=false) {
 				substr($commentary,0,2)!="::" &&
 				substr($commentary,0,3)!="/me" &&
 				substr($commentary,0,5) != "/game") {
-			$commentary = ":`3$talkline, \\\"`#$commentary`3\\\"";
+			$commentary = ":`3$talkline, \"`#$commentary`3\"";
 		}
 		if (substr($commentary,0,5)=="/game" && ($session['user']['superuser']&SU_IS_GAMEMASTER)==SU_IS_GAMEMASTER) {
 			//handle game master inserts now, allow double posts
@@ -298,7 +298,7 @@ function viewcommentary($section,$message="Interject your own commentary?",$limi
 			$ft = substr($ft,0,3);
 
 		$row['comment'] = holidayize($row['comment'],'comment');
-		$row['name'] = holidayize($row['name'],'comment');
+		$row['name'] = holidayize($row['name'] ?? '', 'comment');
 		if ($row['clanrank']) {
 			$row['name'] = ($row['clanshort']>""?"{$clanrankcolors[ceil($row['clanrank']/10)]}&lt;`2{$row['clanshort']}{$clanrankcolors[ceil($row['clanrank']/10)]}&gt; `&":"").$row['name'];
 		}
@@ -332,7 +332,7 @@ function viewcommentary($section,$message="Interject your own commentary?",$limi
 		if (!array_key_exists('timestamp', $session['user']['prefs']))
 			$session['user']['prefs']['timestamp'] = 0;
 		
-		$session['user']['prefs']['timeoffset'] = round($session['user']['prefs']['timeoffset'],1);
+		$session['user']['prefs']['timeoffset'] = round((float)($session['user']['prefs']['timeoffset'] ?? 0),1);
 
 		if ($session['user']['prefs']['timestamp']==1) {
 			if (!isset($session['user']['prefs']['timeformat'])) $session['user']['prefs']['timeformat'] = "[m/d h:ia]";
@@ -609,6 +609,7 @@ function talkform($section,$talkline,$limit=10,$schema=false){
 		reset ($sections);
 		output_notl("<select name='section'>",true);
 		while (list($key,$val)=resurrection_array_next($sections)){
+            $_SESSION['commentary_sections'][$key] = ['talkline' => $talkline, 'schema' => $schema];
 			output_notl("<option value='$key'>$val</option>",true);
 		}
 		output_notl("</select>",true);
