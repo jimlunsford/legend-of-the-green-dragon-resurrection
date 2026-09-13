@@ -629,8 +629,9 @@ function buildnavs(){
 
 			if ($tkey > "" && (!array_key_exists($tkey,$navnocollapse) || !$navnocollapse[$tkey])) {
 				// Generate the collapsable section header
-				$args = array("name"=>"nh-{$key}",
-						"title"=>($key ? $key : "Unnamed Navs"));
+                // A translated heading is an argument array, not an HTML/string identifier.
+                $args = array("name"=>is_array($key) ? "nh-".hash('sha256',$tkey) : "nh-{$key}",
+                        "title"=>is_array($key) ? sprintf_translate($key) : ($key ? $key : "Unnamed Navs"));
 				$args = modulehook("collapse-nav{", $args);
 				if (isset($args['content']))
 					$collapseheader = $args['content'];
