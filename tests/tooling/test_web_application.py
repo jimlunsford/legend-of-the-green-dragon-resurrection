@@ -209,6 +209,175 @@ function resurrectionhttpfixture_run() { echo 'fixture-executed'; exit; }
             self.query('DELETE FROM modules WHERE modulename=?', [module])
             self.query('DELETE FROM settings WHERE setting=?', ['fixture_dependency'])
 
+    def _security_client(self, login='WebPlayer', password="Synthetic web O'Reilly \\ password"):
+        class NoRedirect(urllib.request.HTTPRedirectHandler):
+            def redirect_request(self, *args): return None
+        client=urllib.request.build_opener(urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar()),NoRedirect)
+        def request(url, data=None):
+            req=urllib.request.Request(f'http://127.0.0.1:{self.port}/'+url,
+                data=None if data is None else urllib.parse.urlencode(data).encode())
+            try: response=client.open(req,timeout=20)
+            except urllib.error.HTTPError as error: response=error
+            body=response.read().decode('utf-8',errors='replace')
+            self.assertNotRegex(body,r'(?i)(fatal error|warning:|deprecated:|notice:)',body[:2000])
+            return response.status,body
+        if login:
+            _,body=request('home.php')
+            csrf=re.search(r'name=[\'"]csrf_token[\'"] value=[\'"]([a-f0-9]{64})',body).group(1)
+            self.assertEqual(303,request('login.php',{'csrf_token':csrf,'name':login,'password':password})[0])
+        return request
+
+    def _security_allow(self, player, url):
+        value='a:1:{s:'+str(len(url))+':"'+url+'";b:1;}'
+        self.query('UPDATE accounts SET allowednavs=? WHERE acctid=?',[value,player])
+
+    def _security_fields(self, body, action=None):
+        if action:
+            forms=re.findall(r'<form\b[^>]*action=[\'"]([^\'"]+)[\'"][^>]*>(.*?)</form>',body,re.S|re.I)
+            matches=[part for url,part in forms if html.unescape(url)==action]
+            self.assertEqual(1,len(matches),action+' '+body[:2000]); body=matches[0]
+        result={}
+        for key in ['csrf_token','action_token']:
+            match=re.search(r'name=[\'"]'+key+r'[\'"] value=[\'"]([a-f0-9]{64})',body)
+            self.assertIsNotNone(match,body[:2000]); result[key]=match.group(1)
+        return result
+
+    def test_dag_funded_pvp_and_failure_rollback(self):
+        player=self.query('SELECT acctid FROM accounts WHERE login=?',['WebPlayer'])[0]['acctid']
+        original=self.query('SELECT * FROM accounts WHERE acctid=?',[player])[0]
+        target=self.query('SELECT acctid FROM accounts WHERE login=?',['FixtureAdmin'])[0]['acctid']
+        target_original=self.query('SELECT * FROM accounts WHERE acctid=?',[target])[0]
+        modules=self.query('SELECT modulename,active FROM modules')
+        self.query('UPDATE modules SET active=1')
+        request=self._security_client()
+        def call(url,fields=None):
+            self._security_allow(player,url); return request(url,fields)
+        def prepare():
+            self.query("UPDATE accounts SET gold=1000,level=5,age=20,experience=5000,attack=10000,defense=10000,hitpoints=10000,maxhitpoints=10000,playerfights=10,alive=1,badguy='',bufflist='a:0:{}',companions='a:0:{}',specialinc='',location='Degolburg',superuser=0 WHERE acctid=?",[player])
+            self.query("UPDATE accounts SET gold=0,level=5,age=20,experience=0,attack=1,defense=1,maxhitpoints=1,hitpoints=1,alive=1,loggedin=0,locked=0,slaydragon=0,pvpflag='2000-01-01 00:00:00',location='Degolburg' WHERE acctid=?",[target])
+        def snapshot():
+            return [self.query('SELECT acctid,gold,experience,alive,hitpoints,playerfights,badguy,pvpflag FROM accounts WHERE acctid IN (?,?) ORDER BY acctid',[player,target]),
+                self.query('SELECT * FROM bounty WHERE target=? ORDER BY bountyid',[target]),
+                self.query('SELECT COUNT(*) n FROM news'),self.query('SELECT COUNT(*) n FROM debuglog'),self.query('SELECT COUNT(*) n FROM mail')]
+        entry=f'pvp.php?act=attack&name={target}'
+        try:
+            prepare()
+            # Funded eligible, own, future and already-closed rows are independent.
+            for amount,setter,date,status in [(250,0,'2020-01-01 00:00:00',0),(125,player,'2020-01-01 00:00:00',0),(75,0,'2099-01-01 00:00:00',0),(50,0,'2020-01-01 00:00:00',1)]:
+                self.query('INSERT INTO bounty(amount,target,setter,setdate,status) VALUES (?,?,?,?,?)',[amount,target,setter,date,status])
+            before=snapshot(); status,body=call(entry); self.assertEqual(200,status); form=self._security_fields(body)
+            self.assertEqual(before,snapshot())  # confirmation GET never starts a fight
+            self.assertEqual(403,call(entry,{})[0]); self.assertEqual(before,snapshot())
+            # Every failure is fixture DDL outside the application transaction.
+            for table,condition in [('bounty','status=0 OR amount<>250'),('news',"newstext NOT LIKE '%collected%gold bounty%'"),('mail','msgto<>'+str(target)),('accounts','gold<>1250')]:
+                self.query(f'ALTER TABLE {table} ADD CONSTRAINT fixture_dag_failure CHECK ({condition})')
+                try:
+                    status,body=call(entry); form=self._security_fields(body)
+                    status,body=call(entry,form)
+                    # If the target surprises the attacker, settle on the next round.
+                    if status==200 and self.query('SELECT alive FROM accounts WHERE acctid=?',[target])[0]['alive']=='1':
+                        before=snapshot(); fight='pvp.php?op=fight'; form=self._security_fields(body,fight)
+                        status,body=call(fight,form)
+                    self.assertEqual(500,status,body[:2000]); self.assertEqual(before,snapshot())
+                    self.assertEqual(409,call(entry,form)[0])
+                finally:
+                    self.query(f'ALTER TABLE {table} DROP CONSTRAINT fixture_dag_failure')
+                prepare(); before=snapshot()
+            status,body=call(entry); form=self._security_fields(body)
+            status,body=call(entry,{**form,'amount':'999999','target':'999999','winner':'999999'})
+            self.assertEqual(200,status,body[:2000])
+            for _ in range(3):
+                if self.query('SELECT alive FROM accounts WHERE acctid=?',[target])[0]['alive']=='0': break
+                fight='pvp.php?op=fight'; form=self._security_fields(body,fight)
+                status,body=call(fight,form); self.assertEqual(200,status,body[:2000])
+            self.assertEqual('0',self.query('SELECT alive FROM accounts WHERE acctid=?',[target])[0]['alive'])
+            self.assertEqual('1250',self.query('SELECT gold FROM accounts WHERE acctid=?',[player])[0]['gold'])
+            self.assertEqual('9',self.query('SELECT playerfights FROM accounts WHERE acctid=?',[player])[0]['playerfights'])
+            bounties=self.query('SELECT amount,status,winner FROM bounty WHERE target=? ORDER BY amount',[target])
+            self.assertEqual([('50','1'),('75','0'),('125','0'),('250','1')],[(r['amount'],r['status']) for r in bounties])
+            self.assertEqual(str(player),bounties[-1]['winner'])
+            after=snapshot(); self.assertEqual(409,call('pvp.php?op=fight',form)[0]); self.assertEqual(after,snapshot())
+            status,body=call(entry); self.assertEqual(200,status)
+            self.assertEqual(409,call(entry,self._security_fields(body))[0]); self.assertEqual(after,snapshot())
+            # Actor/target authority survives bypass of issued navigation.
+            for changes in ["alive=0", "playerfights=0"]:
+                prepare(); self.query('UPDATE accounts SET '+changes+' WHERE acctid=?',[player])
+                _,body=call(entry); before=snapshot(); self.assertEqual(409,call(entry,self._security_fields(body))[0]); self.assertEqual(before,snapshot())
+            for changes in ["alive=0","locked=1","age=0","location='Elsewhere'","level=15","loggedin=1,laston=NOW()","pvpflag='2099-01-01 00:00:00'"]:
+                prepare(); self.query('UPDATE accounts SET '+changes+' WHERE acctid=?',[target])
+                _,body=call(entry); before=snapshot(); self.assertEqual(409,call(entry,self._security_fields(body))[0]); self.assertEqual(before,snapshot())
+            prepare()
+            for ident in ['-1','0','1e2','999999999999999999999','1%20OR%201=1']:
+                self.assertEqual(400,call('pvp.php?act=attack&name='+ident)[0])
+            for ident in [player,999999]:
+                url=f'pvp.php?act=attack&name={ident}'; _,body=call(url); before=snapshot()
+                self.assertEqual(409,call(url,self._security_fields(body))[0]); self.assertEqual(before,snapshot())
+        finally:
+            self.query('DELETE FROM bounty WHERE target=?',[target])
+            for row in [original,target_original]:
+                keys=[k for k in row if k not in ['acctid','allowednavs','restorepage']]
+                self.query('UPDATE accounts SET '+','.join('`'+k+'`=?' for k in keys)+' WHERE acctid=?',[*[row[k] for k in keys],row['acctid']])
+            for row in modules: self.query('UPDATE modules SET active=? WHERE modulename=?',[row['active'],row['modulename']])
+
+    def test_dag_administrator_http_matrix(self):
+        player=self.query('SELECT acctid FROM accounts WHERE login=?',['WebPlayer'])[0]['acctid']
+        original=self.query('SELECT superuser,gold FROM accounts WHERE acctid=?',[player])[0]
+        self.query('UPDATE modules SET active=1')
+        request=self._security_client()
+        base='runmodule.php?module=dag&manage=true'
+        place=base+'&op=addbounty&admin=true'
+        listing=base+'&op=viewbounties&type=1&sort=1&dir=1&admin=true'
+        cleanup=base+'&op=cleanup'
+        def call(url,fields=None): self._security_allow(player,url); return request(url,fields)
+        target=self.query('SELECT acctid,name FROM accounts WHERE login=?',['FixtureAdmin'])[0]
+        try:
+            anon=self._security_client(None)
+            for url in [base,place,cleanup,base+'&op=closebounty&id=1']:
+                self.assertIn(anon(url,{})[0],[302,303,403])
+            for role in [0,16]:
+                self.query('UPDATE accounts SET superuser=? WHERE acctid=?',[role,player])
+                for url in [base,listing,place,cleanup,base+'&op=closebounty&id=1']:
+                    self.assertEqual(403,call(url)[0]); self.assertEqual(403,call(url,{})[0])
+            self.query('UPDATE accounts SET superuser=64 WHERE acctid=?',[player])
+            status,body=call(base); self.assertEqual(200,status,body[:2000])
+            form=self._security_fields(body,place)
+            self.assertEqual(403,call(place)[0]); self.assertEqual(403,call(place,{})[0])
+            for amount in ['0','-1','1e3','2147483648']:
+                _,body=call(base); form=self._security_fields(body,place)
+                self.assertEqual(400,call(place,{**form,'amount':amount,'contractname':target['name']})[0])
+            for name in ['MissingFixture',"' OR 1=1 --",'x'*101]:
+                _,body=call(base); form=self._security_fields(body,place)
+                before=self.query('SELECT COUNT(*) n FROM bounty')
+                status,_=call(place,{**form,'amount':'250','contractname':name})
+                self.assertIn(status,[200,400]); self.assertEqual(before,self.query('SELECT COUNT(*) n FROM bounty'))
+            _,body=call(base); form={**self._security_fields(body,place),'amount':'250','contractname':target['name']}
+            self.assertEqual(200,call(place,form)[0]); self.assertEqual(409,call(place,form)[0])
+            self.assertEqual(original['gold'],self.query('SELECT gold FROM accounts WHERE acctid=?',[player])[0]['gold'])
+            bounty=self.query('SELECT bountyid,status,setter FROM bounty WHERE target=? ORDER BY bountyid DESC LIMIT 1',[target['acctid']])[0]
+            self.assertEqual('0',bounty['setter'])
+            _,body=call(base)  # actual funded overview, including location and duplicate-name grouping
+            status,body=call(listing); self.assertEqual(200,status)
+            close=base+'&op=closebounty&id='+bounty['bountyid']+'&admin=true'
+            form=self._security_fields(body,close)
+            self.assertEqual(403,call(close)[0]); self.assertEqual(403,call(close,{})[0])
+            self.assertEqual(200,call(close,form)[0]); after=self.query('SELECT * FROM bounty WHERE bountyid=?',[bounty['bountyid']])
+            self.assertEqual('1',after[0]['status']); self.assertEqual(409,call(close,form)[0]); self.assertEqual(after,self.query('SELECT * FROM bounty WHERE bountyid=?',[bounty['bountyid']]))
+            for ident in ['0','-1','1e2','2147483648','1%20OR%201=1']:
+                self.assertEqual(400,call(base+'&op=closebounty&id='+ident,form)[0])
+            self.assertEqual(409,call(base+'&op=closebounty&id=999999',form)[0])
+            # Issue a legitimate close form, then remove its record before submission.
+            self.query('UPDATE bounty SET status=0 WHERE bountyid=?',[bounty['bountyid']]); _,body=call(listing); form=self._security_fields(body,close)
+            self.query('DELETE FROM bounty WHERE bountyid=?',[bounty['bountyid']]); self.assertEqual(404,call(close,form)[0])
+            self.query("INSERT INTO bounty(amount,target,setter,setdate,status,windate) VALUES (250,?,0,'2020-01-01 00:00:00',1,'2020-01-01 00:00:00')",[target['acctid']])
+            _,body=call(base); form=self._security_fields(body,cleanup)
+            self.assertEqual(403,call(cleanup)[0]); self.assertEqual(403,call(cleanup,{})[0])
+            self.assertEqual(200,call(cleanup,form)[0]); self.assertEqual(409,call(cleanup,form)[0])
+            self.assertEqual([],self.query('SELECT * FROM bounty WHERE target=?',[target['acctid']]))
+        finally:
+            self.query('DELETE FROM bounty WHERE target=?',[target['acctid']])
+            self.query('UPDATE accounts SET superuser=? WHERE acctid=?',[original['superuser'],player])
+            self.query('UPDATE modules SET active=0')
+
     def test_darkhorse_shared_jackpot_concurrency(self):
         from concurrent.futures import ThreadPoolExecutor
         import threading

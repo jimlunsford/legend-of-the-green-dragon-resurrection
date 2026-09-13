@@ -9,8 +9,8 @@ require_once("lib/sanitize.php");
 
 function systemmail($to,$subject,$body,$from=0,$noemail=false){
 	global $session;
-	$sql = "SELECT prefs,emailaddress FROM " . db_prefix("accounts") . " WHERE acctid='$to'";
-	$result = db_query($sql);
+	$sql = "SELECT prefs,emailaddress FROM " . db_prefix("accounts") . " WHERE acctid=?";
+	$result = db_query($sql,true,[(int)$to]);
 	$row = db_fetch_assoc($result);
 	db_free_result($result);
 	$prefs = \Resurrection\Security\ScalarState::read($row['prefs']);
@@ -24,13 +24,13 @@ function systemmail($to,$subject,$body,$from=0,$noemail=false){
 			$body = serialize($body);
 			$serialized+=2;
 		}
-		$subject = safeescape($subject);
-		$body = safeescape($body);
+		$subject = (string)$subject;
+		$body = (string)$body;
 	}else{
-		$subject = safeescape($subject);
+		$subject = (string)$subject;
 		$subject=str_replace("\n","",$subject);
 		$subject=str_replace("`n","",$subject);
-		$body = safeescape($body);
+		$body = (string)$body;
 		if ((isset($prefs['dirtyemail']) && $prefs['dirtyemail']) || $from==0){
 		}else{
 			$subject=soap($subject,false,"mail");
@@ -38,9 +38,19 @@ function systemmail($to,$subject,$body,$from=0,$noemail=false){
 		}
 	}
 
-	$sql = "INSERT INTO " . db_prefix("mail") . " (msgfrom,msgto,subject,body,sent,originator) VALUES ('".$from."','".(int)$to."','$subject','$body','".date("Y-m-d H:i:s")."', ".($session['user']['acctid']).")";
-	db_query($sql);
-	invalidatedatacache("mail-$to");
+    db_query('INSERT INTO '.db_prefix('mail').' (msgfrom,msgto,subject,body,sent,originator) VALUES (?,?,?,?,?,?)',true,
+        [(int)$from,(int)$to,$subject,$body,date('Y-m-d H:i:s'),(int)$session['user']['acctid']]);
+    invalidatedatacache("mail-$to");
+    $notification = [$to,$subject,$body,$from,$noemail,$row,$serialized,$prefs];
+    if (isset($GLOBALS['pvp_mail_notifications'])) {
+        $GLOBALS['pvp_mail_notifications'][] = $notification;
+        return;
+    }
+    resurrection_systemmail_notification(...$notification);
+}
+
+// Notifications execute after PvP commits. A delivery failure cannot undo game state.
+function resurrection_systemmail_notification($to,$subject,$body,$from,$noemail,$row,$serialized,$prefs) {
 	$email=false;
 	if (isset($prefs['emailonmail']) && $prefs['emailonmail'] && $from>0){
 		$email=true;
@@ -54,25 +64,25 @@ function systemmail($to,$subject,$body,$from=0,$noemail=false){
 	if (!is_email($emailadd)) $email=false;
 	if ($email && !$noemail){
 		if ($serialized&2){
-			$body = \Resurrection\Security\ScalarState::read(stripslashes($body));
+			$body = \Resurrection\Security\ScalarState::read($body);
 			$body = translate_mail($body,$to);
 		}
 		if ($serialized&1){
-			$subject = \Resurrection\Security\ScalarState::read(stripslashes($subject));
+			$subject = \Resurrection\Security\ScalarState::read($subject);
 			$subject = translate_mail($subject,$to);
 		}
 
-		$sql = "SELECT name FROM " . db_prefix("accounts") . " WHERE acctid='$from'";
-		$result = db_query($sql);
+		$sql = "SELECT name FROM " . db_prefix("accounts") . " WHERE acctid=?";
+		$result = db_query($sql,true,[(int)$from]);
 		$row1=db_fetch_assoc($result);
 		db_free_result($result);
-		if ($row1['name']!="")
+		if (!empty($row1['name']))
 			$fromline=full_sanitize($row1['name']);
 		else
 			$fromline=translate_inline("The Green Dragon","mail");
 
-		$sql = "SELECT name FROM " . db_prefix("accounts") . " WHERE acctid='$to'";
-		$result = db_query($sql);
+		$sql = "SELECT name FROM " . db_prefix("accounts") . " WHERE acctid=?";
+		$result = db_query($sql,true,[(int)$to]);
 		$row1=db_fetch_assoc($result);
 		db_free_result($result);
 		$toline = full_sanitize($row1['name']);

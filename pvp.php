@@ -20,48 +20,66 @@ page_header("PvP Combat!");
 $op = httpget('op');
 $act = httpget('act');
 
-if ($op=="" && $act!="attack"){
-	checkday();
-	pvpwarning();
-	$args = array(
-		'atkmsg'=> '`4You head out to the fields, where you know some unwitting warriors are sleeping.`n`nYou have `^%s`4 PvP fights left for today.`n`n',
-		'schemas'=>array('atkmsg'=>'pvp')
-	);
-	$args = modulehook("pvpstart", $args);
-	tlschema($args['schemas']['atkmsg']);
-	output($args['atkmsg'], $session['user']['playerfights']);
-	tlschema();
-	addnav("L?Refresh List of Warriors","pvp.php");
-	pvplist();
-	villagenav();
-} else if ($act == "attack") {
-	$name = httpget('name');
-	$badguy = setup_target($name);
-	$options['type'] = "pvp";
-	$failedattack = false;
-	if ($badguy === false) {
-		$failedattack = true;
-	} else {
-		$battle=true;
-		if ($badguy['location']==$iname) {
-			$badguy['bodyguardlevel']=$badguy['boughtroomtoday'];
-		}
-		$attackstack['enemies'][0] = $badguy;
-		$attackstack['options'] = $options;
-		$session['user']['badguy']=createstring($attackstack);
-		debug($session['user']['badguy']);
-		$session['user']['playerfights']--;
-	}
+require_once 'lib/player_mutation.php';
+require_once 'src/Security/PvpState.php';
+try {
+    \Resurrection\Http\Input::choice($_GET,'act',['','attack'],'');
+    \Resurrection\Http\Input::choice($_GET,'op',['','fight','run'],'');
+    \Resurrection\Http\Input::choice($_GET,'inn',['','1'],'');
+    \Resurrection\Http\Input::choice($_GET,'auto',['','five','ten','full'],'');
+    foreach (['skill','l','newtarget','type'] as $key) {
+        if (\Resurrection\Http\Input::string($_GET,$key) !== '') throw new InvalidArgumentException();
+    }
+    $targetId = $act === 'attack' ? \Resurrection\Http\Input::integer($_GET,'name',0,1) : 0;
+    if ($act === 'attack' && ($targetId < 1 || $targetId > 2147483647 || $op !== '')) throw new InvalidArgumentException();
+} catch (InvalidArgumentException $error) { http_response_code(400); exit('Invalid PvP action.'); }
 
-	if ($failedattack){
-		if (httpget('inn') > ""){
-			addnav("Return to Listing","inn.php?op=bartender&act=listupstairs");
-		}else{
-			addnav("Return to Listing","pvp.php");
-		}
-	}
+if ($op === '' && $act === '') {
+    if ($session['user']['badguy'] !== '') {
+        try { \Resurrection\Security\PvpState::read($session['user']['badguy'],(int)$session['user']['acctid']); }
+        catch (DomainException $error) { http_response_code(409); exit('A different or invalid combat is pending.'); }
+        resurrection_pvp_form('pvp.php?op=fight','pvp-round',hash('sha256',$session['user']['badguy']),'Fight');
+    } else {
+        checkday(); pvpwarning();
+        $args = modulehook('pvpstart',['atkmsg'=>'`4You head out to the fields. You have `^%s`4 PvP fights left today.`n','schemas'=>['atkmsg'=>'pvp']]);
+        output($args['atkmsg'],$session['user']['playerfights']);
+        pvplist(); villagenav();
+    }
+    page_footer();
 }
-
+$url = 'pvp.php?' . http_build_query($_GET);
+$scope = $act === 'attack' ? 'pvp-enter' : 'pvp-round';
+$context = $act === 'attack' ? $targetId.':'.httpget('inn') : hash('sha256',$session['user']['badguy']);
+if (($_SERVER['REQUEST_METHOD'] ?? '') === 'GET') {
+    if ($act !== 'attack') {
+        try { \Resurrection\Security\PvpState::read($session['user']['badguy'],(int)$session['user']['acctid']); }
+        catch (DomainException $error) { http_response_code(409); exit('No active PvP combat.'); }
+    }
+    resurrection_pvp_form($url,$scope,$context,$act === 'attack' ? 'Attack' : 'Fight');
+    page_footer();
+}
+resurrection_consume_action($scope,$context);
+$GLOBALS['pvp_mail_notifications'] = [];
+try {
+    resurrection_player_mutation(function () use ($act,$targetId,$iname,$op) {
+        global $session,$badguy,$options,$battle,$victory,$defeat,$attackstack;
+        if (empty($session['user']['alive']) || $session['user']['hitpoints'] <= 0) throw new DomainException('Invalid PvP actor.');
+        if ($act === 'attack') {
+            if ($session['user']['badguy'] !== '') throw new DomainException('Combat already pending.');
+            $badguy = setup_target($targetId);
+            if ($badguy === false) throw new DomainException('Target unavailable.');
+            if ($badguy['location'] === $iname) $badguy['bodyguardlevel'] = $badguy['boughtroomtoday'];
+            $options = ['type'=>'pvp','owner'=>(int)$session['user']['acctid'],'target'=>$targetId,
+                'encounter'=>bin2hex(random_bytes(16)),'reservation'=>$badguy['pvpflag']];
+            $session['user']['badguy'] = createstring(['enemies'=>[$badguy],'options'=>$options]);
+            $session['user']['playerfights']--;
+        } else {
+            $attackstack = \Resurrection\Security\PvpState::read($session['user']['badguy'],(int)$session['user']['acctid']);
+            $options = $attackstack['options'];
+            $rows = db_query('SELECT alive,pvpflag FROM '.db_prefix('accounts').' WHERE acctid=? FOR UPDATE',true,[$options['target']]);
+            if (count($rows) !== 1 || !$rows[0]['alive'] || $rows[0]['pvpflag'] !== $options['reservation']) throw new DomainException('PvP target changed.');
+        }
+        $battle = true;
 if ($op=="run"){
   output("Your pride prevents you from running");
   $op="fight";
@@ -79,7 +97,7 @@ if ($op=="fight" || $op=="run"){
 }
 if ($battle){
 
-	require_once("battle.php");
+	require("battle.php");
 
 	if ($victory){
 		$killedin = $badguy['location'];
@@ -121,11 +139,31 @@ if ($battle){
 				addnews("`%%s`5 has been slain while attacking `^%s`5 in the fields of `&%s`5.`n%s`0", $session['user']['name'], $badguy['creaturename'], $killedin, $taunt);
 			}
 		}
-	}else{
-		$extra = "";
-		if (httpget('inn')) $extra = "?inn=1";
-		fightnav(false,false, "pvp.php$extra");
-	}
+    }
+    if ($victory || $defeat) $session['user']['badguy'] = '';
+}
+    });
+} catch (DomainException $error) {
+    unset($GLOBALS['pvp_mail_notifications']);
+    http_response_code(409); exit('PvP action no longer available. Reload before retrying.');
+} catch (Throwable $error) {
+    unset($GLOBALS['pvp_mail_notifications']);
+    http_response_code(500); exit('PvP action failed. No result was committed. Reload before retrying.');
+}
+$notifications = $GLOBALS['pvp_mail_notifications'];
+unset($GLOBALS['pvp_mail_notifications']);
+foreach ($notifications as $notification) {
+    try { resurrection_systemmail_notification(...$notification); }
+    catch (Throwable $error) { error_log('PvP notification delivery failed after commit.'); }
+}
+if (!$victory && !$defeat) {
+    $extra = httpget('inn') === '1' ? '&inn=1' : '';
+    resurrection_pvp_form('pvp.php?op=fight'.$extra,'pvp-round',hash('sha256',$session['user']['badguy']),'Fight');
 }
 page_footer();
-?>
+
+function resurrection_pvp_form(string $url, string $scope, string $context, string $label): void {
+    addnav('',$url);
+    rawoutput('<form method="POST" action="'.htmlspecialchars($url,ENT_QUOTES,'UTF-8').'">'.
+        resurrection_action_fields($scope,$context).'<button class="button">'.$label.'</button></form>');
+}

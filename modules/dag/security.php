@@ -50,7 +50,7 @@ function dag_place_bounty(int $targetId, int $amount, bool $administrator = fals
  */
 function dag_claim_bounties(int $targetId): array {
     if ($targetId < 1) { throw new DomainException('Invalid bounty target.'); }
-    return resurrection_player_mutation(function () use ($targetId): array {
+    $claim = function () use ($targetId): array {
         global $session;
         if ($targetId === (int)$session['user']['acctid']) { throw new DomainException('Invalid bounty target.'); }
         $rows = db_query('SELECT bountyid,amount,setter FROM ' . db_prefix('bounty') . ' WHERE status=0 AND setdate<=? AND target=? FOR UPDATE', true, [date('Y-m-d H:i:s'),$targetId]);
@@ -66,5 +66,8 @@ function dag_claim_bounties(int $targetId): array {
         }
         $session['user']['gold'] += $good;
         return [$good,$own];
-    });
+    };
+    // The real PvP route owns the larger combat/result transaction. Standalone
+    // internal callers retain the existing account transaction contract.
+    return $GLOBALS['dbinfo']['connection']->inTransaction() ? $claim() : resurrection_player_mutation($claim);
 }
