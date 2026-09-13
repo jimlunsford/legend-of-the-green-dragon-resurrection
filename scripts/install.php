@@ -15,6 +15,9 @@ try {
     require 'lib/constants.php';
     require 'lib/datacache.php';
     require 'lib/settings.php';
+    require 'lib/modules.php';
+    require 'lib/output.php';
+    require 'lib/sanitize.php';
     require 'lib/installer/fresh_install.php';
     if (!db_connect($DB_HOST, $DB_USER, $DB_PASS) || !db_select_db($DB_NAME)) {
         throw new RuntimeException('Database connection failed.');

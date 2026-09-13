@@ -4,6 +4,7 @@ require_once __DIR__ . '/../../src/Security/Passwords.php';
 require_once __DIR__ . '/../all_tables.php';
 require_once __DIR__ . '/../tabledescriptor.php';
 require_once __DIR__ . '/../accounts.php';
+require_once __DIR__ . '/bundled_modules.php';
 
 function resurrection_install_state(): string {
     $tables = db_query('SHOW TABLES');
@@ -89,6 +90,8 @@ function resurrection_fresh_install(string $login, #[\SensitiveParameter] string
         savesetting('charset', 'UTF-8');
         savesetting('newdaycron', 1);
         savesetting('serverlanguages', 'en,English,fr,Français,dk,Danish,de,Deutsch,es,Español,it,Italian');
+        // Install only the fixed 24 shipped modules, all initially inactive.
+        resurrection_install_bundled_modules();
         // No external mail or payments are required by a fresh installation.
         $db->beginTransaction();
         $GLOBALS['fresh_install_phase'] = 'administrator';
@@ -96,7 +99,7 @@ function resurrection_fresh_install(string $login, #[\SensitiveParameter] string
         savesetting('installer_version', '1.1.2 Dragonprime Edition');
         savesetting('resurrection_install', 'complete');
         $db->commit();
-        return ['tables' => db_num_rows(db_query('SHOW TABLES')), 'administrator' => $admin, 'state' => resurrection_install_state()];
+        return ['tables' => db_num_rows(db_query('SHOW TABLES')), 'modules_installed' => count(resurrection_bundled_modules()), 'modules_active' => 0, 'administrator' => $admin, 'state' => resurrection_install_state()];
     } finally {
         if ($db->inTransaction()) { $db->rollBack(); }
         db_query('SELECT RELEASE_LOCK(?)', false, [$lock]);

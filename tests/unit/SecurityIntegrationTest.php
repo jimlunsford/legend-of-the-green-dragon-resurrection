@@ -74,8 +74,8 @@ final class SecurityIntegrationTest extends TestCase
         require_once 'lib/sanitize.php';
         $path = 'modules/resurrectionfixture.php';
         self::assertFileDoesNotExist($path);
-        file_put_contents($path, '<?php function resurrectionfixture_getmoduleinfo(){return ["name"=>"Fixture","version"=>"1.0","requires"=>$GLOBALS["fixture_requirements"]];}');
-        $GLOBALS['session'] = ['loggedin' => true, 'user' => ['acctid' => 2, 'superuser' => 0]];
+        file_put_contents($path, '<?php function resurrectionfixture_getmoduleinfo(){return ["name"=>"Fixture","version"=>"1.0","author"=>"Synthetic","category"=>"Tests","requires"=>$GLOBALS["fixture_requirements"]];}');
+        $GLOBALS['session'] = ['loggedin' => true, 'user' => ['acctid' => 2, 'superuser' => 0, 'loggedin' => true]];
         $GLOBALS['fixture_requirements'] = [];
         $GLOBALS['translation_namespace_stack'] = [];
         $GLOBALS['translation_namespace'] = '';
@@ -91,6 +91,14 @@ final class SecurityIntegrationTest extends TestCase
             $clear(); self::assertFalse(injectmodule('resurrectionfixture', true));
             db_query('UPDATE modules SET active=1 WHERE modulename=?', true, ['resurrectionfixture']);
             $clear(); self::assertTrue(injectmodule('resurrectionfixture', false));
+            $raw = "Apostrophe ' and backslash \\ and dragon 🐉";
+            set_module_setting('raw_setting', $raw, 'resurrectionfixture');
+            unset($GLOBALS['module_settings']['resurrectionfixture']);
+            self::assertSame($raw, get_module_setting('raw_setting', 'resurrectionfixture'));
+            set_module_pref('user_raw', $raw, 'resurrectionfixture', 2);
+            unset($GLOBALS['module_prefs'][2]['resurrectionfixture']);
+            self::assertSame($raw, get_module_pref('user_raw', 'resurrectionfixture', 2));
+
             $GLOBALS['fixture_requirements'] = ['missingdependency' => '1.0|Missing dependency'];
             $clear(); self::assertFalse(injectmodule('resurrectionfixture', true));
             $GLOBALS['fixture_requirements'] = ['resurrectionfixture' => '99.0|Too old'];
@@ -98,9 +106,22 @@ final class SecurityIntegrationTest extends TestCase
             self::assertFalse(activate_module('resurrectionfixture'));
             self::assertFalse(install_module('resurrectionfixture'));
             self::assertFalse(uninstall_module('resurrectionfixture'));
+            $GLOBALS['session']['user']['superuser'] = SU_MANAGE_MODULES;
+            $_SESSION = []; $_POST = ['csrf_token' => Csrf::token($_SESSION)];
+            $_SERVER['REQUEST_METHOD'] = 'POST';
+            $clear(); self::assertFalse(activate_module('resurrectionfixture'));
+            $GLOBALS['fixture_requirements'] = [];
+            db_query('UPDATE modules SET active=0 WHERE modulename=?', true, ['resurrectionfixture']);
+            $clear(); self::assertTrue(activate_module('resurrectionfixture'));
+            $clear(); self::assertTrue(injectmodule('resurrectionfixture', false));
+            self::assertTrue(deactivate_module('resurrectionfixture'));
+            $clear(); self::assertFalse(injectmodule('resurrectionfixture', false));
+
         } finally {
             unlink($path);
             db_query('DELETE FROM modules WHERE modulename=?', true, ['resurrectionfixture']);
+            db_query('DELETE FROM module_settings WHERE modulename=?', true, ['resurrectionfixture']);
+            db_query('DELETE FROM module_userprefs WHERE modulename=?', true, ['resurrectionfixture']);
             $GLOBALS['injected_modules'] = [0 => [], 1 => []];
         }
     }

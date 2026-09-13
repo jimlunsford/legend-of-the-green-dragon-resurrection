@@ -65,7 +65,10 @@ final class FreshInstallTest extends TestCase
             self::assertGreaterThan(100, (int)db_fetch_assoc($result)['n']);
             self::assertSame('UTF-8', getsetting('charset', ''));
             $tables = db_query('SELECT ENGINE,TABLE_COLLATION FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE()');
-            self::assertCount(count(resurrection_fresh_schema()), $tables);
+            self::assertCount(count(resurrection_fresh_schema()) + 2, $tables);
+            $moduleRows = db_query("SELECT modulename,active FROM modules ORDER BY modulename");
+            self::assertSame(resurrection_bundled_modules(), array_column($moduleRows, "modulename"));
+            self::assertSame(["0"], array_values(array_unique(array_column($moduleRows, "active"))));
             foreach ($tables as $table) {
                 self::assertSame('InnoDB', $table['ENGINE']);
                 self::assertStringStartsWith('utf8mb4_', $table['TABLE_COLLATION']);
@@ -81,7 +84,7 @@ final class FreshInstallTest extends TestCase
             $GLOBALS['mostrecentmodule'] = 'drinks';
             self::assertTrue(drinks_install_private());
             self::assertSame('3', $GLOBALS['dbinfo']['connection']->query('SELECT COUNT(*) FROM drinks')->fetchColumn());
-            self::assertSame('15', $GLOBALS['dbinfo']['connection']->query('SELECT COUNT(*) FROM module_hooks')->fetchColumn());
+            self::assertSame('15', $GLOBALS['dbinfo']['connection']->query("SELECT COUNT(*) FROM module_hooks WHERE modulename IN ('dag','drinks')")->fetchColumn());
             db_query('INSERT INTO bounty (amount,target,setter) VALUES (50,1,1)');
             $bounty = $GLOBALS['dbinfo']['connection']->query('SELECT setdate,windate FROM bounty')->fetch();
             self::assertNull($bounty['windate']);
@@ -125,7 +128,12 @@ final class FreshInstallTest extends TestCase
             self::assertSame(1, $code);
             self::assertSame('2', $GLOBALS['dbinfo']['connection']->query('SELECT COUNT(*) FROM accounts')->fetchColumn());
             self::assertSame('installed', resurrection_install_state());
-            fwrite(STDERR, 'Fresh install: ' . json_encode(['php' => PHP_VERSION, 'database' => db_get_server_version(), 'tables' => count($tables), 'sql_mode' => $modes, 'admin' => 'modern hash', 'repeat' => 'locked']) . "\n");
+            $seedCounts = [];
+            foreach (['creatures','weapons','armor','masters','titles','mounts','drinks'] as $table) {
+                $counts = db_query('SELECT COUNT(*) AS n FROM ' . db_identifier($table));
+                $seedCounts[$table] = (int)db_fetch_assoc($counts)['n'];
+            }
+            fwrite(STDERR, 'Fresh install: ' . json_encode(['php' => PHP_VERSION, 'database' => db_get_server_version(), 'tables' => count($tables), 'seed_counts' => $seedCounts, 'password_api' => password_get_info($admin['password']), 'sql_mode' => $modes, 'admin' => 'modern hash', 'repeat' => 'locked']) . "\n");
         } finally { unlink($config); }
     }
 }
