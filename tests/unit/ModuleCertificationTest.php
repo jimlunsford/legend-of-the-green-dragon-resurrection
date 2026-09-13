@@ -215,11 +215,11 @@ final class ModuleCertificationTest extends TestCase
             $GLOBALS['session']['user']['gold'] = 1000;
             $GLOBALS['session']['user']['gems'] = 10;
             $GLOBALS['session']['user']['hashorse'] = 0;
-            foreach (['dag'=>['bounties'], 'drinks'=>['harddrinks','drunkeness'], 'lovers'=>['seenlover'], 'sethsong'=>['been'], 'outhouse'=>['usedouthouse'], 'crazyaudrey'=>['played']] as $module=>$preferences) {
+            foreach (['dag'=>['bounties'], 'drinks'=>['harddrinks','drunkeness'], 'lovers'=>['seenlover'], 'sethsong'=>['been'], 'outhouse'=>['usedouthouse'], 'crazyaudrey'=>['played'], 'game_fivesix'=>['playstoday']] as $module=>$preferences) {
                 foreach ($preferences as $preference) set_module_pref($preference, 1, $module);
             }
             modulehook('newday', ['turnstoday'=>'', 'resurrection'=>false]);
-            foreach (['dag'=>['bounties'], 'drinks'=>['harddrinks','drunkeness'], 'lovers'=>['seenlover'], 'sethsong'=>['been'], 'outhouse'=>['usedouthouse'], 'crazyaudrey'=>['played']] as $module=>$preferences) {
+            foreach (['dag'=>['bounties'], 'drinks'=>['harddrinks','drunkeness'], 'lovers'=>['seenlover'], 'sethsong'=>['been'], 'outhouse'=>['usedouthouse'], 'crazyaudrey'=>['played'], 'game_fivesix'=>['playstoday']] as $module=>$preferences) {
                 foreach ($preferences as $preference) self::assertSame(0, get_module_pref($preference, $module));
             }
             modulehook('inn', []);

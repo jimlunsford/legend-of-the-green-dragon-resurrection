@@ -73,7 +73,7 @@ class WebApplicationTests(unittest.TestCase):
         # DDL is fixture setup, before the real request transaction. No SUPER/trigger privilege.
         self.assertIn(module,['game_stones','game_dice','game_fivesix'])
         pattern='%"game":"'+module+'"%"stage":"complete"%'
-        self.query("ALTER TABLE accounts ADD CONSTRAINT fixture_wager_failure CHECK (acctid<>"+str(int(player))+" OR specialmisc NOT LIKE '"+pattern+"')")
+        self.query("ALTER TABLE accounts ADD CONSTRAINT fixture_wager_failure CHECK (specialmisc NOT LIKE '"+pattern+"')")
 
     def remove_wager_failure(self):
         if self.query("SELECT CONSTRAINT_NAME FROM information_schema.TABLE_CONSTRAINTS WHERE CONSTRAINT_SCHEMA=DATABASE() AND TABLE_NAME='accounts' AND CONSTRAINT_NAME='fixture_wager_failure'"):

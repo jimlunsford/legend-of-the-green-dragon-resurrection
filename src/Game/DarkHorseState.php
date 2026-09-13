@@ -27,9 +27,9 @@ final class DarkHorseState
     /** @param array<string,mixed> $state */
     public static function validate(array $state, int $owner): void
     {
-        $keys = ['version','owner','game','wager','stage','active','result','settled','data'];
+        $keys = ['version','id','owner','game','wager','stage','active','result','settled','data'];
         if (count($state) !== count($keys) || array_diff(array_keys($state), $keys) !== [] ||
-            $state['version'] !== 1 || $owner < 1 || $state['owner'] !== $owner ||
+            $state['version'] !== 1 || !is_string($state['id']) || !preg_match('/\A[a-f0-9]{32}\z/', $state['id']) || $owner < 1 || $state['owner'] !== $owner ||
             !in_array($state['game'], ['game_stones','game_dice','game_fivesix'], true) ||
             !is_int($state['wager']) || $state['wager'] < 0 || $state['wager'] > 1073741823 ||
             !in_array($state['stage'], ['choose','play','complete','abandoned'], true) ||
@@ -72,7 +72,7 @@ final class DarkHorseState
             self::validate($prior, $owner);
             if ($prior['active']) throw new \DomainException('Finish or abandon the active game.');
         }
-        $state = ['version'=>1,'owner'=>$owner,'game'=>$game,'wager'=>$wager,
+        $state = ['version'=>1,'id'=>bin2hex(random_bytes(16)),'owner'=>$owner,'game'=>$game,'wager'=>$wager,
             'stage'=>$wager === 0 ? 'choose' : 'play','active'=>true,'result'=>'pending','settled'=>false,'data'=>$data];
         self::validate($state, $owner);
         return $state;

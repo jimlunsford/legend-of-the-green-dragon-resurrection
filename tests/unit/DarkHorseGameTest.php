@@ -26,6 +26,10 @@ final class DarkHorseGameTest extends TestCase
         self::assertFalse($ended['active']);
         self::assertTrue($ended['settled']);
         self::assertSame('game_fivesix',DarkHorseState::start($ended,7,'game_fivesix',5,'[1,2,3,4,5]')['game']);
+        $first=DarkHorseState::start($ended,7,'game_fivesix',5,'[1,2,3,4,5]');
+        $terminal=$first; $terminal['stage']='complete'; $terminal['active']=false; $terminal['settled']=true; $terminal['result']='loss';
+        $second=DarkHorseState::start($terminal,7,'game_fivesix',5,'[1,2,3,4,5]');
+        self::assertNotSame($first['id'],$second['id']); // Identical rolls cannot reuse a prior action context.
         $this->expectException(\DomainException::class);
         DarkHorseState::abandon($ended,7,'game_dice');
     }
