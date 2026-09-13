@@ -63,6 +63,9 @@ final class SecurityIntegrationTest extends TestCase
         file_put_contents($path, '<?php function resurrectionfixture_getmoduleinfo(){return ["name"=>"Fixture","version"=>"1.0","requires"=>$GLOBALS["fixture_requirements"]];}');
         $GLOBALS['session'] = ['loggedin' => true, 'user' => ['acctid' => 2, 'superuser' => 0]];
         $GLOBALS['fixture_requirements'] = [];
+        $GLOBALS['translation_namespace_stack'] = [];
+        $GLOBALS['translation_namespace'] = '';
+        $GLOBALS['REQUEST_URI'] = 'runmodule.php';
         try {
             $clear = static function (): void { $GLOBALS['injected_modules'] = [0 => [], 1 => []]; };
             $clear();

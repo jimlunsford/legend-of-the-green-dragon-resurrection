@@ -47,6 +47,12 @@ try {
     unset($account['password']);
     $session['user'] = $account;
     $baseaccount = $account;
+    foreach (['prefs', 'dragonpoints'] as $field) {
+        $value = unserialize($account[$field], ['allowed_classes' => false]);
+        $session['user'][$field] = is_array($value) ? $value : [];
+    }
+    $session['bufflist'] = unserialize($account['bufflist'], ['allowed_classes' => false]);
+    $session['allowednavs'] = unserialize($account['allowednavs'], ['allowed_classes' => false]);
     modulehook('check-login');
     $session['loggedin'] = true;
     $session['user']['loggedin'] = true;
