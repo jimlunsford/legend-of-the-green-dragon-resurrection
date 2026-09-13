@@ -644,7 +644,9 @@ function buildnavs(){
 			$sublinks = "";
 			while (list($k,$v)=resurrection_array_next($val)){
 				if (is_array($v) && count($v)>0){
-					$sublinks .=   call_user_func_array("private_addnav",$v);
+					// Navigation metadata is not a PHP named argument.
+                    unset($v['translate']);
+                    $sublinks .= call_user_func_array('private_addnav', array_values($v));
 				}//end if
 			}//end while
 

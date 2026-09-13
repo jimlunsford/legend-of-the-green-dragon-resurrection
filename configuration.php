@@ -14,83 +14,43 @@ tlschema("configuration");
 $op = httpget('op');
 $module=httpget('module');
 if ($op=="save"){
-	include_once("lib/gamelog.php");
-	//loadsettings();
-	if ((int)httppost('blockdupemail') == 1 &&
-			(int)httppost('requirevalidemail') != 1) {
-		httppostset('requirevalidemail', "1");
-		output("`brequirevalidemail has been set since blockdupemail was set.`b`n");
-	}
-	if ((int)httppost('requirevalidemail') == 1 &&
-			(int)httppost('requireemail') != 1) {
-		httppostset('requireemail', "1");
-		output("`brequireemail has been set since requirevalidemail was set.`b`n");
-	}
-	$defsup = httppost("defaultsuperuser");
-	if ($defsup != "") {
-		$value = 0;
-		while(list($k, $v)=resurrection_array_next($defsup)) {
-			if ($v) $value += (int)$k;
-		}
-		httppostset('defaultsuperuser', $value);
-	}
-	$tmp = stripslashes(httppost("villagename"));
-	if ($tmp && $tmp != $settings['villagename']) {
-		debug("Updating village name -- moving players");
-		$sql = "UPDATE " . db_prefix("accounts") . " SET location='".
-			httppost("villagename") . "' WHERE location='" .
-			addslashes($settings['villagename']) . "'";
-		db_query($sql);
-		if ($session['user']['location'] == $settings['villagename'])
-			$session['user']['location'] =
-				stripslashes(httppost('villagename'));
-		debug("Moving companions");
-		$sql = "UPDATE " . db_prefix("companions") . " SET companionlocation = '".
-			httppost("villagename") . "' WHERE companionlocation = '".
-			addslashes($settings['villagename']) . "'";
-		db_query($sql);
-	}
-	$tmp = stripslashes(httppost("innname"));
-	if ($tmp && $tmp != $settings['innname']) {
-		debug("Updating inn name -- moving players");
-		$sql = "UPDATE " . db_prefix("accounts") . " SET location='".
-			httppost("innname") . "' WHERE location='" .
-			addslashes($settings['innname']) . "'";
-		db_query($sql);
-		if ($session['user']['location'] == $settings['innname'])
-			$session['user']['location'] = stripslashes(httppost('innname'));
-	}
-	if (stripslashes(httppost("motditems")) != $settings['motditems']) {
-		invalidatedatacache("motd");
-	}
-	$post = httpallpost();
-	reset($post);
-	$old=$settings;
-	while (list($key,$val)=resurrection_array_next($post)){
-		if (!isset($settings[$key]) ||
-				(stripslashes($val) != $settings[$key])) {
-			if (!isset($old[$key]))
-				$old[$key] = "";
-			savesetting($key,stripslashes($val));
-			output("Setting %s to %s`n", $key, stripslashes($val));
-			gamelog("`@Changed core setting `^$key`@ from `#{$old[$key]}`@ to `&$val`0","settings");
-			// Notify every module
-			modulehook("changesetting",
-					array("module"=>"core", "setting"=>$key,
-						"old"=>$old[$key], "new"=>$val), true);
-		}
-	}
-	output("`^Settings saved.`0");
-	$op = "";
-	httpset($op, "");
+    resurrection_require_post();
+    include_once 'lib/gamelog.php';
+    $post = $_POST;
+    unset($post['csrf_token']);
+    foreach ($post as $key => $value) {
+        if ($key === 'defaultsuperuser') { unset($post[$key]); continue; }
+        if (!is_string($value) || !preg_match('/\A[A-Za-z][A-Za-z0-9_]*\z/', $key) ||
+            in_array($key, ['resurrection_install', 'installer_version'], true)) { http_response_code(400); exit('Invalid setting.'); }
+    }
+    if (($post['requirevalidemail'] ?? '0') === '1') { $post['requireemail'] = '1'; }
+    foreach (['villagename', 'innname'] as $key) {
+        if (isset($post[$key]) && $post[$key] !== ($settings[$key] ?? '')) {
+            db_query('UPDATE ' . db_prefix('accounts') . ' SET location=? WHERE location=?', true, [$post[$key], $settings[$key] ?? '']);
+            if ($session['user']['location'] === ($settings[$key] ?? '')) { $session['user']['location'] = $post[$key]; }
+            if ($key === 'villagename') { db_query('UPDATE ' . db_prefix('companions') . ' SET companionlocation=? WHERE companionlocation=?', true, [$post[$key], $settings[$key] ?? '']); }
+        }
+    }
+    foreach ($post as $key => $value) {
+        $old = $settings[$key] ?? '';
+        savesetting($key, $value);
+        gamelog('Changed core setting ' . $key, 'settings');
+        modulehook('changesetting', ['module' => 'core', 'setting' => $key, 'old' => $old, 'new' => $value], true);
+    }
+    invalidatedatacache('motd');
+    output('Settings saved.');
+    $op = '';
+    httpset('op', '');
 }elseif($op=="modulesettings"){
 	include_once("lib/gamelog.php");
 	if (injectmodule($module,true)){
 		$save = httpget('save');
 		if ($save!=""){
+            resurrection_require_post();
 			load_module_settings($module);
 			$old = $module_settings[$module];
 			$post = httpallpost();
+            unset($post['csrf_token']);
 			$post = modulehook("validatesettings", $post, true, $module);
 			if (isset($post['validation_error'])) {
 				$post['validation_error'] =
@@ -100,11 +60,10 @@ if ($op=="save"){
 			} else {
 				reset($post);
 				while (list($key,$val)=resurrection_array_next($post)){
-					$key = stripslashes($key);
-					$val = stripslashes($val);
+					if (!is_string($val)) { http_response_code(400); exit('Invalid setting.'); }
 					set_module_setting($key,$val);
 					if (!isset($old[$key]) || $old[$key] != $val) {
-						output("Setting %s to %s`n", $key, $val);
+						output("Setting %s updated.`n", $key);
 						// Notify modules
 						if($key == "villagename") {
 							debug("Moving companions");
@@ -115,7 +74,7 @@ if ($op=="save"){
 						}
 						$oldval = "";
 						if (isset($old[$key])) $oldval = $old[$key];
-						gamelog("`@Changed module(`5$module`@) setting `^$key`@ from `#$oldval`@ to `&$val`0","settings");
+						gamelog("Changed module $module setting $key", "settings");
 						modulehook("changesetting",
 								array("module"=>$module, "setting"=>$key,
 									"old"=>$oldval, "new"=>$val), true);
@@ -162,7 +121,7 @@ if ($op=="save"){
 					rawoutput("</a>");
 					addnav("","modules.php?op=activate&module={$module}&cat={$info['category']}");
 				}
-				rawoutput("<form action='configuration.php?op=modulesettings&module=$module&save=1' method='POST'>",true);
+				rawoutput("<form action='configuration.php?op=modulesettings&module=$module&save=1' method='POST'>" . resurrection_csrf_field(),true);
 				addnav("","configuration.php?op=modulesettings&module=$module&save=1");
 				tlschema("module-$module");
 				showform($msettings,$module_settings[$mostrecentmodule]);
@@ -215,7 +174,7 @@ if ($op == "") {
 		"emailpetitions"=>"Should submitted petitions be emailed to Admin Email address?,bool",
 		"Enter languages here like this: `i(shortname 2 chars) comma (readable name of the language)`i and continue as long as you wish,note",
 		"serverlanguages"=>"Languages available on this server",
-		"defaultlanguage"=>"Default Language,enum,".getsetting("serverlanguages","en,English,fr,Français,dk,Danish,de,Deutsch,es,Español,it,Italian"),
+		"defaultlanguage"=>"Default Language,enum,".getsetting("serverlanguages","en,English,fr,FranÃ§ais,dk,Danish,de,Deutsch,es,EspaÃ±ol,it,Italian"),
 		"edittitles"=>"Should DK titles be editable in user editor,bool",
 		"motditems"=>"How many items should be shown on the motdlist,int",
 
@@ -443,7 +402,7 @@ if ($op == "") {
 	loadsettings();
 	$vals = $settings + $useful_vals;
 
-	rawoutput("<form action='configuration.php?op=save' method='POST'>");
+	rawoutput("<form action='configuration.php?op=save' method='POST'>" . resurrection_csrf_field());
 	addnav("","configuration.php?op=save");
 	showform($setup,$vals);
 	rawoutput("</form>");

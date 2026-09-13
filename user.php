@@ -12,7 +12,12 @@ tlschema("user");
 check_su_access(SU_EDIT_USERS);
 
 $op = httpget('op');
-$userid=httpget("userid");
+try { $userid = \Resurrection\Http\Input::integer($_GET, 'userid'); }
+catch (InvalidArgumentException $error) { http_response_code(400); exit('Invalid account ID.'); }
+if (in_array($op, ['savemodule', 'special', 'save', 'del', 'saveban', 'delban', 'removeban'], true)) {
+    resurrection_require_post();
+}
+
 
 if ($op == "lasthit") {
 	// Try and keep user editor and captcha from breaking each other.
