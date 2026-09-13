@@ -1,0 +1,27 @@
+# Generated configuration and secrets
+/dbconnect.php
+/prefixes.php
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+# Disposable lab data, sessions, output and credentials
+.runtime/
+lab/**/runtime/
+lab/**/artifacts/
+lab/**/.env
+lab/**/runtime-lock.local.json
+sess_*
+*.sqlite
+*.sqlite3
+*.sql.gz
+*.sql.bz2
+*.sql.xz
+*.dump
+__pycache__/
+*.pyc
+# Local editor/OS state
+.DS_Store
+.vscode/
+.idea/
