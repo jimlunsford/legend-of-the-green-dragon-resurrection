@@ -292,7 +292,7 @@ function resurrectionhttpfixture_run() { echo 'fixture-executed'; exit; }
                     self.assertEqual(int(before['gems'])-1,int(after['gems']))
                     prior_skill=int(next((r['value'] for r in skill_before if r['setting']=='skill'),'0'))
                     skill_after=self.query('SELECT setting,value FROM module_userprefs WHERE modulename=? AND userid=? ORDER BY setting',['specialtydarkarts',player])
-                    self.assertEqual(prior_skill+1,int(next(r['value'] for r in skill_after if r['setting']=='skill'))
+                    self.assertEqual(prior_skill+1,int(next(r['value'] for r in skill_after if r['setting']=='skill')))
                 if module=='fairy': self.assertIn(int(after['gems'])-int(before['gems']),[-1,1])
                 self.assertEqual('',self.query('SELECT specialinc FROM accounts WHERE acctid=?',[player])[0]['specialinc'])
                 # A replay after completion cannot re-enter the consumed event.
