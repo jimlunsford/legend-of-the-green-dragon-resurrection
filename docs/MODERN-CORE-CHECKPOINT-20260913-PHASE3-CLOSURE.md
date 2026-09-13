@@ -99,3 +99,127 @@ Public hosting remains NO independently of merge: modern recovery/email verifica
 | `3bc09518723f3a5a5ed64df93ad88ed000e74a8e` | Reject forged player preference namespaces before writes and test unpaid event actions |
 | `7735f1a1f59de47314d0613cab33f93a99f11cfd` | Preserve shipped drink decimal modifiers and effect message lengths in typed editor |
 | `5da77fc0aa2db4c845ef68813c4fb77d3372a834` | Roll back invalid currency results and related writes at the shared mutation boundary |
+
+## Continuation 2: committed Dark Horse wagers and three game certifications
+
+**Modern-core merge: NOT READY. PR #1 remains OPEN, DRAFT, NOT MERGED. Public hosting: NO. Continue Phase 3.**
+
+This execution closes the first shared game-state cluster. It does not certify the remaining module, core/editor or cleanup families by implication. Earlier continuation history above is retained.
+
+### Published history and preservation
+
+- Repository: https://github.com/jimlunsford/legend-of-the-green-dragon-resurrection
+- Branch: `modernization/core-modernization`; existing PR #1 only.
+- Starting branch SHA: `459236e70779817571254e554346cce5899cb855`, verified against the published branch and PR before editing.
+- Ending implementation SHA: `1a6cd7340978e68fa43e7b2d015f4ca513d130ec`. This documentation-only checkpoint follows it. The final documentation-commit SHA and exact-head workflow IDs are recorded in PR #1 and the execution report because a commit cannot contain its own hash.
+- Unchanged main: `999cec6f9c655a840320d982d673bb863c68c2b2`.
+- Five implementation/test commits, followed by this documentation commit:
+
+| Commit | Change |
+|---|---|
+| `522f1735d1fc90b7551ce0f50912169b0dd81e39` | Shared committed wagers; Stones/Dice/Five-Six state/action changes; oldman and paid bartender boundary; tests |
+| `4b0e921218d882a98678fb94f02dd2b252e81b41` | Explicit class includes for procedural HTTP bootstrap; generic response after database rollback; rotated-CSRF fixture correction |
+| `4028dbbf3ad1b1b9611aedc6775b4f66d81200eb` | Two-server jackpot test; persisted Dice-result validation; mounted tavern-entry check; rendered-nav assertion correction |
+| `10e80dcb064ee7737b4f452b1b64d27cb4b888f6` | All-in Stones and final-write failure tests; internal event POST marker handling; fixture routing/day corrections |
+| `1a6cd7340978e68fa43e7b2d015f4ca513d130ec` | Unique game generations; Five/Six New Day counter assertion; bounded color text; portable constraint-based failure injection |
+
+All published commits extend the actual prior branch. No valid remote history was reset, squashed or rebased. GitHub's authenticated connector published matching local file trees because this workspace's Git transport had no push credentials; no user terminal relay was required.
+
+Historical tag object `51cab4fbe58a234651a3177a56289b18bc152b4d`, source `bdc29df9bc344774b41e0ad7cae7f6ed2f7512e2`, tree `4013a0ccc5227e87cd7a22de00b7c322d7aa237c`, 417 files and 11 preservation commits verify unchanged. No writes were made to `jimlunsford/lotgd` or `jimlunsford/lotgd-modules`. No archive import, VPS access, deployment, public runtime, new branch/PR, version tag, release or package occurred.
+
+### Wager and route results
+
+- A small shared JSON envelope records schema version, random 128-bit game ID, owning account, game, wager, finite stage, active flag, result, settlement flag and exact game data. It is bounded to 2 KiB and validates owner/key/type/state consistency. Every newly started game has a different intent context, even if all Five/Six dice and payouts repeat.
+- Stones and Dice debit the positive affordable stake atomically on commitment. Settlement returns zero stakes for a loss, one for a tie, two for a win. Their net historical economics are unchanged. Draw/play does not require the committed money to remain in the wallet; the all-in Stones regression proves this.
+- Oldman GET preserves active and terminal state. A live game offers resume or explicit POST/CSRF abandonment. Abandonment checks a matching active game and a consumed state intent, retains the forfeited wager record and refunds nothing. Empty, wrong-game, completed, repeated, foreign-owner and malformed state are rejected. Other navigation cannot refund committed risk. Old pre-envelope in-progress blobs fail closed; no live migration was attempted.
+- Dice stores its die, 1..3 roll count and opponent result on the server. Finite bet/pass/keep actions reject request-carried try/what/result and wager changes. The historical opponent stopping policy is preserved, including the different tie rules on its first and second rolls. Settlement and its debug/account writes occur in the player transaction.
+- Five/Six rechecks daily uses and balance and reads authoritative settings while holding the installed module row and setting-row locks. Its contribution, cap, 5/10/100-percent awards and 100-gold full-jackpot reset remain unchanged. Invalid negative/overflow configuration fails closed. The valid supported maximum must accommodate the historical 100-gold reset. Account, daily-use, jackpot and winner/news writes share the transaction.
+- Two actual PHP loopback servers concurrently execute Five/Six for different authenticated actors. Both database targets prove results equivalent to one valid serial ordering, correct per-player gold and daily use, no lost shared pot update and no replay payout. Deterministic unit branches prove each payout formula and cap. The real bundled New Day hook resets playstoday.
+- Bartender search/login queries are bound; names/search/text are typed and bounded. Paid GET displays a confirmation. POST/CSRF with a consumed intent charges the original 100 gold only for an existing unlocked target and sufficient funds, under the actor transaction. HTTP tests prove missing-CSRF, replay and forged cost rejection, insufficient funds, missing target and quote/backslash/UTF-8 search handling. LoGD stat/story formatting and escaped action attributes remain distinct.
+- Mounted direct entry now checks the actual mount's tavern ability, and the tavern event remains set while inside. Its complete positive/negative HTTP matrix and settings/object-preference editor remain unproven, so **Dark Horse itself remains BLOCKED**, despite its closed wager and paid-information components.
+
+Actual settlement failure injection covers **Stones, Dice and Five/Six** at the account UPDATE after gameplay/related DML. A temporary CHECK constraint is installed as fixture DDL before the HTTP request, rejects terminal game state, and is removed afterward. The tests assert the account/game state remains unchanged, Five/Six jackpot and daily-use writes roll back, and a freshly issued retry succeeds. DDL is never claimed to participate in the application rollback.
+
+### Final module decisions
+
+**6 PASS, 0 PASS WITH DOCUMENTED LIMITATION, 18 BLOCKED. All 24 lifecycle PASS.**
+
+| Module | Decision | Exact remaining module gate, if blocked |
+|---|---|---|
+| findgem | PASS | None in supported bundled scope |
+| findgold | PASS | None in supported bundled gameplay; general settings editor remains a core gate |
+| foilwench | PASS | None in supported bundled scope |
+| game_stones | PASS, promoted | Shared wager/abandonment blocker closed; full game and failure/replay evidence pass |
+| game_dice | PASS, promoted | Server state, method/CSRF, finite progression, payout and rollback/replay evidence pass |
+| game_fivesix | PASS, promoted | Shared jackpot concurrency, formulas, daily state, method/CSRF and rollback/replay evidence pass; general settings editor remains core scope |
+| darkhorse | BLOCKED | Mounted entry HTTP matrix; shared settings/object-preference editor closure |
+| dag | BLOCKED | Funded actual PvP claim; full authorized/denied admin place/close/cleanup HTTP matrix; bounty-specific write failure injection |
+| drinks | BLOCKED | Editor create/delete/activation; delegated canedit matrix; configured hard-limit/drunkenness/reset boundaries |
+| cedrikspotions | BLOCKED | Configured/random costs and bounds; actual transmutation New Day persistence; settings editor |
+| crazyaudrey | BLOCKED | Village paid play/pet remains a GET mutation; daily/replay/effect closure |
+| lovers | BLOCKED | Conversation/effect POST/CSRF, daily stage/visits, replay and reset |
+| fairy | BLOCKED | Material HP/max-HP/turn/specialty/no-reward/configured/carry branches |
+| glowingstream | BLOCKED | All value-changing outcomes and configured values; settings editor |
+| goldmine | BLOCKED | Alternate gold/gem/death and mount/tether outcomes; object prefs and configured bounds |
+| outhouse | BLOCKED | Wash/no-reward/no-wash/gem/turn outcomes and configured probability/cost/editor boundaries |
+| sethsong | BLOCKED | All HP/gold/gem effects, fresh-intent visit exhaustion, configured values/reset/editor evidence |
+| racehuman | BLOCKED | Actual valid/invalid/duplicate HTTP onboarding and persistence |
+| raceelf | BLOCKED | Actual valid/invalid/duplicate HTTP onboarding and persistence |
+| racedwarf | BLOCKED | Actual valid/invalid/duplicate HTTP onboarding and persistence |
+| racetroll | BLOCKED | Actual valid/invalid/duplicate HTTP onboarding and persistence |
+| specialtydarkarts | BLOCKED | HTTP onboarding and actual combat/session/uses/POST/CSRF/replay authority |
+| specialtymysticpower | BLOCKED | Same specialty onboarding/combat gates |
+| specialtythiefskills | BLOCKED | Same specialty onboarding/combat gates |
+
+No other module's prior unexecuted gates were relabeled as complete. The Markdown and JSON matrices agree.
+
+### Remaining core and cleanup decisions
+
+| Requested family | Result in this continuation |
+|---|---|
+| Dag funded PvP / admin | No new closure beyond existing service/player placement evidence; gates above remain |
+| Race and specialty onboarding | Not changed; actual HTTP authorization/selection/persistence matrices remain |
+| Specialty combat and combat-state schema | Not changed; current combat authority, remaining uses, replay and exact badguy schema remain |
+| Mail send / reply / systemmail | Not changed; recipient/reply ownership, sender semantics, lengths, bound helper/caller audit and protected send remain |
+| Petition administration | Not changed; SU_EDIT_PETITIONS matrix, typed IDs/status, protected cleanup/status/note/delete and output remain |
+| Clans | Not changed; complete role/rank/cross-clan/self-target authorization, bound membership/text writes, POST/CSRF/replay/atomicity remain |
+| Bank/economy | Not changed; positive bounded amounts, locked balances, transfer ownership/debit/credit and failure rollback remain |
+| Weapons / armor | Not changed; typed item, authoritative price/eligibility/trade-in, protected atomic purchase and replay remain |
+| Mounts/stables | Not changed; ownership/location/price/transaction, exact mount/buff/companion schemas and editor matrix remain |
+| Training/masters | Not changed; server eligibility, combat entry, one-level advancement and replay remain |
+| PvP | Not changed; actor/target/location/alive/daily/combat authority and funded Dag interaction remain |
+| Admin/editor role matrix | Not changed; representative anonymous/player/insufficient/admin, methods/CSRF/IDs/unknown-fields matrices remain |
+| Module settings and object preferences | Not changed; declared descriptor/type/range/length/namespace allowlists and authorized bound editor writes remain |
+| Player preference protection | Existing forged canedit/skill namespace rejection retained and regression tests pass |
+| Serialized state | Exactly 87 tokenized sites / 41 files, 31 serialize, 55 ScalarState reads, one actual unserialize; new wager business schemas closed; combat/mount/companion/buff/mail-translation/editor/nav schemas remain |
+| Meaningful GET mutations | Dark Horse payment and game mutations removed; Audrey Village, Lovers, onboarding/combat, petitions, clans, equipment, stables, training/PvP and legacy editor families remain; bank/mail enforced boundaries also open |
+| Replay risks | New games pass duplicate/fresh-form invalid-stage and shared jackpot replay tests. Untouched route families remain open. Non-game session-intent crash windows are not a universal durable exactly-once guarantee |
+| expire_chars.php | Not changed; premature last_char_expire marker remains a merge blocker, with multi-point failure/retry tests outstanding |
+| charcleanup/account deletion | Not changed; preflight/hook/related cleanup/account DELETE/log failure semantics and external-effect recovery remain blockers |
+| External expiration mail / optimization | Still require separate observability, completion/retry semantics; external mail and OPTIMIZE implicit commits are not rollback-safe |
+
+### Both-target evidence
+
+At implementation `1a6cd7340978e68fa43e7b2d015f4ca513d130ec`:
+
+| Gate | PHP 8.4 / MariaDB | PHP 8.5 / MySQL |
+|---|---|---|
+| PHPUnit | 65 tests, 1,612 assertions, zero skips | Same |
+| Python and actual HTTP | 16 tests, zero skips | Same |
+| PHP lint | 300 files, zero failures | Same |
+| Legacy PHPStan | Level 0; seven retained findings; zero new errors | Same |
+| New infrastructure PHPStan | Level 6; zero errors; no baseline | Same |
+| Composer | Strict validation, locked install, dependency audit PASS | Same |
+| Fresh install/auth/modules/scheduler | PASS existing full regression | Same |
+| Modern core | SUCCESS, job 103795858461 | SUCCESS, job 103795858653 |
+
+- Modern core: https://github.com/jimlunsford/legend-of-the-green-dragon-resurrection/actions/runs/34783935347, SUCCESS.
+- Baseline integrity: https://github.com/jimlunsford/legend-of-the-green-dragon-resurrection/actions/runs/34783935406, SUCCESS.
+- Final documentation-head CI is run again and recorded in PR #1 and the final report. No test was skipped or removed, no static baseline regenerated, no dependency added.
+- Prior failed Modern core runs remain visible: 34783218603 (missing procedural class includes), 34783386237 (rendered navigation test assertion), 34783540283 (fixture New Day/search routing and trigger portability), 34783775745 (constraint fixture auto-increment restriction). These were corrected, not concealed. Two-server jackpot concurrency already passed on both jobs of 34783775745.
+
+### Merge decision and precise next work
+
+PR #1 cannot be marked ready or merged while the known major core and bundled-module gates above remain. No merge commit exists for this execution; main stays at the verified original SHA. Public hosting remains NO independently of the merge decision.
+
+Continue **Phase 3 on this branch and PR**. The shared wager cluster is now complete. Next prioritize **Dag's actual funded PvP interaction and full administrator place/close/cleanup matrix with bounty-specific rollback**, then Drinks' create/delete/delegated-editor and configured-boundary completion, Cedrik, Audrey/Lovers, remaining Forest/Outhouse/Seth branches, onboarding/combat, and the recorded core/editor/cleanup families. The general typed settings/object-preference editor should be completed as those dependent module gates are addressed. Do not start Phase 4, deploy or release.

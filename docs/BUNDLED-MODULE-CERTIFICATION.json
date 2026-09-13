@@ -1,7 +1,7 @@
 {
   "scope": "Only the 24 bundled entrypoints, verified against modules/*.php; no archive import.",
   "date": "2026-09-13",
-  "evidence": "Phase 3 continuation: ModuleCertificationTest, PlayerMutationTest, ScalarStateTest, StonesGameTest, DrinkInputTest, ExpressionTest, SecurityIntegrationTest, test_web_application.py. Exact final workflow evidence is in MODERN-CORE-CHECKPOINT-20260913-PHASE3-CLOSURE.md and PR #1.",
+  "evidence": "Phase 3 continuation: ModuleCertificationTest, PlayerMutationTest, ScalarStateTest, StonesGameTest, DrinkInputTest, ExpressionTest, SecurityIntegrationTest, test_web_application.py. Exact final workflow evidence is in MODERN-CORE-CHECKPOINT-20260913-PHASE3-CLOSURE.md and PR #1. Dark Horse continuation: DarkHorseGameTest and two-server concurrent jackpot HTTP tests; 65 PHPUnit tests / 1612 assertions / 16 Python tests on both targets.",
   "status_meaning": "Final certification is per module in the supported bundled scope. PASS requires actual behavior/security evidence; PARTIAL is a component route result only and final remains BLOCKED. Core editor/combat/hosting gates are tracked separately and still prevent merge.",
   "modules": [
     {
@@ -337,23 +337,23 @@
       },
       "settings_preferences_result": "PASS for named defaults and raw round trips; NOT APPLICABLE for empty namespaces",
       "object_preferences_result": "PASS for mounts.findtavern values 0 and 1",
-      "direct_runmodule_route": "BLOCKED",
-      "direct_route_note": "Lifecycle, event entrance and Stones return smoke pass. Bartender name/search SQL is still unbound, paid information is a GET mutation, and oldman clears specialmisc without an independent active-wager contract.",
+      "direct_runmodule_route": "PARTIAL",
+      "direct_route_note": "PARTIAL: oldman preserves active state on GET and allows only matching current POST/CSRF abandonment with no refund. Bartender search/login SQL is bound; paid GET confirms, protected POST debits the historical 100 gold atomically; HTTP funds, missing target, quote/backslash/UTF-8 search, forged cost and replay tests pass. Mounted direct-entry authorization was tightened, but its full positive/negative HTTP matrix and shared settings/object-preference editor validation remain unclosed.",
       "database_tables": [],
-      "database_behavior": "PASS: strict fresh install/reinstall and tested metadata writes; purchase/admin transactions not certified",
+      "database_behavior": "PASS for bartender bound reads/atomic debit; full editor scope remains unclosed",
       "daily_hooks": [],
       "combat_hooks": [],
       "integration_hooks": [
         "forest"
       ],
-      "php_8_4": "PASS for tested components; final BLOCKED for remaining gates",
-      "php_8_5": "PASS for tested components; final BLOCKED for remaining gates",
-      "mariadb_11_4": "PASS for tested components; final BLOCKED for remaining gates",
-      "mysql_8_4": "PASS for tested components; final BLOCKED for remaining gates",
+      "php_8_4": "PASS for tested components; final BLOCKED for remaining mounted-entry/editor gates",
+      "php_8_5": "PASS for tested components; final BLOCKED for remaining mounted-entry/editor gates",
+      "mariadb_11_4": "PASS for tested components; final BLOCKED for remaining mounted-entry/editor gates",
+      "mysql_8_4": "PASS for tested components; final BLOCKED for remaining mounted-entry/editor gates",
       "warnings_errors": "No PHP warnings/errors in the passing matrix tests; unexecuted paths unverified.",
-      "security_notes": "Lifecycle, event entrance and Stones return smoke pass. Bartender name/search SQL is still unbound, paid information is a GET mutation, and oldman clears specialmisc without an independent active-wager contract.",
+      "security_notes": "PARTIAL: oldman preserves active state on GET and allows only matching current POST/CSRF abandonment with no refund. Bartender search/login SQL is bound; paid GET confirms, protected POST debits the historical 100 gold atomically; HTTP funds, missing target, quote/backslash/UTF-8 search, forged cost and replay tests pass. Mounted direct-entry authorization was tightened, but its full positive/negative HTTP matrix and shared settings/object-preference editor validation remain unclosed.",
       "final_certification": "BLOCKED",
-      "continuation_evidence": "See CORE-ROUTE-SECURITY.md for component gates and exact test names; prior lifecycle evidence is retained."
+      "continuation_evidence": "DarkHorseGameTest; StonesGameTest; ModuleCertificationTest; test_create_login_rotate_render_logout; test_darkhorse_wagers_abandonment_and_information; test_darkhorse_shared_jackpot_concurrency. Modern core 34783935347, baseline 34783935406, exact implementation 1a6cd7340978e68fa43e7b2d015f4ca513d130ec. Final documentation-head CI is recorded in PR #1."
     },
     {
       "module": "drinks",
@@ -671,23 +671,23 @@
       "object_preferences": {},
       "settings_preferences_result": "PASS for named defaults and raw round trips; NOT APPLICABLE for empty namespaces",
       "object_preferences_result": "NOT APPLICABLE",
-      "direct_runmodule_route": "BLOCKED",
-      "direct_route_note": "Lifecycle/hook PASS. Direct game still trusts bet/try/what across requests, uses GET roll/settlement and has no certified server wager/replay contract.",
+      "direct_runmodule_route": "PASS",
+      "direct_route_note": "PASS: server-owned wager, roll, attempts and result; positive affordable committed stake; finite bet/pass/keep with at most three player rolls; historical opponent stopping rules and payouts; POST/CSRF, one-use state intent, abandonment, wrong-game and forged-field rejection; real HTTP progression/settlement/rollback/replay and deterministic opponent branches on both targets.",
       "database_tables": [],
-      "database_behavior": "PASS: strict fresh install/reinstall and tested metadata writes; purchase/admin transactions not certified",
+      "database_behavior": "PASS for tested bound player/game writes and rollback; shared game jackpot concurrency PASS",
       "daily_hooks": [],
       "combat_hooks": [],
       "integration_hooks": [
         "darkhorsegame"
       ],
-      "php_8_4": "PASS for tested components; final BLOCKED for remaining gates",
-      "php_8_5": "PASS for tested components; final BLOCKED for remaining gates",
-      "mariadb_11_4": "PASS for tested components; final BLOCKED for remaining gates",
-      "mysql_8_4": "PASS for tested components; final BLOCKED for remaining gates",
+      "php_8_4": "PASS in supported bundled gameplay scope",
+      "php_8_5": "PASS in supported bundled gameplay scope",
+      "mariadb_11_4": "PASS in supported bundled gameplay scope",
+      "mysql_8_4": "PASS in supported bundled gameplay scope",
       "warnings_errors": "No PHP warnings/errors in the passing matrix tests; unexecuted paths unverified.",
-      "security_notes": "Lifecycle/hook PASS. Direct game still trusts bet/try/what across requests, uses GET roll/settlement and has no certified server wager/replay contract.",
-      "final_certification": "BLOCKED",
-      "continuation_evidence": "See CORE-ROUTE-SECURITY.md for component gates and exact test names; prior lifecycle evidence is retained."
+      "security_notes": "PASS: server-owned wager, roll, attempts and result; positive affordable committed stake; finite bet/pass/keep with at most three player rolls; historical opponent stopping rules and payouts; POST/CSRF, one-use state intent, abandonment, wrong-game and forged-field rejection; real HTTP progression/settlement/rollback/replay and deterministic opponent branches on both targets.",
+      "final_certification": "PASS",
+      "continuation_evidence": "DarkHorseGameTest; StonesGameTest; ModuleCertificationTest; test_create_login_rotate_render_logout; test_darkhorse_wagers_abandonment_and_information; test_darkhorse_shared_jackpot_concurrency. Modern core 34783935347, baseline 34783935406, exact implementation 1a6cd7340978e68fa43e7b2d015f4ca513d130ec. Final documentation-head CI is recorded in PR #1."
     },
     {
       "module": "game_fivesix",
@@ -735,10 +735,10 @@
       "object_preferences": {},
       "settings_preferences_result": "PASS for named defaults and raw round trips; NOT APPLICABLE for empty namespaces",
       "object_preferences_result": "NOT APPLICABLE",
-      "direct_runmodule_route": "BLOCKED",
-      "direct_route_note": "Lifecycle/hook PASS. Direct roll/wager/jackpot mutations and shared jackpot locking need POST/CSRF, typed authoritative state and replay/atomicity closure.",
+      "direct_runmodule_route": "PASS",
+      "direct_route_note": "PASS: server-configured bounded cost/daily quota/jackpot, committed stake, server dice/result, unique wager generation, one-use POST/CSRF, locked shared jackpot and atomic player/pref/settings writes; exact payout/cap/reset unit branches, actual HTTP rollback and replay, two actors on two loopback servers with serial-equivalent jackpot/account results, plus actual New Day hook counter reset on both targets. General administrator settings editor remains a separate core merge blocker.",
       "database_tables": [],
-      "database_behavior": "PASS: strict fresh install/reinstall and tested metadata writes; purchase/admin transactions not certified",
+      "database_behavior": "PASS for tested bound player/game writes and rollback; shared game jackpot concurrency PASS",
       "daily_hooks": [
         "newday"
       ],
@@ -746,14 +746,14 @@
       "integration_hooks": [
         "darkhorsegame"
       ],
-      "php_8_4": "PASS for tested components; final BLOCKED for remaining gates",
-      "php_8_5": "PASS for tested components; final BLOCKED for remaining gates",
-      "mariadb_11_4": "PASS for tested components; final BLOCKED for remaining gates",
-      "mysql_8_4": "PASS for tested components; final BLOCKED for remaining gates",
+      "php_8_4": "PASS in supported bundled gameplay scope",
+      "php_8_5": "PASS in supported bundled gameplay scope",
+      "mariadb_11_4": "PASS in supported bundled gameplay scope",
+      "mysql_8_4": "PASS in supported bundled gameplay scope",
       "warnings_errors": "No PHP warnings/errors in the passing matrix tests; unexecuted paths unverified.",
-      "security_notes": "Lifecycle/hook PASS. Direct roll/wager/jackpot mutations and shared jackpot locking need POST/CSRF, typed authoritative state and replay/atomicity closure.",
-      "final_certification": "BLOCKED",
-      "continuation_evidence": "See CORE-ROUTE-SECURITY.md for component gates and exact test names; prior lifecycle evidence is retained."
+      "security_notes": "PASS: server-configured bounded cost/daily quota/jackpot, committed stake, server dice/result, unique wager generation, one-use POST/CSRF, locked shared jackpot and atomic player/pref/settings writes; exact payout/cap/reset unit branches, actual HTTP rollback and replay, two actors on two loopback servers with serial-equivalent jackpot/account results, plus actual New Day hook counter reset on both targets. General administrator settings editor remains a separate core merge blocker.",
+      "final_certification": "PASS",
+      "continuation_evidence": "DarkHorseGameTest; StonesGameTest; ModuleCertificationTest; test_create_login_rotate_render_logout; test_darkhorse_wagers_abandonment_and_information; test_darkhorse_shared_jackpot_concurrency. Modern core 34783935347, baseline 34783935406, exact implementation 1a6cd7340978e68fa43e7b2d015f4ca513d130ec. Final documentation-head CI is recorded in PR #1."
     },
     {
       "module": "game_stones",
@@ -782,23 +782,23 @@
       "object_preferences": {},
       "settings_preferences_result": "PASS for named defaults and raw round trips; NOT APPLICABLE for empty namespaces",
       "object_preferences_result": "NOT APPLICABLE",
-      "direct_runmodule_route": "BLOCKED",
-      "direct_route_note": "JSON state, exact schema, malicious serialized object rejection, positive authoritative bet, one-use choose/bet/draw/settle and duplicate settlement pass unit and full HTTP game tests. Remaining: surrounding Dark Horse wager abandonment/state transitions must be independent of navigation; bet is charged on settlement and oldman resets specialmisc.",
+      "direct_runmodule_route": "PASS",
+      "direct_route_note": "PASS: account-owned, unique-generation JSON wager envelope; stake debited atomically on bet; exact Stones conservation schema; finite choose/bet/draw/settle; loss/tie/win return 0/1/2 stakes; explicit no-refund abandonment and conflicting-game rejection; full HTTP game, replay, malformed state, all-in unit branch and database settlement-failure rollback on both targets.",
       "database_tables": [],
-      "database_behavior": "PASS for existing lifecycle plus tested transactional action paths; see security_notes for unclosed family gates",
+      "database_behavior": "PASS for tested bound player/game writes and rollback; shared game jackpot concurrency PASS",
       "daily_hooks": [],
       "combat_hooks": [],
       "integration_hooks": [
         "darkhorsegame"
       ],
-      "php_8_4": "PASS for tested components; final BLOCKED for remaining gates",
-      "php_8_5": "PASS for tested components; final BLOCKED for remaining gates",
-      "mariadb_11_4": "PASS for tested components; final BLOCKED for remaining gates",
-      "mysql_8_4": "PASS for tested components; final BLOCKED for remaining gates",
+      "php_8_4": "PASS in supported bundled gameplay scope",
+      "php_8_5": "PASS in supported bundled gameplay scope",
+      "mariadb_11_4": "PASS in supported bundled gameplay scope",
+      "mysql_8_4": "PASS in supported bundled gameplay scope",
       "warnings_errors": "No PHP warnings/errors in the passing matrix tests; unexecuted paths unverified.",
-      "security_notes": "JSON state, exact schema, malicious serialized object rejection, positive authoritative bet, one-use choose/bet/draw/settle and duplicate settlement pass unit and full HTTP game tests. Remaining: surrounding Dark Horse wager abandonment/state transitions must be independent of navigation; bet is charged on settlement and oldman resets specialmisc.",
-      "final_certification": "BLOCKED",
-      "continuation_evidence": "See CORE-ROUTE-SECURITY.md for component gates and exact test names; prior lifecycle evidence is retained."
+      "security_notes": "PASS: account-owned, unique-generation JSON wager envelope; stake debited atomically on bet; exact Stones conservation schema; finite choose/bet/draw/settle; loss/tie/win return 0/1/2 stakes; explicit no-refund abandonment and conflicting-game rejection; full HTTP game, replay, malformed state, all-in unit branch and database settlement-failure rollback on both targets.",
+      "final_certification": "PASS",
+      "continuation_evidence": "DarkHorseGameTest; StonesGameTest; ModuleCertificationTest; test_create_login_rotate_render_logout; test_darkhorse_wagers_abandonment_and_information; test_darkhorse_shared_jackpot_concurrency. Modern core 34783935347, baseline 34783935406, exact implementation 1a6cd7340978e68fa43e7b2d015f4ca513d130ec. Final documentation-head CI is recorded in PR #1."
     },
     {
       "module": "glowingstream",
@@ -1967,9 +1967,9 @@
     }
   ],
   "counts": {
-    "PASS": 3,
+    "PASS": 6,
     "PASS WITH DOCUMENTED LIMITATION": 0,
-    "BLOCKED": 21,
+    "BLOCKED": 18,
     "lifecycle_PASS": 24
   }
 }

@@ -6,7 +6,7 @@ Date: 2026-09-13. Scope: tracked shipped PHP, excluding tests and tooling. Token
 
 The inventory contains **87 sites in 41 files: 31 `serialize()` writers/checks, 55 `ScalarState::read()` calls, and one actual `unserialize()` implementation**. `ScalarState::read()` disables classes, limits input to 1 MiB, depth to 32 and visited nodes to 10,000, accepts only null/boolean/integer/string/finite-float/array values, rejects incomplete objects and cycles, and requires canonical complete serialization. Errors return `false`; callers still need their own exact schema and invalid-state response. PHP session encoding itself is server-owned and is not a call site in this inventory.
 
-`game_stones` no longer restores PHP serialization. `StonesState` accepts bounded JSON only (512 bytes, depth 4), checks keys/types/ranges, side/bet values, even piles and conservation of all 16 stones. Malicious serialized objects and malformed JSON receive rejection. An in-progress pre-conversion Stones blob is rejected instead of migrated; no production runtime was deployed. The surrounding Dark Horse game-abandonment/wager-state contract remains unclosed, independently of object restoration.
+`game_stones` no longer restores PHP serialization. `StonesState` accepts bounded JSON only (512 bytes, depth 4), checks keys/types/ranges, side/bet values, even piles and conservation of all 16 stones. Malicious serialized objects and malformed JSON receive rejection. An in-progress pre-conversion Stones blob is rejected instead of migrated; no production runtime was deployed. The second continuation closes the shared Dark Horse contract using an account-owned wager envelope with a unique game ID and committed stake; see the added business schemas below.
 
 ## Exact call-site inventory
 
@@ -113,3 +113,11 @@ Each remaining site is listed below. A writer never instantiates an object by it
 - Disabled payments remain disabled. This audit does not authorize payment restoration, external recovery, public serving of internals, or deployment.
 
 Workflow results and the merge decision are recorded in [the continuation checkpoint](MODERN-CORE-CHECKPOINT-20260913-PHASE3-CLOSURE.md).
+
+## Dark Horse JSON envelope continuation
+
+The PHP serialization inventory remains 87 sites / 41 files, 31 writers/checks, 55 ScalarState readers and one centralized actual unserialize. No compatibility parser was loosened.
+
+`DarkHorseState` adds a bounded 2 KiB/depth-6 JSON envelope to `specialmisc`, with exact keys, a random 128-bit game ID, and owner/game/stage/wager/active/result/settled consistency. Stones retains its bounded conservation schema inside the envelope. Dice data is exactly roll (1..6), tries (1..3), opponent (0..6). Five/Six data is exactly five integers (1..6). Unknown envelope keys, invalid types, foreign ownership, conflicting active games, serialized objects and malformed JSON fail closed. No external request can supply the envelope or result data. Mutation writers execute within the locked account transaction. Combat, mount, buff, companion, translated mail/MOTD and editor schemas remain unclosed.
+
+Recounted with PHP token_get_all on tracked shipped PHP (excluding tests/tooling/comments): exactly 87 sites / 41 files, 31 serialize, 55 ScalarState::read, one actual unserialize, zero active eval. The new wager ID makes identical Five/Six rolls distinct action contexts. The full existing ScalarState parser limits remain unchanged. Both-target tests now include actual final-write rollback for each game and two-server shared jackpot execution.

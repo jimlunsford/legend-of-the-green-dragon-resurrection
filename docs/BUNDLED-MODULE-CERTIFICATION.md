@@ -1,6 +1,6 @@
 # Bundled module certification
 
-**Final counts: 3 PASS, 0 PASS WITH DOCUMENTED LIMITATION, 21 BLOCKED. Lifecycle/metadata: 24 PASS. Modern-core merge: NOT READY. Public hosting: NO.**
+**Final counts: 6 PASS, 0 PASS WITH DOCUMENTED LIMITATION, 18 BLOCKED. Lifecycle/metadata: 24 PASS. Modern-core merge: NOT READY. Public hosting: NO.**
 
 This 2026-09-13 continuation updates the original all-BLOCKED checkpoint using new mutation evidence. The earlier Phase 3 history remains in [the original checkpoint](MODERN-CORE-CHECKPOINT-20260913-PHASE3.md). Only the 24 shipped entrypoints are in scope. No archive module was imported. No module is promoted merely because a route renders.
 
@@ -17,9 +17,9 @@ PASS covers the named module in supported bundled use, not arbitrary core/editor
 | `findgem` | 1.1 | PASS | PASS |
 | `findgold` | 1.1 | PASS | PASS |
 | `foilwench` | 1.1 | PASS | PASS |
-| `game_dice` | 1.1 | PASS | BLOCKED |
-| `game_fivesix` | 1.7 | PASS | BLOCKED |
-| `game_stones` | 1.1 | PASS | BLOCKED |
+| `game_dice` | 1.1 | PASS | PASS |
+| `game_fivesix` | 1.7 | PASS | PASS |
+| `game_stones` | 1.1 | PASS | PASS |
 | `glowingstream` | 1.1 | PASS | BLOCKED |
 | `goldmine` | 1.0 | PASS | BLOCKED |
 | `lovers` | 1.0 | PASS | BLOCKED |
@@ -66,10 +66,10 @@ Bound transactional eligible placement, quota/funds checks, claim status/own-bou
 
 ### darkhorse (1.1): BLOCKED
 
-Lifecycle, event entrance and Stones return smoke pass. Bartender name/search SQL is still unbound, paid information is a GET mutation, and oldman clears specialmisc without an independent active-wager contract.
+PARTIAL: oldman preserves active state on GET and allows only matching current POST/CSRF abandonment with no refund. Bartender search/login SQL is bound; paid GET confirms, protected POST debits the historical 100 gold atomically; HTTP funds, missing target, quote/backslash/UTF-8 search, forged cost and replay tests pass. Mounted direct-entry authorization was tightened, but its full positive/negative HTTP matrix and shared settings/object-preference editor validation remain unclosed.
 
-- Component route result: BLOCKED.
-- Exact metadata, descriptors, hooks, dependencies, database tables and prior lifecycle evidence remain in [the JSON record](BUNDLED-MODULE-CERTIFICATION.json).
+- Component route result: PARTIAL.
+- Exact metadata and lifecycle evidence remain in [the JSON record](BUNDLED-MODULE-CERTIFICATION.json).
 
 ### drinks (1.1): BLOCKED
 
@@ -106,26 +106,26 @@ Current Forest event requires POST/CSRF and consumed intent. Real HTTP proves ex
 - Component route result: PASS.
 - Exact metadata, descriptors, hooks, dependencies, database tables and prior lifecycle evidence remain in [the JSON record](BUNDLED-MODULE-CERTIFICATION.json).
 
-### game_dice (1.1): BLOCKED
+### game_dice (1.1): PASS
 
-Lifecycle/hook PASS. Direct game still trusts bet/try/what across requests, uses GET roll/settlement and has no certified server wager/replay contract.
+PASS: server-owned wager, roll, attempts and result; positive affordable committed stake; finite bet/pass/keep with at most three player rolls; historical opponent stopping rules and payouts; POST/CSRF, one-use state intent, abandonment, wrong-game and forged-field rejection; real HTTP progression/settlement/rollback/replay and deterministic opponent branches on both targets.
 
-- Component route result: BLOCKED.
-- Exact metadata, descriptors, hooks, dependencies, database tables and prior lifecycle evidence remain in [the JSON record](BUNDLED-MODULE-CERTIFICATION.json).
+- Component route result: PASS.
+- Exact metadata and lifecycle evidence remain in [the JSON record](BUNDLED-MODULE-CERTIFICATION.json).
 
-### game_fivesix (1.7): BLOCKED
+### game_fivesix (1.7): PASS
 
-Lifecycle/hook PASS. Direct roll/wager/jackpot mutations and shared jackpot locking need POST/CSRF, typed authoritative state and replay/atomicity closure.
+PASS: server-configured bounded cost/daily quota/jackpot, committed stake, server dice/result, unique wager generation, one-use POST/CSRF, locked shared jackpot and atomic player/pref/settings writes; exact payout/cap/reset unit branches, actual HTTP rollback and replay, two actors on two loopback servers with serial-equivalent jackpot/account results, plus actual New Day hook counter reset on both targets. General administrator settings editor remains a separate core merge blocker.
 
-- Component route result: BLOCKED.
-- Exact metadata, descriptors, hooks, dependencies, database tables and prior lifecycle evidence remain in [the JSON record](BUNDLED-MODULE-CERTIFICATION.json).
+- Component route result: PASS.
+- Exact metadata and lifecycle evidence remain in [the JSON record](BUNDLED-MODULE-CERTIFICATION.json).
 
-### game_stones (1.1): BLOCKED
+### game_stones (1.1): PASS
 
-JSON state, exact schema, malicious serialized object rejection, positive authoritative bet, one-use choose/bet/draw/settle and duplicate settlement pass unit and full HTTP game tests. Remaining: surrounding Dark Horse wager abandonment/state transitions must be independent of navigation; bet is charged on settlement and oldman resets specialmisc.
+PASS: account-owned, unique-generation JSON wager envelope; stake debited atomically on bet; exact Stones conservation schema; finite choose/bet/draw/settle; loss/tie/win return 0/1/2 stakes; explicit no-refund abandonment and conflicting-game rejection; full HTTP game, replay, malformed state, all-in unit branch and database settlement-failure rollback on both targets.
 
-- Component route result: BLOCKED.
-- Exact metadata, descriptors, hooks, dependencies, database tables and prior lifecycle evidence remain in [the JSON record](BUNDLED-MODULE-CERTIFICATION.json).
+- Component route result: PASS.
+- Exact metadata and lifecycle evidence remain in [the JSON record](BUNDLED-MODULE-CERTIFICATION.json).
 
 ### glowingstream (1.1): BLOCKED
 
@@ -210,3 +210,7 @@ Existing valid skill-level buff/use and dragon-kill/reset hook fixtures PASS. Ac
 
 - Component route result: BLOCKED.
 - Exact metadata, descriptors, hooks, dependencies, database tables and prior lifecycle evidence remain in [the JSON record](BUNDLED-MODULE-CERTIFICATION.json).
+
+## Second Phase 3 continuation evidence
+
+Stones, Dice and Five/Six are promoted after both supported jobs pass the full expanded HTTP, deterministic payout, replay and rollback tests. Modern core 34783935347 and Baseline integrity 34783935406 pass at implementation `1a6cd7340978e68fa43e7b2d015f4ca513d130ec`. Totals: 65 PHPUnit tests / 1612 assertions / 16 Python tests / 300 linted PHP files, zero skips. General settings, object-preference, combat and other core route gates remain independent merge blockers. No other module was promoted or silently declared complete.
