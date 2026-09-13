@@ -171,31 +171,27 @@ function is_module_installed($modulename,$version=false){
  * @return bool If successful or not
  */
 function module_check_requirements($reqs, $forceinject=false){
-	// Since we can inject here, we need to save off the module we're on
-	global $mostrecentmodule;
-
-	$oldmodule = $mostrecentmodule;
-	$result = true;
-
-	if (!is_array($reqs)) return false;
-
-	// Check the requirements.
-	reset($reqs);
-	while (list($key,$val)=resurrection_array_next($reqs)){
-		$info = explode("|",$val);
-		if (!is_module_installed($key,$info[0]) || !is_module_active($key)) {
-			return false;
-		}
-		// This is actually cheap since we cache the result
-		$status = module_status($key);
-		// If it's not injected and we should force it, do so.
-		if (!($status & MODULE_INJECTED) && $forceinject) {
-			$result = $result && injectmodule($key);
-		}
-	}
-
-	$mostrecentmodule = $oldmodule;
-	return $result;
+    global $mostrecentmodule;
+    static $checking = [];
+    if (!is_array($reqs)) return false;
+    $oldmodule = $mostrecentmodule;
+    try {
+        foreach ($reqs as $name => $descriptor) {
+            if (!is_string($name) || !preg_match('/\\A[A-Za-z][A-Za-z0-9_]*\\z/', $name)
+                || !is_string($descriptor)) return false;
+            $version = explode('|', $descriptor, 2)[0];
+            if (!preg_match('/\\A[0-9]+(?:\\.[0-9]+)*\\z/', $version) || isset($checking[$name])) return false;
+            if (!is_module_installed($name, $version) || !is_module_active($name)) return false;
+            $checking[$name] = true;
+            try {
+                require_once 'modules/' . $name . '.php';
+                $metadata = ($name . '_getmoduleinfo')();
+                if (!is_array($metadata) || !module_check_requirements($metadata['requires'] ?? [], false)) return false;
+                if ($forceinject && !injectmodule($name)) return false;
+            } finally { unset($checking[$name]); }
+        }
+        return true;
+    } finally { $mostrecentmodule = $oldmodule; }
 }
 
 /**
@@ -1174,9 +1170,22 @@ function module_compare_versions($a,$b){
 	//insert alternate version detection and comparison algorithms here.
 
 	//default case, typecast as float
-	$a = (float)$a;
-	$b = (float)$b;
-	return ($a < $b ? -1 : ($a > $b ? 1 : 0) );
+	return version_compare((string)$a, (string)$b);
+}
+
+/** Lifecycle changes invalidate dependants as well as preloaded hook/event rows. */
+function resurrection_invalidate_module_runtime($module) {
+    $GLOBALS['injected_modules'] = [0 => [], 1 => []];
+    $GLOBALS['modulehook_queries'] = [];
+    $GLOBALS['module_preload'] = [];
+    foreach (['hook-', 'event-', 'moduleprepare', 'inject-'] as $prefix) {
+        foreach (array_keys($GLOBALS['datacache'] ?? []) as $key) {
+            if (str_starts_with($key, $prefix)) invalidatedatacache($key);
+        }
+        massinvalidate($prefix);
+    }
+    invalidatedatacache('modulesettings-' . $module);
+    unset($GLOBALS['module_settings'][$module]);
 }
 
 function activate_module($module){
@@ -1193,10 +1202,11 @@ function activate_module($module){
     if (!module_check_requirements($info['requires'] ?? [])) { return false; }
 	$sql = "UPDATE " . db_prefix("modules") . " SET active=1 WHERE modulename=?";
     db_query($sql, true, [$module]);
-    unset($GLOBALS['injected_modules'][0][$module], $GLOBALS['injected_modules'][1][$module]);
+    $changed = db_affected_rows();
+    resurrection_invalidate_module_runtime($module);
 	invalidatedatacache("inject-$module");
 	massinvalidate("moduleprepare");
-	if (db_affected_rows() <= 0){
+	if ($changed <= 0){
 		return false;
 	}else{
 		return true;
@@ -1218,10 +1228,11 @@ function deactivate_module($module){
 	}
 	$sql = "UPDATE " . db_prefix("modules") . " SET active=0 WHERE modulename=?";
     db_query($sql, true, [$module]);
-    unset($GLOBALS['injected_modules'][0][$module], $GLOBALS['injected_modules'][1][$module]);
+    $changed = db_affected_rows();
+    resurrection_invalidate_module_runtime($module);
 	invalidatedatacache("inject-$module");
 	massinvalidate("moduleprepare");
-	if (db_affected_rows() <= 0){
+	if ($changed <= 0){
 		return false;
 	}else{
 		return true;
@@ -1243,7 +1254,7 @@ function uninstall_module($module){
 		output("Deleting module entry`n");
 		$sql = "DELETE FROM " . db_prefix("modules") . " WHERE modulename=?";
         db_query($sql, true, [$module]);
-        unset($GLOBALS['injected_modules'][0][$module], $GLOBALS['injected_modules'][1][$module]);
+        resurrection_invalidate_module_runtime($module);
 
 		output("Deleting module hooks`n");
 		module_wipehooks();
@@ -1294,11 +1305,13 @@ function install_module($module, $force=true){
         foreach ($info['settings'] ?? [] as $key => $descriptor) {
             if (!is_string($key)) { continue; }
             $parts = explode('|', is_array($descriptor) ? $descriptor[0] : $descriptor, 2);
-            if (isset($parts[1])) { set_module_setting($key, $parts[1], $module); }
+            if (isset($parts[1])) {
+                db_query('INSERT INTO ' . db_prefix('module_settings') . ' (modulename,setting,value) VALUES (?,?,?) ON DUPLICATE KEY UPDATE setting=VALUES(setting)', true, [$module, $key, $parts[1]]);
+            }
         }
         return ($module . '_install')() !== false;
     } finally {
-        unset($GLOBALS['injected_modules'][0][$module], $GLOBALS['injected_modules'][1][$module]);
+        resurrection_invalidate_module_runtime($module);
         invalidatedatacache('inject-' . $module);
         massinvalidate('moduleprepare');
     }

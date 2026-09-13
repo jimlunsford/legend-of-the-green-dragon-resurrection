@@ -99,6 +99,17 @@ final class SecurityIntegrationTest extends TestCase
             unset($GLOBALS['module_prefs'][2]['resurrectionfixture']);
             self::assertSame($raw, get_module_pref('user_raw', 'resurrectionfixture', 2));
 
+            foreach ([['racehuman' => []], [0 => '1.0'], ['../racehuman' => '1.0'], ['racehuman' => 'not-a-version']] as $bad) {
+                self::assertFalse(module_check_requirements($bad));
+            }
+            self::assertGreaterThan(0, module_compare_versions('1.10', '1.2'));
+            self::assertFalse(module_check_requirements(['racehuman' => '1.0|Inactive']));
+            db_query('UPDATE modules SET active=1 WHERE modulename=?', true, ['racehuman']);
+            self::assertTrue(module_check_requirements(['racehuman' => '1.0|Valid']));
+            self::assertFalse(module_check_requirements(['racehuman' => '9.0|Too old']));
+            $GLOBALS['fixture_requirements'] = ['resurrectionfixture' => '1.0|Cycle'];
+            self::assertFalse(module_check_requirements($GLOBALS['fixture_requirements']));
+            db_query('UPDATE modules SET active=0 WHERE modulename=?', true, ['racehuman']);
             $GLOBALS['fixture_requirements'] = 'malformed';
             $clear(); self::assertFalse(injectmodule('resurrectionfixture', false));
             $GLOBALS['fixture_requirements'] = ['missingdependency' => '1.0|Missing dependency'];
