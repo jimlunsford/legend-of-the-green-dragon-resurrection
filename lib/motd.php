@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/../src/Security/ScalarState.php';
 require_once __DIR__ . '/../src/Compatibility/array_cursor.php';
 // addnews ready
 // translator ready
@@ -44,7 +45,7 @@ function pollitem($id,$subject,$body,$author,$date,$showpoll=true){
 	$result = db_query($sql);
 	$row = db_fetch_assoc($result);
 	$choice = $row['choice'];
-	$body = unserialize($body);
+	$body = \Resurrection\Security\ScalarState::read($body);
 
 	$poll = translate_inline("Poll:");
 	if ($session['user']['loggedin'] && $showpoll) {

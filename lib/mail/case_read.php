@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/../../src/Security/ScalarState.php';
 $mail = db_prefix('mail');
 $accounts = db_prefix('accounts');
 $sql = "SELECT $mail.*, $accounts.name FROM $mail LEFT JOIN $accounts ON $accounts.acctid=$mail.msgfrom WHERE msgto=\"".$session['user']['acctid']."\" AND messageid=\"".$id."\"";
@@ -12,12 +13,12 @@ if (db_num_rows($result)>0){
 			$row['name']=$row['msgfrom'];
 		}
 		// No translation for subject if it's not an array
-		$row_subject = @unserialize($row['subject']);
+		$row_subject = \Resurrection\Security\ScalarState::read($row['subject']);
 		if ($row_subject !== false) {
 			$row['subject'] = call_user_func_array("sprintf_translate", $row_subject);
 		}
 		// No translation for body if it's not an array
-		$row_body = @unserialize($row['body']);
+		$row_body = \Resurrection\Security\ScalarState::read($row['body']);
 		if ($row_body !== false) {
 			$row['body'] = call_user_func_array("sprintf_translate", $row_body);
 		}

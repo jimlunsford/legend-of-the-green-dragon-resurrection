@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/src/Security/ScalarState.php';
 // translator ready
 // addnews ready
 // mail ready
@@ -133,7 +134,7 @@ if ($op==""){
 		output_notl("%s", $row['moddate']);
 		rawoutput("</td>");
 		rawoutput("<td>");
-		$comment = unserialize($row['comment'], ['allowed_classes' => false]);
+		$comment = \Resurrection\Security\ScalarState::read($row['comment']);
 		output_notl("`0(%s)", $comment['section']);
 
 		if (($comment['clanrank'] ?? 0)>0)

@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/../src/Security/ScalarState.php';
 require_once __DIR__ . '/../src/Compatibility/array_cursor.php';
 // translator ready
 // addnews ready
@@ -133,8 +134,8 @@ if ($op==""){
 				$row['name']=translate_inline("`i`^System`0`i");
 				// Only translate the subject if it's an array, ie, it came
 				// from the game.
-				if (is_array(@unserialize($row['subject']))) {
-					$row['subject'] = unserialize($row['subject']);
+				if (is_array(\Resurrection\Security\ScalarState::read($row['subject']))) {
+					$row['subject'] = \Resurrection\Security\ScalarState::read($row['subject']);
 					$row['subject'] =
 						call_user_func_array("sprintf_translate",
 								$row['subject']);
@@ -175,14 +176,14 @@ if ($op==""){
 		if ((int)$row['msgfrom']==0){
 			$row['name']=translate_inline("`i`^System`0`i");
 			// No translation for subject if it's not an array
-			if (is_array(@unserialize($row['subject']))) {
-				$row['subject'] = unserialize($row['subject']);
+			if (is_array(\Resurrection\Security\ScalarState::read($row['subject']))) {
+				$row['subject'] = \Resurrection\Security\ScalarState::read($row['subject']);
 				$row['subject'] =
 					call_user_func_array("sprintf_translate", $row['subject']);
 			}
 			// No translation for body if it's not an array
-			if (is_array(@unserialize($row['body']))) {
-				$row['body'] = unserialize($row['body']);
+			if (is_array(\Resurrection\Security\ScalarState::read($row['body']))) {
+				$row['body'] = \Resurrection\Security\ScalarState::read($row['body']);
 				$row['body'] =
 					call_user_func_array("sprintf_translate", $row['body']);
 			}
@@ -285,15 +286,15 @@ if ($op==""){
 			if ((int)$row['msgfrom']==0){
 				$row['name']=translate_inline("`i`^System`0`i");
 				// No translation for subject if it's not an array
-				if (is_array(@unserialize($row['subject']))) {
-					$row['subject'] = unserialize($row['subject']);
+				if (is_array(\Resurrection\Security\ScalarState::read($row['subject']))) {
+					$row['subject'] = \Resurrection\Security\ScalarState::read($row['subject']);
 					$row['subject'] =
 						call_user_func_array("sprintf_translate",
 								$row['subject']);
 				}
 				// No translation for body if it's not an array
-				if (is_array(@unserialize($row['body']))) {
-					$row['body'] = unserialize($row['body']);
+				if (is_array(\Resurrection\Security\ScalarState::read($row['body']))) {
+					$row['body'] = \Resurrection\Security\ScalarState::read($row['body']);
 					$row['body'] =
 						call_user_func_array("sprintf_translate",
 								$row['body']);

@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/../src/Security/ScalarState.php';
 require_once __DIR__ . '/../src/Http/Input.php';
 require_once __DIR__ . '/../src/Security/Csrf.php';
 
@@ -67,7 +68,7 @@ function resurrection_restore_comment(array $actor, array $csrfState, string $me
         $rows = db_query('SELECT comment FROM ' . db_prefix('moderatedcomments') . ' WHERE modid=? FOR UPDATE', true, [$id]);
         $row = db_fetch_assoc($rows);
         if (!$row) { $db->commit(); return false; }
-        $comment = unserialize($row['comment'], ['allowed_classes' => false]);
+        $comment = \Resurrection\Security\ScalarState::read($row['comment']);
         if (!is_array($comment)) { throw new DomainException('Invalid audit record.'); }
         db_query('INSERT INTO ' . db_prefix('commentary') . ' (commentid,postdate,section,author,comment) VALUES (?,?,?,?,?)', true,
             [(int)$comment['commentid'], $comment['postdate'], $comment['section'], (int)$comment['author'], $comment['comment']]);

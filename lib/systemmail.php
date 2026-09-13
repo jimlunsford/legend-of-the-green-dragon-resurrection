@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/../src/Security/ScalarState.php';
 // translator ready
 // addnews ready
 // mail ready
@@ -12,7 +13,7 @@ function systemmail($to,$subject,$body,$from=0,$noemail=false){
 	$result = db_query($sql);
 	$row = db_fetch_assoc($result);
 	db_free_result($result);
-	$prefs = unserialize($row['prefs']);
+	$prefs = \Resurrection\Security\ScalarState::read($row['prefs']);
 	$serialized=0;
 	if ($from==0){
 		if (is_array($subject)){
@@ -53,11 +54,11 @@ function systemmail($to,$subject,$body,$from=0,$noemail=false){
 	if (!is_email($emailadd)) $email=false;
 	if ($email && !$noemail){
 		if ($serialized&2){
-			$body = unserialize(stripslashes($body));
+			$body = \Resurrection\Security\ScalarState::read(stripslashes($body));
 			$body = translate_mail($body,$to);
 		}
 		if ($serialized&1){
-			$subject = unserialize(stripslashes($subject));
+			$subject = \Resurrection\Security\ScalarState::read(stripslashes($subject));
 			$subject = translate_mail($subject,$to);
 		}
 

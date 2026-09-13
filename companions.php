@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/src/Security/ScalarState.php';
 require_once __DIR__ . '/src/Compatibility/array_cursor.php';
 // addnews ready
 // mail ready
@@ -52,7 +53,7 @@ if ($op=="deactivate"){
 		$row['maxhitpoints'] = $row['maxhitpoints'] + $row['maxhitpointsperlevel'] * $session['user']['level'];
 		$row['hitpoints'] = $row['maxhitpoints'];
 		$row = modulehook("alter-companion", $row);
-		$row['abilities'] = @unserialize($row['abilities']);
+		$row['abilities'] = \Resurrection\Security\ScalarState::read($row['abilities']);
 		require_once("lib/buffs.php");
 		apply_companion($row['name'], $row);
 		output("`\$Succesfully taken `^%s`\$ as companion.", $row['name']);
@@ -213,7 +214,7 @@ if ($op==""){
 		} else {
 			output("Companion Editor:`n");
 			$row = db_fetch_assoc($result);
-			$row['abilities'] = @unserialize($row['abilities']);
+			$row['abilities'] = \Resurrection\Security\ScalarState::read($row['abilities']);
 			companionform($row);
 		}
 	}

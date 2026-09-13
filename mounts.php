@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/src/Security/ScalarState.php';
 require_once __DIR__ . '/src/Compatibility/array_cursor.php';
 // addnews ready
 // mail ready
@@ -72,7 +73,7 @@ if ($op=="deactivate"){
 	$sql = "SELECT * FROM ".db_prefix("mounts")." WHERE mountid='$id'";
 	$result = db_query_cached($sql, "mountdata-$id", 3600);
 	$row = db_fetch_assoc($result);
-	$buff = unserialize($row['mountbuff']);
+	$buff = \Resurrection\Security\ScalarState::read($row['mountbuff']);
 	if ($buff['schema'] == "") $buff['schema'] = "mounts";
 	apply_buff("mount",$buff);
 	$op="";
@@ -260,7 +261,7 @@ if ($op==""){
 		} else {
 			output("Mount Editor:`n");
 			$row = db_fetch_assoc($result);
-			$row['mountbuff']=unserialize($row['mountbuff']);
+			$row['mountbuff']=\Resurrection\Security\ScalarState::read($row['mountbuff']);
 			mountform($row);
 		}
 	}

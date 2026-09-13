@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/../src/Security/ScalarState.php';
 require_once __DIR__ . '/../src/Compatibility/array_cursor.php';
 /**
  * Library Functions for page output.
@@ -616,7 +617,7 @@ function buildnavs(){
 			if ($key>"") {
 				if ($session['loggedin']) tlschema($navschema[$key]);
 				if (substr($key,0,7)=="!array!"){
-					$key = unserialize(substr($key,7));
+					$key = \Resurrection\Security\ScalarState::read(substr($key,7));
 				}
 				$navbanner = private_addnav($key);
 				if ($session['loggedin']) tlschema();

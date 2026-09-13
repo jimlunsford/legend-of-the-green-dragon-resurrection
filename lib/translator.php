@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/../src/Security/ScalarState.php';
 require_once __DIR__ . '/../src/Compatibility/array_cursor.php';
 // translator ready
 // addnews ready
@@ -130,7 +131,7 @@ function translate_mail($in,$to=0){
 	if ($to>0){
 		$languageResult = db_query("SELECT prefs FROM ".db_prefix("accounts")." WHERE acctid=$to");
 		$language = db_fetch_assoc($languageResult);
-		$language['prefs'] = unserialize($language['prefs']);
+		$language['prefs'] = \Resurrection\Security\ScalarState::read($language['prefs']);
 		$session['tlanguage'] = $language['prefs']['language']?$language['prefs']['language']:getsetting("defaultlanguage","en");
 	}
 	reset($in);

@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/../src/Security/ScalarState.php';
 require_once __DIR__ . '/../src/Compatibility/array_cursor.php';
 // addnews ready
 // translator ready
@@ -6,7 +7,7 @@ require_once __DIR__ . '/../src/Compatibility/array_cursor.php';
 function dump_item($item){
 	$out = "";
 	if (is_array($item)) $temp = $item;
-	else $temp = @unserialize($item);
+	else $temp = \Resurrection\Security\ScalarState::read($item);
 	if (is_array($temp)) {
 		$out .= "array(" . count($temp) . ") {<div style='padding-left: 20pt;'>";
 		while(list($key, $val) = resurrection_array_next($temp)) {
@@ -22,7 +23,7 @@ function dump_item($item){
 function dump_item_ascode($item,$indent="\t"){
 	$out = "";
 	if (is_array($item)) $temp = $item;
-	else $temp = @unserialize($item);
+	else $temp = \Resurrection\Security\ScalarState::read($item);
 	if (is_array($temp)) {
 		$out .= "array(\n$indent";
 		$row = array();

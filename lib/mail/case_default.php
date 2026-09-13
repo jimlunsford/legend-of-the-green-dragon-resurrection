@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/../../src/Security/ScalarState.php';
 output("`b`iMail Box`i`b");
 if (isset($session['message'])) {
 	output($session['message']);
@@ -26,7 +27,7 @@ if ($db_num_rows>0){
 				$row['name']=$row['msgfrom'];
 			}
 			// Only translate the subject if it's an array, ie, it came from the game.
-			$row_subject = @unserialize($row['subject']);
+			$row_subject = \Resurrection\Security\ScalarState::read($row['subject']);
 			if ($row_subject !== false) {
 				$row['subject'] = call_user_func_array("sprintf_translate", $row_subject);
 			} else {

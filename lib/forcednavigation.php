@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/../src/Security/ScalarState.php';
 // translator ready
 // addnews ready
 // mail ready
@@ -18,13 +19,13 @@ function do_forced_nav($anonymous,$overrideforced){
                 resurrection_rotate_session();
             }
             $_SESSION['auth_privileges'] = (int)$session['user']['superuser'];
-			$session['bufflist']=unserialize($session['user']['bufflist'], ['allowed_classes' => false]);
+			$session['bufflist']=\Resurrection\Security\ScalarState::read($session['user']['bufflist']);
 			if (!is_array($session['bufflist'])) $session['bufflist']=array();
-			$session['user']['dragonpoints']=unserialize($session['user']['dragonpoints'], ['allowed_classes' => false]);
-			$session['user']['prefs']=unserialize($session['user']['prefs'], ['allowed_classes' => false]);
+			$session['user']['dragonpoints']=\Resurrection\Security\ScalarState::read($session['user']['dragonpoints']);
+			$session['user']['prefs']=\Resurrection\Security\ScalarState::read($session['user']['prefs']);
 			if (!is_array($session['user']['dragonpoints'])) $session['user']['dragonpoints']=array();
-			if (is_array(unserialize($session['user']['allowednavs'], ['allowed_classes' => false]))){
-				$session['allowednavs']=unserialize($session['user']['allowednavs'], ['allowed_classes' => false]);
+			if (is_array(\Resurrection\Security\ScalarState::read($session['user']['allowednavs']))){
+				$session['allowednavs']=\Resurrection\Security\ScalarState::read($session['user']['allowednavs']);
 			}else{
 				$session['allowednavs']=array($session['user']['allowednavs']);
 			}

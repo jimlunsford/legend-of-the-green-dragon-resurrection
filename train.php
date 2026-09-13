@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/src/Security/ScalarState.php';
 require_once __DIR__ . '/src/Compatibility/array_cursor.php';
 //addnews ready
 // mail ready
@@ -112,7 +113,7 @@ if (db_num_rows($result) > 0 && $session['user']['level'] <= 14){
 
 				$battle=true;
 				if ($victory) {
-					$badguy = unserialize($session['user']['badguy']);
+					$badguy = \Resurrection\Security\ScalarState::read($session['user']['badguy']);
 					$badguy = $badguy['enemies'][0];
 					output("With a flurry of blows you dispatch your master.`n");
 				}

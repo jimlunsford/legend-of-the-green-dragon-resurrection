@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/../src/Game/StonesState.php';
 // addnews ready
 // mail ready
 // translator ready
@@ -27,6 +28,7 @@ function game_stones_uninstall(){
 
 function game_stones_dohook($hookname, $args){
 	if ($hookname=="darkhorsegame"){
+		$_SESSION['stones_return'] = $args['return'];
 		$ret = urlencode($args['return']);
 		addnav("S?Play Stones Game",
 				"runmodule.php?module=game_stones&ret=$ret");
@@ -35,98 +37,73 @@ function game_stones_dohook($hookname, $args){
 }
 
 function game_stones_run(){
-	global $session;
-	$ret = urlencode(httpget("ret"));
-	page_header("A Game of Stones");
-	$stones = unserialize($session['user']['specialmisc']);
-	if (!is_array($stones)) $stones = array();
-	$side = httpget('side');
-	if ($side=="likepair") $stones['side']="likepair";
-	if ($side=="unlikepair") $stones['side']="unlikepair";
-	$bet = httppost('bet');
-	if ($bet != "")
-		$stones['bet'] = min($session['user']['gold'], abs((int)$bet));
-	if (!isset($stones['side']) || $stones['side']==""){
-		output("`3The old man explains his game, \"`7I have a bag with 6 red stones, and 10 blue stones in it.  You can choose between 'like pair' or 'unlike pair.'  I will then draw out pairs of stones two at a time.  If they are the same color as each other, they go to which ever of us is 'like pair,' and otherwise they go to which ever of us is 'unlike pair.'  Whoever has the most stones at the end will win.  If we have the same number, then it is a draw, and no one wins.`3\"");
-		addnav("Never Mind", appendlink(urldecode($ret), "op=oldman"));
-		addnav("Like Pair",
-				"runmodule.php?module=game_stones&side=likepair&ret=$ret");
-		addnav("Unlike Pair",
-				"runmodule.php?module=game_stones&side=unlikepair&ret=$ret");
-		$stones['red']=6;
-		$stones['blue']=10;
-		$stones['player']=0;
-		$stones['oldman']=0;
-	}elseif (!isset($stones['bet']) || $stones['bet']==0){
-		$s1 = translate_inline($stones['side']=="likepair"?"Like":"Unlike");
-		$s2 = translate_inline($stones['side']=="likepair"?"unlike":"like");
-		output("`3\"`7%s pair for you, and %s pair for me it is then!  How much do you bet?`3\"", $s1, $s2);
-		rawoutput("<form action='runmodule.php?module=game_stones&ret=$ret' method='POST'>");
-		rawoutput("<input name='bet' id='bet'>");
-		$b = translate_inline("Bet");
-		rawoutput("<input type='submit' class='button' value='$b'>");
-		rawoutput("</form>");
-		rawoutput("<script language='JavaScript'>document.getElementById('bet').focus();</script>");
-		addnav("","runmodule.php?module=game_stones&ret=$ret");
-		addnav("Never Mind", appendlink(urldecode($ret), "op=oldman"));
-	}elseif ($stones['red']+$stones['blue'] > 0 &&
-			$stones['oldman']<=8 && $stones['player']<=8){
-		$s1="";
-		$s2="";
-		$rstone = translate_inline("`\$red`3");
-		$bstone = translate_inline("`!blue`3");
-		while ($s1=="" || $s2==""){
-			$s1 = e_rand(1,($stones['red']+$stones['blue']));
-			if ($s1<=$stones['red']) {
-				$s1=$rstone;
-				$stones['red']--;
-			}else{
-				$s1=$bstone;
-				$stones['blue']--;
-			}
-			if ($s2=="") {
-				$s2=$s1;
-				$s1="";
-			}
-		}
-		output("`3The old man reaches into his bag and withdraws two stones.");
-		output("They are %s and %s.  Your bet is `^%s`3.`n`n", $s1, $s2, $stones['bet']);
-
-		if ($stones['side']=="likepair" && $s1==$s2) {
-			$winner="your";
-			$stones['player']+=2;
-		} elseif ($stones['side']!="likepair" && $s1!=$s2) {
-			$winner="your";
-			$stones['player']+=2;
-		} else {
-			$stones['oldman']+=2;
-			$winner = "his";
-		}
-		$winner = translate_inline($winner);
-
-		output("Since you are %s pairs, the old man places the stones in %s pile.`n`n", translate_inline($stones['side']=="likepair"?"like":"unlike"), $winner);
-
-		output("You currently have `^%s`3 stones in your pile, and the old man has `^%s`3 stones in his.`n`n", $stones['player'], $stones['oldman']);
-		output("There are %s %s stones and %s %s stones in the bag yet.", $stones['red'], $rstone, $stones['blue'], $bstone);
-		addnav("Continue","runmodule.php?module=game_stones&ret=$ret");
-	}else{
-		if ($stones['player']>$stones['oldman']){
-			output("`3Having defeated the old man at his game, you claim your `^%s`3 gold.", $stones['bet']);
-			$session['user']['gold']+=$stones['bet'];
-			debuglog("won {$stones['bet']} gold in the stones game");
-		}elseif ($stones['player']<$stones['oldman']){
-			output("`3Having defeated you at his game, the old man claims your `^%s`3 gold.", $stones['bet']);
-			$session['user']['gold']-=$stones['bet'];
-			debuglog("lost {$stones['bet']} gold in the stones game");
-		}else{
-			output("`3Having tied the old man, you call it a draw.");
-		}
-		$stones=array();
-		addnav("Play again?","runmodule.php?module=game_stones&ret=$ret");
-		addnav("Other Games",appendlink(urldecode($ret), "op=oldman"));
-		addnav("Return to Main Room", appendlink(urldecode($ret), "op=tavern"));
-	}
-	$session['user']['specialmisc']=serialize($stones);
-	page_footer();
+    global $session;
+    require_once 'lib/player_mutation.php';
+    require_once 'src/Game/StonesGame.php';
+    // Return locations are application-owned. Never reflect a submitted URL.
+    $return = $_SESSION['stones_return'] ?? '';
+    if (!in_array($return, ['forest.php', 'travel.php'], true) || ($session['user']['specialinc'] ?? '') !== 'module:darkhorse') {
+        http_response_code(403); exit('Game unavailable.');
+    }
+    if (empty($session['loggedin']) || !is_module_active('darkhorse')) {
+        http_response_code(403); exit('Game unavailable.');
+    }
+    $encoded = (string)$session['user']['specialmisc'];
+    $context = hash('sha256', $encoded);
+    try {
+        $stones = \Resurrection\Game\StonesState::decode($encoded);
+    } catch (DomainException $error) {
+        http_response_code(409); exit('Invalid Stones state. Return to the tavern before starting a new game.');
+    }
+    $result = null;
+    if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+        resurrection_consume_action('game_stones', $context);
+        try {
+            $action = \Resurrection\Http\Input::choice($_POST, 'action', ['choose','bet','draw','settle'], '');
+            $side = \Resurrection\Http\Input::string($_POST, 'side');
+            $bet = \Resurrection\Http\Input::integer($_POST, 'bet', 0, 1);
+            $result = resurrection_player_mutation(function () use ($stones, $action, $side, $bet) {
+                global $session;
+                $result = \Resurrection\Game\StonesGame::act($stones, (int)$session['user']['gold'], $action, $side, $bet, 'e_rand');
+                $session['user']['specialmisc'] = \Resurrection\Game\StonesState::encode($result['state']);
+                $session['user']['gold'] = $result['gold'];
+                return $result;
+            });
+            $stones = $result['state'];
+        } catch (InvalidArgumentException|DomainException $error) {
+            http_response_code(400); exit('Invalid Stones action.');
+        }
+    } elseif (isset($_GET['side']) || isset($_GET['bet']) || isset($_GET['action'])) {
+        http_response_code(403); exit('Use the game form.');
+    }
+    page_header('A Game of Stones');
+    if ($result !== null && $result['drawn'] !== []) {
+        output('`3The old man reaches into his bag and withdraws two stones. They are %s and %s.`n`n', $result['drawn'][0], $result['drawn'][1]);
+    }
+    if ($result !== null && $result['settled']) {
+        if ($result['change'] > 0) output('`3Having defeated the old man at his game, you claim your `^%s`3 gold.', $result['change']);
+        elseif ($result['change'] < 0) output('`3Having defeated you at his game, the old man claims your `^%s`3 gold.', -$result['change']);
+        else output('`3Having tied the old man, you call it a draw.');
+    }
+    $url = 'runmodule.php?module=game_stones';
+    addnav('', $url);
+    rawoutput('<form action="' . $url . '" method="POST">');
+    rawoutput(resurrection_action_fields('game_stones', hash('sha256', (string)$session['user']['specialmisc'])));
+    if ($stones === []) {
+        output('`3The old man explains his game, "`7I have a bag with 6 red stones, and 10 blue stones in it. You can choose between like pair or unlike pair. I will draw pairs of stones. Matching colors go to like pair, different colors to unlike pair. Whoever has the most stones wins. If we tie, neither of us wins.`3"`n');
+        rawoutput('<input type="hidden" name="action" value="choose"><button name="side" value="likepair" class="button">Like Pair</button> <button name="side" value="unlikepair" class="button">Unlike Pair</button>');
+    } elseif (!isset($stones['bet'])) {
+        output('`3"`7How much do you bet?`3"');
+        rawoutput('<input type="hidden" name="action" value="bet"><input name="bet" type="number" min="1"><button class="button">Bet</button>');
+    } else {
+        output('Your bet is `^%s`3. You have %s stones, the old man has %s. There are %s red and %s blue stones in the bag.`n', $stones['bet'], $stones['player'], $stones['oldman'], $stones['red'], $stones['blue']);
+        $action = $stones['red'] + $stones['blue'] === 0 || $stones['player'] > 8 || $stones['oldman'] > 8 ? 'settle' : 'draw';
+        rawoutput('<button name="action" value="' . $action . '" class="button">Continue</button>');
+    }
+    rawoutput('</form>');
+    if (!isset($stones['bet'])) {
+        addnav('Other Games', $return . '?op=oldman');
+        addnav('Return to Main Room', $return . '?op=tavern');
+    }
+    page_footer();
 }
-?>

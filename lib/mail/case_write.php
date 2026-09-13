@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/../../src/Security/ScalarState.php';
 $subject=httppost('subject');
 $body="";
 $row="";
@@ -33,12 +34,12 @@ if (is_array($row)){
 		if ((int)$row['msgfrom']==0){
 			$row['name']=translate_inline("`i`^System`0`i");
 			// No translation for subject if it's not an array
-			$row_subject = @unserialize($row['subject']);
+			$row_subject = \Resurrection\Security\ScalarState::read($row['subject']);
 			if ($row_subject !== false) {
 				$row['subject'] = call_user_func_array("sprintf_translate", $row_subject);
 			}
 			// No translation for body if it's not an array
-			$row_body = @unserialize($row['body']);
+			$row_body = \Resurrection\Security\ScalarState::read($row['body']);
 			if ($row_body !== false) {
 				$row['body'] = call_user_func_array("sprintf_translate", $row_body);
 			}

@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/src/Security/ScalarState.php';
 require_once __DIR__ . '/src/Compatibility/array_cursor.php';
 // addnews ready
 // translator ready
@@ -119,7 +120,7 @@ if ($target = db_fetch_assoc($result)) {
 	  tlschema($row['tlschema']);
 	  if ($row['arguments'] > "") {
 		  $arguments = array();
-		  $base_arguments = unserialize($row['arguments']);
+		  $base_arguments = \Resurrection\Security\ScalarState::read($row['arguments']);
 		  array_push($arguments, $row['newstext']);
 		  while(list($key, $val) = resurrection_array_next($base_arguments)) {
 			  array_push($arguments, $val);

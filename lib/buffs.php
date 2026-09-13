@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/../src/Security/ScalarState.php';
 require_once __DIR__ . '/../src/Game/Expression.php';
 require_once __DIR__ . '/../src/Compatibility/array_cursor.php';
 // addnews ready
@@ -92,7 +93,7 @@ function apply_buff($name,$buff){
 function apply_companion($name,$companion,$ignorelimit=false){
 	global $session, $companions;
 	if (!is_array($companions)) {
-		$companions = @unserialize($session['user']['companions']);
+		$companions = \Resurrection\Security\ScalarState::read($session['user']['companions']);
 	}
 	$companionsallowed = getsetting("companionsallowed", 1);
 	$args = modulehook("companionsallowed", array("maxallowed"=>$companionsallowed));

@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/src/Security/ScalarState.php';
 require_once __DIR__ . '/src/Compatibility/array_cursor.php';
 // translator ready
 // addnews ready
@@ -144,7 +145,7 @@ if ($dp < $dkills) {
 	}
 
 	//clear all standard buffs
-	$tempbuf = unserialize($session['user']['bufflist']);
+	$tempbuf = \Resurrection\Security\ScalarState::read($session['user']['bufflist']);
 	$session['user']['bufflist']="";
 	strip_all_buffs();
 	tlschema("buffs");
@@ -176,7 +177,7 @@ if ($dp < $dkills) {
 		}
 	}
 	if ($session['user']['hashorse']){
-		$buff = unserialize($playermount['mountbuff']);
+		$buff = \Resurrection\Security\ScalarState::read($playermount['mountbuff']);
 		if (!isset($buff['schema']) || $buff['schema'] == "")
 			$buff['schema']="mounts";
 		apply_buff('mount',$buff);

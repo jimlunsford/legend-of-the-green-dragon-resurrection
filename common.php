@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/src/Security/ScalarState.php';
 // translator ready
 // addnews ready
 // mail ready
@@ -252,7 +253,7 @@ if ($session['user']['hitpoints']>0){
 }
 
 if (isset($session['user']['bufflist']))
-	$session['bufflist']=unserialize($session['user']['bufflist']);
+	$session['bufflist']=\Resurrection\Security\ScalarState::read($session['user']['bufflist']);
 else
 	$session['bufflist'] = array();
 if (!is_array($session['bufflist'])) $session['bufflist']=array();
@@ -336,7 +337,7 @@ prepare_template();
 
 if (!isset($session['user']['hashorse'])) $session['user']['hashorse']=0;
 $playermount = getmount($session['user']['hashorse']);
-$temp_comp = @unserialize($session['user']['companions']);
+$temp_comp = \Resurrection\Security\ScalarState::read($session['user']['companions']);
 $companions = array();
 if(is_array($temp_comp)) {
 	foreach ($temp_comp as $name => $companion) {

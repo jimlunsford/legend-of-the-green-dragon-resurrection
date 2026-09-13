@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/src/Security/ScalarState.php';
 // translator ready
 // addnews ready
 // mail ready
@@ -18,7 +19,7 @@ global $companions,$companion,$newcompanions,$count,$defended,$needtostopfightin
 tlschema("battle");
 
 $newcompanions = array();
-$attackstack = @unserialize($session['user']['badguy']);
+$attackstack = \Resurrection\Security\ScalarState::read($session['user']['badguy']);
 if (isset($attackstack['enemies'])) $enemies = $attackstack['enemies'];
 if (isset($attackstack['options'])) $options = $attackstack['options'];
 

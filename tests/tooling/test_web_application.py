@@ -341,6 +341,66 @@ function resurrectionhttpfixture_run() { echo 'fixture-executed'; exit; }
             status, _, body = request(issued_link(body, 'forest.php'))
             self.assertEqual(200, status)
             self.assertIsNotNone(issued_link(body, 'runmodule.php?module=outhouse'))
+            # Actual Dark Horse event -> Stones forms. Only fixture setup writes SQL.
+            player_id = self.query('SELECT acctid FROM accounts WHERE login=?', ['WebPlayer'])[0]['acctid']
+            prior_gold = self.query('SELECT gold FROM accounts WHERE acctid=?', [player_id])[0]['gold']
+            event_url = 'forest.php?op=oldman'
+            allowed = 'a:1:{s:' + str(len(event_url)) + ':"' + event_url + '";b:1;}'
+            self.query('UPDATE accounts SET specialinc=?,specialmisc=?,gold=100,allowednavs=? WHERE acctid=?',
+                       ['module:darkhorse', '', allowed, player_id])
+            status, _, body = request(event_url)
+            self.assertEqual(200, status)
+            status, _, body = request(issued_link(body, 'runmodule.php?module=game_stones'))
+            self.assertEqual(200, status)
+            game_url = 'runmodule.php?module=game_stones'
+            def game_fields(body, **extra):
+                nonce = re.search(r'name="action_token" value="([a-f0-9]{64})"', body)
+                self.assertIsNotNone(nonce, body[:1000])
+                return {'csrf_token': token(body), 'action_token': nonce.group(1), **extra}
+            fields = game_fields(body, action='choose', side='likepair')
+            status, _, _ = request(game_url, {'action':'choose', 'side':'likepair'})
+            self.assertEqual(403, status)
+            self.assertEqual('', self.query('SELECT specialmisc FROM accounts WHERE acctid=?', [player_id])[0]['specialmisc'])
+            status, _, body = request(game_url, fields)
+            self.assertEqual(200, status)
+            status, _, _ = request(game_url, fields)
+            self.assertEqual(409, status)
+            status, _, body = request(game_url)
+            fields = game_fields(body, action='bet', bet='-10')
+            status, _, _ = request(game_url, fields)
+            self.assertEqual(400, status)
+            self.assertEqual('100', self.query('SELECT gold FROM accounts WHERE acctid=?', [player_id])[0]['gold'])
+            status, _, body = request(game_url)
+            fields = game_fields(body, action='bet', bet='10')
+            status, _, body = request(game_url, fields)
+            self.assertEqual(200, status)
+            for _ in range(9):
+                state = json.loads(self.query('SELECT specialmisc FROM accounts WHERE acctid=?', [player_id])[0]['specialmisc'])
+                action = 'settle' if state['red']+state['blue']==0 or state['player']>8 or state['oldman']>8 else 'draw'
+                fields = game_fields(body, action=action)
+                status, _, body = request(game_url, fields)
+                self.assertEqual(200, status)
+                saved = self.query('SELECT gold,specialmisc FROM accounts WHERE acctid=?', [player_id])[0]
+                status, _, _ = request(game_url, fields)
+                self.assertEqual(409, status)
+                self.assertEqual(saved, self.query('SELECT gold,specialmisc FROM accounts WHERE acctid=?', [player_id])[0])
+                status, _, body = request(game_url)
+                self.assertEqual(200, status)
+                if action == 'settle':
+                    self.assertEqual([], json.loads(saved['specialmisc']))
+                    self.assertIn(saved['gold'], ['90','100','110'])
+                    break
+            else:
+                self.fail('Stones did not complete within its finite draw limit')
+            self.query('UPDATE accounts SET specialmisc=? WHERE acctid=?', ['O:8:"stdClass":0:{}', player_id])
+            status, _, _ = request(game_url)
+            self.assertEqual(409, status)
+            self.query('UPDATE accounts SET specialmisc=?,gold=? WHERE acctid=?', ['[]', prior_gold, player_id])
+            status, _, body = request(game_url)
+            status, _, body = request(issued_link(body, 'forest.php?op=tavern'))
+            self.assertEqual(200, status)
+            status, _, body = request(issued_link(body, 'forest.php?op=leave'))
+            self.assertEqual(200, status)
             status, _, body = request(issued_link(body, 'village.php'))
             self.assertEqual(200, status)
         finally:

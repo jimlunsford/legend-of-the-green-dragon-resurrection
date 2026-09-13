@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/src/Security/ScalarState.php';
 // Authentication boundary; game hooks and navigation remain procedural.
 define('ALLOW_ANONYMOUS', true);
 define('OVERRIDE_FORCED_NAV', true);
@@ -50,11 +51,11 @@ try {
     $session['user'] = $account;
     $baseaccount = $account;
     foreach (['prefs', 'dragonpoints'] as $field) {
-        $value = unserialize($account[$field], ['allowed_classes' => false]);
+        $value = \Resurrection\Security\ScalarState::read($account[$field]);
         $session['user'][$field] = is_array($value) ? $value : [];
     }
-    $session['bufflist'] = unserialize($account['bufflist'], ['allowed_classes' => false]);
-    $session['allowednavs'] = unserialize($account['allowednavs'], ['allowed_classes' => false]);
+    $session['bufflist'] = \Resurrection\Security\ScalarState::read($account['bufflist']);
+    $session['allowednavs'] = \Resurrection\Security\ScalarState::read($account['allowednavs']);
     modulehook('check-login');
     $session['loggedin'] = true;
     $session['user']['loggedin'] = true;
