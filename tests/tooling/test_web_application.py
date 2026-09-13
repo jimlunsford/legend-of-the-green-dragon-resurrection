@@ -102,7 +102,7 @@ function resurrectionhttpfixture_run() { echo 'fixture-executed'; exit; }
             self.assertNotRegex(body, r'(?i)(fatal error|warning:|deprecated:|notice:|runtime error in)')
             if expected_execution:
                 self.assertEqual(200, response.status)
-                self.assertEqual('fixture-executed', body)
+                self.assertEqual('fixture-executed', body.strip())  # historical includes emit a leading newline
             else:
                 self.assertIn(response.status, (302, 303, 403, 404))
                 self.assertNotIn('fixture-executed', body)
