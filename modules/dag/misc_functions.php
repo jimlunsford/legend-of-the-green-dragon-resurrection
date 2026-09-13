@@ -513,6 +513,7 @@ function dag_manage(){
 
 function dag_pvpwin($args){
 	global $session;
+    if (!is_array($args['badguy'] ?? null) || !isset($args['badguy']['acctid'])) throw new DomainException('Missing defeated PvP target.');
     $badguy = $args['badguy'];
 	// ***ADDED***
 	// By Andrew Senger

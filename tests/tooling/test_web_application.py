@@ -378,6 +378,66 @@ function resurrectionhttpfixture_run() { echo 'fixture-executed'; exit; }
             self.query('UPDATE accounts SET superuser=? WHERE acctid=?',[original['superuser'],player])
             self.query('UPDATE modules SET active=0')
 
+    def test_drinks_editor_delegation_create_activation_delete(self):
+        player=self.query('SELECT acctid FROM accounts WHERE login=?',['WebPlayer'])[0]['acctid']
+        original=self.query('SELECT superuser FROM accounts WHERE acctid=?',[player])[0]
+        prefs=self.query('SELECT setting,value FROM module_userprefs WHERE modulename=? AND userid=?',['drinks',player])
+        self.query('UPDATE modules SET active=1')
+        request=self._security_client()
+        base='runmodule.php?module=drinks&act=editor&admin=true'
+        add='runmodule.php?module=drinks&act=editor&op=add&admin=true'
+        save='runmodule.php?module=drinks&act=editor&op=save&admin=true'
+        created=[]
+        def call(url,fields=None): self._security_allow(player,url); return request(url,fields)
+        def grant(value):
+            self.query('INSERT INTO module_userprefs(modulename,setting,userid,value) VALUES (?,?,?,?) ON DUPLICATE KEY UPDATE value=VALUES(value)',['drinks','canedit',player,str(value)])
+        try:
+            anon=self._security_client(None)
+            for url in [base,add,save]: self.assertIn(anon(url,{})[0],[302,303,403])
+            grant(0)
+            for role in [0,16]:
+                self.query('UPDATE accounts SET superuser=? WHERE acctid=?',[role,player])
+                for url in [base,add,save]:
+                    self.assertEqual(403,call(url)[0]); self.assertEqual(403,call(url,{'canedit':'1'})[0])
+            # Both legitimate delegation and SU_EDIT_USERS perform the actual create and CRUD routes.
+            for role,delegated in [(0,1),(64,0)]:
+                self.query('UPDATE accounts SET superuser=? WHERE acctid=?',[role,player]); grant(delegated)
+                status,body=call(add); self.assertEqual(200,status,body[:1800])
+                form=self._security_fields(body,save)
+                values={**form,'drinkid':'0','name':"`2O'Reilly 🐉",'remarks':"UTF-8 雪 \\ <img src=x> apostrophe's",'costperlevel':'2147483647','drunkeness':'100','buffrounds':'127','hpmin':'-20','hpmax':'20','turnmin':'-5','turnmax':'5','hppercent':'25','buffatkmod':'999999.999999'}
+                self.assertEqual(403,call(save)[0]); self.assertEqual(403,call(save,{**values,'csrf_token':''})[0])
+                count=self.query('SELECT COUNT(*) n FROM drinks')
+                self.assertEqual(200,call(save,values)[0]); self.assertEqual(409,call(save,values)[0])
+                self.assertEqual(int(count[0]['n'])+1,int(self.query('SELECT COUNT(*) n FROM drinks')[0]['n']))
+                drink=self.query('SELECT * FROM drinks ORDER BY drinkid DESC LIMIT 1')[0]; ident=drink['drinkid']; created.append(ident)
+                for key in ['name','remarks','costperlevel','drunkeness','buffrounds','hpmin','hpmax','turnmin','turnmax','hppercent','buffatkmod']:
+                    self.assertEqual(values[key],drink[key])
+                edit=f'runmodule.php?module=drinks&act=editor&op=edit&drinkid={ident}&admin=true'
+                for invalid in [{'costperlevel':'2147483648'},{'drunkeness':'101'},{'buffrounds':'128'},{'hpmin':'-21'},{'turnmax':'6'},{'active':'1'},{'name[]':'array'},{'buffatkmod':'INF'}]:
+                    _,body=call(edit); bad={k:v for k,v in drink.items() if k!='active'}; bad.update(self._security_fields(body,save)); bad.update(invalid)
+                    self.assertEqual(400,call(save,bad)[0]); self.assertEqual(drink,self.query('SELECT * FROM drinks WHERE drinkid=?',[ident])[0])
+                for op,active in [('activate','1'),('deactivate','0')]:
+                    url=f'runmodule.php?module=drinks&act=editor&op={op}&drinkid={ident}&admin=true'
+                    _,body=call(base); form=self._security_fields(body,url)
+                    self.assertEqual(403,call(url)[0]); self.assertEqual(403,call(url,{})[0])
+                    self.assertEqual(200,call(url,form)[0]); self.assertEqual(409,call(url,form)[0])
+                    self.assertEqual(active,self.query('SELECT active FROM drinks WHERE drinkid=?',[ident])[0]['active'])
+                delete=f'runmodule.php?module=drinks&act=editor&op=del&drinkid={ident}&admin=true'
+                _,body=call(base); form=self._security_fields(body,delete)
+                self.assertEqual(403,call(delete)[0]); self.assertEqual(403,call(delete,{})[0])
+                if delegated:
+                    grant(0); self.assertEqual(403,call(delete,form)[0]); self.assertEqual(drink,self.query('SELECT * FROM drinks WHERE drinkid=?',[ident])[0]); grant(1)
+                self.assertEqual(200,call(delete,form)[0]); self.assertEqual(409,call(delete,form)[0]); self.assertEqual([],self.query('SELECT * FROM drinks WHERE drinkid=?',[ident]))
+            for ident in ['0','-1','1e2','32768','1%20OR%201=1']:
+                self.assertEqual(400,call(f'runmodule.php?module=drinks&act=editor&op=edit&drinkid={ident}&admin=true')[0])
+            self.assertEqual(404,call('runmodule.php?module=drinks&act=editor&op=edit&drinkid=32767&admin=true')[0])
+        finally:
+            for ident in created: self.query('DELETE FROM drinks WHERE drinkid=?',[ident])
+            self.query('DELETE FROM module_userprefs WHERE modulename=? AND userid=?',['drinks',player])
+            for row in prefs: self.query('INSERT INTO module_userprefs(modulename,setting,userid,value) VALUES (?,?,?,?)',['drinks',row['setting'],player,row['value']])
+            self.query('UPDATE accounts SET superuser=? WHERE acctid=?',[original['superuser'],player])
+            self.query('UPDATE modules SET active=0')
+
     def test_darkhorse_shared_jackpot_concurrency(self):
         from concurrent.futures import ThreadPoolExecutor
         import threading

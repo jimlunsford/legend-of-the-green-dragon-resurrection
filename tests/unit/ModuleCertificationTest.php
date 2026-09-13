@@ -277,7 +277,8 @@ final class ModuleCertificationTest extends TestCase
             set_module_pref('harddrinks', get_module_setting('hardlimit','drinks'), 'drinks');
             modulehook('ale', []); // Exhausted hard-drink quota text/list path.
             $GLOBALS['badguy'] = ['acctid'=>999999, 'creaturename'=>'Synthetic opponent'];
-            self::assertSame(['pvpmessageadd'=>''], modulehook('pvpwin', ['pvpmessageadd'=>''], false, 'dag'));
+            $args = ['pvpmessageadd'=>'','badguy'=>$GLOBALS['badguy']];
+            self::assertSame($args, modulehook('pvpwin', $args, false, 'dag'));
             $_GET = [];
             injectmodule('findgem');
             findgem_runevent('forest', 'forest.php?');

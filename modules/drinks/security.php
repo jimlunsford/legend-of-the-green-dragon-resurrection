@@ -13,8 +13,10 @@ function drinks_purchase(int $id): array {
         unset($GLOBALS['module_prefs'][(int)$session['user']['acctid']]['drinks']);
         $drunk=(int)get_module_pref('drunkeness','drinks');
         $hard=(int)get_module_pref('harddrinks','drinks');
-        if ($drunk > (int)get_module_setting('maxdrunk','drinks') ||
-            ($row['harddrink'] && $hard >= (int)get_module_setting('hardlimit','drinks'))) {
+        $maximum = filter_var(get_module_setting('maxdrunk','drinks'),FILTER_VALIDATE_INT,['options'=>['min_range'=>0,'max_range'=>100]]);
+        $limit = filter_var(get_module_setting('hardlimit','drinks'),FILTER_VALIDATE_INT,['options'=>['min_range'=>0,'max_range'=>2147483647]]);
+        if ($maximum === false || $limit === false) throw new DomainException('Invalid drink limits.');
+        if ($drunk > $maximum || ($row['harddrink'] && $hard >= $limit)) {
             throw new DomainException('Drink limit reached.');
         }
         $row['allowdrink']=1;

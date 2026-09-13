@@ -194,6 +194,7 @@ function drinks_editor(){
 		} elseif ($subop=="") {
 				$result = db_query('SELECT * FROM ' . db_prefix('drinks') . ' WHERE drinkid=?',true,[$drinkid]);
 				$row = db_fetch_assoc($result);
+                if (!$row) { http_response_code(404); exit('Drink not found.'); }
 		}
 	}elseif ($op=="add"){
 		/* We're adding a new drink, make an empty row */
