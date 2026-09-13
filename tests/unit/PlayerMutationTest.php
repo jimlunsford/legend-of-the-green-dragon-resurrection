@@ -48,6 +48,23 @@ final class PlayerMutationTest extends TestCase
         db_query('DELETE FROM settings WHERE setting=?',true,['fixture_mutation']);
     }
 
+    public function testInvalidCurrencyEffectsRollBackAccountAndRelatedWrites(): void
+    {
+        $id=(int)$GLOBALS['session']['user']['acctid'];
+        $before=db_query('SELECT gold,gems FROM accounts WHERE acctid=?',true,[$id]);
+        foreach ([['gold',-1],['gems',-1],['gold',2147483648],['gems',1.5]] as [$field,$value]) {
+            try {
+                resurrection_player_mutation(function () use ($field,$value) {
+                    $GLOBALS['session']['user'][$field]=$value;
+                    db_query('INSERT INTO settings (setting,value) VALUES (?,?)',true,['fixture_currency','uncommitted']);
+                });
+                self::fail('Invalid currency committed');
+            } catch (\DomainException $error) { self::assertSame('Invalid currency balance.',$error->getMessage()); }
+            self::assertSame($before,db_query('SELECT gold,gems FROM accounts WHERE acctid=?',true,[$id]));
+            self::assertSame([],db_query('SELECT value FROM settings WHERE setting=?',true,['fixture_currency']));
+        }
+    }
+
     public function testConcurrentChangedBalanceRefusesStaleMutation(): void
     {
         $id=(int)$GLOBALS['session']['user']['acctid'];

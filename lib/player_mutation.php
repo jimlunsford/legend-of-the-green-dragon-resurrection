@@ -48,6 +48,13 @@ function resurrection_player_mutation(callable $action): mixed {
             if ((string)$rows[0][$key] !== (string)$value) { throw new DomainException('Player state changed. Reload before acting.'); }
         }
         $result = $action();
+        foreach (['gold','gems'] as $currency) {
+            $balance = $session['user'][$currency] ?? null;
+            if (!is_scalar($balance) || filter_var((string)$balance, FILTER_VALIDATE_INT,
+                ['options'=>['min_range'=>0,'max_range'=>2147483647]]) === false) {
+                throw new DomainException('Invalid currency balance.');
+            }
+        }
         $values = $session['user'];
         $values['bufflist'] = serialize($session['bufflist']);
         if (is_array($companions)) { $values['companions'] = serialize($companions); }
