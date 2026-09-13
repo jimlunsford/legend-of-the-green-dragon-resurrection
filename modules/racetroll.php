@@ -40,8 +40,7 @@ function racetroll_uninstall(){
 	global $session;
 	$vname = getsetting("villagename", LOCATION_FIELDS);
 	$gname = get_module_setting("villagename");
-	$sql = "UPDATE " . db_prefix("accounts") . " SET location='$vname' WHERE location = '$gname'";
-	db_query($sql);
+	db_query('UPDATE ' . db_prefix('accounts') . ' SET location=? WHERE location=?', true, [$vname, $gname]);
 	if ($session['user']['location'] == $gname)
 		$session['user']['location'] = $vname;
 	// Force anyone who was a Troll to rechoose race
@@ -84,16 +83,9 @@ function racetroll_dohook($hookname,$args){
 		if ($args['setting'] == "villagename" && $args['module']=="racetroll") {
 			if ($session['user']['location'] == $args['old'])
 				$session['user']['location'] = $args['new'];
-			$sql = "UPDATE " . db_prefix("accounts") .
-				" SET location='" . addslashes($args['new']) .
-				"' WHERE location='" . addslashes($args['old']) . "'";
-			db_query($sql);
+			db_query('UPDATE ' . db_prefix('accounts') . ' SET location=? WHERE location=?', true, [$args['new'], $args['old']]);
 			if (is_module_active("cities")) {
-				$sql = "UPDATE " . db_prefix("module_userprefs") .
-					" SET value='" . addslashes($args['new']) .
-					"' WHERE modulename='cities' AND setting='homecity'" .
-					"AND value='" . addslashes($args['old']) . "'";
-				db_query($sql);
+				db_query('UPDATE ' . db_prefix('module_userprefs') . ' SET value=? WHERE modulename=? AND setting=? AND value=?', true, [$args['new'], 'cities', 'homecity', $args['old']]);
 			}
 		}
 		break;

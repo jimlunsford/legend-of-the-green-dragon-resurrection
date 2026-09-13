@@ -41,8 +41,7 @@ function racehuman_uninstall(){
 	global $session;
 	$vname = getsetting("villagename", LOCATION_FIELDS);
 	$gname = get_module_setting("villagename");
-	$sql = "UPDATE " . db_prefix("accounts") . " SET location='$vname' WHERE location = '$gname'";
-	db_query($sql);
+	db_query('UPDATE ' . db_prefix('accounts') . ' SET location=? WHERE location=?', true, [$vname, $gname]);
 	if ($session['user']['location'] == $gname)
 		$session['user']['location'] = $vname;
 	// Force anyone who was a Human to rechoose race
@@ -74,16 +73,9 @@ function racehuman_dohook($hookname,$args){
 		if ($args['setting'] == "villagename" && $args['module']=="racehuman") {
 			if ($session['user']['location'] == $args['old'])
 				$session['user']['location'] = $args['new'];
-			$sql = "UPDATE " . db_prefix("accounts") .
-				" SET location='" . addslashes($args['new']) .
-				"' WHERE location='" . addslashes($args['old']) . "'";
-			db_query($sql);
+			db_query('UPDATE ' . db_prefix('accounts') . ' SET location=? WHERE location=?', true, [$args['new'], $args['old']]);
 			if (is_module_active("cities")) {
-				$sql = "UPDATE " . db_prefix("module_userprefs") .
-					" SET value='" . addslashes($args['new']) .
-					"' WHERE modulename='cities' AND setting='homecity'" .
-					"AND value='" . addslashes($args['old']) . "'";
-				db_query($sql);
+				db_query('UPDATE ' . db_prefix('module_userprefs') . ' SET value=? WHERE modulename=? AND setting=? AND value=?', true, [$args['new'], 'cities', 'homecity', $args['old']]);
 			}
 		}
 		break;
@@ -98,7 +90,7 @@ function racehuman_dohook($hookname,$args){
 			$one = translate_inline("an");
 			$two = translate_inline("two");
 			$three = translate_inline("three");
-			$word = ($bonus==1?$one:$bonus==2)?$two:$three;
+			$word = ($bonus==1 ? $one : ($bonus==2 ? $two : $three));
 			$fight = translate_inline("fight");
 			$fights = translate_inline("fights");
 			output("`&As a human, your size and strength permit you the ability to effortlessly wield weapons, tiring much less quickly than other races.`n`^You gain %s extra forest %s each day!", $word, $bonus==1?$fight:$fights);
@@ -123,7 +115,7 @@ function racehuman_dohook($hookname,$args){
 			$one = translate_inline("an");
 			$two = translate_inline("two");
 			$three = translate_inline("three");
-			$word = ($bonus==1?$one:$bonus==2)?$two:$three;
+			$word = ($bonus==1 ? $one : ($bonus==2 ? $two : $three));
 			$fight = translate_inline("fight");
 			$fights = translate_inline("fights");
 

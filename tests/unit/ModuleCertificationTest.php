@@ -23,7 +23,8 @@ final class ModuleCertificationTest extends TestCase
         $user['loggedin'] = true;
         $user['superuser'] = SU_MANAGE_MODULES;
         $GLOBALS['session'] = ['loggedin'=>true, 'user'=>$user, 'bufflist'=>[], 'allowednavs'=>[], 'debug'=>''];
-        foreach (['module_settings','module_prefs','modulehook_queries','module_preload','navschema','navbysection','translation_namespace_stack'] as $key) $GLOBALS[$key] = [];
+        foreach (['module_settings','module_prefs','modulehook_queries','module_preload','navschema','navbysection','translation_namespace_stack','blocked_modules','unblocked_modules'] as $key) $GLOBALS[$key] = [];
+        $GLOBALS['block_all_modules'] = false;
         $GLOBALS['injected_modules'] = [0=>[],1=>[]];
         $GLOBALS['translation_namespace'] = '';
         $GLOBALS['REQUEST_URI'] = 'village.php';
@@ -112,6 +113,12 @@ final class ModuleCertificationTest extends TestCase
                 self::assertSame(2, get_module_pref('uses', $module));
                 modulehook('fightnav-specialties', ['script'=>'forest.php?'], false, $module);
                 self::assertNotEmpty($GLOBALS['navbysection']);
+                foreach (['-1','0','4','999999999999999999999', '1 OR 1=1', ['1']] as $invalid) {
+                    $_GET = ['skill'=>$spec, 'l'=>$invalid];
+                    modulehook('apply-specialties', [], false, $module);
+                    self::assertSame(2, get_module_pref('uses', $module));
+                }
+                $_GET = [];
                 modulehook('dragonkill', [], false, $module);
                 self::assertSame(0, get_module_pref('skill', $module));
                 self::assertSame(0, get_module_pref('uses', $module));
