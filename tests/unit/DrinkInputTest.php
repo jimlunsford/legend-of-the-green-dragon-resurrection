@@ -9,12 +9,13 @@ final class DrinkInputTest extends TestCase
     public function testTypedEditorPreservesRawText(): void
     {
         $raw="`2O'Reilly \\ 🐉";
-        $values=DrinkInput::parse(['name'=>$raw,'remarks'=>'<img src=x>','costperlevel'=>'15','hpmin'=>'-5','hpmax'=>'15','buffatkmod'=>'1.1']);
+        $values=DrinkInput::parse(['name'=>$raw,'remarks'=>'<img src=x>','costperlevel'=>'15','hpmin'=>'-5','hpmax'=>'15','buffatkmod'=>'1.1','buffdefmod'=>'.9']);
         self::assertSame($raw,$values['name']);
         self::assertSame('<img src=x>',$values['remarks']);
         self::assertSame(15,$values['costperlevel']);
         self::assertSame(-5,$values['hpmin']);
         self::assertSame('1.1',$values['buffatkmod']);
+        self::assertSame('.9',$values['buffdefmod']);
         self::assertArrayNotHasKey('drinkid',$values);
     }
 
