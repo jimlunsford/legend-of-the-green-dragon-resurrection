@@ -112,7 +112,7 @@ function resurrectionhttpfixture_run() { echo 'fixture-executed'; exit; }
             request()  # installed but inactive
             self.query('UPDATE modules SET active=1 WHERE modulename=?', [module])
             request(True)
-            self.query('INSERT INTO settings (setting,value) VALUES (?,?)', ['fixture_dependency', '1'])
+            self.query('UPDATE settings SET value=? WHERE setting=?', ['1', 'fixture_dependency'])  # getsetting persisted its default
             request()  # active but missing a dependency
         finally:
             path.unlink()
