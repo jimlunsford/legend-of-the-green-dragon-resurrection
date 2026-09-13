@@ -28,7 +28,7 @@ function game_stones_uninstall(){
 
 function game_stones_dohook($hookname, $args){
 	if ($hookname=="darkhorsegame"){
-		$_SESSION['stones_return'] = $args['return'];
+		$_SESSION['darkhorse_return'] = $args['return'];
 		$ret = urlencode($args['return']);
 		addnav("S?Play Stones Game",
 				"runmodule.php?module=game_stones&ret=$ret");
@@ -41,7 +41,7 @@ function game_stones_run(){
     require_once 'lib/player_mutation.php';
     require_once 'src/Game/StonesGame.php';
     // Return locations are application-owned. Never reflect a submitted URL.
-    $return = $_SESSION['stones_return'] ?? '';
+    $return = $_SESSION['darkhorse_return'] ?? '';
     if (!in_array($return, ['forest.php', 'travel.php'], true) || ($session['user']['specialinc'] ?? '') !== 'module:darkhorse') {
         http_response_code(403); exit('Game unavailable.');
     }
@@ -51,7 +51,9 @@ function game_stones_run(){
     $encoded = (string)$session['user']['specialmisc'];
     $context = hash('sha256', $encoded);
     try {
-        $stones = \Resurrection\Game\StonesState::decode($encoded);
+        $wager = \Resurrection\Game\DarkHorseState::read($encoded, (int)$session['user']['acctid']);
+        if (($wager['active'] ?? false) && $wager['game'] !== 'game_stones') throw new DomainException('Wrong game.');
+        $stones = ($wager['active'] ?? false) ? \Resurrection\Game\StonesState::decode($wager['data']) : [];
     } catch (DomainException $error) {
         http_response_code(409); exit('Invalid Stones state. Return to the tavern before starting a new game.');
     }
@@ -60,12 +62,25 @@ function game_stones_run(){
         resurrection_consume_action('game_stones', $context);
         try {
             $action = \Resurrection\Http\Input::choice($_POST, 'action', ['choose','bet','draw','settle'], '');
+            if (array_diff(array_keys($_POST), ['action','csrf_token','action_token', ...($action === 'choose' ? ['side'] : ($action === 'bet' ? ['bet'] : []))]) !== []) throw new DomainException('Unknown field.');
             $side = \Resurrection\Http\Input::string($_POST, 'side');
             $bet = \Resurrection\Http\Input::integer($_POST, 'bet', 0, 1);
-            $result = resurrection_player_mutation(function () use ($stones, $action, $side, $bet) {
+            $result = resurrection_player_mutation(function () use ($stones, $wager, $action, $side, $bet) {
                 global $session;
                 $result = \Resurrection\Game\StonesGame::act($stones, (int)$session['user']['gold'], $action, $side, $bet, 'e_rand');
-                $session['user']['specialmisc'] = \Resurrection\Game\StonesState::encode($result['state']);
+                $owner = (int)$session['user']['acctid'];
+                $data = \Resurrection\Game\StonesState::encode($result['state']);
+                if ($action === 'choose') {
+                    $wager = \Resurrection\Game\DarkHorseState::start($wager, $owner, 'game_stones', 0, $data);
+                } else {
+                    $wager['data'] = $data;
+                    if ($action === 'bet') { $wager['wager']=$bet; $wager['stage']='play'; }
+                    if ($result['settled']) {
+                        $wager['active']=false; $wager['settled']=true; $wager['stage']='complete';
+                        $wager['result']=$result['change'] > 0 ? 'win' : ($result['change'] < 0 ? 'loss' : 'tie');
+                    }
+                }
+                $session['user']['specialmisc'] = \Resurrection\Game\DarkHorseState::write($wager, $owner);
                 $session['user']['gold'] = $result['gold'];
                 return $result;
             });
@@ -101,7 +116,7 @@ function game_stones_run(){
         rawoutput('<button name="action" value="' . $action . '" class="button">Continue</button>');
     }
     rawoutput('</form>');
-    if (!isset($stones['bet'])) {
+    {
         addnav('Other Games', $return . '?op=oldman');
         addnav('Return to Main Room', $return . '?op=tavern');
     }

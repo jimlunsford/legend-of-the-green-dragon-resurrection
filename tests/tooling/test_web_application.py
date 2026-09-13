@@ -199,6 +199,144 @@ function resurrectionhttpfixture_run() { echo 'fixture-executed'; exit; }
             self.query('DELETE FROM modules WHERE modulename=?', [module])
             self.query('DELETE FROM settings WHERE setting=?', ['fixture_dependency'])
 
+    def test_darkhorse_wagers_abandonment_and_information(self):
+        class NoRedirect(urllib.request.HTTPRedirectHandler):
+            def redirect_request(self, *args): return None
+        client=urllib.request.build_opener(urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar()),NoRedirect)
+        def request(url, data=None):
+            req=urllib.request.Request(f'http://127.0.0.1:{self.port}/'+url,
+                data=None if data is None else urllib.parse.urlencode(data).encode())
+            try: response=client.open(req,timeout=15)
+            except urllib.error.HTTPError as error: response=error
+            body=response.read().decode('utf-8',errors='replace')
+            self.assertNotRegex(body,r'(?i)(fatal error|warning:|deprecated:|notice:)',body[:1800])
+            return response.status,body
+        def fields(body, **extra):
+            result={}
+            for key in ['csrf_token','action_token']:
+                match=re.search(r'name=[\'"]'+key+r'[\'"] value=[\'"]([a-f0-9]{64})',body)
+                self.assertIsNotNone(match,body[:1800]); result[key]=match.group(1)
+            return {**result,**extra}
+        def allow(url):
+            value='a:1:{s:'+str(len(url))+':"'+url+'";b:1;}'
+            self.query('UPDATE accounts SET allowednavs=? WHERE acctid=?',[value,player])
+        def snapshot():
+            return self.query('SELECT gold,specialmisc FROM accounts WHERE acctid=?',[player])[0]
+        def state(): return json.loads(snapshot()['specialmisc'])
+        def page(url):
+            allow(url); status,body=request(url); self.assertEqual(200,status,body[:1000]); return body
+        status,body=request('home.php')
+        csrf=re.search(r'name=[\'"]csrf_token[\'"] value=[\'"]([a-f0-9]{64})',body).group(1)
+        status,_=request('login.php',{'csrf_token':csrf,'name':'WebPlayer','password':"Synthetic web O'Reilly \\ password"})
+        self.assertEqual(303,status)
+        player=self.query('SELECT acctid FROM accounts WHERE login=?',['WebPlayer'])[0]['acctid']
+        prior=self.query('SELECT gold,specialmisc,specialinc FROM accounts WHERE acctid=?',[player])[0]
+        settings=self.query('SELECT setting,value FROM module_settings WHERE modulename=?',['game_fivesix'])
+        self.query('UPDATE modules SET active=1')
+        oldman='forest.php?op=oldman'
+        try:
+            self.query('UPDATE accounts SET specialinc=?,specialmisc=?,gold=1000 WHERE acctid=?',['module:darkhorse','',player])
+            body=page(oldman)  # issues server-owned return for all three games
+            self.assertEqual('',snapshot()['specialmisc'])
+            # No active state cannot authorize an abandonment, even with correct CSRF.
+            allow(oldman); status,_=request(oldman,{'csrf_token':csrf,'game':'game_dice','action_token':'0'*64})
+            self.assertEqual(409,status)
+            for module in ['game_stones','game_dice']:
+                url='runmodule.php?module='+module
+                body=page(url)
+                if module=='game_stones':
+                    status,body=request(url,fields(body,action='choose',side='likepair')); self.assertEqual(200,status)
+                before=int(snapshot()['gold'])
+                post=fields(body,action='bet',bet='10')
+                status,_=request(url,{'action':'bet','bet':'10'}); self.assertEqual(403,status)
+                status,body=request(url,post); self.assertEqual(200,status)
+                self.assertEqual(before-10,int(snapshot()['gold']))
+                saved=snapshot()
+                body=page(oldman)
+                self.assertEqual(saved,snapshot())  # GET oldman cannot erase risk
+                self.assertIn('Resume game',body)
+                other='runmodule.php?module='+('game_dice' if module=='game_stones' else 'game_stones')
+                allow(other); status,_=request(other); self.assertEqual(409,status); self.assertEqual(saved,snapshot())
+                body=page(oldman)
+                wrong=fields(body,game='game_fivesix')
+                status,_=request(oldman,wrong); self.assertEqual(409,status); self.assertEqual(saved,snapshot())
+                body=page(oldman); post=fields(body,game=module)
+                status,_=request(oldman,{'game':module}); self.assertEqual(403,status)
+                status,body=request(oldman,post); self.assertEqual(200,status)
+                self.assertEqual(before-10,int(snapshot()['gold'])); self.assertEqual('abandoned',state()['stage'])
+                saved=snapshot(); allow(oldman)
+                status,_=request(oldman,post); self.assertEqual(409,status); self.assertEqual(saved,snapshot())
+                body=page(oldman); self.assertEqual(saved,snapshot())
+            # Dice finite progression, request-carried state rejected, payout once.
+            url='runmodule.php?module=game_dice'; body=page(url); before=int(snapshot()['gold'])
+            for bet in ['-1','0','100000000000000000000','100000']:
+                status,_=request(url,fields(body,action='bet',bet=bet)); self.assertEqual(400,status)
+                self.assertEqual(before,int(snapshot()['gold'])); body=page(url)
+            status,body=request(url,fields(body,action='bet',bet='10')); self.assertEqual(200,status)
+            for attempt in [2,3]:
+                status,body=request(url,fields(body,action='pass')); self.assertEqual(200,status)
+                self.assertEqual(attempt,json.loads(state()['data'])['tries']); self.assertEqual(before-10,int(snapshot()['gold']))
+            saved=snapshot()
+            status,_=request(url,fields(body,action='pass')); self.assertEqual(400,status); self.assertEqual(saved,snapshot())
+            body=page(url)
+            for extra in [{'bet':'20'},{'try':'1'},{'what':'keep'},{'result':'win'}]:
+                status,_=request(url,fields(body,action='keep',**extra)); self.assertEqual(400,status); self.assertEqual(saved,snapshot()); body=page(url)
+            # Actual DML failure at final account write rolls settlement back.
+            self.query("CREATE TRIGGER fixture_wager_failure BEFORE UPDATE ON accounts FOR EACH ROW BEGIN IF NEW.acctid="+str(player)+" AND NEW.specialmisc LIKE '%\"stage\":\"complete\"%' THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='fixture settlement failure'; END IF; END")
+            post=fields(body,action='keep'); status,_=request(url,post); self.assertGreaterEqual(status,500)
+            self.assertEqual(saved,snapshot()); self.query('DROP TRIGGER fixture_wager_failure')
+            body=page(url); post=fields(body,action='keep'); status,body=request(url,post); self.assertEqual(200,status)
+            dice=json.loads(state()['data']); comparison=(dice['roll']>dice['opponent'])-(dice['roll']<dice['opponent'])
+            self.assertEqual(before+comparison*10,int(snapshot()['gold'])); self.assertTrue(state()['settled'])
+            saved=snapshot(); status,_=request(url,post); self.assertEqual(409,status); self.assertEqual(saved,snapshot())
+            body=page(oldman); self.assertEqual(saved,snapshot())
+            # Five/Six shared jackpot and daily counter commit with the actor.
+            for key,value in [('cost','5'),('dailyuses','1'),('jackpot','100'),('maxjackpot','5000')]:
+                self.query('INSERT INTO module_settings (modulename,setting,value) VALUES (?,?,?) ON DUPLICATE KEY UPDATE value=VALUES(value)',['game_fivesix',key,value])
+            self.query('INSERT INTO module_userprefs (modulename,setting,userid,value) VALUES (?,?,?,?) ON DUPLICATE KEY UPDATE value=VALUES(value)',['game_fivesix','playstoday',player,'0'])
+            url='runmodule.php?module=game_fivesix'; body=page(url); before=snapshot()
+            self.query("CREATE TRIGGER fixture_wager_failure BEFORE UPDATE ON accounts FOR EACH ROW BEGIN IF NEW.acctid="+str(player)+" AND NEW.specialmisc<>OLD.specialmisc THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='fixture jackpot failure'; END IF; END")
+            status,_=request(url,fields(body,action='roll')); self.assertGreaterEqual(status,500)
+            self.assertEqual(before,snapshot())
+            self.assertEqual('100',self.query('SELECT value FROM module_settings WHERE modulename=? AND setting=?',['game_fivesix','jackpot'])[0]['value'])
+            self.assertEqual('0',self.query('SELECT value FROM module_userprefs WHERE modulename=? AND setting=? AND userid=?',['game_fivesix','playstoday',player])[0]['value'])
+            self.query('DROP TRIGGER fixture_wager_failure')
+            body=page(url); post=fields(body,action='roll'); status,body=request(url,post); self.assertEqual(200,status)
+            sixes=json.loads(state()['data']).count(6)
+            payout={5:105,4:11,3:5}.get(sixes,0)
+            self.assertEqual(int(before['gold'])-5+payout,int(snapshot()['gold']))
+            self.assertEqual(str(100 if sixes==5 else 105-payout),self.query('SELECT value FROM module_settings WHERE modulename=? AND setting=?',['game_fivesix','jackpot'])[0]['value'])
+            saved=snapshot(); status,_=request(url,post); self.assertEqual(409,status); self.assertEqual(saved,snapshot())
+            body=page(url); status,_=request(url,fields(body,action='roll')); self.assertEqual(400,status); self.assertEqual(saved,snapshot())
+            # Every game rejects GET value operations even with issued navigation.
+            for suffix in ['game_dice&bet=10','game_dice&what=keep','game_fivesix&what=roll','game_stones&action=draw']:
+                attack='runmodule.php?module='+suffix; allow(attack)
+                status,_=request(attack); self.assertEqual(403,status); self.assertEqual(saved,snapshot())
+            # Bartender search binds quote/backslash/UTF-8; paid GET only confirms.
+            url='forest.php?op=bartender&what=enemies&subop=search'; page(url)
+            status,body=request(url,{'name':"O'Reilly \\ 雪"}); self.assertEqual(200,status); self.assertEqual(saved,snapshot())
+            url='forest.php?op=bartender&what=enemies&who=WebPlayer'; body=page(url)
+            self.assertEqual(saved,snapshot()); post=fields(body)
+            status,_=request(url,{}); self.assertEqual(403,status); self.assertEqual(saved,snapshot())
+            status,body=request(url,post); self.assertEqual(200,status)
+            self.assertEqual(int(saved['gold'])-100,int(snapshot()['gold']))
+            after=snapshot(); allow(url); status,_=request(url,post); self.assertEqual(409,status); self.assertEqual(after,snapshot())
+            for who in ['Nonexistent',"O'Reilly\\"]:
+                url='forest.php?op=bartender&what=enemies&who='+urllib.parse.quote(who)
+                body=page(url); status,_=request(url,fields(body)); self.assertEqual(200,status); self.assertEqual(after,snapshot())
+            # Persisted malformed/foreign-owner state never silently becomes a new wager.
+            for value in ['O:8:"stdClass":0:{}','{}',json.dumps({**state(),'owner':int(player)+999})]:
+                self.query('UPDATE accounts SET specialmisc=? WHERE acctid=?',[value,player]); allow(oldman)
+                status,_=request(oldman); self.assertEqual(409,status); self.assertEqual(value,snapshot()['specialmisc'])
+        finally:
+            self.query('DROP TRIGGER IF EXISTS fixture_wager_failure')
+            self.query('UPDATE accounts SET gold=?,specialmisc=?,specialinc=? WHERE acctid=?',[prior['gold'],prior['specialmisc'],prior['specialinc'],player])
+            self.query('DELETE FROM module_settings WHERE modulename=?',['game_fivesix'])
+            for row in settings:
+                self.query('INSERT INTO module_settings (modulename,setting,value) VALUES (?,?,?)',['game_fivesix',row['setting'],row['value']])
+            self.query('DELETE FROM module_userprefs WHERE modulename=? AND userid=?',['game_fivesix',player])
+            self.query('UPDATE modules SET active=0')
+
     def test_module_purchases_post_csrf_replay_and_effects(self):
         class NoRedirect(urllib.request.HTTPRedirectHandler):
             def redirect_request(self, *args): return None
@@ -630,8 +768,10 @@ function resurrectionhttpfixture_run() { echo 'fixture-executed'; exit; }
             fields = game_fields(body, action='bet', bet='10')
             status, _, body = request(game_url, fields)
             self.assertEqual(200, status)
+            self.assertEqual('90', self.query('SELECT gold FROM accounts WHERE acctid=?', [player_id])[0]['gold'])
             for _ in range(9):
-                state = json.loads(self.query('SELECT specialmisc FROM accounts WHERE acctid=?', [player_id])[0]['specialmisc'])
+                wager = json.loads(self.query('SELECT specialmisc FROM accounts WHERE acctid=?', [player_id])[0]['specialmisc'])
+                state = json.loads(wager['data'])
                 action = 'settle' if state['red']+state['blue']==0 or state['player']>8 or state['oldman']>8 else 'draw'
                 fields = game_fields(body, action=action)
                 status, _, body = request(game_url, fields)
@@ -643,7 +783,8 @@ function resurrectionhttpfixture_run() { echo 'fixture-executed'; exit; }
                 status, _, body = request(game_url)
                 self.assertEqual(200, status)
                 if action == 'settle':
-                    self.assertEqual([], json.loads(saved['specialmisc']))
+                    self.assertTrue(json.loads(saved['specialmisc'])['settled'])
+                    self.assertFalse(json.loads(saved['specialmisc'])['active'])
                     self.assertIn(saved['gold'], ['90','100','110'])
                     break
             else:

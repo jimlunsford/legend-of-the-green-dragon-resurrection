@@ -86,6 +86,7 @@ function darkhorse_dohook($hookname,$args){
 }
 
 function darkhorse_checkday(){
+    global $session;
 	// Reset special-in just in case checkday kicks in.
 	$session['user']['specialinc']="";
 	checkday();
@@ -95,7 +96,8 @@ function darkhorse_checkday(){
 
 function darkhorse_bartender($from){
 	global $session;
-	$what = httpget('what');
+	require_once 'lib/player_mutation.php';
+	$what = \Resurrection\Http\Input::choice($_GET, 'what', ['', 'colors', 'enemies'], '');
 	if ($what==""){
 		output("The grizzled old man behind the bar reminds you very much of a strip of beef jerky.`n`n");
 		$dname = translate_inline($session['user']['sex']?"lasshie":"shon");
@@ -120,7 +122,8 @@ function darkhorse_bartender($from){
 		}
 		output("`0`n`nThese colors can be used in your name, and in any conversations you have.");
 	}else if($what=="enemies"){
-		$who = httpget('who');
+		$who = \Resurrection\Http\Input::string($_GET, 'who');
+        if (strlen($who)>25) { http_response_code(400); exit('Invalid name.'); }
 		if ($who==""){
 			output("\"`7Sho, you want to learn about your enemiesh, do you?  Who do you want to know about?  Well?  Shpeak up!  It only costs `^100`7 gold per person for information.`0\"");
 			$subop = httpget('subop');
@@ -132,12 +135,13 @@ function darkhorse_bartender($from){
 			}else{
 				addnav("Search Again",$from."op=bartender&what=enemies");
 				$search = "%";
-				$name = httppost('name');
+				$name = \Resurrection\Http\Input::string($_POST, 'name');
+                if (mb_strlen($name, 'UTF-8')>50) { http_response_code(400); exit('Invalid search.'); }
 				for ($i=0;$i<strlen($name);$i++){
 					$search.=substr($name,$i,1)."%";
 				}
-				$sql = "SELECT name,alive,location,sex,level,laston,loggedin,login FROM " . db_prefix("accounts") . " WHERE (locked=0 AND name LIKE '$search') ORDER BY level DESC";
-				$result = db_query($sql);
+				$sql = "SELECT name,alive,location,sex,level,laston,loggedin,login FROM " . db_prefix("accounts") . " WHERE (locked=0 AND name LIKE ?) ORDER BY level DESC LIMIT 101";
+				$result = db_query($sql, true, [$search]);
 				$max = db_num_rows($result);
 				if ($max > 100) {
 					output("`n`n\"`7Hey, whatsh you think yoush doin'.  That'sh too many namesh to shay.  I'll jusht tell you 'bout shome of them.`0`n");
@@ -156,9 +160,23 @@ function darkhorse_bartender($from){
 				rawoutput("</table>");
 			}
 		}else{
+            $url=$from.'op=bartender&what=enemies&who='.rawurlencode($who);
+            $context='information:'.$who;
+            if ($_SERVER['REQUEST_METHOD']!=='POST') {
+                addnav('', $url);
+                rawoutput('<form method="POST" action="'.htmlspecialchars($url,ENT_QUOTES,'UTF-8').'">');
+                rawoutput(resurrection_action_fields('darkhorse_information',$context));
+                rawoutput('<button class="button">Buy information for 100 gold</button></form>');
+                addnav('Return to Main Room',$from.'op=tavern');
+                return;
+            }
+            resurrection_consume_action('darkhorse_information',$context);
+            if (array_diff(array_keys($_POST),['csrf_token','action_token'])!==[]) { http_response_code(400); exit('Unknown field.'); }
+            resurrection_player_mutation(function () use ($who) {
+                global $session;
 			if ($session['user']['gold']>=100){
-				$sql = "SELECT name,acctid,alive,location,maxhitpoints,gold,sex,level,weapon,armor,attack,race,defense,charm FROM " . db_prefix("accounts") . " WHERE login='$who'";
-				$result = db_query($sql);
+				$sql = "SELECT name,acctid,alive,location,maxhitpoints,gold,sex,level,weapon,armor,attack,race,defense,charm FROM " . db_prefix("accounts") . " WHERE login=? AND locked=0";
+				$result = db_query($sql, true, [$who]);
 				if (db_num_rows($result)>0){
 					$row = db_fetch_assoc($result);
 					$row = modulehook("adjuststats", $row);
@@ -204,6 +222,7 @@ function darkhorse_bartender($from){
 				output("`4`bAttack:`b`6 Eleventy billion`n");
 				output("`4`bDefense:`b`6 Super Duper`n");
 			}
+            });
 		}
 	}
 	addnav("Return to the Main Room",$from."op=tavern");
@@ -266,6 +285,33 @@ function darkhorse_runevent($type, $link){
 		darkhorse_bartender($from);
 		break;
 	case "oldman":
+        require_once 'lib/player_mutation.php';
+        try {
+            $wager = \Resurrection\Game\DarkHorseState::read((string)$session['user']['specialmisc'], (int)$session['user']['acctid']);
+            if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+                resurrection_consume_action('darkhorse_abandon', hash('sha256', (string)$session['user']['specialmisc']));
+                $game = \Resurrection\Http\Input::string($_POST, 'game');
+                resurrection_player_mutation(function () use ($wager, $game) {
+                    global $session;
+                    $state = \Resurrection\Game\DarkHorseState::abandon($wager, (int)$session['user']['acctid'], $game);
+                    $session['user']['specialmisc'] = \Resurrection\Game\DarkHorseState::write($state, (int)$session['user']['acctid']);
+                });
+                $wager['active'] = false;
+            }
+            if ($wager['active'] ?? false) {
+                $_SESSION['darkhorse_return'] = $gameret;
+                addnav('Resume game', 'runmodule.php?module=' . $wager['game']);
+                $url = $from . 'op=oldman';
+                addnav('', $url);
+                output('Your game is still active. Abandoning it forfeits the committed stake of %s gold.', $wager['wager']);
+                rawoutput('<form method="POST" action="' . htmlspecialchars($url, ENT_QUOTES, 'UTF-8') . '">');
+                rawoutput(resurrection_action_fields('darkhorse_abandon', hash('sha256', (string)$session['user']['specialmisc'])));
+                rawoutput('<button name="game" value="' . $wager['game'] . '" class="button">Abandon game</button></form>');
+                break;
+            }
+        } catch (DomainException|InvalidArgumentException $error) {
+            http_response_code(409); exit('Invalid or inactive wager.');
+        }
 		darkhorse_checkday();
 		addnav("Old Man");
 		modulehook("darkhorsegame", array("return"=>$gameret));
@@ -282,7 +328,7 @@ function darkhorse_runevent($type, $link){
 			if ($c > 1) output(" I can play several games!`0\"");
 			else output(" Shall we play a game?`0\"");
 		}
-		$session['user']['specialmisc']="";
+
 		addnav("Return to the Main Room",$from."op=tavern");
 		break;
 	case "leave":
