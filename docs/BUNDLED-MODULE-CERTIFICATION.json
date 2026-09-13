@@ -1,0 +1,1944 @@
+{
+  "scope": "Only the 24 bundled entrypoints, verified against modules/*.php; no archive import.",
+  "date": "2026-09-13",
+  "evidence": "ModuleCertificationTest, ExpressionTest, SecurityIntegrationTest, test_web_application.py. Exact final CI evidence in Phase 3 checkpoint.",
+  "status_meaning": "PASS is a component result only. BLOCKED is the final certification until required route and mutation gates pass.",
+  "modules": [
+    {
+      "module": "cedrikspotions",
+      "historical_version": "2.6",
+      "sources": [
+        "modules/cedrikspotions.php"
+      ],
+      "installation": "PASS",
+      "activation": "PASS",
+      "deactivation": "PASS",
+      "reactivation_and_cache_invalidation": "PASS",
+      "reinstall": "PASS: registration equality, configured setting preserved, leaves inactive before explicit reactivation",
+      "legacy_schema_upgrade": "NOT CERTIFIED: fresh-schema reinstall only; historical column migrations not exercised",
+      "declared_dependencies": {},
+      "hook_registrations": [
+        {
+          "location": "header-inn",
+          "callback": "cedrikspotions_dohook",
+          "priority": 50,
+          "whenactive": ""
+        },
+        {
+          "location": "newday-runonce",
+          "callback": "cedrikspotions_dohook",
+          "priority": 50,
+          "whenactive": ""
+        },
+        {
+          "location": "hprecalc",
+          "callback": "cedrikspotions_dohook",
+          "priority": 50,
+          "whenactive": ""
+        }
+      ],
+      "event_hooks": [],
+      "settings": {
+        "ischarm": "Is Charm potion available,bool|1",
+        "ismax": "Is Vitality potion available,bool|1",
+        "istemp": "Is Health potion available,bool|1",
+        "isforget": "Is Forgetfulness potion available,bool|1",
+        "istrans": "Is Transmutation potion available,bool|1",
+        "charmcost": "Cost for Charm Potion,range,1,10,1|2",
+        "maxcost": "Cost for Vitality Potion,range,1,10,1|2",
+        "tempcost": "Cost for Health Potion,range,1,10,1|2",
+        "forgcost": "Cost for Forgetfulness Potion,range,1,10,1|2",
+        "transcost": "Cost for Transmutation Potion,range,1,10,1|2",
+        "random": "Is the cost per point of potion random,bool|0",
+        "minrand": "Minimum cost per point of effect,range,1,9,1|2",
+        "maxrand": "Maximum cost per point of effect,range,2,10,1|5",
+        "randcost": "Current random cost,rang,1,10,1|2",
+        "transmuteturns": "How many turns will the transmutation sickness last?,range,1,20,1|10",
+        "defmod": "How much is the multiplier for Transmutation Sickness (defense)?,floatrange,.1,2,.05|.75",
+        "atkmod": "How much is the multiplier for Transmutation Sickness (attack)?,floatrange,.1,2,.05|.75",
+        "survive": "Will transmutation sickness carry over new days?,bool|1",
+        "charmgain": "How much charm do you get per potion,int|1",
+        "vitalgain": "How many maxhp do you get per potion,int|1",
+        "tempgain": "How many current hp do you get per potion,int|20",
+        "carrydk": "Do MaxHitpoint (vitality) potions carry across DKs?,bool|1"
+      },
+      "user_preferences": {
+        "extrahps": "How many extra hitpoints has the user bought?,int"
+      },
+      "object_preferences": {},
+      "settings_preferences_result": "PASS for named defaults and raw round trips; NOT APPLICABLE for empty namespaces",
+      "object_preferences_result": "NOT APPLICABLE",
+      "direct_runmodule_route": "BLOCKED",
+      "direct_route_note": "Full action authorization, POST/CSRF, output and replay certification not complete.",
+      "database_tables": [],
+      "database_behavior": "PASS: strict fresh install/reinstall and tested metadata writes; purchase/admin transactions not certified",
+      "daily_hooks": [
+        "newday-runonce"
+      ],
+      "combat_hooks": [
+        "hprecalc"
+      ],
+      "integration_hooks": [
+        "header-inn"
+      ],
+      "php_8_4": "PASS for tested subset; overall BLOCKED",
+      "php_8_5": "PASS for tested subset; overall BLOCKED",
+      "mariadb_11_4": "PASS for tested subset; overall BLOCKED",
+      "mysql_8_4": "PASS for tested subset; overall BLOCKED",
+      "warnings_errors": "No PHP warnings/errors in the passing matrix tests; unexecuted paths unverified.",
+      "security_notes": "Inn header navigation, health recalculation, real daily callback and retry receipts; purchase/effect routes remain untested.",
+      "final_certification": "BLOCKED"
+    },
+    {
+      "module": "crazyaudrey",
+      "historical_version": "1.1",
+      "sources": [
+        "modules/crazyaudrey.php"
+      ],
+      "installation": "PASS",
+      "activation": "PASS",
+      "deactivation": "PASS",
+      "reactivation_and_cache_invalidation": "PASS",
+      "reinstall": "PASS: registration equality, configured setting preserved, leaves inactive before explicit reactivation",
+      "legacy_schema_upgrade": "NOT CERTIFIED: fresh-schema reinstall only; historical column migrations not exercised",
+      "declared_dependencies": {},
+      "hook_registrations": [
+        {
+          "location": "village",
+          "callback": "crazyaudrey_dohook",
+          "priority": 50,
+          "whenactive": ""
+        },
+        {
+          "location": "village-desc",
+          "callback": "crazyaudrey_dohook",
+          "priority": 50,
+          "whenactive": ""
+        },
+        {
+          "location": "newday",
+          "callback": "crazyaudrey_dohook",
+          "priority": 50,
+          "whenactive": ""
+        },
+        {
+          "location": "newday-runonce",
+          "callback": "crazyaudrey_dohook",
+          "priority": 50,
+          "whenactive": ""
+        }
+      ],
+      "event_hooks": [
+        {
+          "type": "forest",
+          "condition": "return 100;"
+        }
+      ],
+      "settings": {
+        "cost": "Cost to pet,int|5",
+        "animal": "Name of animal (should be singular)|Kitten",
+        "animals": "Plural name of animal|Kittens",
+        "lanimal": "Lowercase name of animal (should be singular)|kitten",
+        "lanimals": "Lowercase plural name of animal|kittens",
+        "sound": "Sound that animal makes|mew",
+        "buffname": "Name of buff from animal|Warm Fuzzies",
+        "gamedaysremaining": "How many game days should the animal remain? (set to -1 for indefinite),int|-1",
+        "defaultanimal": "Name of default animal (should be singular)|Kitten",
+        "defaultanimals": "Plural name of default animal|Kittens",
+        "defaultsound": "Sound that default animal makes|mew",
+        "defaultbuffname": "Name of buff from default animal|Warm Fuzzies",
+        "profit": "How much profit has Audrey made?,int|5",
+        "villagepercent": "How often will you see Crazy Audrey sitting in the village square?,range,0,100,1|20"
+      },
+      "user_preferences": {
+        "played": "Played Baskets Today?,bool|0"
+      },
+      "object_preferences": {},
+      "settings_preferences_result": "PASS for named defaults and raw round trips; NOT APPLICABLE for empty namespaces",
+      "object_preferences_result": "NOT APPLICABLE",
+      "direct_runmodule_route": "BLOCKED",
+      "direct_route_note": "Full action authorization, POST/CSRF, output and replay certification not complete.",
+      "database_tables": [],
+      "database_behavior": "PASS: strict fresh install/reinstall and tested metadata writes; purchase/admin transactions not certified",
+      "daily_hooks": [
+        "newday",
+        "newday-runonce"
+      ],
+      "combat_hooks": [],
+      "integration_hooks": [
+        "village",
+        "village-desc"
+      ],
+      "php_8_4": "PASS for tested subset; overall BLOCKED",
+      "php_8_5": "PASS for tested subset; overall BLOCKED",
+      "mariadb_11_4": "PASS for tested subset; overall BLOCKED",
+      "mysql_8_4": "PASS for tested subset; overall BLOCKED",
+      "warnings_errors": "No PHP warnings/errors in the passing matrix tests; unexecuted paths unverified.",
+      "security_notes": "Combined New Day reset, daily countdown/retry, event collection and forest entrance; random play/reward paths remain untested.",
+      "final_certification": "BLOCKED"
+    },
+    {
+      "module": "dag",
+      "historical_version": "1.3",
+      "sources": [
+        "modules/dag.php",
+        "modules/dag/install.php"
+      ],
+      "installation": "PASS",
+      "activation": "PASS",
+      "deactivation": "PASS",
+      "reactivation_and_cache_invalidation": "PASS",
+      "reinstall": "PASS: registration equality, configured setting preserved, leaves inactive before explicit reactivation",
+      "legacy_schema_upgrade": "NOT CERTIFIED: fresh-schema reinstall only; historical column migrations not exercised",
+      "declared_dependencies": {},
+      "hook_registrations": [
+        {
+          "location": "inn-desc",
+          "callback": "dag_dohook",
+          "priority": 50,
+          "whenactive": ""
+        },
+        {
+          "location": "inn",
+          "callback": "dag_dohook",
+          "priority": 50,
+          "whenactive": ""
+        },
+        {
+          "location": "superuser",
+          "callback": "dag_dohook",
+          "priority": 50,
+          "whenactive": ""
+        },
+        {
+          "location": "newday",
+          "callback": "dag_dohook",
+          "priority": 50,
+          "whenactive": ""
+        },
+        {
+          "location": "pvpwin",
+          "callback": "dag_dohook",
+          "priority": 50,
+          "whenactive": ""
+        },
+        {
+          "location": "dragonkill",
+          "callback": "dag_dohook",
+          "priority": 50,
+          "whenactive": ""
+        },
+        {
+          "location": "showsettings",
+          "callback": "dag_dohook",
+          "priority": 50,
+          "whenactive": ""
+        },
+        {
+          "location": "delete_character",
+          "callback": "dag_dohook",
+          "priority": 50,
+          "whenactive": ""
+        }
+      ],
+      "event_hooks": [],
+      "settings": {
+        "bountymin": "Minimum amount per level of target for bounty,int|50",
+        "bountymax": "Maximum amount per level of target for bounty,int|200",
+        "bountylevel": "Minimum player level for being a bounty target,int|3",
+        "bountyfee": "Percentage of bounty kept by Dag Durnick,int|10",
+        "maxbounties": "How many bounties can a person set per day,int|5"
+      },
+      "user_preferences": {
+        "bounties": "Bounties set today,int|0"
+      },
+      "object_preferences": {},
+      "settings_preferences_result": "PASS for named defaults and raw round trips; NOT APPLICABLE for empty namespaces",
+      "object_preferences_result": "NOT APPLICABLE",
+      "direct_runmodule_route": "BLOCKED",
+      "direct_route_note": "PASS for real authenticated issued Inn-to-module-to-Inn HTTP navigation with all 24 active. Full action authorization, POST/CSRF, output and replay certification remains BLOCKED.",
+      "database_tables": [
+        "bounty"
+      ],
+      "database_behavior": "PASS: strict fresh install/reinstall and tested metadata writes; purchase/admin transactions not certified",
+      "daily_hooks": [
+        "newday"
+      ],
+      "combat_hooks": [
+        "pvpwin",
+        "dragonkill"
+      ],
+      "integration_hooks": [
+        "inn-desc",
+        "inn"
+      ],
+      "php_8_4": "PASS for tested subset; overall BLOCKED",
+      "php_8_5": "PASS for tested subset; overall BLOCKED",
+      "mariadb_11_4": "PASS for tested subset; overall BLOCKED",
+      "mysql_8_4": "PASS for tested subset; overall BLOCKED",
+      "warnings_errors": "No PHP warnings/errors in the passing matrix tests; unexecuted paths unverified.",
+      "security_notes": "Strict bounty table install/reinstall with row preservation, Inn hooks, New Day count reset and PvP no-bounty path. Bounty creation/claims/admin mutations remain unreviewed. Issued direct route and return-to-Inn HTTP smoke passes on both targets.",
+      "final_certification": "BLOCKED"
+    },
+    {
+      "module": "darkhorse",
+      "historical_version": "1.1",
+      "sources": [
+        "modules/darkhorse.php"
+      ],
+      "installation": "PASS",
+      "activation": "PASS",
+      "deactivation": "PASS",
+      "reactivation_and_cache_invalidation": "PASS",
+      "reinstall": "PASS: registration equality, configured setting preserved, leaves inactive before explicit reactivation",
+      "legacy_schema_upgrade": "NOT CERTIFIED: fresh-schema reinstall only; historical column migrations not exercised",
+      "declared_dependencies": {},
+      "hook_registrations": [
+        {
+          "location": "forest",
+          "callback": "darkhorse_dohook",
+          "priority": 50,
+          "whenactive": ""
+        },
+        {
+          "location": "mountfeatures",
+          "callback": "darkhorse_dohook",
+          "priority": 50,
+          "whenactive": ""
+        },
+        {
+          "location": "moderate",
+          "callback": "darkhorse_dohook",
+          "priority": 50,
+          "whenactive": ""
+        }
+      ],
+      "event_hooks": [
+        {
+          "type": "forest",
+          "condition": "bundled:darkhorse-without-tavern-mount"
+        },
+        {
+          "type": "travel",
+          "condition": "bundled:darkhorse-without-tavern-mount"
+        }
+      ],
+      "settings": {
+        "tavernname": "Name of the tavern|Dark Horse Tavern"
+      },
+      "user_preferences": {},
+      "object_preferences": {
+        "mounts": {
+          "findtavern": "Can this mount find the tavern,bool|0"
+        }
+      },
+      "settings_preferences_result": "PASS for named defaults and raw round trips; NOT APPLICABLE for empty namespaces",
+      "object_preferences_result": "PASS for mounts.findtavern values 0 and 1",
+      "direct_runmodule_route": "BLOCKED",
+      "direct_route_note": "Full action authorization, POST/CSRF, output and replay certification not complete.",
+      "database_tables": [],
+      "database_behavior": "PASS: strict fresh install/reinstall and tested metadata writes; purchase/admin transactions not certified",
+      "daily_hooks": [],
+      "combat_hooks": [],
+      "integration_hooks": [
+        "forest"
+      ],
+      "php_8_4": "PASS for tested subset; overall BLOCKED",
+      "php_8_5": "PASS for tested subset; overall BLOCKED",
+      "mariadb_11_4": "PASS for tested subset; overall BLOCKED",
+      "mysql_8_4": "PASS for tested subset; overall BLOCKED",
+      "warnings_errors": "No PHP warnings/errors in the passing matrix tests; unexecuted paths unverified.",
+      "security_notes": "Forest/travel chance, mount object preference, forest entrance and darkhorsegame callbacks from all three games. Tavern mutations and return navigation validation remain open.",
+      "final_certification": "BLOCKED"
+    },
+    {
+      "module": "drinks",
+      "historical_version": "1.1",
+      "sources": [
+        "modules/drinks.php",
+        "modules/drinks/install.php"
+      ],
+      "installation": "PASS",
+      "activation": "PASS",
+      "deactivation": "PASS",
+      "reactivation_and_cache_invalidation": "PASS",
+      "reinstall": "PASS: registration equality, configured setting preserved, leaves inactive before explicit reactivation",
+      "legacy_schema_upgrade": "NOT CERTIFIED: fresh-schema reinstall only; historical column migrations not exercised",
+      "declared_dependencies": {},
+      "hook_registrations": [
+        {
+          "location": "ale",
+          "callback": "drinks_dohook",
+          "priority": 50,
+          "whenactive": ""
+        },
+        {
+          "location": "newday",
+          "callback": "drinks_dohook",
+          "priority": 50,
+          "whenactive": ""
+        },
+        {
+          "location": "superuser",
+          "callback": "drinks_dohook",
+          "priority": 50,
+          "whenactive": ""
+        },
+        {
+          "location": "header-graveyard",
+          "callback": "drinks_dohook",
+          "priority": 50,
+          "whenactive": ""
+        },
+        {
+          "location": "commentary",
+          "callback": "drinks_dohook",
+          "priority": 50,
+          "whenactive": ""
+        },
+        {
+          "location": "soberup",
+          "callback": "drinks_dohook",
+          "priority": 50,
+          "whenactive": ""
+        },
+        {
+          "location": "dragonkill",
+          "callback": "drinks_dohook",
+          "priority": 50,
+          "whenactive": ""
+        }
+      ],
+      "event_hooks": [],
+      "settings": {
+        "hardlimit": "How many hard drinks can a user buy in a day?,int|3",
+        "maxdrunk": [
+          "How drunk before %s`0 won't serve you?,range,0,100,1|66",
+          "`)Cedrik"
+        ]
+      },
+      "user_preferences": {
+        "drunkeness": "Drunkeness,range,0,100,1|0",
+        "harddrinks": "How many hard drinks has the user bought today?,int|0",
+        "canedit": "Has access to the drinks editor,bool|0",
+        "noslur": "Don't slur speach when drunk,bool|0"
+      },
+      "object_preferences": {},
+      "settings_preferences_result": "PASS for named defaults and raw round trips; NOT APPLICABLE for empty namespaces",
+      "object_preferences_result": "NOT APPLICABLE",
+      "direct_runmodule_route": "BLOCKED",
+      "direct_route_note": "Full action authorization, POST/CSRF, output and replay certification not complete.",
+      "database_tables": [
+        "drinks"
+      ],
+      "database_behavior": "PASS: strict fresh install/reinstall and tested metadata writes; purchase/admin transactions not certified",
+      "daily_hooks": [
+        "newday"
+      ],
+      "combat_hooks": [
+        "dragonkill"
+      ],
+      "integration_hooks": [
+        "header-graveyard"
+      ],
+      "php_8_4": "PASS for tested subset; overall BLOCKED",
+      "php_8_5": "PASS for tested subset; overall BLOCKED",
+      "mariadb_11_4": "PASS for tested subset; overall BLOCKED",
+      "mysql_8_4": "PASS for tested subset; overall BLOCKED",
+      "warnings_errors": "No PHP warnings/errors in the passing matrix tests; unexecuted paths unverified.",
+      "security_notes": "Strict drinks table and three default records preserved on reinstall, daily state, quota text/list and graveyard sobriety. Purchase and editor mutations remain unreviewed.",
+      "final_certification": "BLOCKED"
+    },
+    {
+      "module": "fairy",
+      "historical_version": "1.1",
+      "sources": [
+        "modules/fairy.php"
+      ],
+      "installation": "PASS",
+      "activation": "PASS",
+      "deactivation": "PASS",
+      "reactivation_and_cache_invalidation": "PASS",
+      "reinstall": "PASS: registration equality, configured setting preserved, leaves inactive before explicit reactivation",
+      "legacy_schema_upgrade": "NOT CERTIFIED: fresh-schema reinstall only; historical column migrations not exercised",
+      "declared_dependencies": {},
+      "hook_registrations": [
+        {
+          "location": "hprecalc",
+          "callback": "fairy_dohook",
+          "priority": 50,
+          "whenactive": ""
+        }
+      ],
+      "event_hooks": [
+        {
+          "type": "forest",
+          "condition": "return 100;"
+        }
+      ],
+      "settings": {
+        "carrydk": "Do max hitpoints gained carry across DKs?,bool|1",
+        "hptoaward": "How many HP are given by the fairy?,range,1,5,1|1",
+        "fftoaward": "How many FFs are given by the fairy?,range,1,5,1|1"
+      },
+      "user_preferences": {
+        "extrahps": "How many extra hitpoints has the user gained?,int"
+      },
+      "object_preferences": {},
+      "settings_preferences_result": "PASS for named defaults and raw round trips; NOT APPLICABLE for empty namespaces",
+      "object_preferences_result": "NOT APPLICABLE",
+      "direct_runmodule_route": "NOT APPLICABLE",
+      "direct_route_note": "Empty historical run function; event/core hook route remains in scope.",
+      "database_tables": [],
+      "database_behavior": "PASS: strict fresh install/reinstall and tested metadata writes; purchase/admin transactions not certified",
+      "daily_hooks": [],
+      "combat_hooks": [
+        "hprecalc"
+      ],
+      "integration_hooks": [],
+      "php_8_4": "PASS for tested subset; overall BLOCKED",
+      "php_8_5": "PASS for tested subset; overall BLOCKED",
+      "mariadb_11_4": "PASS for tested subset; overall BLOCKED",
+      "mysql_8_4": "PASS for tested subset; overall BLOCKED",
+      "warnings_errors": "No PHP warnings/errors in the passing matrix tests; unexecuted paths unverified.",
+      "security_notes": "Forest event collection/entrance and health recalculation; random reward/loss branches remain untested.",
+      "final_certification": "BLOCKED"
+    },
+    {
+      "module": "findgem",
+      "historical_version": "1.1",
+      "sources": [
+        "modules/findgem.php"
+      ],
+      "installation": "PASS",
+      "activation": "PASS",
+      "deactivation": "PASS",
+      "reactivation_and_cache_invalidation": "PASS",
+      "reinstall": "PASS: registration equality, configured setting preserved, leaves inactive before explicit reactivation",
+      "legacy_schema_upgrade": "NOT CERTIFIED: fresh-schema reinstall only; historical column migrations not exercised",
+      "declared_dependencies": {},
+      "hook_registrations": [],
+      "event_hooks": [
+        {
+          "type": "forest",
+          "condition": "return 100;"
+        },
+        {
+          "type": "travel",
+          "condition": "return 20;"
+        }
+      ],
+      "settings": {},
+      "user_preferences": {},
+      "object_preferences": {},
+      "settings_preferences_result": "PASS for named defaults and raw round trips; NOT APPLICABLE for empty namespaces",
+      "object_preferences_result": "NOT APPLICABLE",
+      "direct_runmodule_route": "NOT APPLICABLE",
+      "direct_route_note": "Empty historical run function; event/core hook route remains in scope.",
+      "database_tables": [],
+      "database_behavior": "PASS: strict fresh install/reinstall and tested metadata writes; purchase/admin transactions not certified",
+      "daily_hooks": [],
+      "combat_hooks": [],
+      "integration_hooks": [],
+      "php_8_4": "PASS for tested subset; overall BLOCKED",
+      "php_8_5": "PASS for tested subset; overall BLOCKED",
+      "mariadb_11_4": "PASS for tested subset; overall BLOCKED",
+      "mysql_8_4": "PASS for tested subset; overall BLOCKED",
+      "warnings_errors": "No PHP warnings/errors in the passing matrix tests; unexecuted paths unverified.",
+      "security_notes": "Forest/travel registration and active collection; real forest event grants one gem. Shared event route replay/method/CSRF certification remains open.",
+      "final_certification": "BLOCKED"
+    },
+    {
+      "module": "findgold",
+      "historical_version": "1.1",
+      "sources": [
+        "modules/findgold.php"
+      ],
+      "installation": "PASS",
+      "activation": "PASS",
+      "deactivation": "PASS",
+      "reactivation_and_cache_invalidation": "PASS",
+      "reinstall": "PASS: registration equality, configured setting preserved, leaves inactive before explicit reactivation",
+      "legacy_schema_upgrade": "NOT CERTIFIED: fresh-schema reinstall only; historical column migrations not exercised",
+      "declared_dependencies": {},
+      "hook_registrations": [],
+      "event_hooks": [
+        {
+          "type": "forest",
+          "condition": "return 100;"
+        },
+        {
+          "type": "travel",
+          "condition": "return 20;"
+        }
+      ],
+      "settings": {
+        "mingold": "Minimum gold to find (multiplied by level),range,0,50,1|10",
+        "maxgold": "Maximum gold to find (multiplied by level),range,20,150,1|50"
+      },
+      "user_preferences": {},
+      "object_preferences": {},
+      "settings_preferences_result": "PASS for named defaults and raw round trips; NOT APPLICABLE for empty namespaces",
+      "object_preferences_result": "NOT APPLICABLE",
+      "direct_runmodule_route": "NOT APPLICABLE",
+      "direct_route_note": "Empty historical run function; event/core hook route remains in scope.",
+      "database_tables": [],
+      "database_behavior": "PASS: strict fresh install/reinstall and tested metadata writes; purchase/admin transactions not certified",
+      "daily_hooks": [],
+      "combat_hooks": [],
+      "integration_hooks": [],
+      "php_8_4": "PASS for tested subset; overall BLOCKED",
+      "php_8_5": "PASS for tested subset; overall BLOCKED",
+      "mariadb_11_4": "PASS for tested subset; overall BLOCKED",
+      "mysql_8_4": "PASS for tested subset; overall BLOCKED",
+      "warnings_errors": "No PHP warnings/errors in the passing matrix tests; unexecuted paths unverified.",
+      "security_notes": "Forest/travel registration and active collection; real forest event grants gold. Shared event route replay/method/CSRF certification remains open.",
+      "final_certification": "BLOCKED"
+    },
+    {
+      "module": "foilwench",
+      "historical_version": "1.1",
+      "sources": [
+        "modules/foilwench.php"
+      ],
+      "installation": "PASS",
+      "activation": "PASS",
+      "deactivation": "PASS",
+      "reactivation_and_cache_invalidation": "PASS",
+      "reinstall": "PASS: registration equality, configured setting preserved, leaves inactive before explicit reactivation",
+      "legacy_schema_upgrade": "NOT CERTIFIED: fresh-schema reinstall only; historical column migrations not exercised",
+      "declared_dependencies": {},
+      "hook_registrations": [],
+      "event_hooks": [
+        {
+          "type": "forest",
+          "condition": "return 100;"
+        }
+      ],
+      "settings": {},
+      "user_preferences": {},
+      "object_preferences": {},
+      "settings_preferences_result": "PASS for named defaults and raw round trips; NOT APPLICABLE for empty namespaces",
+      "object_preferences_result": "NOT APPLICABLE",
+      "direct_runmodule_route": "NOT APPLICABLE",
+      "direct_route_note": "Empty historical run function; event/core hook route remains in scope.",
+      "database_tables": [],
+      "database_behavior": "PASS: strict fresh install/reinstall and tested metadata writes; purchase/admin transactions not certified",
+      "daily_hooks": [],
+      "combat_hooks": [],
+      "integration_hooks": [],
+      "php_8_4": "PASS for tested subset; overall BLOCKED",
+      "php_8_5": "PASS for tested subset; overall BLOCKED",
+      "mariadb_11_4": "PASS for tested subset; overall BLOCKED",
+      "mysql_8_4": "PASS for tested subset; overall BLOCKED",
+      "warnings_errors": "No PHP warnings/errors in the passing matrix tests; unexecuted paths unverified.",
+      "security_notes": "Forest event collection/entrance and gift branch spends a gem and increments specialty. GET mutation remains a blocker.",
+      "final_certification": "BLOCKED"
+    },
+    {
+      "module": "game_dice",
+      "historical_version": "1.1",
+      "sources": [
+        "modules/game_dice.php"
+      ],
+      "installation": "PASS",
+      "activation": "PASS",
+      "deactivation": "PASS",
+      "reactivation_and_cache_invalidation": "PASS",
+      "reinstall": "PASS: registration equality, configured setting preserved, leaves inactive before explicit reactivation",
+      "legacy_schema_upgrade": "NOT CERTIFIED: fresh-schema reinstall only; historical column migrations not exercised",
+      "declared_dependencies": {},
+      "hook_registrations": [
+        {
+          "location": "darkhorsegame",
+          "callback": "game_dice_dohook",
+          "priority": 50,
+          "whenactive": ""
+        }
+      ],
+      "event_hooks": [],
+      "settings": {},
+      "user_preferences": {},
+      "object_preferences": {},
+      "settings_preferences_result": "PASS for named defaults and raw round trips; NOT APPLICABLE for empty namespaces",
+      "object_preferences_result": "NOT APPLICABLE",
+      "direct_runmodule_route": "BLOCKED",
+      "direct_route_note": "Full action authorization, POST/CSRF, output and replay certification not complete.",
+      "database_tables": [],
+      "database_behavior": "PASS: strict fresh install/reinstall and tested metadata writes; purchase/admin transactions not certified",
+      "daily_hooks": [],
+      "combat_hooks": [],
+      "integration_hooks": [
+        "darkhorsegame"
+      ],
+      "php_8_4": "PASS for tested subset; overall BLOCKED",
+      "php_8_5": "PASS for tested subset; overall BLOCKED",
+      "mariadb_11_4": "PASS for tested subset; overall BLOCKED",
+      "mysql_8_4": "PASS for tested subset; overall BLOCKED",
+      "warnings_errors": "No PHP warnings/errors in the passing matrix tests; unexecuted paths unverified.",
+      "security_notes": "Module-defined darkhorsegame navigation with all game modules active; direct game execution, amount validation and replay remain open.",
+      "final_certification": "BLOCKED"
+    },
+    {
+      "module": "game_fivesix",
+      "historical_version": "1.7",
+      "sources": [
+        "modules/game_fivesix.php"
+      ],
+      "installation": "PASS",
+      "activation": "PASS",
+      "deactivation": "PASS",
+      "reactivation_and_cache_invalidation": "PASS",
+      "reinstall": "PASS: registration equality, configured setting preserved, leaves inactive before explicit reactivation",
+      "legacy_schema_upgrade": "NOT CERTIFIED: fresh-schema reinstall only; historical column migrations not exercised",
+      "declared_dependencies": {},
+      "hook_registrations": [
+        {
+          "location": "darkhorsegame",
+          "callback": "game_fivesix_dohook",
+          "priority": 50,
+          "whenactive": ""
+        },
+        {
+          "location": "newday",
+          "callback": "game_fivesix_dohook",
+          "priority": 50,
+          "whenactive": ""
+        }
+      ],
+      "event_hooks": [],
+      "settings": {
+        "cost": "Cost to play,int|5",
+        "dailyuses": "Plays per  day (0=unlimited),int|10",
+        "jackpot": "Gold in the pot,int|100",
+        "maxjackpot": "Maximum Payout,int|5000",
+        "lastwin5": "Last jackpot winner|Nobody...yet",
+        "lastpot5": "Last Jackpot Won,int|0",
+        "lastwin4": "Last winner of 4 sixes|Nobody...yet",
+        "lastpot4": "Last Jackpot Won,int|0",
+        "lastwin3": "Last winner of 3 sixes|Nobody...yet",
+        "lastpot3": "Last Jackpot Won,int|0"
+      },
+      "user_preferences": {
+        "playstoday": "Times played today,int|0"
+      },
+      "object_preferences": {},
+      "settings_preferences_result": "PASS for named defaults and raw round trips; NOT APPLICABLE for empty namespaces",
+      "object_preferences_result": "NOT APPLICABLE",
+      "direct_runmodule_route": "BLOCKED",
+      "direct_route_note": "Full action authorization, POST/CSRF, output and replay certification not complete.",
+      "database_tables": [],
+      "database_behavior": "PASS: strict fresh install/reinstall and tested metadata writes; purchase/admin transactions not certified",
+      "daily_hooks": [
+        "newday"
+      ],
+      "combat_hooks": [],
+      "integration_hooks": [
+        "darkhorsegame"
+      ],
+      "php_8_4": "PASS for tested subset; overall BLOCKED",
+      "php_8_5": "PASS for tested subset; overall BLOCKED",
+      "mariadb_11_4": "PASS for tested subset; overall BLOCKED",
+      "mysql_8_4": "PASS for tested subset; overall BLOCKED",
+      "warnings_errors": "No PHP warnings/errors in the passing matrix tests; unexecuted paths unverified.",
+      "security_notes": "Module-defined darkhorsegame navigation and combined New Day execution; direct play/jackpot persistence and mutation security remain open.",
+      "final_certification": "BLOCKED"
+    },
+    {
+      "module": "game_stones",
+      "historical_version": "1.1",
+      "sources": [
+        "modules/game_stones.php"
+      ],
+      "installation": "PASS",
+      "activation": "PASS",
+      "deactivation": "PASS",
+      "reactivation_and_cache_invalidation": "PASS",
+      "reinstall": "PASS: registration equality, configured setting preserved, leaves inactive before explicit reactivation",
+      "legacy_schema_upgrade": "NOT CERTIFIED: fresh-schema reinstall only; historical column migrations not exercised",
+      "declared_dependencies": {},
+      "hook_registrations": [
+        {
+          "location": "darkhorsegame",
+          "callback": "game_stones_dohook",
+          "priority": 50,
+          "whenactive": ""
+        }
+      ],
+      "event_hooks": [],
+      "settings": {},
+      "user_preferences": {},
+      "object_preferences": {},
+      "settings_preferences_result": "PASS for named defaults and raw round trips; NOT APPLICABLE for empty namespaces",
+      "object_preferences_result": "NOT APPLICABLE",
+      "direct_runmodule_route": "BLOCKED",
+      "direct_route_note": "Full action authorization, POST/CSRF, output and replay certification not complete.",
+      "database_tables": [],
+      "database_behavior": "PASS: strict fresh install/reinstall and tested metadata writes; purchase/admin transactions not certified",
+      "daily_hooks": [],
+      "combat_hooks": [],
+      "integration_hooks": [
+        "darkhorsegame"
+      ],
+      "php_8_4": "PASS for tested subset; overall BLOCKED",
+      "php_8_5": "PASS for tested subset; overall BLOCKED",
+      "mariadb_11_4": "PASS for tested subset; overall BLOCKED",
+      "mysql_8_4": "PASS for tested subset; overall BLOCKED",
+      "warnings_errors": "No PHP warnings/errors in the passing matrix tests; unexecuted paths unverified.",
+      "security_notes": "Module-defined darkhorsegame navigation; direct game play, unvalidated unserialize of specialmisc, bets and replay remain open.",
+      "final_certification": "BLOCKED"
+    },
+    {
+      "module": "glowingstream",
+      "historical_version": "1.1",
+      "sources": [
+        "modules/glowingstream.php"
+      ],
+      "installation": "PASS",
+      "activation": "PASS",
+      "deactivation": "PASS",
+      "reactivation_and_cache_invalidation": "PASS",
+      "reinstall": "PASS: registration equality, configured setting preserved, leaves inactive before explicit reactivation",
+      "legacy_schema_upgrade": "NOT CERTIFIED: fresh-schema reinstall only; historical column migrations not exercised",
+      "declared_dependencies": {},
+      "hook_registrations": [],
+      "event_hooks": [
+        {
+          "type": "forest",
+          "condition": "return 100;"
+        },
+        {
+          "type": "travel",
+          "condition": "return 100;"
+        }
+      ],
+      "settings": {},
+      "user_preferences": {},
+      "object_preferences": {},
+      "settings_preferences_result": "PASS for named defaults and raw round trips; NOT APPLICABLE for empty namespaces",
+      "object_preferences_result": "NOT APPLICABLE",
+      "direct_runmodule_route": "NOT APPLICABLE",
+      "direct_route_note": "Empty historical run function; event/core hook route remains in scope.",
+      "database_tables": [],
+      "database_behavior": "PASS: strict fresh install/reinstall and tested metadata writes; purchase/admin transactions not certified",
+      "daily_hooks": [],
+      "combat_hooks": [],
+      "integration_hooks": [],
+      "php_8_4": "PASS for tested subset; overall BLOCKED",
+      "php_8_5": "PASS for tested subset; overall BLOCKED",
+      "mariadb_11_4": "PASS for tested subset; overall BLOCKED",
+      "mysql_8_4": "PASS for tested subset; overall BLOCKED",
+      "warnings_errors": "No PHP warnings/errors in the passing matrix tests; unexecuted paths unverified.",
+      "security_notes": "Forest/travel registration and active collection; forest entrance. Drink outcome branches remain untested.",
+      "final_certification": "BLOCKED"
+    },
+    {
+      "module": "goldmine",
+      "historical_version": "1.0",
+      "sources": [
+        "modules/goldmine.php"
+      ],
+      "installation": "PASS",
+      "activation": "PASS",
+      "deactivation": "PASS",
+      "reactivation_and_cache_invalidation": "PASS",
+      "reinstall": "PASS: registration equality, configured setting preserved, leaves inactive before explicit reactivation",
+      "legacy_schema_upgrade": "NOT CERTIFIED: fresh-schema reinstall only; historical column migrations not exercised",
+      "declared_dependencies": {},
+      "hook_registrations": [],
+      "event_hooks": [
+        {
+          "type": "forest",
+          "condition": "return 100;"
+        }
+      ],
+      "settings": {
+        "alwaystether": "Chance the player will tether their mount automatically,range,0,100,1|10",
+        "percentgemloss": "Percentage of gems lost on death in mine,range,0,100,1|0",
+        "percentgoldloss": "Percentage of gold lost on death in mine,range,0,100,1|0"
+      },
+      "user_preferences": {},
+      "object_preferences": {
+        "mounts": {
+          "entermine": "Chance of entering mine,range,0,100,1|0",
+          "dieinmine": "Chance of dying in the mine,range,0,100,1|0",
+          "saveplayer": "Chance of saving player in mine,range,0,100,1|0",
+          "tethermsg": "Message when mount is tethered|",
+          "deathmsg": "Message when mount dies|",
+          "savemsg": "Message when mount saves player|"
+        }
+      },
+      "settings_preferences_result": "PASS for named defaults and raw round trips; NOT APPLICABLE for empty namespaces",
+      "object_preferences_result": "PASS for mounts.findtavern values 0 and 1",
+      "direct_runmodule_route": "NOT APPLICABLE",
+      "direct_route_note": "Empty historical run function; event/core hook route remains in scope.",
+      "database_tables": [],
+      "database_behavior": "PASS: strict fresh install/reinstall and tested metadata writes; purchase/admin transactions not certified",
+      "daily_hooks": [],
+      "combat_hooks": [],
+      "integration_hooks": [],
+      "php_8_4": "PASS for tested subset; overall BLOCKED",
+      "php_8_5": "PASS for tested subset; overall BLOCKED",
+      "mariadb_11_4": "PASS for tested subset; overall BLOCKED",
+      "mysql_8_4": "PASS for tested subset; overall BLOCKED",
+      "warnings_errors": "No PHP warnings/errors in the passing matrix tests; unexecuted paths unverified.",
+      "security_notes": "Forest event collection/entrance and decline/exit; mining random branches and economic mutation security remain open.",
+      "final_certification": "BLOCKED"
+    },
+    {
+      "module": "lovers",
+      "historical_version": "1.0",
+      "sources": [
+        "modules/lovers.php"
+      ],
+      "installation": "PASS",
+      "activation": "PASS",
+      "deactivation": "PASS",
+      "reactivation_and_cache_invalidation": "PASS",
+      "reinstall": "PASS: registration equality, configured setting preserved, leaves inactive before explicit reactivation",
+      "legacy_schema_upgrade": "NOT CERTIFIED: fresh-schema reinstall only; historical column migrations not exercised",
+      "declared_dependencies": {},
+      "hook_registrations": [
+        {
+          "location": "newday",
+          "callback": "lovers_dohook",
+          "priority": 50,
+          "whenactive": ""
+        },
+        {
+          "location": "inn",
+          "callback": "lovers_dohook",
+          "priority": 50,
+          "whenactive": ""
+        }
+      ],
+      "event_hooks": [],
+      "settings": {},
+      "user_preferences": {
+        "seenlover": "Visited Lover Today?,bool|0"
+      },
+      "object_preferences": {},
+      "settings_preferences_result": "PASS for named defaults and raw round trips; NOT APPLICABLE for empty namespaces",
+      "object_preferences_result": "NOT APPLICABLE",
+      "direct_runmodule_route": "BLOCKED",
+      "direct_route_note": "PASS for real authenticated issued Inn-to-module-to-Inn HTTP navigation with all 24 active. Full action authorization, POST/CSRF, output and replay certification remains BLOCKED.",
+      "database_tables": [],
+      "database_behavior": "PASS: strict fresh install/reinstall and tested metadata writes; purchase/admin transactions not certified",
+      "daily_hooks": [
+        "newday"
+      ],
+      "combat_hooks": [],
+      "integration_hooks": [
+        "inn"
+      ],
+      "php_8_4": "PASS for tested subset; overall BLOCKED",
+      "php_8_5": "PASS for tested subset; overall BLOCKED",
+      "mariadb_11_4": "PASS for tested subset; overall BLOCKED",
+      "mysql_8_4": "PASS for tested subset; overall BLOCKED",
+      "warnings_errors": "No PHP warnings/errors in the passing matrix tests; unexecuted paths unverified.",
+      "security_notes": "Inn navigation and daily preference reset; conversation/effect mutations and output audit remain open. Issued direct route and return-to-Inn HTTP smoke passes on both targets.",
+      "final_certification": "BLOCKED"
+    },
+    {
+      "module": "outhouse",
+      "historical_version": "2.0",
+      "sources": [
+        "modules/outhouse.php"
+      ],
+      "installation": "PASS",
+      "activation": "PASS",
+      "deactivation": "PASS",
+      "reactivation_and_cache_invalidation": "PASS",
+      "reinstall": "PASS: registration equality, configured setting preserved, leaves inactive before explicit reactivation",
+      "legacy_schema_upgrade": "NOT CERTIFIED: fresh-schema reinstall only; historical column migrations not exercised",
+      "declared_dependencies": {},
+      "hook_registrations": [
+        {
+          "location": "forest",
+          "callback": "outhouse_dohook",
+          "priority": 50,
+          "whenactive": ""
+        },
+        {
+          "location": "newday",
+          "callback": "outhouse_dohook",
+          "priority": 50,
+          "whenactive": ""
+        }
+      ],
+      "event_hooks": [],
+      "settings": {
+        "cost": "Cost to use the private outhouse,range,1,20,1|5",
+        "goldinhand": "How much gold must user have in hand before they can lose money,range,0,10,1|1",
+        "giveback": "How much gold to give back if the player is rewarded for washing their hands,range,0,20,1|3",
+        "takeback": "How much gold to take if the user is punished for not washing their hands,range,0,20,1|1",
+        "goodmusthit": "Percent of time you get your money back if you wash,range,0,100,1|60",
+        "badmusthit": "Percent of time you lose money if you don't wash,range,0,100,1|50",
+        "givegempercent": "Percent chance of getting a gem if you wash,range,0,100,1|25",
+        "giveturnchance": "Percent chance of a free forest fight if you wash,range,0,100,1|0"
+      },
+      "user_preferences": {
+        "usedouthouse": "Used Outhouse Today,bool|0"
+      },
+      "object_preferences": {},
+      "settings_preferences_result": "PASS for named defaults and raw round trips; NOT APPLICABLE for empty namespaces",
+      "object_preferences_result": "NOT APPLICABLE",
+      "direct_runmodule_route": "BLOCKED",
+      "direct_route_note": "Full action authorization, POST/CSRF, output and replay certification not complete.",
+      "database_tables": [],
+      "database_behavior": "PASS: strict fresh install/reinstall and tested metadata writes; purchase/admin transactions not certified",
+      "daily_hooks": [
+        "newday"
+      ],
+      "combat_hooks": [],
+      "integration_hooks": [
+        "forest"
+      ],
+      "php_8_4": "PASS for tested subset; overall BLOCKED",
+      "php_8_5": "PASS for tested subset; overall BLOCKED",
+      "mariadb_11_4": "PASS for tested subset; overall BLOCKED",
+      "mysql_8_4": "PASS for tested subset; overall BLOCKED",
+      "warnings_errors": "No PHP warnings/errors in the passing matrix tests; unexecuted paths unverified.",
+      "security_notes": "Forest navigation and New Day preference reset; paid/free use and reward/loss actions remain untested.",
+      "final_certification": "BLOCKED"
+    },
+    {
+      "module": "racedwarf",
+      "historical_version": "1.1",
+      "sources": [
+        "modules/racedwarf.php"
+      ],
+      "installation": "PASS",
+      "activation": "PASS",
+      "deactivation": "PASS",
+      "reactivation_and_cache_invalidation": "PASS",
+      "reinstall": "PASS: registration equality, configured setting preserved, leaves inactive before explicit reactivation",
+      "legacy_schema_upgrade": "NOT CERTIFIED: fresh-schema reinstall only; historical column migrations not exercised",
+      "declared_dependencies": {},
+      "hook_registrations": [
+        {
+          "location": "chooserace",
+          "callback": "racedwarf_dohook",
+          "priority": 50,
+          "whenactive": ""
+        },
+        {
+          "location": "setrace",
+          "callback": "racedwarf_dohook",
+          "priority": 50,
+          "whenactive": ""
+        },
+        {
+          "location": "creatureencounter",
+          "callback": "racedwarf_dohook",
+          "priority": 50,
+          "whenactive": ""
+        },
+        {
+          "location": "villagetext",
+          "callback": "racedwarf_dohook",
+          "priority": 50,
+          "whenactive": ""
+        },
+        {
+          "location": "travel",
+          "callback": "racedwarf_dohook",
+          "priority": 50,
+          "whenactive": ""
+        },
+        {
+          "location": "village",
+          "callback": "racedwarf_dohook",
+          "priority": 50,
+          "whenactive": ""
+        },
+        {
+          "location": "validlocation",
+          "callback": "racedwarf_dohook",
+          "priority": 50,
+          "whenactive": ""
+        },
+        {
+          "location": "validforestloc",
+          "callback": "racedwarf_dohook",
+          "priority": 50,
+          "whenactive": ""
+        },
+        {
+          "location": "moderate",
+          "callback": "racedwarf_dohook",
+          "priority": 50,
+          "whenactive": ""
+        },
+        {
+          "location": "drinks-text",
+          "callback": "racedwarf_dohook",
+          "priority": 50,
+          "whenactive": ""
+        },
+        {
+          "location": "changesetting",
+          "callback": "racedwarf_dohook",
+          "priority": 50,
+          "whenactive": ""
+        },
+        {
+          "location": "drinks-check",
+          "callback": "racedwarf_dohook",
+          "priority": 50,
+          "whenactive": ""
+        },
+        {
+          "location": "raceminedeath",
+          "callback": "racedwarf_dohook",
+          "priority": 50,
+          "whenactive": ""
+        },
+        {
+          "location": "racenames",
+          "callback": "racedwarf_dohook",
+          "priority": 50,
+          "whenactive": ""
+        },
+        {
+          "location": "camplocs",
+          "callback": "racedwarf_dohook",
+          "priority": 50,
+          "whenactive": ""
+        },
+        {
+          "location": "mercenarycamptext",
+          "callback": "racedwarf_dohook",
+          "priority": 50,
+          "whenactive": ""
+        }
+      ],
+      "event_hooks": [],
+      "settings": {
+        "villagename": "Name for the dwarven village|Qexelcrag",
+        "minedeathchance": "Chance for Dwarves to die in the mine,range,0,100,1|5"
+      },
+      "user_preferences": {},
+      "object_preferences": {
+        "drinks": {
+          "servedkeg": "Is this drink served in the dwarven inn?,bool|0"
+        }
+      },
+      "settings_preferences_result": "PASS for named defaults and raw round trips; NOT APPLICABLE for empty namespaces",
+      "object_preferences_result": "PASS for mounts.findtavern values 0 and 1",
+      "direct_runmodule_route": "BLOCKED",
+      "direct_route_note": "Full action authorization, POST/CSRF, output and replay certification not complete.",
+      "database_tables": [],
+      "database_behavior": "PASS: strict fresh install/reinstall and tested metadata writes; purchase/admin transactions not certified",
+      "daily_hooks": [],
+      "combat_hooks": [
+        "creatureencounter"
+      ],
+      "integration_hooks": [
+        "villagetext",
+        "village",
+        "validforestloc"
+      ],
+      "php_8_4": "PASS for tested subset; overall BLOCKED",
+      "php_8_5": "PASS for tested subset; overall BLOCKED",
+      "mariadb_11_4": "PASS for tested subset; overall BLOCKED",
+      "mysql_8_4": "PASS for tested subset; overall BLOCKED",
+      "warnings_errors": "No PHP warnings/errors in the passing matrix tests; unexecuted paths unverified.",
+      "security_notes": "Race naming/setrace, location changes with raw quote/backslash/UTF-8 values and no-Cities location hooks. Creature gold multiplier. Full selection HTTP and combat/location route security remain open. Optional Cities is outside the bundled set. Chooserace hook text/navigation passes.",
+      "final_certification": "BLOCKED"
+    },
+    {
+      "module": "raceelf",
+      "historical_version": "1.0",
+      "sources": [
+        "modules/raceelf.php"
+      ],
+      "installation": "PASS",
+      "activation": "PASS",
+      "deactivation": "PASS",
+      "reactivation_and_cache_invalidation": "PASS",
+      "reinstall": "PASS: registration equality, configured setting preserved, leaves inactive before explicit reactivation",
+      "legacy_schema_upgrade": "NOT CERTIFIED: fresh-schema reinstall only; historical column migrations not exercised",
+      "declared_dependencies": {},
+      "hook_registrations": [
+        {
+          "location": "chooserace",
+          "callback": "raceelf_dohook",
+          "priority": 50,
+          "whenactive": ""
+        },
+        {
+          "location": "setrace",
+          "callback": "raceelf_dohook",
+          "priority": 50,
+          "whenactive": ""
+        },
+        {
+          "location": "newday",
+          "callback": "raceelf_dohook",
+          "priority": 50,
+          "whenactive": ""
+        },
+        {
+          "location": "villagetext",
+          "callback": "raceelf_dohook",
+          "priority": 50,
+          "whenactive": ""
+        },
+        {
+          "location": "travel",
+          "callback": "raceelf_dohook",
+          "priority": 50,
+          "whenactive": ""
+        },
+        {
+          "location": "validlocation",
+          "callback": "raceelf_dohook",
+          "priority": 50,
+          "whenactive": ""
+        },
+        {
+          "location": "validforestloc",
+          "callback": "raceelf_dohook",
+          "priority": 50,
+          "whenactive": ""
+        },
+        {
+          "location": "moderate",
+          "callback": "raceelf_dohook",
+          "priority": 50,
+          "whenactive": ""
+        },
+        {
+          "location": "changesetting",
+          "callback": "raceelf_dohook",
+          "priority": 50,
+          "whenactive": ""
+        },
+        {
+          "location": "raceminedeath",
+          "callback": "raceelf_dohook",
+          "priority": 50,
+          "whenactive": ""
+        },
+        {
+          "location": "pvpadjust",
+          "callback": "raceelf_dohook",
+          "priority": 50,
+          "whenactive": ""
+        },
+        {
+          "location": "adjuststats",
+          "callback": "raceelf_dohook",
+          "priority": 50,
+          "whenactive": ""
+        },
+        {
+          "location": "racenames",
+          "callback": "raceelf_dohook",
+          "priority": 50,
+          "whenactive": ""
+        },
+        {
+          "location": "weaponstext",
+          "callback": "raceelf_dohook",
+          "priority": 50,
+          "whenactive": ""
+        }
+      ],
+      "event_hooks": [],
+      "settings": {
+        "villagename": "Name for the elven village|Glorfindal",
+        "minedeathchance": "Chance for Elves to die in the mine,range,0,100,1|90"
+      },
+      "user_preferences": {},
+      "object_preferences": {},
+      "settings_preferences_result": "PASS for named defaults and raw round trips; NOT APPLICABLE for empty namespaces",
+      "object_preferences_result": "NOT APPLICABLE",
+      "direct_runmodule_route": "NOT APPLICABLE",
+      "direct_route_note": "Empty historical run function; event/core hook route remains in scope.",
+      "database_tables": [],
+      "database_behavior": "PASS: strict fresh install/reinstall and tested metadata writes; purchase/admin transactions not certified",
+      "daily_hooks": [
+        "newday"
+      ],
+      "combat_hooks": [
+        "pvpadjust",
+        "adjuststats"
+      ],
+      "integration_hooks": [
+        "villagetext",
+        "validforestloc"
+      ],
+      "php_8_4": "PASS for tested subset; overall BLOCKED",
+      "php_8_5": "PASS for tested subset; overall BLOCKED",
+      "mariadb_11_4": "PASS for tested subset; overall BLOCKED",
+      "mysql_8_4": "PASS for tested subset; overall BLOCKED",
+      "warnings_errors": "No PHP warnings/errors in the passing matrix tests; unexecuted paths unverified.",
+      "security_notes": "Race naming/setrace, location changes with raw quote/backslash/UTF-8 values and no-Cities location hooks. New Day defense formula, PvP/training buff flags and zero-stat guard. Full selection HTTP and combat/location route security remain open. Optional Cities is outside the bundled set. Chooserace hook text/navigation passes. Actual pvpadjust and adjuststats hooks preserve the level-10 +3 modifier.",
+      "final_certification": "BLOCKED"
+    },
+    {
+      "module": "racehuman",
+      "historical_version": "1.0",
+      "sources": [
+        "modules/racehuman.php"
+      ],
+      "installation": "PASS",
+      "activation": "PASS",
+      "deactivation": "PASS",
+      "reactivation_and_cache_invalidation": "PASS",
+      "reinstall": "PASS: registration equality, configured setting preserved, leaves inactive before explicit reactivation",
+      "legacy_schema_upgrade": "NOT CERTIFIED: fresh-schema reinstall only; historical column migrations not exercised",
+      "declared_dependencies": {},
+      "hook_registrations": [
+        {
+          "location": "chooserace",
+          "callback": "racehuman_dohook",
+          "priority": 50,
+          "whenactive": ""
+        },
+        {
+          "location": "setrace",
+          "callback": "racehuman_dohook",
+          "priority": 50,
+          "whenactive": ""
+        },
+        {
+          "location": "newday",
+          "callback": "racehuman_dohook",
+          "priority": 50,
+          "whenactive": ""
+        },
+        {
+          "location": "villagetext",
+          "callback": "racehuman_dohook",
+          "priority": 50,
+          "whenactive": ""
+        },
+        {
+          "location": "stabletext",
+          "callback": "racehuman_dohook",
+          "priority": 50,
+          "whenactive": ""
+        },
+        {
+          "location": "travel",
+          "callback": "racehuman_dohook",
+          "priority": 50,
+          "whenactive": ""
+        },
+        {
+          "location": "validlocation",
+          "callback": "racehuman_dohook",
+          "priority": 50,
+          "whenactive": ""
+        },
+        {
+          "location": "validforestloc",
+          "callback": "racehuman_dohook",
+          "priority": 50,
+          "whenactive": ""
+        },
+        {
+          "location": "moderate",
+          "callback": "racehuman_dohook",
+          "priority": 50,
+          "whenactive": ""
+        },
+        {
+          "location": "changesetting",
+          "callback": "racehuman_dohook",
+          "priority": 50,
+          "whenactive": ""
+        },
+        {
+          "location": "raceminedeath",
+          "callback": "racehuman_dohook",
+          "priority": 50,
+          "whenactive": ""
+        },
+        {
+          "location": "stablelocs",
+          "callback": "racehuman_dohook",
+          "priority": 50,
+          "whenactive": ""
+        },
+        {
+          "location": "racenames",
+          "callback": "racehuman_dohook",
+          "priority": 50,
+          "whenactive": ""
+        }
+      ],
+      "event_hooks": [],
+      "settings": {
+        "villagename": "Name for the human village|Romar",
+        "minedeathchance": "Chance for Humans to die in the mine,range,0,100,1|90",
+        "bonus": "How many extra forest fights for humans?,range,1,3,1|2"
+      },
+      "user_preferences": {},
+      "object_preferences": {},
+      "settings_preferences_result": "PASS for named defaults and raw round trips; NOT APPLICABLE for empty namespaces",
+      "object_preferences_result": "NOT APPLICABLE",
+      "direct_runmodule_route": "NOT APPLICABLE",
+      "direct_route_note": "Empty historical run function; event/core hook route remains in scope.",
+      "database_tables": [],
+      "database_behavior": "PASS: strict fresh install/reinstall and tested metadata writes; purchase/admin transactions not certified",
+      "daily_hooks": [
+        "newday"
+      ],
+      "combat_hooks": [],
+      "integration_hooks": [
+        "villagetext",
+        "validforestloc"
+      ],
+      "php_8_4": "PASS for tested subset; overall BLOCKED",
+      "php_8_5": "PASS for tested subset; overall BLOCKED",
+      "mariadb_11_4": "PASS for tested subset; overall BLOCKED",
+      "mysql_8_4": "PASS for tested subset; overall BLOCKED",
+      "warnings_errors": "No PHP warnings/errors in the passing matrix tests; unexecuted paths unverified.",
+      "security_notes": "Race naming/setrace, location changes with raw quote/backslash/UTF-8 values and no-Cities location hooks. New Day turn bonus and historical singular/plural text. Full selection HTTP and combat/location route security remain open. Optional Cities is outside the bundled set. Chooserace hook text/navigation passes.",
+      "final_certification": "BLOCKED"
+    },
+    {
+      "module": "racetroll",
+      "historical_version": "1.0",
+      "sources": [
+        "modules/racetroll.php"
+      ],
+      "installation": "PASS",
+      "activation": "PASS",
+      "deactivation": "PASS",
+      "reactivation_and_cache_invalidation": "PASS",
+      "reinstall": "PASS: registration equality, configured setting preserved, leaves inactive before explicit reactivation",
+      "legacy_schema_upgrade": "NOT CERTIFIED: fresh-schema reinstall only; historical column migrations not exercised",
+      "declared_dependencies": {},
+      "hook_registrations": [
+        {
+          "location": "chooserace",
+          "callback": "racetroll_dohook",
+          "priority": 50,
+          "whenactive": ""
+        },
+        {
+          "location": "setrace",
+          "callback": "racetroll_dohook",
+          "priority": 50,
+          "whenactive": ""
+        },
+        {
+          "location": "newday",
+          "callback": "racetroll_dohook",
+          "priority": 50,
+          "whenactive": ""
+        },
+        {
+          "location": "villagetext",
+          "callback": "racetroll_dohook",
+          "priority": 50,
+          "whenactive": ""
+        },
+        {
+          "location": "travel",
+          "callback": "racetroll_dohook",
+          "priority": 50,
+          "whenactive": ""
+        },
+        {
+          "location": "validlocation",
+          "callback": "racetroll_dohook",
+          "priority": 50,
+          "whenactive": ""
+        },
+        {
+          "location": "validforestloc",
+          "callback": "racetroll_dohook",
+          "priority": 50,
+          "whenactive": ""
+        },
+        {
+          "location": "moderate",
+          "callback": "racetroll_dohook",
+          "priority": 50,
+          "whenactive": ""
+        },
+        {
+          "location": "changesetting",
+          "callback": "racetroll_dohook",
+          "priority": 50,
+          "whenactive": ""
+        },
+        {
+          "location": "raceminedeath",
+          "callback": "racetroll_dohook",
+          "priority": 50,
+          "whenactive": ""
+        },
+        {
+          "location": "pvpadjust",
+          "callback": "racetroll_dohook",
+          "priority": 50,
+          "whenactive": ""
+        },
+        {
+          "location": "adjuststats",
+          "callback": "racetroll_dohook",
+          "priority": 50,
+          "whenactive": ""
+        },
+        {
+          "location": "racenames",
+          "callback": "racetroll_dohook",
+          "priority": 50,
+          "whenactive": ""
+        }
+      ],
+      "event_hooks": [],
+      "settings": {
+        "villagename": "Name for the troll village|Glukmoore",
+        "minedeathchance": "Chance for Trolls to die in the mine,range,0,100,1|90"
+      },
+      "user_preferences": {},
+      "object_preferences": {},
+      "settings_preferences_result": "PASS for named defaults and raw round trips; NOT APPLICABLE for empty namespaces",
+      "object_preferences_result": "NOT APPLICABLE",
+      "direct_runmodule_route": "NOT APPLICABLE",
+      "direct_route_note": "Empty historical run function; event/core hook route remains in scope.",
+      "database_tables": [],
+      "database_behavior": "PASS: strict fresh install/reinstall and tested metadata writes; purchase/admin transactions not certified",
+      "daily_hooks": [
+        "newday"
+      ],
+      "combat_hooks": [
+        "pvpadjust",
+        "adjuststats"
+      ],
+      "integration_hooks": [
+        "villagetext",
+        "validforestloc"
+      ],
+      "php_8_4": "PASS for tested subset; overall BLOCKED",
+      "php_8_5": "PASS for tested subset; overall BLOCKED",
+      "mariadb_11_4": "PASS for tested subset; overall BLOCKED",
+      "mysql_8_4": "PASS for tested subset; overall BLOCKED",
+      "warnings_errors": "No PHP warnings/errors in the passing matrix tests; unexecuted paths unverified.",
+      "security_notes": "Race naming/setrace, location changes with raw quote/backslash/UTF-8 values and no-Cities location hooks. New Day attack formula, PvP/training buff flags and zero-stat guard. Full selection HTTP and combat/location route security remain open. Optional Cities is outside the bundled set. Chooserace hook text/navigation passes. Actual pvpadjust and adjuststats hooks preserve the level-10 +3 modifier.",
+      "final_certification": "BLOCKED"
+    },
+    {
+      "module": "sethsong",
+      "historical_version": "1.1",
+      "sources": [
+        "modules/sethsong.php"
+      ],
+      "installation": "PASS",
+      "activation": "PASS",
+      "deactivation": "PASS",
+      "reactivation_and_cache_invalidation": "PASS",
+      "reinstall": "PASS: registration equality, configured setting preserved, leaves inactive before explicit reactivation",
+      "legacy_schema_upgrade": "NOT CERTIFIED: fresh-schema reinstall only; historical column migrations not exercised",
+      "declared_dependencies": {},
+      "hook_registrations": [
+        {
+          "location": "inn",
+          "callback": "sethsong_dohook",
+          "priority": 50,
+          "whenactive": ""
+        },
+        {
+          "location": "newday",
+          "callback": "sethsong_dohook",
+          "priority": 50,
+          "whenactive": ""
+        }
+      ],
+      "event_hooks": [],
+      "settings": {
+        "bhploss": "Percent of hitpoints that can be lost when Seth burps,range,2,100,2|10",
+        "shploss": "Percent of hitpoints that can be lost when a string breaks,range,2,100,2|20",
+        "hpgain": "Percent of max hitpoints that can be gained,range,2,100,2|20",
+        "maxgems": "Most gems that can be found,int|1",
+        "mingems": "Fewest gems that can be found,int|1",
+        "mingold": "Minimum amount gold you can find,int|10",
+        "maxgold": "Maximum amount gold you can find,int|50",
+        "goldloss": "Amount of gold that can be lost,int|5",
+        "visits": "How many times per day can a player listen to Seth,int|1"
+      },
+      "user_preferences": {
+        "been": "How many times have they listened Seth today,int|0"
+      },
+      "object_preferences": {},
+      "settings_preferences_result": "PASS for named defaults and raw round trips; NOT APPLICABLE for empty namespaces",
+      "object_preferences_result": "NOT APPLICABLE",
+      "direct_runmodule_route": "BLOCKED",
+      "direct_route_note": "PASS for real authenticated issued Inn-to-module-to-Inn HTTP navigation with all 24 active. Full action authorization, POST/CSRF, output and replay certification remains BLOCKED.",
+      "database_tables": [],
+      "database_behavior": "PASS: strict fresh install/reinstall and tested metadata writes; purchase/admin transactions not certified",
+      "daily_hooks": [
+        "newday"
+      ],
+      "combat_hooks": [],
+      "integration_hooks": [
+        "inn"
+      ],
+      "php_8_4": "PASS for tested subset; overall BLOCKED",
+      "php_8_5": "PASS for tested subset; overall BLOCKED",
+      "mariadb_11_4": "PASS for tested subset; overall BLOCKED",
+      "mysql_8_4": "PASS for tested subset; overall BLOCKED",
+      "warnings_errors": "No PHP warnings/errors in the passing matrix tests; unexecuted paths unverified.",
+      "security_notes": "Inn navigation and daily preference reset; conversation/random-song outcomes and mutation security remain open. Issued direct route and return-to-Inn HTTP smoke passes on both targets.",
+      "final_certification": "BLOCKED"
+    },
+    {
+      "module": "specialtydarkarts",
+      "historical_version": "1.1",
+      "sources": [
+        "modules/specialtydarkarts.php"
+      ],
+      "installation": "PASS",
+      "activation": "PASS",
+      "deactivation": "PASS",
+      "reactivation_and_cache_invalidation": "PASS",
+      "reinstall": "PASS: registration equality, configured setting preserved, leaves inactive before explicit reactivation",
+      "legacy_schema_upgrade": "NOT CERTIFIED: fresh-schema reinstall only; historical column migrations not exercised",
+      "declared_dependencies": {},
+      "hook_registrations": [
+        {
+          "location": "choose-specialty",
+          "callback": "specialtydarkarts_dohook",
+          "priority": 50,
+          "whenactive": ""
+        },
+        {
+          "location": "set-specialty",
+          "callback": "specialtydarkarts_dohook",
+          "priority": 50,
+          "whenactive": ""
+        },
+        {
+          "location": "fightnav-specialties",
+          "callback": "specialtydarkarts_dohook",
+          "priority": 50,
+          "whenactive": ""
+        },
+        {
+          "location": "apply-specialties",
+          "callback": "specialtydarkarts_dohook",
+          "priority": 50,
+          "whenactive": ""
+        },
+        {
+          "location": "newday",
+          "callback": "specialtydarkarts_dohook",
+          "priority": 50,
+          "whenactive": ""
+        },
+        {
+          "location": "incrementspecialty",
+          "callback": "specialtydarkarts_dohook",
+          "priority": 50,
+          "whenactive": ""
+        },
+        {
+          "location": "specialtynames",
+          "callback": "specialtydarkarts_dohook",
+          "priority": 50,
+          "whenactive": ""
+        },
+        {
+          "location": "specialtymodules",
+          "callback": "specialtydarkarts_dohook",
+          "priority": 50,
+          "whenactive": ""
+        },
+        {
+          "location": "specialtycolor",
+          "callback": "specialtydarkarts_dohook",
+          "priority": 50,
+          "whenactive": ""
+        },
+        {
+          "location": "dragonkill",
+          "callback": "specialtydarkarts_dohook",
+          "priority": 50,
+          "whenactive": ""
+        }
+      ],
+      "event_hooks": [],
+      "settings": {},
+      "user_preferences": {
+        "skill": "Skill points in Dark Arts,int|0",
+        "uses": "Uses of Dark Arts allowed,int|0"
+      },
+      "object_preferences": {},
+      "settings_preferences_result": "PASS for named defaults and raw round trips; NOT APPLICABLE for empty namespaces",
+      "object_preferences_result": "NOT APPLICABLE",
+      "direct_runmodule_route": "NOT APPLICABLE",
+      "direct_route_note": "Empty historical run function; event/core hook route remains in scope.",
+      "database_tables": [],
+      "database_behavior": "PASS: strict fresh install/reinstall and tested metadata writes; purchase/admin transactions not certified",
+      "daily_hooks": [
+        "newday"
+      ],
+      "combat_hooks": [
+        "choose-specialty",
+        "set-specialty",
+        "fightnav-specialties",
+        "apply-specialties",
+        "incrementspecialty",
+        "specialtynames",
+        "specialtymodules",
+        "specialtycolor",
+        "dragonkill"
+      ],
+      "integration_hooks": [],
+      "php_8_4": "PASS for tested subset; overall BLOCKED",
+      "php_8_5": "PASS for tested subset; overall BLOCKED",
+      "mariadb_11_4": "PASS for tested subset; overall BLOCKED",
+      "mysql_8_4": "PASS for tested subset; overall BLOCKED",
+      "warnings_errors": "No PHP warnings/errors in the passing matrix tests; unexecuted paths unverified.",
+      "security_notes": "Specialty identity, skill increment, New Day uses, fight navigation, malformed/negative/unsupported level rejection and Dragon Kill reset. Full combat and selection route method/CSRF/replay certification remain open. Actual choice navigation and all four valid skill levels (1, 2, 3, 5) execute and spend the expected uses; Dark Arts companion construction also passes.",
+      "final_certification": "BLOCKED"
+    },
+    {
+      "module": "specialtymysticpower",
+      "historical_version": "1.0",
+      "sources": [
+        "modules/specialtymysticpower.php"
+      ],
+      "installation": "PASS",
+      "activation": "PASS",
+      "deactivation": "PASS",
+      "reactivation_and_cache_invalidation": "PASS",
+      "reinstall": "PASS: registration equality, configured setting preserved, leaves inactive before explicit reactivation",
+      "legacy_schema_upgrade": "NOT CERTIFIED: fresh-schema reinstall only; historical column migrations not exercised",
+      "declared_dependencies": {},
+      "hook_registrations": [
+        {
+          "location": "choose-specialty",
+          "callback": "specialtymysticpower_dohook",
+          "priority": 50,
+          "whenactive": ""
+        },
+        {
+          "location": "set-specialty",
+          "callback": "specialtymysticpower_dohook",
+          "priority": 50,
+          "whenactive": ""
+        },
+        {
+          "location": "fightnav-specialties",
+          "callback": "specialtymysticpower_dohook",
+          "priority": 50,
+          "whenactive": ""
+        },
+        {
+          "location": "apply-specialties",
+          "callback": "specialtymysticpower_dohook",
+          "priority": 50,
+          "whenactive": ""
+        },
+        {
+          "location": "newday",
+          "callback": "specialtymysticpower_dohook",
+          "priority": 50,
+          "whenactive": ""
+        },
+        {
+          "location": "incrementspecialty",
+          "callback": "specialtymysticpower_dohook",
+          "priority": 50,
+          "whenactive": ""
+        },
+        {
+          "location": "specialtynames",
+          "callback": "specialtymysticpower_dohook",
+          "priority": 50,
+          "whenactive": ""
+        },
+        {
+          "location": "specialtymodules",
+          "callback": "specialtymysticpower_dohook",
+          "priority": 50,
+          "whenactive": ""
+        },
+        {
+          "location": "specialtycolor",
+          "callback": "specialtymysticpower_dohook",
+          "priority": 50,
+          "whenactive": ""
+        },
+        {
+          "location": "dragonkill",
+          "callback": "specialtymysticpower_dohook",
+          "priority": 50,
+          "whenactive": ""
+        }
+      ],
+      "event_hooks": [],
+      "settings": {},
+      "user_preferences": {
+        "skill": "Skill points in Mystical Powers,int|0",
+        "uses": "Uses of Mystical Powers allowed,int|0"
+      },
+      "object_preferences": {},
+      "settings_preferences_result": "PASS for named defaults and raw round trips; NOT APPLICABLE for empty namespaces",
+      "object_preferences_result": "NOT APPLICABLE",
+      "direct_runmodule_route": "NOT APPLICABLE",
+      "direct_route_note": "Empty historical run function; event/core hook route remains in scope.",
+      "database_tables": [],
+      "database_behavior": "PASS: strict fresh install/reinstall and tested metadata writes; purchase/admin transactions not certified",
+      "daily_hooks": [
+        "newday"
+      ],
+      "combat_hooks": [
+        "choose-specialty",
+        "set-specialty",
+        "fightnav-specialties",
+        "apply-specialties",
+        "incrementspecialty",
+        "specialtynames",
+        "specialtymodules",
+        "specialtycolor",
+        "dragonkill"
+      ],
+      "integration_hooks": [],
+      "php_8_4": "PASS for tested subset; overall BLOCKED",
+      "php_8_5": "PASS for tested subset; overall BLOCKED",
+      "mariadb_11_4": "PASS for tested subset; overall BLOCKED",
+      "mysql_8_4": "PASS for tested subset; overall BLOCKED",
+      "warnings_errors": "No PHP warnings/errors in the passing matrix tests; unexecuted paths unverified.",
+      "security_notes": "Specialty identity, skill increment, New Day uses, fight navigation, malformed/negative/unsupported level rejection and Dragon Kill reset. Full combat and selection route method/CSRF/replay certification remain open. Actual choice navigation and all four valid skill levels (1, 2, 3, 5) execute and spend the expected uses; Dark Arts companion construction also passes.",
+      "final_certification": "BLOCKED"
+    },
+    {
+      "module": "specialtythiefskills",
+      "historical_version": "1.0",
+      "sources": [
+        "modules/specialtythiefskills.php"
+      ],
+      "installation": "PASS",
+      "activation": "PASS",
+      "deactivation": "PASS",
+      "reactivation_and_cache_invalidation": "PASS",
+      "reinstall": "PASS: registration equality, configured setting preserved, leaves inactive before explicit reactivation",
+      "legacy_schema_upgrade": "NOT CERTIFIED: fresh-schema reinstall only; historical column migrations not exercised",
+      "declared_dependencies": {},
+      "hook_registrations": [
+        {
+          "location": "choose-specialty",
+          "callback": "specialtythiefskills_dohook",
+          "priority": 50,
+          "whenactive": ""
+        },
+        {
+          "location": "set-specialty",
+          "callback": "specialtythiefskills_dohook",
+          "priority": 50,
+          "whenactive": ""
+        },
+        {
+          "location": "fightnav-specialties",
+          "callback": "specialtythiefskills_dohook",
+          "priority": 50,
+          "whenactive": ""
+        },
+        {
+          "location": "apply-specialties",
+          "callback": "specialtythiefskills_dohook",
+          "priority": 50,
+          "whenactive": ""
+        },
+        {
+          "location": "newday",
+          "callback": "specialtythiefskills_dohook",
+          "priority": 50,
+          "whenactive": ""
+        },
+        {
+          "location": "incrementspecialty",
+          "callback": "specialtythiefskills_dohook",
+          "priority": 50,
+          "whenactive": ""
+        },
+        {
+          "location": "specialtynames",
+          "callback": "specialtythiefskills_dohook",
+          "priority": 50,
+          "whenactive": ""
+        },
+        {
+          "location": "specialtymodules",
+          "callback": "specialtythiefskills_dohook",
+          "priority": 50,
+          "whenactive": ""
+        },
+        {
+          "location": "specialtycolor",
+          "callback": "specialtythiefskills_dohook",
+          "priority": 50,
+          "whenactive": ""
+        },
+        {
+          "location": "dragonkill",
+          "callback": "specialtythiefskills_dohook",
+          "priority": 50,
+          "whenactive": ""
+        }
+      ],
+      "event_hooks": [],
+      "settings": {},
+      "user_preferences": {
+        "skill": "Skill points in Thieving Skills,int|0",
+        "uses": "Uses of Thieving Skills allowed,int|0"
+      },
+      "object_preferences": {},
+      "settings_preferences_result": "PASS for named defaults and raw round trips; NOT APPLICABLE for empty namespaces",
+      "object_preferences_result": "NOT APPLICABLE",
+      "direct_runmodule_route": "NOT APPLICABLE",
+      "direct_route_note": "Empty historical run function; event/core hook route remains in scope.",
+      "database_tables": [],
+      "database_behavior": "PASS: strict fresh install/reinstall and tested metadata writes; purchase/admin transactions not certified",
+      "daily_hooks": [
+        "newday"
+      ],
+      "combat_hooks": [
+        "choose-specialty",
+        "set-specialty",
+        "fightnav-specialties",
+        "apply-specialties",
+        "incrementspecialty",
+        "specialtynames",
+        "specialtymodules",
+        "specialtycolor",
+        "dragonkill"
+      ],
+      "integration_hooks": [],
+      "php_8_4": "PASS for tested subset; overall BLOCKED",
+      "php_8_5": "PASS for tested subset; overall BLOCKED",
+      "mariadb_11_4": "PASS for tested subset; overall BLOCKED",
+      "mysql_8_4": "PASS for tested subset; overall BLOCKED",
+      "warnings_errors": "No PHP warnings/errors in the passing matrix tests; unexecuted paths unverified.",
+      "security_notes": "Specialty identity, skill increment, New Day uses, fight navigation, malformed/negative/unsupported level rejection and Dragon Kill reset. Full combat and selection route method/CSRF/replay certification remain open. Actual choice navigation and all four valid skill levels (1, 2, 3, 5) execute and spend the expected uses; Dark Arts companion construction also passes.",
+      "final_certification": "BLOCKED"
+    }
+  ],
+  "validated_implementation_sha": "e5e9193aba19e7d98ffa5a2c558eda2b9c96ca52",
+  "modern_core_run": 34777799831,
+  "baseline_integrity_run": 34777799828,
+  "supported_matrix": [
+    {
+      "php": "8.4.25",
+      "database": "MariaDB 11.4.13",
+      "job": 103778999760,
+      "result": "PASS for tested subset"
+    },
+    {
+      "php": "8.5.10",
+      "database": "MySQL 8.4.11",
+      "job": 103778999702,
+      "result": "PASS for tested subset"
+    }
+  ]
+}
