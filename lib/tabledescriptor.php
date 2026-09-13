@@ -112,7 +112,7 @@ function synctable($tablename,$descriptor,$nodrop=false){
 }//end function
 
 function table_create_from_descriptor($tablename,$descriptor){
-	$sql = "CREATE TABLE $tablename (\n";
+	$sql = "CREATE TABLE " . db_identifier($tablename) . " (\n";
 	$type = "INNODB";
 	reset($descriptor);
 	$i=0;
@@ -153,7 +153,7 @@ function table_create_from_descriptor($tablename,$descriptor){
 		$sql .= descriptor_createsql($val);
 		$i++;
 	}
-	$sql .= ") engine=$type";
+	$sql .= ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci";
 	return $sql;
 }
 
@@ -237,11 +237,13 @@ function descriptor_createsql($input){
 	}else{
 		//this is a standard column
 		if (!array_key_exists('extra', $input)) $input['extra']="";
-		$return = $input['name']." "
+		$return = db_identifier($input['name'])." "
 			.$input['type']
 			.(isset($input['null']) && $input['null']?"":" NOT NULL")
-			.(isset($input['default']) &&
-					$input['default']>""?" default '{$input['default']}'":"")
+			.(array_key_exists('default', $input)
+                ? " DEFAULT " . (preg_match('/text|blob/', $input['type']) ? "(" : "")
+                    . "'" . str_replace("'", "''", (string)$input['default']) . "'"
+                    . (preg_match('/text|blob/', $input['type']) ? ")" : "") : "")
 			." ".$input['extra'];
 	}
 	return $return;
