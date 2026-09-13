@@ -31,8 +31,8 @@ function injectmodule($modulename,$force=false){
 	$modulefilename = "modules/{$modulename}.php";
 	if (file_exists($modulefilename)){
 		tlschema("module-{$modulename}");
-		$sql = "SELECT active,filemoddate,infokeys,version FROM " . db_prefix("modules") . " WHERE modulename='$modulename'";
-		$result = db_query_cached($sql, "inject-$modulename", 3600);
+		$sql = "SELECT active,filemoddate,infokeys,version FROM " . db_prefix("modules") . " WHERE modulename=?";
+        $result = db_query($sql, true, [$modulename]);
 		if (!$force) {
 			//our chance to abort if this module isn't currently installed
 			//or doesn't meet the prerequisites.
@@ -56,7 +56,11 @@ function injectmodule($modulename,$force=false){
 			$fname = $modulename."_getmoduleinfo";
 			$info = $fname();
 			if (!isset($info['requires'])) $info['requires'] = array();
-			if (!is_array($info['requires'])) $info['requires'] = array();
+			if (!is_array($info['requires'])) {
+                $injected_modules[$force][$modulename] = false;
+                tlschema();
+                return false;
+            }
 			if (!isset($info['download'])) $info['download']="";
 			if (!isset($info['description'])) $info['description']="";
 			if (!module_check_requirements($info['requires'])) {
@@ -91,8 +95,8 @@ function module_status($modulename, $version=false) {
 	$modulefilename = "modules/$modulename.php";
 	$status = MODULE_NO_INFO;
 	if (file_exists($modulefilename)) {
-		$sql = "SELECT active,filemoddate,infokeys,version FROM " . db_prefix("modules") . " WHERE modulename='$modulename'";
-		$result = db_query_cached($sql, "inject-$modulename", 3600);
+		$sql = "SELECT active,filemoddate,infokeys,version FROM " . db_prefix("modules") . " WHERE modulename=?";
+        $result = db_query($sql, true, [$modulename]);
 		if (db_num_rows($result) > 0) {
 			// The module is installed
 			$status = MODULE_INSTALLED;
@@ -1187,8 +1191,9 @@ function activate_module($module){
 	}
     $info = get_module_info($module);
     if (!module_check_requirements($info['requires'] ?? [])) { return false; }
-	$sql = "UPDATE " . db_prefix("modules") . " SET active=1 WHERE modulename='$module'";
-	db_query($sql);
+	$sql = "UPDATE " . db_prefix("modules") . " SET active=1 WHERE modulename=?";
+    db_query($sql, true, [$module]);
+    unset($GLOBALS['injected_modules'][0][$module], $GLOBALS['injected_modules'][1][$module]);
 	invalidatedatacache("inject-$module");
 	massinvalidate("moduleprepare");
 	if (db_affected_rows() <= 0){
@@ -1211,8 +1216,9 @@ function deactivate_module($module){
 			return true;
 		}
 	}
-	$sql = "UPDATE " . db_prefix("modules") . " SET active=0 WHERE modulename='$module'";
-	db_query($sql);
+	$sql = "UPDATE " . db_prefix("modules") . " SET active=0 WHERE modulename=?";
+    db_query($sql, true, [$module]);
+    unset($GLOBALS['injected_modules'][0][$module], $GLOBALS['injected_modules'][1][$module]);
 	invalidatedatacache("inject-$module");
 	massinvalidate("moduleprepare");
 	if (db_affected_rows() <= 0){
@@ -1235,9 +1241,9 @@ function uninstall_module($module){
 		tlschema();
 
 		output("Deleting module entry`n");
-		$sql = "DELETE FROM " . db_prefix("modules") .
-			" WHERE modulename='$module'";
-		db_query($sql);
+		$sql = "DELETE FROM " . db_prefix("modules") . " WHERE modulename=?";
+        db_query($sql, true, [$module]);
+        unset($GLOBALS['injected_modules'][0][$module], $GLOBALS['injected_modules'][1][$module]);
 
 		output("Deleting module hooks`n");
 		module_wipehooks();

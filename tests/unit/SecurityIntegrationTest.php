@@ -99,6 +99,8 @@ final class SecurityIntegrationTest extends TestCase
             unset($GLOBALS['module_prefs'][2]['resurrectionfixture']);
             self::assertSame($raw, get_module_pref('user_raw', 'resurrectionfixture', 2));
 
+            $GLOBALS['fixture_requirements'] = 'malformed';
+            $clear(); self::assertFalse(injectmodule('resurrectionfixture', false));
             $GLOBALS['fixture_requirements'] = ['missingdependency' => '1.0|Missing dependency'];
             $clear(); self::assertFalse(injectmodule('resurrectionfixture', true));
             $GLOBALS['fixture_requirements'] = ['resurrectionfixture' => '99.0|Too old'];
@@ -118,7 +120,7 @@ final class SecurityIntegrationTest extends TestCase
             $clear(); self::assertTrue(activate_module('resurrectionfixture'));
             $clear(); self::assertTrue(injectmodule('resurrectionfixture', false));
             self::assertTrue(deactivate_module('resurrectionfixture'));
-            $clear(); self::assertFalse(injectmodule('resurrectionfixture', false));
+            self::assertFalse(injectmodule('resurrectionfixture', false));
 
         } finally {
             unlink($path);
