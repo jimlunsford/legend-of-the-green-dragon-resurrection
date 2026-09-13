@@ -1,5 +1,7 @@
 <?php
-/** Fixed shipped registry. Archive-only modules are never discovered or imported. */
+/** Fixed shipped registry. Archive-only modules are never discovered or imported.
+ * @return list<string>
+ */
 function resurrection_bundled_modules(): array {
     return ['cedrikspotions','crazyaudrey','dag','darkhorse','drinks','fairy','findgem','findgold',
         'foilwench','game_dice','game_fivesix','game_stones','glowingstream','goldmine','lovers','outhouse',

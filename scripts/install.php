@@ -11,6 +11,10 @@ set_error_handler(static function (int $severity, string $message, string $file,
 try {
     $config = $argv[1] ?? 'dbconnect.php';
     require $config;
+    if (!isset($DB_HOST, $DB_USER, $DB_PASS, $DB_NAME) ||
+        !is_string($DB_HOST) || !is_string($DB_USER) || !is_string($DB_PASS) || !is_string($DB_NAME)) {
+        throw new RuntimeException('Database configuration is incomplete.');
+    }
     require 'lib/dbwrapper_pdo.php';
     require 'lib/constants.php';
     require 'lib/datacache.php';

@@ -2,6 +2,23 @@ parameters:
     level: 6
     paths:
         - src
+        - lib/accounts.php
+        - lib/web_security.php
+        - lib/commentary_security.php
+        - lib/installer/fresh_install.php
+        - lib/installer/bundled_modules.php
+        - scripts/install.php
+    bootstrapFiles:
+        - lib/constants.php
+    scanFiles:
+        - lib/dbwrapper_pdo.php
+        - lib/constants.php
+        - lib/datacache.php
+        - lib/settings.php
+        - lib/modules.php
+        - lib/output.php
+        - lib/all_tables.php
+        - lib/tabledescriptor.php
     tmpDir: .phpstan-cache/new
     parallel:
         maximumNumberOfProcesses: 1

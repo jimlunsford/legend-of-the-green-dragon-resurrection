@@ -2,6 +2,11 @@
 require_once __DIR__ . '/../src/Http/Input.php';
 require_once __DIR__ . '/../src/Security/Csrf.php';
 
+/**
+ * @param array<string, mixed> $actor
+ * @param array<string, mixed> $csrfState
+ * @param array<string, mixed> $post
+ */
 function resurrection_delete_comment(array $actor, array $csrfState, string $method, array $post): bool {
     if (empty($actor['loggedin']) || (int)($actor['user']['acctid'] ?? 0) < 1 ||
         (((int)($actor['user']['superuser'] ?? 0) & SU_EDIT_COMMENTS) === 0)) {
@@ -31,7 +36,9 @@ function resurrection_delete_comment(array $actor, array $csrfState, string $met
     }
 }
 
-/** Validate every selected key before any batch mutation. */
+/** Validate every selected key before any batch mutation.
+ * @return list<int>
+ */
 function resurrection_comment_ids(mixed $selected): array {
     if (!is_array($selected) || count($selected) > 100) { throw new InvalidArgumentException('Invalid selection.'); }
     $ids = [];
@@ -41,6 +48,11 @@ function resurrection_comment_ids(mixed $selected): array {
     return $ids;
 }
 
+/**
+ * @param array<string, mixed> $actor
+ * @param array<string, mixed> $csrfState
+ * @param array<string, mixed> $post
+ */
 function resurrection_restore_comment(array $actor, array $csrfState, string $method, array $post): bool {
     if (empty($actor['loggedin']) || (int)($actor['user']['acctid'] ?? 0) < 1 ||
         (((int)($actor['user']['superuser'] ?? 0) & SU_AUDIT_MODERATION) === 0)) {

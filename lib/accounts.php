@@ -48,7 +48,9 @@ function resurrection_create_account(string $login, #[\SensitiveParameter] strin
     }
 }
 
-/** Returns the account only after verifying a submitted plaintext password. */
+/** Returns the account only after verifying a submitted plaintext password.
+ * @return array<string, mixed>|false
+ */
 function resurrection_authenticate(string $login, #[\SensitiveParameter] mixed $password): array|false {
     $result = db_query('SELECT * FROM ' . db_prefix('accounts') . ' WHERE login=? LIMIT 1', true, [$login]);
     $row = db_fetch_assoc($result);

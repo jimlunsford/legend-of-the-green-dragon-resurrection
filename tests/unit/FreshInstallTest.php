@@ -57,6 +57,15 @@ final class FreshInstallTest extends TestCase
             self::assertSame(1, $code);
             self::assertSame('123', $GLOBALS['dbinfo']['connection']->query('SELECT id FROM unrelated')->fetchColumn());
             db_query('DROP TABLE unrelated'); // Only our synthetic fixture, never product cleanup.
+            db_query('CREATE TABLE settings (setting VARCHAR(50) PRIMARY KEY, value TEXT) ENGINE=InnoDB');
+            db_query('CREATE TABLE accounts (acctid INT PRIMARY KEY, login VARCHAR(25), password VARCHAR(255)) ENGINE=InnoDB');
+            db_query('INSERT INTO settings VALUES (?,?)', true, ['installer_version', '1.1.2 Dragonprime Edition']);
+            db_query('INSERT INTO accounts VALUES (456,?,?)', true, ['HistoricalFixture', 'synthetic legacy placeholder']);
+            self::assertSame('upgrade-required', resurrection_install_state());
+            [$code, $out, $err] = $run();
+            self::assertSame(1, $code);
+            self::assertSame('456', $GLOBALS['dbinfo']['connection']->query('SELECT acctid FROM accounts')->fetchColumn());
+            db_query('DROP TABLE accounts,settings'); // Only this test's synthetic upgrade candidate.
             [$code, $out, $err] = $run();
             self::assertSame(0, $code, $err . $out);
             self::assertStringNotContainsString($password, $out . $err);

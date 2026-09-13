@@ -10,13 +10,20 @@ function resurrection_install_state(): string {
     $tables = db_query('SHOW TABLES');
     if (db_num_rows($tables) === 0) { return 'empty'; }
     if (db_table_exists(db_prefix('settings'))) {
-        $result = db_query('SELECT value FROM ' . db_identifier(db_prefix('settings')) . ' WHERE setting=?', false, ['resurrection_install']);
-        $row = db_fetch_assoc($result);
-        if ($row && $row['value'] === 'complete') { return 'installed'; }
+        $columns = array_column(db_query('SHOW COLUMNS FROM ' . db_identifier(db_prefix('settings'))), 'Field');
+        if (!in_array('setting', $columns, true) || !in_array('value', $columns, true)) { return 'populated'; }
+        $result = db_query('SELECT setting,value FROM ' . db_identifier(db_prefix('settings')) . ' WHERE setting IN (?,?)', false, ['resurrection_install', 'installer_version']);
+        $state = array_column($result, 'value', 'setting');
+        if (($state['resurrection_install'] ?? '') === 'complete') { return 'installed'; }
+        if (isset($state['installer_version']) && str_starts_with($state['installer_version'], '1.') && db_table_exists(db_prefix('accounts'))) {
+            $columns = array_column(db_query('SHOW COLUMNS FROM ' . db_identifier(db_prefix('accounts'))), 'Field');
+            if (!array_diff(['acctid', 'login', 'password'], $columns)) { return 'upgrade-required'; }
+        }
     }
     return 'populated';
 }
 
+/** @return array<string, array<string, array<string, mixed>>> */
 function resurrection_fresh_schema(): array {
     $tables = get_all_tables();
     foreach ($tables as $table => &$columns) {
@@ -46,6 +53,7 @@ function resurrection_fresh_schema(): array {
     return $tables;
 }
 
+/** @return array{tables: int, modules_installed: int, modules_active: int, administrator: int, state: string} */
 function resurrection_fresh_install(string $login, #[\SensitiveParameter] string $password, string $email = ''): array {
     // Validate credentials before any DDL, without logging them.
     resurrection_validate_account($login, $email);
@@ -73,7 +81,8 @@ function resurrection_fresh_install(string $login, #[\SensitiveParameter] string
         }
         // Execute the preserved chronological fresh seed path, including its
         // final oldcreatureexp cleanup. Never use it as an upgrade mechanism.
-        require __DIR__ . '/installer_sqlstatements.php';
+        $sql_upgrade_statements = require __DIR__ . '/installer_sqlstatements.php';
+        if (!$sql_upgrade_statements) { throw new RuntimeException('Fresh seed data is missing.'); }
         foreach ($sql_upgrade_statements as $version => $statements) {
             foreach ($statements as $index => $sql) {
                 if (str_starts_with($sql, '1|')) { continue; }
@@ -81,7 +90,8 @@ function resurrection_fresh_install(string $login, #[\SensitiveParameter] string
                 db_query($sql);
             }
         }
-        require __DIR__ . '/installer_default_settings.php';
+        $default_settings = require __DIR__ . '/installer_default_settings.php';
+        if (!$default_settings) { throw new RuntimeException('Default settings are missing.'); }
         $GLOBALS['fresh_install_phase'] = 'settings';
         foreach ($default_settings as $name => $value) {
             db_query('INSERT IGNORE INTO ' . db_prefix('settings') . ' (setting,value) VALUES (?,?)', true, [$name, (string)$value]);
