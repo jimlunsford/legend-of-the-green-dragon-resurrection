@@ -77,6 +77,48 @@ class WebApplicationTests(unittest.TestCase):
         self.assertEqual(0, second.returncode, second.stderr)
         self.assertEqual('already-complete', json.loads(second.stdout)['maintenance'])
 
+    def test_dispatcher_enforces_module_state(self):
+        class NoRedirect(urllib.request.HTTPRedirectHandler):
+            def redirect_request(self, *args):
+                return None
+        client = urllib.request.build_opener(NoRedirect)
+        path = ROOT / 'modules' / 'resurrectionhttpfixture.php'
+        module = 'resurrectionhttpfixture'
+        with path.open('x') as file:
+            file.write('''<?php
+function resurrectionhttpfixture_getmoduleinfo() {
+    return ['name'=>'HTTP fixture','version'=>'1.0','author'=>'Synthetic','category'=>'Tests',
+        'allowanonymous'=>true,'override_forced_nav'=>true,
+        'requires'=>getsetting('fixture_dependency',0) ? ['missingdependency'=>'1.0|Missing'] : []];
+}
+function resurrectionhttpfixture_run() { echo 'fixture-executed'; exit; }
+''')
+        def request(expected_execution=False):
+            try:
+                response = client.open(f'http://127.0.0.1:{self.port}/runmodule.php?module={module}&admin=1&force=1', timeout=15)
+            except urllib.error.HTTPError as error:
+                response = error
+            body = response.read().decode()
+            self.assertNotRegex(body, r'(?i)(fatal error|warning:|deprecated:|notice:|runtime error in)')
+            if expected_execution:
+                self.assertEqual(200, response.status)
+                self.assertEqual('fixture-executed', body)
+            else:
+                self.assertIn(response.status, (302, 303, 403, 404))
+                self.assertNotIn('fixture-executed', body)
+        try:
+            request()  # uninstalled, despite both forged force parameters
+            self.query('INSERT INTO modules (modulename,active,version) VALUES (?,0,?)', [module, '1.0'])
+            request()  # installed but inactive
+            self.query('UPDATE modules SET active=1 WHERE modulename=?', [module])
+            request(True)
+            self.query('INSERT INTO settings (setting,value) VALUES (?,?)', ['fixture_dependency', '1'])
+            request()  # active but missing a dependency
+        finally:
+            path.unlink()
+            self.query('DELETE FROM modules WHERE modulename=?', [module])
+            self.query('DELETE FROM settings WHERE setting=?', ['fixture_dependency'])
+
     def test_create_login_rotate_render_logout(self):
         class NoRedirect(urllib.request.HTTPRedirectHandler):
             def redirect_request(self, *args):

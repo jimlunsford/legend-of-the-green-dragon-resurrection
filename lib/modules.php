@@ -1270,65 +1270,32 @@ function install_module($module, $force=true){
     require_once 'lib/web_security.php';
     resurrection_require_post();
     if (!is_string($module) || !preg_match('/\\A[A-Za-z][A-Za-z0-9_]*\\z/', $module)) { return false; }
- 	global $mostrecentmodule, $session;
-	$name = $session['user']['name'];
-	if (!$name) $name = '`@System`0';
-
-	require_once("lib/sanitize.php");
-	if (modulename_sanitize($module)!=$module){
-		output("Error, module file names can only contain alpha numeric characters and underscores before the trailing .php`n`nGood module names include 'testmodule.php', 'joesmodule2.php', while bad module names include, 'test.module.php' or 'joes module.php'`n");
-		return false;
-	}else{
-		// If we are forcing an install, then whack the old version.
-		if ($force) {
-			$sql = "DELETE FROM " . db_prefix("modules") . " WHERE modulename='$module'";
-			db_query($sql);
-		}
-		// We want to do the inject so that it auto-upgrades any installed
-		// version correctly.
-		if (injectmodule($module,true)) {
-			// If we're not forcing and this is already installed, we are done
-			if (!$force && is_module_installed($module))
-				return true;
-			$info = get_module_info($module);
-			//check installation requirements
-			if (!module_check_requirements($info['requires'])){
-				output("`\$Module could not installed -- it did not meet its prerequisites.`n");
-				return false;
-			}else{
-				$keys = "|".join("|", array_keys($info))."|";
-				$sql = "INSERT INTO " . db_prefix("modules") . " (modulename,formalname,moduleauthor,active,filename,installdate,installedby,category,infokeys,version,download,description) VALUES ('$mostrecentmodule','".addslashes($info['name'])."','".addslashes($info['author'])."',0,'{$mostrecentmodule}.php','".date("Y-m-d H:i:s")."','".addslashes($name)."','".addslashes($info['category'])."','$keys','".addslashes($info['version'])."','".addslashes($info['download'])."', '".addslashes($info['description'])."')";
-				db_query($sql);
-				$fname = $mostrecentmodule."_install";
-				if (isset($info['settings']) && count($info['settings']) > 0) {
-					foreach($info['settings'] as $key=>$val){
-						if (is_array($val)) {
-							$x = explode("|", $val[0]);
-						} else {
-							$x = explode("|",$val);
-						}
-						if (isset($x[1])){
-							set_module_setting($key,$x[1]);
-							debug("Setting $key to default {$x[1]}");
-						}
-					}
-				}
-				if ($fname() === false) {
-					return false;
-				}
-				output("`^Module installed.  It is not yet active.`n");
-				invalidatedatacache("inject-$mostrecentmodule");
-				massinvalidate("moduleprepare");
-				return true;
-			}
-		} else {
-			output("`\$Module could not be injected.");
-			output("Module not installed.");
-			output("This is probably due to the module file having a parse error or not existing in the filesystem.`n");
-			return false;
-		}
-	}
-
+    global $session;
+    if (!injectmodule($module, true)) { return false; }
+    if (!$force && is_module_installed($module)) { return true; }
+    $info = get_module_info($module);
+    // Preflight before modifying existing metadata. Reinstallation always leaves
+    // the module inactive until an explicit successful activation request.
+    if (!module_check_requirements($info['requires'] ?? [])) { return false; }
+    $columns = ['modulename','formalname','moduleauthor','active','filename','installdate','installedby','category','infokeys','version','download','description','filemoddate'];
+    $values = [$module, $info['name'], $info['author'], 0, $module . '.php', date('Y-m-d H:i:s'),
+        $session['user']['name'] ?? 'Administrator', $info['category'], '|' . implode('|', array_keys($info)) . '|',
+        $info['version'], $info['download'] ?? '', $info['description'] ?? '', date('Y-m-d H:i:s', filemtime('modules/' . $module . '.php'))];
+    $updates = [];
+    foreach (array_slice($columns, 1) as $column) { $updates[] = db_identifier($column) . '=VALUES(' . db_identifier($column) . ')'; }
+    db_query('INSERT INTO ' . db_prefix('modules') . ' (' . implode(',', array_map('db_identifier', $columns)) . ') VALUES (' . implode(',', array_fill(0, count($columns), '?')) . ') ON DUPLICATE KEY UPDATE ' . implode(',', $updates), true, $values);
+    try {
+        foreach ($info['settings'] ?? [] as $key => $descriptor) {
+            if (!is_string($key)) { continue; }
+            $parts = explode('|', is_array($descriptor) ? $descriptor[0] : $descriptor, 2);
+            if (isset($parts[1])) { set_module_setting($key, $parts[1], $module); }
+        }
+        return ($module . '_install')() !== false;
+    } finally {
+        unset($GLOBALS['injected_modules'][0][$module], $GLOBALS['injected_modules'][1][$module]);
+        invalidatedatacache('inject-' . $module);
+        massinvalidate('moduleprepare');
+    }
 }
 
 /**

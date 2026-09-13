@@ -74,7 +74,7 @@ final class SecurityIntegrationTest extends TestCase
         require_once 'lib/sanitize.php';
         $path = 'modules/resurrectionfixture.php';
         self::assertFileDoesNotExist($path);
-        file_put_contents($path, '<?php function resurrectionfixture_getmoduleinfo(){return ["name"=>"Fixture","version"=>"1.0","author"=>"Synthetic","category"=>"Tests","requires"=>$GLOBALS["fixture_requirements"]];}');
+        file_put_contents($path, '<?php function resurrectionfixture_getmoduleinfo(){return ["name"=>"Fixture","version"=>"1.0","author"=>"Synthetic","category"=>"Tests","requires"=>$GLOBALS["fixture_requirements"]];} function resurrectionfixture_install(){return true;}');
         $GLOBALS['session'] = ['loggedin' => true, 'user' => ['acctid' => 2, 'superuser' => 0, 'loggedin' => true]];
         $GLOBALS['fixture_requirements'] = [];
         $GLOBALS['translation_namespace_stack'] = [];
@@ -110,8 +110,11 @@ final class SecurityIntegrationTest extends TestCase
             $_SESSION = []; $_POST = ['csrf_token' => Csrf::token($_SESSION)];
             $_SERVER['REQUEST_METHOD'] = 'POST';
             $clear(); self::assertFalse(activate_module('resurrectionfixture'));
+            self::assertFalse(install_module('resurrectionfixture'));
+            self::assertSame('1', db_fetch_assoc(db_query('SELECT active FROM modules WHERE modulename=?', true, ['resurrectionfixture']))['active']);
             $GLOBALS['fixture_requirements'] = [];
-            db_query('UPDATE modules SET active=0 WHERE modulename=?', true, ['resurrectionfixture']);
+            self::assertTrue(install_module('resurrectionfixture'));
+            self::assertSame('0', db_fetch_assoc(db_query('SELECT active FROM modules WHERE modulename=?', true, ['resurrectionfixture']))['active']);
             $clear(); self::assertTrue(activate_module('resurrectionfixture'));
             $clear(); self::assertTrue(injectmodule('resurrectionfixture', false));
             self::assertTrue(deactivate_module('resurrectionfixture'));
