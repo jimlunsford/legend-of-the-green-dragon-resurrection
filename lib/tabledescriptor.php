@@ -207,6 +207,18 @@ function table_create_descriptor($tablename){
 }
 
 function descriptor_createsql($input){
+    if (isset($input['columns'])) {
+        $columns = is_array($input['columns']) ? $input['columns'] : explode(',', $input['columns']);
+        $quoted = [];
+        foreach ($columns as $column) {
+            if (!preg_match('/\\A([A-Za-z0-9_]+)(\\([1-9][0-9]*\\))?\\z/', trim($column), $parts)) {
+                throw new InvalidArgumentException('Invalid index column.');
+            }
+            $quoted[] = db_identifier($parts[1]) . ($parts[2] ?? '');
+        }
+        $input['columns'] = implode(',', $quoted);
+    }
+
 	$input['type'] = descriptor_sanitize_type($input['type']);
 	if ($input['type']=="key" || $input['type']=='unique key'){
 		//this is a standard index
@@ -227,7 +239,7 @@ function descriptor_createsql($input){
 		}
 		if (substr($input['type'],0,7)=="unique ") $input['unique'] = true;
 		$return = (isset($input['unique']) && $input['unique']?"UNIQUE ":"")
-			."KEY {$input['name']} "
+			."KEY " . db_identifier($input['name']) . " "
 			."({$input['columns']})";
 	}elseif ($input['type']=="primary key"){
 		//this is a primary key

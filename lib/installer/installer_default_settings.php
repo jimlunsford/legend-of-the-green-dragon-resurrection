@@ -97,7 +97,7 @@ $default_settings = array(
 	"lastdboptimize"=>date("y-m-d h:i:s"),
 	"paypalcurrency"=>"USD",
 	"logdnet"=>0,
-	"serverurl"=>"http://".$_SERVER['SERVER_NAME'].($_SERVER['SERVER_PORT'] == 80?"":":".$_SERVER['SERVER_PORT']).dirname($_SERVER['REQUEST_URI']),
+	"serverurl"=>"http://".($_SERVER['SERVER_NAME'] ?? 'localhost').(($_SERVER['SERVER_PORT'] ?? 80) == 80?"":":".$_SERVER['SERVER_PORT']).dirname($_SERVER['REQUEST_URI'] ?? '/'),
 	"defaultlanguage"=>"en",
 	"serverdesc"=>"Another LoGD Server",
 	"logdnetserver"=>"http://logdnet.logd.com/",
