@@ -4,6 +4,7 @@ parameters:
         - src
         - lib/accounts.php
         - lib/player_mutation.php
+        - lib/darkhorse_game.php
         - lib/event_security.php
         - modules/dag/security.php
         - modules/drinks/security.php
