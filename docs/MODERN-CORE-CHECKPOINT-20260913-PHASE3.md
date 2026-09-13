@@ -179,3 +179,10 @@ Continue **Phase 3 closure on `modernization/core-modernization`, PR #1**. Do no
 5. Mark ready and normal-merge PR #1 only if every modern-core acceptance gate passes, then verify main and its CI. No merge is justified by this checkpoint.
 
 Public hosting remains **NO** independently: modern recovery/email verification, abuse controls, trusted production TLS/proxy/session configuration, internal/config/vendor/test-file protection, isolation, least-privilege credentials, backup/restore testing, monitoring and independent security review remain. No public-hosting claim follows from a future core merge.
+
+
+## Security closure continuation (2026-09-13)
+
+The original checkpoint above is preserved as historical evidence. The [security closure continuation](MODERN-CORE-CHECKPOINT-20260913-PHASE3-CLOSURE.md) records subsequent commits and results: 60 PHPUnit tests / 1,551 assertions, 14 Python tests, 295 PHP files linted, both static-analysis policies and Composer gates passing at implementation head `5da77fc0aa2db4c845ef68813c4fb77d3372a834`. Modern core run `34781821375` and Baseline integrity run `34781821371` succeeded. The final documentation-head workflow evidence is in PR #1.
+
+The updated module decisions are **3 PASS, 0 PASS WITH DOCUMENTED LIMITATION, 21 BLOCKED**, with all 24 lifecycle PASS. See [route security](CORE-ROUTE-SECURITY.md), [serialized state](SERIALIZED-STATE-AUDIT.md), and [module certification](BUNDLED-MODULE-CERTIFICATION.md). **Modern-core merge remains NOT READY; PR #1 remains OPEN and DRAFT; public hosting remains NO.** No Phase 4, new branch/PR, deployment or release is authorized by this checkpoint.

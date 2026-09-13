@@ -1,8 +1,8 @@
 {
   "scope": "Only the 24 bundled entrypoints, verified against modules/*.php; no archive import.",
   "date": "2026-09-13",
-  "evidence": "ModuleCertificationTest, ExpressionTest, SecurityIntegrationTest, test_web_application.py. Exact final CI evidence in Phase 3 checkpoint.",
-  "status_meaning": "PASS is a component result only. BLOCKED is the final certification until required route and mutation gates pass.",
+  "evidence": "Phase 3 continuation: ModuleCertificationTest, PlayerMutationTest, ScalarStateTest, StonesGameTest, DrinkInputTest, ExpressionTest, SecurityIntegrationTest, test_web_application.py. Exact final workflow evidence is in MODERN-CORE-CHECKPOINT-20260913-PHASE3-CLOSURE.md and PR #1.",
+  "status_meaning": "Final certification is per module in the supported bundled scope. PASS requires actual behavior/security evidence; PARTIAL is a component route result only and final remains BLOCKED. Core editor/combat/hosting gates are tracked separately and still prevent merge.",
   "modules": [
     {
       "module": "cedrikspotions",
@@ -68,10 +68,10 @@
       "object_preferences": {},
       "settings_preferences_result": "PASS for named defaults and raw round trips; NOT APPLICABLE for empty namespaces",
       "object_preferences_result": "NOT APPLICABLE",
-      "direct_runmodule_route": "BLOCKED",
-      "direct_route_note": "Full action authorization, POST/CSRF, output and replay certification not complete.",
+      "direct_runmodule_route": "PARTIAL",
+      "direct_route_note": "All five fixed-cost effects pass real POST/CSRF, typed quantity, server availability, persisted state and replay tests; existing daily/HP hooks remain passing. Remaining: full configured/random-cost and settings-editor type/authorization matrix, actual transmutation New Day route persistence.",
       "database_tables": [],
-      "database_behavior": "PASS: strict fresh install/reinstall and tested metadata writes; purchase/admin transactions not certified",
+      "database_behavior": "PASS for existing lifecycle plus tested transactional action paths; see security_notes for unclosed family gates",
       "daily_hooks": [
         "newday-runonce"
       ],
@@ -81,13 +81,14 @@
       "integration_hooks": [
         "header-inn"
       ],
-      "php_8_4": "PASS for tested subset; overall BLOCKED",
-      "php_8_5": "PASS for tested subset; overall BLOCKED",
-      "mariadb_11_4": "PASS for tested subset; overall BLOCKED",
-      "mysql_8_4": "PASS for tested subset; overall BLOCKED",
+      "php_8_4": "PASS for tested components; final BLOCKED for remaining gates",
+      "php_8_5": "PASS for tested components; final BLOCKED for remaining gates",
+      "mariadb_11_4": "PASS for tested components; final BLOCKED for remaining gates",
+      "mysql_8_4": "PASS for tested components; final BLOCKED for remaining gates",
       "warnings_errors": "No PHP warnings/errors in the passing matrix tests; unexecuted paths unverified.",
-      "security_notes": "Inn header navigation, health recalculation, real daily callback and retry receipts; purchase/effect routes remain untested.",
-      "final_certification": "BLOCKED"
+      "security_notes": "All five fixed-cost effects pass real POST/CSRF, typed quantity, server availability, persisted state and replay tests; existing daily/HP hooks remain passing. Remaining: full configured/random-cost and settings-editor type/authorization matrix, actual transmutation New Day route persistence.",
+      "final_certification": "BLOCKED",
+      "continuation_evidence": "See CORE-ROUTE-SECURITY.md for component gates and exact test names; prior lifecycle evidence is retained."
     },
     {
       "module": "crazyaudrey",
@@ -157,7 +158,7 @@
       "settings_preferences_result": "PASS for named defaults and raw round trips; NOT APPLICABLE for empty namespaces",
       "object_preferences_result": "NOT APPLICABLE",
       "direct_runmodule_route": "BLOCKED",
-      "direct_route_note": "Full action authorization, POST/CSRF, output and replay certification not complete.",
+      "direct_route_note": "Shared Forest event POST/CSRF/current-state/replay path passes. Direct Village paid pet/play route is still a GET mutation without the shared transaction/action contract.",
       "database_tables": [],
       "database_behavior": "PASS: strict fresh install/reinstall and tested metadata writes; purchase/admin transactions not certified",
       "daily_hooks": [
@@ -169,13 +170,14 @@
         "village",
         "village-desc"
       ],
-      "php_8_4": "PASS for tested subset; overall BLOCKED",
-      "php_8_5": "PASS for tested subset; overall BLOCKED",
-      "mariadb_11_4": "PASS for tested subset; overall BLOCKED",
-      "mysql_8_4": "PASS for tested subset; overall BLOCKED",
+      "php_8_4": "PASS for tested components; final BLOCKED for remaining gates",
+      "php_8_5": "PASS for tested components; final BLOCKED for remaining gates",
+      "mariadb_11_4": "PASS for tested components; final BLOCKED for remaining gates",
+      "mysql_8_4": "PASS for tested components; final BLOCKED for remaining gates",
       "warnings_errors": "No PHP warnings/errors in the passing matrix tests; unexecuted paths unverified.",
-      "security_notes": "Combined New Day reset, daily countdown/retry, event collection and forest entrance; random play/reward paths remain untested.",
-      "final_certification": "BLOCKED"
+      "security_notes": "Shared Forest event POST/CSRF/current-state/replay path passes. Direct Village paid pet/play route is still a GET mutation without the shared transaction/action contract.",
+      "final_certification": "BLOCKED",
+      "continuation_evidence": "See CORE-ROUTE-SECURITY.md for component gates and exact test names; prior lifecycle evidence is retained."
     },
     {
       "module": "dag",
@@ -255,12 +257,12 @@
       "object_preferences": {},
       "settings_preferences_result": "PASS for named defaults and raw round trips; NOT APPLICABLE for empty namespaces",
       "object_preferences_result": "NOT APPLICABLE",
-      "direct_runmodule_route": "BLOCKED",
-      "direct_route_note": "PASS for real authenticated issued Inn-to-module-to-Inn HTTP navigation with all 24 active. Full action authorization, POST/CSRF, output and replay certification remains BLOCKED.",
+      "direct_runmodule_route": "PARTIAL",
+      "direct_route_note": "Bound transactional eligible placement, quota/funds checks, claim status/own-bounty handling and service replay pass; real player placement/GET/CSRF/replay and unprivileged admin denial pass. Remaining: funded PvP HTTP authority/claim, authorized close/cleanup/place HTTP matrix and failure injection at bounty-specific write points.",
       "database_tables": [
         "bounty"
       ],
-      "database_behavior": "PASS: strict fresh install/reinstall and tested metadata writes; purchase/admin transactions not certified",
+      "database_behavior": "PASS for existing lifecycle plus tested transactional action paths; see security_notes for unclosed family gates",
       "daily_hooks": [
         "newday"
       ],
@@ -272,13 +274,14 @@
         "inn-desc",
         "inn"
       ],
-      "php_8_4": "PASS for tested subset; overall BLOCKED",
-      "php_8_5": "PASS for tested subset; overall BLOCKED",
-      "mariadb_11_4": "PASS for tested subset; overall BLOCKED",
-      "mysql_8_4": "PASS for tested subset; overall BLOCKED",
+      "php_8_4": "PASS for tested components; final BLOCKED for remaining gates",
+      "php_8_5": "PASS for tested components; final BLOCKED for remaining gates",
+      "mariadb_11_4": "PASS for tested components; final BLOCKED for remaining gates",
+      "mysql_8_4": "PASS for tested components; final BLOCKED for remaining gates",
       "warnings_errors": "No PHP warnings/errors in the passing matrix tests; unexecuted paths unverified.",
-      "security_notes": "Strict bounty table install/reinstall with row preservation, Inn hooks, New Day count reset and PvP no-bounty path. Bounty creation/claims/admin mutations remain unreviewed. Issued direct route and return-to-Inn HTTP smoke passes on both targets.",
-      "final_certification": "BLOCKED"
+      "security_notes": "Bound transactional eligible placement, quota/funds checks, claim status/own-bounty handling and service replay pass; real player placement/GET/CSRF/replay and unprivileged admin denial pass. Remaining: funded PvP HTTP authority/claim, authorized close/cleanup/place HTTP matrix and failure injection at bounty-specific write points.",
+      "final_certification": "BLOCKED",
+      "continuation_evidence": "See CORE-ROUTE-SECURITY.md for component gates and exact test names; prior lifecycle evidence is retained."
     },
     {
       "module": "darkhorse",
@@ -335,7 +338,7 @@
       "settings_preferences_result": "PASS for named defaults and raw round trips; NOT APPLICABLE for empty namespaces",
       "object_preferences_result": "PASS for mounts.findtavern values 0 and 1",
       "direct_runmodule_route": "BLOCKED",
-      "direct_route_note": "Full action authorization, POST/CSRF, output and replay certification not complete.",
+      "direct_route_note": "Lifecycle, event entrance and Stones return smoke pass. Bartender name/search SQL is still unbound, paid information is a GET mutation, and oldman clears specialmisc without an independent active-wager contract.",
       "database_tables": [],
       "database_behavior": "PASS: strict fresh install/reinstall and tested metadata writes; purchase/admin transactions not certified",
       "daily_hooks": [],
@@ -343,13 +346,14 @@
       "integration_hooks": [
         "forest"
       ],
-      "php_8_4": "PASS for tested subset; overall BLOCKED",
-      "php_8_5": "PASS for tested subset; overall BLOCKED",
-      "mariadb_11_4": "PASS for tested subset; overall BLOCKED",
-      "mysql_8_4": "PASS for tested subset; overall BLOCKED",
+      "php_8_4": "PASS for tested components; final BLOCKED for remaining gates",
+      "php_8_5": "PASS for tested components; final BLOCKED for remaining gates",
+      "mariadb_11_4": "PASS for tested components; final BLOCKED for remaining gates",
+      "mysql_8_4": "PASS for tested components; final BLOCKED for remaining gates",
       "warnings_errors": "No PHP warnings/errors in the passing matrix tests; unexecuted paths unverified.",
-      "security_notes": "Forest/travel chance, mount object preference, forest entrance and darkhorsegame callbacks from all three games. Tavern mutations and return navigation validation remain open.",
-      "final_certification": "BLOCKED"
+      "security_notes": "Lifecycle, event entrance and Stones return smoke pass. Bartender name/search SQL is still unbound, paid information is a GET mutation, and oldman clears specialmisc without an independent active-wager contract.",
+      "final_certification": "BLOCKED",
+      "continuation_evidence": "See CORE-ROUTE-SECURITY.md for component gates and exact test names; prior lifecycle evidence is retained."
     },
     {
       "module": "drinks",
@@ -426,12 +430,12 @@
       "object_preferences": {},
       "settings_preferences_result": "PASS for named defaults and raw round trips; NOT APPLICABLE for empty namespaces",
       "object_preferences_result": "NOT APPLICABLE",
-      "direct_runmodule_route": "BLOCKED",
-      "direct_route_note": "Full action authorization, POST/CSRF, output and replay certification not complete.",
+      "direct_runmodule_route": "PARTIAL",
+      "direct_route_note": "Typed active drink purchase, authoritative cost, hard-drink limit, bounded drunkenness and one-use POST/CSRF pass. Typed editor save/privilege/CSRF/replay and apostrophe/backslash/UTF-8 escaping are exercised. Remaining: editor create/delete/activation full role matrix, preference-granted editor matrix and complete daily/drunken-state bounds under configured values.",
       "database_tables": [
         "drinks"
       ],
-      "database_behavior": "PASS: strict fresh install/reinstall and tested metadata writes; purchase/admin transactions not certified",
+      "database_behavior": "PASS for existing lifecycle plus tested transactional action paths; see security_notes for unclosed family gates",
       "daily_hooks": [
         "newday"
       ],
@@ -441,13 +445,14 @@
       "integration_hooks": [
         "header-graveyard"
       ],
-      "php_8_4": "PASS for tested subset; overall BLOCKED",
-      "php_8_5": "PASS for tested subset; overall BLOCKED",
-      "mariadb_11_4": "PASS for tested subset; overall BLOCKED",
-      "mysql_8_4": "PASS for tested subset; overall BLOCKED",
+      "php_8_4": "PASS for tested components; final BLOCKED for remaining gates",
+      "php_8_5": "PASS for tested components; final BLOCKED for remaining gates",
+      "mariadb_11_4": "PASS for tested components; final BLOCKED for remaining gates",
+      "mysql_8_4": "PASS for tested components; final BLOCKED for remaining gates",
       "warnings_errors": "No PHP warnings/errors in the passing matrix tests; unexecuted paths unverified.",
-      "security_notes": "Strict drinks table and three default records preserved on reinstall, daily state, quota text/list and graveyard sobriety. Purchase and editor mutations remain unreviewed.",
-      "final_certification": "BLOCKED"
+      "security_notes": "Typed active drink purchase, authoritative cost, hard-drink limit, bounded drunkenness and one-use POST/CSRF pass. Typed editor save/privilege/CSRF/replay and apostrophe/backslash/UTF-8 escaping are exercised. Remaining: editor create/delete/activation full role matrix, preference-granted editor matrix and complete daily/drunken-state bounds under configured values.",
+      "final_certification": "BLOCKED",
+      "continuation_evidence": "See CORE-ROUTE-SECURITY.md for component gates and exact test names; prior lifecycle evidence is retained."
     },
     {
       "module": "fairy",
@@ -487,8 +492,8 @@
       "object_preferences": {},
       "settings_preferences_result": "PASS for named defaults and raw round trips; NOT APPLICABLE for empty namespaces",
       "object_preferences_result": "NOT APPLICABLE",
-      "direct_runmodule_route": "NOT APPLICABLE",
-      "direct_route_note": "Empty historical run function; event/core hook route remains in scope.",
+      "direct_runmodule_route": "PARTIAL",
+      "direct_route_note": "Current Forest event POST/CSRF and one-time give action pass; scalar-only state and transactional player/pref writes. Remaining: all HP/pref/specialty/no-gem result branches with configured values and shared settings-editor closure.",
       "database_tables": [],
       "database_behavior": "PASS: strict fresh install/reinstall and tested metadata writes; purchase/admin transactions not certified",
       "daily_hooks": [],
@@ -496,13 +501,14 @@
         "hprecalc"
       ],
       "integration_hooks": [],
-      "php_8_4": "PASS for tested subset; overall BLOCKED",
-      "php_8_5": "PASS for tested subset; overall BLOCKED",
-      "mariadb_11_4": "PASS for tested subset; overall BLOCKED",
-      "mysql_8_4": "PASS for tested subset; overall BLOCKED",
+      "php_8_4": "PASS for tested components; final BLOCKED for remaining gates",
+      "php_8_5": "PASS for tested components; final BLOCKED for remaining gates",
+      "mariadb_11_4": "PASS for tested components; final BLOCKED for remaining gates",
+      "mysql_8_4": "PASS for tested components; final BLOCKED for remaining gates",
       "warnings_errors": "No PHP warnings/errors in the passing matrix tests; unexecuted paths unverified.",
-      "security_notes": "Forest event collection/entrance and health recalculation; random reward/loss branches remain untested.",
-      "final_certification": "BLOCKED"
+      "security_notes": "Current Forest event POST/CSRF and one-time give action pass; scalar-only state and transactional player/pref writes. Remaining: all HP/pref/specialty/no-gem result branches with configured values and shared settings-editor closure.",
+      "final_certification": "BLOCKED",
+      "continuation_evidence": "See CORE-ROUTE-SECURITY.md for component gates and exact test names; prior lifecycle evidence is retained."
     },
     {
       "module": "findgem",
@@ -533,20 +539,21 @@
       "object_preferences": {},
       "settings_preferences_result": "PASS for named defaults and raw round trips; NOT APPLICABLE for empty namespaces",
       "object_preferences_result": "NOT APPLICABLE",
-      "direct_runmodule_route": "NOT APPLICABLE",
-      "direct_route_note": "Empty historical run function; event/core hook route remains in scope.",
+      "direct_runmodule_route": "NOT APPLICABLE: empty direct handler; Forest event certified",
+      "direct_route_note": "Simple supported Forest reward passes actual GET/no-effect, POST/CSRF, exactly one gem, persisted completion and replay rejection. Active-module/current-event authorization, bound transactional writes and currency bounds apply. No direct mutation, user setting, object preference or serialized state. Optional Cities travel integration is outside this bundled scope.",
       "database_tables": [],
-      "database_behavior": "PASS: strict fresh install/reinstall and tested metadata writes; purchase/admin transactions not certified",
+      "database_behavior": "PASS for existing lifecycle plus tested transactional action paths; see security_notes for unclosed family gates",
       "daily_hooks": [],
       "combat_hooks": [],
       "integration_hooks": [],
-      "php_8_4": "PASS for tested subset; overall BLOCKED",
-      "php_8_5": "PASS for tested subset; overall BLOCKED",
-      "mariadb_11_4": "PASS for tested subset; overall BLOCKED",
-      "mysql_8_4": "PASS for tested subset; overall BLOCKED",
+      "php_8_4": "PASS for certified bundled Forest scope",
+      "php_8_5": "PASS for certified bundled Forest scope",
+      "mariadb_11_4": "PASS for certified bundled Forest scope",
+      "mysql_8_4": "PASS for certified bundled Forest scope",
       "warnings_errors": "No PHP warnings/errors in the passing matrix tests; unexecuted paths unverified.",
-      "security_notes": "Forest/travel registration and active collection; real forest event grants one gem. Shared event route replay/method/CSRF certification remains open.",
-      "final_certification": "BLOCKED"
+      "security_notes": "Simple supported Forest reward passes actual GET/no-effect, POST/CSRF, exactly one gem, persisted completion and replay rejection. Active-module/current-event authorization, bound transactional writes and currency bounds apply. No direct mutation, user setting, object preference or serialized state. Optional Cities travel integration is outside this bundled scope.",
+      "final_certification": "PASS",
+      "continuation_evidence": "See CORE-ROUTE-SECURITY.md for component gates and exact test names; prior lifecycle evidence is retained."
     },
     {
       "module": "findgold",
@@ -580,20 +587,21 @@
       "object_preferences": {},
       "settings_preferences_result": "PASS for named defaults and raw round trips; NOT APPLICABLE for empty namespaces",
       "object_preferences_result": "NOT APPLICABLE",
-      "direct_runmodule_route": "NOT APPLICABLE",
-      "direct_route_note": "Empty historical run function; event/core hook route remains in scope.",
+      "direct_runmodule_route": "NOT APPLICABLE: empty direct handler; Forest event certified",
+      "direct_route_note": "Supported Forest reward passes actual GET/no-effect, POST/CSRF, level-scaled historical reward range, persisted completion and no repeat reward. Server settings supply amounts; bound transactional writes reject invalid resulting currency. No player amount authority or serialized state. Optional Cities integration is outside scope; general administrator settings editor remains a separate core blocker.",
       "database_tables": [],
-      "database_behavior": "PASS: strict fresh install/reinstall and tested metadata writes; purchase/admin transactions not certified",
+      "database_behavior": "PASS for existing lifecycle plus tested transactional action paths; see security_notes for unclosed family gates",
       "daily_hooks": [],
       "combat_hooks": [],
       "integration_hooks": [],
-      "php_8_4": "PASS for tested subset; overall BLOCKED",
-      "php_8_5": "PASS for tested subset; overall BLOCKED",
-      "mariadb_11_4": "PASS for tested subset; overall BLOCKED",
-      "mysql_8_4": "PASS for tested subset; overall BLOCKED",
+      "php_8_4": "PASS for certified bundled Forest scope",
+      "php_8_5": "PASS for certified bundled Forest scope",
+      "mariadb_11_4": "PASS for certified bundled Forest scope",
+      "mysql_8_4": "PASS for certified bundled Forest scope",
       "warnings_errors": "No PHP warnings/errors in the passing matrix tests; unexecuted paths unverified.",
-      "security_notes": "Forest/travel registration and active collection; real forest event grants gold. Shared event route replay/method/CSRF certification remains open.",
-      "final_certification": "BLOCKED"
+      "security_notes": "Supported Forest reward passes actual GET/no-effect, POST/CSRF, level-scaled historical reward range, persisted completion and no repeat reward. Server settings supply amounts; bound transactional writes reject invalid resulting currency. No player amount authority or serialized state. Optional Cities integration is outside scope; general administrator settings editor remains a separate core blocker.",
+      "final_certification": "PASS",
+      "continuation_evidence": "See CORE-ROUTE-SECURITY.md for component gates and exact test names; prior lifecycle evidence is retained."
     },
     {
       "module": "foilwench",
@@ -620,20 +628,21 @@
       "object_preferences": {},
       "settings_preferences_result": "PASS for named defaults and raw round trips; NOT APPLICABLE for empty namespaces",
       "object_preferences_result": "NOT APPLICABLE",
-      "direct_runmodule_route": "NOT APPLICABLE",
-      "direct_route_note": "Empty historical run function; event/core hook route remains in scope.",
+      "direct_runmodule_route": "NOT APPLICABLE: empty direct handler; Forest event certified",
+      "direct_route_note": "Current Forest event requires POST/CSRF and consumed intent. Real HTTP proves exactly one gem spent and one Dark Arts skill increment, no replay increment, no reward without a gem and malformed operation rejection. Existing specialty hook fixtures cover the bundled skill handlers. Bound player/pref transaction and safe LoGD output; no serialized state.",
       "database_tables": [],
-      "database_behavior": "PASS: strict fresh install/reinstall and tested metadata writes; purchase/admin transactions not certified",
+      "database_behavior": "PASS for existing lifecycle plus tested transactional action paths; see security_notes for unclosed family gates",
       "daily_hooks": [],
       "combat_hooks": [],
       "integration_hooks": [],
-      "php_8_4": "PASS for tested subset; overall BLOCKED",
-      "php_8_5": "PASS for tested subset; overall BLOCKED",
-      "mariadb_11_4": "PASS for tested subset; overall BLOCKED",
-      "mysql_8_4": "PASS for tested subset; overall BLOCKED",
+      "php_8_4": "PASS for certified bundled Forest scope",
+      "php_8_5": "PASS for certified bundled Forest scope",
+      "mariadb_11_4": "PASS for certified bundled Forest scope",
+      "mysql_8_4": "PASS for certified bundled Forest scope",
       "warnings_errors": "No PHP warnings/errors in the passing matrix tests; unexecuted paths unverified.",
-      "security_notes": "Forest event collection/entrance and gift branch spends a gem and increments specialty. GET mutation remains a blocker.",
-      "final_certification": "BLOCKED"
+      "security_notes": "Current Forest event requires POST/CSRF and consumed intent. Real HTTP proves exactly one gem spent and one Dark Arts skill increment, no replay increment, no reward without a gem and malformed operation rejection. Existing specialty hook fixtures cover the bundled skill handlers. Bound player/pref transaction and safe LoGD output; no serialized state.",
+      "final_certification": "PASS",
+      "continuation_evidence": "See CORE-ROUTE-SECURITY.md for component gates and exact test names; prior lifecycle evidence is retained."
     },
     {
       "module": "game_dice",
@@ -663,7 +672,7 @@
       "settings_preferences_result": "PASS for named defaults and raw round trips; NOT APPLICABLE for empty namespaces",
       "object_preferences_result": "NOT APPLICABLE",
       "direct_runmodule_route": "BLOCKED",
-      "direct_route_note": "Full action authorization, POST/CSRF, output and replay certification not complete.",
+      "direct_route_note": "Lifecycle/hook PASS. Direct game still trusts bet/try/what across requests, uses GET roll/settlement and has no certified server wager/replay contract.",
       "database_tables": [],
       "database_behavior": "PASS: strict fresh install/reinstall and tested metadata writes; purchase/admin transactions not certified",
       "daily_hooks": [],
@@ -671,13 +680,14 @@
       "integration_hooks": [
         "darkhorsegame"
       ],
-      "php_8_4": "PASS for tested subset; overall BLOCKED",
-      "php_8_5": "PASS for tested subset; overall BLOCKED",
-      "mariadb_11_4": "PASS for tested subset; overall BLOCKED",
-      "mysql_8_4": "PASS for tested subset; overall BLOCKED",
+      "php_8_4": "PASS for tested components; final BLOCKED for remaining gates",
+      "php_8_5": "PASS for tested components; final BLOCKED for remaining gates",
+      "mariadb_11_4": "PASS for tested components; final BLOCKED for remaining gates",
+      "mysql_8_4": "PASS for tested components; final BLOCKED for remaining gates",
       "warnings_errors": "No PHP warnings/errors in the passing matrix tests; unexecuted paths unverified.",
-      "security_notes": "Module-defined darkhorsegame navigation with all game modules active; direct game execution, amount validation and replay remain open.",
-      "final_certification": "BLOCKED"
+      "security_notes": "Lifecycle/hook PASS. Direct game still trusts bet/try/what across requests, uses GET roll/settlement and has no certified server wager/replay contract.",
+      "final_certification": "BLOCKED",
+      "continuation_evidence": "See CORE-ROUTE-SECURITY.md for component gates and exact test names; prior lifecycle evidence is retained."
     },
     {
       "module": "game_fivesix",
@@ -726,7 +736,7 @@
       "settings_preferences_result": "PASS for named defaults and raw round trips; NOT APPLICABLE for empty namespaces",
       "object_preferences_result": "NOT APPLICABLE",
       "direct_runmodule_route": "BLOCKED",
-      "direct_route_note": "Full action authorization, POST/CSRF, output and replay certification not complete.",
+      "direct_route_note": "Lifecycle/hook PASS. Direct roll/wager/jackpot mutations and shared jackpot locking need POST/CSRF, typed authoritative state and replay/atomicity closure.",
       "database_tables": [],
       "database_behavior": "PASS: strict fresh install/reinstall and tested metadata writes; purchase/admin transactions not certified",
       "daily_hooks": [
@@ -736,13 +746,14 @@
       "integration_hooks": [
         "darkhorsegame"
       ],
-      "php_8_4": "PASS for tested subset; overall BLOCKED",
-      "php_8_5": "PASS for tested subset; overall BLOCKED",
-      "mariadb_11_4": "PASS for tested subset; overall BLOCKED",
-      "mysql_8_4": "PASS for tested subset; overall BLOCKED",
+      "php_8_4": "PASS for tested components; final BLOCKED for remaining gates",
+      "php_8_5": "PASS for tested components; final BLOCKED for remaining gates",
+      "mariadb_11_4": "PASS for tested components; final BLOCKED for remaining gates",
+      "mysql_8_4": "PASS for tested components; final BLOCKED for remaining gates",
       "warnings_errors": "No PHP warnings/errors in the passing matrix tests; unexecuted paths unverified.",
-      "security_notes": "Module-defined darkhorsegame navigation and combined New Day execution; direct play/jackpot persistence and mutation security remain open.",
-      "final_certification": "BLOCKED"
+      "security_notes": "Lifecycle/hook PASS. Direct roll/wager/jackpot mutations and shared jackpot locking need POST/CSRF, typed authoritative state and replay/atomicity closure.",
+      "final_certification": "BLOCKED",
+      "continuation_evidence": "See CORE-ROUTE-SECURITY.md for component gates and exact test names; prior lifecycle evidence is retained."
     },
     {
       "module": "game_stones",
@@ -772,21 +783,22 @@
       "settings_preferences_result": "PASS for named defaults and raw round trips; NOT APPLICABLE for empty namespaces",
       "object_preferences_result": "NOT APPLICABLE",
       "direct_runmodule_route": "BLOCKED",
-      "direct_route_note": "Full action authorization, POST/CSRF, output and replay certification not complete.",
+      "direct_route_note": "JSON state, exact schema, malicious serialized object rejection, positive authoritative bet, one-use choose/bet/draw/settle and duplicate settlement pass unit and full HTTP game tests. Remaining: surrounding Dark Horse wager abandonment/state transitions must be independent of navigation; bet is charged on settlement and oldman resets specialmisc.",
       "database_tables": [],
-      "database_behavior": "PASS: strict fresh install/reinstall and tested metadata writes; purchase/admin transactions not certified",
+      "database_behavior": "PASS for existing lifecycle plus tested transactional action paths; see security_notes for unclosed family gates",
       "daily_hooks": [],
       "combat_hooks": [],
       "integration_hooks": [
         "darkhorsegame"
       ],
-      "php_8_4": "PASS for tested subset; overall BLOCKED",
-      "php_8_5": "PASS for tested subset; overall BLOCKED",
-      "mariadb_11_4": "PASS for tested subset; overall BLOCKED",
-      "mysql_8_4": "PASS for tested subset; overall BLOCKED",
+      "php_8_4": "PASS for tested components; final BLOCKED for remaining gates",
+      "php_8_5": "PASS for tested components; final BLOCKED for remaining gates",
+      "mariadb_11_4": "PASS for tested components; final BLOCKED for remaining gates",
+      "mysql_8_4": "PASS for tested components; final BLOCKED for remaining gates",
       "warnings_errors": "No PHP warnings/errors in the passing matrix tests; unexecuted paths unverified.",
-      "security_notes": "Module-defined darkhorsegame navigation; direct game play, unvalidated unserialize of specialmisc, bets and replay remain open.",
-      "final_certification": "BLOCKED"
+      "security_notes": "JSON state, exact schema, malicious serialized object rejection, positive authoritative bet, one-use choose/bet/draw/settle and duplicate settlement pass unit and full HTTP game tests. Remaining: surrounding Dark Horse wager abandonment/state transitions must be independent of navigation; bet is charged on settlement and oldman resets specialmisc.",
+      "final_certification": "BLOCKED",
+      "continuation_evidence": "See CORE-ROUTE-SECURITY.md for component gates and exact test names; prior lifecycle evidence is retained."
     },
     {
       "module": "glowingstream",
@@ -817,20 +829,21 @@
       "object_preferences": {},
       "settings_preferences_result": "PASS for named defaults and raw round trips; NOT APPLICABLE for empty namespaces",
       "object_preferences_result": "NOT APPLICABLE",
-      "direct_runmodule_route": "NOT APPLICABLE",
-      "direct_route_note": "Empty historical run function; event/core hook route remains in scope.",
+      "direct_runmodule_route": "PARTIAL",
+      "direct_route_note": "Shared current-event POST/CSRF and consumed drink action pass. Historical effects unchanged; transactional bounded currency. Remaining: all value-changing branches, configured effects and settings-editor validation evidence.",
       "database_tables": [],
       "database_behavior": "PASS: strict fresh install/reinstall and tested metadata writes; purchase/admin transactions not certified",
       "daily_hooks": [],
       "combat_hooks": [],
       "integration_hooks": [],
-      "php_8_4": "PASS for tested subset; overall BLOCKED",
-      "php_8_5": "PASS for tested subset; overall BLOCKED",
-      "mariadb_11_4": "PASS for tested subset; overall BLOCKED",
-      "mysql_8_4": "PASS for tested subset; overall BLOCKED",
+      "php_8_4": "PASS for tested components; final BLOCKED for remaining gates",
+      "php_8_5": "PASS for tested components; final BLOCKED for remaining gates",
+      "mariadb_11_4": "PASS for tested components; final BLOCKED for remaining gates",
+      "mysql_8_4": "PASS for tested components; final BLOCKED for remaining gates",
       "warnings_errors": "No PHP warnings/errors in the passing matrix tests; unexecuted paths unverified.",
-      "security_notes": "Forest/travel registration and active collection; forest entrance. Drink outcome branches remain untested.",
-      "final_certification": "BLOCKED"
+      "security_notes": "Shared current-event POST/CSRF and consumed drink action pass. Historical effects unchanged; transactional bounded currency. Remaining: all value-changing branches, configured effects and settings-editor validation evidence.",
+      "final_certification": "BLOCKED",
+      "continuation_evidence": "See CORE-ROUTE-SECURITY.md for component gates and exact test names; prior lifecycle evidence is retained."
     },
     {
       "module": "goldmine",
@@ -870,20 +883,21 @@
       },
       "settings_preferences_result": "PASS for named defaults and raw round trips; NOT APPLICABLE for empty namespaces",
       "object_preferences_result": "PASS for mounts.findtavern values 0 and 1",
-      "direct_runmodule_route": "NOT APPLICABLE",
-      "direct_route_note": "Empty historical run function; event/core hook route remains in scope.",
+      "direct_runmodule_route": "PARTIAL",
+      "direct_route_note": "Shared current-event POST/CSRF, mine action and consumed reward pass. Remaining: alternate reward/loss and optional mount-specific branches, configured amounts and settings-editor validation.",
       "database_tables": [],
       "database_behavior": "PASS: strict fresh install/reinstall and tested metadata writes; purchase/admin transactions not certified",
       "daily_hooks": [],
       "combat_hooks": [],
       "integration_hooks": [],
-      "php_8_4": "PASS for tested subset; overall BLOCKED",
-      "php_8_5": "PASS for tested subset; overall BLOCKED",
-      "mariadb_11_4": "PASS for tested subset; overall BLOCKED",
-      "mysql_8_4": "PASS for tested subset; overall BLOCKED",
+      "php_8_4": "PASS for tested components; final BLOCKED for remaining gates",
+      "php_8_5": "PASS for tested components; final BLOCKED for remaining gates",
+      "mariadb_11_4": "PASS for tested components; final BLOCKED for remaining gates",
+      "mysql_8_4": "PASS for tested components; final BLOCKED for remaining gates",
       "warnings_errors": "No PHP warnings/errors in the passing matrix tests; unexecuted paths unverified.",
-      "security_notes": "Forest event collection/entrance and decline/exit; mining random branches and economic mutation security remain open.",
-      "final_certification": "BLOCKED"
+      "security_notes": "Shared current-event POST/CSRF, mine action and consumed reward pass. Remaining: alternate reward/loss and optional mount-specific branches, configured amounts and settings-editor validation.",
+      "final_certification": "BLOCKED",
+      "continuation_evidence": "See CORE-ROUTE-SECURITY.md for component gates and exact test names; prior lifecycle evidence is retained."
     },
     {
       "module": "lovers",
@@ -921,7 +935,7 @@
       "settings_preferences_result": "PASS for named defaults and raw round trips; NOT APPLICABLE for empty namespaces",
       "object_preferences_result": "NOT APPLICABLE",
       "direct_runmodule_route": "BLOCKED",
-      "direct_route_note": "PASS for real authenticated issued Inn-to-module-to-Inn HTTP navigation with all 24 active. Full action authorization, POST/CSRF, output and replay certification remains BLOCKED.",
+      "direct_route_note": "Existing hook semantics and issued Inn route render PASS. Value-changing conversation/flirt/chat routes still require daily-stage authorization, POST/CSRF and replay closure.",
       "database_tables": [],
       "database_behavior": "PASS: strict fresh install/reinstall and tested metadata writes; purchase/admin transactions not certified",
       "daily_hooks": [
@@ -931,13 +945,14 @@
       "integration_hooks": [
         "inn"
       ],
-      "php_8_4": "PASS for tested subset; overall BLOCKED",
-      "php_8_5": "PASS for tested subset; overall BLOCKED",
-      "mariadb_11_4": "PASS for tested subset; overall BLOCKED",
-      "mysql_8_4": "PASS for tested subset; overall BLOCKED",
+      "php_8_4": "PASS for tested components; final BLOCKED for remaining gates",
+      "php_8_5": "PASS for tested components; final BLOCKED for remaining gates",
+      "mariadb_11_4": "PASS for tested components; final BLOCKED for remaining gates",
+      "mysql_8_4": "PASS for tested components; final BLOCKED for remaining gates",
       "warnings_errors": "No PHP warnings/errors in the passing matrix tests; unexecuted paths unverified.",
-      "security_notes": "Inn navigation and daily preference reset; conversation/effect mutations and output audit remain open. Issued direct route and return-to-Inn HTTP smoke passes on both targets.",
-      "final_certification": "BLOCKED"
+      "security_notes": "Existing hook semantics and issued Inn route render PASS. Value-changing conversation/flirt/chat routes still require daily-stage authorization, POST/CSRF and replay closure.",
+      "final_certification": "BLOCKED",
+      "continuation_evidence": "See CORE-ROUTE-SECURITY.md for component gates and exact test names; prior lifecycle evidence is retained."
     },
     {
       "module": "outhouse",
@@ -978,15 +993,16 @@
         "giveturnchance": "Percent chance of a free forest fight if you wash,range,0,100,1|0"
       },
       "user_preferences": {
-        "usedouthouse": "Used Outhouse Today,bool|0"
+        "usedouthouse": "Used Outhouse Today,bool|0",
+        "stage": "Current visit stage,viewonly|0"
       },
       "object_preferences": {},
       "settings_preferences_result": "PASS for named defaults and raw round trips; NOT APPLICABLE for empty namespaces",
       "object_preferences_result": "NOT APPLICABLE",
-      "direct_runmodule_route": "BLOCKED",
-      "direct_route_note": "Full action authorization, POST/CSRF, output and replay certification not complete.",
+      "direct_runmodule_route": "PARTIAL",
+      "direct_route_note": "Paid/free use and wash pass real GET/no-effect, POST/CSRF, charge, replay and fresh-form stage rejection; used/stage prefs persist and reset at New Day. Currency cannot go negative. Remaining: forced reward/loss/gem/turn outcomes, nowash branch and settings-editor validation.",
       "database_tables": [],
-      "database_behavior": "PASS: strict fresh install/reinstall and tested metadata writes; purchase/admin transactions not certified",
+      "database_behavior": "PASS for existing lifecycle plus tested transactional action paths; see security_notes for unclosed family gates",
       "daily_hooks": [
         "newday"
       ],
@@ -994,13 +1010,14 @@
       "integration_hooks": [
         "forest"
       ],
-      "php_8_4": "PASS for tested subset; overall BLOCKED",
-      "php_8_5": "PASS for tested subset; overall BLOCKED",
-      "mariadb_11_4": "PASS for tested subset; overall BLOCKED",
-      "mysql_8_4": "PASS for tested subset; overall BLOCKED",
+      "php_8_4": "PASS for tested components; final BLOCKED for remaining gates",
+      "php_8_5": "PASS for tested components; final BLOCKED for remaining gates",
+      "mariadb_11_4": "PASS for tested components; final BLOCKED for remaining gates",
+      "mysql_8_4": "PASS for tested components; final BLOCKED for remaining gates",
       "warnings_errors": "No PHP warnings/errors in the passing matrix tests; unexecuted paths unverified.",
-      "security_notes": "Forest navigation and New Day preference reset; paid/free use and reward/loss actions remain untested.",
-      "final_certification": "BLOCKED"
+      "security_notes": "Paid/free use and wash pass real GET/no-effect, POST/CSRF, charge, replay and fresh-form stage rejection; used/stage prefs persist and reset at New Day. Currency cannot go negative. Remaining: forced reward/loss/gem/turn outcomes, nowash branch and settings-editor validation.",
+      "final_certification": "BLOCKED",
+      "continuation_evidence": "See CORE-ROUTE-SECURITY.md for component gates and exact test names; prior lifecycle evidence is retained."
     },
     {
       "module": "racedwarf",
@@ -1127,7 +1144,7 @@
       "settings_preferences_result": "PASS for named defaults and raw round trips; NOT APPLICABLE for empty namespaces",
       "object_preferences_result": "PASS for mounts.findtavern values 0 and 1",
       "direct_runmodule_route": "BLOCKED",
-      "direct_route_note": "Full action authorization, POST/CSRF, output and replay certification not complete.",
+      "direct_route_note": "Existing choice text, newday/stat and combined-hook behavior PASS. Actual HTTP onboarding choice/invalid choice/POST/CSRF/persistence/reselection matrix remains unimplemented; Cities excluded.",
       "database_tables": [],
       "database_behavior": "PASS: strict fresh install/reinstall and tested metadata writes; purchase/admin transactions not certified",
       "daily_hooks": [],
@@ -1139,13 +1156,14 @@
         "village",
         "validforestloc"
       ],
-      "php_8_4": "PASS for tested subset; overall BLOCKED",
-      "php_8_5": "PASS for tested subset; overall BLOCKED",
-      "mariadb_11_4": "PASS for tested subset; overall BLOCKED",
-      "mysql_8_4": "PASS for tested subset; overall BLOCKED",
+      "php_8_4": "PASS for tested components; final BLOCKED for remaining gates",
+      "php_8_5": "PASS for tested components; final BLOCKED for remaining gates",
+      "mariadb_11_4": "PASS for tested components; final BLOCKED for remaining gates",
+      "mysql_8_4": "PASS for tested components; final BLOCKED for remaining gates",
       "warnings_errors": "No PHP warnings/errors in the passing matrix tests; unexecuted paths unverified.",
-      "security_notes": "Race naming/setrace, location changes with raw quote/backslash/UTF-8 values and no-Cities location hooks. Creature gold multiplier. Full selection HTTP and combat/location route security remain open. Optional Cities is outside the bundled set. Chooserace hook text/navigation passes.",
-      "final_certification": "BLOCKED"
+      "security_notes": "Existing choice text, newday/stat and combined-hook behavior PASS. Actual HTTP onboarding choice/invalid choice/POST/CSRF/persistence/reselection matrix remains unimplemented; Cities excluded.",
+      "final_certification": "BLOCKED",
+      "continuation_evidence": "See CORE-ROUTE-SECURITY.md for component gates and exact test names; prior lifecycle evidence is retained."
     },
     {
       "module": "raceelf",
@@ -1255,8 +1273,8 @@
       "object_preferences": {},
       "settings_preferences_result": "PASS for named defaults and raw round trips; NOT APPLICABLE for empty namespaces",
       "object_preferences_result": "NOT APPLICABLE",
-      "direct_runmodule_route": "NOT APPLICABLE",
-      "direct_route_note": "Empty historical run function; event/core hook route remains in scope.",
+      "direct_runmodule_route": "BLOCKED",
+      "direct_route_note": "Existing choice text, newday/stat and combined-hook behavior PASS. Actual HTTP onboarding choice/invalid choice/POST/CSRF/persistence/reselection matrix remains unimplemented; Cities excluded.",
       "database_tables": [],
       "database_behavior": "PASS: strict fresh install/reinstall and tested metadata writes; purchase/admin transactions not certified",
       "daily_hooks": [
@@ -1270,13 +1288,14 @@
         "villagetext",
         "validforestloc"
       ],
-      "php_8_4": "PASS for tested subset; overall BLOCKED",
-      "php_8_5": "PASS for tested subset; overall BLOCKED",
-      "mariadb_11_4": "PASS for tested subset; overall BLOCKED",
-      "mysql_8_4": "PASS for tested subset; overall BLOCKED",
+      "php_8_4": "PASS for tested components; final BLOCKED for remaining gates",
+      "php_8_5": "PASS for tested components; final BLOCKED for remaining gates",
+      "mariadb_11_4": "PASS for tested components; final BLOCKED for remaining gates",
+      "mysql_8_4": "PASS for tested components; final BLOCKED for remaining gates",
       "warnings_errors": "No PHP warnings/errors in the passing matrix tests; unexecuted paths unverified.",
-      "security_notes": "Race naming/setrace, location changes with raw quote/backslash/UTF-8 values and no-Cities location hooks. New Day defense formula, PvP/training buff flags and zero-stat guard. Full selection HTTP and combat/location route security remain open. Optional Cities is outside the bundled set. Chooserace hook text/navigation passes. Actual pvpadjust and adjuststats hooks preserve the level-10 +3 modifier.",
-      "final_certification": "BLOCKED"
+      "security_notes": "Existing choice text, newday/stat and combined-hook behavior PASS. Actual HTTP onboarding choice/invalid choice/POST/CSRF/persistence/reselection matrix remains unimplemented; Cities excluded.",
+      "final_certification": "BLOCKED",
+      "continuation_evidence": "See CORE-ROUTE-SECURITY.md for component gates and exact test names; prior lifecycle evidence is retained."
     },
     {
       "module": "racehuman",
@@ -1381,8 +1400,8 @@
       "object_preferences": {},
       "settings_preferences_result": "PASS for named defaults and raw round trips; NOT APPLICABLE for empty namespaces",
       "object_preferences_result": "NOT APPLICABLE",
-      "direct_runmodule_route": "NOT APPLICABLE",
-      "direct_route_note": "Empty historical run function; event/core hook route remains in scope.",
+      "direct_runmodule_route": "BLOCKED",
+      "direct_route_note": "Existing choice text, newday/stat and combined-hook behavior PASS. Actual HTTP onboarding choice/invalid choice/POST/CSRF/persistence/reselection matrix remains unimplemented; Cities excluded.",
       "database_tables": [],
       "database_behavior": "PASS: strict fresh install/reinstall and tested metadata writes; purchase/admin transactions not certified",
       "daily_hooks": [
@@ -1393,13 +1412,14 @@
         "villagetext",
         "validforestloc"
       ],
-      "php_8_4": "PASS for tested subset; overall BLOCKED",
-      "php_8_5": "PASS for tested subset; overall BLOCKED",
-      "mariadb_11_4": "PASS for tested subset; overall BLOCKED",
-      "mysql_8_4": "PASS for tested subset; overall BLOCKED",
+      "php_8_4": "PASS for tested components; final BLOCKED for remaining gates",
+      "php_8_5": "PASS for tested components; final BLOCKED for remaining gates",
+      "mariadb_11_4": "PASS for tested components; final BLOCKED for remaining gates",
+      "mysql_8_4": "PASS for tested components; final BLOCKED for remaining gates",
       "warnings_errors": "No PHP warnings/errors in the passing matrix tests; unexecuted paths unverified.",
-      "security_notes": "Race naming/setrace, location changes with raw quote/backslash/UTF-8 values and no-Cities location hooks. New Day turn bonus and historical singular/plural text. Full selection HTTP and combat/location route security remain open. Optional Cities is outside the bundled set. Chooserace hook text/navigation passes.",
-      "final_certification": "BLOCKED"
+      "security_notes": "Existing choice text, newday/stat and combined-hook behavior PASS. Actual HTTP onboarding choice/invalid choice/POST/CSRF/persistence/reselection matrix remains unimplemented; Cities excluded.",
+      "final_certification": "BLOCKED",
+      "continuation_evidence": "See CORE-ROUTE-SECURITY.md for component gates and exact test names; prior lifecycle evidence is retained."
     },
     {
       "module": "racetroll",
@@ -1503,8 +1523,8 @@
       "object_preferences": {},
       "settings_preferences_result": "PASS for named defaults and raw round trips; NOT APPLICABLE for empty namespaces",
       "object_preferences_result": "NOT APPLICABLE",
-      "direct_runmodule_route": "NOT APPLICABLE",
-      "direct_route_note": "Empty historical run function; event/core hook route remains in scope.",
+      "direct_runmodule_route": "BLOCKED",
+      "direct_route_note": "Existing choice text, newday/stat and combined-hook behavior PASS. Actual HTTP onboarding choice/invalid choice/POST/CSRF/persistence/reselection matrix remains unimplemented; Cities excluded.",
       "database_tables": [],
       "database_behavior": "PASS: strict fresh install/reinstall and tested metadata writes; purchase/admin transactions not certified",
       "daily_hooks": [
@@ -1518,13 +1538,14 @@
         "villagetext",
         "validforestloc"
       ],
-      "php_8_4": "PASS for tested subset; overall BLOCKED",
-      "php_8_5": "PASS for tested subset; overall BLOCKED",
-      "mariadb_11_4": "PASS for tested subset; overall BLOCKED",
-      "mysql_8_4": "PASS for tested subset; overall BLOCKED",
+      "php_8_4": "PASS for tested components; final BLOCKED for remaining gates",
+      "php_8_5": "PASS for tested components; final BLOCKED for remaining gates",
+      "mariadb_11_4": "PASS for tested components; final BLOCKED for remaining gates",
+      "mysql_8_4": "PASS for tested components; final BLOCKED for remaining gates",
       "warnings_errors": "No PHP warnings/errors in the passing matrix tests; unexecuted paths unverified.",
-      "security_notes": "Race naming/setrace, location changes with raw quote/backslash/UTF-8 values and no-Cities location hooks. New Day attack formula, PvP/training buff flags and zero-stat guard. Full selection HTTP and combat/location route security remain open. Optional Cities is outside the bundled set. Chooserace hook text/navigation passes. Actual pvpadjust and adjuststats hooks preserve the level-10 +3 modifier.",
-      "final_certification": "BLOCKED"
+      "security_notes": "Existing choice text, newday/stat and combined-hook behavior PASS. Actual HTTP onboarding choice/invalid choice/POST/CSRF/persistence/reselection matrix remains unimplemented; Cities excluded.",
+      "final_certification": "BLOCKED",
+      "continuation_evidence": "See CORE-ROUTE-SECURITY.md for component gates and exact test names; prior lifecycle evidence is retained."
     },
     {
       "module": "sethsong",
@@ -1571,10 +1592,10 @@
       "object_preferences": {},
       "settings_preferences_result": "PASS for named defaults and raw round trips; NOT APPLICABLE for empty namespaces",
       "object_preferences_result": "NOT APPLICABLE",
-      "direct_runmodule_route": "BLOCKED",
-      "direct_route_note": "PASS for real authenticated issued Inn-to-module-to-Inn HTTP navigation with all 24 active. Full action authorization, POST/CSRF, output and replay certification remains BLOCKED.",
+      "direct_runmodule_route": "PARTIAL",
+      "direct_route_note": "GET is read-only; real POST/CSRF increments daily been once and replay cannot repeat effect. Counter is rechecked under lock; original random effects retained. Remaining: complete HP/gold/gem branches, visit exhaustion with a fresh intent and settings-editor validation.",
       "database_tables": [],
-      "database_behavior": "PASS: strict fresh install/reinstall and tested metadata writes; purchase/admin transactions not certified",
+      "database_behavior": "PASS for existing lifecycle plus tested transactional action paths; see security_notes for unclosed family gates",
       "daily_hooks": [
         "newday"
       ],
@@ -1582,13 +1603,14 @@
       "integration_hooks": [
         "inn"
       ],
-      "php_8_4": "PASS for tested subset; overall BLOCKED",
-      "php_8_5": "PASS for tested subset; overall BLOCKED",
-      "mariadb_11_4": "PASS for tested subset; overall BLOCKED",
-      "mysql_8_4": "PASS for tested subset; overall BLOCKED",
+      "php_8_4": "PASS for tested components; final BLOCKED for remaining gates",
+      "php_8_5": "PASS for tested components; final BLOCKED for remaining gates",
+      "mariadb_11_4": "PASS for tested components; final BLOCKED for remaining gates",
+      "mysql_8_4": "PASS for tested components; final BLOCKED for remaining gates",
       "warnings_errors": "No PHP warnings/errors in the passing matrix tests; unexecuted paths unverified.",
-      "security_notes": "Inn navigation and daily preference reset; conversation/random-song outcomes and mutation security remain open. Issued direct route and return-to-Inn HTTP smoke passes on both targets.",
-      "final_certification": "BLOCKED"
+      "security_notes": "GET is read-only; real POST/CSRF increments daily been once and replay cannot repeat effect. Counter is rechecked under lock; original random effects retained. Remaining: complete HP/gold/gem branches, visit exhaustion with a fresh intent and settings-editor validation.",
+      "final_certification": "BLOCKED",
+      "continuation_evidence": "See CORE-ROUTE-SECURITY.md for component gates and exact test names; prior lifecycle evidence is retained."
     },
     {
       "module": "specialtydarkarts",
@@ -1674,8 +1696,8 @@
       "object_preferences": {},
       "settings_preferences_result": "PASS for named defaults and raw round trips; NOT APPLICABLE for empty namespaces",
       "object_preferences_result": "NOT APPLICABLE",
-      "direct_runmodule_route": "NOT APPLICABLE",
-      "direct_route_note": "Empty historical run function; event/core hook route remains in scope.",
+      "direct_runmodule_route": "BLOCKED",
+      "direct_route_note": "Existing valid skill-level buff/use and dragon-kill/reset hook fixtures PASS. Actual HTTP onboarding and combat action authority, invalid/negative levels, unavailable uses, POST/CSRF and duplicate use remain unclosed.",
       "database_tables": [],
       "database_behavior": "PASS: strict fresh install/reinstall and tested metadata writes; purchase/admin transactions not certified",
       "daily_hooks": [
@@ -1693,13 +1715,14 @@
         "dragonkill"
       ],
       "integration_hooks": [],
-      "php_8_4": "PASS for tested subset; overall BLOCKED",
-      "php_8_5": "PASS for tested subset; overall BLOCKED",
-      "mariadb_11_4": "PASS for tested subset; overall BLOCKED",
-      "mysql_8_4": "PASS for tested subset; overall BLOCKED",
+      "php_8_4": "PASS for tested components; final BLOCKED for remaining gates",
+      "php_8_5": "PASS for tested components; final BLOCKED for remaining gates",
+      "mariadb_11_4": "PASS for tested components; final BLOCKED for remaining gates",
+      "mysql_8_4": "PASS for tested components; final BLOCKED for remaining gates",
       "warnings_errors": "No PHP warnings/errors in the passing matrix tests; unexecuted paths unverified.",
-      "security_notes": "Specialty identity, skill increment, New Day uses, fight navigation, malformed/negative/unsupported level rejection and Dragon Kill reset. Full combat and selection route method/CSRF/replay certification remain open. Actual choice navigation and all four valid skill levels (1, 2, 3, 5) execute and spend the expected uses; Dark Arts companion construction also passes.",
-      "final_certification": "BLOCKED"
+      "security_notes": "Existing valid skill-level buff/use and dragon-kill/reset hook fixtures PASS. Actual HTTP onboarding and combat action authority, invalid/negative levels, unavailable uses, POST/CSRF and duplicate use remain unclosed.",
+      "final_certification": "BLOCKED",
+      "continuation_evidence": "See CORE-ROUTE-SECURITY.md for component gates and exact test names; prior lifecycle evidence is retained."
     },
     {
       "module": "specialtymysticpower",
@@ -1785,8 +1808,8 @@
       "object_preferences": {},
       "settings_preferences_result": "PASS for named defaults and raw round trips; NOT APPLICABLE for empty namespaces",
       "object_preferences_result": "NOT APPLICABLE",
-      "direct_runmodule_route": "NOT APPLICABLE",
-      "direct_route_note": "Empty historical run function; event/core hook route remains in scope.",
+      "direct_runmodule_route": "BLOCKED",
+      "direct_route_note": "Existing valid skill-level buff/use and dragon-kill/reset hook fixtures PASS. Actual HTTP onboarding and combat action authority, invalid/negative levels, unavailable uses, POST/CSRF and duplicate use remain unclosed.",
       "database_tables": [],
       "database_behavior": "PASS: strict fresh install/reinstall and tested metadata writes; purchase/admin transactions not certified",
       "daily_hooks": [
@@ -1804,13 +1827,14 @@
         "dragonkill"
       ],
       "integration_hooks": [],
-      "php_8_4": "PASS for tested subset; overall BLOCKED",
-      "php_8_5": "PASS for tested subset; overall BLOCKED",
-      "mariadb_11_4": "PASS for tested subset; overall BLOCKED",
-      "mysql_8_4": "PASS for tested subset; overall BLOCKED",
+      "php_8_4": "PASS for tested components; final BLOCKED for remaining gates",
+      "php_8_5": "PASS for tested components; final BLOCKED for remaining gates",
+      "mariadb_11_4": "PASS for tested components; final BLOCKED for remaining gates",
+      "mysql_8_4": "PASS for tested components; final BLOCKED for remaining gates",
       "warnings_errors": "No PHP warnings/errors in the passing matrix tests; unexecuted paths unverified.",
-      "security_notes": "Specialty identity, skill increment, New Day uses, fight navigation, malformed/negative/unsupported level rejection and Dragon Kill reset. Full combat and selection route method/CSRF/replay certification remain open. Actual choice navigation and all four valid skill levels (1, 2, 3, 5) execute and spend the expected uses; Dark Arts companion construction also passes.",
-      "final_certification": "BLOCKED"
+      "security_notes": "Existing valid skill-level buff/use and dragon-kill/reset hook fixtures PASS. Actual HTTP onboarding and combat action authority, invalid/negative levels, unavailable uses, POST/CSRF and duplicate use remain unclosed.",
+      "final_certification": "BLOCKED",
+      "continuation_evidence": "See CORE-ROUTE-SECURITY.md for component gates and exact test names; prior lifecycle evidence is retained."
     },
     {
       "module": "specialtythiefskills",
@@ -1896,8 +1920,8 @@
       "object_preferences": {},
       "settings_preferences_result": "PASS for named defaults and raw round trips; NOT APPLICABLE for empty namespaces",
       "object_preferences_result": "NOT APPLICABLE",
-      "direct_runmodule_route": "NOT APPLICABLE",
-      "direct_route_note": "Empty historical run function; event/core hook route remains in scope.",
+      "direct_runmodule_route": "BLOCKED",
+      "direct_route_note": "Existing valid skill-level buff/use and dragon-kill/reset hook fixtures PASS. Actual HTTP onboarding and combat action authority, invalid/negative levels, unavailable uses, POST/CSRF and duplicate use remain unclosed.",
       "database_tables": [],
       "database_behavior": "PASS: strict fresh install/reinstall and tested metadata writes; purchase/admin transactions not certified",
       "daily_hooks": [
@@ -1915,13 +1939,14 @@
         "dragonkill"
       ],
       "integration_hooks": [],
-      "php_8_4": "PASS for tested subset; overall BLOCKED",
-      "php_8_5": "PASS for tested subset; overall BLOCKED",
-      "mariadb_11_4": "PASS for tested subset; overall BLOCKED",
-      "mysql_8_4": "PASS for tested subset; overall BLOCKED",
+      "php_8_4": "PASS for tested components; final BLOCKED for remaining gates",
+      "php_8_5": "PASS for tested components; final BLOCKED for remaining gates",
+      "mariadb_11_4": "PASS for tested components; final BLOCKED for remaining gates",
+      "mysql_8_4": "PASS for tested components; final BLOCKED for remaining gates",
       "warnings_errors": "No PHP warnings/errors in the passing matrix tests; unexecuted paths unverified.",
-      "security_notes": "Specialty identity, skill increment, New Day uses, fight navigation, malformed/negative/unsupported level rejection and Dragon Kill reset. Full combat and selection route method/CSRF/replay certification remain open. Actual choice navigation and all four valid skill levels (1, 2, 3, 5) execute and spend the expected uses; Dark Arts companion construction also passes.",
-      "final_certification": "BLOCKED"
+      "security_notes": "Existing valid skill-level buff/use and dragon-kill/reset hook fixtures PASS. Actual HTTP onboarding and combat action authority, invalid/negative levels, unavailable uses, POST/CSRF and duplicate use remain unclosed.",
+      "final_certification": "BLOCKED",
+      "continuation_evidence": "See CORE-ROUTE-SECURITY.md for component gates and exact test names; prior lifecycle evidence is retained."
     }
   ],
   "validated_implementation_sha": "e5e9193aba19e7d98ffa5a2c558eda2b9c96ca52",
@@ -1940,5 +1965,11 @@
       "job": 103778999702,
       "result": "PASS for tested subset"
     }
-  ]
+  ],
+  "counts": {
+    "PASS": 3,
+    "PASS WITH DOCUMENTED LIMITATION": 0,
+    "BLOCKED": 21,
+    "lifecycle_PASS": 24
+  }
 }

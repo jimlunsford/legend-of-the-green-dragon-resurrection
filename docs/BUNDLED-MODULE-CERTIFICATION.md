@@ -1,18 +1,12 @@
 # Bundled module certification
 
-**Final certification: BLOCKED for all 24. Lifecycle/metadata certification: PASS for all 24.** Fully passing: 0; passing with documented limitations: 0; blocked: 24. This is a continuation checkpoint, not a claim of module/public-hosting safety.
+**Final counts: 3 PASS, 0 PASS WITH DOCUMENTED LIMITATION, 21 BLOCKED. Lifecycle/metadata: 24 PASS. Modern-core merge: NOT READY. Public hosting: NO.**
 
-The set and versions below were read from the actual 24 `modules/*.php` entrypoints and their `getmoduleinfo` functions. [Machine-readable matrix](BUNDLED-MODULE-CERTIFICATION.json) contains every setting/preference descriptor, dependency declaration, registered hook/callback/priority/condition, event, route status, schema and platform result. No module declares a hard `requires` dependency. Dark Horse games consume the `darkhorsegame` hook; optional Cities integration is outside this bundled set. Absence of a hard dependency is preserved, not bypassed.
+This 2026-09-13 continuation updates the original all-BLOCKED checkpoint using new mutation evidence. The earlier Phase 3 history remains in [the original checkpoint](MODERN-CORE-CHECKPOINT-20260913-PHASE3.md). Only the 24 shipped entrypoints are in scope. No archive module was imported. No module is promoted merely because a route renders.
 
-## Shared lifecycle evidence
+PASS covers the named module in supported bundled use, not arbitrary core/editor routes or public hosting. Find Gold reads server settings, but the general configuration editor remains a core merge blocker. Optional Cities integration, legacy-column migration and destructive uninstall recovery are outside this fresh-install bundled milestone. A nonsecurity limitation is not invented to disguise a security blocker.
 
-`ModuleCertificationTest` starts with installed/inactive modules, rejects injection while inactive, activates using the real API, verifies active database state, dependencies and callable registrations, round-trips every named setting/user preference (including apostrophe, backslash and UTF-8), primes hook preloads, deactivates, verifies disabled injection and preload invalidation, reactivates, reinstalls and compares hooks/events exactly, preserves a configured setting, then explicitly reactivates. All 24 run together; registrations have no duplicates and Dag/Drinks support data is preserved. Fixtures restore inactive state. Fresh installation still defaults to inactive.
-
-Dependency fixtures cover valid, missing, inactive, insufficient-version, malformed and cyclic descriptors. Version checks use version_compare, and cache invalidation also invalidates dependents. Reinstallation is tested on the modern schema; historical-column conversion and destructive uninstall/data-loss recovery are not certified.
-
-Both supported targets pass the tested subset: PHP 8.4.25 / MariaDB 11.4.13 and PHP 8.5.10 / MySQL 8.4.11. Passing tests report no PHP notices/warnings/deprecations. These results do not cover unexecuted random branches. CI counts and exact conclusions are in the [Phase 3 checkpoint](MODERN-CORE-CHECKPOINT-20260913-PHASE3.md).
-
-| Module | Historical version | Lifecycle | Final certification |
+| Module | Version | Lifecycle | Final certification |
 |---|---|---|---|
 | `cedrikspotions` | 2.6 | PASS | BLOCKED |
 | `crazyaudrey` | 1.1 | PASS | BLOCKED |
@@ -20,9 +14,9 @@ Both supported targets pass the tested subset: PHP 8.4.25 / MariaDB 11.4.13 and 
 | `darkhorse` | 1.1 | PASS | BLOCKED |
 | `drinks` | 1.1 | PASS | BLOCKED |
 | `fairy` | 1.1 | PASS | BLOCKED |
-| `findgem` | 1.1 | PASS | BLOCKED |
-| `findgold` | 1.1 | PASS | BLOCKED |
-| `foilwench` | 1.1 | PASS | BLOCKED |
+| `findgem` | 1.1 | PASS | PASS |
+| `findgold` | 1.1 | PASS | PASS |
+| `foilwench` | 1.1 | PASS | PASS |
 | `game_dice` | 1.1 | PASS | BLOCKED |
 | `game_fivesix` | 1.7 | PASS | BLOCKED |
 | `game_stones` | 1.1 | PASS | BLOCKED |
@@ -39,304 +33,180 @@ Both supported targets pass the tested subset: PHP 8.4.25 / MariaDB 11.4.13 and 
 | `specialtymysticpower` | 1.0 | PASS | BLOCKED |
 | `specialtythiefskills` | 1.0 | PASS | BLOCKED |
 
-The final implementation fixture also exercises real authenticated Village, Inn and Forest HTTP rendering with all 24 active, and follows issued Dag/Lovers/Seth direct routes and their return-to-Inn links. All four valid skill levels for all three specialties construct their expected buffs/companion and spend the expected uses. Race choice text and actual Elf/Troll PvP/stat-adjustment hooks pass. The full mutation-security gates below remain open.
+## Shared evidence
+
+All 24 install, activate, deactivate, reactivate, reinstall and round-trip named setting/preference values using the real API; registrations, dependency enforcement and cache invalidation are tested. All 24 run together. Race/specialty hooks and active daily-hook failure/retry/concurrency tests remain passing. These facts do not certify their untested HTTP mutation boundaries.
+
+The shared player transaction locks/rechecks the actor, binds changed fields, includes related DML, rolls back invalid currency and restores in-memory state on failure. The current-event contract adds POST/CSRF, a session event generation, consumed intent and persisted completion to seven Forest modules. Outhouse additionally persists the paid/free visit stage. Stories, reward ranges, price formulas and probabilities remain historical except documented invalid-state corrections in the continuation checkpoint.
+
+Real HTTP evidence covers Dag placement, Drinks purchase/editor save, all five Cedrik effects, full Stones choose/bet/draw/settle, seven Forest event routes, Outhouse paid/free/wash, Seth song consumption and forged player-preference namespace rejection. See [route security](CORE-ROUTE-SECURITY.md), [serialized state](SERIALIZED-STATE-AUDIT.md) and [continuation results](MODERN-CORE-CHECKPOINT-20260913-PHASE3-CLOSURE.md).
 
 ## Per-module evidence and remaining gates
 
-### cedrikspotions (2.6)
+### cedrikspotions (2.6): BLOCKED
 
-Inn header navigation, health recalculation, real daily callback and retry receipts; purchase/effect routes remain untested.
+All five fixed-cost effects pass real POST/CSRF, typed quantity, server availability, persisted state and replay tests; existing daily/HP hooks remain passing. Remaining: full configured/random-cost and settings-editor type/authorization matrix, actual transmutation New Day route persistence.
 
-- Hooks: `header-inn`, `newday-runonce`, `hprecalc`.
-- Events: NOT APPLICABLE.
-- Settings: `ischarm`, `ismax`, `istemp`, `isforget`, `istrans`, `charmcost`, `maxcost`, `tempcost`, `forgcost`, `transcost`, `random`, `minrand`, `maxrand`, `randcost`, `transmuteturns`, `defmod`, `atkmod`, `survive`, `charmgain`, `vitalgain`, `tempgain`, `carrydk`.
-- User preferences: `extrahps`.
-- Object preferences: NOT APPLICABLE.
-- Direct runmodule route: BLOCKED. Full action authorization, POST/CSRF, output and replay certification not complete.
-- Schema: No new module table on fresh installation. Shared settings/preferences and player state only.
+- Component route result: PARTIAL.
+- Exact metadata, descriptors, hooks, dependencies, database tables and prior lifecycle evidence remain in [the JSON record](BUNDLED-MODULE-CERTIFICATION.json).
 
-### crazyaudrey (1.1)
+### crazyaudrey (1.1): BLOCKED
 
-Combined New Day reset, daily countdown/retry, event collection and forest entrance; random play/reward paths remain untested.
+Shared Forest event POST/CSRF/current-state/replay path passes. Direct Village paid pet/play route is still a GET mutation without the shared transaction/action contract.
 
-- Hooks: `village`, `village-desc`, `newday`, `newday-runonce`.
-- Events: `forest`: `return 100;`.
-- Settings: `cost`, `animal`, `animals`, `lanimal`, `lanimals`, `sound`, `buffname`, `gamedaysremaining`, `defaultanimal`, `defaultanimals`, `defaultsound`, `defaultbuffname`, `profit`, `villagepercent`.
-- User preferences: `played`.
-- Object preferences: NOT APPLICABLE.
-- Direct runmodule route: BLOCKED. Full action authorization, POST/CSRF, output and replay certification not complete.
-- Schema: No new module table on fresh installation. Shared settings/preferences and player state only.
+- Component route result: BLOCKED.
+- Exact metadata, descriptors, hooks, dependencies, database tables and prior lifecycle evidence remain in [the JSON record](BUNDLED-MODULE-CERTIFICATION.json).
 
-### dag (1.3)
+### dag (1.3): BLOCKED
 
-Strict bounty table install/reinstall with row preservation, Inn hooks, New Day count reset and PvP no-bounty path. Bounty creation/claims/admin mutations remain unreviewed. Issued direct route and return-to-Inn HTTP smoke passes on both targets.
+Bound transactional eligible placement, quota/funds checks, claim status/own-bounty handling and service replay pass; real player placement/GET/CSRF/replay and unprivileged admin denial pass. Remaining: funded PvP HTTP authority/claim, authorized close/cleanup/place HTTP matrix and failure injection at bounty-specific write points.
 
-- Hooks: `inn-desc`, `inn`, `superuser`, `newday`, `pvpwin`, `dragonkill`, `showsettings`, `delete_character`.
-- Events: NOT APPLICABLE.
-- Settings: `bountymin`, `bountymax`, `bountylevel`, `bountyfee`, `maxbounties`.
-- User preferences: `bounties`.
-- Object preferences: NOT APPLICABLE.
-- Direct runmodule route: BLOCKED. PASS for real authenticated issued Inn-to-module-to-Inn HTTP navigation with all 24 active. Full action authorization, POST/CSRF, output and replay certification remains BLOCKED.
-- Schema: bounty support table; strict fresh installation and row-preserving reinstall PASS.
+- Component route result: PARTIAL.
+- Exact metadata, descriptors, hooks, dependencies, database tables and prior lifecycle evidence remain in [the JSON record](BUNDLED-MODULE-CERTIFICATION.json).
 
-### darkhorse (1.1)
+### darkhorse (1.1): BLOCKED
 
-Forest/travel chance, mount object preference, forest entrance and darkhorsegame callbacks from all three games. Tavern mutations and return navigation validation remain open.
+Lifecycle, event entrance and Stones return smoke pass. Bartender name/search SQL is still unbound, paid information is a GET mutation, and oldman clears specialmisc without an independent active-wager contract.
 
-- Hooks: `forest`, `mountfeatures`, `moderate`.
-- Events: `forest`: `bundled:darkhorse-without-tavern-mount`; `travel`: `bundled:darkhorse-without-tavern-mount`.
-- Settings: `tavernname`.
-- User preferences: NOT APPLICABLE.
-- Object preferences: mounts.
-- Direct runmodule route: BLOCKED. Full action authorization, POST/CSRF, output and replay certification not complete.
-- Schema: No new module table on fresh installation. Shared settings/preferences and player state only.
+- Component route result: BLOCKED.
+- Exact metadata, descriptors, hooks, dependencies, database tables and prior lifecycle evidence remain in [the JSON record](BUNDLED-MODULE-CERTIFICATION.json).
 
-### drinks (1.1)
+### drinks (1.1): BLOCKED
 
-Strict drinks table and three default records preserved on reinstall, daily state, quota text/list and graveyard sobriety. Purchase and editor mutations remain unreviewed.
+Typed active drink purchase, authoritative cost, hard-drink limit, bounded drunkenness and one-use POST/CSRF pass. Typed editor save/privilege/CSRF/replay and apostrophe/backslash/UTF-8 escaping are exercised. Remaining: editor create/delete/activation full role matrix, preference-granted editor matrix and complete daily/drunken-state bounds under configured values.
 
-- Hooks: `ale`, `newday`, `superuser`, `header-graveyard`, `commentary`, `soberup`, `dragonkill`.
-- Events: NOT APPLICABLE.
-- Settings: `hardlimit`, `maxdrunk`.
-- User preferences: `drunkeness`, `harddrinks`, `canedit`, `noslur`.
-- Object preferences: NOT APPLICABLE.
-- Direct runmodule route: BLOCKED. Full action authorization, POST/CSRF, output and replay certification not complete.
-- Schema: drinks support table; strict fresh installation and row-preserving reinstall PASS.
+- Component route result: PARTIAL.
+- Exact metadata, descriptors, hooks, dependencies, database tables and prior lifecycle evidence remain in [the JSON record](BUNDLED-MODULE-CERTIFICATION.json).
 
-### fairy (1.1)
+### fairy (1.1): BLOCKED
 
-Forest event collection/entrance and health recalculation; random reward/loss branches remain untested.
+Current Forest event POST/CSRF and one-time give action pass; scalar-only state and transactional player/pref writes. Remaining: all HP/pref/specialty/no-gem result branches with configured values and shared settings-editor closure.
 
-- Hooks: `hprecalc`.
-- Events: `forest`: `return 100;`.
-- Settings: `carrydk`, `hptoaward`, `fftoaward`.
-- User preferences: `extrahps`.
-- Object preferences: NOT APPLICABLE.
-- Direct runmodule route: NOT APPLICABLE. Empty historical run function; event/core hook route remains in scope.
-- Schema: No new module table on fresh installation. Shared settings/preferences and player state only.
+- Component route result: PARTIAL.
+- Exact metadata, descriptors, hooks, dependencies, database tables and prior lifecycle evidence remain in [the JSON record](BUNDLED-MODULE-CERTIFICATION.json).
 
-### findgem (1.1)
+### findgem (1.1): PASS
 
-Forest/travel registration and active collection; real forest event grants one gem. Shared event route replay/method/CSRF certification remains open.
+Simple supported Forest reward passes actual GET/no-effect, POST/CSRF, exactly one gem, persisted completion and replay rejection. Active-module/current-event authorization, bound transactional writes and currency bounds apply. No direct mutation, user setting, object preference or serialized state. Optional Cities travel integration is outside this bundled scope.
 
-- Hooks: NOT APPLICABLE.
-- Events: `forest`: `return 100;`; `travel`: `return 20;`.
-- Settings: NOT APPLICABLE.
-- User preferences: NOT APPLICABLE.
-- Object preferences: NOT APPLICABLE.
-- Direct runmodule route: NOT APPLICABLE. Empty historical run function; event/core hook route remains in scope.
-- Schema: No new module table on fresh installation. Shared settings/preferences and player state only.
+- Component route result: PASS.
+- Exact metadata, descriptors, hooks, dependencies, database tables and prior lifecycle evidence remain in [the JSON record](BUNDLED-MODULE-CERTIFICATION.json).
 
-### findgold (1.1)
+### findgold (1.1): PASS
 
-Forest/travel registration and active collection; real forest event grants gold. Shared event route replay/method/CSRF certification remains open.
+Supported Forest reward passes actual GET/no-effect, POST/CSRF, level-scaled historical reward range, persisted completion and no repeat reward. Server settings supply amounts; bound transactional writes reject invalid resulting currency. No player amount authority or serialized state. Optional Cities integration is outside scope; general administrator settings editor remains a separate core blocker.
 
-- Hooks: NOT APPLICABLE.
-- Events: `forest`: `return 100;`; `travel`: `return 20;`.
-- Settings: `mingold`, `maxgold`.
-- User preferences: NOT APPLICABLE.
-- Object preferences: NOT APPLICABLE.
-- Direct runmodule route: NOT APPLICABLE. Empty historical run function; event/core hook route remains in scope.
-- Schema: No new module table on fresh installation. Shared settings/preferences and player state only.
+- Component route result: PASS.
+- Exact metadata, descriptors, hooks, dependencies, database tables and prior lifecycle evidence remain in [the JSON record](BUNDLED-MODULE-CERTIFICATION.json).
 
-### foilwench (1.1)
+### foilwench (1.1): PASS
 
-Forest event collection/entrance and gift branch spends a gem and increments specialty. GET mutation remains a blocker.
+Current Forest event requires POST/CSRF and consumed intent. Real HTTP proves exactly one gem spent and one Dark Arts skill increment, no replay increment, no reward without a gem and malformed operation rejection. Existing specialty hook fixtures cover the bundled skill handlers. Bound player/pref transaction and safe LoGD output; no serialized state.
 
-- Hooks: NOT APPLICABLE.
-- Events: `forest`: `return 100;`.
-- Settings: NOT APPLICABLE.
-- User preferences: NOT APPLICABLE.
-- Object preferences: NOT APPLICABLE.
-- Direct runmodule route: NOT APPLICABLE. Empty historical run function; event/core hook route remains in scope.
-- Schema: No new module table on fresh installation. Shared settings/preferences and player state only.
-
-### game_dice (1.1)
-
-Module-defined darkhorsegame navigation with all game modules active; direct game execution, amount validation and replay remain open.
-
-- Hooks: `darkhorsegame`.
-- Events: NOT APPLICABLE.
-- Settings: NOT APPLICABLE.
-- User preferences: NOT APPLICABLE.
-- Object preferences: NOT APPLICABLE.
-- Direct runmodule route: BLOCKED. Full action authorization, POST/CSRF, output and replay certification not complete.
-- Schema: No new module table on fresh installation. Shared settings/preferences and player state only.
-
-### game_fivesix (1.7)
-
-Module-defined darkhorsegame navigation and combined New Day execution; direct play/jackpot persistence and mutation security remain open.
-
-- Hooks: `darkhorsegame`, `newday`.
-- Events: NOT APPLICABLE.
-- Settings: `cost`, `dailyuses`, `jackpot`, `maxjackpot`, `lastwin5`, `lastpot5`, `lastwin4`, `lastpot4`, `lastwin3`, `lastpot3`.
-- User preferences: `playstoday`.
-- Object preferences: NOT APPLICABLE.
-- Direct runmodule route: BLOCKED. Full action authorization, POST/CSRF, output and replay certification not complete.
-- Schema: No new module table on fresh installation. Shared settings/preferences and player state only.
-
-### game_stones (1.1)
-
-Module-defined darkhorsegame navigation; direct game play, unvalidated unserialize of specialmisc, bets and replay remain open.
-
-- Hooks: `darkhorsegame`.
-- Events: NOT APPLICABLE.
-- Settings: NOT APPLICABLE.
-- User preferences: NOT APPLICABLE.
-- Object preferences: NOT APPLICABLE.
-- Direct runmodule route: BLOCKED. Full action authorization, POST/CSRF, output and replay certification not complete.
-- Schema: No new module table on fresh installation. Shared settings/preferences and player state only.
-
-### glowingstream (1.1)
-
-Forest/travel registration and active collection; forest entrance. Drink outcome branches remain untested.
-
-- Hooks: NOT APPLICABLE.
-- Events: `forest`: `return 100;`; `travel`: `return 100;`.
-- Settings: NOT APPLICABLE.
-- User preferences: NOT APPLICABLE.
-- Object preferences: NOT APPLICABLE.
-- Direct runmodule route: NOT APPLICABLE. Empty historical run function; event/core hook route remains in scope.
-- Schema: No new module table on fresh installation. Shared settings/preferences and player state only.
-
-### goldmine (1.0)
-
-Forest event collection/entrance and decline/exit; mining random branches and economic mutation security remain open.
-
-- Hooks: NOT APPLICABLE.
-- Events: `forest`: `return 100;`.
-- Settings: `alwaystether`, `percentgemloss`, `percentgoldloss`.
-- User preferences: NOT APPLICABLE.
-- Object preferences: mounts.
-- Direct runmodule route: NOT APPLICABLE. Empty historical run function; event/core hook route remains in scope.
-- Schema: No new module table on fresh installation. Shared settings/preferences and player state only.
-
-### lovers (1.0)
-
-Inn navigation and daily preference reset; conversation/effect mutations and output audit remain open. Issued direct route and return-to-Inn HTTP smoke passes on both targets.
-
-- Hooks: `newday`, `inn`.
-- Events: NOT APPLICABLE.
-- Settings: NOT APPLICABLE.
-- User preferences: `seenlover`.
-- Object preferences: NOT APPLICABLE.
-- Direct runmodule route: BLOCKED. PASS for real authenticated issued Inn-to-module-to-Inn HTTP navigation with all 24 active. Full action authorization, POST/CSRF, output and replay certification remains BLOCKED.
-- Schema: No new module table on fresh installation. Shared settings/preferences and player state only.
-
-### outhouse (2.0)
-
-Forest navigation and New Day preference reset; paid/free use and reward/loss actions remain untested.
-
-- Hooks: `forest`, `newday`.
-- Events: NOT APPLICABLE.
-- Settings: `cost`, `goldinhand`, `giveback`, `takeback`, `goodmusthit`, `badmusthit`, `givegempercent`, `giveturnchance`.
-- User preferences: `usedouthouse`.
-- Object preferences: NOT APPLICABLE.
-- Direct runmodule route: BLOCKED. Full action authorization, POST/CSRF, output and replay certification not complete.
-- Schema: No new module table on fresh installation. Shared settings/preferences and player state only.
-
-### racedwarf (1.1)
-
-Race naming/setrace, location changes with raw quote/backslash/UTF-8 values and no-Cities location hooks. Creature gold multiplier. Full selection HTTP and combat/location route security remain open. Optional Cities is outside the bundled set. Chooserace hook text/navigation passes.
+- Component route result: PASS.
+- Exact metadata, descriptors, hooks, dependencies, database tables and prior lifecycle evidence remain in [the JSON record](BUNDLED-MODULE-CERTIFICATION.json).
 
-- Hooks: `chooserace`, `setrace`, `creatureencounter`, `villagetext`, `travel`, `village`, `validlocation`, `validforestloc`, `moderate`, `drinks-text`, `changesetting`, `drinks-check`, `raceminedeath`, `racenames`, `camplocs`, `mercenarycamptext`.
-- Events: NOT APPLICABLE.
-- Settings: `villagename`, `minedeathchance`.
-- User preferences: NOT APPLICABLE.
-- Object preferences: drinks.
-- Direct runmodule route: BLOCKED. Full action authorization, POST/CSRF, output and replay certification not complete.
-- Schema: No new module table on fresh installation. Shared settings/preferences and player state only.
+### game_dice (1.1): BLOCKED
 
-### raceelf (1.0)
+Lifecycle/hook PASS. Direct game still trusts bet/try/what across requests, uses GET roll/settlement and has no certified server wager/replay contract.
 
-Race naming/setrace, location changes with raw quote/backslash/UTF-8 values and no-Cities location hooks. New Day defense formula, PvP/training buff flags and zero-stat guard. Full selection HTTP and combat/location route security remain open. Optional Cities is outside the bundled set. Chooserace hook text/navigation passes. Actual pvpadjust and adjuststats hooks preserve the level-10 +3 modifier.
+- Component route result: BLOCKED.
+- Exact metadata, descriptors, hooks, dependencies, database tables and prior lifecycle evidence remain in [the JSON record](BUNDLED-MODULE-CERTIFICATION.json).
 
-- Hooks: `chooserace`, `setrace`, `newday`, `villagetext`, `travel`, `validlocation`, `validforestloc`, `moderate`, `changesetting`, `raceminedeath`, `pvpadjust`, `adjuststats`, `racenames`, `weaponstext`.
-- Events: NOT APPLICABLE.
-- Settings: `villagename`, `minedeathchance`.
-- User preferences: NOT APPLICABLE.
-- Object preferences: NOT APPLICABLE.
-- Direct runmodule route: NOT APPLICABLE. Empty historical run function; event/core hook route remains in scope.
-- Schema: No new module table on fresh installation. Shared settings/preferences and player state only.
+### game_fivesix (1.7): BLOCKED
 
-### racehuman (1.0)
+Lifecycle/hook PASS. Direct roll/wager/jackpot mutations and shared jackpot locking need POST/CSRF, typed authoritative state and replay/atomicity closure.
 
-Race naming/setrace, location changes with raw quote/backslash/UTF-8 values and no-Cities location hooks. New Day turn bonus and historical singular/plural text. Full selection HTTP and combat/location route security remain open. Optional Cities is outside the bundled set. Chooserace hook text/navigation passes.
+- Component route result: BLOCKED.
+- Exact metadata, descriptors, hooks, dependencies, database tables and prior lifecycle evidence remain in [the JSON record](BUNDLED-MODULE-CERTIFICATION.json).
 
-- Hooks: `chooserace`, `setrace`, `newday`, `villagetext`, `stabletext`, `travel`, `validlocation`, `validforestloc`, `moderate`, `changesetting`, `raceminedeath`, `stablelocs`, `racenames`.
-- Events: NOT APPLICABLE.
-- Settings: `villagename`, `minedeathchance`, `bonus`.
-- User preferences: NOT APPLICABLE.
-- Object preferences: NOT APPLICABLE.
-- Direct runmodule route: NOT APPLICABLE. Empty historical run function; event/core hook route remains in scope.
-- Schema: No new module table on fresh installation. Shared settings/preferences and player state only.
+### game_stones (1.1): BLOCKED
 
-### racetroll (1.0)
+JSON state, exact schema, malicious serialized object rejection, positive authoritative bet, one-use choose/bet/draw/settle and duplicate settlement pass unit and full HTTP game tests. Remaining: surrounding Dark Horse wager abandonment/state transitions must be independent of navigation; bet is charged on settlement and oldman resets specialmisc.
 
-Race naming/setrace, location changes with raw quote/backslash/UTF-8 values and no-Cities location hooks. New Day attack formula, PvP/training buff flags and zero-stat guard. Full selection HTTP and combat/location route security remain open. Optional Cities is outside the bundled set. Chooserace hook text/navigation passes. Actual pvpadjust and adjuststats hooks preserve the level-10 +3 modifier.
+- Component route result: BLOCKED.
+- Exact metadata, descriptors, hooks, dependencies, database tables and prior lifecycle evidence remain in [the JSON record](BUNDLED-MODULE-CERTIFICATION.json).
 
-- Hooks: `chooserace`, `setrace`, `newday`, `villagetext`, `travel`, `validlocation`, `validforestloc`, `moderate`, `changesetting`, `raceminedeath`, `pvpadjust`, `adjuststats`, `racenames`.
-- Events: NOT APPLICABLE.
-- Settings: `villagename`, `minedeathchance`.
-- User preferences: NOT APPLICABLE.
-- Object preferences: NOT APPLICABLE.
-- Direct runmodule route: NOT APPLICABLE. Empty historical run function; event/core hook route remains in scope.
-- Schema: No new module table on fresh installation. Shared settings/preferences and player state only.
+### glowingstream (1.1): BLOCKED
 
-### sethsong (1.1)
+Shared current-event POST/CSRF and consumed drink action pass. Historical effects unchanged; transactional bounded currency. Remaining: all value-changing branches, configured effects and settings-editor validation evidence.
 
-Inn navigation and daily preference reset; conversation/random-song outcomes and mutation security remain open. Issued direct route and return-to-Inn HTTP smoke passes on both targets.
+- Component route result: PARTIAL.
+- Exact metadata, descriptors, hooks, dependencies, database tables and prior lifecycle evidence remain in [the JSON record](BUNDLED-MODULE-CERTIFICATION.json).
 
-- Hooks: `inn`, `newday`.
-- Events: NOT APPLICABLE.
-- Settings: `bhploss`, `shploss`, `hpgain`, `maxgems`, `mingems`, `mingold`, `maxgold`, `goldloss`, `visits`.
-- User preferences: `been`.
-- Object preferences: NOT APPLICABLE.
-- Direct runmodule route: BLOCKED. PASS for real authenticated issued Inn-to-module-to-Inn HTTP navigation with all 24 active. Full action authorization, POST/CSRF, output and replay certification remains BLOCKED.
-- Schema: No new module table on fresh installation. Shared settings/preferences and player state only.
+### goldmine (1.0): BLOCKED
 
-### specialtydarkarts (1.1)
+Shared current-event POST/CSRF, mine action and consumed reward pass. Remaining: alternate reward/loss and optional mount-specific branches, configured amounts and settings-editor validation.
 
-Specialty identity, skill increment, New Day uses, fight navigation, malformed/negative/unsupported level rejection and Dragon Kill reset. Full combat and selection route method/CSRF/replay certification remain open. Actual choice navigation and all four valid skill levels (1, 2, 3, 5) execute and spend the expected uses; Dark Arts companion construction also passes.
+- Component route result: PARTIAL.
+- Exact metadata, descriptors, hooks, dependencies, database tables and prior lifecycle evidence remain in [the JSON record](BUNDLED-MODULE-CERTIFICATION.json).
 
-- Hooks: `choose-specialty`, `set-specialty`, `fightnav-specialties`, `apply-specialties`, `newday`, `incrementspecialty`, `specialtynames`, `specialtymodules`, `specialtycolor`, `dragonkill`.
-- Events: NOT APPLICABLE.
-- Settings: NOT APPLICABLE.
-- User preferences: `skill`, `uses`.
-- Object preferences: NOT APPLICABLE.
-- Direct runmodule route: NOT APPLICABLE. Empty historical run function; event/core hook route remains in scope.
-- Schema: No new module table on fresh installation. Shared settings/preferences and player state only.
+### lovers (1.0): BLOCKED
 
-### specialtymysticpower (1.0)
+Existing hook semantics and issued Inn route render PASS. Value-changing conversation/flirt/chat routes still require daily-stage authorization, POST/CSRF and replay closure.
 
-Specialty identity, skill increment, New Day uses, fight navigation, malformed/negative/unsupported level rejection and Dragon Kill reset. Full combat and selection route method/CSRF/replay certification remain open. Actual choice navigation and all four valid skill levels (1, 2, 3, 5) execute and spend the expected uses; Dark Arts companion construction also passes.
+- Component route result: BLOCKED.
+- Exact metadata, descriptors, hooks, dependencies, database tables and prior lifecycle evidence remain in [the JSON record](BUNDLED-MODULE-CERTIFICATION.json).
 
-- Hooks: `choose-specialty`, `set-specialty`, `fightnav-specialties`, `apply-specialties`, `newday`, `incrementspecialty`, `specialtynames`, `specialtymodules`, `specialtycolor`, `dragonkill`.
-- Events: NOT APPLICABLE.
-- Settings: NOT APPLICABLE.
-- User preferences: `skill`, `uses`.
-- Object preferences: NOT APPLICABLE.
-- Direct runmodule route: NOT APPLICABLE. Empty historical run function; event/core hook route remains in scope.
-- Schema: No new module table on fresh installation. Shared settings/preferences and player state only.
+### outhouse (2.0): BLOCKED
 
-### specialtythiefskills (1.0)
+Paid/free use and wash pass real GET/no-effect, POST/CSRF, charge, replay and fresh-form stage rejection; used/stage prefs persist and reset at New Day. Currency cannot go negative. Remaining: forced reward/loss/gem/turn outcomes, nowash branch and settings-editor validation.
 
-Specialty identity, skill increment, New Day uses, fight navigation, malformed/negative/unsupported level rejection and Dragon Kill reset. Full combat and selection route method/CSRF/replay certification remain open. Actual choice navigation and all four valid skill levels (1, 2, 3, 5) execute and spend the expected uses; Dark Arts companion construction also passes.
+- Component route result: PARTIAL.
+- Exact metadata, descriptors, hooks, dependencies, database tables and prior lifecycle evidence remain in [the JSON record](BUNDLED-MODULE-CERTIFICATION.json).
 
-- Hooks: `choose-specialty`, `set-specialty`, `fightnav-specialties`, `apply-specialties`, `newday`, `incrementspecialty`, `specialtynames`, `specialtymodules`, `specialtycolor`, `dragonkill`.
-- Events: NOT APPLICABLE.
-- Settings: NOT APPLICABLE.
-- User preferences: `skill`, `uses`.
-- Object preferences: NOT APPLICABLE.
-- Direct runmodule route: NOT APPLICABLE. Empty historical run function; event/core hook route remains in scope.
-- Schema: No new module table on fresh installation. Shared settings/preferences and player state only.
+### racedwarf (1.1): BLOCKED
 
-## Hook coverage boundaries
+Existing choice text, newday/stat and combined-hook behavior PASS. Actual HTTP onboarding choice/invalid choice/POST/CSRF/persistence/reselection matrix remains unimplemented; Cities excluded.
 
-Combined fixtures exercise chooserace, choose-specialty, racenames, setrace, pvpadjust, adjuststats, newday, incrementspecialty, fightnav-specialties, apply-specialties rejection and all four valid levels, dragonkill reset, changesetting, validlocation, validforestloc, creatureencounter, hprecalc, header-inn, inn, inn-desc, forest, header-graveyard, ale, pvpwin (no bounty), darkhorsegame and both actual newday-runonce callbacks. Event collection covers eight forest and four travel registrations. Forest callbacks include actual Findgem/Findgold rewards, six other entrances, Foil Wench gift and Goldmine decline. These are concrete samples, not exhaustive path certification.
+- Component route result: BLOCKED.
+- Exact metadata, descriptors, hooks, dependencies, database tables and prior lifecycle evidence remain in [the JSON record](BUNDLED-MODULE-CERTIFICATION.json).
 
-Full battle/battle-victory/battle-defeat and training/PvP routes are not certified by buff construction. Module registration does not imply every hook branch executed. Explicit remaining work includes all Dark Horse game action/state round trips, all purchase/value-changing paths, optional-integration decisions without archive imports, remaining conversations/rewards, object-preference input boundaries, administrator capability checks and full output-context review.
+### raceelf (1.0): BLOCKED
 
-## Security and operational limits
+Existing choice text, newday/stat and combined-hook behavior PASS. Actual HTTP onboarding choice/invalid choice/POST/CSRF/persistence/reselection matrix remains unimplemented; Cities excluded.
 
-Module PHP remains trusted repository code. The extension system is not a sandbox for arbitrary third-party PHP. All five prior expression eval sites are removed; see [expression audit](EXPRESSION-EVALUATION-AUDIT.md). Active daily-hook transactions and receipts are verified, but do not promise exactly-once external side effects or arbitrary DDL rollback. No statistical probability testing or gameplay rebalance was performed. Public hosting remains NO.
+- Component route result: BLOCKED.
+- Exact metadata, descriptors, hooks, dependencies, database tables and prior lifecycle evidence remain in [the JSON record](BUNDLED-MODULE-CERTIFICATION.json).
+
+### racehuman (1.0): BLOCKED
+
+Existing choice text, newday/stat and combined-hook behavior PASS. Actual HTTP onboarding choice/invalid choice/POST/CSRF/persistence/reselection matrix remains unimplemented; Cities excluded.
+
+- Component route result: BLOCKED.
+- Exact metadata, descriptors, hooks, dependencies, database tables and prior lifecycle evidence remain in [the JSON record](BUNDLED-MODULE-CERTIFICATION.json).
+
+### racetroll (1.0): BLOCKED
+
+Existing choice text, newday/stat and combined-hook behavior PASS. Actual HTTP onboarding choice/invalid choice/POST/CSRF/persistence/reselection matrix remains unimplemented; Cities excluded.
+
+- Component route result: BLOCKED.
+- Exact metadata, descriptors, hooks, dependencies, database tables and prior lifecycle evidence remain in [the JSON record](BUNDLED-MODULE-CERTIFICATION.json).
+
+### sethsong (1.1): BLOCKED
+
+GET is read-only; real POST/CSRF increments daily been once and replay cannot repeat effect. Counter is rechecked under lock; original random effects retained. Remaining: complete HP/gold/gem branches, visit exhaustion with a fresh intent and settings-editor validation.
+
+- Component route result: PARTIAL.
+- Exact metadata, descriptors, hooks, dependencies, database tables and prior lifecycle evidence remain in [the JSON record](BUNDLED-MODULE-CERTIFICATION.json).
+
+### specialtydarkarts (1.1): BLOCKED
+
+Existing valid skill-level buff/use and dragon-kill/reset hook fixtures PASS. Actual HTTP onboarding and combat action authority, invalid/negative levels, unavailable uses, POST/CSRF and duplicate use remain unclosed.
+
+- Component route result: BLOCKED.
+- Exact metadata, descriptors, hooks, dependencies, database tables and prior lifecycle evidence remain in [the JSON record](BUNDLED-MODULE-CERTIFICATION.json).
+
+### specialtymysticpower (1.0): BLOCKED
+
+Existing valid skill-level buff/use and dragon-kill/reset hook fixtures PASS. Actual HTTP onboarding and combat action authority, invalid/negative levels, unavailable uses, POST/CSRF and duplicate use remain unclosed.
+
+- Component route result: BLOCKED.
+- Exact metadata, descriptors, hooks, dependencies, database tables and prior lifecycle evidence remain in [the JSON record](BUNDLED-MODULE-CERTIFICATION.json).
+
+### specialtythiefskills (1.0): BLOCKED
+
+Existing valid skill-level buff/use and dragon-kill/reset hook fixtures PASS. Actual HTTP onboarding and combat action authority, invalid/negative levels, unavailable uses, POST/CSRF and duplicate use remain unclosed.
+
+- Component route result: BLOCKED.
+- Exact metadata, descriptors, hooks, dependencies, database tables and prior lifecycle evidence remain in [the JSON record](BUNDLED-MODULE-CERTIFICATION.json).
