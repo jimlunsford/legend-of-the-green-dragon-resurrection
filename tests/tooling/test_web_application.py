@@ -260,6 +260,41 @@ function resurrectionhttpfixture_run() { echo 'fixture-executed'; exit; }
                 action=html.unescape(re.search(r'<form action=[\'"]([^\'"]+)[\'"] method=[\'"]POST',body).group(1))
                 before=snapshot(); status,_=request(action,{**post,'wish':'1','gemcount':invalid})
                 self.assertEqual(400,status); self.assertEqual(before,snapshot())
+            # Shared real Forest dispatcher: pending event, POST, consumed reward, replay.
+            for module,choice in [('findgem',''),('findgold',''),('foilwench','give'),('fairy','give'),
+                                  ('glowingstream','drink'),('goldmine','mine'),('crazyaudrey','play')]:
+                self.query('UPDATE accounts SET specialinc=?,specialmisc=?,gems=20,gold=1000,hitpoints=100,maxhitpoints=100,turns=30,alive=1,race=?,specialty=? WHERE acctid=?',
+                           ['module:'+module,'','Human','DA',player])
+                event_url='forest.php?op='
+                allow(event_url); before=snapshot(); status,body=request(event_url)
+                self.assertEqual(200,status); self.assertEqual(before,snapshot())
+                event_post=fields(body)
+                status,_=request(event_url,{})
+                self.assertEqual(403,status); self.assertEqual(before,snapshot())
+                status,body=request(event_url,event_post)
+                self.assertEqual(200,status)
+                if choice:
+                    event_url='forest.php?op='+choice
+                    allow(event_url); status,body=request(event_url)
+                    self.assertEqual(200,status)
+                    event_post=fields(body)
+                    before=snapshot()
+                    status,body=request(event_url,event_post)
+                    self.assertEqual(200,status)
+                after=snapshot()
+                if module=='findgem': self.assertEqual(int(before['gems'])+1,int(after['gems']))
+                if module=='findgold':
+                    level=int(self.query('SELECT level FROM accounts WHERE acctid=?',[player])[0]['level'])
+                    self.assertGreaterEqual(int(after['gold'])-int(before['gold']),10*level)
+                    self.assertLessEqual(int(after['gold'])-int(before['gold']),50*level)
+                if module=='foilwench': self.assertEqual(int(before['gems'])-1,int(after['gems']))
+                if module=='fairy': self.assertIn(int(after['gems'])-int(before['gems']),[-1,1])
+                self.assertEqual('',self.query('SELECT specialinc FROM accounts WHERE acctid=?',[player])[0]['specialinc'])
+                # A replay after completion cannot re-enter the consumed event.
+                allow(event_url); status,_=request(event_url,event_post)
+                self.assertIn(status,(200,302,303,403,409))
+                self.assertEqual(after,snapshot())
+            self.query('UPDATE accounts SET alive=1,hitpoints=100,turns=30,specialinc=? WHERE acctid=?',['',player])
             # Server availability applies even when a forged form selects a hidden potion.
             self.query('UPDATE module_settings SET value=? WHERE modulename=? AND setting=?',['0','cedrikspotions','ischarm'])
             allow(url); status,body=request(url); post=fields(body)
@@ -329,7 +364,7 @@ function resurrectionhttpfixture_run() { echo 'fixture-executed'; exit; }
             return next(form for form in forms.forms if 'insertcommentary' in form[1])
         def issued_link(body, prefix):
             links = re.findall(r'href=[\'"]([^\'"]+)', body)
-            found = next((html.unescape(link) for link in links if link.startswith(prefix)), None)
+            found = next((html.unescape(link) for link in links if html.unescape(link).startswith(prefix)), None)
             self.assertIsNotNone(found, 'Missing issued navigation: ' + prefix)
             return found
         def session_id():

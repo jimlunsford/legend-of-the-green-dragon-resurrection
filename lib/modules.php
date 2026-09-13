@@ -1051,7 +1051,9 @@ function module_events($eventtype, $basechance, $baseLink = false) {
 				tlschema();
 				$op = httpget('op');
 				httpset('op', "");
-				module_do_event($eventtype, $event['modulename'], false, $baseLink);
+                require_once 'lib/event_security.php';
+                if (resurrection_secured_event($event['modulename'])) resurrection_event_context($event['modulename'],$eventtype);
+                module_do_event($eventtype, $event['modulename'], false, $baseLink);
 				httpset('op', $op);
 				return 1;
 			}
@@ -1082,7 +1084,12 @@ function module_do_event($type, $module, $allowinactive=false, $baseLink=false)
 		$oldnavsection = $navsection;
 		tlschema("module-$module");
 		$fname = $module."_runevent";
-		$fname($type,$baseLink);
+        require_once 'lib/event_security.php';
+        if (resurrection_secured_event($module)) {
+            resurrection_run_event($module,$type,$baseLink,static function () use ($fname,$type,$baseLink) { $fname($type,$baseLink); });
+        } else {
+            $fname($type,$baseLink);
+        }
 		tlschema();
 		//hook into the running event, but only in *this* running event, not in all
 		modulehook("runevent_$module", array("type"=>$type, "baselink"=>$baseLink, "get"=>httpallget(), "post"=>httpallpost()));

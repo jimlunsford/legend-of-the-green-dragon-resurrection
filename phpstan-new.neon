@@ -4,6 +4,7 @@ parameters:
         - src
         - lib/accounts.php
         - lib/player_mutation.php
+        - lib/event_security.php
         - modules/dag/security.php
         - modules/drinks/security.php
         - lib/mail_security.php
@@ -16,6 +17,7 @@ parameters:
         - lib/constants.php
     scanFiles:
         - lib/buffs.php
+        - lib/http.php
         - lib/e_rand.php
         - lib/dbwrapper_pdo.php
         - lib/constants.php
