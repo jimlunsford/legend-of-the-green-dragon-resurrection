@@ -67,6 +67,35 @@ final class SecurityIntegrationTest extends TestCase
 
     }
 
+    public function testMailboxMutationsRejectForgeryAndCrossAccountDeletion(): void
+    {
+        require_once 'lib/mail_security.php';
+        db_query('INSERT INTO mail (msgfrom,msgto,subject,body,sent,seen) VALUES (1,1,?,?,?,1)', true, ['Fixture subject', 'Body', date('Y-m-d H:i:s')]);
+        $own = db_insert_id();
+        db_query('INSERT INTO mail (msgfrom,msgto,subject,body,sent,seen) VALUES (1,2,?,?,?,1)', true, ['Other mailbox', 'Body', date('Y-m-d H:i:s')]);
+        $other = db_insert_id();
+        $actor = ['loggedin'=>true,'user'=>['acctid'=>1,'superuser'=>0]];
+        $csrf = []; $token = Csrf::token($csrf);
+        $post = ['csrf_token'=>$token, 'msg'=>[(string)$own, (string)$other]];
+        try {
+            foreach ([[[], 'POST', $post], [$actor, 'GET', $post], [$actor, 'POST', ['msg'=>[(string)$own]]]] as [$user,$method,$fields]) {
+                try { resurrection_mutate_mailbox($user, $csrf, $method, $fields, 'process'); self::fail('Forbidden mail mutation accepted.'); }
+                catch (\DomainException $error) { self::assertNotEmpty($error->getMessage()); }
+            }
+            foreach ([[], ['1 OR 1=1'], ['-1'], ['0'], [['1']], ['999999999999999999999999']] as $invalid) {
+                try { resurrection_mutate_mailbox($actor, $csrf, 'POST', ['csrf_token'=>$token, 'msg'=>$invalid], 'process'); self::fail('Invalid message ID accepted.'); }
+                catch (\InvalidArgumentException $error) { self::assertNotEmpty($error->getMessage()); }
+            }
+            self::assertSame('1', db_query('SELECT seen FROM mail WHERE messageid=?', true, [$own])[0]['seen']);
+            self::assertSame(0, resurrection_mutate_mailbox($actor, $csrf, 'POST', ['csrf_token'=>$token,'id'=>(string)$other], 'unread'));
+            self::assertSame(1, resurrection_mutate_mailbox($actor, $csrf, 'POST', ['csrf_token'=>$token,'id'=>(string)$own], 'unread'));
+            self::assertSame('0', db_query('SELECT seen FROM mail WHERE messageid=?', true, [$own])[0]['seen']);
+            self::assertSame(1, resurrection_mutate_mailbox($actor, $csrf, 'POST', $post, 'process'));
+            self::assertSame(0, resurrection_mutate_mailbox($actor, $csrf, 'POST', $post, 'process'));
+            self::assertCount(1, db_query('SELECT messageid FROM mail WHERE messageid=?', true, [$other]));
+        } finally { db_query('DELETE FROM mail WHERE messageid IN (?,?)', true, [$own,$other]); }
+    }
+
     public function testActualModuleInjectionEnforcesStateAndDependencies(): void
     {
         require_once 'lib/modules.php';

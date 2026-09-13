@@ -3,6 +3,7 @@ parameters:
     paths:
         - src
         - lib/accounts.php
+        - lib/mail_security.php
         - lib/web_security.php
         - lib/commentary_security.php
         - lib/installer/fresh_install.php

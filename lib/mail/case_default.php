@@ -11,7 +11,9 @@ $result = db_query($sql);
 $db_num_rows = db_num_rows($result);
 if ($db_num_rows>0){
 	$no_subject = translate_inline("`i(No Subject)`i");
-	rawoutput("<form action='mail.php?op=process' method='post'><table>");
+	rawoutput("<form action='mail.php?op=process' method='post'>");
+    rawoutput(resurrection_csrf_field());
+    rawoutput('<table>');
 	while($row = db_fetch_assoc($result)){
 		rawoutput("<tr>");
 		rawoutput("<td nowrap><input type='checkbox' name='msg[]' value='{$row['messageid']}'>");
@@ -32,7 +34,9 @@ if ($db_num_rows>0){
         		}
 		}
 		// In one line so the Translator doesn't screw the Html up
-		output_notl("<a href='mail.php?op=read&id={$row['messageid']}'>".((trim($row['subject']))?$row['subject']:$no_subject)."</a>", true);
+		rawoutput("<a href='mail.php?op=read&id={$row['messageid']}'>");
+        output_notl('%s', trim($row['subject']) ? $row['subject'] : $no_subject);
+        rawoutput('</a>');
 		rawoutput("</td><td><a href='mail.php?op=read&id={$row['messageid']}'>");
 		output_notl($row['name']);
 		rawoutput("</a></td><td><a href='mail.php?op=read&id={$row['messageid']}'>".date("M d, h:i a",strtotime($row['sent']))."</a></td>");

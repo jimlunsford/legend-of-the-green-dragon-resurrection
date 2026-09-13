@@ -109,7 +109,7 @@ function resurrectionmaintenancefixture_dohook($hook, $args) {
                 self.assertEqual(1, failed.returncode, failed.stdout)
                 self.assertNotIn('SYNTHETIC-SECRET', failed.stdout + failed.stderr)
                 self.assertNotIn('nonexistent_fixture_table', failed.stdout + failed.stderr)
-                self.assertEqual([], self.query('SELECT value FROM settings WHERE setting=?', ['maintenance_day']))
+                self.assertEqual([{'value': ''}], self.query('SELECT value FROM settings WHERE setting=?', ['maintenance_day']))  # getsetting persists its empty default, never a completed day
                 self.assertEqual('0', self.query('SELECT value FROM settings WHERE setting=?', ['fixture_maint_count'])[0]['value'])
                 # Earlier committed active module is not repeated when a later one fails.
                 self.assertEqual('2', self.query('SELECT value FROM module_settings WHERE modulename=? AND setting=?', ['crazyaudrey', 'gamedaysremaining'])[0]['value'])
@@ -321,6 +321,26 @@ function resurrectionhttpfixture_run() { echo 'fixture-executed'; exit; }
         self.assertEqual([], self.query('SELECT commentid FROM commentary WHERE commentid=?', [rows[0]['commentid']]))
         authenticated_id = session_id()
 
+
+        # Actual mailbox UI: stored subject HTML, HTTP methods, CSRF and ownership.
+        player_id = self.query('SELECT acctid FROM accounts WHERE login=?', ['WebPlayer'])[0]['acctid']
+        subject = '<img src=x onerror=alert(8675309)>'
+        self.query('INSERT INTO mail (msgfrom,msgto,subject,body,sent) VALUES (1,?,?,?,NOW())', [player_id, subject, 'Synthetic message'])
+        message_id = self.query('SELECT messageid FROM mail WHERE msgto=? ORDER BY messageid DESC LIMIT 1', [player_id])[0]['messageid']
+        status, _, body = request('mail.php')
+        self.assertEqual(200, status)
+        self.assertNotIn(subject, body)
+        csrf = token(body)
+        status, _, _ = request('mail.php?op=del&id=' + message_id)
+        self.assertEqual(403, status)
+        status, _, _ = request('mail.php?op=del', {'id':message_id})
+        self.assertEqual(403, status)
+        status, _, _ = request('mail.php?op=process', {'csrf_token':csrf, 'msg[]':"1') OR 1=1 --"})
+        self.assertEqual(400, status)
+        self.assertEqual(1, len(self.query('SELECT messageid FROM mail WHERE messageid=?', [message_id])))
+        status, _, _ = request('mail.php?op=del', {'csrf_token':csrf, 'id':message_id})
+        self.assertEqual(303, status)
+        self.assertEqual([], self.query('SELECT messageid FROM mail WHERE messageid=?', [message_id]))
 
         status, _, body = request('login.php?op=logout')
         self.assertEqual(200, status, headers.get('Location', 'Unexpected HTTP status'))
