@@ -15,6 +15,25 @@ if ($_POST || httpget('op') === 'suicide') { resurrection_require_post(); }
 foreach ($_POST as $key => $value) {
     if (!is_string($value)) { http_response_code(400); exit('Invalid preference.'); }
 }
+// Validate every module namespace before any preference or account write.
+// Visibility in showform is not permission to write an arbitrary internal preference.
+foreach ($_POST as $field => $value) {
+    if (strpos($field, '___') === false) continue;
+    $parts = explode('___', $field);
+    if (count($parts) !== 2 || !preg_match('/\A[A-Za-z][A-Za-z0-9_]*\z/', $parts[0]) ||
+        !preg_match('/\A(?:user_|check_)[A-Za-z0-9_]+\z/', $parts[1])) {
+        http_response_code(400); exit('Invalid preference namespace.');
+    }
+    [$prefModule, $prefName] = $parts;
+    if (!injectmodule($prefModule, false)) { http_response_code(403); exit('Preference module unavailable.'); }
+    $prefInfo = get_module_info($prefModule);
+    if (!array_key_exists($prefName, $prefInfo['prefs'] ?? [])) {
+        http_response_code(400); exit('Unknown user preference.');
+    }
+    // None of the 24 bundled modules exposes user_/check_ preferences. Keep
+    // future modules fail-closed until their value descriptor has a typed parser.
+    http_response_code(400); exit('Unsupported user preference descriptor.');
+}
 if (isset($_POST['template'])) {
     $skin = $_POST['template'];
     if (!preg_match('/\A[A-Za-z0-9_-]+\.htm\z/', $skin) || !is_file('templates/' . $skin)) { http_response_code(400); exit('Invalid skin.'); }

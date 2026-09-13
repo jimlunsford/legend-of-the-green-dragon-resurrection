@@ -301,6 +301,18 @@ function resurrectionhttpfixture_run() { echo 'fixture-executed'; exit; }
                 self.assertEqual(after,snapshot())
                 if module=='foilwench':
                     self.assertEqual(skill_after,self.query('SELECT setting,value FROM module_userprefs WHERE modulename=? AND userid=? ORDER BY setting',['specialtydarkarts',player]))
+            # Current Foil Wench encounter still requires a real gem, not merely a valid form.
+            self.query('UPDATE accounts SET specialinc=?,gems=0,specialty=? WHERE acctid=?',['module:foilwench','DA',player])
+            event_url='forest.php?op=give'
+            allow(event_url); status,body=request(event_url)
+            self.assertEqual(200,status); post=fields(body); before=snapshot()
+            skill_before=self.query('SELECT setting,value FROM module_userprefs WHERE modulename=? AND userid=? ORDER BY setting',['specialtydarkarts',player])
+            invalid_url='forest.php?op[]=give'
+            allow(invalid_url); status,_=request(invalid_url)
+            self.assertEqual(400,status); self.assertEqual(before,snapshot())
+            allow(event_url); status,_=request(event_url,post)
+            self.assertEqual(200,status); self.assertEqual(before,snapshot())
+            self.assertEqual(skill_before,self.query('SELECT setting,value FROM module_userprefs WHERE modulename=? AND userid=? ORDER BY setting',['specialtydarkarts',player]))
             self.query('UPDATE accounts SET alive=1,hitpoints=100,turns=30,specialinc=? WHERE acctid=?',['',player])
             # Server availability applies even when a forged form selects a hidden potion.
             self.query('UPDATE module_settings SET value=? WHERE modulename=? AND setting=?',['0','cedrikspotions','ischarm'])
@@ -363,6 +375,15 @@ function resurrectionhttpfixture_run() { echo 'fixture-executed'; exit; }
                 allow(url); status,body=request(url); post=fields(body)
                 status,_=request(url,post)
                 self.assertEqual(409,status); self.assertEqual(washed,snapshot())
+            # A player cannot smuggle an internal module preference through a suffix.
+            pref_before=self.query('SELECT modulename,setting,value FROM module_userprefs WHERE userid=? ORDER BY modulename,setting',[player])
+            csrf=fields(body)['csrf_token']
+            for forged in ['drinks___canedit___user_','specialtydarkarts___skill___check_',
+                           'drinks___user_forged','absentmodule___user_forged']:
+                pref_url='prefs.php?op=save'; allow(pref_url)
+                status,_=request(pref_url,{'csrf_token':csrf,forged:'1'})
+                self.assertIn(status,(400,403))
+                self.assertEqual(pref_before,self.query('SELECT modulename,setting,value FROM module_userprefs WHERE userid=? ORDER BY modulename,setting',[player]))
             # Editor authorization is checked even with an issued route fixture.
             editor='runmodule.php?module=drinks&act=editor&op=edit&drinkid='+drink['drinkid']+'&admin=true'
             self.query('UPDATE accounts SET superuser=0 WHERE acctid=?',[player])
