@@ -13,7 +13,7 @@ final class ModuleCertificationTest extends TestCase
         self::assertSame('resurrection_test', getenv('RESURRECTION_TEST_DB_NAME'));
         self::assertTrue(db_connect(getenv('RESURRECTION_TEST_DB_HOST'), getenv('RESURRECTION_TEST_DB_USER'), getenv('RESURRECTION_TEST_DB_PASSWORD')));
         self::assertTrue(db_select_db('resurrection_test'));
-        foreach (['modules','output','translator','sanitize','holiday_texts','http','datetime','e_rand','buffs','tempstat','pageparts'] as $library) require_once 'lib/' . $library . '.php';
+        foreach (['modules','output','translator','sanitize','holiday_texts','http','datetime','e_rand','buffs','tempstat','pageparts','debuglog','addnews'] as $library) require_once 'lib/' . $library . '.php';
         $GLOBALS['DB_PREFIX'] = '';
         $GLOBALS['DB_USEDATACACHE'] = 0;
         $GLOBALS['settings'] = null;
@@ -178,6 +178,73 @@ final class ModuleCertificationTest extends TestCase
             self::assertTrue(\Resurrection\Game\CreatureAi::supported($scripts[0]['creatureaiscript']));
         } finally {
             db_query('UPDATE accounts SET location=? WHERE acctid=?', true, [LOCATION_FIELDS, $GLOBALS['session']['user']['acctid']]);
+            foreach (resurrection_bundled_modules() as $module) deactivate_module($module);
+        }
+    }
+
+    public function testCombinedInnDayAndForestParticipation(): void
+    {
+        foreach (resurrection_bundled_modules() as $module) self::assertTrue(activate_module($module));
+        try {
+            $GLOBALS['session']['user']['race'] = 'Human';
+            $GLOBALS['session']['user']['specialty'] = 'DA';
+            $GLOBALS['session']['user']['turns'] = 10;
+            $GLOBALS['session']['user']['gold'] = 1000;
+            $GLOBALS['session']['user']['gems'] = 10;
+            $GLOBALS['session']['user']['hashorse'] = 0;
+            foreach (['dag'=>['bounties'], 'drinks'=>['harddrinks','drunkeness'], 'lovers'=>['seenlover'], 'sethsong'=>['been'], 'outhouse'=>['usedouthouse'], 'crazyaudrey'=>['played']] as $module=>$preferences) {
+                foreach ($preferences as $preference) set_module_pref($preference, 1, $module);
+            }
+            modulehook('newday', ['turnstoday'=>'', 'resurrection'=>false]);
+            foreach (['dag'=>['bounties'], 'drinks'=>['harddrinks','drunkeness'], 'lovers'=>['seenlover'], 'sethsong'=>['been'], 'outhouse'=>['usedouthouse'], 'crazyaudrey'=>['played']] as $module=>$preferences) {
+                foreach ($preferences as $preference) self::assertSame(0, get_module_pref($preference, $module));
+            }
+            modulehook('inn', []);
+            modulehook('inn-desc', []);
+            modulehook('forest', []);
+            self::assertStringContainsString('Dag Durnick', $GLOBALS['output']);
+            $navs = json_encode($GLOBALS['navbysection']);
+            foreach (['dag','lovers','sethsong','outhouse'] as $module) self::assertStringContainsString('module=' . $module, $navs);
+            $_GET = ['op'=>'bartender', 'act'=>''];
+            modulehook('header-inn', []);
+            self::assertStringContainsString('module=cedrikspotions', json_encode($GLOBALS['navbysection']));
+            set_module_pref('extrahps', 3, 'cedrikspotions');
+            set_module_pref('extrahps', 2, 'fairy');
+            self::assertSame(95, modulehook('hprecalc', ['total'=>100,'extra'=>5])['total']);
+            set_module_pref('drunkeness', 80, 'drinks');
+            modulehook('header-graveyard', []);
+            self::assertSame(0, get_module_pref('drunkeness', 'drinks'));
+            set_module_pref('harddrinks', get_module_setting('hardlimit','drinks'), 'drinks');
+            modulehook('ale', []); // Exhausted hard-drink quota text/list path.
+            $GLOBALS['badguy'] = ['acctid'=>999999, 'creaturename'=>'Synthetic opponent'];
+            self::assertSame(['pvpmessageadd'=>''], modulehook('pvpwin', ['pvpmessageadd'=>''], false, 'dag'));
+            $_GET = [];
+            injectmodule('findgem');
+            findgem_runevent('forest', 'forest.php?');
+            self::assertSame(11, $GLOBALS['session']['user']['gems']);
+            injectmodule('findgold');
+            $gold = $GLOBALS['session']['user']['gold'];
+            findgold_runevent('forest', 'forest.php?');
+            self::assertGreaterThan($gold, $GLOBALS['session']['user']['gold']);
+            foreach (['crazyaudrey','fairy','foilwench','glowingstream','goldmine','darkhorse'] as $module) {
+                injectmodule($module);
+                $GLOBALS['output'] = '';
+                $_GET = [];
+                ($module . '_runevent')('forest', 'forest.php?');
+                self::assertNotEmpty($GLOBALS['output'], $module);
+            }
+            injectmodule('foilwench');
+            $_GET = ['op'=>'give'];
+            $before = get_module_pref('skill', 'specialtydarkarts');
+            foilwench_runevent('forest');
+            self::assertSame($before + 1, get_module_pref('skill', 'specialtydarkarts'));
+            self::assertSame(10, $GLOBALS['session']['user']['gems']);
+            injectmodule('goldmine');
+            $_GET = ['op'=>'no'];
+            goldmine_runevent('forest');
+            self::assertSame('', $GLOBALS['session']['user']['specialinc']);
+        } finally {
+            $_GET = [];
             foreach (resurrection_bundled_modules() as $module) deactivate_module($module);
         }
     }

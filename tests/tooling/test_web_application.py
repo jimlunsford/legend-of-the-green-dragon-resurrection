@@ -79,8 +79,8 @@ function resurrectionmaintenancefixture_getmoduleinfo() {
     return ['name'=>'Maintenance fixture','version'=>'1.0','author'=>'Synthetic','category'=>'Tests'];
 }
 function resurrectionmaintenancefixture_dohook($hook, $args) {
-    $mode = getsetting('fixture_maintenance_mode', 'ok');
-    db_query("UPDATE settings SET value=value+1 WHERE setting='fixture_maintenance_count'");
+    $mode = getsetting('fixture_maint_mode', 'ok');
+    db_query("UPDATE settings SET value=value+1 WHERE setting='fixture_maint_count'");
     if ($mode === 'throw') throw new RuntimeException('SYNTHETIC-SECRET-MUST-NOT-LOG');
     if ($mode === 'malformed') return 'invalid';
     if ($mode === 'database') db_query('INSERT INTO nonexistent_fixture_table VALUES (1)');
@@ -96,33 +96,33 @@ function resurrectionmaintenancefixture_dohook($hook, $args) {
         def run():
             return subprocess.run([shutil.which('php'), 'cron.php'], cwd=ROOT, capture_output=True, text=True, timeout=60)
         try:
-            self.query('DELETE FROM settings WHERE setting=? OR setting LIKE ?', ['maintenance_day', 'maintenance-hook-%'])
+            self.query('DELETE FROM settings WHERE setting=? OR setting LIKE ?', ['maintenance_day', 'mh:%'])
             self.query('UPDATE modules SET active=1')  # Lifecycle independently exercised by PHPUnit.
             self.query('INSERT INTO modules (modulename,active,version) VALUES (?,1,?)', [module, '1.0'])
             self.query('INSERT INTO module_hooks (modulename,location,`function`,whenactive,priority) VALUES (?,?,?,?,?)',
                        [module, 'newday-runonce', module + '_dohook', '', 100])
             self.query('UPDATE module_settings SET value=3 WHERE modulename=? AND setting=?', ['crazyaudrey', 'gamedaysremaining'])
-            setting('fixture_maintenance_count', 0)
+            setting('fixture_maint_count', 0)
             for mode in ['throw', 'malformed', 'database']:
-                setting('fixture_maintenance_mode', mode)
+                setting('fixture_maint_mode', mode)
                 failed = run()
                 self.assertEqual(1, failed.returncode, failed.stdout)
                 self.assertNotIn('SYNTHETIC-SECRET', failed.stdout + failed.stderr)
                 self.assertNotIn('nonexistent_fixture_table', failed.stdout + failed.stderr)
                 self.assertEqual([], self.query('SELECT value FROM settings WHERE setting=?', ['maintenance_day']))
-                self.assertEqual('0', self.query('SELECT value FROM settings WHERE setting=?', ['fixture_maintenance_count'])[0]['value'])
+                self.assertEqual('0', self.query('SELECT value FROM settings WHERE setting=?', ['fixture_maint_count'])[0]['value'])
                 # Earlier committed active module is not repeated when a later one fails.
                 self.assertEqual('2', self.query('SELECT value FROM module_settings WHERE modulename=? AND setting=?', ['crazyaudrey', 'gamedaysremaining'])[0]['value'])
-            setting('fixture_maintenance_mode', 'ok')
+            setting('fixture_maint_mode', 'ok')
             finished = run()
             self.assertEqual(0, finished.returncode, finished.stderr)
             self.assertEqual('complete', json.loads(finished.stdout)['maintenance'])
-            self.assertEqual('1', self.query('SELECT value FROM settings WHERE setting=?', ['fixture_maintenance_count'])[0]['value'])
+            self.assertEqual('1', self.query('SELECT value FROM settings WHERE setting=?', ['fixture_maint_count'])[0]['value'])
             duplicate = run()
             self.assertEqual('already-complete', json.loads(duplicate.stdout)['maintenance'])
-            self.assertEqual('1', self.query('SELECT value FROM settings WHERE setting=?', ['fixture_maintenance_count'])[0]['value'])
-            self.query('DELETE FROM settings WHERE setting=? OR setting LIKE ?', ['maintenance_day', 'maintenance-hook-%'])
-            setting('fixture_maintenance_mode', 'slow')
+            self.assertEqual('1', self.query('SELECT value FROM settings WHERE setting=?', ['fixture_maint_count'])[0]['value'])
+            self.query('DELETE FROM settings WHERE setting=? OR setting LIKE ?', ['maintenance_day', 'mh:%'])
+            setting('fixture_maint_mode', 'slow')
             first = subprocess.Popen([shutil.which('php'), 'cron.php'], cwd=ROOT, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
             try:
                 for _ in range(100):
@@ -135,7 +135,7 @@ function resurrectionmaintenancefixture_dohook($hook, $args) {
                 out, err = first.communicate(timeout=60)
                 self.assertEqual(0, first.returncode, err)
                 self.assertEqual('complete', json.loads(out)['maintenance'])
-                self.assertEqual('2', self.query('SELECT value FROM settings WHERE setting=?', ['fixture_maintenance_count'])[0]['value'])
+                self.assertEqual('2', self.query('SELECT value FROM settings WHERE setting=?', ['fixture_maint_count'])[0]['value'])
             finally:
                 if first.poll() is None:
                     first.terminate()
@@ -147,7 +147,7 @@ function resurrectionmaintenancefixture_dohook($hook, $args) {
             self.query('DELETE FROM modules WHERE modulename=?', [module])
             self.query('UPDATE modules SET active=0')
             self.query('DELETE FROM settings WHERE setting=? OR setting LIKE ? OR setting LIKE ?',
-                       ['maintenance_day', 'maintenance-hook-%', 'fixture_maintenance_%'])
+                       ['maintenance_day', 'mh:%', 'fixture_maint_%'])
 
     def test_cli_maintenance_is_once_per_game_day(self):
         first = subprocess.run([shutil.which('php'), 'cron.php'], cwd=ROOT, capture_output=True, text=True, timeout=60)

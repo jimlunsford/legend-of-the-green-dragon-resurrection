@@ -499,8 +499,9 @@ function dag_pvpwin($args){
 	// Added for Bounty Code
 	// Bounty Check - Andrew Senger
 	// Check for Bounty
-	$sql = "SELECT bountyid,amount,setter FROM " . db_prefix("bounty") . " WHERE status=0 AND setdate<='".date("Y-m-d H:i:s")."' AND target=".$badguy['acctid'];
-	$result = db_query($sql);
+    $totgoodamt = 0;
+    $totbadamt = 0;
+    $result = db_query('SELECT bountyid,amount,setter FROM ' . db_prefix('bounty') . ' WHERE status=0 AND setdate<=? AND target=?', true, [date('Y-m-d H:i:s'), (int)$badguy['acctid']]);
 	if (db_num_rows($result) > 0) {
 		$totgoodamt = 0;
 		$totbadamt = 0;

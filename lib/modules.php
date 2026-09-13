@@ -533,7 +533,7 @@ function resurrection_invoke_module_hook($row, $hookname, $args) {
         throw new DomainException('Unsupported module hook callback.');
     }
     $daily = $hookname === 'newday-runonce' && defined('RESURRECTION_MAINTENANCE_DAY');
-    $receipt = 'maintenance-hook-' . md5($callback);
+    $receipt = 'mh:' . substr(hash('sha256', $callback), 0, 17);
     if ($daily) {
         $rows = db_query('SELECT value FROM ' . db_prefix('settings') . ' WHERE setting=?', true, [$receipt]);
         if (($rows[0]['value'] ?? '') === RESURRECTION_MAINTENANCE_DAY) return $args;
