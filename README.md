@@ -44,7 +44,7 @@ composer check
 vendor/bin/phpstan analyse -c phpstan-new.neon
 ```
 
-The integrity commands do not execute the application. Use the disposable modern CI environments for driver checks; PHP 5 lab work is deferred. A passing engineering check is not a successful game install.
+The integrity commands do not execute the application. The modern CI matrix also performs a real strict fresh installation, installs all 24 bundled modules inactive, and verifies account creation, authentication, session rotation, village rendering, commentary moderation and logout. See the phase-2 checkpoint for exact evidence and remaining security/module gates. PHP 5 lab work is deferred; public hosting remains unapproved.
 
 ## Project documents
 
@@ -58,7 +58,10 @@ The integrity commands do not execute the application. Use the disposable modern
 - [Historical lab](lab/historical-1.1.2/README.md)
 - [Descendant research](docs/DESCENDANT-RESEARCH.md)
 - [Foundation checkpoint, historical record](docs/FOUNDATION-CHECKPOINT-20260913.md)
-- [Modern core checkpoint](docs/MODERN-CORE-CHECKPOINT-20260913.md)
+- [Modern core phase-1 checkpoint](docs/MODERN-CORE-CHECKPOINT-20260913.md)
+- [Modern core phase-2 checkpoint](docs/MODERN-CORE-CHECKPOINT-20260913-PHASE2.md)
+- [Modern local installation](docs/MODERN-INSTALLATION.md)
+- [Raw request contract](docs/REQUEST-SEMANTICS.md)
 
 ## Licensing
 

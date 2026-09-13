@@ -24,9 +24,9 @@ Run from the repository root:
 php scripts/install.php /absolute/private/path/dbconnect.php
 ```
 
-The command runs the supported installation service, creates the historical core schema and chronological fresh seed content, creates a modern administrator, and records completion only after successful administrator creation. Output contains counts and state, never credentials. For local application testing, place the approved configuration at dbconnect.php with restrictive permissions; it is ignored by Git. The CI creates this file exclusively and removes it after loopback tests.
+The command runs the supported installation service, creates the historical core schema and chronological fresh seed content, installs the fixed 24 shipped modules and their support data in an inactive state, creates a modern administrator, and records completion only after successful administrator creation. Output contains counts and state, never credentials. For local application testing, place the approved configuration at dbconnect.php with restrictive permissions; it is ignored by Git. The CI creates this file exclusively and removes it after loopback tests.
 
-The installer uses an advisory database lock. Any existing table causes refusal, including an unrelated populated database, a partial failed install, and a previous historical game. A completed Resurrection database is reported as installed. No automatic truncate, drop, retry cleanup or in-place upgrade is performed. Diagnose a failed disposable installation before explicitly recreating its disposable database. Never apply that procedure to valuable data.
+The installer uses an advisory database lock. Any existing table causes refusal, including an unrelated populated database, a partial failed install, and a previous historical game. A completed Resurrection database is reported as installed; a recognizable historical accounts/settings/version combination is reported as upgrade-required, while unrelated tables are populated. Both populated states are refused without modification. No automatic truncate, drop, retry cleanup or in-place upgrade is performed. Diagnose a failed disposable installation before explicitly recreating its disposable database. Never apply that procedure to valuable data.
 
 The historical web installer returns 403 before bootstrap. Direct requests cannot install or upgrade, even if an installation marker is removed. scripts/install.php rejects HTTP with 404. A future upgrade must be a separately reviewed migration with backup and recovery evidence.
 
@@ -54,6 +54,6 @@ A database advisory lock serializes maintenance. A completed game-day marker mak
 
 ## Validation
 
-CI installs into a truly empty resurrection_test database using a non-root database account, executes the actual CLI install command, and tests populated/repeated-install refusal, strict schema, seeds, administrator and player credentials, and bundled Dag/Drinks DDL. Python smoke tests use a standard PHP server bound only to 127.0.0.1, then run application HTTP requests and CLI maintenance. Tests refuse a differently named database.
+CI installs into a truly empty resurrection_test database using a non-root database account, executes the actual CLI install command, and tests populated/repeated-install refusal, strict schema, seeds, administrator and player credentials, all 24 bundled module install callbacks and Dag/Drinks DDL. The result is 38 tables, 24 installed modules and zero active modules. Activation and gameplay certification are the next phase. Python smoke tests use a standard PHP server bound only to 127.0.0.1, then run application HTTP requests and CLI maintenance. Tests refuse a differently named database.
 
 See the phase-2 checkpoint and security/compatibility ledgers for exact passing runs and remaining limitations. Installation success alone does not certify bundled gameplay modules or public hosting.
