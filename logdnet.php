@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/src/Compatibility/array_cursor.php';
 // translator ready
 // addnews ready
 // mail ready
@@ -218,7 +219,7 @@ if ($op==""){
 	$servers=pullurl($u."logdnet.php?op=net");
 	if (!$servers) $servers = array();
 	$i = 0;
-	while (list($key,$val)=each($servers)){
+	while (list($key,$val)=resurrection_array_next($servers)){
 		$row=unserialize($val);
 
 		// If we aren't given an address, continue on.
@@ -266,7 +267,7 @@ function apply_logdnet_bans($logdnet){
 	$result = db_query($sql,"logdnetbans");
 	while ($row = db_fetch_assoc($result)){
 		reset($logdnet);
-		while (list($i,$net)=each($logdnet)){
+		while (list($i,$net)=resurrection_array_next($logdnet)){
 			if (preg_match("/{$row['banvalue']}/i",$net[$row['bantype']])){
 				unset($logdnet[$i]);
 			}

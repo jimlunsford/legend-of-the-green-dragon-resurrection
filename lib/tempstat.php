@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/../src/Compatibility/array_cursor.php';
 // translator ready
 // addnews ready
 // mail ready
@@ -49,10 +50,10 @@ function suspend_temp_stats(){
 	global $session, $temp_user_stats;
 	if (!$temp_user_stats['is_suspended']){
 		reset($temp_user_stats);
-		while (list($type,$collection)=each($temp_user_stats)){
+		while (list($type,$collection)=resurrection_array_next($temp_user_stats)){
 			if ($type=='add'){
 				reset($collection);
-				while (list($attribute,$value)=each($collection)){
+				while (list($attribute,$value)=resurrection_array_next($collection)){
 					$session['user'][$attribute] -= $value;
 				}
 			}
@@ -68,10 +69,10 @@ function restore_temp_stats(){
 	global $session, $temp_user_stats;
 	if ($temp_user_stats['is_suspended']){
 		reset($temp_user_stats);
-		while (list($type,$collection)=each($temp_user_stats)){
+		while (list($type,$collection)=resurrection_array_next($temp_user_stats)){
 			if ($type=='add'){
 				reset($collection);
-				while (list($attribute,$value)=each($collection)){
+				while (list($attribute,$value)=resurrection_array_next($collection)){
 					$session['user'][$attribute] += $value;
 				}
 			}

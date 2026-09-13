@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/../../src/Compatibility/array_cursor.php';
 //save module settings.
 $userid = httpget('userid');
 $module = httpget('module');
@@ -12,7 +13,7 @@ if (isset($post['validation_error']) && $post['validation_error']) {
 	output("Unable to change settings: `\$%s`0", $post['validation_error']);
 } else {
 	reset($post);
-	while (list($key,$val)=each($post)){
+	while (list($key,$val)=resurrection_array_next($post)){
 		output("Setting %s to %s`n", $key, stripslashes($val));
 		$sql = "REPLACE INTO " . db_prefix("module_userprefs") . " (modulename,userid,setting,value) VALUES ('$module','$userid','$key','$val')";
 		db_query($sql);

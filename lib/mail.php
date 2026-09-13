@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/../src/Compatibility/array_cursor.php';
 // translator ready
 // addnews ready
 // mail ready
@@ -354,7 +355,7 @@ if ($op==""){
 	}
 	rawoutput("<script language='JavaScript'>
 	var superusers = new Array();");
-	while (list($key,$val)=each($superusers)){
+	while (list($key,$val)=resurrection_array_next($superusers)){
 		rawoutput("	superusers['".addslashes($val)."'] = true;");
 	}
 	rawoutput("</script>");

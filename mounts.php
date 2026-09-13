@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/src/Compatibility/array_cursor.php';
 // addnews ready
 // mail ready
 // translator ready
@@ -83,7 +84,7 @@ if ($op=="deactivate"){
 		$mount = httppost('mount');
 		if ($mount) {
 			reset($mount['mountbuff']);
-			while (list($key,$val)=each($mount['mountbuff'])){
+			while (list($key,$val)=resurrection_array_next($mount['mountbuff'])){
 				if ($val>""){
 					$buff[$key]=stripslashes($val);
 				}
@@ -112,7 +113,7 @@ if ($op=="deactivate"){
 		$module = httpget("module");
 		$post = httpallpost();
 		reset($post);
-		while(list($key, $val) = each($post)) {
+		while(list($key, $val) = resurrection_array_next($post)) {
 			set_module_objpref("mounts", $id, $key, $val, $module);
 		}
 		output("`^Saved!`0`n");
@@ -226,7 +227,7 @@ if ($op==""){
 		}
 		rawoutput("</td><td nowrap>");
 		$file = "mounts.php?op=xml&id=".$row['mountid'];
-		rawoutput("<div id='mountusers$i'><a href='$file' target='_blank' onClick=\"getUserInfo('".$row{'mountid'}."', $i); return false\">");
+		rawoutput("<div id='mountusers$i'><a href='$file' target='_blank' onClick=\"getUserInfo('".$row['mountid']."', $i); return false\">");
  		output_notl("`#%s`0", $mounts[$row['mountid']]);
 		addnav("", $file);
 		rawoutput("</a></div>");

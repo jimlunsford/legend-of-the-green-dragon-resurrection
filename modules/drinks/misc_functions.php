@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/../../src/Compatibility/array_cursor.php';
 function drinks_gettexts() {
 	global $session;
 	$iname = getsetting("innname", LOCATION_INN);
@@ -116,7 +117,7 @@ function drinks_editor(){
 			//db_query($sql);
 			$post = httpallpost();
 			reset($post);
-			while(list($key, $val)=each($post)) {
+			while(list($key, $val)=resurrection_array_next($post)) {
 				set_module_objpref("drinks", $drinkid,$key, $val, $module);
 			}
 			output("`^Saved.");

@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/../../src/Compatibility/array_cursor.php';
 /**
  * Page explaining what LotGD is
  * 
@@ -14,7 +15,7 @@
  * @license http://creativecommons.org/licenses/by-nc-sa/2.0/legalcode
  */
 $order=array("1","2");
-while (list($key,$val)=each($order)){
+while (list($key,$val)=resurrection_array_next($order)){
 	switch($val){
 	case "2":
 		/* NOTICE

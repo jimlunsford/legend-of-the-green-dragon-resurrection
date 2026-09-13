@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/../src/Compatibility/array_cursor.php';
 // translator ready
 // addnews ready
 // mail ready
@@ -17,7 +18,7 @@ function saveuser(){
 		if (isset($companions) && is_array($companions)) $session['user']['companions']=serialize($companions);
 		$sql="";
 		reset($session['user']);
-		while(list($key,$val)=each($session['user'])){
+		while(list($key,$val)=resurrection_array_next($session['user'])){
 			if (is_array($val)) $val = serialize($val);
 			//only update columns that have changed.
 			if ($baseaccount[$key]!=$val){

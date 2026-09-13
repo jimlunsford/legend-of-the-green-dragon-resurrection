@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/../src/Compatibility/array_cursor.php';
 
 function logd_error_handler($errno, $errstr, $errfile, $errline){
 	global $session;
@@ -111,7 +112,7 @@ $html_text
 			/***
 			  * Mime bits are set up,
 			 **/
-			while (list($key,$email)=each($sendto)){
+			while (list($key,$email)=resurrection_array_next($sendto)){
 				debug("Notifying $email of this error.");
 
 				mail($email, $subject, $body,

@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/src/Compatibility/array_cursor.php';
 //addnews ready
 // mail ready
 // translator ready
@@ -82,7 +83,7 @@ if (db_num_rows($result) > 0 && $session['user']['level'] <= 14){
 			if ($session['user']['experience']>=$exprequired){
 				$dk = 0;
 				restore_buff_fields();
-				while(list($key, $val)=each($session['user']['dragonpoints'])) {
+				while(list($key, $val)=resurrection_array_next($session['user']['dragonpoints'])) {
 					if ($val=="at" || $val=="de") $dk++;
 				}
 				$dk += (int)(($session['user']['maxhitpoints'] -

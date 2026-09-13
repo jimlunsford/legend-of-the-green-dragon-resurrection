@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/../src/Compatibility/array_cursor.php';
 // addnews ready
 // translator ready
 // mail ready
@@ -11,9 +12,9 @@ function calculate_buff_fields(){
 
 	//run temp stats
 	reset($session['bufflist']);
-	while (list($buffname,$buff)=each($session['bufflist'])){
+	while (list($buffname,$buff)=resurrection_array_next($session['bufflist'])){
 		if (!isset($buff['tempstats_calculated'])){
-			while (list($property,$value)=each($buff)){
+			while (list($property,$value)=resurrection_array_next($buff)){
 				if (substr($property,0,9)=='tempstat-'){
 					apply_temp_stat(substr($property,9),$value);
 				}
@@ -25,9 +26,9 @@ function calculate_buff_fields(){
 	//process calculated buff fields.
 	reset($session['bufflist']);
 	if (!is_array($buffreplacements)) $buffreplacements = array();
-	while (list($buffname,$buff)=each($session['bufflist'])){
+	while (list($buffname,$buff)=resurrection_array_next($session['bufflist'])){
 		if (!isset($buff['fields_calculated'])){
-			while (list($property,$value)=each($buff)){
+			while (list($property,$value)=resurrection_array_next($buff)){
 				//calculate dynamic buff fields
 				$origstring = $value;
 				//Simple <module|variable> replacements for get_module_pref('variable','module')
@@ -105,9 +106,9 @@ function restore_buff_fields(){
 	global $session, $buffreplacements;
 	if (is_array($buffreplacements)){
 		reset($buffreplacements);
-		while (list($buffname,$val)=each($buffreplacements)){
+		while (list($buffname,$val)=resurrection_array_next($buffreplacements)){
 			reset($val);
-			while (list($property,$value)=each($val)){
+			while (list($property,$value)=resurrection_array_next($val)){
 				if (isset($session['bufflist'][$buffname])){
 					$session['bufflist'][$buffname][$property] = $value;
 					unset($session['bufflist'][$buffname]['fields_calculated']);
@@ -120,10 +121,10 @@ function restore_buff_fields(){
 	//restore temp stats
 	if (!is_array($session['bufflist'])) $session['bufflist'] = array();
 	reset($session['bufflist']);
-	while (list($buffname,$buff)=each($session['bufflist'])){
+	while (list($buffname,$buff)=resurrection_array_next($session['bufflist'])){
 		if (array_key_exists("tempstats_calculated",$buff) && $buff['tempstats_calculated']){
 			reset($buff);
-			while (list($property,$value)=each($buff)){
+			while (list($property,$value)=resurrection_array_next($buff)){
 				if (substr($property,0,9)=='tempstat-'){
 					apply_temp_stat(substr($property,9),-$value);
 				}
@@ -198,7 +199,7 @@ function strip_all_buffs(){
 	global $session;
 	$thebuffs = $session['bufflist'];
 	reset($thebuffs);
-	while (list($buffname,$buff)=each($thebuffs)){
+	while (list($buffname,$buff)=resurrection_array_next($thebuffs)){
 		strip_buff($buffname);
 	}
 }

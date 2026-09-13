@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/../src/Compatibility/array_cursor.php';
 // translator ready
 // addnews ready
 // mail ready
@@ -16,7 +17,7 @@ function soap($input,$debug=false,$skiphook=false){
 		$search = nasty_word_list();
 		$exceptions = array_flip(good_word_list());
 		$changed_content = false;
-		while (list($key,$word)=each($search)){
+		while (list($key,$word)=resurrection_array_next($search)){
 			do {
 				if ($word > "")
 					$times = preg_match_all($word,$output,$matches);

@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/src/Compatibility/array_cursor.php';
 // translator ready
 // addnews ready
 // mail ready
@@ -147,7 +148,7 @@ if ($dp < $dkills) {
 	$session['user']['bufflist']="";
 	strip_all_buffs();
 	tlschema("buffs");
-	while(list($key,$val)=@each($tempbuf)){
+	while(list($key,$val)=resurrection_array_next($tempbuf)){
 		if (array_key_exists('survivenewday', $val) &&
 				$val['survivenewday']==1){
 			//$session['bufflist'][$key]=$val;
@@ -169,7 +170,7 @@ if ($dp < $dkills) {
 
 	reset($session['user']['dragonpoints']);
 	$dkff=0;
-	while(list($key,$val)=each($session['user']['dragonpoints'])){
+	while(list($key,$val)=resurrection_array_next($session['user']['dragonpoints'])){
 		if ($val=="ff"){
 			$dkff++;
 		}

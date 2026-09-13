@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/../src/Compatibility/array_cursor.php';
 // addnews ready
 // translator ready
 // mail ready
@@ -169,7 +170,7 @@ function buffbadguy($badguy){
 	if ($dk === false) {
 		//make badguys get harder as you advance in dragon kills.
 		$dk = 0;
-		while(list($key, $val)=each($session['user']['dragonpoints'])) {
+		while(list($key, $val)=resurrection_array_next($session['user']['dragonpoints'])) {
 			if ($val=="at" || $val=="de") $dk++;
 		}
 		$dk += (int)(($session['user']['maxhitpoints']-($session['user']['level']*10))/5);

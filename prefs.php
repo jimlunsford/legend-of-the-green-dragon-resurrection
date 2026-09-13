@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/src/Compatibility/array_cursor.php';
 // addnews ready
 // mail ready
 // translator ready
@@ -219,7 +220,7 @@ if ($op=="suicide" && getsetting("selfdelete",0)!=0) {
 		$tempsettings = array();
 		$tempdata = array();
 		$found = 0;
-		while (list($key, $val) = each($info['prefs'])) {
+		while (list($key, $val) = resurrection_array_next($info['prefs'])) {
 			$isuser = preg_match("/^user_/", $key);
 			$ischeck = preg_match("/^check_/", $key);
 

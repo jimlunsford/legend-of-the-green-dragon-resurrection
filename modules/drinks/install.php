@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/../../src/Compatibility/array_cursor.php';
 function drinks_install_private(){
 	if (db_table_exists(db_prefix("drinks"))) {
 		debug("Drinks table already exists");
@@ -38,7 +39,7 @@ function drinks_install_private(){
 			"INSERT INTO " . db_prefix("drinks") . " VALUES (0, 'Habanero Martini', 1, 15, 0, 0, 1, 1, 50, 1, -5, 15, 0.0, -1, 1, 'Cedrik pulls out a bottle labeled with 3 X\\'s and a chile pepper and pours a miniscule shot into your glass.  You toss it back and grimace as smoke floods out of your ears.', '`\$Hot Hands', 12, 'You feel like your hands are about to burn off.', 'Finally, your hands are no longer burning.', '1.1', '.9', '1.5', '0', '', '', '')",
 			"INSERT INTO " . db_prefix("drinks") . " VALUES (0, 'Mule Daniels', 1, 25, 2, 3, 0, 0, 50, 1, -10, -1, 0.0, 1, 3, 'Cedrik drags a large pony-keg out from behind the bar and pours a slug into a cast iron cup which rattles as the thick liquid is poured into it.  You toss it back in a gulp and make a face like a mule kicked you hard in the gut.  From across the room, you hear {lover} laugh at you.', '`#Mulekick', 15, 'You hear a donkey braying in the distance', 'That donkey finally shuts up.', '0', '0', '1.3', '1.3', 'Your head rings as the donkey kicks you instead.', 'That mule would have kicked {badguy} to the moon, but it missed!', '{badguy} sees`$ {damage}`) stars as the mule kicks him over the moon.')"
 		);
-		while (list($key,$sql)=each($sqls)){
+		while (list($key,$sql)=resurrection_array_next($sqls)){
 			db_query($sql);
 		}
 	}

@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/src/Compatibility/array_cursor.php';
 require_once("common.php");
 require_once("lib/showform.php");
 require_once("lib/http.php");
@@ -28,7 +29,7 @@ if ($op=="save"){
 	$defsup = httppost("defaultsuperuser");
 	if ($defsup != "") {
 		$value = 0;
-		while(list($k, $v)=each($defsup)) {
+		while(list($k, $v)=resurrection_array_next($defsup)) {
 			if ($v) $value += (int)$k;
 		}
 		httppostset('defaultsuperuser', $value);
@@ -65,7 +66,7 @@ if ($op=="save"){
 	$post = httpallpost();
 	reset($post);
 	$old=$settings;
-	while (list($key,$val)=each($post)){
+	while (list($key,$val)=resurrection_array_next($post)){
 		if (!isset($settings[$key]) ||
 				(stripslashes($val) != $settings[$key])) {
 			if (!isset($old[$key]))
@@ -98,7 +99,7 @@ if ($op=="save"){
 						$post['validation_error']);
 			} else {
 				reset($post);
-				while (list($key,$val)=each($post)){
+				while (list($key,$val)=resurrection_array_next($post)){
 					$key = stripslashes($key);
 					$val = stripslashes($val);
 					set_module_setting($key,$val);
@@ -130,7 +131,7 @@ if ($op=="save"){
 			if (count($info['settings'])>0){
 				load_module_settings($mostrecentmodule);
 				$msettings=array();
-				while (list($key,$val)=each($info['settings'])){
+				while (list($key,$val)=resurrection_array_next($info['settings'])){
 					if (is_array($val)) {
 						$v = $val[0];
 						$x = explode("|", $v);

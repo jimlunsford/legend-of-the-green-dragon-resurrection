@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/../../src/Compatibility/array_cursor.php';
 function dag_install_private(){
 	global $session;
 	module_addhook("inn-desc");
@@ -14,7 +15,7 @@ function dag_install_private(){
 	$result = db_query($sql);
 	$bountytableisthere=false;
 	while ($row = db_fetch_assoc($result)){
-		list($key,$val)=each($row);
+		list($key,$val)=resurrection_array_next($row);
 		if ($val==db_prefix("bounty")){
 			$bountytableisthere=true;
 			break;

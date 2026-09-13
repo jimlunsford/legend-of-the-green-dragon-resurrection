@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/../../src/Compatibility/array_cursor.php';
 function dag_dohook_private($hookname,$args){
 	require_once("modules/dag/misc_functions.php");
 	global $session;
@@ -44,7 +45,7 @@ function dag_dohook_private($hookname,$args){
 		$info = dag_getmoduleinfo();
 		$parts = array();
 		$values = array();
-		while(list($key,$val)= each($info['settings'])) {
+		while(list($key,$val)= resurrection_array_next($info['settings'])) {
 			if (is_array($val)) {
 				$x = explode("|", $val[0]);
 			} else {

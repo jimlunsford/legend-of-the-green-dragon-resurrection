@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/../../src/Compatibility/array_cursor.php';
 $result = db_query("SELECT * FROM " . db_prefix("accounts") . " WHERE acctid='$userid'");
 $row = db_fetch_assoc($result);
 $petition=httpget("returnpetition");
@@ -67,7 +68,7 @@ if (httpget("subop")==""){
 	if (count($info['prefs']) > 0) {
 		$data = array();
 		$msettings = array();
-		while (list($key,$val)=each($info['prefs'])){
+		while (list($key,$val)=resurrection_array_next($info['prefs'])){
 			// Handle vals which are arrays.
 			if (is_array($val)) {
 				$v = $val[0];

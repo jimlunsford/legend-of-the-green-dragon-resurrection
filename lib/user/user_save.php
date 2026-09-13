@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/../../src/Compatibility/array_cursor.php';
 $sql = "";
 $updates=0;
 $oldvalues = stripslashes(httppost('oldvalues'));
@@ -9,7 +10,7 @@ if ($oldvalues['ctitle']) $otitle = $oldvalues['ctitle'];
 $oldvalues['name'] = $otitle . ' ' . $oldvalues['name'];
 	$post = httpallpost();
 reset($post);
-while (list($key,$val)=each($post)){
+while (list($key,$val)=resurrection_array_next($post)){
 	if (isset($userinfo[$key])){
 		if ($key=="newpassword" ){
 			if ($val>"") {
@@ -23,7 +24,7 @@ while (list($key,$val)=each($post)){
 			}
 		}elseif ($key=="superuser"){
 			$value = 0;
-			while (list($k,$v)=each($val)){
+			while (list($k,$v)=resurrection_array_next($val)){
 				if ($v) $value += (int)$k;
 			}
 				//strip off an attempt to set privs that the user doesn't

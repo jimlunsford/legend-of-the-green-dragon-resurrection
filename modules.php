@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/src/Compatibility/array_cursor.php';
 // addnews ready
 // translator ready
 // mail ready
@@ -35,7 +36,7 @@ if (is_array($module)){
 	else $modules = array();
 }
 reset($modules);
-while (list($key,$module)=each($modules)){
+while (list($key,$module)=resurrection_array_next($modules)){
 	$op = $theOp;
 	output("`2Performing `^%s`2 on `%%s`0`n", translate_inline($op), $module);
 	if($op=="install"){
@@ -280,7 +281,7 @@ if ($op==""){
 					rawoutput("<td colspan='6'>");
 					output("`bRequires:`b`n");
 					reset($moduleinfo[$i]['requires']);
-					while (list($key,$val)=each($moduleinfo[$i]['requires'])){
+					while (list($key,$val)=resurrection_array_next($moduleinfo[$i]['requires'])){
 						$info = explode("|",$val);
 						if (module_check_requirements(array($key=>$val))){
 							output_notl("`@");

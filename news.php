@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/src/Compatibility/array_cursor.php';
 // translator ready
 // addnews ready
 // mail ready
@@ -70,7 +71,7 @@ while ($row = db_fetch_assoc($result)) {
 		$arguments = array();
 		$base_arguments = unserialize($row['arguments']);
 		array_push($arguments,$row['newstext']);
-		while (list($key,$val)=each($base_arguments)){
+		while (list($key,$val)=resurrection_array_next($base_arguments)){
 			array_push($arguments,$val);
 		}
 		$news = call_user_func_array("sprintf_translate",$arguments);

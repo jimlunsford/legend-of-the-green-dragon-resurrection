@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/../src/Compatibility/array_cursor.php';
 // translator ready
 // addnews ready
 // mail ready
@@ -69,7 +70,7 @@ function postparse($verify=false, $subval=false){
 	$keys = "";
 	$vals = "";
 	$i = 0;
-	while(list($key, $val) = each($var)) {
+	while(list($key, $val) = resurrection_array_next($var)) {
 		if ($verify === false || isset($verify[$key])) {
 			if (is_array($val)) $val = addslashes(serialize($val));
 			$sql .= (($i > 0) ? "," : "") . "$key='$val'";

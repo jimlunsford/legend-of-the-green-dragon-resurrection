@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/../src/Compatibility/array_cursor.php';
 /**
  * Library (supporting) functions for page output
  *		addnews ready
@@ -110,9 +111,9 @@ function page_footer($saveuser=true){
 	//output any template part replacements that above hooks need (eg,
 	//advertising)
 	reset($replacementbits);
-	while (list($key,$val)=each($replacementbits)){
-		$header = str_replace("{".$key."}","{".$key."}".join($val,""),$header);
-		$footer = str_replace("{".$key."}","{".$key."}".join($val,""),$footer);
+	while (list($key,$val)=resurrection_array_next($replacementbits)){
+		$header = str_replace("{".$key."}","{".$key."}".join("",$val),$header);
+		$footer = str_replace("{".$key."}","{".$key."}".join("",$val),$footer);
 	}
 
 	$builtnavs = buildnavs();
@@ -153,7 +154,7 @@ function page_footer($saveuser=true){
 	if (!isset($session['user']['login'])) $session['user']['login']="";
 
 	//clean up unclosed output tags.
-	while (list($key,$val)=each($nestedtags)){
+	while (list($key,$val)=resurrection_array_next($nestedtags)){
 		if ($nestedtags[$key] === true) $output.="</$key>";
 
 		unset($nestedtags[$key]);
@@ -183,7 +184,7 @@ function page_footer($saveuser=true){
 		if (target.nodeName.toUpperCase()=='INPUT' || target.nodeName.toUpperCase()=='TEXTAREA' || altKey || ctrlKey){
 		}else{";
 	reset($quickkeys);
-	while (list($key,$val)=each($quickkeys)){
+	while (list($key,$val)=resurrection_array_next($quickkeys)){
 		$script.="\n			if (c == '".strtoupper($key)."') { $val; return false; }";
 	}
 	$script.="
@@ -415,7 +416,7 @@ function popup_header($title="Legend of the Green Dragon"){
 function popup_footer(){
 	global $output,$nestedtags,$header,$session,$y2,$z2,$copyright, $template;
 
-	while (list($key,$val)=each($nestedtags)){
+	while (list($key,$val)=resurrection_array_next($nestedtags)){
 		if ($nestedtags[$key] === true) $output.="</$key>";
 		unset($nestedtags[$key]);
 	}
@@ -429,9 +430,9 @@ function popup_footer(){
 	$replacementbits = modulehook("footer-popup",array());
 	//output any template part replacements that above hooks need
 	reset($replacementbits);
-	while (list($key,$val)=each($replacementbits)){
-		$header = str_replace("{".$key."}","{".$key."}".join($val,""),$header);
-		$footer = str_replace("{".$key."}","{".$key."}".join($val,""),$footer);
+	while (list($key,$val)=resurrection_array_next($replacementbits)){
+		$header = str_replace("{".$key."}","{".$key."}".join("",$val),$header);
+		$footer = str_replace("{".$key."}","{".$key."}".join("",$val),$footer);
 	}
 
 	$z = $y2^$z2;
@@ -592,7 +593,7 @@ function charstats(){
 		$def=$u['defense'];
 		$buffcount = 0;
 		$buffs = "";
-		while (list($key,$val)=each($session['bufflist'])){
+		while (list($key,$val)=resurrection_array_next($session['bufflist'])){
 			if (isset($val['suspended']) && $val['suspended']) continue;
 			if (isset($val['atkmod'])) {
 				$atk *= $val['atkmod'];
@@ -759,7 +760,7 @@ function loadtemplate($templatename){
 		$templatename="jade.htm";
 	$fulltemplate = file_get_contents("templates/$templatename");
 	$fulltemplate = explode("<!--!",$fulltemplate);
-	while (list($key,$val)=each($fulltemplate)){
+	while (list($key,$val)=resurrection_array_next($fulltemplate)){
 		$fieldname=substr($val,0,strpos($val,"-->"));
 		if ($fieldname!=""){
 			$template[$fieldname]=substr($val,strpos($val,"-->")+3);

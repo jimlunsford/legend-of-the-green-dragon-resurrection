@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/../src/Compatibility/array_cursor.php';
 // addnews ready
 // translator ready
 // mail ready
@@ -13,7 +14,7 @@ if (defined('E_DEPRECATED')) {
 function set_magic_quotes(&$vars) {
 	if (is_array($vars)) {
 		reset($vars);
-		while (list($key,$val) = each($vars))
+		while (list($key,$val) = resurrection_array_next($vars))
 			set_magic_quotes($vars[$key]);
 	}else{
 		$vars = addslashes($vars);

@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/../src/Compatibility/array_cursor.php';
 // translator ready
 // addnews ready
 // mail ready
@@ -56,7 +57,8 @@ function addcommentary() {
                 ".author LEFT JOIN ".db_prefix("clans")." ON ".
                 db_prefix("clans").".clanid=".db_prefix("accounts").
                 ".clanid WHERE commentid=$remove";
-		$row = db_fetch_assoc(db_query($sql));
+		$singleRowResult = db_query($sql);
+		$row = db_fetch_assoc($singleRowResult);
 		$sql = "INSERT LOW_PRIORITY INTO ".db_prefix("moderatedcomments").
 			" (moderator,moddate,comment) VALUES ('{$session['user']['acctid']}','".date("Y-m-d H:i:s")."','".addslashes(serialize($row))."')";
 		db_query($sql);
@@ -431,7 +433,7 @@ function viewcommentary($section,$message="Interject your own commentary?",$limi
 	$sections = commentarylocs();
 	$needclose = 0;
 
-	while (list($sec,$v)=each($outputcomments)){
+	while (list($sec,$v)=resurrection_array_next($outputcomments)){
 		if ($sec!="x") {
 			if($needclose) modulehook("}collapse");
 			output_notl("`n<hr><a href='moderate.php?area=%s'>`b`^%s`0`b</a>`n",
@@ -444,7 +446,7 @@ function viewcommentary($section,$message="Interject your own commentary?",$limi
 			$needclose = 1;
 		}
 		reset($v);
-		while (list($key,$val)=each($v)){
+		while (list($key,$val)=resurrection_array_next($v)){
 			$args = array('commentline'=>$val);
 			$args = modulehook("viewcommentary", $args);
 			$val = $args['commentline'];
@@ -611,7 +613,7 @@ function talkform($section,$talkline,$limit=10,$schema=false){
 		$sections = commentarylocs();
 		reset ($sections);
 		output_notl("<select name='section'>",true);
-		while (list($key,$val)=each($sections)){
+		while (list($key,$val)=resurrection_array_next($sections)){
 			output_notl("<option value='$key'>$val</option>",true);
 		}
 		output_notl("</select>",true);
