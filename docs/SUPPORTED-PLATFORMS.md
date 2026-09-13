@@ -17,7 +17,7 @@ Runtime requirements: PDO, pdo_mysql, mbstring, JSON, sessions and normal standa
 
 Primary target: MariaDB 11.4 LTS. Secondary candidate: MySQL 8.4 LTS. MariaDB 11.4 has Community maintenance through May 2029 according to the [MariaDB maintenance policy](https://mariadb.org/about/#maintenance-policy). MySQL 8.4 is an LTS series under the [MySQL release model](https://dev.mysql.com/doc/refman/8.4/en/mysql-releases.html).
 
-The CI matrix pairs PHP 8.4 with MariaDB 11.4 and PHP 8.5 with MySQL 8.4 to test the new PDO driver. These are two tested pairings once their checks pass, not a claim about every PHP/database combination. Exact resolved versions and workflow outcomes belong in the checkpoint.
+The CI matrix pairs PHP 8.4 with MariaDB 11.4 and PHP 8.5 with MySQL 8.4 to test the new PDO driver. Both passed at code checkpoint 471056d6a8515fee60b51319173a5f1f87f8545c (PHP 8.4.25 / MariaDB 11.4.13 and PHP 8.5.10 / MySQL 8.4.11). These are two tested pairings, not a claim about every PHP/database combination. Exact resolved versions and workflow outcomes belong in the checkpoint.
 
 Driver requirements: explicit utf8mb4 connection, native prepared statements, multi-statement execution disabled, predictable string-valued result columns, validated identifiers, and a non-root application account scoped to one database. Test tables use InnoDB and utf8mb4. Integration checks require STRICT_TRANS_TABLES; no global or connection SQL-mode weakening is performed. The game schema, zero dates, defaults, legacy table locks, and bundled module DDL still require a separate fresh-install pass. No full schema compatibility claim is made yet.
 
