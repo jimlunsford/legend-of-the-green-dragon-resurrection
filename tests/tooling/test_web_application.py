@@ -321,6 +321,30 @@ function resurrectionhttpfixture_run() { echo 'fixture-executed'; exit; }
         self.assertEqual([], self.query('SELECT commentid FROM commentary WHERE commentid=?', [rows[0]['commentid']]))
         authenticated_id = session_id()
 
+        # All bundled modules active in one real authenticated HTTP session.
+        # Lifecycle/cache transitions are tested through the real API in PHPUnit.
+        self.query('UPDATE modules SET active=1')
+        try:
+            status, _, body = request('village.php')
+            self.assertEqual(200, status)
+            status, _, body = request(issued_link(body, 'inn.php'))
+            self.assertEqual(200, status)
+            for module in ['dag', 'lovers', 'sethsong']:
+                status, _, body = request(issued_link(body, 'runmodule.php?module=' + module))
+                self.assertEqual(200, status)
+                self.assertIn('WebPlayer', body)
+                status, _, body = request(issued_link(body, 'inn.php'))
+                self.assertEqual(200, status)
+            status, _, body = request(issued_link(body, 'village.php'))
+            self.assertEqual(200, status)
+            status, _, body = request(issued_link(body, 'forest.php'))
+            self.assertEqual(200, status)
+            self.assertIsNotNone(issued_link(body, 'runmodule.php?module=outhouse'))
+            status, _, body = request(issued_link(body, 'village.php'))
+            self.assertEqual(200, status)
+        finally:
+            self.query('UPDATE modules SET active=0')
+
 
         # Actual mailbox UI: stored subject HTML, HTTP methods, CSRF and ownership.
         player_id = self.query('SELECT acctid FROM accounts WHERE login=?', ['WebPlayer'])[0]['acctid']
