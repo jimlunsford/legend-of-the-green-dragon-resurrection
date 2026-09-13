@@ -68,7 +68,7 @@ function game_dice_run(){
                 $session['user']['specialmisc']=\Resurrection\Game\DarkHorseState::write($state,$owner);
                 return $state;
             });
-        } catch (DomainException|InvalidArgumentException $error) { http_response_code(400); exit('Invalid dice action.'); }
+        } catch (DomainException|InvalidArgumentException $error) { http_response_code(400); exit('Invalid dice action.'); } catch (RuntimeException $error) { http_response_code(503); exit('Game temporarily unavailable.'); }
     } elseif (array_intersect(array_keys($_GET),['bet','try','what','action'])!==[]) {
         http_response_code(403); exit('Use the game form.');
     }

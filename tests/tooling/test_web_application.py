@@ -239,7 +239,8 @@ function resurrectionhttpfixture_run() { echo 'fixture-executed'; exit; }
             body=page(oldman)  # issues server-owned return for all three games
             self.assertEqual('',snapshot()['specialmisc'])
             # No active state cannot authorize an abandonment, even with correct CSRF.
-            allow(oldman); status,_=request(oldman,{'csrf_token':csrf,'game':'game_dice','action_token':'0'*64})
+            empty_form=fields(page('runmodule.php?module=game_dice'))
+            allow(oldman); status,_=request(oldman,{**empty_form,'game':'game_dice'})
             self.assertEqual(409,status)
             for module in ['game_stones','game_dice']:
                 url='runmodule.php?module='+module

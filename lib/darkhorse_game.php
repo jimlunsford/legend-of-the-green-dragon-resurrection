@@ -1,5 +1,9 @@
 <?php
 require_once __DIR__ . '/player_mutation.php';
+require_once __DIR__ . '/../src/Game/StonesState.php';
+require_once __DIR__ . '/../src/Game/DiceGame.php';
+require_once __DIR__ . '/../src/Game/FiveSixGame.php';
+require_once __DIR__ . '/../src/Game/DarkHorseState.php';
 
 /** @return array<string,mixed> */
 function resurrection_darkhorse_game(string $game): array {

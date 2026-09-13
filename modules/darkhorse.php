@@ -96,7 +96,7 @@ function darkhorse_checkday(){
 
 function darkhorse_bartender($from){
 	global $session;
-	require_once 'lib/player_mutation.php';
+	require_once 'lib/darkhorse_game.php';
 	$what = \Resurrection\Http\Input::choice($_GET, 'what', ['', 'colors', 'enemies'], '');
 	if ($what==""){
 		output("The grizzled old man behind the bar reminds you very much of a strip of beef jerky.`n`n");
@@ -285,7 +285,7 @@ function darkhorse_runevent($type, $link){
 		darkhorse_bartender($from);
 		break;
 	case "oldman":
-        require_once 'lib/player_mutation.php';
+        require_once 'lib/darkhorse_game.php';
         try {
             $wager = \Resurrection\Game\DarkHorseState::read((string)$session['user']['specialmisc'], (int)$session['user']['acctid']);
             if ($_SERVER['REQUEST_METHOD'] === 'POST') {

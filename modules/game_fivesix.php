@@ -109,7 +109,7 @@ function game_fivesix_run(){
                 $session['user']['specialmisc']=\Resurrection\Game\DarkHorseState::write($state,$owner);
                 return $state;
             });
-        } catch (DomainException|InvalidArgumentException $error) { http_response_code(400); exit('Invalid or unavailable roll.'); }
+        } catch (DomainException|InvalidArgumentException $error) { http_response_code(400); exit('Invalid or unavailable roll.'); } catch (RuntimeException $error) { http_response_code(503); exit('Game temporarily unavailable.'); }
     } elseif (array_intersect(array_keys($_GET),['action','bet','try','result','jackpot'])!==[] || (isset($_GET['what']) && $_GET['what']!=='play')) {
         http_response_code(403); exit('Use the game form.');
     }

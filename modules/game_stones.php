@@ -38,7 +38,7 @@ function game_stones_dohook($hookname, $args){
 
 function game_stones_run(){
     global $session;
-    require_once 'lib/player_mutation.php';
+    require_once 'lib/darkhorse_game.php';
     require_once 'src/Game/StonesGame.php';
     // Return locations are application-owned. Never reflect a submitted URL.
     $return = $_SESSION['darkhorse_return'] ?? '';
@@ -87,7 +87,7 @@ function game_stones_run(){
             $stones = $result['state'];
         } catch (InvalidArgumentException|DomainException $error) {
             http_response_code(400); exit('Invalid Stones action.');
-        }
+        } catch (RuntimeException $error) { http_response_code(503); exit('Game temporarily unavailable.'); }
     } elseif (isset($_GET['side']) || isset($_GET['bet']) || isset($_GET['action'])) {
         http_response_code(403); exit('Use the game form.');
     }
