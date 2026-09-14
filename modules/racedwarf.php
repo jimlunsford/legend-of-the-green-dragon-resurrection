@@ -97,9 +97,9 @@ function racedwarf_dohook($hookname,$args){
 		}
 		break;
 	case "chooserace":
-		output("<a href='newday.php?setrace=$race$resline'>Deep in the subterranean strongholds of %s</a>, home to the noble and fierce `#Dwarven`0 people whose desire for privacy and treasure bears no resemblance to their tiny stature.`n`n", $city, true);
-		addnav("`#Dwarf`0","newday.php?setrace=$race$resline");
-		addnav("","newday.php?setrace=$race$resline");
+		output("Deep in the subterranean strongholds of %s, home to the noble and fierce `#Dwarven`0 people whose desire for privacy and treasure bears no resemblance to their tiny stature.`n`n", $city);
+		require_once('lib/race_onboarding.php');
+		resurrection_race_form($race);
 		break;
 	case "setrace":
 		if ($session['user']['race']==$race){

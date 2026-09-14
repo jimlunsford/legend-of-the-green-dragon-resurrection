@@ -90,9 +90,9 @@ function racetroll_dohook($hookname,$args){
 		}
 		break;
 	case "chooserace":
-		output("<a href='newday.php?setrace=$race$resline'>In the swamps of %s</a>`2 as a `@Troll`2, fending for yourself from the very moment you crept out of your leathery egg, slaying your yet unhatched siblings, and feasting on their bones.`n`n",$city, true);
-		addnav("`@Troll`0","newday.php?setrace=$race$resline");
-		addnav("","newday.php?setrace=$race$resline");
+		output("In the swamps of %s`2 as a `@Troll`2, fending for yourself from the very moment you crept out of your leathery egg, slaying your yet unhatched siblings, and feasting on their bones.`n`n",$city);
+		require_once('lib/race_onboarding.php');
+		resurrection_race_form($race);
 		break;
 	case "setrace":
 		if ($session['user']['race']==$race){

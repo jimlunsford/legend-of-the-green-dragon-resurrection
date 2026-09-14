@@ -9,6 +9,14 @@ require_once("lib/http.php");
 require_once("lib/sanitize.php");
 require_once("lib/buffs.php");
 
+require_once('lib/race_onboarding.php');
+if (isset($_GET['setrace'])) { http_response_code(403); exit('Race selection requires a form.'); }
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && (isset($_POST['setrace']) || isset($_POST['onboarding']) ||
+    !$session['user']['race'] || $session['user']['race'] === RACE_UNKNOWN)) {
+    $resline = httpget('resurrection') === 'true' ? '&resurrection=true' : '';
+    resurrection_race_onboarding();
+}
+
 tlschema("newday");
 //mass_module_prepare(array("newday-intercept", "newday"));
 modulehook("newday-intercept",array());

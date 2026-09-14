@@ -80,9 +80,9 @@ function racehuman_dohook($hookname,$args){
 		}
 		break;
 	case "chooserace":
-		output("`0<a href='newday.php?setrace=$race$resline'>On the plains in the city of %s</a>, the city of `&men`0; always following your father and looking up to his every move, until he sought out the `@Green Dragon`0, never to be seen again.`n`n", $city, true);
-		addnav("`&Human`0","newday.php?setrace=$race$resline");
-		addnav("","newday.php?setrace=$race$resline");
+		output("`0On the plains in the city of %s, the city of `&men`0; always following your father and looking up to his every move, until he sought out the `@Green Dragon`0, never to be seen again.`n`n", $city);
+		require_once('lib/race_onboarding.php');
+		resurrection_race_form($race);
 		break;
 	case "setrace":
 		if ($session['user']['race']==$race){

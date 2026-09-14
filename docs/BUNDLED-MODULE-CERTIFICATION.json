@@ -1186,10 +1186,10 @@
       "mariadb_11_4": "PASS for tested components; final BLOCKED for remaining gates",
       "mysql_8_4": "PASS for tested components; final BLOCKED for remaining gates",
       "warnings_errors": "No PHP warnings/errors in the passing matrix tests; unexecuted paths unverified.",
-      "security_notes": "Existing choice text, newday/stat and combined-hook behavior PASS. Actual HTTP onboarding choice/invalid choice/POST/CSRF/persistence/reselection matrix remains unimplemented; Cities excluded.",
+      "security_notes": "Shared race HTTP boundary implemented in lib/race_onboarding.php and exercised by test_race_onboarding_http_authority: active bundled choices, server identity/main-village location, POST/CSRF/state intent, forged race/module/path/location/stat rejection, replay/reselection/stale/inactive/anonymous denial, atomic account persistence and final-write rollback/fresh retry. Existing runtime/stat/New Day/PvP hooks retained. Supported-target CI verification pending before final promotion.",
       "final_certification": "BLOCKED",
-      "continuation_evidence": "See CORE-ROUTE-SECURITY.md for component gates and exact test names; prior lifecycle evidence is retained.",
-      "next_required_gate": "Complete actual HTTP choice/invalid/forged/POST/CSRF/persistence/location/reselection and later New Day effect matrix.",
+      "continuation_evidence": "Shared race HTTP boundary implemented in lib/race_onboarding.php and exercised by test_race_onboarding_http_authority: active bundled choices, server identity/main-village location, POST/CSRF/state intent, forged race/module/path/location/stat rejection, replay/reselection/stale/inactive/anonymous denial, atomic account persistence and final-write rollback/fresh retry. Existing runtime/stat/New Day/PvP hooks retained. Supported-target CI verification pending before final promotion.",
+      "next_required_gate": "Verify the new shared onboarding HTTP matrix on both supported targets.",
       "previous_certification": "BLOCKED"
     },
     {
@@ -1320,10 +1320,10 @@
       "mariadb_11_4": "PASS for tested components; final BLOCKED for remaining gates",
       "mysql_8_4": "PASS for tested components; final BLOCKED for remaining gates",
       "warnings_errors": "No PHP warnings/errors in the passing matrix tests; unexecuted paths unverified.",
-      "security_notes": "Existing choice text, newday/stat and combined-hook behavior PASS. Actual HTTP onboarding choice/invalid choice/POST/CSRF/persistence/reselection matrix remains unimplemented; Cities excluded.",
+      "security_notes": "Shared race HTTP boundary implemented in lib/race_onboarding.php and exercised by test_race_onboarding_http_authority: active bundled choices, server identity/main-village location, POST/CSRF/state intent, forged race/module/path/location/stat rejection, replay/reselection/stale/inactive/anonymous denial, atomic account persistence and final-write rollback/fresh retry. Existing runtime/stat/New Day/PvP hooks retained. Supported-target CI verification pending before final promotion.",
       "final_certification": "BLOCKED",
-      "continuation_evidence": "See CORE-ROUTE-SECURITY.md for component gates and exact test names; prior lifecycle evidence is retained.",
-      "next_required_gate": "Complete actual HTTP choice/invalid/forged/POST/CSRF/persistence/location/reselection and later New Day effect matrix.",
+      "continuation_evidence": "Shared race HTTP boundary implemented in lib/race_onboarding.php and exercised by test_race_onboarding_http_authority: active bundled choices, server identity/main-village location, POST/CSRF/state intent, forged race/module/path/location/stat rejection, replay/reselection/stale/inactive/anonymous denial, atomic account persistence and final-write rollback/fresh retry. Existing runtime/stat/New Day/PvP hooks retained. Supported-target CI verification pending before final promotion.",
+      "next_required_gate": "Verify the new shared onboarding HTTP matrix on both supported targets.",
       "previous_certification": "BLOCKED"
     },
     {
@@ -1446,10 +1446,10 @@
       "mariadb_11_4": "PASS for tested components; final BLOCKED for remaining gates",
       "mysql_8_4": "PASS for tested components; final BLOCKED for remaining gates",
       "warnings_errors": "No PHP warnings/errors in the passing matrix tests; unexecuted paths unverified.",
-      "security_notes": "Existing choice text, newday/stat and combined-hook behavior PASS. Actual HTTP onboarding choice/invalid choice/POST/CSRF/persistence/reselection matrix remains unimplemented; Cities excluded.",
+      "security_notes": "Shared race HTTP boundary implemented in lib/race_onboarding.php and exercised by test_race_onboarding_http_authority: active bundled choices, server identity/main-village location, POST/CSRF/state intent, forged race/module/path/location/stat rejection, replay/reselection/stale/inactive/anonymous denial, atomic account persistence and final-write rollback/fresh retry. Existing runtime/stat/New Day/PvP hooks retained. Supported-target CI verification pending before final promotion.",
       "final_certification": "BLOCKED",
-      "continuation_evidence": "See CORE-ROUTE-SECURITY.md for component gates and exact test names; prior lifecycle evidence is retained.",
-      "next_required_gate": "Complete actual HTTP choice/invalid/forged/POST/CSRF/persistence/location/reselection and later New Day effect matrix.",
+      "continuation_evidence": "Shared race HTTP boundary implemented in lib/race_onboarding.php and exercised by test_race_onboarding_http_authority: active bundled choices, server identity/main-village location, POST/CSRF/state intent, forged race/module/path/location/stat rejection, replay/reselection/stale/inactive/anonymous denial, atomic account persistence and final-write rollback/fresh retry. Existing runtime/stat/New Day/PvP hooks retained. Supported-target CI verification pending before final promotion.",
+      "next_required_gate": "Verify the new shared onboarding HTTP matrix on both supported targets.",
       "previous_certification": "BLOCKED"
     },
     {
@@ -1574,10 +1574,10 @@
       "mariadb_11_4": "PASS for tested components; final BLOCKED for remaining gates",
       "mysql_8_4": "PASS for tested components; final BLOCKED for remaining gates",
       "warnings_errors": "No PHP warnings/errors in the passing matrix tests; unexecuted paths unverified.",
-      "security_notes": "Existing choice text, newday/stat and combined-hook behavior PASS. Actual HTTP onboarding choice/invalid choice/POST/CSRF/persistence/reselection matrix remains unimplemented; Cities excluded.",
+      "security_notes": "Shared race HTTP boundary implemented in lib/race_onboarding.php and exercised by test_race_onboarding_http_authority: active bundled choices, server identity/main-village location, POST/CSRF/state intent, forged race/module/path/location/stat rejection, replay/reselection/stale/inactive/anonymous denial, atomic account persistence and final-write rollback/fresh retry. Existing runtime/stat/New Day/PvP hooks retained. Supported-target CI verification pending before final promotion.",
       "final_certification": "BLOCKED",
-      "continuation_evidence": "See CORE-ROUTE-SECURITY.md for component gates and exact test names; prior lifecycle evidence is retained.",
-      "next_required_gate": "Complete actual HTTP choice/invalid/forged/POST/CSRF/persistence/location/reselection and later New Day effect matrix.",
+      "continuation_evidence": "Shared race HTTP boundary implemented in lib/race_onboarding.php and exercised by test_race_onboarding_http_authority: active bundled choices, server identity/main-village location, POST/CSRF/state intent, forged race/module/path/location/stat rejection, replay/reselection/stale/inactive/anonymous denial, atomic account persistence and final-write rollback/fresh retry. Existing runtime/stat/New Day/PvP hooks retained. Supported-target CI verification pending before final promotion.",
+      "next_required_gate": "Verify the new shared onboarding HTTP matrix on both supported targets.",
       "previous_certification": "BLOCKED"
     },
     {

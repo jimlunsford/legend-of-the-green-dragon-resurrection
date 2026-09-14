@@ -379,7 +379,8 @@ final class ModuleCertificationTest extends TestCase
                 $GLOBALS['session']['user']['race'] = $race;
                 $GLOBALS['output'] = '';
                 modulehook('chooserace', [], false, $module);
-                self::assertStringContainsString('setrace=' . $race, $GLOBALS['output']);
+                self::assertStringContainsString('name="setrace" value="' . $race . '"', $GLOBALS['output']);
+                self::assertStringContainsString('method="POST"', $GLOBALS['output']);
                 modulehook('setrace', [], false, $module);
                 $old = get_module_setting('villagename', $module);
                 $new = "O'Reilly \\ village 🐉";

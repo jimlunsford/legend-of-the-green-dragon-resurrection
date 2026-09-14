@@ -232,6 +232,80 @@ function resurrectionrandomfixture_dohook($hook,$args) { mt_srand((int)getsettin
             self.query('DELETE FROM settings WHERE setting=?',['fixture_rng_seed'])
             path.unlink()
 
+    def test_race_onboarding_http_authority(self):
+        player=self.query('SELECT acctid FROM accounts WHERE login=?',['WebPlayer'])[0]['acctid']
+        original=self.query('SELECT * FROM accounts WHERE acctid=?',[player])[0]
+        modules=self.query('SELECT modulename,active FROM modules')
+        self.query('UPDATE modules SET active=1')
+        call=self._security_client(); url='newday.php?continue=1'
+        races={'Human':'racehuman','Elf':'raceelf','Dwarf':'racedwarf','Troll':'racetroll'}
+        village=self.query('SELECT value FROM settings WHERE setting=?',['villagename'])[0]['value']
+        def setup():
+            self.query('UPDATE accounts SET race=?,specialty=?,location=?,specialinc=?,dragonkills=0,dragonpoints=?,alive=1,hitpoints=100,bufflist=? WHERE acctid=?',
+                ['Horrible Gelatinous Blob','DA','Unselected location','','a:0:{}','a:0:{}',player])
+        def state():
+            return self.query('SELECT race,location,specialty,gold,gems,turns,age,attack,defense,dragonkills FROM accounts WHERE acctid=?',[player])[0]
+        def adversarial(path,data=None): self._security_allow(player,path); return call(path,data)
+        def form():
+            self._security_allow(player,'newday.php'); before=state()
+            status,body=call('newday.php'); self.assertEqual(200,status,body[:1000]); self.assertEqual(before,state())
+            found={}
+            for action,part in re.findall(r'<form\b[^>]*action="([^"]+)"[^>]*>(.*?)</form>',body,re.S):
+                if html.unescape(action)!=url: continue
+                choice=re.search(r'name="setrace" value="([^"]+)"',part)
+                if choice: found[choice[1]]=self._security_fields(part)|{'onboarding':'race','setrace':choice[1]}
+            return found,body
+        try:
+            for race,module in races.items():
+                with self.subTest(race=race):
+                    setup(); forms,body=form(); self.assertEqual(set(races),set(forms))
+                    self.assertNotIn('href=\'newday.php?setrace=',body)
+                    before=state(); self.assertIn(self._security_client(None)(url,forms[race])[0],[302,303,403]); self.assertEqual(before,state())
+                    for patch in [{'csrf_token':None},{'csrf_token':'0'*64}]:
+                        data=forms[race]|patch
+                        if data['csrf_token'] is None: del data['csrf_token']
+                        self.assertEqual(403,adversarial(url,data)[0]); self.assertEqual(before,state())
+                    forms,_=form()
+                    self.assertEqual(200,call(url,forms[race])[0]); after=state()
+                    self.assertEqual(race,after['race']); self.assertEqual(village,after['location'])
+                    self.assertEqual({k:v for k,v in before.items() if k not in ['race','location']},{k:v for k,v in after.items() if k not in ['race','location']})
+                    self.assertEqual(409,adversarial(url,forms[race])[0]); self.assertEqual(after,state())
+                    alternative=next(v for k,v in forms.items() if k!=race)
+                    self.assertEqual(409,adversarial(url,alternative)[0]); self.assertEqual(after,state())
+                    # A separate authenticated request reloads the committed identity/location.
+                    call=self._security_client(); adversarial('inn.php'); self.assertEqual(after,state())
+                    setup(); forms,_=form(); self.query('UPDATE modules SET active=0 WHERE modulename=?',[module]); before=state()
+                    self.assertEqual(409,call(url,forms[race])[0]); self.assertEqual(before,state())
+                    offered,_=form(); self.assertNotIn(race,offered)
+                    self.query('UPDATE modules SET active=1 WHERE modulename=?',[module])
+                    setup(); forms,_=form(); before=state()
+                    self.assertEqual(403,adversarial('newday.php?setrace='+race)[0]); self.assertEqual(before,state())
+                    # One atomic account UPDATE persists race and location. A database CHECK
+                    # at that write proves failed selections leave both fields unchanged.
+                    forms,_=form()
+                    self.query("ALTER TABLE accounts ADD CONSTRAINT fixture_race_failure CHECK (login <> 'WebPlayer' OR race='Horrible Gelatinous Blob')")
+                    try: self.assertEqual(500,call(url,forms[race])[0])
+                    finally: self.query('ALTER TABLE accounts DROP CONSTRAINT fixture_race_failure')
+                    self.assertEqual(before,state()); self.assertEqual(409,adversarial(url,forms[race])[0]); self.assertEqual(before,state())
+                    forms,_=form(); self.assertEqual(200,call(url,forms[race])[0]); self.assertEqual(race,state()['race'])
+            for patch in [{'setrace':'Unknown'},{'setrace':'../modules/racehuman.php'},{'setrace':'racehuman'},{'setrace':''},
+                          {'setrace[]':'Human'},{'module':'racehuman'},{'module':'../common.php'},{'location':'Forged'},
+                          {'attack':'999'},{'defense':'999'},{'name':'Human'},{'onboarding':'specialty'}]:
+                setup(); forms,_=form(); before=state()
+                self.assertEqual(400,call(url,forms['Human']|patch)[0]); self.assertEqual(before,state())
+            setup(); forms,_=form(); missing=forms['Human'].copy(); del missing['setrace']; before=state()
+            self.assertEqual(400,call(url,missing)[0]); self.assertEqual(before,state())
+            for key,value in [('race','Elf'),('specialinc','module:goldmine'),('dragonkills',1),('specialty','MP'),('age',999)]:
+                setup(); forms,_=form(); self.query('UPDATE accounts SET '+key+'=? WHERE acctid=?',[value,player]); before=state()
+                self.assertEqual(409,call(url,forms['Human'])[0]); self.assertEqual(before,state())
+            # No implicit GET fallback is allowed when every bundled race is inactive.
+            setup()
+            for module in races.values(): self.query('UPDATE modules SET active=0 WHERE modulename=?',[module])
+            before=state(); offered,body=form(); self.assertEqual({},offered); self.assertIn('No active bundled races',body); self.assertEqual(before,state())
+        finally:
+            self.query('UPDATE accounts SET '+','.join(k+'=?' for k in original if k!='acctid')+' WHERE acctid=?',[*[v for k,v in original.items() if k!='acctid'],player])
+            for row in modules: self.query('UPDATE modules SET active=? WHERE modulename=?',[row['active'],row['modulename']])
+
     def test_lovers_alternative_choices_daily_authority_http(self):
         player=self.query('SELECT acctid FROM accounts WHERE login=?',['WebPlayer'])[0]['acctid']
         original=self.query('SELECT * FROM accounts WHERE acctid=?',[player])[0]
@@ -787,7 +861,9 @@ function resurrectionrandomfixture_dohook($hook,$args) { mt_srand((int)getsettin
             self.assertEqual(200,buy()[2][0]); self.assertEqual(4,buffs()['transmute']['rounds']); self.assertEqual(.5,buffs()['transmute']['atkmod']); self.assertEqual(1,buffs()['transmute']['survivenewday'])
             # Exercise the shipped race-selection and actual New Day route. This is persistence
             # evidence only, not certification of onboarding authority or New Day replay.
-            self.assertEqual(200,request('newday.php?setrace=Human')[0])
+            status,body=request('newday.php'); self.assertEqual(200,status)
+            raceform=self._security_fields(body)|{'onboarding':'race','setrace':'Human'}
+            self.assertEqual(200,call('newday.php?continue=1',raceform)[0])
             self.assertEqual(200,request('newday.php?continue=1')[0]); self.assertEqual(4,buffs()['transmute']['rounds'])
             self.assertEqual(200,request('newday.php?continue=1')[0]); self.assertEqual(4,buffs()['transmute']['rounds'])
             # Failure on final account write must undo the preceding real potion debug log.
@@ -812,7 +888,9 @@ function resurrectionrandomfixture_dohook($hook,$args) { mt_srand((int)getsettin
             self.query("UPDATE accounts SET badguy='' WHERE acctid=?",[player])
             # A new potion without carry expires at the next real New Day.
             stored({}); self.assertEqual(200,buy()[2][0]); self.assertEqual(0,buffs()['transmute']['survivenewday'])
-            self.assertEqual(200,request('newday.php?setrace=Human')[0]); self.assertEqual(200,request('newday.php?continue=1')[0]); self.assertNotIn('transmute',buffs())
+            status,body=request('newday.php'); self.assertEqual(200,status)
+            raceform=self._security_fields(body)|{'onboarding':'race','setrace':'Human'}
+            self.assertEqual(200,call('newday.php?continue=1',raceform)[0]); self.assertEqual(200,request('newday.php?continue=1')[0]); self.assertNotIn('transmute',buffs())
             for invalid in [None,{},dict(first,rounds=0),dict(first,rounds=-1),dict(first,rounds=2147483648),dict(first,atkmod='<attack>'),dict(first,defmod=[]),dict(first,forged=1)]:
                 stored({'transmute':invalid}); before=self.query('SELECT gems,race,bufflist FROM accounts WHERE acctid=?',[player])
                 self.assertEqual(400,request(base)[0]); self.assertEqual(before,self.query('SELECT gems,race,bufflist FROM accounts WHERE acctid=?',[player]))
@@ -1911,12 +1989,18 @@ function resurrectionrandomfixture_dohook($hook,$args) { mt_srand((int)getsettin
         self.assertEqual('village.php', headers['Location'])
         self.assertNotEqual(initial_id, session_id())
         authenticated_id = session_id()
+        self.query('UPDATE modules SET active=1 WHERE modulename=?',['racehuman'])
         status, headers, body = request('village.php')
         # First login follows the game's existing character onboarding, including
-        # fallback choices when no races or specialties have been activated.
+        # active Human POST selection and the still-legacy specialty fallback.
         if status in (302, 303) and headers['Location'] == 'newday.php':
             status, _, body = request('newday.php')
             self.assertEqual(200, status, headers.get('Location', 'Unexpected HTTP status'))
+            race_form=self._security_fields(body) | {'onboarding':'race','setrace':'Human'}
+            status, _, body=request('newday.php?continue=1',race_form)
+            self.assertEqual(200,status)
+            status, _, body=request(issued_link(body,'newday.php?continue=1'))
+            self.assertEqual(200,status)
             for _ in range(3):
                 if 'No Races Installed' not in body and 'No Specialties Installed' not in body:
                     break

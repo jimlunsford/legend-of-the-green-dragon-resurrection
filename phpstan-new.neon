@@ -4,6 +4,7 @@ parameters:
         - src
         - lib/accounts.php
         - lib/player_mutation.php
+        - lib/race_onboarding.php
         - lib/typed_editor.php
         - lib/darkhorse_game.php
         - lib/darkhorse_entry.php
@@ -19,6 +20,8 @@ parameters:
     bootstrapFiles:
         - lib/constants.php
     scanFiles:
+        - lib/translator.php
+        - lib/pageparts.php
         - modules/goldmine.php
         - lib/su_access.php
         - lib/gamelog.php
