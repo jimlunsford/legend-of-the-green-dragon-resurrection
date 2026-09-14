@@ -1,7 +1,7 @@
 {
   "scope": "Only the 24 bundled entrypoints, verified against modules/*.php; no archive import.",
   "date": "2026-09-14",
-  "evidence": "Retained lifecycle/hook, player mutation, scalar/expression, game and HTTP evidence plus PvpStateTest, funded Dag/admin/four-failure/retry HTTP, Drinks delegated CRUD/configured/New Day and Cedrik configured/random pricing. Both targets: 67 PHPUnit tests / 1692 assertions / 20 Python tests / 302 linted PHP files, zero skips/failures. Final documentation-head evidence is recorded in PR #1.",
+  "evidence": "Retained all previous module/security regression requirements. Added SettingDescriptorTest, actual buff combat and vitality hooks, settings/object HTTP, configured potion consumption, Transmutation lifecycle/Dragon reset and Dark Horse entry/discovery/exit. Each supported target: 71 PHPUnit tests / 1744 assertions / 25 Python tests / 308 PHP lint files; exact completed runs and final SHA are recorded in PR #1 and the appended checkpoint.",
   "status_meaning": "Final certification is per module in the supported bundled scope. PASS requires actual behavior/security evidence; PARTIAL is a component route result only and final remains BLOCKED. Core editor/combat/hosting gates are tracked separately and still prevent merge.",
   "modules": [
     {
@@ -66,10 +66,10 @@
         "extrahps": "How many extra hitpoints has the user bought?,int"
       },
       "object_preferences": {},
-      "settings_preferences_result": "PASS for named defaults and raw round trips; NOT APPLICABLE for empty namespaces",
+      "settings_preferences_result": "PASS shared typed settings HTTP, role/CSRF/replay/bounds/stale-state/rollback and configured behavior",
       "object_preferences_result": "NOT APPLICABLE",
-      "direct_runmodule_route": "PARTIAL",
-      "direct_route_note": "All five effects and each configured fixed price pass actual HTTP; random cost endpoints 1/10, invalid random bounds/current cost, exact charged whole doses, insufficient funds, multiple quantity, maximum offered integer, malformed quantity and replay pass. Server pricing preserves the one-dose Forgetfulness/Transmutation limit and remainder behavior. Remaining: actual Transmutation combat-round sickness/New Day survival/expiration/Dragon Kill persistence and typed settings-editor authorization. There is no historical day countdown.",
+      "direct_runmodule_route": "PASS",
+      "direct_route_note": "PASS in supported bundled scope: real HTTP purchases, exact configured charges, typed effect values and Transmutation business schema; account reload/fresh login; cumulative rounds retain original modifiers/carry flag; actual New Day carry/reset; actual Forest combat consumes one round and expires; actual Dragon victory/reset strips sickness and retains/removes Vitality HP according to carrydk. Malformed/missing/stale state and duplicate purchase coverage; final-account-write failure rolls back the preceding debug log and exact player snapshot, then a fresh intent retries. Shared settings role/CSRF/replay/bounds/ranges and stored configuration behavior are covered. Core onboarding/combat/Dragon reset authorization remains a separate BLOCKED family.",
       "database_tables": [],
       "database_behavior": "PASS for existing lifecycle plus tested transactional action paths; see security_notes for unclosed family gates",
       "daily_hooks": [
@@ -81,15 +81,16 @@
       "integration_hooks": [
         "header-inn"
       ],
-      "php_8_4": "PASS for tested components; final BLOCKED for remaining gates",
-      "php_8_5": "PASS for tested components; final BLOCKED for remaining gates",
-      "mariadb_11_4": "PASS for tested components; final BLOCKED for remaining gates",
-      "mysql_8_4": "PASS for tested components; final BLOCKED for remaining gates",
+      "php_8_4": "PASS for supported bundled certification gates; general core gates remain separate",
+      "php_8_5": "PASS for supported bundled certification gates; general core gates remain separate",
+      "mariadb_11_4": "PASS for supported bundled certification gates; general core gates remain separate",
+      "mysql_8_4": "PASS for supported bundled certification gates; general core gates remain separate",
       "warnings_errors": "No PHP warnings/errors in the passing matrix tests; unexecuted paths unverified.",
-      "security_notes": "All five effects and each configured fixed price pass actual HTTP; random cost endpoints 1/10, invalid random bounds/current cost, exact charged whole doses, insufficient funds, multiple quantity, maximum offered integer, malformed quantity and replay pass. Server pricing preserves the one-dose Forgetfulness/Transmutation limit and remainder behavior. Remaining: actual Transmutation combat-round sickness/New Day survival/expiration/Dragon Kill persistence and typed settings-editor authorization. There is no historical day countdown.",
-      "final_certification": "BLOCKED",
-      "continuation_evidence": "2026-09-14: PlayerMutationTest, PvpStateTest and the Dag/Drinks/configured-potions HTTP methods; implementation d575acfcf7631201b0f195f0fe10be11fe0d63ec; Modern core 34792299180 and Baseline integrity 34792299186.",
-      "next_required_gate": "Prove Transmutation persistence through actual New Day and combat routes, including configured survival and expiration."
+      "security_notes": "PASS in supported bundled scope: real HTTP purchases, exact configured charges, typed effect values and Transmutation business schema; account reload/fresh login; cumulative rounds retain original modifiers/carry flag; actual New Day carry/reset; actual Forest combat consumes one round and expires; actual Dragon victory/reset strips sickness and retains/removes Vitality HP according to carrydk. Malformed/missing/stale state and duplicate purchase coverage; final-account-write failure rolls back the preceding debug log and exact player snapshot, then a fresh intent retries. Shared settings role/CSRF/replay/bounds/ranges and stored configuration behavior are covered. Core onboarding/combat/Dragon reset authorization remains a separate BLOCKED family.",
+      "final_certification": "PASS",
+      "continuation_evidence": "2026-09-14 Cedrik/shared-editor/Dark Horse continuation; exact implementation and final-head CI evidence in the checkpoint and PR #1.",
+      "next_required_gate": "",
+      "previous_certification": "BLOCKED"
     },
     {
       "module": "crazyaudrey",
@@ -179,7 +180,8 @@
       "security_notes": "Shared Forest event POST/CSRF/current-state/replay path passes. Direct Village paid pet/play route is still a GET mutation without the shared transaction/action contract.",
       "final_certification": "BLOCKED",
       "continuation_evidence": "See CORE-ROUTE-SECURITY.md for component gates and exact test names; prior lifecycle evidence is retained.",
-      "next_required_gate": "Protect and test the Village paid pet/play mutation with daily state, POST/CSRF and one-use replay handling."
+      "next_required_gate": "Protect and test the Village paid pet/play mutation with daily state, POST/CSRF and one-use replay handling.",
+      "previous_certification": "BLOCKED"
     },
     {
       "module": "dag",
@@ -283,7 +285,8 @@
       "warnings_errors": "No PHP warnings/errors in the passing matrix tests; unexecuted paths unverified.",
       "security_notes": "PASS: real funded PvP win derives actor, target and payout from locked server state; mature open bounties pay once, own/delayed/closed rows do not pay. Four actual CHECK-constraint failures at bounty close, bounty news, in-game mail and final winner credit roll back account/victim/bounty/news/debug/mail state. Fresh intent retries preserved combat safely. Anonymous/ordinary/insufficient/authorized administrator place/close/cleanup/list HTTP matrix, malformed/deleted IDs, invalid targets/amounts, GET/CSRF/replay and literal UTF-8/apostrophe/backslash/LIKE-symbol searches pass. General core settings, account deletion and remaining PvP defeat/inn/combat gates remain separate core blockers.",
       "final_certification": "PASS",
-      "continuation_evidence": "2026-09-14: PlayerMutationTest, PvpStateTest and the Dag/Drinks/configured-potions HTTP methods; implementation d575acfcf7631201b0f195f0fe10be11fe0d63ec; Modern core 34792299180 and Baseline integrity 34792299186."
+      "continuation_evidence": "2026-09-14: PlayerMutationTest, PvpStateTest and the Dag/Drinks/configured-potions HTTP methods; implementation d575acfcf7631201b0f195f0fe10be11fe0d63ec; Modern core 34792299180 and Baseline integrity 34792299186.",
+      "previous_certification": "PASS"
     },
     {
       "module": "darkhorse",
@@ -337,10 +340,10 @@
           "findtavern": "Can this mount find the tavern,bool|0"
         }
       },
-      "settings_preferences_result": "PASS for named defaults and raw round trips; NOT APPLICABLE for empty namespaces",
-      "object_preferences_result": "PASS for mounts.findtavern values 0 and 1",
-      "direct_runmodule_route": "PARTIAL",
-      "direct_route_note": "PARTIAL: oldman preserves active state on GET and allows only matching current POST/CSRF abandonment with no refund. Bartender search/login SQL is bound; paid GET confirms, protected POST debits the historical 100 gold atomically; HTTP funds, missing target, quote/backslash/UTF-8 search, forged cost and replay tests pass. Mounted direct-entry authorization was tightened, but its full positive/negative HTTP matrix and shared settings/object-preference editor validation remain unclosed.",
+      "settings_preferences_result": "PASS shared typed settings HTTP, role/CSRF/replay/bounds/stale-state/rollback and configured behavior",
+      "object_preferences_result": "PASS declared mounts/findtavern HTTP contract; other object types stay unavailable",
+      "direct_runmodule_route": "PASS",
+      "direct_route_note": "PASS in supported bundled scope: mounted entry derives the account mount and declared findtavern preference from server state and uses POST/CSRF/one-use intents; GET does not enter. No mount, invalid/disabled preference, stale/removed mount and replay are tested. Actual Forest discovery and persisted event dispatch are exercised without a mount; forged developer event-handler input cannot select an event for a normal user. Exit confirms on GET and requires POST; replay cannot re-enter or pay. Existing wager/abandonment/information tests remain passing. Shared typed tavern settings and declared mount preferences, including cross-object/module attempts, bounds, stale/deleted objects, output and transaction rollback, are covered.",
       "database_tables": [],
       "database_behavior": "PASS for bartender bound reads/atomic debit; full editor scope remains unclosed",
       "daily_hooks": [],
@@ -348,15 +351,16 @@
       "integration_hooks": [
         "forest"
       ],
-      "php_8_4": "PASS for tested components; final BLOCKED for remaining mounted-entry/editor gates",
-      "php_8_5": "PASS for tested components; final BLOCKED for remaining mounted-entry/editor gates",
-      "mariadb_11_4": "PASS for tested components; final BLOCKED for remaining mounted-entry/editor gates",
-      "mysql_8_4": "PASS for tested components; final BLOCKED for remaining mounted-entry/editor gates",
+      "php_8_4": "PASS for supported bundled certification gates; general core gates remain separate",
+      "php_8_5": "PASS for supported bundled certification gates; general core gates remain separate",
+      "mariadb_11_4": "PASS for supported bundled certification gates; general core gates remain separate",
+      "mysql_8_4": "PASS for supported bundled certification gates; general core gates remain separate",
       "warnings_errors": "No PHP warnings/errors in the passing matrix tests; unexecuted paths unverified.",
-      "security_notes": "PARTIAL: oldman preserves active state on GET and allows only matching current POST/CSRF abandonment with no refund. Bartender search/login SQL is bound; paid GET confirms, protected POST debits the historical 100 gold atomically; HTTP funds, missing target, quote/backslash/UTF-8 search, forged cost and replay tests pass. Mounted direct-entry authorization was tightened, but its full positive/negative HTTP matrix and shared settings/object-preference editor validation remain unclosed.",
-      "final_certification": "BLOCKED",
-      "continuation_evidence": "DarkHorseGameTest; StonesGameTest; ModuleCertificationTest; test_create_login_rotate_render_logout; test_darkhorse_wagers_abandonment_and_information; test_darkhorse_shared_jackpot_concurrency. Modern core 34783935347, baseline 34783935406, exact implementation 1a6cd7340978e68fa43e7b2d015f4ca513d130ec. Final documentation-head CI is recorded in PR #1.",
-      "next_required_gate": "Complete mounted/no-mount/findtavern positive/negative HTTP entry, then secured tavern setting and mount object preference editing."
+      "security_notes": "PASS in supported bundled scope: mounted entry derives the account mount and declared findtavern preference from server state and uses POST/CSRF/one-use intents; GET does not enter. No mount, invalid/disabled preference, stale/removed mount and replay are tested. Actual Forest discovery and persisted event dispatch are exercised without a mount; forged developer event-handler input cannot select an event for a normal user. Exit confirms on GET and requires POST; replay cannot re-enter or pay. Existing wager/abandonment/information tests remain passing. Shared typed tavern settings and declared mount preferences, including cross-object/module attempts, bounds, stale/deleted objects, output and transaction rollback, are covered.",
+      "final_certification": "PASS",
+      "continuation_evidence": "2026-09-14 Cedrik/shared-editor/Dark Horse continuation; exact implementation and final-head CI evidence in the checkpoint and PR #1.",
+      "next_required_gate": "",
+      "previous_certification": "BLOCKED"
     },
     {
       "module": "drinks",
@@ -455,7 +459,8 @@
       "warnings_errors": "No PHP warnings/errors in the passing matrix tests; unexecuted paths unverified.",
       "security_notes": "PASS: protected active purchase, server price, configured hardlimit/maxdrunk boundaries, bounded drunkenness and actual New Day reset pass. Real editor create/save/activate/deactivate/delete passes for SU_EDIT_USERS and legitimately stored canedit; anonymous/ordinary/insufficient/forged/revoked editors are denied. Typed extreme values round-trip; out-of-range, arrays, unknown fields, invalid IDs, GET, missing CSRF and duplicates are rejected. UTF-8/apostrophe/backslash and markup storage/rendering pass. General configuration and administrator preference assignment remain separately tracked core gates.",
       "final_certification": "PASS",
-      "continuation_evidence": "2026-09-14: PlayerMutationTest, PvpStateTest and the Dag/Drinks/configured-potions HTTP methods; implementation d575acfcf7631201b0f195f0fe10be11fe0d63ec; Modern core 34792299180 and Baseline integrity 34792299186."
+      "continuation_evidence": "2026-09-14: PlayerMutationTest, PvpStateTest and the Dag/Drinks/configured-potions HTTP methods; implementation d575acfcf7631201b0f195f0fe10be11fe0d63ec; Modern core 34792299180 and Baseline integrity 34792299186.",
+      "previous_certification": "PASS"
     },
     {
       "module": "fairy",
@@ -512,7 +517,8 @@
       "security_notes": "Current Forest event POST/CSRF and one-time give action pass; scalar-only state and transactional player/pref writes. Remaining: all HP/pref/specialty/no-gem result branches with configured values and shared settings-editor closure.",
       "final_certification": "BLOCKED",
       "continuation_evidence": "See CORE-ROUTE-SECURITY.md for component gates and exact test names; prior lifecycle evidence is retained.",
-      "next_required_gate": "Force all supported HP/permanent-HP/turn/specialty/no-reward branches under configured values and carry behavior."
+      "next_required_gate": "Force all supported HP/permanent-HP/turn/specialty/no-reward branches under configured values and carry behavior.",
+      "previous_certification": "BLOCKED"
     },
     {
       "module": "findgem",
@@ -557,7 +563,8 @@
       "warnings_errors": "No PHP warnings/errors in the passing matrix tests; unexecuted paths unverified.",
       "security_notes": "Simple supported Forest reward passes actual GET/no-effect, POST/CSRF, exactly one gem, persisted completion and replay rejection. Active-module/current-event authorization, bound transactional writes and currency bounds apply. No direct mutation, user setting, object preference or serialized state. Optional Cities travel integration is outside this bundled scope.",
       "final_certification": "PASS",
-      "continuation_evidence": "See CORE-ROUTE-SECURITY.md for component gates and exact test names; prior lifecycle evidence is retained."
+      "continuation_evidence": "See CORE-ROUTE-SECURITY.md for component gates and exact test names; prior lifecycle evidence is retained.",
+      "previous_certification": "PASS"
     },
     {
       "module": "findgold",
@@ -605,7 +612,8 @@
       "warnings_errors": "No PHP warnings/errors in the passing matrix tests; unexecuted paths unverified.",
       "security_notes": "Supported Forest reward passes actual GET/no-effect, POST/CSRF, level-scaled historical reward range, persisted completion and no repeat reward. Server settings supply amounts; bound transactional writes reject invalid resulting currency. No player amount authority or serialized state. Optional Cities integration is outside scope; general administrator settings editor remains a separate core blocker.",
       "final_certification": "PASS",
-      "continuation_evidence": "See CORE-ROUTE-SECURITY.md for component gates and exact test names; prior lifecycle evidence is retained."
+      "continuation_evidence": "See CORE-ROUTE-SECURITY.md for component gates and exact test names; prior lifecycle evidence is retained.",
+      "previous_certification": "PASS"
     },
     {
       "module": "foilwench",
@@ -646,7 +654,8 @@
       "warnings_errors": "No PHP warnings/errors in the passing matrix tests; unexecuted paths unverified.",
       "security_notes": "Current Forest event requires POST/CSRF and consumed intent. Real HTTP proves exactly one gem spent and one Dark Arts skill increment, no replay increment, no reward without a gem and malformed operation rejection. Existing specialty hook fixtures cover the bundled skill handlers. Bound player/pref transaction and safe LoGD output; no serialized state.",
       "final_certification": "PASS",
-      "continuation_evidence": "See CORE-ROUTE-SECURITY.md for component gates and exact test names; prior lifecycle evidence is retained."
+      "continuation_evidence": "See CORE-ROUTE-SECURITY.md for component gates and exact test names; prior lifecycle evidence is retained.",
+      "previous_certification": "PASS"
     },
     {
       "module": "game_dice",
@@ -691,7 +700,8 @@
       "warnings_errors": "No PHP warnings/errors in the passing matrix tests; unexecuted paths unverified.",
       "security_notes": "PASS: server-owned wager, roll, attempts and result; positive affordable committed stake; finite bet/pass/keep with at most three player rolls; historical opponent stopping rules and payouts; POST/CSRF, one-use state intent, abandonment, wrong-game and forged-field rejection; real HTTP progression/settlement/rollback/replay and deterministic opponent branches on both targets.",
       "final_certification": "PASS",
-      "continuation_evidence": "DarkHorseGameTest; StonesGameTest; ModuleCertificationTest; test_create_login_rotate_render_logout; test_darkhorse_wagers_abandonment_and_information; test_darkhorse_shared_jackpot_concurrency. Modern core 34783935347, baseline 34783935406, exact implementation 1a6cd7340978e68fa43e7b2d015f4ca513d130ec. Final documentation-head CI is recorded in PR #1."
+      "continuation_evidence": "DarkHorseGameTest; StonesGameTest; ModuleCertificationTest; test_create_login_rotate_render_logout; test_darkhorse_wagers_abandonment_and_information; test_darkhorse_shared_jackpot_concurrency. Modern core 34783935347, baseline 34783935406, exact implementation 1a6cd7340978e68fa43e7b2d015f4ca513d130ec. Final documentation-head CI is recorded in PR #1.",
+      "previous_certification": "PASS"
     },
     {
       "module": "game_fivesix",
@@ -757,7 +767,8 @@
       "warnings_errors": "No PHP warnings/errors in the passing matrix tests; unexecuted paths unverified.",
       "security_notes": "PASS: server-configured bounded cost/daily quota/jackpot, committed stake, server dice/result, unique wager generation, one-use POST/CSRF, locked shared jackpot and atomic player/pref/settings writes; exact payout/cap/reset unit branches, actual HTTP rollback and replay, two actors on two loopback servers with serial-equivalent jackpot/account results, plus actual New Day hook counter reset on both targets. General administrator settings editor remains a separate core merge blocker.",
       "final_certification": "PASS",
-      "continuation_evidence": "DarkHorseGameTest; StonesGameTest; ModuleCertificationTest; test_create_login_rotate_render_logout; test_darkhorse_wagers_abandonment_and_information; test_darkhorse_shared_jackpot_concurrency. Modern core 34783935347, baseline 34783935406, exact implementation 1a6cd7340978e68fa43e7b2d015f4ca513d130ec. Final documentation-head CI is recorded in PR #1."
+      "continuation_evidence": "DarkHorseGameTest; StonesGameTest; ModuleCertificationTest; test_create_login_rotate_render_logout; test_darkhorse_wagers_abandonment_and_information; test_darkhorse_shared_jackpot_concurrency. Modern core 34783935347, baseline 34783935406, exact implementation 1a6cd7340978e68fa43e7b2d015f4ca513d130ec. Final documentation-head CI is recorded in PR #1.",
+      "previous_certification": "PASS"
     },
     {
       "module": "game_stones",
@@ -802,7 +813,8 @@
       "warnings_errors": "No PHP warnings/errors in the passing matrix tests; unexecuted paths unverified.",
       "security_notes": "PASS: account-owned, unique-generation JSON wager envelope; stake debited atomically on bet; exact Stones conservation schema; finite choose/bet/draw/settle; loss/tie/win return 0/1/2 stakes; explicit no-refund abandonment and conflicting-game rejection; full HTTP game, replay, malformed state, all-in unit branch and database settlement-failure rollback on both targets.",
       "final_certification": "PASS",
-      "continuation_evidence": "DarkHorseGameTest; StonesGameTest; ModuleCertificationTest; test_create_login_rotate_render_logout; test_darkhorse_wagers_abandonment_and_information; test_darkhorse_shared_jackpot_concurrency. Modern core 34783935347, baseline 34783935406, exact implementation 1a6cd7340978e68fa43e7b2d015f4ca513d130ec. Final documentation-head CI is recorded in PR #1."
+      "continuation_evidence": "DarkHorseGameTest; StonesGameTest; ModuleCertificationTest; test_create_login_rotate_render_logout; test_darkhorse_wagers_abandonment_and_information; test_darkhorse_shared_jackpot_concurrency. Modern core 34783935347, baseline 34783935406, exact implementation 1a6cd7340978e68fa43e7b2d015f4ca513d130ec. Final documentation-head CI is recorded in PR #1.",
+      "previous_certification": "PASS"
     },
     {
       "module": "glowingstream",
@@ -848,7 +860,8 @@
       "security_notes": "Shared current-event POST/CSRF and consumed drink action pass. Historical effects unchanged; transactional bounded currency. Remaining: all value-changing branches, configured effects and settings-editor validation evidence.",
       "final_certification": "BLOCKED",
       "continuation_evidence": "See CORE-ROUTE-SECURITY.md for component gates and exact test names; prior lifecycle evidence is retained.",
-      "next_required_gate": "Force every supported reward/loss/HP/turn/currency branch under configured values."
+      "next_required_gate": "Force every supported reward/loss/HP/turn/currency branch under configured values.",
+      "previous_certification": "BLOCKED"
     },
     {
       "module": "goldmine",
@@ -887,7 +900,7 @@
         }
       },
       "settings_preferences_result": "PASS for named defaults and raw round trips; NOT APPLICABLE for empty namespaces",
-      "object_preferences_result": "PASS for mounts.findtavern values 0 and 1",
+      "object_preferences_result": "PASS exercised mount preference editor: declared ranges/text, role/CSRF/replay/cross-module/stale/deletion and multi-write rollback; gameplay outcome combinations remain BLOCKED",
       "direct_runmodule_route": "PARTIAL",
       "direct_route_note": "Shared current-event POST/CSRF, mine action and consumed reward pass. Remaining: alternate reward/loss and optional mount-specific branches, configured amounts and settings-editor validation.",
       "database_tables": [],
@@ -903,7 +916,8 @@
       "security_notes": "Shared current-event POST/CSRF, mine action and consumed reward pass. Remaining: alternate reward/loss and optional mount-specific branches, configured amounts and settings-editor validation.",
       "final_certification": "BLOCKED",
       "continuation_evidence": "See CORE-ROUTE-SECURITY.md for component gates and exact test names; prior lifecycle evidence is retained. Final-run seeded callback test proves no-mount death with configured gold/gem losses and experience; initialized horsedead fixes the intermittent HTTP branch error. Other outcome/mount/editor gates remain BLOCKED.",
-      "next_required_gate": "Complete deterministic reward/loss/death/tether/mount-save/mount-death outcomes and configured object preferences."
+      "next_required_gate": "Complete deterministic reward/loss/death/tether/mount-save/mount-death outcomes using the now-secured settings and mount preference editors.",
+      "previous_certification": "BLOCKED"
     },
     {
       "module": "lovers",
@@ -959,7 +973,8 @@
       "security_notes": "Existing hook semantics and issued Inn route render PASS. Value-changing conversation/flirt/chat routes still require daily-stage authorization, POST/CSRF and replay closure.",
       "final_certification": "BLOCKED",
       "continuation_evidence": "See CORE-ROUTE-SECURITY.md for component gates and exact test names; prior lifecycle evidence is retained.",
-      "next_required_gate": "Secure conversation/flirt/chat daily stages, POST/CSRF and one-use replay before certifying effects."
+      "next_required_gate": "Secure conversation/flirt/chat daily stages, POST/CSRF and one-use replay before certifying effects.",
+      "previous_certification": "BLOCKED"
     },
     {
       "module": "outhouse",
@@ -1025,7 +1040,8 @@
       "security_notes": "Paid/free use and wash pass real GET/no-effect, POST/CSRF, charge, replay and fresh-form stage rejection; used/stage prefs persist and reset at New Day. Currency cannot go negative. Remaining: forced reward/loss/gem/turn outcomes, nowash branch and settings-editor validation.",
       "final_certification": "BLOCKED",
       "continuation_evidence": "See CORE-ROUTE-SECURITY.md for component gates and exact test names; prior lifecycle evidence is retained.",
-      "next_required_gate": "Force reward/no-reward/penalty/gem/turn/nowash branches with configured costs and chances."
+      "next_required_gate": "Force reward/no-reward/penalty/gem/turn/nowash branches with configured costs and chances.",
+      "previous_certification": "BLOCKED"
     },
     {
       "module": "racedwarf",
@@ -1172,7 +1188,8 @@
       "security_notes": "Existing choice text, newday/stat and combined-hook behavior PASS. Actual HTTP onboarding choice/invalid choice/POST/CSRF/persistence/reselection matrix remains unimplemented; Cities excluded.",
       "final_certification": "BLOCKED",
       "continuation_evidence": "See CORE-ROUTE-SECURITY.md for component gates and exact test names; prior lifecycle evidence is retained.",
-      "next_required_gate": "Complete actual HTTP choice/invalid/forged/POST/CSRF/persistence/location/reselection and later New Day effect matrix."
+      "next_required_gate": "Complete actual HTTP choice/invalid/forged/POST/CSRF/persistence/location/reselection and later New Day effect matrix.",
+      "previous_certification": "BLOCKED"
     },
     {
       "module": "raceelf",
@@ -1305,7 +1322,8 @@
       "security_notes": "Existing choice text, newday/stat and combined-hook behavior PASS. Actual HTTP onboarding choice/invalid choice/POST/CSRF/persistence/reselection matrix remains unimplemented; Cities excluded.",
       "final_certification": "BLOCKED",
       "continuation_evidence": "See CORE-ROUTE-SECURITY.md for component gates and exact test names; prior lifecycle evidence is retained.",
-      "next_required_gate": "Complete actual HTTP choice/invalid/forged/POST/CSRF/persistence/location/reselection and later New Day effect matrix."
+      "next_required_gate": "Complete actual HTTP choice/invalid/forged/POST/CSRF/persistence/location/reselection and later New Day effect matrix.",
+      "previous_certification": "BLOCKED"
     },
     {
       "module": "racehuman",
@@ -1430,7 +1448,8 @@
       "security_notes": "Existing choice text, newday/stat and combined-hook behavior PASS. Actual HTTP onboarding choice/invalid choice/POST/CSRF/persistence/reselection matrix remains unimplemented; Cities excluded.",
       "final_certification": "BLOCKED",
       "continuation_evidence": "See CORE-ROUTE-SECURITY.md for component gates and exact test names; prior lifecycle evidence is retained.",
-      "next_required_gate": "Complete actual HTTP choice/invalid/forged/POST/CSRF/persistence/location/reselection and later New Day effect matrix."
+      "next_required_gate": "Complete actual HTTP choice/invalid/forged/POST/CSRF/persistence/location/reselection and later New Day effect matrix.",
+      "previous_certification": "BLOCKED"
     },
     {
       "module": "racetroll",
@@ -1557,7 +1576,8 @@
       "security_notes": "Existing choice text, newday/stat and combined-hook behavior PASS. Actual HTTP onboarding choice/invalid choice/POST/CSRF/persistence/reselection matrix remains unimplemented; Cities excluded.",
       "final_certification": "BLOCKED",
       "continuation_evidence": "See CORE-ROUTE-SECURITY.md for component gates and exact test names; prior lifecycle evidence is retained.",
-      "next_required_gate": "Complete actual HTTP choice/invalid/forged/POST/CSRF/persistence/location/reselection and later New Day effect matrix."
+      "next_required_gate": "Complete actual HTTP choice/invalid/forged/POST/CSRF/persistence/location/reselection and later New Day effect matrix.",
+      "previous_certification": "BLOCKED"
     },
     {
       "module": "sethsong",
@@ -1623,7 +1643,8 @@
       "security_notes": "GET is read-only; real POST/CSRF increments daily been once and replay cannot repeat effect. Counter is rechecked under lock; original random effects retained. Remaining: complete HP/gold/gem branches, visit exhaustion with a fresh intent and settings-editor validation.",
       "final_certification": "BLOCKED",
       "continuation_evidence": "See CORE-ROUTE-SECURITY.md for component gates and exact test names; prior lifecycle evidence is retained.",
-      "next_required_gate": "Force HP/gold/gem/no-effect outcomes and configured visit exhaustion/fresh-intent/reset boundaries."
+      "next_required_gate": "Force HP/gold/gem/no-effect outcomes and configured visit exhaustion/fresh-intent/reset boundaries.",
+      "previous_certification": "BLOCKED"
     },
     {
       "module": "specialtydarkarts",
@@ -1736,7 +1757,8 @@
       "security_notes": "Existing valid skill-level buff/use and dragon-kill/reset hook fixtures PASS. Actual HTTP onboarding and combat action authority, invalid/negative levels, unavailable uses, POST/CSRF and duplicate use remain unclosed.",
       "final_certification": "BLOCKED",
       "continuation_evidence": "See CORE-ROUTE-SECURITY.md for component gates and exact test names; prior lifecycle evidence is retained.",
-      "next_required_gate": "Complete actual HTTP onboarding and specialty combat level/use/state/POST/CSRF/duplicate authority matrix."
+      "next_required_gate": "Complete actual HTTP onboarding and specialty combat level/use/state/POST/CSRF/duplicate authority matrix.",
+      "previous_certification": "BLOCKED"
     },
     {
       "module": "specialtymysticpower",
@@ -1849,7 +1871,8 @@
       "security_notes": "Existing valid skill-level buff/use and dragon-kill/reset hook fixtures PASS. Actual HTTP onboarding and combat action authority, invalid/negative levels, unavailable uses, POST/CSRF and duplicate use remain unclosed.",
       "final_certification": "BLOCKED",
       "continuation_evidence": "See CORE-ROUTE-SECURITY.md for component gates and exact test names; prior lifecycle evidence is retained.",
-      "next_required_gate": "Complete actual HTTP onboarding and specialty combat level/use/state/POST/CSRF/duplicate authority matrix."
+      "next_required_gate": "Complete actual HTTP onboarding and specialty combat level/use/state/POST/CSRF/duplicate authority matrix.",
+      "previous_certification": "BLOCKED"
     },
     {
       "module": "specialtythiefskills",
@@ -1962,7 +1985,8 @@
       "security_notes": "Existing valid skill-level buff/use and dragon-kill/reset hook fixtures PASS. Actual HTTP onboarding and combat action authority, invalid/negative levels, unavailable uses, POST/CSRF and duplicate use remain unclosed.",
       "final_certification": "BLOCKED",
       "continuation_evidence": "See CORE-ROUTE-SECURITY.md for component gates and exact test names; prior lifecycle evidence is retained.",
-      "next_required_gate": "Complete actual HTTP onboarding and specialty combat level/use/state/POST/CSRF/duplicate authority matrix."
+      "next_required_gate": "Complete actual HTTP onboarding and specialty combat level/use/state/POST/CSRF/duplicate authority matrix.",
+      "previous_certification": "BLOCKED"
     }
   ],
   "validated_implementation_sha": "d575acfcf7631201b0f195f0fe10be11fe0d63ec",

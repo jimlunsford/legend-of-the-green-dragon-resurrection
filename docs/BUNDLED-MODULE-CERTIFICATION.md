@@ -1,17 +1,17 @@
 # Bundled module certification
 
-**Final counts: 8 PASS, 0 PASS WITH DOCUMENTED LIMITATION, 16 BLOCKED. Lifecycle/metadata: 24 PASS. Modern-core merge: NOT READY. Public hosting: NO.**
+**Final counts: 10 PASS, 0 PASS WITH DOCUMENTED LIMITATION, 14 BLOCKED. Lifecycle/metadata: 24 PASS. Modern-core merge: NOT READY. Public hosting: NO.**
 
 This 2026-09-14 continuation updates the original all-BLOCKED checkpoint using new mutation evidence. The earlier Phase 3 history remains in [the original checkpoint](MODERN-CORE-CHECKPOINT-20260913-PHASE3.md). Only the 24 shipped entrypoints are in scope. No archive module was imported. No module is promoted merely because a route renders.
 
-PASS covers the named module in supported bundled use, not arbitrary core/editor routes or public hosting. Find Gold reads server settings, but the general configuration editor remains a core merge blocker. Optional Cities integration, legacy-column migration and destructive uninstall recovery are outside this fresh-install bundled milestone. A nonsecurity limitation is not invented to disguise a security blocker.
+PASS covers the named module in supported bundled use, not arbitrary core/editor routes or public hosting. Find Gold reads server settings, and the shared configuration boundary is now secured; broader administrator editors remain core merge blockers. Optional Cities integration, legacy-column migration and destructive uninstall recovery are outside this fresh-install bundled milestone. A nonsecurity limitation is not invented to disguise a security blocker.
 
 | Module | Version | Lifecycle | Final certification |
 |---|---|---|---|
-| `cedrikspotions` | 2.6 | PASS | BLOCKED |
+| `cedrikspotions` | 2.6 | PASS | PASS |
 | `crazyaudrey` | 1.1 | PASS | BLOCKED |
 | `dag` | 1.3 | PASS | PASS |
-| `darkhorse` | 1.1 | PASS | BLOCKED |
+| `darkhorse` | 1.1 | PASS | PASS |
 | `drinks` | 1.1 | PASS | PASS |
 | `fairy` | 1.1 | PASS | BLOCKED |
 | `findgem` | 1.1 | PASS | PASS |
@@ -43,13 +43,12 @@ Real HTTP evidence covers Dag placement, Drinks purchase/editor save, all five C
 
 ## Per-module evidence and remaining gates
 
-### cedrikspotions (2.6): BLOCKED
+### cedrikspotions (2.6): PASS
 
-All five effects and each configured fixed price pass actual HTTP; random cost endpoints 1/10, invalid random bounds/current cost, exact charged whole doses, insufficient funds, multiple quantity, maximum offered integer, malformed quantity and replay pass. Server pricing preserves the one-dose Forgetfulness/Transmutation limit and remainder behavior. Remaining: actual Transmutation combat-round sickness/New Day survival/expiration/Dragon Kill persistence and typed settings-editor authorization. There is no historical day countdown.
+PASS in supported bundled scope: real HTTP purchases, exact configured charges, typed effect values and Transmutation business schema; account reload/fresh login; cumulative rounds retain original modifiers/carry flag; actual New Day carry/reset; actual Forest combat consumes one round and expires; actual Dragon victory/reset strips sickness and retains/removes Vitality HP according to carrydk. Malformed/missing/stale state and duplicate purchase coverage; final-account-write failure rolls back the preceding debug log and exact player snapshot, then a fresh intent retries. Shared settings role/CSRF/replay/bounds/ranges and stored configuration behavior are covered. Core onboarding/combat/Dragon reset authorization remains a separate BLOCKED family.
 
-- Component route result: PARTIAL.
-
-- Exact metadata, descriptors, hooks, dependencies, database tables and prior lifecycle evidence remain in [the JSON record](BUNDLED-MODULE-CERTIFICATION.json).
+- Previous certification: BLOCKED. Current route component: PASS in the named scope.
+- Prior checkpoint evidence remains in the appended Phase 3 record.
 
 ### crazyaudrey (1.1): BLOCKED
 
@@ -66,12 +65,12 @@ PASS: real funded PvP win derives actor, target and payout from locked server st
 
 - Exact metadata, descriptors, hooks, dependencies, database tables and prior lifecycle evidence remain in [the JSON record](BUNDLED-MODULE-CERTIFICATION.json).
 
-### darkhorse (1.1): BLOCKED
+### darkhorse (1.1): PASS
 
-PARTIAL: oldman preserves active state on GET and allows only matching current POST/CSRF abandonment with no refund. Bartender search/login SQL is bound; paid GET confirms, protected POST debits the historical 100 gold atomically; HTTP funds, missing target, quote/backslash/UTF-8 search, forged cost and replay tests pass. Mounted direct-entry authorization was tightened, but its full positive/negative HTTP matrix and shared settings/object-preference editor validation remain unclosed.
+PASS in supported bundled scope: mounted entry derives the account mount and declared findtavern preference from server state and uses POST/CSRF/one-use intents; GET does not enter. No mount, invalid/disabled preference, stale/removed mount and replay are tested. Actual Forest discovery and persisted event dispatch are exercised without a mount; forged developer event-handler input cannot select an event for a normal user. Exit confirms on GET and requires POST; replay cannot re-enter or pay. Existing wager/abandonment/information tests remain passing. Shared typed tavern settings and declared mount preferences, including cross-object/module attempts, bounds, stale/deleted objects, output and transaction rollback, are covered.
 
-- Component route result: PARTIAL.
-- Exact metadata and lifecycle evidence remain in [the JSON record](BUNDLED-MODULE-CERTIFICATION.json).
+- Previous certification: BLOCKED. Current route component: PASS in the named scope.
+- Prior checkpoint evidence remains in the appended Phase 3 record.
 
 ### drinks (1.1): PASS
 
@@ -225,3 +224,7 @@ Dag and Drinks are individually promoted after their named remaining gates passe
 Modern core [34792299180](https://github.com/jimlunsford/legend-of-the-green-dragon-resurrection/actions/runs/34792299180) and Baseline integrity [34792299186](https://github.com/jimlunsford/legend-of-the-green-dragon-resurrection/actions/runs/34792299186) pass. Each supported target runs 67 PHPUnit tests, 1,692 assertions and 20 Python tests with zero skips; 302 PHP files lint with zero failures; both PHPStan policies and Composer gates pass. The final documentation commit is rerun and its exact-head result is recorded in PR #1.
 
 Neither promotion certifies the shared administrator configuration/preference editor, all systemmail callers, full PvP core or character deletion. Cedrik's configured prices are closed; its Transmutation persistence and settings-editor gates are still BLOCKED. No other module is promoted by inference from this test count.
+
+## Cedrik / shared editor / Dark Horse continuation
+
+All eight previously certified modules remain PASS. Cedrik and Dark Horse are added only after both supported targets pass. Lifecycle remains 24 PASS. Goldmine gains tested shared preference infrastructure but stays BLOCKED for its configured gameplay outcomes. Other consumers are not automatically certified by a secure shared primitive. See the latest appended checkpoint for all 24 previous/final decisions and remaining gates.
