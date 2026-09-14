@@ -343,14 +343,14 @@ prepare_template();
 
 if (!isset($session['user']['hashorse'])) $session['user']['hashorse']=0;
 $playermount = getmount($session['user']['hashorse']);
-$temp_comp = \Resurrection\Security\ScalarState::read($session['user']['companions']);
-$companions = array();
-if(is_array($temp_comp)) {
-	foreach ($temp_comp as $name => $companion) {
-		if (is_array($companion)) {
-			$companions[$name] = $companion;
-		}
-	}
+require_once __DIR__ . '/src/Game/SkeletonCompanionState.php';
+try {
+    $temp_comp = $session['user']['companions'] === '' ? [] :
+        \Resurrection\Security\ScalarState::read($session['user']['companions']);
+    $companions = \Resurrection\Game\SkeletonCompanionState::companions($temp_comp);
+} catch (DomainException $error) {
+    http_response_code(409);
+    exit('Invalid stored companion state. No game action was completed.');
 }
 unset($temp_comp);
 

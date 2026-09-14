@@ -1759,7 +1759,8 @@
       "final_certification": "BLOCKED",
       "continuation_evidence": "Shared onboarding PASS through actual HTTP: exact identity, default-zero and preserved earned skill/uses, forged extra fields, inactive/missing module and missing file, stale preferences/account state, CSRF, duplicate/reselection/replay, late-account-write rollback, fresh retry and actual New Day skill-derived restoration. Combat level/use/state/POST/CSRF/replay/persistence/rollback and companion business schema remain BLOCKED. Both supported targets PASS at 82bb591d5355ccd0e5a071f1d4fd3efd7033c7ba: 74 PHPUnit tests / 2231 assertions / 33 Python and HTTP tests / 310 PHP files linted; zero failures/skips. Modern core 34886260212 and Baseline integrity 34886260167 SUCCESS.",
       "next_required_gate": "Prove shared HTTP specialty combat authority and Dark Arts companion business state, then all levels/costs, stale/malformed combat, replay, persistence and rollback. Onboarding is closed.",
-      "previous_certification": "BLOCKED"
+      "previous_certification": "BLOCKED",
+      "companion_business_state": "SkeletonCompanionState implemented; common hydration and producer validation, unit and actual Forest HTTP state tests added. CI pending. GET/replay/transaction/general-combat/lifecycle authority still BLOCKED; no promotion."
     },
     {
       "module": "specialtymysticpower",

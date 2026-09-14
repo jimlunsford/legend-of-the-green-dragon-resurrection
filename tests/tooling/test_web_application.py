@@ -1013,6 +1013,72 @@ function resurrectionrandomfixture_dohook($hook,$args) { mt_srand((int)getsettin
             self.query('UPDATE modules SET active=0')
 
 
+    def test_darkarts_companion_business_state_http(self):
+        # Real historical Forest action proves the producer/consumer representation.
+        # GET authority, replay and transaction certification remain separate blockers.
+        player=self.query('SELECT acctid FROM accounts WHERE login=?',['WebPlayer'])[0]['acctid']
+        original=self.query('SELECT * FROM accounts WHERE acctid=?',[player])[0]
+        prefs=self.query('SELECT * FROM module_userprefs WHERE userid=?',[player])
+        settings=self.query('SELECT * FROM settings WHERE setting=?',['enablecompanions'])
+        registry=self.query('SELECT modulename,active FROM modules')
+        self.query('UPDATE modules SET active=0')
+        self.query("UPDATE modules SET active=1 WHERE modulename='specialtydarkarts'")
+        call=self._security_client()
+        def request(url,form=None): self._security_allow(player,url); return call(url,form)
+        def encode(value):
+            return subprocess.run([shutil.which('php'),'-r','echo serialize(json_decode(stream_get_contents(STDIN),true));'],input=json.dumps(value),text=True,capture_output=True,cwd=ROOT,check=True).stdout
+        def companions():
+            encoded=self.query('SELECT companions FROM accounts WHERE acctid=?',[player])[0]['companions']
+            code="require 'src/Security/ScalarState.php'; echo json_encode(\\Resurrection\\Security\\ScalarState::read(stream_get_contents(STDIN)),JSON_THROW_ON_ERROR);"
+            return json.loads(subprocess.run([shutil.which('php'),'-r',code],input=encoded,text=True,capture_output=True,cwd=ROOT,check=True).stdout)
+        def snapshot():
+            return self.query('SELECT gold,gems,experience,hitpoints,badguy,companions,bufflist FROM accounts WHERE acctid=?',[player]) + self.query("SELECT setting,value FROM module_userprefs WHERE userid=? AND modulename='specialtydarkarts' ORDER BY setting",[player])
+        try:
+            self.query("INSERT INTO settings(setting,value) VALUES ('enablecompanions','1') ON DUPLICATE KEY UPDATE value='1'")
+            enemy=self.query('SELECT * FROM creatures ORDER BY creatureid LIMIT 1')[0]
+            enemy.update(creaturehealth=1000000,creatureattack=1,creaturedefense=0,creaturelevel=10,playerstarthp=10000,diddamage=0)
+            self.query("UPDATE accounts SET level=10,alive=1,race='Human',specialty='DA',dragonkills=0,dragonpoints='a:0:{}',badguy=?,companions='a:0:{}',bufflist='a:0:{}',hitpoints=10000,maxhitpoints=10000,attack=1,defense=10000,specialinc='' WHERE acctid=?",[encode({'enemies':[enemy],'options':{'type':'forest'}}),player])
+            for key,value in [('skill','15'),('uses','5')]:
+                self.query("INSERT INTO module_userprefs(modulename,setting,userid,value) VALUES ('specialtydarkarts',?,?,?) ON DUPLICATE KEY UPDATE value=VALUES(value)",[key,player,value])
+            status,body=request('forest.php?op=fight&skill=DA&l=1'); self.assertEqual(200,status,body[:2000])
+            skeleton=companions()['skeleton_warrior']
+            self.assertEqual(43,skeleton['maxhitpoints']); self.assertGreater(skeleton['hitpoints'],0)
+            self.assertEqual(26.5,skeleton['attack']); self.assertEqual(14.5,skeleton['defense'])
+            self.assertEqual({'fight':True},skeleton['abilities']); self.assertIs(skeleton['used'],True)
+            self.assertEqual('4',self.query("SELECT value FROM module_userprefs WHERE userid=? AND modulename='specialtydarkarts' AND setting='uses'",[player])[0]['value'])
+            call=self._security_client(); self.assertEqual(200,request('village.php')[0]); self.assertEqual(skeleton,companions()['skeleton_warrior'])
+            # Valid persistent runtime flags and injury survive read-only hydration.
+            for flags in [{'used':False,'suspended':True},{'used':True,'suspended':False}]:
+                state=dict(skeleton,hitpoints=1,**flags)
+                self.query('UPDATE accounts SET companions=? WHERE acctid=?',[encode({'skeleton_warrior':state}),player])
+                self.assertEqual(200,request('village.php')[0]); self.assertEqual(state,companions()['skeleton_warrior'])
+            malformed=[None,{},dict(skeleton,hitpoints=0),dict(skeleton,hitpoints=-1),dict(skeleton,hitpoints=44),
+                dict(skeleton,hitpoints='43'),dict(skeleton,maxhitpoints=2147483648),dict(skeleton,attack=27.5),
+                dict(skeleton,defense=[]),dict(skeleton,used=1),dict(skeleton,suspended='1'),
+                dict(skeleton,rounds=1),dict(skeleton,cannotdie=True),dict(skeleton,expireafterfight=True),
+                dict(skeleton,abilities={'fight':True,'magic':100}),dict(skeleton,extra={'nested':1})]
+            for key in ['name','hitpoints','maxhitpoints','attack','defense','abilities','ignorelimit','dyingtext']:
+                state=dict(skeleton); del state[key]; malformed.append(state)
+            payloads=[encode({'skeleton_warrior':state}) for state in malformed]
+            payloads += ['broken','a:0:{}junk','O:8:"stdClass":0:{}','a:1:{s:16:"skeleton_warrior";O:8:"stdClass":0:{}}',encode('wrong root')]
+            for payload in payloads:
+                with self.subTest(payload=payload[:100]):
+                    self.query('UPDATE accounts SET companions=? WHERE acctid=?',[payload,player]); before=snapshot()
+                    for fields in [None,{'skill':'DA','l':'1','companions':'forged'}]:
+                        status,body=request('forest.php?op=fight&skill=DA&l=1',fields)
+                        self.assertEqual(409,status,body[:1000]); self.assertEqual(before,snapshot())
+            # Recovery is explicit fixture/admin repair, never silent state deletion.
+            self.query('UPDATE accounts SET companions=? WHERE acctid=?',[encode({'skeleton_warrior':skeleton}),player])
+            self.assertEqual(200,request('village.php')[0]); self.assertEqual(skeleton,companions()['skeleton_warrior'])
+        finally:
+            self.query('UPDATE accounts SET '+','.join(k+'=?' for k in original)+' WHERE acctid=?',[*original.values(),player])
+            self.query('DELETE FROM module_userprefs WHERE userid=?',[player])
+            for row in prefs: self.query('INSERT INTO module_userprefs(modulename,setting,userid,value) VALUES (?,?,?,?)',[row['modulename'],row['setting'],player,row['value']])
+            self.query("DELETE FROM settings WHERE setting='enablecompanions'")
+            for row in settings: self.query('INSERT INTO settings(setting,value) VALUES (?,?)',[row['setting'],row['value']])
+            for row in registry: self.query('UPDATE modules SET active=? WHERE modulename=?',[row['active'],row['modulename']])
+
+
     def test_fairy_settings_and_dragon_carry_http(self):
         player=self.query('SELECT acctid FROM accounts WHERE login=?',['WebPlayer'])[0]['acctid']
         original=self.query('SELECT * FROM accounts WHERE acctid=?',[player])[0]

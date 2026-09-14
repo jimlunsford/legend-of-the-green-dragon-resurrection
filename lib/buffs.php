@@ -91,9 +91,11 @@ function apply_buff($name,$buff){
 }
 
 function apply_companion($name,$companion,$ignorelimit=false){
+    require_once __DIR__ . '/../src/Game/SkeletonCompanionState.php';
+    if ($name === 'skeleton_warrior') { \Resurrection\Game\SkeletonCompanionState::validate($companion); }
 	global $session, $companions;
 	if (!is_array($companions)) {
-		$companions = \Resurrection\Security\ScalarState::read($session['user']['companions']);
+		$companions = \Resurrection\Game\SkeletonCompanionState::companions(\Resurrection\Security\ScalarState::read($session['user']['companions']));
 	}
 	$companionsallowed = getsetting("companionsallowed", 1);
 	$args = modulehook("companionsallowed", array("maxallowed"=>$companionsallowed));
