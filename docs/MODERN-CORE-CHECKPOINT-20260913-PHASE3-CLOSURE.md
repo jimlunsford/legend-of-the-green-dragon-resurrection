@@ -231,3 +231,107 @@ The six-commit checkpoint above was published at `6725c39ef2612f86b863ecae4da58f
 ### Final-run Goldmine regression correction
 
 Final workflow 34784430521 exposed a pre-existing random Goldmine cave-in failure on MariaDB: `horsedead` was read without initialization when the player died and the mount-death roll did not set it. The MySQL job passed, as did all new Dark Horse tests on both jobs. This was not dismissed by retrying. The eighth continuation commit initializes the outcome flag to zero and adds `testGoldmineDeathWithoutMountHasDefinedOutcome`, which deterministically exercises the actual callback with seed zero, checks death/HP/no-mount/event completion, and proves configured gold/gem losses and experience retain their formulas. No odds or effects change. Goldmine remains BLOCKED for its other outcomes, mount/object preferences and editor gates. Final PHPUnit count becomes 66 tests; the exact assertion count and both workflow outcomes are recorded in PR #1 after the expanded matrix completes.
+
+## Dag funded PvP / Drinks / configured Cedrik continuation (2026-09-14)
+
+**Modern-core merge: NOT READY. Public hosting: NO. PR #1 remains OPEN, DRAFT, NOT MERGED.** This append supersedes older conclusions for the routes it names, while preserving all prior continuation history. Phase 4 is not started.
+
+### Published starting state and commits
+
+Repository: https://github.com/jimlunsford/legend-of-the-green-dragon-resurrection. Existing branch `modernization/core-modernization`, existing PR #1. Published starting SHA verified as `150f7a09a1927ff1b32f6802a41282785a25369b`; main verified unchanged at `999cec6f9c655a840320d982d673bb863c68c2b2`. PR was OPEN/DRAFT/unmerged. No legitimate later published work was reset or replaced.
+
+Verified ending implementation SHA: **`d575acfcf7631201b0f195f0fe10be11fe0d63ec`**. Five implementation commits, followed by this evidence-only commit (six commits total for this execution). The final documentation commit's full ending SHA and its exact-head CI are recorded in PR #1 and the final execution report, after they exist.
+
+| Commit | Purpose |
+|---|---|
+| `fb1d7dcc9a9646db2b8e2a58b1ddbf090f0a9cd9` | Owned PvP actions, minimum state schema, enclosing funded Dag settlement transaction and deferred email notification |
+| `f1832ef53fc0305dfa5891a8e656c7df5b1b6ade` | Drinks delegated editor/CRUD HTTP coverage and actual pvpwin callback argument fixture |
+| `f01e66912856410d2fe0806c493dbc277ddcffa3` | Exercised PvP/form corrections, new drink defaults, configured Cedrik pricing validation and HTTP cases |
+| `95fe60bb7bceb8a6af6fe600aab8a905f8c394aa` | Inn/bodyguard context derived from stored target; hydrated actual Drinks New Day callback fixture |
+| `d575acfcf7631201b0f195f0fe10be11fe0d63ec` | Literal Unicode Dag searches, consistent dead-player fixture, complete failure retry without account resets, serialized inventory |
+| This documentation commit | Module promotion, route/security/schema records, retained failure history and merge decision |
+
+### Gates closed and evidence limits
+
+- **Dag funded PvP PASS.** Real HTTP entry/round/win uses a valid locked actor and eligible target. An eligible mature 250-gold bounty pays once; own, delayed and closed rows do not pay. Posted amount/target/winner cannot select payment or victim. The account owns a unique encounter, target and reservation; action methods, CSRF and consumed entry/round intents are enforced; terminal combat is cleared. Repeated result and invalid actor/target requests preserve relevant state. Historical bounty economics are unchanged.
+- **Dag administration PASS.** Actual place/close/cleanup/list/search covers anonymous, ordinary player, insufficient capability and SU_EDIT_USERS. Positive typed IDs, nonexistent/deleted records, invalid amount/target, allowlisted filters/sort, GET, missing CSRF, replay and valid POST are exercised independently of hidden navigation. Literal apostrophe/backslash/UTF-8/percent/underscore/escape-symbol names work through bound SQL; markup stays out of raw HTML. Placement charges administrators the historical zero cost and records the system setter.
+- **Dag rollback PASS.** Test CHECK constraints fail bounty close, bounty-specific news, in-game mail and final winner-credit writes. Actor/victim balances, HP/experience/daily fights/combat/reservation, bounty rows, news/debug/mail counts roll back to their snapshots. Failed intents cannot be replayed. After removing the final constraint, a fresh issued intent retries the preserved encounter to exactly one payout, without a fixture account reset. DDL is fixture setup outside the DML transaction. External email is queued until commit and failure cannot roll back the completed game result.
+- **Drinks PASS.** Existing purchase and editor save are retained. Actual create/activate/deactivate/delete, stored delegation, forged/revoked delegation, both authorized editor roles and denied role/method/CSRF/ID matrices pass. Extreme valid values persist; invalid ranges, arrays and undeclared fields do not. Configured hard-drink and max-drunk thresholds, hard maximum, invalid configuration and actual New Day reset/hangover-once behavior pass in the transactional callback fixture. This does not certify arbitrary administrator preference/configuration editing.
+- **Cedrik pricing PASS; module BLOCKED.** Each configured fixed price, random cost 1/10 endpoints, invalid random bounds/current cost, exact whole-dose charge, multiple quantity, insufficient funds, maximum offered integer, malformed quantity and replay pass. Historical offered-gems/remainder and single-dose Forgetfulness/Transmutation behavior remains. Transmutation sickness is counted in combat rounds, with optional New Day survival, not a day countdown. Actual New Day/combat carry/expiration/Dragon Kill route evidence and the shared typed settings editor remain open.
+- **PvP core PARTIAL.** The new protected entry/round/win path and funded Dag boundary are proven. Full defeat/result/inn-bodyguard, broader actor and combat-state matrices are not claimed complete. Stored inn location now controls bodyguard behavior, but deriving it in code does not substitute for that remaining HTTP evidence.
+- **Serialized state PARTIAL.** `PvpState` validates owner/encounter/target/reservation, single enemy, finite bounded core combat numbers and bounded text before this PvP route executes combat. The token scan is **88 sites / 42 files: 31 serialize, 56 ScalarState reads, one actual unserialize**. ScalarState's class/input/depth/node/cycle/canonical fail-closed restrictions are unchanged. General combat, optional nested fields, mounts, companions, buffs, mail translation, preferences, editor oldvalues and navigation schemas remain open. No arbitrary shipped eval is restored.
+- **systemmail PARTIAL.** SQL reads and insertion are bound, raw message text is preserved rather than pre-escaped, and PvP email notifications are deferred until commit. Mail send/reply, recipient/sender trust classification of every caller, length limits and translated-array business schemas remain unclosed.
+
+### Module decisions
+
+**8 PASS, 0 PASS WITH DOCUMENTED LIMITATION, 16 BLOCKED; 24 lifecycle PASS.** Dag and Drinks are promoted individually on the evidence above. All six prior PASS decisions remain intact. The readable and JSON certification records contain the complete 24-module matrix and an explicit next required gate for each blocked module.
+
+| Module(s) | Final status | Exact remaining supported gate |
+|---|---|---|
+| dag; drinks; findgem; findgold; foilwench; game_stones; game_dice; game_fivesix | PASS | No module-specific gate remains in the certified bundled scope; separate core gates below remain |
+| cedrikspotions | BLOCKED | Actual Transmutation New Day/combat carry, expiration, survival and Dragon Kill interaction; typed settings editing |
+| darkhorse | BLOCKED | Mounted/no-mount/findtavern/event-entry HTTP matrix, tavern name setting and mount object preference editor |
+| fairy | BLOCKED | Deterministic configured HP/permanent-HP/turn/specialty/no-reward/requirement and carry branches |
+| glowingstream | BLOCKED | Deterministic configured currency/HP/turn/reward/loss branch coverage |
+| goldmine | BLOCKED | Remaining reward/loss/death/mount-save/mount-death/tether branches and configured mount preferences |
+| outhouse | BLOCKED | Reward/no-reward/penalty/gem/turn/nowash branches and configured cost/chance editor evidence |
+| sethsong | BLOCKED | HP/gold/gem/no-effect branches, configured visits/exhaustion/fresh intent and reset |
+| crazyaudrey | BLOCKED | Village paid pet/play authority, daily state, POST/CSRF/replay and effects |
+| lovers | BLOCKED | Protected daily conversation/effect stage progression and reset |
+| racehuman; raceelf; racedwarf; racetroll | BLOCKED | Actual HTTP onboarding/invalid/forged/CSRF/persistence/location/reselection and later New Day effects |
+| specialtydarkarts; specialtymysticpower; specialtythiefskills | BLOCKED | Actual HTTP selection and combat level/use/state/CSRF/duplicate-use matrix |
+
+### Other major core gates remain open
+
+| Family | Result / remaining work |
+|---|---|
+| Settings editor | BLOCKED: inspect shipped descriptors; typed key/module/type/range/length allowlists and full HTTP roles/method/CSRF matrix |
+| Object preferences | BLOCKED: declared module/object/key, compatible ID, typed value and authorized POST/CSRF; no arbitrary namespaces |
+| Race onboarding | BLOCKED for all four; existing hook/stat fixtures retained, actual HTTP not added |
+| Specialty onboarding/combat | BLOCKED for all three; valid hook/buff fixtures retained, actual HTTP action authority not added |
+| General combat schema | BLOCKED: minimum PvP schema added, full shipped combat and genuinely used nested fields still need validation |
+| Mail send | BLOCKED: sender/recipient authority, bounds, SQL, enforced POST/CSRF/replay and quota |
+| Mail reply | BLOCKED: original ownership and stored sender-derived recipient, invalid/deleted/spoofed target and rendering |
+| systemmail | PARTIAL as above; every-caller trust model and player-facing semantics not certified |
+| Petition administration | BLOCKED: SU_EDIT_PETITIONS, strict IDs/status, bound writes, protected cleanup/status/notes/delete and full HTTP role matrix |
+| Clans | BLOCKED: membership/rank/cross-clan officer/leader actions, bounded persistent text, bound atomic POST/CSRF and replay |
+| Bank | BLOCKED: reject negative rather than abs; positive bounds, locked atomic debit/credit and failure rollback |
+| Weapons | BLOCKED: authoritative typed item/price/trade-in and protected atomic purchase/replay/failure injection |
+| Armor | BLOCKED: same purchase/trade-in boundary |
+| Mounts/stables | BLOCKED: ownership/location/price, buy/sell/replace/buffs, exact state schema and editor/object preferences |
+| Training/masters | BLOCKED: server master/experience/level and victory authority, protected entry/advancement, no double-level replay |
+| PvP | PARTIAL as above; full core certification not inferred from funded Dag win |
+| Admin/editor matrix | BLOCKED: user/configuration/creature/equipment/mount/title/taunt/module manager role, field, SQL and output matrices |
+| Remaining serialized schemas | BLOCKED: general combat, mounts, companions, buffs, translation arrays, preferences, oldvalues and navigation |
+| Expiration cleanup | BLOCKED: last_char_expire still advances before successful cleanup; candidate/hook/related/final-delete failure injection absent |
+| Account deletion | BLOCKED: preflight/veto/hook/related-row/final-delete/success-log phases, transactions and observable retry semantics |
+| External email and OPTIMIZE | Delivery is not transactional; optimization may implicitly commit. Completion/notification/optimization reporting and retry semantics must stay separate |
+
+The fresh meaningful-GET scan reconfirms Audrey Village, Lovers, onboarding/specialty combat, `viewpetition.php`, clans, weapons/armor, stables, training and legacy editors. `pvp.php` entry/round/result GETs are now confirmation-only. No meaningful remaining GET mutation is accepted as harmless navigation. Changed mutation routes have duplicate tests; untouched families retain replay risks. One-use session intents are not a universal crash-safe exactly-once platform.
+
+### Supported validation
+
+At `d575acfcf7631201b0f195f0fe10be11fe0d63ec`:
+
+| Gate | PHP 8.4.25 / MariaDB 11.4.13 | PHP 8.5.10 / MySQL 8.4.11 |
+|---|---|---|
+| PHPUnit | 67 tests, 1,692 assertions, zero skips | Same |
+| Python / loopback HTTP | 20 tests, zero skips, PASS | Same |
+| PHP lint | 302 files, zero failures | Same |
+| Legacy PHPStan | Level 0, seven retained findings, zero new errors | Same |
+| Infrastructure PHPStan | Level 6, zero errors, no baseline | Same |
+| Composer | Strict validation, locked install, audit PASS | Same |
+| Fresh install/auth/24 modules/games/scheduler | Retained full regression PASS | Same |
+| Modern core job | 103818653164 SUCCESS | 103818653066 SUCCESS |
+
+Modern core [34792299180](https://github.com/jimlunsford/legend-of-the-green-dragon-resurrection/actions/runs/34792299180) SUCCESS. Baseline integrity [34792299186](https://github.com/jimlunsford/legend-of-the-green-dragon-resurrection/actions/runs/34792299186) SUCCESS. The evidence-only ending commit runs the complete matrix again; its exact SHA and run IDs are reported in PR #1 and the final response. No tests or static-analysis gates were removed or weakened. A supplemental local PHP 8.4 / disposable MariaDB 10.11 fixture run passed; it does not replace either supported target.
+
+Intermediate failed Modern core runs are retained: 34791067220 (pvpwin fixture lacked the actual callback arguments), 34791203164 (missing-op false value and new drink form defaults; stale HTTP fixture day/target state), 34791465123 (New Day fixture lacked hydrated preferences), and 34791589194 (an inconsistent alive=0/positive-HP actor fixture). Corrections are in the published history. Common bootstrap derives alive from HP, so the final dead-player case sets HP=0 and still asserts rejection. Added literal-name coverage exposed a real SQL LIKE backslash/UTF-8 bug, corrected in d575acf. These failures were investigated rather than hidden by weakening assertions.
+
+### Preservation, decision and exact next phase
+
+Historical tag `historical-source-1.1.2` remains annotated object **51cab4fbe58a234651a3177a56289b18bc152b4d**, target **bdc29df9bc344774b41e0ad7cae7f6ed2f7512e2**, root tree **4013a0ccc5227e87cd7a22de00b7c322d7aa237c**: **417 files and 11 preservation commits PASS**. No writes to `jimlunsford/lotgd` or `jimlunsford/lotgd-modules`; no archive imports. No VPS access, public game runtime, deployment, release/tag/ZIP or Phase 4. Disabled LoGDnet, console, payments, source viewer and recovery remain disabled.
+
+Known major gates remain, so PR #1 stays OPEN/DRAFT and is not merged. No merge SHA exists for this execution. Main remains unchanged. **Modern-core NOT READY; public hosting NO.**
+
+**Next phase: continue Phase 3 on this same branch/PR**, beginning with Cedrik Transmutation route persistence and the shared typed settings/object-preference editor, then Dark Horse entry/configuration and remaining configured bundled branches; continue onboarding/combat, mail/petitions/clans/economy/equipment/mounts/training/full PvP, other editors/schemas, and cleanup/deletion failure semantics. Do not start Phase 4 until the actual modern-core gates are closed.

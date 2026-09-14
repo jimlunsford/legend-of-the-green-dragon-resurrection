@@ -1,8 +1,8 @@
 # Bundled module certification
 
-**Final counts: 6 PASS, 0 PASS WITH DOCUMENTED LIMITATION, 18 BLOCKED. Lifecycle/metadata: 24 PASS. Modern-core merge: NOT READY. Public hosting: NO.**
+**Final counts: 8 PASS, 0 PASS WITH DOCUMENTED LIMITATION, 16 BLOCKED. Lifecycle/metadata: 24 PASS. Modern-core merge: NOT READY. Public hosting: NO.**
 
-This 2026-09-13 continuation updates the original all-BLOCKED checkpoint using new mutation evidence. The earlier Phase 3 history remains in [the original checkpoint](MODERN-CORE-CHECKPOINT-20260913-PHASE3.md). Only the 24 shipped entrypoints are in scope. No archive module was imported. No module is promoted merely because a route renders.
+This 2026-09-14 continuation updates the original all-BLOCKED checkpoint using new mutation evidence. The earlier Phase 3 history remains in [the original checkpoint](MODERN-CORE-CHECKPOINT-20260913-PHASE3.md). Only the 24 shipped entrypoints are in scope. No archive module was imported. No module is promoted merely because a route renders.
 
 PASS covers the named module in supported bundled use, not arbitrary core/editor routes or public hosting. Find Gold reads server settings, but the general configuration editor remains a core merge blocker. Optional Cities integration, legacy-column migration and destructive uninstall recovery are outside this fresh-install bundled milestone. A nonsecurity limitation is not invented to disguise a security blocker.
 
@@ -10,9 +10,9 @@ PASS covers the named module in supported bundled use, not arbitrary core/editor
 |---|---|---|---|
 | `cedrikspotions` | 2.6 | PASS | BLOCKED |
 | `crazyaudrey` | 1.1 | PASS | BLOCKED |
-| `dag` | 1.3 | PASS | BLOCKED |
+| `dag` | 1.3 | PASS | PASS |
 | `darkhorse` | 1.1 | PASS | BLOCKED |
-| `drinks` | 1.1 | PASS | BLOCKED |
+| `drinks` | 1.1 | PASS | PASS |
 | `fairy` | 1.1 | PASS | BLOCKED |
 | `findgem` | 1.1 | PASS | PASS |
 | `findgold` | 1.1 | PASS | PASS |
@@ -45,9 +45,10 @@ Real HTTP evidence covers Dag placement, Drinks purchase/editor save, all five C
 
 ### cedrikspotions (2.6): BLOCKED
 
-All five fixed-cost effects pass real POST/CSRF, typed quantity, server availability, persisted state and replay tests; existing daily/HP hooks remain passing. Remaining: full configured/random-cost and settings-editor type/authorization matrix, actual transmutation New Day route persistence.
+All five effects and each configured fixed price pass actual HTTP; random cost endpoints 1/10, invalid random bounds/current cost, exact charged whole doses, insufficient funds, multiple quantity, maximum offered integer, malformed quantity and replay pass. Server pricing preserves the one-dose Forgetfulness/Transmutation limit and remainder behavior. Remaining: actual Transmutation combat-round sickness/New Day survival/expiration/Dragon Kill persistence and typed settings-editor authorization. There is no historical day countdown.
 
 - Component route result: PARTIAL.
+
 - Exact metadata, descriptors, hooks, dependencies, database tables and prior lifecycle evidence remain in [the JSON record](BUNDLED-MODULE-CERTIFICATION.json).
 
 ### crazyaudrey (1.1): BLOCKED
@@ -57,11 +58,12 @@ Shared Forest event POST/CSRF/current-state/replay path passes. Direct Village p
 - Component route result: BLOCKED.
 - Exact metadata, descriptors, hooks, dependencies, database tables and prior lifecycle evidence remain in [the JSON record](BUNDLED-MODULE-CERTIFICATION.json).
 
-### dag (1.3): BLOCKED
+### dag (1.3): PASS
 
-Bound transactional eligible placement, quota/funds checks, claim status/own-bounty handling and service replay pass; real player placement/GET/CSRF/replay and unprivileged admin denial pass. Remaining: funded PvP HTTP authority/claim, authorized close/cleanup/place HTTP matrix and failure injection at bounty-specific write points.
+PASS: real funded PvP win derives actor, target and payout from locked server state; mature open bounties pay once, own/delayed/closed rows do not pay. Four actual CHECK-constraint failures at bounty close, bounty news, in-game mail and final winner credit roll back account/victim/bounty/news/debug/mail state. Fresh intent retries preserved combat safely. Anonymous/ordinary/insufficient/authorized administrator place/close/cleanup/list HTTP matrix, malformed/deleted IDs, invalid targets/amounts, GET/CSRF/replay and literal UTF-8/apostrophe/backslash/LIKE-symbol searches pass. General core settings, account deletion and remaining PvP defeat/inn/combat gates remain separate core blockers.
 
-- Component route result: PARTIAL.
+- Component route result: PASS.
+
 - Exact metadata, descriptors, hooks, dependencies, database tables and prior lifecycle evidence remain in [the JSON record](BUNDLED-MODULE-CERTIFICATION.json).
 
 ### darkhorse (1.1): BLOCKED
@@ -71,11 +73,12 @@ PARTIAL: oldman preserves active state on GET and allows only matching current P
 - Component route result: PARTIAL.
 - Exact metadata and lifecycle evidence remain in [the JSON record](BUNDLED-MODULE-CERTIFICATION.json).
 
-### drinks (1.1): BLOCKED
+### drinks (1.1): PASS
 
-Typed active drink purchase, authoritative cost, hard-drink limit, bounded drunkenness and one-use POST/CSRF pass. Typed editor save/privilege/CSRF/replay and apostrophe/backslash/UTF-8 escaping are exercised. Remaining: editor create/delete/activation full role matrix, preference-granted editor matrix and complete daily/drunken-state bounds under configured values.
+PASS: protected active purchase, server price, configured hardlimit/maxdrunk boundaries, bounded drunkenness and actual New Day reset pass. Real editor create/save/activate/deactivate/delete passes for SU_EDIT_USERS and legitimately stored canedit; anonymous/ordinary/insufficient/forged/revoked editors are denied. Typed extreme values round-trip; out-of-range, arrays, unknown fields, invalid IDs, GET, missing CSRF and duplicates are rejected. UTF-8/apostrophe/backslash and markup storage/rendering pass. General configuration and administrator preference assignment remain separately tracked core gates.
 
-- Component route result: PARTIAL.
+- Component route result: PASS.
+
 - Exact metadata, descriptors, hooks, dependencies, database tables and prior lifecycle evidence remain in [the JSON record](BUNDLED-MODULE-CERTIFICATION.json).
 
 ### fairy (1.1): BLOCKED
@@ -214,3 +217,11 @@ Existing valid skill-level buff/use and dragon-kill/reset hook fixtures PASS. Ac
 ## Second Phase 3 continuation evidence
 
 Stones, Dice and Five/Six are promoted after both supported jobs pass the full expanded HTTP, deterministic payout, replay and rollback tests. Modern core 34783935347 and Baseline integrity 34783935406 pass at implementation `1a6cd7340978e68fa43e7b2d015f4ca513d130ec`. Totals: 65 PHPUnit tests / 1612 assertions / 16 Python tests / 300 linted PHP files, zero skips. General settings, object-preference, combat and other core route gates remain independent merge blockers. No other module was promoted or silently declared complete.
+
+## Dag/Drinks continuation evidence (2026-09-14)
+
+Dag and Drinks are individually promoted after their named remaining gates passed on both targets at `d575acfcf7631201b0f195f0fe10be11fe0d63ec`. Counts are **8 PASS, 0 PASS WITH DOCUMENTED LIMITATION, 16 BLOCKED; 24 lifecycle PASS**. The six previously certified modules remain PASS. The JSON includes a concrete next required gate for each BLOCKED module.
+
+Modern core [34792299180](https://github.com/jimlunsford/legend-of-the-green-dragon-resurrection/actions/runs/34792299180) and Baseline integrity [34792299186](https://github.com/jimlunsford/legend-of-the-green-dragon-resurrection/actions/runs/34792299186) pass. Each supported target runs 67 PHPUnit tests, 1,692 assertions and 20 Python tests with zero skips; 302 PHP files lint with zero failures; both PHPStan policies and Composer gates pass. The final documentation commit is rerun and its exact-head result is recorded in PR #1.
+
+Neither promotion certifies the shared administrator configuration/preference editor, all systemmail callers, full PvP core or character deletion. Cedrik's configured prices are closed; its Transmutation persistence and settings-editor gates are still BLOCKED. No other module is promoted by inference from this test count.
