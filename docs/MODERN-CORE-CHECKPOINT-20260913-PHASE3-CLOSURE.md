@@ -685,3 +685,11 @@ Historical baseline unchanged: annotated tag object `51cab4fbe58a234651a3177a562
 **Phase 3 remains NOT COMPLETE. Modern-core merge: NOT READY. Public hosting: NO.**
 
 Exact next Phase 3 step: close Lovers' real entry/choice/daily-consumption contract through POST/CSRF and server-owned progression, both Seth and Violet paths, married and unmarried effects, persisted visit exhaustion, New Day reset, replay and transactional failure/retry. The historical `flirt=1..7` values are alternative choices, not sequential stages; preserve those choices rather than imposing a new seven-stage story. Then continue Human, Elf, Dwarf, Troll and the three specialty boundaries in the requested order.
+
+### Final-validation regression correction
+
+The evidence-only head `80c493cfc9e6cd4b0d15e6acb11cf81df2ab9fc1` passed PHP 8.4 and baseline integrity 34838004154, but Modern core 34838004195 failed its PHP 8.5 target in the existing `test_potions_dragon_reset_persistence_http`: the unseeded fight produced the death/news path rather than the required victory/prologue link. Goldmine's deterministic test passed on that target. This failed run is not final acceptance evidence.
+
+Both related Fairy and potion Dragon carry/reset fixtures now seed the real Dragon HTTP battle through the already-existing test-only random hook. All existing victory, persistence, carry/reset and buff-removal assertions remain. No production combat formula or randomness changed. Targeted actual HTTP for both fixtures and all 74 PHPUnit tests / 2,227 assertions pass locally.
+
+This is the third appended commit in this execution. The ending SHA is now the commit containing this addendum; PR #1 and the final execution report record its literal SHA and exact-head supported-matrix run IDs after publication. Certification remains 16 PASS / 0 limited / 8 BLOCKED. Phase 3 remains incomplete, merge NOT READY and public hosting NO.

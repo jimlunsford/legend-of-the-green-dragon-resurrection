@@ -694,7 +694,10 @@ function resurrectionrandomfixture_dohook($hook,$args) { mt_srand((int)getsettin
                 enemy={'creaturename':'Synthetic Green Dragon','creatureweapon':'Padded stick','creaturelevel':18,'creatureattack':1,'creaturedefense':1,'creaturehealth':1,'diddamage':0,'type':'dragon'}
                 encoded=subprocess.run([shutil.which('php'),'-r','echo serialize(json_decode(stream_get_contents(STDIN),true));'],input=json.dumps(enemy),text=True,capture_output=True,cwd=ROOT,check=True).stdout
                 self.query('UPDATE accounts SET badguy=? WHERE acctid=?',[encoded,player])
-                status,body=request('dragon.php?op=fight'); self.assertEqual(200,status,body[:1500])
+                # Exercise the real battle with a deterministic roll, not a probabilistic victory.
+                with self._seeded_module_actions('header-dragon') as seed:
+                    seed(0)
+                    status,body=request('dragon.php?op=fight'); self.assertEqual(200,status,body[:1500])
                 link=re.search(r'href=[\'"](dragon.php\?op=prologue1[^\'"]*)',body); self.assertIsNotNone(link,body[:1500])
                 status,body=request(html.unescape(link.group(1))); self.assertEqual(200,status,body[:1500])
                 state=self.query('SELECT dragonkills,maxhitpoints,bufflist FROM accounts WHERE acctid=?',[player])[0]
@@ -733,7 +736,10 @@ function resurrectionrandomfixture_dohook($hook,$args) { mt_srand((int)getsettin
                 enemy={'creaturename':'Synthetic Green Dragon','creatureweapon':'Padded stick','creaturelevel':18,'creatureattack':1,'creaturedefense':1,'creaturehealth':1,'diddamage':0,'type':'dragon'}
                 encoded=subprocess.run([shutil.which('php'),'-r','echo serialize(json_decode(stream_get_contents(STDIN),true));'],input=json.dumps(enemy),text=True,capture_output=True,cwd=ROOT,check=True).stdout
                 self.query('UPDATE accounts SET badguy=? WHERE acctid=?',[encoded,player])
-                status,body=request('dragon.php?op=fight'); self.assertEqual(200,status,body[:1500])
+                # Exercise the real battle with a deterministic roll, not a probabilistic victory.
+                with self._seeded_module_actions('header-dragon') as seed:
+                    seed(0)
+                    status,body=request('dragon.php?op=fight'); self.assertEqual(200,status,body[:1500])
                 link=re.search(r'href=[\'"](dragon.php\?op=prologue1[^\'"]*)',body); self.assertIsNotNone(link,body[:1500])
                 status,body=request(html.unescape(link.group(1))); self.assertEqual(200,status,body[:1500])
                 state=self.query('SELECT dragonkills,maxhitpoints,bufflist FROM accounts WHERE acctid=?',[player])[0]
