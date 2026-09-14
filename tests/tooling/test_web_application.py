@@ -42,7 +42,7 @@ class WebApplicationTests(unittest.TestCase):
             cls.port = sock.getsockname()[1]
         # Outside the application tree; only the loopback fixture server loads this.
         cls.seed_file = tempfile.NamedTemporaryFile(mode='w', suffix='.php')
-        cls.seed_file.write("<?php if (($_SERVER['HTTP_X_RESURRECTION_FIXTURE'] ?? '') === 'skeleton-death') mt_srand(12345);\n")
+        cls.seed_file.write("<?php if (in_array($_SERVER['HTTP_X_RESURRECTION_FIXTURE'] ?? '', ['skeleton-death','specialty-accounting'], true)) mt_srand(12345);\n")
         cls.seed_file.flush()
         cls.server_log = tempfile.TemporaryFile(mode='w+t')
         cls.server = subprocess.Popen([shutil.which('php'), '-d', 'display_errors=1', '-d', 'error_reporting=-1',
@@ -1137,6 +1137,264 @@ function resurrectionrandomfixture_dohook($hook,$args) { mt_srand((int)getsettin
             for row in prefs: self.query('INSERT INTO module_userprefs(modulename,setting,userid,value) VALUES (?,?,?,?)',[row['modulename'],row['setting'],player,row['value']])
             for row in registry: self.query('UPDATE modules SET active=? WHERE modulename=?',[row['active'],row['modulename']])
 
+    @contextmanager
+    def _specialty_accounting_fixture(self):
+        player=self.query('SELECT acctid FROM accounts WHERE login=?',['WebPlayer'])[0]['acctid']
+        original=self.query('SELECT * FROM accounts WHERE acctid=?',[player])[0]
+        prefs=self.query('SELECT * FROM module_userprefs WHERE userid=?',[player])
+        registry=self.query('SELECT * FROM modules')
+        hooks=self.query('SELECT * FROM module_hooks WHERE location=?',['apply-specialties'])
+        setting_values={'enablecompanions':'1','dropmingold':'0','forestgemchance':'25','instantexp':'0'}
+        settings=self.query("SELECT * FROM settings WHERE setting IN ('enablecompanions','dropmingold','forestgemchance','instantexp')")
+        modules={'DA':'specialtydarkarts','MP':'specialtymysticpower','TS':'specialtythiefskills'}
+        self.query('UPDATE modules SET active=0')
+        self.query("UPDATE modules SET active=1 WHERE modulename IN ('specialtydarkarts','specialtymysticpower','specialtythiefskills')")
+        for key,value in setting_values.items():
+            self.query('INSERT INTO settings(setting,value) VALUES (?,?) ON DUPLICATE KEY UPDATE value=VALUES(value)',[key,value])
+        call=self._security_client(); url='forest.php?op=specialty'
+        def request(path=url,data=None):
+            self._security_allow(player,path)
+            return call(path,data,fixture='specialty-accounting')
+        def encode(value):
+            return subprocess.run([shutil.which('php'),'-r','echo serialize(json_decode(stream_get_contents(STDIN),true));'],input=json.dumps(value),text=True,capture_output=True,cwd=ROOT,check=True).stdout
+        def decode(value):
+            return json.loads(subprocess.run([shutil.which('php'),'-r',"require 'src/Security/ScalarState.php'; echo json_encode(\\Resurrection\\Security\\ScalarState::read(stream_get_contents(STDIN)),JSON_THROW_ON_ERROR);"],input=value,text=True,capture_output=True,cwd=ROOT,check=True).stdout)
+        enemy=self.query('SELECT * FROM creatures ORDER BY creatureid LIMIT 1')[0]
+        enemy.update(creaturename='Accounting Target',creaturehealth=100000,creatureattack=120,creaturedefense=80,creaturelevel=10,playerstarthp=500,diddamage=0)
+        def prepare(spec,**changes):
+            values=dict(level=10,alive=1,race='Human',specialty=spec,dragonkills=0,dragonpoints='a:0:{}',badguy=encode({'enemies':[enemy],'options':{'type':'forest','didsurprise':1}}),companions='a:0:{}',bufflist='a:0:{}',hitpoints=500,maxhitpoints=1000,attack=100,defense=50,specialinc='',superuser=0)
+            values.update(changes)
+            self.query('UPDATE accounts SET '+','.join(k+'=?' for k in values)+' WHERE acctid=?',[*values.values(),player])
+            for module in modules.values():
+                for key,value in [('uses','9'),('skill','15')]:
+                    self.query('INSERT INTO module_userprefs(modulename,setting,userid,value) VALUES (?,?,?,?) ON DUPLICATE KEY UPDATE value=VALUES(value)',[module,key,player,value])
+        def snapshot():
+            return self.query('SELECT specialty,gold,gems,experience,hitpoints,maxhitpoints,alive,turns,age,attack,defense,badguy,companions,bufflist FROM accounts WHERE acctid=?',[player])+self.query("SELECT modulename,setting,value FROM module_userprefs WHERE userid=? ORDER BY modulename,setting",[player])
+        def form(level):
+            status,body=request(); self.assertEqual(200,status,body[:2000])
+            return self._security_fields(body)|{'level':str(level)}
+        def rejected(data,expected=409):
+            before=snapshot(); status,body=request(data=data)
+            self.assertEqual(expected,status,body[:2000]); self.assertEqual(before,snapshot())
+        try:
+            yield dict(player=player,modules=modules,enemy=enemy,prepare=prepare,request=request,encode=encode,decode=decode,snapshot=snapshot,form=form,rejected=rejected)
+        finally:
+            self.query('UPDATE accounts SET '+','.join(k+'=?' for k in original)+' WHERE acctid=?',[*original.values(),player])
+            self.query('DELETE FROM module_userprefs WHERE userid=?',[player])
+            for row in prefs: self.query('INSERT INTO module_userprefs(modulename,setting,userid,value) VALUES (?,?,?,?)',[row['modulename'],row['setting'],player,row['value']])
+            for row in registry:
+                self.query('REPLACE INTO modules ('+','.join(row)+') VALUES ('+','.join('?' for _ in row)+')',list(row.values()))
+            self.query('DELETE FROM module_hooks WHERE location=?',['apply-specialties'])
+            for row in hooks:
+                self.query('INSERT INTO module_hooks ('+','.join('`'+k+'`' for k in row)+') VALUES ('+','.join('?' for _ in row)+')',list(row.values()))
+            self.query("DELETE FROM settings WHERE setting IN ('enablecompanions','dropmingold','forestgemchance','instantexp')")
+            for row in settings: self.query('INSERT INTO settings(setting,value) VALUES (?,?)',[row['setting'],row['value']])
+
+    def test_specialty_independent_level_authority(self):
+        with self._specialty_accounting_fixture() as f:
+            for spec,module in f['modules'].items():
+                for level in [1,2,3,5]:
+                    for case in ['wrong','none','inactive','skill','uses','zero','malformed','negative','excessive','missing','malformed-combat','zero-hp','negative-hp','dead','terminal','stale','csrf','invalid-csrf','unsupported','malformed-level']:
+                        with self.subTest(specialty=spec,level=level,case=case):
+                            f['prepare'](spec); data=f['form'](level); expected=409
+                            if case in ['wrong','none']:
+                                self.query('UPDATE accounts SET specialty=? WHERE acctid=?',['' if case=='none' else ('MP' if spec=='DA' else 'DA'),f['player']])
+                            elif case=='inactive': self.query('UPDATE modules SET active=0 WHERE modulename=?',[module])
+                            elif case in ['skill','uses','zero','malformed','negative','excessive']:
+                                value={'skill':str(level-1),'uses':str(level-1),'zero':'0','malformed':'broken','negative':'-1','excessive':'9999999999'}[case]
+                                self.query('UPDATE module_userprefs SET value=? WHERE userid=? AND modulename=? AND setting=?',[value,f['player'],module,'skill' if case=='skill' else 'uses'])
+                            elif case in ['missing','malformed-combat']:
+                                self.query('UPDATE accounts SET badguy=? WHERE acctid=?',['' if case=='missing' else 'broken',f['player']])
+                            elif case in ['zero-hp','negative-hp','dead','terminal','stale']:
+                                change={'zero-hp':{'creaturehealth':0},'negative-hp':{'creaturehealth':-1},'dead':{'dead':True},'terminal':{'terminal':True},'stale':{'creaturehealth':99999}}[case]
+                                self.query('UPDATE accounts SET badguy=? WHERE acctid=?',[f['encode']({'enemies':[dict(f['enemy'],**change)],'options':{'type':'forest','didsurprise':1}}),f['player']])
+                            elif case in ['csrf','invalid-csrf']:
+                                if case=='csrf': del data['csrf_token']
+                                else: data['csrf_token']='invalid'
+                                expected=403
+                            else:
+                                data['level']='4' if case=='unsupported' else '2.0'; expected=400
+                            try: f['rejected'](data,expected)
+                            finally: self.query('UPDATE modules SET active=1 WHERE modulename=?',[module])
+                    # A valid intent against independently insufficient authority must
+                    # fail too, not merely an intent made stale by a changed preference.
+                    for key in ['skill','uses']:
+                        f['prepare'](spec)
+                        self.query('UPDATE module_userprefs SET value=? WHERE userid=? AND modulename=? AND setting=?',[str(level-1),f['player'],module,key])
+                        if level==1:
+                            status,body=f['request'](); self.assertEqual(200,status)
+                            self.assertNotIn('name="action_token"',body)
+                            continue
+                        f['rejected'](f['form'](level))
+
+    def test_specialty_module_availability_changes(self):
+        with self._specialty_accounting_fixture() as f:
+            for spec,module in f['modules'].items():
+                registry=self.query('SELECT * FROM modules WHERE modulename=?',[module])[0]
+                hook=self.query('SELECT * FROM module_hooks WHERE modulename=? AND location=?',[module,'apply-specialties'])[0]
+                for level in [1,2,3,5]:
+                    for case in ['uninstalled','inactive','file','handler','missing-hook','conditional-hook']:
+                        with self.subTest(specialty=spec,level=level,case=case):
+                            f['prepare'](spec); data=f['form'](level)
+                            path=ROOT/'modules'/(module+'.php'); hidden=path.with_suffix('.fixture-unavailable')
+                            try:
+                                if case=='uninstalled': self.query('DELETE FROM modules WHERE modulename=?',[module])
+                                elif case=='inactive': self.query('UPDATE modules SET active=0 WHERE modulename=?',[module])
+                                elif case=='file': path.rename(hidden)
+                                elif case=='missing-hook': self.query('DELETE FROM module_hooks WHERE modulename=? AND location=?',[module,'apply-specialties'])
+                                else:
+                                    field='function' if case=='handler' else 'whenactive'
+                                    self.query('UPDATE module_hooks SET `'+field+'`=? WHERE modulename=? AND location=?',['invalid_handler' if case=='handler' else 'false',module,'apply-specialties'])
+                                f['rejected'](data)
+                                before=f['snapshot'](); status,body=f['request']()
+                                self.assertEqual(409,status,body[:2000]); self.assertEqual(before,f['snapshot']())
+                            finally:
+                                if hidden.exists(): hidden.rename(path)
+                                self.query('REPLACE INTO modules ('+','.join(registry)+') VALUES ('+','.join('?' for _ in registry)+')',list(registry.values()))
+                                self.query('DELETE FROM module_hooks WHERE modulename=? AND location=?',[module,'apply-specialties'])
+                                self.query('INSERT INTO module_hooks ('+','.join('`'+k+'`' for k in hook)+') VALUES ('+','.join('?' for _ in hook)+')',list(hook.values()))
+
+    def test_specialty_nonexposing_callers_reject_injection(self):
+        with self._specialty_accounting_fixture() as f:
+            anonymous=self._security_client(login=None)
+            for spec in f['modules']:
+                f['prepare'](spec)
+                for level in [1,2,3,5]:
+                    for route in ['train.php','graveyard.php']:
+                        for params in [{'skill':spec},{'l':str(level)},{'skill':spec,'l':str(level)},{'skill[]':spec,'l[]':str(level)}]:
+                            for method in ['GET','POST']:
+                                url=route+'?op=fight'+('&'+urllib.parse.urlencode(params) if method=='GET' else '')
+                                data=None if method=='GET' else params
+                                before=f['snapshot']()
+                                self.assertEqual(400,f['request'](url,data)[0])
+                                self.assertEqual(before,f['snapshot']())
+                                self.assertEqual(400,anonymous(url,data)[0])
+                                self.assertEqual(before,f['snapshot']())
+
+    def test_specialty_gameplay_accounting(self):
+        # Fixed RNG, actual producer + battle + committed HTTP result. These
+        # explicit totals account for hits/ripostes as well as the named effect.
+        cases=[
+            ('DA',1,120,80,5000,99955,['Your skeleton warrior crumbles to dust.']),
+            ('DA',2,120,80,4914,99737,['doll hurting it for 263 points!','RIPOSTED for 24 points','hits you for 62 points']),
+            ('DA',3,1000,80,4911,99960,['You hit Accounting Target for 40 points','hits you for 89 points']),
+            ('DA',5,1000,80,5000,99951,['You hit Accounting Target for 47 points','RIPOSTE for 2 points']),
+            ('MP',1,120,80,5010,99955,['You regenerate for 10 health.']),
+            ('MP',2,120,80,4914,99999,['earth pummels Accounting Target for 1 points.','RIPOSTED for 24 points','hits you for 62 points']),
+            ('MP',3,120,80,5045,99955,['You are healed for 40 health.','You are healed for 5 health.']),
+            ('MP',5,120,80,5000,99955,['slightly singed by your lightning, but otherwise unharmed.']),
+            ('MP',5,1000,80,4823,99606,['hits you for 177 points','hitting for 354 damage.']),
+            ('TS',1,1000,80,4930,99960,['hits you for 70 points']),
+            ('TS',2,120,80,5000,99907,['You hit Accounting Target for 88 points','RIPOSTE for 5 points']),
+            ('TS',3,1000,80,5000,99942,['You hit Accounting Target for 40 points','RIPOSTE for 18 points']),
+            ('TS',5,120,80,5000,99823,['You hit Accounting Target for 135 points','RIPOSTE for 42 points']),
+            ('TS',5,1000,80,4896,99865,['You hit Accounting Target for 135 points','hits you for 104 points']),
+            ('DA',1,1,1,5000,99924,['Skeleton Warrior hits Accounting Target for 10 points','Skeleton Warrior RIPOSTES for 1 points']),
+        ]
+        with self._specialty_accounting_fixture() as f:
+            for spec,level,attack,defense,hp,targethp,messages in cases:
+                with self.subTest(specialty=spec,level=level,enemy_attack=attack,enemy_defense=defense):
+                    combat={'enemies':[dict(f['enemy'],creatureattack=attack,creaturedefense=defense)],'options':{'type':'forest','didsurprise':1}}
+                    f['prepare'](spec,badguy=f['encode'](combat),hitpoints=5000,maxhitpoints=10000)
+                    before=f['snapshot']()[0]; data=f['form'](level)
+                    status,body=f['request'](data=data); self.assertEqual(200,status,body[:2000])
+                    after=f['snapshot']()[0]; text=re.sub(r'\s+',' ',html.unescape(re.sub('<[^>]+>',' ',body)))
+                    self.assertEqual(hp,int(after['hitpoints'])); self.assertEqual(targethp,f['decode'](after['badguy'])['enemies'][0]['creaturehealth'])
+                    for message in messages: self.assertIn(message,text)
+                    for key in ['gold','gems','experience','attack','defense','alive']: self.assertEqual(before[key],after[key])
+                    self.assertEqual(str(9-level),self.query('SELECT value FROM module_userprefs WHERE userid=? AND modulename=? AND setting=?',[f['player'],f['modules'][spec],'uses'])[0]['value'])
+                    if spec=='DA' and level==1:
+                        companions=f['decode'](after['companions'])
+                        if attack==1: self.assertEqual(43,companions['skeleton_warrior']['hitpoints'])
+                        else: self.assertEqual([],companions)
+                    elif spec=='DA' and level==2: self.assertNotIn('da2',f['decode'](after['bufflist']))
+                    else: self.assertEqual(4,f['decode'](after['bufflist'])[spec.lower()+str(level)]['rounds'])
+                    f['rejected'](data); f['rejected'](data)
+                    self.assertEqual(200,f['request']('village.php')[0]); self.assertEqual(after,f['snapshot']()[0])
+            # Same deterministic unmodified damage roll: 177 incoming damage.
+            # Curse rounds 177*0.5 to 89; shield reflects 177*2 = 354.
+            f['prepare']('DA',badguy=f['encode']({'enemies':[dict(f['enemy'],creatureattack=1000)],'options':{'type':'forest','didsurprise':1}}),hitpoints=5000,maxhitpoints=10000)
+            self.assertEqual(200,f['request']('forest.php?op=fight')[0])
+            self.assertEqual(4823,int(f['snapshot']()[0]['hitpoints']))
+            self.assertEqual(99960,f['decode'](f['snapshot']()[0]['badguy'])['enemies'][0]['creaturehealth'])
+
+    def test_specialty_healing_aura_and_expiration(self):
+        with self._specialty_accounting_fixture() as f:
+            weak={'enemies':[dict(f['enemy'],creatureattack=1,creaturedefense=1)],'options':{'type':'forest','didsurprise':1}}
+            f['prepare']('DA',badguy=f['encode'](weak))
+            self.assertEqual(200,f['request'](data=f['form'](1))[0])
+            skeleton=f['decode'](f['snapshot']()[0]['companions'])['skeleton_warrior']
+            skeleton['hitpoints']=30
+            f['prepare']('MP',badguy=f['encode'](weak),hitpoints=995,maxhitpoints=1000,companions=f['encode']({'skeleton_warrior':skeleton}))
+            data=f['form'](1)
+            for round_number in range(1,6):
+                status,body=f['request'](data=data) if round_number==1 else f['request']('forest.php?op=fight')
+                self.assertEqual(200,status,body[:2000]); after=f['snapshot']()[0]
+                text=re.sub(r'\s+',' ',html.unescape(re.sub('<[^>]+>',' ',body)))
+                self.assertLess(text.index('regenerate'),text.index('You hit Accounting Target'))
+                self.assertIn('regenerates for '+str(3 if round_number<5 else 1)+' health due to your healing aura.',text)
+                self.assertIn('You regenerate for 5 health.' if round_number==1 else 'You have no wounds to regenerate.',text)
+                self.assertEqual('8',self.query('SELECT value FROM module_userprefs WHERE userid=? AND modulename=? AND setting=?',[f['player'],'specialtymysticpower','uses'])[0]['value'])
+                self.assertEqual(1000,int(after['hitpoints']))
+                self.assertEqual(min(43,30+3*round_number),f['decode'](after['companions'])['skeleton_warrior']['hitpoints'])
+                buffs=f['decode'](after['bufflist'])
+                if round_number<5: self.assertEqual(5-round_number,buffs['mp1']['rounds'])
+                else: self.assertNotIn('mp1',buffs)
+            self.query('UPDATE accounts SET hitpoints=990 WHERE acctid=?',[f['player']])
+            self.assertEqual(200,f['request']('forest.php?op=fight')[0]); self.assertEqual(990,int(f['snapshot']()[0]['hitpoints']))
+            f['rejected'](data)
+            # Lifetap cannot heal above max HP or remove HP from a full player.
+            for hp in [995,1000]:
+                f['prepare']('MP',hitpoints=hp,maxhitpoints=1000)
+                self.assertEqual(200,f['request'](data=f['form'](3))[0])
+                self.assertEqual(1000,int(f['snapshot']()[0]['hitpoints']))
+
+    def test_specialty_terminal_rewards_area_and_fallback(self):
+        with self._specialty_accounting_fixture() as f:
+            for hp in [263,262]:
+                f['prepare']('DA',badguy=f['encode']({'enemies':[dict(f['enemy'],creaturehealth=hp)],'options':{'type':'forest','didsurprise':1}}))
+                before=f['snapshot']()[0]; old=f['form'](1); data=f['form'](2)
+                status,body=f['request'](data=data); self.assertEqual(200,status,body[:2000])
+                after=f['snapshot']()[0]; text=re.sub(r'\s+',' ',html.unescape(re.sub('<[^>]+>',' ',body)))
+                self.assertIn('doll hurting it for 263 points!',text)
+                self.assertNotIn('You hit Accounting Target',text)
+                self.assertEqual(14,int(after['experience'])-int(before['experience']))
+                self.assertEqual(44,int(after['gold'])-int(before['gold']))
+                self.assertEqual(1,int(after['turns'])-int(before['turns']))
+                self.assertEqual(before['gems'],after['gems'])
+                self.assertEqual('7',self.query('SELECT value FROM module_userprefs WHERE userid=? AND modulename=? AND setting=?',[f['player'],'specialtydarkarts','uses'])[0]['value'])
+                self.assertEqual('',after['badguy']); self.assertEqual(before['hitpoints'],after['hitpoints'])
+                f['rejected'](data); f['rejected'](old)
+            f['prepare']('DA')
+            self.query("UPDATE settings SET value='0' WHERE setting='enablecompanions'")
+            data=f['form'](1); status,body=f['request'](data=data); self.assertEqual(200,status,body[:2000])
+            after=f['snapshot']()[0]
+            self.assertEqual(491,int(after['hitpoints']))
+            self.assertEqual(99985,f['decode'](after['badguy'])['enemies'][0]['creaturehealth'])
+            self.assertEqual([],f['decode'](after['companions']))
+            self.assertEqual(4,f['decode'](after['bufflist'])['da1']['rounds'])
+            f['rejected'](data)
+            f['prepare']('MP',badguy=f['encode']({'enemies':[dict(f['enemy'],creatureattack=1,creaturedefense=1),dict(f['enemy'],creatureid=2,creaturename='Accounting Second',creatureattack=1,creaturedefense=1)],'options':{'type':'forest','didsurprise':1}}))
+            old=f['form'](1); data=f['form'](2)
+            status,body=f['request'](data=data); self.assertEqual(200,status,body[:2000])
+            after=f['snapshot']()[0]; enemies=f['decode'](after['badguy'])['enemies']
+            self.assertEqual([99986,99973],[e['creaturehealth'] for e in enemies])
+            self.assertEqual([True,False],[e['istarget'] for e in enemies])
+            self.assertEqual(500,int(after['hitpoints']))
+            self.assertEqual(4,f['decode'](after['bufflist'])['mp2']['rounds'])
+            self.assertEqual('7',self.query('SELECT value FROM module_userprefs WHERE userid=? AND modulename=? AND setting=?',[f['player'],'specialtymysticpower','uses'])[0]['value'])
+            text=re.sub(r'\s+',' ',html.unescape(re.sub('<[^>]+>',' ',body)))
+            self.assertIn('earth pummels Accounting Target for 1 points.',text)
+            self.assertIn('earth pummels Accounting Second for 22 points.',text)
+            f['rejected'](data); f['rejected'](old)
+            # A server-side target change invalidates the complete state-bound form.
+            data=f['form'](2); combat=f['decode'](after['badguy'])
+            combat['enemies'][0]['istarget']=False; combat['enemies'][1]['istarget']=True
+            self.query('UPDATE accounts SET badguy=? WHERE acctid=?',[f['encode'](combat),f['player']])
+            f['rejected'](data)
+            # This proves live-target binding, not dead-target progression.
+
+
     def test_darkarts_companion_business_state_http(self):
         # Real Forest POST action proves the producer/consumer representation.
         # Broader route and complete module certification remain separate blockers.
@@ -1239,7 +1497,7 @@ function resurrectionrandomfixture_dohook($hook,$args) { mt_srand((int)getsettin
             self.query('UPDATE accounts SET '+','.join(k+'=?' for k in original)+' WHERE acctid=?',[*original.values(),player])
             self.query('DELETE FROM module_userprefs WHERE userid=?',[player])
             for row in prefs: self.query('INSERT INTO module_userprefs(modulename,setting,userid,value) VALUES (?,?,?,?)',[row['modulename'],row['setting'],player,row['value']])
-            self.query("DELETE FROM settings WHERE setting='enablecompanions'")
+            self.query("DELETE FROM settings WHERE setting IN ('enablecompanions','dropmingold','forestgemchance','instantexp')")
             for row in settings: self.query('INSERT INTO settings(setting,value) VALUES (?,?)',[row['setting'],row['value']])
             for row in registry: self.query('UPDATE modules SET active=? WHERE modulename=?',[row['active'],row['modulename']])
 

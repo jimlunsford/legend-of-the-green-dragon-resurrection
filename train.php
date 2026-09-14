@@ -1,4 +1,12 @@
 <?php
+// Masters never offer specialties. Reject forged legacy parameters before any
+// bootstrap or training mutation, including parameters sent in a POST body.
+foreach (['skill','l'] as $field) {
+    if (array_key_exists($field, $_GET) || array_key_exists($field, $_POST)) {
+        http_response_code(400);
+        exit('Specialties are unavailable in training.');
+    }
+}
 require_once __DIR__ . '/src/Security/ScalarState.php';
 require_once __DIR__ . '/src/Compatibility/array_cursor.php';
 //addnews ready

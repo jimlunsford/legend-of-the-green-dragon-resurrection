@@ -12,6 +12,14 @@ function resurrection_combat_specialty(bool $lock = false): array {
     $selected = $session['user']['specialty'];
     if (!isset($choices[$selected])) throw new DomainException('Specialty unavailable.');
     $module = $choices[$selected];
+    // A registered, unconditional bundled handler is part of combat authority.
+    // Otherwise modulehook can silently skip it while battle still advances.
+    $hooks = db_query('SELECT `function`,whenactive FROM ' . db_prefix('module_hooks') .
+        ' WHERE modulename=? AND location=?' . ($lock ? ' FOR UPDATE' : ''), true, [$module,'apply-specialties']);
+    if (count($hooks) !== 1 || $hooks[0]['function'] !== $module . '_dohook' ||
+        $hooks[0]['whenactive'] !== '' || !is_callable($module . '_dohook')) {
+        throw new DomainException('Specialty handler unavailable.');
+    }
     $prefs = resurrection_specialty_preferences([$selected=>$module],$lock)[$module];
     return ['module'=>$module,'skill'=>$prefs['skill'],'uses'=>$prefs['uses']];
 }
