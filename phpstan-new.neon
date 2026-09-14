@@ -4,6 +4,7 @@ parameters:
         - src
         - lib/accounts.php
         - lib/player_mutation.php
+        - lib/typed_editor.php
         - lib/darkhorse_game.php
         - lib/event_security.php
         - modules/dag/security.php
@@ -17,6 +18,8 @@ parameters:
     bootstrapFiles:
         - lib/constants.php
     scanFiles:
+        - lib/su_access.php
+        - lib/gamelog.php
         - lib/buffs.php
         - lib/http.php
         - lib/e_rand.php

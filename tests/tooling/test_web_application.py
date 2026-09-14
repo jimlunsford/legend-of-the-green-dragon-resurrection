@@ -212,6 +212,122 @@ function resurrectionhttpfixture_run() { echo 'fixture-executed'; exit; }
             self.query('DELETE FROM modules WHERE modulename=?', [module])
             self.query('DELETE FROM settings WHERE setting=?', ['fixture_dependency'])
 
+    def test_shared_typed_settings_http(self):
+        player=self.query('SELECT acctid FROM accounts WHERE login=?',['WebPlayer'])[0]['acctid']
+        original=self.query('SELECT superuser FROM accounts WHERE acctid=?',[player])[0]['superuser']
+        modules=['cedrikspotions','darkhorse']
+        saved={m:self.query('SELECT setting,value FROM module_settings WHERE modulename=?',[m]) for m in modules}
+        self.query('UPDATE modules SET active=1')
+        call=self._security_client()
+        def request(url,fields=None):
+            self._security_allow(player,url); return call(url,fields)
+        def urls(module):
+            base='configuration.php?op=modulesettings&module='+module
+            return base,base+'&save=1'
+        def values(module):
+            return self.query('SELECT setting,value FROM module_settings WHERE modulename=? ORDER BY setting',[module])
+        try:
+            base,save=urls('cedrikspotions')
+            self.assertIn(self._security_client(login=None)(base)[0],[302,303,403])
+            for role in [0,2]:
+                self.query('UPDATE accounts SET superuser=? WHERE acctid=?',[role,player]); call=self._security_client()
+                self.assertEqual(403,request(base)[0]); self.assertEqual(403,request(save,{'transcost':'3'})[0])
+            self.query('UPDATE accounts SET superuser=128 WHERE acctid=?',[player]); call=self._security_client()
+            before=values('cedrikspotions')
+            _,body=request(base); form=self._security_fields(body,save)
+            for fields in [{},{**form,'csrf_token':'bad','transcost':'3'}]: self.assertEqual(403,request(save,fields)[0])
+            self.assertEqual(403,request(save)[0]); self.assertEqual(before,values('cedrikspotions'))
+            for invalid in [{'namespace':'core'},{'undeclared':'1'},{'transcost[]':'2'},{'transcost':'0'},{'transcost':'11'},{'transcost':'1e1'},{'transmuteturns':'2147483648'},{'survive':'true'},{'atkmod':'nan'},{'minrand':'9','maxrand':'2'},{'charmgain':'-1'}]:
+                _,body=request(base); form=self._security_fields(body,save)
+                self.assertEqual(400,request(save,{**form,**invalid})[0]); self.assertEqual(before,values('cedrikspotions'))
+            for module in ['missing','../darkhorse','core']:
+                self.assertIn(request(urls(module)[0])[0],[400,404])
+            for patch in [{'transcost':'1','transmuteturns':'1','atkmod':'.1','defmod':'2','survive':'0'}, {'transcost':'10','transmuteturns':'20','atkmod':'2','defmod':'.1','survive':'1'}]:
+                _,body=request(base); form={**self._security_fields(body,save),**patch}
+                self.assertEqual(200,request(save,form)[0]); self.assertEqual(409,request(save,form)[0])
+                actual={x['setting']:x['value'] for x in values('cedrikspotions')}
+                for key,value in patch.items(): self.assertEqual(value,actual[key])
+            # A second tab cannot overwrite an intervening editor change.
+            _,body=request(base); stale={**self._security_fields(body,save),'transcost':'3'}
+            self.query('UPDATE module_settings SET value=4 WHERE modulename=? AND setting=?',['cedrikspotions','transcost'])
+            self.assertEqual(409,request(save,stale)[0])
+            # Failure after the first setting and its audit but before the second setting rolls back the entire patch.
+            before=values('cedrikspotions')
+            self.query("ALTER TABLE module_settings ADD CONSTRAINT fixture_editor_log CHECK (modulename <> 'cedrikspotions' OR setting <> 'transmuteturns' OR value <> '5')")
+            try:
+                _,body=request(base); form={**self._security_fields(body,save),'transcost':'5','transmuteturns':'5'}
+                self.assertEqual(500,request(save,form)[0]); self.assertEqual(before,values('cedrikspotions'))
+                self.assertEqual(409,request(save,form)[0])
+            finally: self.query('ALTER TABLE module_settings DROP CONSTRAINT fixture_editor_log')
+            _,body=request(base); self.assertEqual(200,request(save,{**self._security_fields(body,save),'transcost':'5','transmuteturns':'5'})[0])
+            base,save=urls('darkhorse'); text='Tavern " onfocus="alert(1) <script>é</script> \\ O\'Reilly'
+            _,body=request(base); self.assertEqual(200,request(save,{**self._security_fields(body,save),'tavernname':text})[0])
+            _,body=request(base); self.assertNotIn('<script>é</script>',body); self.assertIn('&lt;script&gt;é&lt;/script&gt;',body)
+            self.assertEqual(text,{x['setting']:x['value'] for x in values('darkhorse')}['tavernname'])
+            # Core uses the same declared namespace and enum contract.
+            base='configuration.php'; save=base+'?op=save'
+            _,body=request(base); self.assertEqual(400,request(save,{**self._security_fields(body,save),'autofightfull':'99'})[0])
+            _,body=request(base); self.assertEqual(400,request(save,{**self._security_fields(body,save),'resurrection_install':'0'})[0])
+        finally:
+            for m,rows in saved.items():
+                self.query('DELETE FROM module_settings WHERE modulename=?',[m])
+                for row in rows: self.query('INSERT INTO module_settings(modulename,setting,value) VALUES (?,?,?)',[m,row['setting'],row['value']])
+            self.query('UPDATE accounts SET superuser=? WHERE acctid=?',[original,player]); self.query('UPDATE modules SET active=0')
+
+    def test_shared_mount_preferences_http(self):
+        player=self.query('SELECT acctid FROM accounts WHERE login=?',['WebPlayer'])[0]['acctid']
+        original=self.query('SELECT superuser FROM accounts WHERE acctid=?',[player])[0]['superuser']
+        self.query('UPDATE modules SET active=1'); ids=[]
+        call=self._security_client()
+        def request(url,fields=None): self._security_allow(player,url); return call(url,fields)
+        def urls(ident,module='darkhorse'):
+            suffix=f'&subop=module&id={ident}&module={module}'
+            return 'mounts.php?op=edit'+suffix,'mounts.php?op=save'+suffix
+        def snapshot(): return self.query('SELECT * FROM module_objprefs WHERE objtype=? ORDER BY modulename,objid,setting',['mounts'])
+        try:
+            for name in ['Editor fixture one','Editor fixture two']:
+                self.query('INSERT INTO mounts(mountname,mountcategory) VALUES (?,?)',[name,'Fixture'])
+                ids.append(self.query('SELECT mountid FROM mounts WHERE mountname=?',[name])[0]['mountid'])
+            base,save=urls(ids[0]); before=snapshot()
+            self.assertIn(self._security_client(login=None)(base)[0],[302,303,403])
+            for role in [0,128]:
+                self.query('UPDATE accounts SET superuser=? WHERE acctid=?',[role,player]); call=self._security_client()
+                self.assertEqual(403,request(base)[0]); self.assertEqual(403,request(save,{'findtavern':'1'})[0])
+            self.query('UPDATE accounts SET superuser=2 WHERE acctid=?',[player]); call=self._security_client()
+            _,body=request(base); form=self._security_fields(body,save)
+            self.assertEqual(before,snapshot())
+            for data in [None,{},dict(form,csrf_token='bad',findtavern='1')]: self.assertEqual(403,request(save,data)[0])
+            for patch in [{'findtavern':'2'},{'findtavern':'2147483648'},{'findtavern[]':'1'},{'forged':'1'},{'objtype':'accounts'},{'objid':ids[1]},{'module':'goldmine'}]:
+                _,body=request(base); self.assertEqual(400,request(save,{**self._security_fields(body,save),**patch})[0]); self.assertEqual(before,snapshot())
+            _,body=request(base); form=dict(self._security_fields(body,save),findtavern='1')
+            self.assertEqual(409,request(urls(ids[1])[1],form)[0]); self.assertEqual(409,request(urls(ids[0],'goldmine')[1],form)[0])
+            for ident in ['0','-1','999999999','1e2',str(ids[0])+'%20OR%201=1']:
+                self.assertEqual(400,request(urls(ident)[0])[0])
+            self.assertEqual(400,request(base+'&objtype=accounts')[0])
+            self.assertEqual(400,request(urls(ids[0],'cedrikspotions')[0])[0])
+            _,body=request(base); form=dict(self._security_fields(body,save),findtavern='1')
+            result=request(save,form); self.assertEqual(200,result[0],result[1]); self.assertEqual(409,request(save,form)[0])
+            self.assertEqual('1',self.query('SELECT value FROM module_objprefs WHERE modulename=? AND objid=? AND setting=?',['darkhorse',ids[0],'findtavern'])[0]['value'])
+            _,body=request(base); form=dict(self._security_fields(body,save),findtavern='0')
+            self.query('UPDATE mounts SET mountname=? WHERE mountid=?',['Changed fixture',ids[0]])
+            self.assertEqual(409,request(save,form)[0])
+            # Configured range/text consumer and actual multi-write rollback.
+            base,save=urls(ids[0],'goldmine'); before=snapshot()
+            _,body=request(base); form=dict(self._security_fields(body,save),entermine='100',dieinmine='0',tethermsg='<script>fixture</script>')
+            self.query("ALTER TABLE module_objprefs ADD CONSTRAINT fixture_object_log CHECK (value <> '<script>fixture</script>')")
+            try:
+                self.assertEqual(500,request(save,form)[0]); self.assertEqual(before,snapshot()); self.assertEqual(409,request(save,form)[0])
+            finally: self.query('ALTER TABLE module_objprefs DROP CONSTRAINT fixture_object_log')
+            _,body=request(base); form=dict(self._security_fields(body,save),entermine='100',dieinmine='0',tethermsg='<script>fixture</script>')
+            self.assertEqual(200,request(save,form)[0]); _,body=request(base); self.assertIn('&lt;script&gt;fixture&lt;/script&gt;',body)
+            _,body=request(base); form=dict(self._security_fields(body,save),entermine='101'); self.assertEqual(400,request(save,form)[0])
+            _,body=request(base); form=dict(self._security_fields(body,save),entermine='0'); self.query('DELETE FROM mounts WHERE mountid=?',[ids[0]])
+            self.assertEqual(400,request(save,form)[0])
+        finally:
+            for ident in ids:
+                self.query('DELETE FROM module_objprefs WHERE objtype=? AND objid=?',['mounts',ident]); self.query('DELETE FROM mounts WHERE mountid=?',[ident])
+            self.query('UPDATE accounts SET superuser=? WHERE acctid=?',[original,player]); self.query('UPDATE modules SET active=0')
+
     def _security_client(self, login='WebPlayer', password="Synthetic web O'Reilly \\ password"):
         class NoRedirect(urllib.request.HTTPRedirectHandler):
             def redirect_request(self, *args): return None

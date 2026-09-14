@@ -640,8 +640,7 @@ function module_delete_objprefs($objtype, $objid)
 function get_module_objpref($type, $objid, $name, $module=false){
 	global $mostrecentmodule;
 	if ($module === false) $module = $mostrecentmodule;
-	$sql = "SELECT value FROM ".db_prefix("module_objprefs")." WHERE modulename='$module' AND objtype='$type' AND setting='".addslashes($name)."' AND objid='$objid' ";
-	$result = db_query_cached($sql, "objpref-$type-$objid-$name-$module", 86400);
+	$result = db_query('SELECT value FROM '.db_prefix('module_objprefs').' WHERE modulename=? AND objtype=? AND setting=? AND objid=?',true,[$module,$type,$name,$objid]);
 	if (db_num_rows($result)>0){
 		$row = db_fetch_assoc($result);
 		return $row['value'];
@@ -656,7 +655,6 @@ function get_module_objpref($type, $objid, $name, $module=false){
 			$x = explode("|",$info['prefs-'.$type][$name]);
 		}
 		if (isset($x[1])){
-			set_module_objpref($type,$objid,$name,$x[1],$module);
 			return $x[1];
 		}
 	}
@@ -666,9 +664,7 @@ function get_module_objpref($type, $objid, $name, $module=false){
 function set_module_objpref($objtype,$objid,$name,$value,$module=false){
 	global $mostrecentmodule;
 	if ($module === false) $module = $mostrecentmodule;
-	// Delete the old version and insert the new
-	$sql = "REPLACE INTO " . db_prefix("module_objprefs") . "(modulename,objtype,setting,objid,value) VALUES ('$module', '$objtype', '$name', '$objid', '".addslashes($value)."')";
-	db_query($sql);
+	db_query('INSERT INTO '.db_prefix('module_objprefs').' (modulename,objtype,setting,objid,value) VALUES (?,?,?,?,?) ON DUPLICATE KEY UPDATE value=?',true,[$module,$objtype,$name,$objid,(string)$value,(string)$value]);
 	invalidatedatacache("objpref-$objtype-$objid-$name-$module");
 }
 
@@ -1172,32 +1168,8 @@ function module_editor_navs($like, $linkprefix)
 
 function module_objpref_edit($type, $module, $id)
 {
-	$info = get_module_info($module);
-	if (count($info['prefs-'.$type]) > 0) {
-		$data = array();
-		$msettings = array();
-		while(list($key, $val) = resurrection_array_next($info['prefs-'.$type])) {
-			if (is_array($val)) {
-				$v = $val[0];
-				$x = explode("|", $v);
-				$val[0] = $x[0];
-				$x[0] = $val;
-			} else {
-				$x = explode("|", $val);
-			}
-			$msettings[$key]=$x[0];
-			// Set up default
-			if (isset($x[1])) $data[$key]=$x[1];
-		}
-		$sql = "SELECT setting, value FROM " . db_prefix("module_objprefs") . " WHERE modulename='$module' AND objtype='$type' AND objid='$id'";
-		$result = db_query($sql);
-		while($row = db_fetch_assoc($result)) {
-			$data[$row['setting']] = $row['value'];
-		}
-		tlschema("module-$module");
-		showform($msettings, $data);
-		tlschema();
-	}
+    require_once 'lib/typed_editor.php';
+    resurrection_object_editor($type,$module,(int)$id,false);
 }
 
 function module_compare_versions($a,$b){

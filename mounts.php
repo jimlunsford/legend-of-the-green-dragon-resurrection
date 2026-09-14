@@ -8,6 +8,22 @@ require_once("common.php");
 require_once("lib/http.php");
 require_once("lib/showform.php");
 
+// Shared object preferences are dispatched before all legacy mount-editor branches.
+if (($_GET['subop'] ?? '') === 'module') {
+    require_once 'lib/typed_editor.php';
+    check_su_access(SU_EDIT_MOUNTS);
+    try {
+        $editorOp=\Resurrection\Http\Input::choice($_GET,'op',['edit','save'],'edit');
+        $editorId=\Resurrection\Http\Input::integer($_GET,'id',0,1);
+        $editorModule=\Resurrection\Http\Input::string($_GET,'module');
+        if (isset($_GET['objtype']) || isset($_GET['objid'])) throw new InvalidArgumentException();
+        page_header('Mount Preferences');
+        resurrection_object_editor('mounts',$editorModule,$editorId,$editorOp==='save');
+        page_footer();
+    } catch (InvalidArgumentException|DomainException $error) { http_response_code(400); exit('Invalid or stale object preferences.'); }
+    catch (Throwable $error) { http_response_code(500); exit('Preferences were not saved.'); }
+    exit;
+}
 $op = httpget('op');
 $id = httpget('id');
 
@@ -110,14 +126,7 @@ if ($op=="deactivate"){
 			}
 		}
 	} elseif ($subop=="module") {
-		// Save modules settings
-		$module = httpget("module");
-		$post = httpallpost();
-		reset($post);
-		while(list($key, $val) = resurrection_array_next($post)) {
-			set_module_objpref("mounts", $id, $key, $val, $module);
-		}
-		output("`^Saved!`0`n");
+        http_response_code(400); exit('Unsupported preference editor.');
 	}
 	if ($id) {
 		$op="edit";
