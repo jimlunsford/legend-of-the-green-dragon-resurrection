@@ -428,6 +428,45 @@ function resurrectionhttpfixture_run() { echo 'fixture-executed'; exit; }
             self.query('UPDATE modules SET active=0')
 
 
+    def test_fairy_settings_and_dragon_carry_http(self):
+        player=self.query('SELECT acctid FROM accounts WHERE login=?',['WebPlayer'])[0]['acctid']
+        original=self.query('SELECT * FROM accounts WHERE acctid=?',[player])[0]
+        prefs=self.query('SELECT * FROM module_userprefs WHERE userid=?',[player])
+        self.query('UPDATE modules SET active=1'); call=self._security_client()
+        settings=self.query('SELECT setting,value FROM module_settings WHERE modulename=?',['fairy'])
+        def request(url,form=None): self._security_allow(player,url); return call(url,form)
+        try:
+            for carry in [1,0]:
+                self.query('UPDATE accounts SET '+','.join(k+'=?' for k in original if k!='acctid')+' WHERE acctid=?',[*[v for k,v in original.items() if k!='acctid'],player])
+                self.query("UPDATE accounts SET level=15,dragonkills=0,dragonpoints='a:0:{}',maxhitpoints=165,hitpoints=165,gems=100,bufflist='a:0:{}',attack=100000,defense=100000,race='Human',specialty='DA',specialinc='' WHERE acctid=?",[player])
+                for module in ['cedrikspotions','fairy']:
+                    self.query('INSERT INTO module_userprefs(modulename,setting,userid,value) VALUES (?,?,?,?) ON DUPLICATE KEY UPDATE value=VALUES(value)',[module,'extrahps',player,'15' if module=='fairy' else '0'])
+                # Save Fairy's actual declared settings through the certified editor.
+                self.query('UPDATE accounts SET superuser=128 WHERE acctid=?',[player]); call=self._security_client()
+                base='configuration.php?op=modulesettings&module=fairy'; save=base+'&save=1'
+                for invalid in [{'carrydk':'2'},{'hptoaward':'0'},{'hptoaward':'6'},{'fftoaward':'6'}]:
+                    _,body=request(base); form=self._security_fields(body,save)
+                    self.assertEqual(400,request(save,{**form,**invalid})[0])
+                _,body=request(base); form={**self._security_fields(body,save),'carrydk':str(carry),'hptoaward':'5','fftoaward':'5'}
+                self.assertEqual(200,request(save,form)[0]); self.assertEqual(409,request(save,form)[0])
+                self.query('UPDATE accounts SET superuser=0 WHERE acctid=?',[player]); call=self._security_client()
+                enemy={'creaturename':'Synthetic Green Dragon','creatureweapon':'Padded stick','creaturelevel':18,'creatureattack':1,'creaturedefense':1,'creaturehealth':1,'diddamage':0,'type':'dragon'}
+                encoded=subprocess.run([shutil.which('php'),'-r','echo serialize(json_decode(stream_get_contents(STDIN),true));'],input=json.dumps(enemy),text=True,capture_output=True,cwd=ROOT,check=True).stdout
+                self.query('UPDATE accounts SET badguy=? WHERE acctid=?',[encoded,player])
+                status,body=request('dragon.php?op=fight'); self.assertEqual(200,status,body[:1500])
+                link=re.search(r'href=[\'"](dragon.php\?op=prologue1[^\'"]*)',body); self.assertIsNotNone(link,body[:1500])
+                status,body=request(html.unescape(link.group(1))); self.assertEqual(200,status,body[:1500])
+                state=self.query('SELECT dragonkills,maxhitpoints,bufflist FROM accounts WHERE acctid=?',[player])[0]
+                self.assertEqual('1',state['dragonkills']); self.assertEqual(str(25 if carry else 10),state['maxhitpoints']); self.assertNotIn('transmute',state['bufflist'])
+                self.assertEqual(str(15 if carry else 0),self.query('SELECT value FROM module_userprefs WHERE userid=? AND modulename=? AND setting=?',[player,'fairy','extrahps'])[0]['value'])
+        finally:
+            self.query('UPDATE accounts SET '+','.join(k+'=?' for k in original if k!='acctid')+' WHERE acctid=?',[*[v for k,v in original.items() if k!='acctid'],player])
+            self.query('DELETE FROM module_userprefs WHERE userid=?',[player])
+            for row in prefs: self.query('INSERT INTO module_userprefs(modulename,setting,userid,value) VALUES (?,?,?,?)',[row['modulename'],row['setting'],player,row['value']])
+            self.query('DELETE FROM module_settings WHERE modulename=?',['fairy'])
+            for row in settings: self.query('INSERT INTO module_settings(modulename,setting,value) VALUES (?,?,?)',['fairy',row['setting'],row['value']])
+            self.query('UPDATE modules SET active=0')
+
     def test_potions_dragon_reset_persistence_http(self):
         player=self.query('SELECT acctid FROM accounts WHERE login=?',['WebPlayer'])[0]['acctid']
         original=self.query('SELECT * FROM accounts WHERE acctid=?',[player])[0]

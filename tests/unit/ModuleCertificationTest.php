@@ -109,6 +109,65 @@ final class ModuleCertificationTest extends TestCase
         } finally { mt_srand(); $_GET=[]; deactivate_module('glowingstream'); }
     }
 
+    public function testFairyConfiguredOutcomesCarryAndInvalidState(): void
+    {
+        self::assertTrue(activate_module('fairy')); self::assertTrue(activate_module('specialtydarkarts'));
+        $settings=[]; foreach (['carrydk','hptoaward','fftoaward'] as $key) $settings[$key]=get_module_setting($key,'fairy');
+        $extra=get_module_pref('extrahps','fairy');
+        $skill=get_module_pref('skill','specialtydarkarts'); $uses=get_module_pref('uses','specialtydarkarts');
+        try {
+            foreach ([0,1] as $carry) foreach ([1,5] as $amount) {
+                set_module_setting('carrydk',$carry,'fairy'); set_module_setting('hptoaward',$amount,'fairy'); set_module_setting('fftoaward',$amount,'fairy');
+                foreach ([1=>1,2=>5,3=>2,4=>4,5=>0,6=>3,7=>14] as $outcome=>$seed) {
+                    injectmodule('fairy');
+                    $GLOBALS['session']['user']=array_replace($GLOBALS['session']['user'],['hitpoints'=>50,'maxhitpoints'=>100,'turns'=>10,'gems'=>5,'specialty'=>'DA','specialinc'=>'module:fairy']);
+                    set_module_pref('extrahps',0,'fairy'); set_module_pref('skill',2,'specialtydarkarts'); set_module_pref('uses',0,'specialtydarkarts');
+                    $_GET=['op'=>'give']; mt_srand($seed); fairy_runevent('forest');
+                    self::assertEquals(in_array($outcome,[2,3],true)?6:4,$GLOBALS['session']['user']['gems']);
+                    self::assertEquals($outcome===1?10+$amount:10,$GLOBALS['session']['user']['turns']);
+                    $hp=in_array($outcome,[4,5],true)?$amount:0;
+                    self::assertEquals(100+$hp,$GLOBALS['session']['user']['maxhitpoints']);
+                    self::assertEquals(50+$hp,$GLOBALS['session']['user']['hitpoints']);
+                    self::assertSame($hp,fairy_extra_hp());
+                    self::assertEquals($outcome>=6?3:2,get_module_pref('skill','specialtydarkarts'));
+                    self::assertEquals($outcome>=6?1:0,get_module_pref('uses','specialtydarkarts'));
+                    self::assertSame('',$GLOBALS['session']['user']['specialinc']);
+                    $result=modulehook('hprecalc',['total'=>100+$hp,'extra'=>$hp],false,'fairy');
+                    self::assertSame(100,$result['total']); self::assertSame($carry?$hp:0,$result['extra']);
+                    self::assertSame($carry?$hp:0,fairy_extra_hp());
+                }
+            }
+            injectmodule('fairy');
+            foreach (['give','dont'] as $op) {
+                $GLOBALS['session']['user']['gems']=0; $GLOBALS['session']['user']['turns']=10;
+                $_GET=['op'=>$op]; fairy_runevent('forest');
+                self::assertSame(0,$GLOBALS['session']['user']['gems']);
+                self::assertSame($op==='give'?9:10,$GLOBALS['session']['user']['turns']);
+                self::assertSame('',$GLOBALS['session']['user']['specialinc']);
+            }
+            foreach (['-1','nonsense','4294967296'] as $invalid) {
+                set_module_pref('extrahps',$invalid,'fairy');
+                try { fairy_validate_state(); self::fail('Invalid Fairy preference accepted.'); }
+                catch (\DomainException $error) { self::assertSame('Invalid fairy HP state.',$error->getMessage()); }
+            }
+            set_module_pref('extrahps',0,'fairy');
+            foreach (['hptoaward'=>['0','6','no'],'fftoaward'=>['-1','6'],'carrydk'=>['2']] as $key=>$badValues) {
+                $valid=get_module_setting($key,'fairy');
+                foreach ($badValues as $invalid) {
+                    set_module_setting($key,$invalid,'fairy');
+                    try { fairy_validate_state(); self::fail('Invalid Fairy setting accepted.'); }
+                    catch (\DomainException $error) { self::assertSame('Invalid fairy settings.',$error->getMessage()); }
+                }
+                set_module_setting($key,$valid,'fairy');
+            }
+        } finally {
+            mt_srand(); $_GET=[];
+            foreach ($settings as $key=>$value) set_module_setting($key,$value,'fairy');
+            set_module_pref('extrahps',$extra,'fairy'); set_module_pref('skill',$skill,'specialtydarkarts'); set_module_pref('uses',$uses,'specialtydarkarts');
+            deactivate_module('fairy'); deactivate_module('specialtydarkarts');
+        }
+    }
+
     public function testCedrikVitalityCarryAndMalformedPreference(): void
     {
         self::assertTrue(activate_module('cedrikspotions'));
