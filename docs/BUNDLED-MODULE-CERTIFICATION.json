@@ -1,7 +1,7 @@
 {
   "scope": "Only the 24 bundled entrypoints, verified against modules/*.php; no archive import.",
   "date": "2026-09-14",
-  "evidence": "Verified Lovers implementation: 74 PHPUnit tests / 2227 assertions / 31 Python and HTTP tests / 308 linted PHP files. Both supported targets PASS at 72a43cc0cfd4e6e653a943a5377d7adbfc4139db, Modern core 34841113158 and Baseline integrity 34841112989.",
+  "evidence": "Verified implementation: 74 PHPUnit tests / 2231 assertions / 32 Python and HTTP tests / 309 linted PHP files. Both supported targets PASS at 77c58792f87afad71c0db5fc77042cd39ab418b8, Modern core 34842503298 and Baseline integrity 34842503326. Lovers was independently promoted after both targets passed at 72a43cc0cfd4e6e653a943a5377d7adbfc4139db.",
   "status_meaning": "Final certification is per module in the supported bundled scope. PASS requires actual behavior/security evidence; PARTIAL is a component route result only and final remains BLOCKED. Core editor/combat/hosting gates are tracked separately and still prevent merge.",
   "modules": [
     {
@@ -1168,10 +1168,10 @@
       },
       "settings_preferences_result": "PASS for named defaults and raw round trips; NOT APPLICABLE for empty namespaces",
       "object_preferences_result": "PASS for mounts.findtavern values 0 and 1",
-      "direct_runmodule_route": "BLOCKED",
-      "direct_route_note": "Existing choice text, newday/stat and combined-hook behavior PASS. Actual HTTP onboarding choice/invalid choice/POST/CSRF/persistence/reselection matrix remains unimplemented; Cities excluded.",
+      "direct_runmodule_route": "PASS",
+      "direct_route_note": "PASS: test_race_onboarding_http_authority follows real rendered POST forms and independently proves active choice display, authenticated/CSRF authority, exact race/main-village persistence, forged race/module/filename/location/stat rejection, stale/inactive/anonymous denial, no selection GET, no automatic inactive fallback, duplicate/reselection/replay rejection, final-account rollback and fresh retry. Cities remains absent. Both supported targets pass at 77c58792f87afad71c0db5fc77042cd39ab418b8, Modern core 34842503298 and Baseline integrity 34842503326. Dwarf creature-gold modifier and no-Cities location semantics remain unchanged.",
       "database_tables": [],
-      "database_behavior": "PASS: strict fresh install/reinstall and tested metadata writes; purchase/admin transactions not certified",
+      "database_behavior": "PASS: shared locked transaction stores server-derived race and main village; account CHECK failure leaves both unchanged and requires a fresh intent.",
       "daily_hooks": [],
       "combat_hooks": [
         "creatureencounter"
@@ -1181,15 +1181,15 @@
         "village",
         "validforestloc"
       ],
-      "php_8_4": "PASS for tested components; final BLOCKED for remaining gates",
-      "php_8_5": "PASS for tested components; final BLOCKED for remaining gates",
-      "mariadb_11_4": "PASS for tested components; final BLOCKED for remaining gates",
-      "mysql_8_4": "PASS for tested components; final BLOCKED for remaining gates",
+      "php_8_4": "PASS supported bundled scope",
+      "php_8_5": "PASS supported bundled scope",
+      "mariadb_11_4": "PASS supported bundled scope",
+      "mysql_8_4": "PASS supported bundled scope",
       "warnings_errors": "No PHP warnings/errors in the passing matrix tests; unexecuted paths unverified.",
-      "security_notes": "Shared race HTTP boundary implemented in lib/race_onboarding.php and exercised by test_race_onboarding_http_authority: active bundled choices, server identity/main-village location, POST/CSRF/state intent, forged race/module/path/location/stat rejection, replay/reselection/stale/inactive/anonymous denial, atomic account persistence and final-write rollback/fresh retry. Existing runtime/stat/New Day/PvP hooks retained. Supported-target CI verification pending before final promotion.",
-      "final_certification": "BLOCKED",
-      "continuation_evidence": "Shared race HTTP boundary implemented in lib/race_onboarding.php and exercised by test_race_onboarding_http_authority: active bundled choices, server identity/main-village location, POST/CSRF/state intent, forged race/module/path/location/stat rejection, replay/reselection/stale/inactive/anonymous denial, atomic account persistence and final-write rollback/fresh retry. Existing runtime/stat/New Day/PvP hooks retained. Supported-target CI verification pending before final promotion.",
-      "next_required_gate": "Verify the new shared onboarding HTTP matrix on both supported targets.",
+      "security_notes": "PASS: test_race_onboarding_http_authority follows real rendered POST forms and independently proves active choice display, authenticated/CSRF authority, exact race/main-village persistence, forged race/module/filename/location/stat rejection, stale/inactive/anonymous denial, no selection GET, no automatic inactive fallback, duplicate/reselection/replay rejection, final-account rollback and fresh retry. Cities remains absent. Both supported targets pass at 77c58792f87afad71c0db5fc77042cd39ab418b8, Modern core 34842503298 and Baseline integrity 34842503326. Dwarf creature-gold modifier and no-Cities location semantics remain unchanged.",
+      "final_certification": "PASS",
+      "continuation_evidence": "PASS: test_race_onboarding_http_authority follows real rendered POST forms and independently proves active choice display, authenticated/CSRF authority, exact race/main-village persistence, forged race/module/filename/location/stat rejection, stale/inactive/anonymous denial, no selection GET, no automatic inactive fallback, duplicate/reselection/replay rejection, final-account rollback and fresh retry. Cities remains absent. Both supported targets pass at 77c58792f87afad71c0db5fc77042cd39ab418b8, Modern core 34842503298 and Baseline integrity 34842503326. Dwarf creature-gold modifier and no-Cities location semantics remain unchanged.",
+      "next_required_gate": "None in supported bundled race scope; general New Day/dragon-point, specialty/combat and other core gates remain.",
       "previous_certification": "BLOCKED"
     },
     {
@@ -1300,10 +1300,10 @@
       "object_preferences": {},
       "settings_preferences_result": "PASS for named defaults and raw round trips; NOT APPLICABLE for empty namespaces",
       "object_preferences_result": "NOT APPLICABLE",
-      "direct_runmodule_route": "BLOCKED",
-      "direct_route_note": "Existing choice text, newday/stat and combined-hook behavior PASS. Actual HTTP onboarding choice/invalid choice/POST/CSRF/persistence/reselection matrix remains unimplemented; Cities excluded.",
+      "direct_runmodule_route": "PASS",
+      "direct_route_note": "PASS: test_race_onboarding_http_authority follows real rendered POST forms and independently proves active choice display, authenticated/CSRF authority, exact race/main-village persistence, forged race/module/filename/location/stat rejection, stale/inactive/anonymous denial, no selection GET, no automatic inactive fallback, duplicate/reselection/replay rejection, final-account rollback and fresh retry. Cities remains absent. Both supported targets pass at 77c58792f87afad71c0db5fc77042cd39ab418b8, Modern core 34842503298 and Baseline integrity 34842503326. Elf defense, PvP/adjuststats and New Day buff formulas remain unchanged.",
       "database_tables": [],
-      "database_behavior": "PASS: strict fresh install/reinstall and tested metadata writes; purchase/admin transactions not certified",
+      "database_behavior": "PASS: shared locked transaction stores server-derived race and main village; account CHECK failure leaves both unchanged and requires a fresh intent.",
       "daily_hooks": [
         "newday"
       ],
@@ -1315,15 +1315,15 @@
         "villagetext",
         "validforestloc"
       ],
-      "php_8_4": "PASS for tested components; final BLOCKED for remaining gates",
-      "php_8_5": "PASS for tested components; final BLOCKED for remaining gates",
-      "mariadb_11_4": "PASS for tested components; final BLOCKED for remaining gates",
-      "mysql_8_4": "PASS for tested components; final BLOCKED for remaining gates",
+      "php_8_4": "PASS supported bundled scope",
+      "php_8_5": "PASS supported bundled scope",
+      "mariadb_11_4": "PASS supported bundled scope",
+      "mysql_8_4": "PASS supported bundled scope",
       "warnings_errors": "No PHP warnings/errors in the passing matrix tests; unexecuted paths unverified.",
-      "security_notes": "Shared race HTTP boundary implemented in lib/race_onboarding.php and exercised by test_race_onboarding_http_authority: active bundled choices, server identity/main-village location, POST/CSRF/state intent, forged race/module/path/location/stat rejection, replay/reselection/stale/inactive/anonymous denial, atomic account persistence and final-write rollback/fresh retry. Existing runtime/stat/New Day/PvP hooks retained. Supported-target CI verification pending before final promotion.",
-      "final_certification": "BLOCKED",
-      "continuation_evidence": "Shared race HTTP boundary implemented in lib/race_onboarding.php and exercised by test_race_onboarding_http_authority: active bundled choices, server identity/main-village location, POST/CSRF/state intent, forged race/module/path/location/stat rejection, replay/reselection/stale/inactive/anonymous denial, atomic account persistence and final-write rollback/fresh retry. Existing runtime/stat/New Day/PvP hooks retained. Supported-target CI verification pending before final promotion.",
-      "next_required_gate": "Verify the new shared onboarding HTTP matrix on both supported targets.",
+      "security_notes": "PASS: test_race_onboarding_http_authority follows real rendered POST forms and independently proves active choice display, authenticated/CSRF authority, exact race/main-village persistence, forged race/module/filename/location/stat rejection, stale/inactive/anonymous denial, no selection GET, no automatic inactive fallback, duplicate/reselection/replay rejection, final-account rollback and fresh retry. Cities remains absent. Both supported targets pass at 77c58792f87afad71c0db5fc77042cd39ab418b8, Modern core 34842503298 and Baseline integrity 34842503326. Elf defense, PvP/adjuststats and New Day buff formulas remain unchanged.",
+      "final_certification": "PASS",
+      "continuation_evidence": "PASS: test_race_onboarding_http_authority follows real rendered POST forms and independently proves active choice display, authenticated/CSRF authority, exact race/main-village persistence, forged race/module/filename/location/stat rejection, stale/inactive/anonymous denial, no selection GET, no automatic inactive fallback, duplicate/reselection/replay rejection, final-account rollback and fresh retry. Cities remains absent. Both supported targets pass at 77c58792f87afad71c0db5fc77042cd39ab418b8, Modern core 34842503298 and Baseline integrity 34842503326. Elf defense, PvP/adjuststats and New Day buff formulas remain unchanged.",
+      "next_required_gate": "None in supported bundled race scope; general New Day/dragon-point, specialty/combat and other core gates remain.",
       "previous_certification": "BLOCKED"
     },
     {
@@ -1429,10 +1429,10 @@
       "object_preferences": {},
       "settings_preferences_result": "PASS for named defaults and raw round trips; NOT APPLICABLE for empty namespaces",
       "object_preferences_result": "NOT APPLICABLE",
-      "direct_runmodule_route": "BLOCKED",
-      "direct_route_note": "Existing choice text, newday/stat and combined-hook behavior PASS. Actual HTTP onboarding choice/invalid choice/POST/CSRF/persistence/reselection matrix remains unimplemented; Cities excluded.",
+      "direct_runmodule_route": "PASS",
+      "direct_route_note": "PASS: test_race_onboarding_http_authority follows real rendered POST forms and independently proves active choice display, authenticated/CSRF authority, exact race/main-village persistence, forged race/module/filename/location/stat rejection, stale/inactive/anonymous denial, no selection GET, no automatic inactive fallback, duplicate/reselection/replay rejection, final-account rollback and fresh retry. Cities remains absent. Both supported targets pass at 77c58792f87afad71c0db5fc77042cd39ab418b8, Modern core 34842503298 and Baseline integrity 34842503326. Human daily Forest-fight bonus remains +2 at its historical default.",
       "database_tables": [],
-      "database_behavior": "PASS: strict fresh install/reinstall and tested metadata writes; purchase/admin transactions not certified",
+      "database_behavior": "PASS: shared locked transaction stores server-derived race and main village; account CHECK failure leaves both unchanged and requires a fresh intent.",
       "daily_hooks": [
         "newday"
       ],
@@ -1441,15 +1441,15 @@
         "villagetext",
         "validforestloc"
       ],
-      "php_8_4": "PASS for tested components; final BLOCKED for remaining gates",
-      "php_8_5": "PASS for tested components; final BLOCKED for remaining gates",
-      "mariadb_11_4": "PASS for tested components; final BLOCKED for remaining gates",
-      "mysql_8_4": "PASS for tested components; final BLOCKED for remaining gates",
+      "php_8_4": "PASS supported bundled scope",
+      "php_8_5": "PASS supported bundled scope",
+      "mariadb_11_4": "PASS supported bundled scope",
+      "mysql_8_4": "PASS supported bundled scope",
       "warnings_errors": "No PHP warnings/errors in the passing matrix tests; unexecuted paths unverified.",
-      "security_notes": "Shared race HTTP boundary implemented in lib/race_onboarding.php and exercised by test_race_onboarding_http_authority: active bundled choices, server identity/main-village location, POST/CSRF/state intent, forged race/module/path/location/stat rejection, replay/reselection/stale/inactive/anonymous denial, atomic account persistence and final-write rollback/fresh retry. Existing runtime/stat/New Day/PvP hooks retained. Supported-target CI verification pending before final promotion.",
-      "final_certification": "BLOCKED",
-      "continuation_evidence": "Shared race HTTP boundary implemented in lib/race_onboarding.php and exercised by test_race_onboarding_http_authority: active bundled choices, server identity/main-village location, POST/CSRF/state intent, forged race/module/path/location/stat rejection, replay/reselection/stale/inactive/anonymous denial, atomic account persistence and final-write rollback/fresh retry. Existing runtime/stat/New Day/PvP hooks retained. Supported-target CI verification pending before final promotion.",
-      "next_required_gate": "Verify the new shared onboarding HTTP matrix on both supported targets.",
+      "security_notes": "PASS: test_race_onboarding_http_authority follows real rendered POST forms and independently proves active choice display, authenticated/CSRF authority, exact race/main-village persistence, forged race/module/filename/location/stat rejection, stale/inactive/anonymous denial, no selection GET, no automatic inactive fallback, duplicate/reselection/replay rejection, final-account rollback and fresh retry. Cities remains absent. Both supported targets pass at 77c58792f87afad71c0db5fc77042cd39ab418b8, Modern core 34842503298 and Baseline integrity 34842503326. Human daily Forest-fight bonus remains +2 at its historical default.",
+      "final_certification": "PASS",
+      "continuation_evidence": "PASS: test_race_onboarding_http_authority follows real rendered POST forms and independently proves active choice display, authenticated/CSRF authority, exact race/main-village persistence, forged race/module/filename/location/stat rejection, stale/inactive/anonymous denial, no selection GET, no automatic inactive fallback, duplicate/reselection/replay rejection, final-account rollback and fresh retry. Cities remains absent. Both supported targets pass at 77c58792f87afad71c0db5fc77042cd39ab418b8, Modern core 34842503298 and Baseline integrity 34842503326. Human daily Forest-fight bonus remains +2 at its historical default.",
+      "next_required_gate": "None in supported bundled race scope; general New Day/dragon-point, specialty/combat and other core gates remain.",
       "previous_certification": "BLOCKED"
     },
     {
@@ -1554,10 +1554,10 @@
       "object_preferences": {},
       "settings_preferences_result": "PASS for named defaults and raw round trips; NOT APPLICABLE for empty namespaces",
       "object_preferences_result": "NOT APPLICABLE",
-      "direct_runmodule_route": "BLOCKED",
-      "direct_route_note": "Existing choice text, newday/stat and combined-hook behavior PASS. Actual HTTP onboarding choice/invalid choice/POST/CSRF/persistence/reselection matrix remains unimplemented; Cities excluded.",
+      "direct_runmodule_route": "PASS",
+      "direct_route_note": "PASS: test_race_onboarding_http_authority follows real rendered POST forms and independently proves active choice display, authenticated/CSRF authority, exact race/main-village persistence, forged race/module/filename/location/stat rejection, stale/inactive/anonymous denial, no selection GET, no automatic inactive fallback, duplicate/reselection/replay rejection, final-account rollback and fresh retry. Cities remains absent. Both supported targets pass at 77c58792f87afad71c0db5fc77042cd39ab418b8, Modern core 34842503298 and Baseline integrity 34842503326. Troll attack, PvP/adjuststats and New Day buff formulas remain unchanged.",
       "database_tables": [],
-      "database_behavior": "PASS: strict fresh install/reinstall and tested metadata writes; purchase/admin transactions not certified",
+      "database_behavior": "PASS: shared locked transaction stores server-derived race and main village; account CHECK failure leaves both unchanged and requires a fresh intent.",
       "daily_hooks": [
         "newday"
       ],
@@ -1569,15 +1569,15 @@
         "villagetext",
         "validforestloc"
       ],
-      "php_8_4": "PASS for tested components; final BLOCKED for remaining gates",
-      "php_8_5": "PASS for tested components; final BLOCKED for remaining gates",
-      "mariadb_11_4": "PASS for tested components; final BLOCKED for remaining gates",
-      "mysql_8_4": "PASS for tested components; final BLOCKED for remaining gates",
+      "php_8_4": "PASS supported bundled scope",
+      "php_8_5": "PASS supported bundled scope",
+      "mariadb_11_4": "PASS supported bundled scope",
+      "mysql_8_4": "PASS supported bundled scope",
       "warnings_errors": "No PHP warnings/errors in the passing matrix tests; unexecuted paths unverified.",
-      "security_notes": "Shared race HTTP boundary implemented in lib/race_onboarding.php and exercised by test_race_onboarding_http_authority: active bundled choices, server identity/main-village location, POST/CSRF/state intent, forged race/module/path/location/stat rejection, replay/reselection/stale/inactive/anonymous denial, atomic account persistence and final-write rollback/fresh retry. Existing runtime/stat/New Day/PvP hooks retained. Supported-target CI verification pending before final promotion.",
-      "final_certification": "BLOCKED",
-      "continuation_evidence": "Shared race HTTP boundary implemented in lib/race_onboarding.php and exercised by test_race_onboarding_http_authority: active bundled choices, server identity/main-village location, POST/CSRF/state intent, forged race/module/path/location/stat rejection, replay/reselection/stale/inactive/anonymous denial, atomic account persistence and final-write rollback/fresh retry. Existing runtime/stat/New Day/PvP hooks retained. Supported-target CI verification pending before final promotion.",
-      "next_required_gate": "Verify the new shared onboarding HTTP matrix on both supported targets.",
+      "security_notes": "PASS: test_race_onboarding_http_authority follows real rendered POST forms and independently proves active choice display, authenticated/CSRF authority, exact race/main-village persistence, forged race/module/filename/location/stat rejection, stale/inactive/anonymous denial, no selection GET, no automatic inactive fallback, duplicate/reselection/replay rejection, final-account rollback and fresh retry. Cities remains absent. Both supported targets pass at 77c58792f87afad71c0db5fc77042cd39ab418b8, Modern core 34842503298 and Baseline integrity 34842503326. Troll attack, PvP/adjuststats and New Day buff formulas remain unchanged.",
+      "final_certification": "PASS",
+      "continuation_evidence": "PASS: test_race_onboarding_http_authority follows real rendered POST forms and independently proves active choice display, authenticated/CSRF authority, exact race/main-village persistence, forged race/module/filename/location/stat rejection, stale/inactive/anonymous denial, no selection GET, no automatic inactive fallback, duplicate/reselection/replay rejection, final-account rollback and fresh retry. Cities remains absent. Both supported targets pass at 77c58792f87afad71c0db5fc77042cd39ab418b8, Modern core 34842503298 and Baseline integrity 34842503326. Troll attack, PvP/adjuststats and New Day buff formulas remain unchanged.",
+      "next_required_gate": "None in supported bundled race scope; general New Day/dragon-point, specialty/combat and other core gates remain.",
       "previous_certification": "BLOCKED"
     },
     {
@@ -1990,27 +1990,27 @@
       "previous_certification": "BLOCKED"
     }
   ],
-  "validated_implementation_sha": "72a43cc0cfd4e6e653a943a5377d7adbfc4139db",
-  "modern_core_run": 34841113158,
-  "baseline_integrity_run": 34841112989,
+  "validated_implementation_sha": "77c58792f87afad71c0db5fc77042cd39ab418b8",
+  "modern_core_run": 34842503298,
+  "baseline_integrity_run": 34842503326,
   "supported_matrix": [
     {
       "php": "8.4.25",
       "database": "MariaDB 11.4.13",
-      "job": 103966069936,
+      "job": 103970582048,
       "result": "PASS supported scope"
     },
     {
       "php": "8.5.10",
       "database": "MySQL 8.4.11",
-      "job": 103966069657,
+      "job": 103970582001,
       "result": "PASS supported scope"
     }
   ],
   "counts": {
-    "PASS": 17,
+    "PASS": 21,
     "PASS WITH DOCUMENTED LIMITATION": 0,
-    "BLOCKED": 7,
+    "BLOCKED": 3,
     "lifecycle_PASS": 24
   }
 }

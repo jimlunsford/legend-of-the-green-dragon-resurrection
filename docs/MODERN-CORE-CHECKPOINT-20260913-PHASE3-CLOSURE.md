@@ -713,3 +713,66 @@ Historical tag object `51cab4fbe58a234651a3177a56289b18bc152b4d`, source `bdc29d
 Lovers effect GETs are closed. Race/specialty onboarding, specialty combat, petition administration, clans, equipment, stables, training and legacy editor GET families remain. General combat schema and the prior mail/systemmail, bank, PvP, administrator, serialized-business-state, expiration and deletion gates remain unresolved. Serialized inventory is unchanged: 87 sites / 42 files / 31 writers/checks / 55 ScalarState reads / one centralized unserialize.
 
 Phase 3 remains incomplete; modern-core merge NO; public hosting NO. No VPS, deployment, public runtime, archive import, release, tag, package, rebalance, framework rewrite or Phase 4 work. Next: finish shared HTTP race onboarding and independently promote Human, Elf, Dwarf and Troll, then specialty onboarding/combat authority.
+
+
+## 2026-09-14: Lovers and all four races certified; specialties remain blocked
+
+### Published history and scope
+
+Repository: https://github.com/jimlunsford/legend-of-the-green-dragon-resurrection. Existing branch `modernization/core-modernization`; existing PR #1 only.
+
+Actual starting SHA: `f282bc5c2b1cca7dba1755f74150a95bb1621c06`.
+
+Validated implementation ending SHA: `77c58792f87afad71c0db5fc77042cd39ab418b8`.
+
+Three commits precede this final evidence append: `72a43cc0cfd4e6e653a943a5377d7adbfc4139db` (Lovers implementation), `aad653aed8eb7f97f35f90411b4f67aa9df99567` (independent Lovers certification), and `77c58792f87afad71c0db5fc77042cd39ab418b8` (shared race implementation). This evidence append is the fourth commit. Its enclosing commit supplies the final repository ending SHA; that SHA and the final exact-head workflow IDs are recorded in PR #1 and the execution report, avoiding a self-referential commit hash inside this file.
+
+Main remains `999cec6f9c655a840320d982d673bb863c68c2b2`. PR #1 remains OPEN, DRAFT, NOT READY and NOT MERGED; no actual merge SHA. Published history is preserved, without force-push, squash, another branch or PR #2. Git HTTPS had no credentials; each authenticated Git-object tree matched the staged local tree before a non-forced update.
+
+### Certification decisions
+
+**21 PASS / 0 PASS WITH DOCUMENTED LIMITATION / 3 BLOCKED. All 24 lifecycle checks PASS.** All individual final statuses are maintained in BUNDLED-MODULE-CERTIFICATION.md and .json.
+
+Lovers, Human, Elf, Dwarf and Troll are PASS. The sixteen previous PASS decisions are retained. Dark Arts (`specialtydarkarts`), Mystical Powers (`specialtymysticpower`) and Thieving Skills (`specialtythiefskills`) remain BLOCKED. Five of the eight requested modules closed; the eight-module objective is not complete.
+
+Lovers preserves seven alternative choices, not sequential stages. Actual Inn-link/form HTTP proves living authenticated/active/current-daily entry, read-only GET including absent default preference and married entry, every choice on both Seth/Violet paths, married positive/negative effects, unmarried positive/no-effect/negative branches, charm caps, turn exhaustion floors, marriage success/failure, derived buffs/news/debug, daily use once, malformed/forged/stale/replayed submissions, database persistence and subsequent login, actual New Day reset, married attrition/divorce, final-account rollback and fresh retry. Configured apostrophe, backslash, UTF-8 and HTML-like text retain LoGD formatting and escape markup. All three meaningful rollback fixtures preserve preference/player/news/debug state. The one-use intent is consumed on failure; retry requires a fresh form. No universal crash-safe exactly-once guarantee.
+
+Each race independently passes real HTTP display, POST, CSRF, active module, server choice identity, exact stored race/location, invalid/forged race/module/filename/location/stat fields, anonymous/inactive/stale form denial, duplicate/reselection/replay rejection and GET rejection. No inactive-module Human fallback writes through GET. Race and location persist in an atomic account UPDATE; a CHECK failure leaves both unchanged, and a fresh form retries successfully. Valid forms traverse forced navigation without fixture authorization of the submitted mutation. The transmutation test retains all effect/persistence assertions and now uses a real race POST form.
+
+The destination remains the configured main village because Cities is not bundled. No Cities import or invented home-city preference. Human's daily Forest-fight bonus, Elf's defense/PvP/New Day effects, Dwarf's gold/location behavior and Troll's attack/PvP/New Day effects remain covered by existing runtime tests, with formulas unchanged. The new shared boundary is also analyzed at infrastructure PHPStan level 6.
+
+### Remaining specialty and combat gates
+
+No new specialty onboarding or combat HTTP certification is claimed. All three still need active/typed selection, identity/initial skill/uses persistence, replay/reselection, and valid combat levels 1/2/3/5 plus unsupported/negative/excessive/non-numeric levels, zero/insufficient uses, wrong/no specialty, wrong player state, missing/invalid/terminal combat, POST/CSRF, duplicate/replay and persisted historical use cost/effect authority. Existing hook/formula and internal-preference injection regressions still pass; they do not substitute for these HTTP boundaries.
+
+The route review identifies shared `lib/newday/setspecialty.php` onboarding and combat across `battle.php`, `lib/battle-skills.php`, `lib/fightnav.php` and the three specialty modules. Dark Arts also has the shipped companion-enabled path, which must not be omitted. General combat business validation above ScalarState is not added; it remains BLOCKED. No later core family is promoted.
+
+### Acceptance evidence
+
+Both supported targets explicitly checked out `77c58792f87afad71c0db5fc77042cd39ab418b8`:
+
+| Gate | PHP 8.4.25 / MariaDB 11.4.13 | PHP 8.5.10 / MySQL 8.4.11 |
+|---|---|---|
+| PHPUnit | 74 tests / 2,231 assertions | Same |
+| Python / actual HTTP | 32 tests / PASS | Same |
+| Failures / skips | 0 / 0 | 0 / 0 |
+| PHP lint | 309 files / PASS | Same |
+| Legacy PHPStan | Level 0; seven retained findings; zero new errors | Same |
+| Infrastructure PHPStan | Level 6; zero errors; no baseline | Same |
+| Composer | Strict validation, locked install, audit PASS | Same |
+
+Modern core **34842503298 SUCCESS**, jobs **103970582048** (PHP 8.4/MariaDB) and **103970582001** (PHP 8.5/MySQL). Baseline integrity **34842503326 SUCCESS**. Fresh install, authentication, all 24 module lifecycles, certification, Lovers, races, scheduler/New Day and all retained specialty/formula/security regressions pass. Earlier independent Lovers proof: Modern core 34841113158 and Baseline integrity 34841112989 at `72a43cc0cfd4e6e653a943a5377d7adbfc4139db`.
+
+The full supplementary local run passes 74 tests / 2,231 assertions and 32 Python/HTTP tests, plus 309-file lint and both PHPStan scopes. Its MariaDB 10.11 is supplementary only; it is not substituted for the supported matrix. An intermediate full run exposed the retained transmutation test's old GET race selection, now corrected without deleting assertions. Initial navigation/story fixture mismatches, temporary stale fixture files, missing static symbol discovery and a transient local execution-service outage are not acceptance evidence.
+
+### Remaining mutations, preservation and verdicts
+
+Meaningful GET families remain specialty onboarding/combat, petition administration, clans, equipment, stables, training and legacy editors. The focused rescan also found the separate New Day dragon-point allocation `dk` GET path; it is documented as an unresolved core gate, not part of race selection PASS. Existing protected PvP entry/round/result boundaries are retained, while broader PvP remains blocked. Mail send/reply/systemmail trust, bank, administrator/content editors, remaining serialized schemas, expiration cleanup and account deletion semantics remain unresolved. `last_char_expire` still advances before cleanup completes. Unclosed core replay/rollback claims remain unproven.
+
+Serialized inventory unchanged: **87 sites / 42 files / 31 writers/checks / 55 ScalarState::read calls / one centralized unserialize**. No generic ScalarState weakening, new combat schema or cosmetic serialized-audit rewrite.
+
+Historical baseline unchanged: annotated tag `historical-source-1.1.2`, tag object `51cab4fbe58a234651a3177a56289b18bc152b4d`, source `bdc29df9bc344774b41e0ad7cae7f6ed2f7512e2`, tree `4013a0ccc5227e87cd7a22de00b7c322d7aa237c`, **417 files / 11 preservation commits**. Both historical repositories untouched by this execution.
+
+VPS untouched. No deployment, public runtime, release, version tag, ZIP/package, archive import, gameplay rebalance, UI/framework rewrite or Phase 4. Dangerous-feature disablement remains intact.
+
+**Phase 3: INCOMPLETE. Modern-core merge: NO. Public hosting: NO.** Exact next Phase 3 step: finish the shared specialty onboarding contract, then prove Dark Arts, Mystical Powers and Thieving Skills combat authority through actual HTTP (including Dark Arts companion behavior), the minimum required combat schema, and transaction/replay/failure persistence. Only after those three certifications close should general combat schema work continue in the requested order.

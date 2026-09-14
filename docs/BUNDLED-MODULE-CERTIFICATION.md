@@ -1,6 +1,6 @@
 # Bundled module certification
 
-**Final counts: 17 PASS, 0 PASS WITH DOCUMENTED LIMITATION, 7 BLOCKED. Lifecycle/metadata: 24 PASS. Modern-core merge: NOT READY. Public hosting: NO.**
+**Final counts: 21 PASS, 0 PASS WITH DOCUMENTED LIMITATION, 3 BLOCKED. Lifecycle/metadata: 24 PASS. Modern-core merge: NOT READY. Public hosting: NO.**
 
 This 2026-09-14 continuation updates the original all-BLOCKED checkpoint using new mutation evidence. The earlier Phase 3 history remains in [the original checkpoint](MODERN-CORE-CHECKPOINT-20260913-PHASE3.md). Only the 24 shipped entrypoints are in scope. No archive module was imported. No module is promoted merely because a route renders.
 
@@ -25,9 +25,9 @@ PASS covers the named module in supported bundled use, not arbitrary core/editor
 | `lovers` | 1.0 | PASS | PASS |
 | `outhouse` | 2.0 | PASS | PASS |
 | `racedwarf` | 1.1 | PASS | BLOCKED |
-| `raceelf` | 1.0 | PASS | BLOCKED |
-| `racehuman` | 1.0 | PASS | BLOCKED |
-| `racetroll` | 1.0 | PASS | BLOCKED |
+| `raceelf` | 1.0 | PASS | PASS |
+| `racehuman` | 1.0 | PASS | PASS |
+| `racetroll` | 1.0 | PASS | PASS |
 | `sethsong` | 1.1 | PASS | PASS |
 | `specialtydarkarts` | 1.1 | PASS | BLOCKED |
 | `specialtymysticpower` | 1.0 | PASS | BLOCKED |
@@ -160,26 +160,23 @@ Existing choice text, newday/stat and combined-hook behavior PASS. Actual HTTP o
 - Component route result: BLOCKED.
 - Exact metadata, descriptors, hooks, dependencies, database tables and prior lifecycle evidence remain in [the JSON record](BUNDLED-MODULE-CERTIFICATION.json).
 
-### raceelf (1.0): BLOCKED
+### raceelf (1.0): PASS
 
-Existing choice text, newday/stat and combined-hook behavior PASS. Actual HTTP onboarding choice/invalid choice/POST/CSRF/persistence/reselection matrix remains unimplemented; Cities excluded.
+PASS: test_race_onboarding_http_authority follows real rendered POST forms and independently proves active choice display, authenticated/CSRF authority, exact race/main-village persistence, forged race/module/filename/location/stat rejection, stale/inactive/anonymous denial, no selection GET, no automatic inactive fallback, duplicate/reselection/replay rejection, final-account rollback and fresh retry. Cities remains absent. Both supported targets pass at 77c58792f87afad71c0db5fc77042cd39ab418b8, Modern core 34842503298 and Baseline integrity 34842503326. Elf defense, PvP/adjuststats and New Day buff formulas remain unchanged.
 
-- Component route result: BLOCKED.
-- Exact metadata, descriptors, hooks, dependencies, database tables and prior lifecycle evidence remain in [the JSON record](BUNDLED-MODULE-CERTIFICATION.json).
+- Previous certification: BLOCKED. Existing runtime, lifecycle and combined-hook evidence retained.
 
-### racehuman (1.0): BLOCKED
+### racehuman (1.0): PASS
 
-Existing choice text, newday/stat and combined-hook behavior PASS. Actual HTTP onboarding choice/invalid choice/POST/CSRF/persistence/reselection matrix remains unimplemented; Cities excluded.
+PASS: test_race_onboarding_http_authority follows real rendered POST forms and independently proves active choice display, authenticated/CSRF authority, exact race/main-village persistence, forged race/module/filename/location/stat rejection, stale/inactive/anonymous denial, no selection GET, no automatic inactive fallback, duplicate/reselection/replay rejection, final-account rollback and fresh retry. Cities remains absent. Both supported targets pass at 77c58792f87afad71c0db5fc77042cd39ab418b8, Modern core 34842503298 and Baseline integrity 34842503326. Human daily Forest-fight bonus remains +2 at its historical default.
 
-- Component route result: BLOCKED.
-- Exact metadata, descriptors, hooks, dependencies, database tables and prior lifecycle evidence remain in [the JSON record](BUNDLED-MODULE-CERTIFICATION.json).
+- Previous certification: BLOCKED. Existing runtime, lifecycle and combined-hook evidence retained.
 
-### racetroll (1.0): BLOCKED
+### racetroll (1.0): PASS
 
-Existing choice text, newday/stat and combined-hook behavior PASS. Actual HTTP onboarding choice/invalid choice/POST/CSRF/persistence/reselection matrix remains unimplemented; Cities excluded.
+PASS: test_race_onboarding_http_authority follows real rendered POST forms and independently proves active choice display, authenticated/CSRF authority, exact race/main-village persistence, forged race/module/filename/location/stat rejection, stale/inactive/anonymous denial, no selection GET, no automatic inactive fallback, duplicate/reselection/replay rejection, final-account rollback and fresh retry. Cities remains absent. Both supported targets pass at 77c58792f87afad71c0db5fc77042cd39ab418b8, Modern core 34842503298 and Baseline integrity 34842503326. Troll attack, PvP/adjuststats and New Day buff formulas remain unchanged.
 
-- Component route result: BLOCKED.
-- Exact metadata, descriptors, hooks, dependencies, database tables and prior lifecycle evidence remain in [the JSON record](BUNDLED-MODULE-CERTIFICATION.json).
+- Previous certification: BLOCKED. Existing runtime, lifecycle and combined-hook evidence retained.
 
 ### sethsong (1.1): PASS
 
@@ -228,3 +225,5 @@ All eight previously certified modules remain PASS. Cedrik and Dark Horse are ad
 ## Remaining effects continuation (2026-09-14)
 
 Five modules promoted individually: Crazy Audrey, Fairy, Glowing Stream, Outhouse and Seth. Goldmine and Lovers remain BLOCKED; all four race and all three specialty onboarding/combat gates remain BLOCKED. The original ten certifications remain intact. Test-only random fixtures are installed solely in disposable test databases and removed afterwards; production random APIs, outcomes and probabilities are unchanged. Current implementation evidence is in the appended closure checkpoint.
+
+Latest supported implementation `77c58792f87afad71c0db5fc77042cd39ab418b8`: 74 PHPUnit tests / 2,231 assertions / 32 Python and HTTP tests / 309 PHP files linted; zero failures or skips on either supported target. Modern core 34842503298 and Baseline integrity 34842503326 SUCCESS. Three specialty certifications remain BLOCKED; this is not Phase 3 completion.
