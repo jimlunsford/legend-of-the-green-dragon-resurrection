@@ -26,8 +26,8 @@ final class SettingDescriptor
                 $descriptor['default'] ??= '';
             } elseif ($type === 'bool') {
                 $descriptor['default'] ??= '0';
-            } elseif ($type === 'int' || $type === 'range' || $type === 'floatrange') {
-                if ($type !== 'int') {
+            } elseif ($type === 'int' || $type === 'range' || $type === 'floatrange' || $type === 'amount' ) {
+                if ($type !== 'int' && $type !== 'amount') {
                     $descriptor['min'] = (float)($parts[2] ?? 0);
                     $descriptor['max'] = (float)($parts[3] ?? 0);
                 }
@@ -62,8 +62,10 @@ final class SettingDescriptor
         } elseif ($type === 'enum') {
             if (!array_key_exists($value, $descriptor['options'])) throw new \InvalidArgumentException('Invalid choice.');
         } else {
+            $number=$type==='amount' ? rtrim($value,'%') : $value;
+            if ($type==='amount' && !preg_match('/\A-?(?:0|[1-9][0-9]*)%?\z/',$value)) throw new \InvalidArgumentException('Invalid amount.');
             $pattern = $type === 'floatrange' ? '/\A-?(?:[0-9]+(?:\.[0-9]+)?|\.[0-9]+)\z/' : '/\A-?(?:0|[1-9][0-9]*)\z/';
-            if (!preg_match($pattern, $value) || !is_finite((float)$value) || (float)$value<$descriptor['min'] || (float)$value>$descriptor['max']) throw new \InvalidArgumentException('Invalid number.');
+            if (!preg_match($pattern, $number) || !is_finite((float)$number) || (float)$number<$descriptor['min'] || (float)$number>$descriptor['max']) throw new \InvalidArgumentException('Invalid number.');
         }
         return $value;
     }

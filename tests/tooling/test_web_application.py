@@ -215,6 +215,7 @@ function resurrectionhttpfixture_run() { echo 'fixture-executed'; exit; }
     def test_shared_typed_settings_http(self):
         player=self.query('SELECT acctid FROM accounts WHERE login=?',['WebPlayer'])[0]['acctid']
         original=self.query('SELECT superuser FROM accounts WHERE acctid=?',[player])[0]['superuser']
+        core_saved=self.query('SELECT value FROM settings WHERE setting=?',['autofightfull'])
         modules=['cedrikspotions','darkhorse']
         saved={m:self.query('SELECT setting,value FROM module_settings WHERE modulename=?',[m]) for m in modules}
         self.query('UPDATE modules SET active=1')
@@ -268,7 +269,12 @@ function resurrectionhttpfixture_run() { echo 'fixture-executed'; exit; }
             base='configuration.php'; save=base+'?op=save'
             _,body=request(base); self.assertEqual(400,request(save,{**self._security_fields(body,save),'autofightfull':'99'})[0])
             _,body=request(base); self.assertEqual(400,request(save,{**self._security_fields(body,save),'resurrection_install':'0'})[0])
+            _,body=request(base); form=dict(self._security_fields(body,save),autofightfull='1')
+            result=request(save,form); self.assertEqual(200,result[0],result[1][:1500]); self.assertEqual(409,request(save,form)[0])
+            self.assertEqual('1',self.query('SELECT value FROM settings WHERE setting=?',['autofightfull'])[0]['value'])
         finally:
+            self.query('DELETE FROM settings WHERE setting=?',['autofightfull'])
+            if core_saved: self.query('INSERT INTO settings(setting,value) VALUES (?,?)',['autofightfull',core_saved[0]['value']])
             for m,rows in saved.items():
                 self.query('DELETE FROM module_settings WHERE modulename=?',[m])
                 for row in rows: self.query('INSERT INTO module_settings(modulename,setting,value) VALUES (?,?,?)',[m,row['setting'],row['value']])
@@ -401,6 +407,7 @@ function resurrectionhttpfixture_run() { echo 'fixture-executed'; exit; }
             self.query('DELETE FROM module_settings WHERE modulename=?',['cedrikspotions'])
             for row in saved: self.query('INSERT INTO module_settings(modulename,setting,value) VALUES (?,?,?)',['cedrikspotions',row['setting'],row['value']])
             self.query('UPDATE modules SET active=0')
+
 
     def test_potions_dragon_reset_persistence_http(self):
         player=self.query('SELECT acctid FROM accounts WHERE login=?',['WebPlayer'])[0]['acctid']
@@ -570,8 +577,10 @@ function resurrectionhttpfixture_run() { echo 'fixture-executed'; exit; }
                 try:
                     status,body=call(entry); form=self._security_fields(body)
                     status,body=call(entry,form)
-                    # If the target surprises the attacker, settle on the next round.
-                    if status==200 and self.query('SELECT alive FROM accounts WHERE acctid=?',[target])[0]['alive']=='1':
+                    # Surprise and misses can leave combat nonterminal. Reach the real
+                    # settlement failure without weakening its rollback assertions.
+                    for _ in range(8):
+                        if status!=200 or self.query('SELECT alive FROM accounts WHERE acctid=?',[target])[0]['alive']=='0': break
                         before=snapshot(); fight='pvp.php?op=fight'; form=self._security_fields(body,fight)
                         status,body=call(fight,form)
                     self.assertEqual(500,status,body[:2000]); self.assertEqual(before,snapshot())
@@ -584,7 +593,7 @@ function resurrectionhttpfixture_run() { echo 'fixture-executed'; exit; }
             status,body=call(retry); form=self._security_fields(body)
             status,body=call(retry,{**form,'amount':'999999','target':'999999','winner':'999999'})
             self.assertEqual(200,status,body[:2000])
-            for _ in range(3):
+            for _ in range(8):
                 if self.query('SELECT alive FROM accounts WHERE acctid=?',[target])[0]['alive']=='0': break
                 fight='pvp.php?op=fight'; form=self._security_fields(body,fight)
                 status,body=call(fight,form); self.assertEqual(200,status,body[:2000])

@@ -40,7 +40,15 @@ function resurrection_editor_context(array $schema, array $values): string {
  * @param array<string,string> $values */
 function resurrection_settings_rules(string $namespace,array $schema,array $values): void {
     // Validate the resulting declared state, including unchanged fields and defaults.
-    foreach ($schema as $key=>$descriptor) \Resurrection\Http\SettingDescriptor::value($descriptor,$values[$key] ?? $descriptor['default']);
+    foreach ($schema as $key=>$descriptor) {
+        try {
+            $value=$values[$key] ?? $descriptor['default'];
+            // Historical core false defaults were stored as empty strings. POST remains strict 0/1.
+            if ($namespace==='core' && $descriptor['type']==='bool' && $value==='') $value='0';
+            \Resurrection\Http\SettingDescriptor::value($descriptor,$value);
+        }
+        catch (InvalidArgumentException $error) { throw new InvalidArgumentException('Invalid declared field: '.$key); }
+    }
     $pairs = match($namespace) {
         'cedrikspotions'=>[['minrand','maxrand']], 'findgold'=>[['mingold','maxgold']],
         'sethsong'=>[['mingold','maxgold'],['mingems','maxgems']], 'dag'=>[['bountymin','bountymax']],
@@ -48,6 +56,10 @@ function resurrection_settings_rules(string $namespace,array $schema,array $valu
     };
     foreach ($pairs as [$low,$high]) {
         if ((float)($values[$low] ?? $schema[$low]['default'])>(float)($values[$high] ?? $schema[$high]['default'])) throw new DomainException('Reversed range.');
+    }
+    if ($namespace==='core') {
+        $days=(int)($values['daysperday'] ?? $schema['daysperday']['default']);
+        if ((int)($values['gameoffsetseconds'] ?? $schema['gameoffsetseconds']['default'])>86400/$days) throw new DomainException('Invalid day offset.');
     }
     if ($namespace==='cedrikspotions') {
         foreach (['charmgain','vitalgain','tempgain'] as $key) if ((int)($values[$key] ?? $schema[$key]['default'])<0) throw new DomainException('Negative effect.');
@@ -127,6 +139,7 @@ function resurrection_object_editor_state(string $type,string $module,int $id,bo
     if ($type!=='mounts' || $id<1 || $id>2147483647) throw new DomainException('Unsupported object.');
     // Drinks object editing remains disabled until its separate caller matrix is closed.
     check_su_access(SU_EDIT_MOUNTS);
+    if ($lock && !db_query('SELECT modulename FROM '.db_prefix('modules').' WHERE modulename=? FOR UPDATE',true,[$module])) throw new DomainException('Module removed.');
     $info=resurrection_editor_module($module);
     $schema=\Resurrection\Http\SettingDescriptor::declare($info['prefs-'.$type] ?? []);
     if (!$schema) throw new DomainException('Undeclared object preferences.');

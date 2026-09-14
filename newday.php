@@ -145,6 +145,7 @@ if ($dp < $dkills) {
 	}
 
 	//clear all standard buffs
+    restore_buff_fields(); // Carry raw effects, not already-applied temporary stat flags.
 	$tempbuf = $session['bufflist']; // Already hydrated and business-validated in common.php.
     reset($tempbuf); // Buff calculation may have exhausted the hydrated array cursor.
 	$session['user']['bufflist']="";

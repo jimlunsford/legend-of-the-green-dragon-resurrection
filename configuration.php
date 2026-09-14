@@ -11,6 +11,7 @@ try {
     $schema = \Resurrection\Http\SettingDescriptor::declare($layout);
     $save = $op === 'save' || ($op === 'modulesettings' && isset($_GET['save']));
     if ($save) resurrection_settings_save($namespace, $schema);
+    if ($save && $namespace==='core') $schema=\Resurrection\Http\SettingDescriptor::declare(resurrection_core_layout());
     $values = resurrection_settings_values($namespace);
     page_header('Game Settings');
     require_once 'lib/superusernav.php';
@@ -23,4 +24,4 @@ try {
     page_footer();
 } catch (InvalidArgumentException|DomainException $error) {
     http_response_code(400); exit('Invalid or stale settings.');
-} catch (Throwable $error) { http_response_code(500); exit('Settings were not saved.'); } 
+} catch (Throwable $error) { http_response_code(500); exit('Settings were not saved.'); }

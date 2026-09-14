@@ -2,18 +2,9 @@
 /** Existing core declarations shared by rendering and mutation validation. */
 function resurrection_core_layout(): array {
  global $session;
-	$enum="enumpretrans";
-	require_once("lib/datetime.php");
-	$details = gametimedetails();
-	$offset = getsetting("gameoffsetseconds",0);
-	for ($i=0;$i<=86400 / getsetting("daysperday",4);$i+=300){
-		$off = ($details['realsecstotomorrow'] - ($offset - $i));
-		if ($off < 0) $off += 86400;
-		$x = strtotime("+".$off." secs");
-        $str = sprintf_translate("In %s at %s (+%s)",
-                reltime($x), date("h:i a", $x),date("H:i",$i));
-		$enum.=",$i,$str";
-	}
+    $days=filter_var(getsetting('daysperday',4),FILTER_VALIDATE_INT,['options'=>['min_range'=>1,'max_range'=>6]]);
+    if ($days===false) throw new DomainException('Invalid game-day configuration.');
+    $enum='range,0,'.(int)(86400/$days).',300';
 	$setup = array(
 		"Game Setup,title",
 		"loginbanner"=>"Login Banner (under login prompt: 255 chars)",
@@ -118,7 +109,7 @@ function resurrection_core_layout(): array {
 		"The directory is necessary! Do not forget to set the correct one in cron.php in your main game folder!!! ONLY experienced admins should use cron jobbing here,note",
 		"`bAlso make sure you setup a cronjob on your machine using confixx/plesk/cpanel or any other admin panel pointing to the cron.php file in your main folder`b,note",
 		"If you do not know what a Cronjob is... leave it turned off. If you want to know more... check out: <a href='http://wiki.dragonprime.net/index.php?title=Cronjob'>http://wiki.dragonprime.net/index.php?title=Cronjob</a>,note",
-		"resurrectionturns"=>"Modify (+ or -) the number of turns deducted after a resurrection as an absolute (number) or relative (number followed by %),text",
+		"resurrectionturns"=>"Modify (+ or -) the number of turns deducted after a resurrection as an absolute (number) or relative (number followed by %),amount",
 
 		"Forest,title",
 		"turns"=>"Forest Fights per day,range,5,30,1",
@@ -166,7 +157,7 @@ function resurrection_core_layout(): array {
 		"mintransferlev"=>"Min level a player (0 DK's) needs to transfer gold,range,1,5,1",
 		"transferreceive"=>"Total transfers a player can receive in one day,range,0,5,1",
 		"maxtransferout"=>"Amount player can transfer to others (val * level),range,5,100,5",
-		"innfee"=>"Fee for express inn payment (x or x%),int",
+		"innfee"=>"Fee for express inn payment (x or x%),amount",
 
 		"Mail Settings,title",
 		"mailsizelimit"=>"Message size limit per message,int",
@@ -223,7 +214,7 @@ function resurrection_core_layout(): array {
 		"permacollect"=>"Permanently collect untranslated texts (overrides the next settings!),bool",
 		"collecttexts"=>"Are we currently collecting untranslated texts?,viewonly",
 		"tl_maxallowed"=>"Collect untranslated texts if you have fewer player than this logged in. (0 never collects),int",
-		"charset"=>"Which charset should be used for htmlentities?",
+		"charset"=>"Which charset should be used for htmlentities?,enum,UTF-8,UTF-8",
 
 		"Error Notification,title",
 		"Note: you MUST have data caching turned on if you want to use this feature.  Also the first error within any 24 hour period will not generate a notice; I'm sorry: that's really just how it is for technical reasons.,note",
@@ -237,6 +228,7 @@ function resurrection_core_layout(): array {
 		"allowspecialswitch"=>"The Barkeeper may help you to switch your specialty?,bool",
 		"maxlistsize"=>"Maximum number of items to be shown in the warrior list,int",
 	);
- unset($setup["defaultsuperuser"]);
+ // Disabled source/payment/LoGDnet features do not gain writable configuration.
+ unset($setup['defaultsuperuser'],$setup['paypalemail'],$setup['paypalcurrency'],$setup['paypalcountry-code'],$setup['paypaltext'],$setup['logdnet'],$setup['logdnetserver']);
  return $setup;
 }
