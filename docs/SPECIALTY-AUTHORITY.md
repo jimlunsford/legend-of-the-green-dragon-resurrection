@@ -64,3 +64,16 @@ The Forest validator deliberately requires diddamage because terminal Forest rew
 
 
 Accepted Forest component at 353ba60ee0fad71fdc46669009c8a349dc4f0ecc: both supported targets, 80 PHPUnit tests / 2,350 assertions / 35 Python-HTTP tests / 315 lint files, zero failures/skips. Modern core 34892412719 and Baseline integrity 34892412674 SUCCESS. The detailed appended Phase 3 checkpoint separates verified Forest authority/cost/effect-parameter/replay/rollback/New Day evidence from remaining module and general-core gates. Final additional tests cover direct battle include rejection, seeded companion death/removal and actual Dragon win/reset clearing; exact-head acceptance is recorded in PR #1. Module counts remain 21/0/3, with 24 lifecycle PASS; Phase 3 incomplete, merge NO, hosting NO.
+
+
+## 2026-09-14: consumed effects and independent authority continuation
+
+Implementation `426a36deaaebfb6c4f1c8a59f02ae4d92ac7202d` adds six actual HTTP tests and retains onboarding, twelve Forest actions, rollback/New Day, direct battle entry and companion lifecycle regression. [Specialty combat accounting](SPECIALTY-COMBAT-ACCOUNTING.md) records exact gameplay results, authority matrices, active callers and limits.
+
+All twelve paths independently reject wrong/no/inactive specialty, skill/use failures, malformed/stale/terminal combat and invalid CSRF/levels. All twelve reject uninstalled/inactive modules, missing files and invalid/missing/conditional handlers, including forms issued before availability changed. The dispatcher requires and locks the exact unconditional selected handler. Training and graveyard never expose specialties and now reject forged GET/POST skill/l before bootstrap.
+
+New evidence includes actual modifiers, Lifetap hit/riposte healing, shield reflection, Voodoo zero/below-zero victory, skeleton contribution/death, fallback minions, regeneration/aura/caps/expiration, two-live-target Earth Fist, stale target selection and exact terminal rewards/replay. Remaining adverse-effect/lifetime combinations, Dragon authority, dead-target progression, defeat and specialty buff schemas remain open.
+
+**21 PASS / 0 PASS WITH DOCUMENTED LIMITATION / 3 BLOCKED; 24 lifecycle PASS.** No promotion. General combat BLOCKED; Phase 3 incomplete; merge NO; hosting NO.
+
+Implementation CI: Modern core 34898989358 hit the 15-minute job deadline on both targets (cancelled, no assertion failure in completed tests); full HTTP acceptance was not reached. Both passed 80 PHPUnit tests / 2,350 assertions / 315 lint files, Composer and both PHPStan gates. Baseline integrity 34898989352 SUCCESS. Final publication raises the job limit to 25 minutes without dropping checks; new exact-head acceptance is required. Final publication acceptance uses new exact-head runs recorded in PR #1.

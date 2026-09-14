@@ -170,3 +170,10 @@ Inventory delta for this Forest implementation: one new ScalarState read in Spec
 
 
 Accepted Forest component at 353ba60ee0fad71fdc46669009c8a349dc4f0ecc: both supported targets, 80 PHPUnit tests / 2,350 assertions / 35 Python-HTTP tests / 315 lint files, zero failures/skips. Modern core 34892412719 and Baseline integrity 34892412674 SUCCESS. The detailed appended Phase 3 checkpoint separates verified Forest authority/cost/effect-parameter/replay/rollback/New Day evidence from remaining module and general-core gates. Final additional tests cover direct battle include rejection, seeded companion death/removal and actual Dragon win/reset clearing; exact-head acceptance is recorded in PR #1. Module counts remain 21/0/3, with 24 lifecycle PASS; Phase 3 incomplete, merge NO, hosting NO.
+
+
+## 2026-09-14: consumed-effect evidence, schema boundaries unchanged
+
+No serialization writer, reader or validator changed. Inventory remains **89 sites / 44 files / 32 writers-checks / 56 ScalarState::read calls / one centralized unserialize**. ScalarState, SkeletonCompanionState and SpecialtyCombatState are unchanged.
+
+Actual HTTP consumption covers specialty gameplay, regeneration/aura expiration, two-live-target Earth Fist and stale selected-target rejection. This is not a buff business schema. Malformed specialty modifier structures, broader combat families, dead-target progression and general recovery remain BLOCKED. The narrow validator still rejects dead enemies anywhere in the envelope and preserves malformed state for explicit repair. [Evidence and limits](SPECIALTY-COMBAT-ACCOUNTING.md).

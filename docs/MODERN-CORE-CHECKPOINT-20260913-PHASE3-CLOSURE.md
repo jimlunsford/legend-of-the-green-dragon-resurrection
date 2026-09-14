@@ -932,3 +932,44 @@ Serialization inventory: **89 sites / 44 files / 32 writers-checks / 56 ScalarSt
 Historical tag `historical-source-1.1.2`: object `51cab4fbe58a234651a3177a56289b18bc152b4d`, source `bdc29df9bc344774b41e0ad7cae7f6ed2f7512e2`, tree `4013a0ccc5227e87cd7a22de00b7c322d7aa237c`, 417 files / 11 preservation commits. Historical repositories untouched; no moved tag. VPS untouched. No public runtime, deployment, release/version tag/package, archive import, framework rewrite, gameplay rebalance, new modernization branch, PR #2, merge or Phase 4.
 
 Exact next Phase 3 step: finish the complete specialty effect/invalid-authority matrices, then close Dragon and remaining battle-caller specialty/terminal authority and multi-target state before promoting any specialty. Only after all three qualify, record 24/24 and continue general combat schema closure. **Phase 3 INCOMPLETE / modern-core merge NO / public hosting NO.**
+
+
+## 2026-09-14: specialty accounting and independent authority publication
+
+Actual starting SHA: `a89b25753671cb9c070a99d83f6deefccddcbab0`, verified live before edits. Main remains `999cec6f9c655a840320d982d673bb863c68c2b2`. PR #1 remains OPEN, DRAFT, NOT READY, NOT MERGED; merge SHA not applicable. Branch remains `modernization/core-modernization`.
+
+Implementation commit: `426a36deaaebfb6c4f1c8a59f02ae4d92ac7202d`, tree `4a99b1351b5fe73b67aed0a659fe750569d76019`. The connected GitHub app published the exact locally tested tree with the prior branch SHA as parent and a non-forced fast-forward. Ordinary Git HTTPS lacked push credentials. Local unpublished commit `cab8181eb848b614635e3ec2c6d29d6aa848a80f` has the identical tree and was preserved locally; it is not a published branch commit.
+
+This checkpoint consists of two coherent published commits: implementation and this evidence/fixture-isolation update. The ending publication SHA is the commit containing this appended section, fully identified with its exact-head CI in PR #1. A file cannot contain its own final Git commit SHA without changing that SHA. Implementation acceptance below is distinguished from final publication acceptance.
+
+### Decisions and proof
+
+Dark Arts BLOCKED; Mystical Powers BLOCKED; Thieving Skills BLOCKED. Totals stay **21 PASS / 0 PASS WITH DOCUMENTED LIMITATION / 3 BLOCKED**, with all 24 lifecycle PASS. The 24/24 milestone is not reached. No independently complete specialty exists to promote.
+
+[Specialty combat accounting](SPECIALTY-COMBAT-ACCOUNTING.md) records exact consumed results: skeleton hit/riposte and death, Voodoo 263 damage, Curse rounding 177 to 89, zero enemy attack/defense, regeneration/aura/caps/expiration, Earth Fist single/area damage, Lifetap +40/+5, shield 177-to-354 reflection, Thieving multipliers and base-stat preservation. All twelve paths have independent invalid-authority and module/file/handler availability matrices. Prior twelve-action persistence/cost/replay/rollback/fresh-retry/New Day and full companion lifecycle remain mandatory regressions.
+
+Voodoo against HP 263 and 262 reaches zero/below zero, grants server-derived +14 experience/+44 gold/+1 flawless turn/no gem in the seeded fixture, clears combat, and rejects old victory/pre-victory skeleton forms. Two-live-target Earth Fist applies historical area damage, charges once, decrements once and preserves target. A form made before a server-side target switch rejects unchanged. Dead-target progression/final multi-target rewards, remaining adverse-effect/lifetime scenarios and defeat remain unclosed.
+
+Active callers: Forest, Dragon, training, PvP and graveyard invoke battle. No other bundled module directly invokes battle/apply-specialties. New Day/news include helpers only. Training/graveyard disable specialty navigation and now reject forged GET/POST skill/l before bootstrap; authenticated/anonymous scalar/array matrices prove the narrow boundary. PvP specialty rejection is unchanged. Dragon still offers specialty GET, and prologue1 still resets via GET. Companion Dragon cleanup remains lifecycle proof only, not mutation authorization.
+
+### Validation and publication
+
+Local PHP 8.4.25 + disposable MariaDB 10.11.18: retained PHPUnit floor 80 tests / 2,350 assertions; six new focused HTTP tests PASS (181.966 seconds); 315 lint files PASS. Infrastructure PHPStan level 6: no errors/no baseline. Legacy PHPStan: no new errors against the retained seven-finding baseline. Local tests never used the VPS.
+
+Implementation CI: Modern core 34898989358 hit the 15-minute job deadline on both targets (cancelled, no assertion failure in completed tests); full HTTP acceptance was not reached. Both passed 80 PHPUnit tests / 2,350 assertions / 315 lint files, Composer and both PHPStan gates. Baseline integrity 34898989352 SUCCESS. Final publication raises the job limit to 25 minutes without dropping checks; new exact-head acceptance is required. Modern core **34898989358** and Baseline integrity **34898989352** belong to implementation SHA `426a36deaaebfb6c4f1c8a59f02ae4d92ac7202d`. Final publication must use new successful runs against its exact SHA; final IDs/SHA are recorded in PR #1 and the execution report. These implementation IDs are not substituted for final exact-head acceptance.
+
+### Remaining gates and preservation
+
+General combat schema remains BLOCKED. Ordinary entry/rounds/rewards/defeat/recovery were not certified; normal GET rounds in accounting fixtures are effect consumers only. Specialty buff business validation and remaining adverse-effect/lifetime interactions remain open. Dragon-point dk/pdk authority was not reached.
+
+Meaningful GET/replay risks remain ordinary Forest, Dragon specialty/prologue, New Day dk/pdk, petitions, clans, equipment, stables, training and legacy editors. Mail send/reply/systemmail, petition administration, clans, bank, weapons/armor, mounts/stables, training/masters, broader PvP, administrator/content editors, remaining serialized schemas, expiration cleanup and account-deletion failure semantics remain BLOCKED. `lib/expire_chars.php` still advances `last_char_expire` before cleanup completes.
+
+Inventory unchanged: 89 sites / 44 files / 32 writers-checks / 56 ScalarState reads / one centralized unserialize. No new validator. SkeletonCompanionState, narrow SpecialtyCombatState and ScalarState remain unchanged.
+
+Historical tag `historical-source-1.1.2`: annotated object `51cab4fbe58a234651a3177a56289b18bc152b4d`, source `bdc29df9bc344774b41e0ad7cae7f6ed2f7512e2`, tree `4013a0ccc5227e87cd7a22de00b7c322d7aa237c`, 417 files, 11 preservation commits. Historical repositories unchanged. VPS untouched; no deployment/public runtime/release/tag/package, archive import, new branch/PR #2, merge or Phase 4.
+
+Exact next Phase 3 step: finish adverse riposte/defeat effect accounting and remaining effect-duration cases, then close Dragon specialty/prologue/outcome authority with caller-owned POST/CSRF/one-use transactions, dead-target progression and specialty buff schemas before reassessing each specialty independently. Only after all qualify may 24/24 and broader general combat closure be claimed. **Phase 3 INCOMPLETE; modern-core merge NO; public hosting NO.**
+
+Final diff review corrected an over-broad cleanup substitution in the older skeleton HTTP fixture: it again deletes/restores only its own enablecompanions setting. The four-setting cleanup remains confined to the new accounting fixture. Final exact-head validation includes this test-isolation correction.
+
+The initial Modern core run was retained as an infrastructure deadline failure: both jobs were cancelled after 15 minutes. PHP 8.4 reached and passed the non-exposing caller matrix; PHP 8.5 passed gameplay, aura and the independent level matrix before cancellation. No completed test reported an assertion failure. The final commit raises only timeout-minutes to 25, preserves every test and supported target, and includes the fixture-isolation correction and evidence. Full final acceptance is required separately.

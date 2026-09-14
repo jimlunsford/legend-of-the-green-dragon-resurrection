@@ -1497,7 +1497,7 @@ function resurrectionrandomfixture_dohook($hook,$args) { mt_srand((int)getsettin
             self.query('UPDATE accounts SET '+','.join(k+'=?' for k in original)+' WHERE acctid=?',[*original.values(),player])
             self.query('DELETE FROM module_userprefs WHERE userid=?',[player])
             for row in prefs: self.query('INSERT INTO module_userprefs(modulename,setting,userid,value) VALUES (?,?,?,?)',[row['modulename'],row['setting'],player,row['value']])
-            self.query("DELETE FROM settings WHERE setting IN ('enablecompanions','dropmingold','forestgemchance','instantexp')")
+            self.query("DELETE FROM settings WHERE setting='enablecompanions'")
             for row in settings: self.query('INSERT INTO settings(setting,value) VALUES (?,?)',[row['setting'],row['value']])
             for row in registry: self.query('UPDATE modules SET active=? WHERE modulename=?',[row['active'],row['modulename']])
 

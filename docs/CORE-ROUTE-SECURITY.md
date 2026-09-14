@@ -228,3 +228,12 @@ Re-read active shipped code after the Forest change. Forest specialty URL GET is
 New Day still reads `dk` at line 42 and `pdk` at line 82. viewpetition still has GET-driven delete-old and status update paths. Clan operations delegated from clan.php, equipment buy routes in weapons.php/armor.php, stables actions, train.php victory/master paths, and legacy content editors retain unclosed mutation/replay authority. Bank still uses absolute-value coercion for submitted amounts; mail send/reply/systemmail and petition/clan/account-deletion semantics remain unclosed. Expiration still saves last_char_expire at line 11 of lib/expire_chars.php before cleanup. None is certified by the Forest specialty change.
 
 Direct battle.php HTTP requests are rejected with 404 before bootstrap, preference writes or battle execution. It is a caller-owned include and no shipped navigation points to it. Added authenticated/anonymous GET/POST tests check unchanged player/specialty/combat state. Forest/Dragon/PvP include behavior is retained. This blocks the direct include bypass; it does not certify the remaining caller routes.
+
+
+## 2026-09-14: specialty availability and non-exposing callers
+
+`lib/specialty_combat.php` requires exactly one unconditional callable selected apply-specialties hook, with its row locked in the mutation transaction. Missing/conditional hooks cannot silently advance a specialty round. All twelve levels have missing-module/file/inactive/invalid-handler/missing-hook/conditional-hook and stale-availability HTTP evidence.
+
+`train.php` and `graveyard.php` reject GET or POST skill/l presence, including arrays, before bootstrap. Both disable specialty navigation. Authenticated/anonymous HTTP matrices cover all three identities and levels 1/2/3/5, including independently supplied skill or level. This closes specialty injection only; general training/graveyard combat remains uncertified. Existing PvP specialty rejection is unchanged.
+
+Dragon still exposes legacy specialty links and prologue1 resets via GET. Ordinary Forest fight/run/target, New Day dk/pdk, petitions, clans, equipment, stables, training and legacy editors remain meaningful GET/replay risks. [Accounting and complete caller inventory](SPECIALTY-COMBAT-ACCOUNTING.md).
