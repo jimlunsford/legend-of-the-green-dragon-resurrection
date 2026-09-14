@@ -41,6 +41,48 @@ final class ModuleCertificationTest extends TestCase
         translator_setup();
     }
 
+    public function testCedrikVitalityCarryAndMalformedPreference(): void
+    {
+        self::assertTrue(activate_module('cedrikspotions'));
+        $old=get_module_setting('carrydk','cedrikspotions');
+        $pref=get_module_pref('extrahps','cedrikspotions');
+        try {
+            foreach ([1,0] as $carry) {
+                set_module_setting('carrydk',$carry,'cedrikspotions');
+                set_module_pref('extrahps',15,'cedrikspotions');
+                $result=modulehook('hprecalc',['total'=>165,'extra'=>15],false,'cedrikspotions');
+                self::assertSame(150,$result['total']); self::assertSame($carry?15:0,$result['extra']);
+                self::assertSame($carry?15:0,cedrikspotions_extra_hp());
+            }
+            foreach (['-1','1e2','4294967296','garbage'] as $invalid) {
+                set_module_pref('extrahps',$invalid,'cedrikspotions');
+                try { cedrikspotions_extra_hp(); self::fail('Accepted invalid vitality state.'); }
+                catch (\DomainException $error) { self::assertSame('Invalid vitality state.',$error->getMessage()); }
+            }
+        } finally { set_module_setting('carrydk',$old,'cedrikspotions'); set_module_pref('extrahps',$pref,'cedrikspotions'); deactivate_module('cedrikspotions'); }
+    }
+
+    public function testTransmutationActualCombatRoundsAndExpiration(): void
+    {
+        require_once 'lib/battle-buffs.php';
+        $GLOBALS['badguy']=['istarget'=>true,'dead'=>false,'creaturename'=>'Fixture','creatureweapon'=>'Padded stick'];
+        $GLOBALS['count']=0;
+        $buff=\Resurrection\Game\TransmutationState::create(2,.5,.75,1);
+        apply_buff('transmute',$buff);
+        for ($round=2;$round>0;$round--) {
+            self::assertSame(.5,activate_buffs('offense')['atkmod']);
+            self::assertSame(.75,activate_buffs('defense')['defmod']);
+            // Calculating both sides of one combat round consumes just one round.
+            expire_buffs();
+            if ($round>1) {
+                self::assertSame(1,$GLOBALS['session']['bufflist']['transmute']['rounds']);
+                $GLOBALS['session']['bufflist']['transmute']=\Resurrection\Game\TransmutationState::read($GLOBALS['session']['bufflist']['transmute']);
+            } else self::assertArrayNotHasKey('transmute',$GLOBALS['session']['bufflist']);
+        }
+        self::assertSame(1,activate_buffs('offense')['atkmod']);
+        self::assertSame(1,activate_buffs('defense')['defmod']);
+    }
+
     public function testGoldmineDeathWithoutMountHasDefinedOutcome(): void
     {
         self::assertTrue(activate_module('racehuman'));

@@ -257,6 +257,12 @@ if (isset($session['user']['bufflist']))
 else
 	$session['bufflist'] = array();
 if (!is_array($session['bufflist'])) $session['bufflist']=array();
+if (array_key_exists('transmute',$session['bufflist'])) {
+    require_once 'src/Game/TransmutationState.php';
+    try { $session['bufflist']['transmute']=\Resurrection\Game\TransmutationState::read($session['bufflist']['transmute']); }
+    catch (DomainException $error) { http_response_code(400); exit('Invalid stored potion state.'); }
+}
+
 $session['user']['lastip']=$REMOTE_ADDR;
 if (strlen(is_string($_COOKIE['lgi'] ?? null) ? $_COOKIE['lgi'] : '')<32){
 	if (strlen($session['user']['uniqueid'])<32){

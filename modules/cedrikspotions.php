@@ -83,9 +83,9 @@ function cedrikspotions_dohook($hookname,$args){
 		}
 		break;
 	case "hprecalc":
-		$args['total'] -= get_module_pref("extrahps");
+		$args['total'] -= cedrikspotions_extra_hp();
 		if (!get_module_setting("carrydk")) {
-			$args['extra'] -= get_module_pref("extrahps");
+			$args['extra'] -= cedrikspotions_extra_hp();
 			set_module_pref("extrahps", 0);
 		}
 	}
@@ -256,6 +256,18 @@ function cedrikspotions_run(){
             try {
                 resurrection_player_mutation(function () use ($gemcount,$cost,$wish,$barkeep) {
                     global $session;
+                    require_once 'lib/typed_editor.php';
+                    $schema=\Resurrection\Http\SettingDescriptor::declare(cedrikspotions_getmoduleinfo()['settings']);
+                    $configured=resurrection_settings_values('cedrikspotions',true);
+                    $effectKeys=[1=>['charmgain'],2=>['vitalgain','carrydk'],3=>['tempgain'],4=>[],5=>['transmuteturns','atkmod','defmod','survive']];
+                    foreach ($effectKeys[$wish] as $key) {
+                        $value=\Resurrection\Http\SettingDescriptor::value($schema[$key],$configured[$key] ?? $schema[$key]['default']);
+                        if (in_array($key,['charmgain','vitalgain','tempgain'],true) && (int)$value<0) throw new DomainException('Negative potion effect.');
+                    }
+                    $GLOBALS['module_settings']['cedrikspotions']=$configured;
+                    $available=[1=>'ischarm',2=>'ismax',3=>'istemp',4=>'isforget',5=>'istrans'];
+                    if ((string)get_module_setting($available[$wish],'cedrikspotions')!=='1') throw new DomainException('Potion unavailable.');
+                    $cost=cedrikspotions_price((int)$wish);
 			if ($gemcount>$session['user']['gems']){
 				output("%s`0 stares at you blankly.",$barkeep);
 				output("\"`%You don't have that many gems, `bgo get some more gems!`b`0\" he says.");
@@ -306,7 +318,7 @@ function cedrikspotions_run(){
 									"hitpoint" : "hitpoints"));
 						$potiontype = "vitality";
 						set_module_pref("extrahps",
-								get_module_pref("extrahps") +
+								cedrikspotions_extra_hp() +
 								($strength * get_module_setting("vitalgain")));
 						break;
 					case 3:
@@ -337,22 +349,16 @@ function cedrikspotions_run(){
 						output("`^(Your race has been reset and you will be able to chose a new one tomorrow.)");
 						strip_buff('racialbenefit');
 						$potiontype = "transmutation";
-						if (isset($session['bufflist']['transmute'])) {
-							$session['bufflist']['transmute']['rounds'] += get_module_setting("transmuteturns");
-						} else {
-							apply_buff('transmute',
-								array("name"=>"`6Transmutation Sickness",
-									"rounds"=>get_module_setting("transmuteturns"),
-									"wearoff"=>"You stop puking your guts up.  Literally.",
-									"atkmod"=>get_module_setting("atkmod"),
-									"defmod"=>get_module_setting("defmod"),
-									"roundmsg"=>"Bits of skin and bone reshape themselves like wax.",
-									"survivenewday"=>get_module_setting("survive"),
-									"newdaymessage"=>"`6Due to the effects of the Transmutation Potion, you still feel `2ill`6.",
-									"schema"=>"module-cedrikspotions"
-								)
-							);
-						}
+                        require_once 'src/Game/TransmutationState.php';
+                        $rounds=(int)get_module_setting('transmuteturns');
+                        if (isset($session['bufflist']['transmute'])) {
+                            $buff=\Resurrection\Game\TransmutationState::read($session['bufflist']['transmute']);
+                            $buff['rounds'] += $rounds;
+                            $buff=\Resurrection\Game\TransmutationState::read($buff);
+                        } else {
+                            $buff=\Resurrection\Game\TransmutationState::create($rounds,(float)get_module_setting('atkmod'),(float)get_module_setting('defmod'),(int)get_module_setting('survive'));
+                        }
+                        apply_buff('transmute',$buff);
 						break;
 					}
 					debuglog("used $gemcount gems on $potiontype potions");
@@ -366,13 +372,24 @@ function cedrikspotions_run(){
                     if ($session['user']['charm']<0 || $session['user']['charm']>4294967295) throw new DomainException('Charm exceeds bounds.');
                     if (isset($session['bufflist']['transmute']['rounds']) && $session['bufflist']['transmute']['rounds']>2147483647) throw new DomainException('Potion duration exceeds bounds.');
                 });
-            } catch (DomainException $error) { http_response_code(400); exit('Potion purchase rejected.'); }
+            } catch (DomainException|InvalidArgumentException $error) { http_response_code(400); exit('Potion purchase rejected.'); }
+            catch (Throwable $error) { http_response_code(500); exit('Potion purchase was not completed.'); }
 		}
 		addnav("I?Return to the Inn","inn.php");
 		villagenav();
 	}
 	rawoutput("</span>");
 	page_footer();
+}
+
+/** Persisted vitality bookkeeping is a bounded count, never an arbitrary scalar. */
+function cedrikspotions_extra_hp(): int {
+    $raw=get_module_pref('extrahps','cedrikspotions');
+    if ($raw===null || $raw==='') return 0;
+    if (!is_int($raw) && !is_string($raw)) throw new DomainException('Invalid vitality state.');
+    $value=filter_var($raw,FILTER_VALIDATE_INT,['options'=>['min_range'=>0,'max_range'=>4294967295]]);
+    if ($value===false) throw new DomainException('Invalid vitality state.');
+    return $value;
 }
 
 /** Exact configured vocabulary; quantity still means gems offered, as historically. */

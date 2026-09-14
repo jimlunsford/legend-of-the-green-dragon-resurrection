@@ -389,12 +389,12 @@ if ($op != "newtarget") {
 							if (!isset($badguy['creatureexp'])) $badguy['creatureexp'] = 0;
 							$session['user']['experience'] += round($badguy['creatureexp']/count($newenemies));
 							output("`#You receive `^%s`# experience!`n`0",round($badguy['creatureexp']/count($newenemies)));
-							$options['experience'][$index] = $badguy['creatureexp'];
+							$options['experience'][$index] = $badguy['creatureexp'] ?? 0;
 							$options['experiencegained'][$index] = round($badguy['creatureexp']/count($newenemies));
 							$badguy['expgained']=true;
 						}
 					} else {
-						$options['experience'][$index] = $badguy['creatureexp'];
+						$options['experience'][$index] = $badguy['creatureexp'] ?? 0;
 					}
 				}else{
 					$alive++;

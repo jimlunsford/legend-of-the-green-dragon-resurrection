@@ -145,7 +145,8 @@ if ($dp < $dkills) {
 	}
 
 	//clear all standard buffs
-	$tempbuf = \Resurrection\Security\ScalarState::read($session['user']['bufflist']);
+	$tempbuf = $session['bufflist']; // Already hydrated and business-validated in common.php.
+    reset($tempbuf); // Buff calculation may have exhausted the hydrated array cursor.
 	$session['user']['bufflist']="";
 	strip_all_buffs();
 	tlschema("buffs");

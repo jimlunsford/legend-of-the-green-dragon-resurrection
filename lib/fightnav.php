@@ -6,7 +6,7 @@ function fightnav($allowspecial=true, $allowflee=true,$script=false){
 	global $PHP_SELF,$session,$newenemies,$companions;
 	tlschema("fightnav");
 	if ($script===false){
-		$script = substr($PHP_SELF,strrpos($PHP_SELF,"/")+1)."?";
+		$script = basename($_SERVER['SCRIPT_NAME'] ?? 'forest.php')."?";
 	}else{
 		if (!strpos($script,"?")) {
 			$script.="?";

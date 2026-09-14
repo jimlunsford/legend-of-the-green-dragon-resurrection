@@ -328,6 +328,119 @@ function resurrectionhttpfixture_run() { echo 'fixture-executed'; exit; }
                 self.query('DELETE FROM module_objprefs WHERE objtype=? AND objid=?',['mounts',ident]); self.query('DELETE FROM mounts WHERE mountid=?',[ident])
             self.query('UPDATE accounts SET superuser=? WHERE acctid=?',[original,player]); self.query('UPDATE modules SET active=0')
 
+    def test_transmutation_persistence_and_failure_http(self):
+        player=self.query('SELECT acctid FROM accounts WHERE login=?',['WebPlayer'])[0]['acctid']
+        columns='gems,race,specialty,bufflist,maxhitpoints,hitpoints,attack,defense,turns,specialinc,badguy,dragonkills,dragonpoints,age,superuser'
+        original=self.query(f'SELECT {columns} FROM accounts WHERE acctid=?',[player])[0]
+        saved=self.query('SELECT setting,value FROM module_settings WHERE modulename=?',['cedrikspotions'])
+        self.query('UPDATE modules SET active=1'); call=self._security_client()
+        base='runmodule.php?module=cedrikspotions&op=gems'
+        def request(url,form=None): self._security_allow(player,url); return call(url,form)
+        def setting(key,value): self.query('INSERT INTO module_settings(modulename,setting,value) VALUES (?,?,?) ON DUPLICATE KEY UPDATE value=VALUES(value)',['cedrikspotions',key,str(value)])
+        def buffs():
+            value=self.query('SELECT bufflist FROM accounts WHERE acctid=?',[player])[0]['bufflist']
+            code="require 'vendor/autoload.php'; echo json_encode(\\Resurrection\\Security\\ScalarState::read(stream_get_contents(STDIN)),JSON_THROW_ON_ERROR);"
+            result=subprocess.run([shutil.which('php'),'-r',code],input=value,text=True,capture_output=True,cwd=ROOT,check=True)
+            return json.loads(result.stdout)
+        def stored(value):
+            code='echo serialize(json_decode(stream_get_contents(STDIN),true,512,JSON_THROW_ON_ERROR));'
+            data=subprocess.run([shutil.which('php'),'-r',code],input=json.dumps(value),text=True,capture_output=True,cwd=ROOT,check=True).stdout
+            self.query('UPDATE accounts SET bufflist=? WHERE acctid=?',[data,player])
+        def buy():
+            status,body=request(base); self.assertEqual(200,status,body[:1500])
+            url=html.unescape(re.search(r'<form action=[\'"]([^\'"]+)',body).group(1))
+            form=dict(self._security_fields(body),wish='5',gemcount='10',rounds='999',atkmod='999',race='Elf')
+            return url,form,request(url,form)
+        try:
+            for key,value in {'random':0,'transcost':2,'transmuteturns':2,'atkmod':'.5','defmod':'.75','survive':1}.items(): setting(key,value)
+            self.query("UPDATE accounts SET gems=100,race='Human',specialty='DA',bufflist='a:0:{}',dragonkills=0,dragonpoints='a:0:{}',specialinc='' WHERE acctid=?",[player])
+            url,form,result=buy(); self.assertEqual(200,result[0],result[1][:1500])
+            self.assertEqual('98',self.query('SELECT gems FROM accounts WHERE acctid=?',[player])[0]['gems'])
+            first=buffs()['transmute']; self.assertEqual(2,first['rounds']); self.assertEqual(.5,first['atkmod']); self.assertEqual(.75,first['defmod']); self.assertEqual(1,first['survivenewday'])
+            self.assertEqual('Horrible Gelatinous Blob',self.query('SELECT race FROM accounts WHERE acctid=?',[player])[0]['race'])
+            self.assertNotIn('racialbenefit',buffs()); self.assertEqual(409,request(url,form)[0]); self.assertEqual(first,buffs()['transmute'])
+            # A fresh login hydrates the committed buff; navigation does not spend rounds.
+            call=self._security_client(); self.assertEqual(200,request(base)[0]); self.assertEqual(first['rounds'],buffs()['transmute']['rounds'])
+            # Repeated legitimate purchase adds duration, retaining the original effect/carry snapshot.
+            setting('atkmod','2'); setting('survive',0)
+            self.assertEqual(200,buy()[2][0]); self.assertEqual(4,buffs()['transmute']['rounds']); self.assertEqual(.5,buffs()['transmute']['atkmod']); self.assertEqual(1,buffs()['transmute']['survivenewday'])
+            # Exercise the shipped race-selection and actual New Day route. This is persistence
+            # evidence only, not certification of onboarding authority or New Day replay.
+            self.assertEqual(200,request('newday.php?setrace=Human')[0])
+            self.assertEqual(200,request('newday.php?continue=1')[0]); self.assertEqual(4,buffs()['transmute']['rounds'])
+            self.assertEqual(200,request('newday.php?continue=1')[0]); self.assertEqual(4,buffs()['transmute']['rounds'])
+            # Failure on final account write must undo the preceding real potion debug log.
+            before=self.query('SELECT gems,race,bufflist FROM accounts WHERE acctid=?',[player])
+            logs=self.query('SELECT count(*) AS n FROM debuglog WHERE actor=?',[player])
+            balance=int(before[0]['gems'])-2
+            self.query(f"ALTER TABLE accounts ADD CONSTRAINT fixture_transmute CHECK (login <> 'WebPlayer' OR gems <> {balance})")
+            try:
+                url,form,result=buy(); self.assertEqual(500,result[0]); self.assertEqual(before,self.query('SELECT gems,race,bufflist FROM accounts WHERE acctid=?',[player])); self.assertEqual(logs,self.query('SELECT count(*) AS n FROM debuglog WHERE actor=?',[player])); self.assertEqual(409,request(url,form)[0])
+            finally: self.query('ALTER TABLE accounts DROP CONSTRAINT fixture_transmute')
+            self.assertEqual(200,buy()[2][0]); self.assertEqual(6,buffs()['transmute']['rounds'])
+            # Actual Forest HTTP combat persists one spent sickness round per fight request.
+            enemy=self.query('SELECT * FROM creatures ORDER BY creatureid LIMIT 1')[0]
+            enemy.update(creaturehealth=1000000,creatureattack=1,creaturedefense=1,creaturelevel=1,playerstarthp=10000,diddamage=0)
+            combat={'enemies':[enemy],'options':{'type':'forest'}}
+            encoded=subprocess.run([shutil.which('php'),'-r','echo serialize(json_decode(stream_get_contents(STDIN),true));'],input=json.dumps(combat),text=True,capture_output=True,cwd=ROOT,check=True).stdout
+            self.query("UPDATE accounts SET badguy=?,hitpoints=10000,maxhitpoints=10000,attack=1,defense=100,specialinc='' WHERE acctid=?",[encoded,player])
+            for remaining in range(5,-1,-1):
+                status,body=request('forest.php?op=fight'); self.assertEqual(200,status,body[:1500])
+                if remaining: self.assertEqual(remaining,buffs()['transmute']['rounds'])
+                else: self.assertNotIn('transmute',buffs())
+            self.query("UPDATE accounts SET badguy='' WHERE acctid=?",[player])
+            # A new potion without carry expires at the next real New Day.
+            stored({}); self.assertEqual(200,buy()[2][0]); self.assertEqual(0,buffs()['transmute']['survivenewday'])
+            self.assertEqual(200,request('newday.php?setrace=Human')[0]); self.assertEqual(200,request('newday.php?continue=1')[0]); self.assertNotIn('transmute',buffs())
+            for invalid in [None,{},dict(first,rounds=0),dict(first,rounds=-1),dict(first,rounds=2147483648),dict(first,atkmod='<attack>'),dict(first,defmod=[]),dict(first,forged=1)]:
+                stored({'transmute':invalid}); before=self.query('SELECT gems,race,bufflist FROM accounts WHERE acctid=?',[player])
+                self.assertEqual(400,request(base)[0]); self.assertEqual(before,self.query('SELECT gems,race,bufflist FROM accounts WHERE acctid=?',[player]))
+            stored({}); self.assertEqual(200,request(base)[0])
+        finally:
+            self.query('UPDATE accounts SET '+','.join(k+'=?' for k in original)+' WHERE acctid=?',[*original.values(),player])
+            self.query('DELETE FROM module_settings WHERE modulename=?',['cedrikspotions'])
+            for row in saved: self.query('INSERT INTO module_settings(modulename,setting,value) VALUES (?,?,?)',['cedrikspotions',row['setting'],row['value']])
+            self.query('UPDATE modules SET active=0')
+
+    def test_potions_dragon_reset_persistence_http(self):
+        player=self.query('SELECT acctid FROM accounts WHERE login=?',['WebPlayer'])[0]['acctid']
+        original=self.query('SELECT * FROM accounts WHERE acctid=?',[player])[0]
+        prefs=self.query('SELECT * FROM module_userprefs WHERE userid=?',[player])
+        self.query('UPDATE modules SET active=1'); call=self._security_client()
+        settings=self.query('SELECT setting,value FROM module_settings WHERE modulename=?',['cedrikspotions'])
+        def request(url,form=None): self._security_allow(player,url); return call(url,form)
+        def setting(key,value): self.query('INSERT INTO module_settings(modulename,setting,value) VALUES (?,?,?) ON DUPLICATE KEY UPDATE value=VALUES(value)',['cedrikspotions',key,str(value)])
+        def buy(wish):
+            base='runmodule.php?module=cedrikspotions&op=gems'; _,body=request(base)
+            url=html.unescape(re.search(r'<form action=[\'"]([^\'"]+)',body).group(1))
+            status,body=request(url,dict(self._security_fields(body),wish=str(wish),gemcount='10')); self.assertEqual(200,status,body[:1500])
+        try:
+            for carry in [1,0]:
+                self.query('UPDATE accounts SET '+','.join(k+'=?' for k in original if k!='acctid')+' WHERE acctid=?',[*[v for k,v in original.items() if k!='acctid'],player])
+                self.query("UPDATE accounts SET level=15,dragonkills=0,dragonpoints='a:0:{}',maxhitpoints=150,hitpoints=150,gems=100,bufflist='a:0:{}',attack=100000,defense=100000,race='Human',specialty='DA',specialinc='' WHERE acctid=?",[player])
+                for module in ['cedrikspotions','fairy']:
+                    self.query('INSERT INTO module_userprefs(modulename,setting,userid,value) VALUES (?,?,?,?) ON DUPLICATE KEY UPDATE value=VALUES(value)',[module,'extrahps',player,'0'])
+                for key,value in {'carrydk':carry,'random':0,'maxcost':2,'vitalgain':3,'transcost':2,'transmuteturns':20,'survive':1,'atkmod':'.5','defmod':'.75'}.items(): setting(key,value)
+                call=self._security_client(); buy(2); buy(5)
+                self.assertEqual('165',self.query('SELECT maxhitpoints FROM accounts WHERE acctid=?',[player])[0]['maxhitpoints'])
+                self.assertEqual('15',self.query('SELECT value FROM module_userprefs WHERE userid=? AND modulename=? AND setting=?',[player,'cedrikspotions','extrahps'])[0]['value'])
+                enemy={'creaturename':'Synthetic Green Dragon','creatureweapon':'Padded stick','creaturelevel':18,'creatureattack':1,'creaturedefense':1,'creaturehealth':1,'diddamage':0,'type':'dragon'}
+                encoded=subprocess.run([shutil.which('php'),'-r','echo serialize(json_decode(stream_get_contents(STDIN),true));'],input=json.dumps(enemy),text=True,capture_output=True,cwd=ROOT,check=True).stdout
+                self.query('UPDATE accounts SET badguy=? WHERE acctid=?',[encoded,player])
+                status,body=request('dragon.php?op=fight'); self.assertEqual(200,status,body[:1500])
+                link=re.search(r'href=[\'"](dragon.php\?op=prologue1[^\'"]*)',body); self.assertIsNotNone(link,body[:1500])
+                status,body=request(html.unescape(link.group(1))); self.assertEqual(200,status,body[:1500])
+                state=self.query('SELECT dragonkills,maxhitpoints,bufflist FROM accounts WHERE acctid=?',[player])[0]
+                self.assertEqual('1',state['dragonkills']); self.assertEqual(str(25 if carry else 10),state['maxhitpoints']); self.assertNotIn('transmute',state['bufflist'])
+                self.assertEqual(str(15 if carry else 0),self.query('SELECT value FROM module_userprefs WHERE userid=? AND modulename=? AND setting=?',[player,'cedrikspotions','extrahps'])[0]['value'])
+        finally:
+            self.query('UPDATE accounts SET '+','.join(k+'=?' for k in original if k!='acctid')+' WHERE acctid=?',[*[v for k,v in original.items() if k!='acctid'],player])
+            self.query('DELETE FROM module_userprefs WHERE userid=?',[player])
+            for row in prefs: self.query('INSERT INTO module_userprefs(modulename,setting,userid,value) VALUES (?,?,?,?)',[row['modulename'],row['setting'],player,row['value']])
+            self.query('DELETE FROM module_settings WHERE modulename=?',['cedrikspotions'])
+            for row in settings: self.query('INSERT INTO module_settings(modulename,setting,value) VALUES (?,?,?)',['cedrikspotions',row['setting'],row['value']])
+            self.query('UPDATE modules SET active=0')
+
     def _security_client(self, login='WebPlayer', password="Synthetic web O'Reilly \\ password"):
         class NoRedirect(urllib.request.HTTPRedirectHandler):
             def redirect_request(self, *args): return None
