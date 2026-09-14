@@ -93,8 +93,11 @@ function sethsong_dohook($hookname,$args){
 
 function sethsong_run(){
     global $session;
-    require_once 'lib/player_mutation.php';
-    if ($_SERVER['REQUEST_METHOD']==='POST') resurrection_consume_action('sethsong',(string)$session['user']['acctid']);
+    require_once 'lib/typed_editor.php';
+    $context=(string)$session['user']['acctid'].':'.(string)$session['user']['lasthit'];
+    if ($_SERVER['REQUEST_METHOD']==='POST') resurrection_consume_action('sethsong',$context);
+    try { sethsong_validate_state(); }
+    catch (DomainException | InvalidArgumentException $error) { http_response_code(409); exit('Invalid song state.'); }
 	$op=httpget('op');
 	$visits=get_module_setting("visits");
 	$been=get_module_pref("been");
@@ -114,17 +117,22 @@ function sethsong_run(){
 		output("\"I'm sorry, my throat is just too dry.\"");
 	} else {
         if ($_SERVER['REQUEST_METHOD']==='POST') {
-            resurrection_player_mutation(function () {
+            try { resurrection_player_mutation(function () {
                 global $session;
+                $values=resurrection_settings_values('sethsong',true);
+                $GLOBALS['module_settings']['sethsong']=$values;
                 unset($GLOBALS['module_prefs'][(int)$session['user']['acctid']]['sethsong']);
+                sethsong_validate_state();
                 if (get_module_pref('been','sethsong') >= get_module_setting('visits','sethsong')) throw new DomainException('Visit limit reached.');
                 sethsong_sing();
-            });
+            }); }
+            catch (DomainException | InvalidArgumentException $error) { http_response_code(409); exit("Song unavailable."); }
+            catch (Throwable $error) { http_response_code(500); exit("Song was not completed."); }
         } else {
             output('Listen to %s`0 the Bard?',getsetting('bard','`^Seth'));
             $url='runmodule.php?module=sethsong';
             addnav('',$url);
-            rawoutput('<form method="POST" action="'.$url.'">'.resurrection_action_fields('sethsong',(string)$session['user']['acctid']).'<button class="button">Listen</button></form>');
+            rawoutput('<form method="POST" action="'.$url.'">'.resurrection_action_fields('sethsong',$context).'<button class="button">Listen</button></form>');
         }
 	}
 
@@ -135,8 +143,22 @@ function sethsong_run(){
 	page_footer();
 }
 
+function sethsong_validate_state(): void {
+    require_once 'lib/typed_editor.php';
+    $schema=\Resurrection\Http\SettingDescriptor::declare(sethsong_getmoduleinfo()['settings']);
+    $values=[];
+    foreach ($schema as $key=>$descriptor) $values[$key]=(string)get_module_setting($key,'sethsong');
+    resurrection_settings_rules('sethsong',$schema,$values);
+    foreach (['visits','mingold','maxgold','mingems','maxgems','goldloss'] as $key) {
+        if ((int)$values[$key]<0) throw new DomainException('Negative song setting.');
+    }
+    $been=get_module_pref('been','sethsong');
+    if ((!is_string($been) && !is_int($been)) || filter_var($been,FILTER_VALIDATE_INT,['options'=>['min_range'=>0,'max_range'=>2147483646]])===false) throw new DomainException('Invalid song visits.');
+}
+
 function sethsong_sing()
 {
+    sethsong_validate_state();
 	global $session;
 	$mostgold=get_module_setting("maxgold");
 	$leastgold=get_module_setting("mingold");

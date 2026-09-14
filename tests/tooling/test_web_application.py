@@ -1,5 +1,6 @@
 """Real loopback application requests against the preceding clean CI install."""
 import base64
+from contextlib import contextmanager
 import html
 from html.parser import HTMLParser
 import http.cookiejar
@@ -211,6 +212,145 @@ function resurrectionhttpfixture_run() { echo 'fixture-executed'; exit; }
             path.unlink()
             self.query('DELETE FROM modules WHERE modulename=?', [module])
             self.query('DELETE FROM settings WHERE setting=?', ['fixture_dependency'])
+
+    @contextmanager
+    def _seeded_module_actions(self):
+        # Installed only in this disposable fixture. Production e_rand remains unchanged.
+        name='resurrectionrng'+os.urandom(4).hex(); path=ROOT/'modules'/f'{name}.php'
+        with path.open('x') as file:
+            file.write("""<?php
+function resurrectionrandomfixture_getmoduleinfo() { return ['name'=>'Deterministic test fixture','version'=>'1.0','author'=>'Tests','category'=>'Tests']; }
+function resurrectionrandomfixture_dohook($hook,$args) { mt_srand((int)getsetting('fixture_rng_seed',0)); return $args; }
+""".replace('resurrectionrandomfixture',name))
+        try:
+            self.query('INSERT INTO modules(modulename,active,version) VALUES (?,1,?)',[name,'1.0'])
+            self.query('INSERT INTO module_hooks(modulename,location,`function`,priority,whenactive) VALUES (?,?,?,100,?)',[name,'header-runmodule',name+'_dohook',''])
+            yield lambda seed: self.query('INSERT INTO settings(setting,value) VALUES (?,?) ON DUPLICATE KEY UPDATE value=VALUES(value)',['fixture_rng_seed',str(seed)])
+        finally:
+            self.query('DELETE FROM module_hooks WHERE modulename=?',[name])
+            self.query('DELETE FROM modules WHERE modulename=?',[name])
+            self.query('DELETE FROM settings WHERE setting=?',['fixture_rng_seed'])
+            path.unlink()
+
+    def test_outhouse_configured_outcomes_http(self):
+        player=self.query('SELECT acctid FROM accounts WHERE login=?',['WebPlayer'])[0]['acctid']
+        original=self.query('SELECT * FROM accounts WHERE acctid=?',[player])[0]
+        prefs=self.query('SELECT * FROM module_userprefs WHERE userid=?',[player])
+        saved=self.query('SELECT setting,value FROM module_settings WHERE modulename=?',['outhouse'])
+        self.query('UPDATE modules SET active=1'); call=self._security_client()
+        def request(url,form=None): self._security_allow(player,url); return call(url,form)
+        def pref(key,value): self.query('INSERT INTO module_userprefs(modulename,setting,userid,value) VALUES (?,?,?,?) ON DUPLICATE KEY UPDATE value=VALUES(value)',['outhouse',key,player,str(value)])
+        def setting(key,value): self.query('INSERT INTO module_settings(modulename,setting,value) VALUES (?,?,?) ON DUPLICATE KEY UPDATE value=VALUES(value)',['outhouse',key,str(value)])
+        def state(): return self.query('SELECT gold,gems,turns FROM accounts WHERE acctid=?',[player])[0]
+        def action(op,expected=200):
+            url='runmodule.php?module=outhouse&op='+op
+            before=state(); status,body=request(url); self.assertEqual(200,status); self.assertEqual(before,state())
+            form=self._security_fields(body); self.assertEqual(403,request(url,{})[0]); self.assertEqual(before,state())
+            status,body=request(url,form); self.assertEqual(expected,status,body[:1500]); after=state()
+            self.assertEqual(409,request(url,form)[0]); self.assertEqual(after,state())
+            return after
+        try:
+            with self._seeded_module_actions() as seed:
+                for key,value in {'cost':7,'giveback':3,'goldinhand':0,'takeback':20,'badmusthit':0}.items(): setting(key,value)
+                # paid/free, rewards, no reward, penalty and lower bound. Seeds only choose historical outcomes.
+                cases=[('pay','washpay',100,100,100,0,100,96,6,11),('pay','washpay',0,0,0,0,100,93,5,10),
+                       ('pay','washpay',100,0,0,0,100,96,5,10),('free','washfree',100,0,0,0,100,103,5,10),
+                       ('free','washfree',100,0,0,1,100,100,5,10),('free','nowash',0,0,0,0,3,0,5,10)]
+                for visit,finish,good,gem,turn,rng,gold,expectedGold,expectedGems,expectedTurns in cases:
+                    seed(rng); pref('usedouthouse',0); pref('stage',0)
+                    self.query('UPDATE accounts SET gold=?,gems=5,turns=10,alive=1,specialinc=? WHERE acctid=?',[gold,'',player])
+                    for key,value in {'goodmusthit':good,'givegempercent':gem,'giveturnchance':turn}.items(): setting(key,value)
+                    action(visit); after=action(finish)
+                    self.assertEqual([expectedGold,expectedGems,expectedTurns],[int(after[k]) for k in ['gold','gems','turns']])
+                    before=state(); action(finish,409); action(visit,409); self.assertEqual(before,state())
+                for key,bad in [('cost','-1'),('goodmusthit','101'),('givegempercent','bad'),('takeback','21')]:
+                    old=self.query('SELECT value FROM module_settings WHERE modulename=? AND setting=?',['outhouse',key])[0]['value']
+                    pref('usedouthouse',0); pref('stage',0); setting(key,bad); before=state()
+                    action('free',409); self.assertEqual(before,state()); setting(key,old)
+                pref('usedouthouse','invalid'); before=state(); action('free',409); self.assertEqual(before,state())
+                pref('usedouthouse',1); pref('stage',2)
+                self.query('UPDATE accounts SET lasthit=?,race=?,specialty=? WHERE acctid=?',['2000-01-01 00:00:00','Human','DA',player])
+                self.assertEqual(200,request('newday.php?continue=1')[0])
+                actual={r['setting']:r['value'] for r in self.query('SELECT setting,value FROM module_userprefs WHERE modulename=? AND userid=?',['outhouse',player])}
+                self.assertEqual('0',actual['usedouthouse']); self.assertEqual('0',actual['stage'])
+                action('free')
+        finally:
+            self.query('UPDATE accounts SET '+','.join(k+'=?' for k in original if k!='acctid')+' WHERE acctid=?',[*[v for k,v in original.items() if k!='acctid'],player])
+            self.query('DELETE FROM module_userprefs WHERE userid=?',[player])
+            for row in prefs: self.query('INSERT INTO module_userprefs(modulename,setting,userid,value) VALUES (?,?,?,?)',[row['modulename'],row['setting'],player,row['value']])
+            self.query('DELETE FROM module_settings WHERE modulename=?',['outhouse'])
+            for row in saved: setting(row['setting'],row['value'])
+            self.query('UPDATE modules SET active=0')
+
+    def test_sethsong_all_configured_effects_http(self):
+        player=self.query('SELECT acctid FROM accounts WHERE login=?',['WebPlayer'])[0]['acctid']
+        original=self.query('SELECT * FROM accounts WHERE acctid=?',[player])[0]
+        prefs=self.query('SELECT * FROM module_userprefs WHERE userid=?',[player])
+        saved=self.query('SELECT setting,value FROM module_settings WHERE modulename=?',['sethsong'])
+        self.query('UPDATE modules SET active=1'); call=self._security_client(); url='runmodule.php?module=sethsong'
+        def request(path,form=None): self._security_allow(player,path); return call(path,form)
+        def pref(value): self.query('INSERT INTO module_userprefs(modulename,setting,userid,value) VALUES (?,?,?,?) ON DUPLICATE KEY UPDATE value=VALUES(value)',['sethsong','been',player,str(value)])
+        def setting(key,value): self.query('INSERT INTO module_settings(modulename,setting,value) VALUES (?,?,?) ON DUPLICATE KEY UPDATE value=VALUES(value)',['sethsong',key,str(value)])
+        def state(): return self.query('SELECT gold,gems,turns,hitpoints,charm FROM accounts WHERE acctid=?',[player])[0]
+        def listen():
+            before=state(); status,body=request(url); self.assertEqual(200,status); self.assertEqual(before,state())
+            form=self._security_fields(body)
+            self.assertEqual(403,request(url,{})[0]); self.assertEqual(before,state())
+            status,body=request(url,form); self.assertEqual(200,status,body[:1500]); after=state()
+            self.assertEqual(409,request(url,form)[0]); self.assertEqual(after,state())
+            return after
+        try:
+            with self._seeded_module_actions() as seed:
+                config={'visits':1,'mingold':13,'maxgold':13,'mingems':2,'maxgems':2,'hpgain':20,'bhploss':10,'shploss':20,'goldloss':7}
+                for key,value in config.items(): setting(key,value)
+                seeds=[44,39,71,22,15,4,47,1,23,5,10,17,2,3,8,0,28,9,6]
+                for outcome,rng in enumerate(seeds):
+                    pref(0); seed(rng)
+                    self.query('UPDATE accounts SET gold=100,gems=5,turns=10,hitpoints=50,maxhitpoints=100,charm=5,sex=0,alive=1,specialinc=? WHERE acctid=?',['',player])
+                    expected={'gold':100,'gems':5,'turns':10,'hitpoints':50,'charm':5}
+                    if outcome==0: expected['turns']=12
+                    if outcome in [1,2,6,13,14,15]: expected['turns']=11
+                    if outcome in [5,11]: expected['turns']=9
+                    if outcome==3: expected['gold']=113
+                    if outcome==4: expected['hitpoints']=120
+                    if outcome==7: expected['hitpoints']=40
+                    if outcome==8: expected['gold']=93
+                    if outcome==9: expected['gems']=7
+                    if outcome in [10,12]: expected['hitpoints']=100
+                    if outcome==16: expected['hitpoints']=30
+                    if outcome==18: expected['charm']=4
+                    actual=listen(); self.assertEqual(expected,{k:int(v) for k,v in actual.items()},'song '+str(outcome))
+                    self.assertEqual('1',self.query('SELECT value FROM module_userprefs WHERE modulename=? AND setting=? AND userid=?',['sethsong','been',player])[0]['value'])
+                    status,body=request(url); self.assertEqual(200,status); self.assertNotIn('name="action_token"',body); self.assertEqual(actual,state())
+                # Female charm, HP floor, insufficient gold, zero gem reward and overfull HP.
+                for rng,patch,configPatch,field,expected in [(0,{'sex':1},{},'charm',6),(1,{'hitpoints':1},{},'hitpoints',1),
+                    (23,{'gold':6},{},'gold',6),(5,{}, {'mingems':0,'maxgems':0},'gems',5),
+                    (15,{'hitpoints':150},{},'hitpoints',180)]:
+                    pref(0); seed(rng)
+                    self.query('UPDATE accounts SET gold=100,gems=5,turns=10,hitpoints=50,maxhitpoints=100,charm=5,sex=0 WHERE acctid=?',[player])
+                    for key,value in config.items(): setting(key,value)
+                    for key,value in configPatch.items(): setting(key,value)
+                    self.query('UPDATE accounts SET '+','.join(k+'=?' for k in patch)+' WHERE acctid=?',list(patch.values())+[player]) if patch else None
+                    self.assertEqual(expected,int(listen()[field]))
+                for key,value in config.items(): setting(key,value)
+                setting('visits',2); pref(0); seed(9)
+                listen(); listen()
+                before=state(); self.assertNotIn('name="action_token"',request(url)[1]); self.assertEqual(before,state())
+                for key,bad in [('visits','-1'),('hpgain','101'),('mingold','14'),('goldloss','-1')]:
+                    pref(0); _,body=request(url); form=self._security_fields(body); old=self.query('SELECT value FROM module_settings WHERE modulename=? AND setting=?',['sethsong',key])[0]['value']
+                    setting(key,bad); before=state(); self.assertEqual(409,request(url,form)[0]); self.assertEqual(before,state()); setting(key,old)
+                pref('garbage'); self.assertEqual(409,request(url)[0]); pref(2)
+                self.query('UPDATE accounts SET lasthit=?,race=?,specialty=? WHERE acctid=?',['2000-01-01 00:00:00','Human','DA',player])
+                self.assertEqual(200,request('newday.php?continue=1')[0])
+                self.assertEqual('0',self.query('SELECT value FROM module_userprefs WHERE modulename=? AND setting=? AND userid=?',['sethsong','been',player])[0]['value'])
+                listen()
+        finally:
+            self.query('UPDATE accounts SET '+','.join(k+'=?' for k in original if k!='acctid')+' WHERE acctid=?',[*[v for k,v in original.items() if k!='acctid'],player])
+            self.query('DELETE FROM module_userprefs WHERE userid=?',[player])
+            for row in prefs: self.query('INSERT INTO module_userprefs(modulename,setting,userid,value) VALUES (?,?,?,?)',[row['modulename'],row['setting'],player,row['value']])
+            self.query('DELETE FROM module_settings WHERE modulename=?',['sethsong'])
+            for row in saved: setting(row['setting'],row['value'])
+            self.query('UPDATE modules SET active=0')
 
     def test_shared_typed_settings_http(self):
         player=self.query('SELECT acctid FROM accounts WHERE login=?',['WebPlayer'])[0]['acctid']
@@ -438,7 +578,7 @@ function resurrectionhttpfixture_run() { echo 'fixture-executed'; exit; }
         try:
             for carry in [1,0]:
                 self.query('UPDATE accounts SET '+','.join(k+'=?' for k in original if k!='acctid')+' WHERE acctid=?',[*[v for k,v in original.items() if k!='acctid'],player])
-                self.query("UPDATE accounts SET level=15,dragonkills=0,dragonpoints='a:0:{}',maxhitpoints=165,hitpoints=165,gems=100,bufflist='a:0:{}',attack=100000,defense=100000,race='Human',specialty='DA',specialinc='' WHERE acctid=?",[player])
+                self.query("UPDATE accounts SET alive=1,level=15,dragonkills=0,dragonpoints='a:0:{}',maxhitpoints=165,hitpoints=165,gems=100,bufflist='a:0:{}',attack=100000,defense=100000,race='Human',specialty='DA',specialinc='' WHERE acctid=?",[player])
                 for module in ['cedrikspotions','fairy']:
                     self.query('INSERT INTO module_userprefs(modulename,setting,userid,value) VALUES (?,?,?,?) ON DUPLICATE KEY UPDATE value=VALUES(value)',[module,'extrahps',player,'15' if module=='fairy' else '0'])
                 # Save Fairy's actual declared settings through the certified editor.
@@ -482,7 +622,7 @@ function resurrectionhttpfixture_run() { echo 'fixture-executed'; exit; }
         try:
             for carry in [1,0]:
                 self.query('UPDATE accounts SET '+','.join(k+'=?' for k in original if k!='acctid')+' WHERE acctid=?',[*[v for k,v in original.items() if k!='acctid'],player])
-                self.query("UPDATE accounts SET level=15,dragonkills=0,dragonpoints='a:0:{}',maxhitpoints=150,hitpoints=150,gems=100,bufflist='a:0:{}',attack=100000,defense=100000,race='Human',specialty='DA',specialinc='' WHERE acctid=?",[player])
+                self.query("UPDATE accounts SET alive=1,level=15,dragonkills=0,dragonpoints='a:0:{}',maxhitpoints=150,hitpoints=150,gems=100,bufflist='a:0:{}',attack=100000,defense=100000,race='Human',specialty='DA',specialinc='' WHERE acctid=?",[player])
                 for module in ['cedrikspotions','fairy']:
                     self.query('INSERT INTO module_userprefs(modulename,setting,userid,value) VALUES (?,?,?,?) ON DUPLICATE KEY UPDATE value=VALUES(value)',[module,'extrahps',player,'0'])
                 for key,value in {'carrydk':carry,'random':0,'maxcost':2,'vitalgain':3,'transcost':2,'transmuteturns':20,'survive':1,'atkmod':'.5','defmod':'.75'}.items(): setting(key,value)
@@ -1103,7 +1243,7 @@ function resurrectionhttpfixture_run() { echo 'fixture-executed'; exit; }
             self.query('DELETE FROM module_userprefs WHERE modulename=? AND userid=?',['game_fivesix',player])
             self.query('UPDATE modules SET active=0')
 
-    def test_crazyaudrey_village_authority(self):
+    def test_module_audrey_village_authority(self):
         class NoRedirect(urllib.request.HTTPRedirectHandler):
             def redirect_request(self, *args): return None
         jar=http.cookiejar.CookieJar()

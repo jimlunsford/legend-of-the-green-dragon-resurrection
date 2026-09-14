@@ -243,26 +243,33 @@ function outhouse_action(){
 }
 function outhouse_run(){
     global $session;
-    require_once 'lib/player_mutation.php';
+    require_once 'lib/typed_editor.php';
     try { $op=\Resurrection\Http\Input::choice($_GET,'op',['','pay','free','washpay','washfree','nowash'],''); }
     catch (InvalidArgumentException $error) { http_response_code(400); exit('Invalid outhouse action.'); }
     if ($op==='') { outhouse_action(); page_footer(); }
     $url='runmodule.php?module=outhouse&op='.$op;
+    $context=(string)$session['user']['acctid'].':'.(string)$session['user']['lasthit'].':'.$op;
     if ($_SERVER['REQUEST_METHOD']!=='POST') {
         page_header('The Outhouses');
         output('Continue?');
         addnav('',$url);
-        rawoutput('<form method="POST" action="'.htmlspecialchars($url,ENT_QUOTES,'UTF-8').'">'.resurrection_action_fields('outhouse',$op).'<button class="button">Continue</button></form>');
+        rawoutput('<form method="POST" action="'.htmlspecialchars($url,ENT_QUOTES,'UTF-8').'">'.resurrection_action_fields('outhouse',$context).'<button class="button">Continue</button></form>');
         addnav('Return to the Forest','forest.php');
         page_footer();
     }
-    resurrection_consume_action('outhouse',$op);
+    resurrection_consume_action('outhouse',$context);
     try {
         resurrection_player_mutation(function () use ($op) {
             global $session;
             unset($GLOBALS['module_prefs'][(int)$session['user']['acctid']]['outhouse']);
-            $used=(int)get_module_pref('usedouthouse','outhouse');
-            $stage=(int)get_module_pref('stage','outhouse');
+            $schema=\Resurrection\Http\SettingDescriptor::declare(outhouse_getmoduleinfo()['settings']);
+            $values=resurrection_settings_values('outhouse',true);
+            resurrection_settings_rules('outhouse',$schema,$values);
+            $GLOBALS['module_settings']['outhouse']=$values;
+            $used=get_module_pref('usedouthouse','outhouse');
+            $stage=get_module_pref('stage','outhouse');
+            if (!in_array((string)$used,['0','1'],true) || !in_array((string)$stage,['0','1','2'],true)) throw new DomainException('Invalid outhouse state.');
+            $used=(int)$used; $stage=(int)$stage;
             if (in_array($op,['pay','free'],true)) {
                 $cost=(int)get_module_setting('cost','outhouse');
                 if ($used!==0 || $stage!==0 || $cost<0 || ($op==='pay' && $session['user']['gold']<$cost)) throw new DomainException('Outhouse unavailable.');
@@ -273,7 +280,8 @@ function outhouse_run(){
             }
             outhouse_action();
         });
-    } catch (DomainException $error) { http_response_code(409); exit('Outhouse action rejected.'); }
+    } catch (DomainException | InvalidArgumentException $error) { http_response_code(409); exit('Outhouse action rejected.'); }
+    catch (Throwable $error) { http_response_code(500); exit('Outhouse action was not completed.'); }
     page_footer();
 }
 ?>
