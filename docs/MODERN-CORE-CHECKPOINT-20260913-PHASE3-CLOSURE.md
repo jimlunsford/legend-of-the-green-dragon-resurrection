@@ -630,3 +630,58 @@ VPS untouched. No public runtime, deployment, release, release tag, ZIP or deplo
 **Modern-core merge verdict: NO. Public-hosting verdict: NO. PR #1 remains OPEN/DRAFT/unmerged.**
 
 **Exact next recommended phase: continue Phase 3 on this same branch and PR, first Goldmine's remaining reward/loss/mount/tether/racial matrix and Lovers' authoritative conversation stage machine, then the four race and three specialty onboarding/combat gates, followed by combat schemas and the recorded core/cleanup families. Do not start Phase 4.**
+
+
+## Goldmine deterministic HTTP closure, 2026-09-14
+
+Repository: https://github.com/jimlunsford/legend-of-the-green-dragon-resurrection
+
+- Actual starting SHA: `e04a61795e791ad73354cea793055acca16e00b8`, verified against live GitHub before edits.
+- Implementation SHA: `58b9badd48aabb64eb572097439a7242ccb75b66`; one appended implementation commit, followed by this evidence commit. The ending SHA is the commit containing this section; its exact SHA and final validation run IDs are recorded in PR #1 and the execution report after publication (a commit cannot contain its own SHA).
+- Existing branch: `modernization/core-modernization`. No new branch or PR.
+- Main remains `999cec6f9c655a840320d982d673bb863c68c2b2`.
+- PR #1 remains OPEN, DRAFT, NOT READY and NOT MERGED. No actual merge SHA. GitHub's temporary test-merge object is not a completed merge.
+- Publication used the authenticated GitHub Git-object API after ordinary Git HTTPS push had no credentials. Published tree was checked against the tested local tree before the non-forced branch update. All published history was preserved.
+
+### Scope completed
+
+Goldmine promoted independently: **16 PASS / 0 PASS WITH DOCUMENTED LIMITATION / 8 BLOCKED; all 24 lifecycle PASS**. Both certification records updated.
+
+PASS in supported bundled scope: actual Forest HTTP forces all 20 historical mining rolls, no reward, gold, gems, combined rewards, cave-in death, exact configured gold/gem loss (0/25/50/100 percent across HTTP and retained unit evidence), no mount, tether, auto-tether, mount survival/death/player save, and rescue via all four shipped race hooks. Validated declared settings and mount preferences, current mount record and race rescue settings bind the one-use event intent and are rechecked under transaction locks. GET preserves gameplay state; anonymous/inactive, malformed action, missing/stale mount, malformed preferences/settings, stale form and replay checks pass. Final-account-write failure rolls back account/news/debug writes; failed intent remains consumed and fresh retry succeeds. Story output retains color formatting and escapes HTML. No random distribution test or gameplay rebalance.
+
+The new evidence also found and fixed two shared-dispatch defects: inactive secured events were silently cleared, and database failure escaped as a PHP error page. Inactive events now reject without consuming pending state; failed transactional execution returns a controlled failure response. Account/news/debug rollback and a fresh retry are proven through actual HTTP.
+
+### Supported-target evidence
+
+Implementation `58b9badd48aabb64eb572097439a7242ccb75b66`:
+
+| Gate | PHP 8.4 / MariaDB 11.4 | PHP 8.5 / MySQL 8.4 |
+|---|---|---|
+| PHPUnit | 74 tests / 2,227 assertions | 74 tests / 2,227 assertions |
+| Python / HTTP | 30 tests / PASS | 30 tests / PASS |
+| Supported matrix skips / failures | 0 / 0 | 0 / 0 |
+| PHP lint | 308 / zero failures | 308 / zero failures |
+| Legacy PHPStan | Level 0, seven retained findings, zero new errors | Same |
+| Infrastructure PHPStan | Level 6, zero errors, no baseline | Same |
+| Composer | Strict validation, locked install and audit PASS | Same |
+
+- Modern core: [34837310102](https://github.com/jimlunsford/legend-of-the-green-dragon-resurrection/actions/runs/34837310102), SUCCESS, both targets explicitly checked out the implementation SHA.
+- Baseline integrity: [34837310095](https://github.com/jimlunsford/legend-of-the-green-dragon-resurrection/actions/runs/34837310095), SUCCESS.
+- Full supplementary local UTC regression also PASS: 74 tests / 2,227 assertions and 30 Python/HTTP tests. Local MariaDB 10.11 is supplementary, not a replacement for supported-target CI.
+- Intermediate failures are not acceptance evidence. Corrected fixture mount ID to the actual tinyint column range; isolated stale temporary fixture/configuration files in the local runner; corrected local timezone alignment. The new inactive-event and exception-output failures drove production fixes. No coverage was removed.
+
+### Remaining requested modules and core gates
+
+Eight requested module certifications remain unfinished: Lovers, Human, Elf, Dwarf, Troll, Dark Arts, Mystical Powers and Thieving Skills. Their statuses remain BLOCKED. No new Lovers progression/effect/persistence/reset certification, race onboarding/forgery/reselection/replay HTTP certification, or specialty onboarding/levels 1/2/3/5/insufficient-use/wrong-state/replay certification is claimed. Existing runtime/stat/daily-hook evidence remains intact.
+
+General combat schema is still BLOCKED and unchanged. Remaining meaningful GET families: Lovers, race/specialty onboarding, specialty combat, petition administration, clans, equipment, stables, training and legacy editors. Replay authority in these unclosed routes remains unproven. The new session intents do not claim universal crash-safe exactly-once execution.
+
+Serialized inventory unchanged: **87 sites / 42 files / 31 serialize writers/checks / 55 ScalarState reads / one centralized unserialize**. No serialized trust boundary or count changed; the serialized-state audit was not rewritten. Goldmine's declared configuration/preferences validation does not certify general combat, mount buff, companion, mail, editor or other serialized business schemas.
+
+Core blockers remain general combat, mail send/reply and systemmail caller/content/translation trust, petition administration, clans, bank, weapons/armor, mounts/stables, training/masters, broader PvP, administrator/content editors, serialized business schemas, expiration cleanup and account deletion. `last_char_expire` still advances before cleanup completes. No cleanup/deletion or external-hook rollback claim is made.
+
+Historical baseline unchanged: annotated tag object `51cab4fbe58a234651a3177a56289b18bc152b4d`, source `bdc29df9bc344774b41e0ad7cae7f6ed2f7512e2`, tree `4013a0ccc5227e87cd7a22de00b7c322d7aa237c`, 417 files and 11 preservation commits. Both historical repositories untouched. No archive imports, VPS access, deployment, public runtime, release, version tag, package, gameplay rebalance, framework rewrite or restored disabled feature.
+
+**Phase 3 remains NOT COMPLETE. Modern-core merge: NOT READY. Public hosting: NO.**
+
+Exact next Phase 3 step: close Lovers' real entry/choice/daily-consumption contract through POST/CSRF and server-owned progression, both Seth and Violet paths, married and unmarried effects, persisted visit exhaustion, New Day reset, replay and transactional failure/retry. The historical `flirt=1..7` values are alternative choices, not sequential stages; preserve those choices rather than imposing a new seven-stage story. Then continue Human, Elf, Dwarf, Troll and the three specialty boundaries in the requested order.

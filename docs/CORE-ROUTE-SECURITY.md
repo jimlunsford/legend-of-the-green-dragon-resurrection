@@ -148,3 +148,15 @@ Current unresolved meaningful GET families after rescan: Lovers conversation/eff
 The existing systemmail database binding and deferred PvP notification work remains PARTIAL. Sender/caller trust, recipient/content bounds, send/reply ownership and translation business schemas remain unclosed. General combat, mounts/companions/buffs/preferences/editor/navigation schemas remain unclosed. Expiration still moves its marker before cleanup and logs deletion before final account deletion; deletion hooks and related DML still lack complete tested failure/retry semantics. No cleanup, optimization or external-notification improvement is claimed here.
 
 Modern-core merge: NO. Public hosting: NO. PR #1 remains OPEN/DRAFT/unmerged. Next: continue Phase 3 with Goldmine and Lovers, then four race and three specialty authority gates, followed by the listed core families.
+
+
+## Goldmine closure, 2026-09-14
+
+| Boundary | Authentication/authorization | Input and SQL | Method, CSRF and replay | Output / status / proof |
+|---|---|---|---|---|
+| Forest Goldmine event | Authenticated actor; installed active module; server current event; locked account recheck | Typed declared settings/preferences; bound mount/configuration/race reads; settings, mount and rescue state bound to intent and locked before mutation | GET read-only; POST/CSRF; one-use event intent; stale context and duplicate rejection; completed event cleared transactionally | Historical text and color formatting retained; HTML output escape tested; PASS in supported bundled scope via `test_goldmine_deterministic_http_authority` |
+| Secured event dispatch failure | Existing shared authorization retained; inactive event rejected before state clearing | Shared account transaction rolls back account, news and debug writes | Failed intent stays consumed; new form permits retry after rollback | Controlled 500 instead of uncaught PHP error; no falsely reported success; inactive request preserves pending event |
+
+Goldmine deterministic HTTP covers all 20 mining rolls, configured currency-loss endpoints, four bundled race rescues, no-mount and real mount tether/auto-tether/survive/die/save paths, malformed and stale configuration/preferences/mount state, CSRF, anonymous/inactive access, replay, failure injection and fresh retry. Both supported targets PASS in Modern core 34837310102 at `58b9badd48aabb64eb572097439a7242ccb75b66`.
+
+The post-change source rescan still finds meaningful GET mutations in Lovers (`modules/lovers/lovers_seth.php`, `lovers_violet.php`), race and specialty onboarding (`lib/newday/setrace.php`, `setspecialty.php`), specialty combat (`apply-specialty` hooks with `skill`/`l`), petition administration, clan application/membership, weapons/armor purchase, stables, training and legacy editors. These remain blockers, not accepted navigation exceptions. General combat and remaining core replay/business-schema gates are unchanged. No universal crash-safe exactly-once claim is made.

@@ -1,6 +1,6 @@
 # Bundled module certification
 
-**Final counts: 15 PASS, 0 PASS WITH DOCUMENTED LIMITATION, 9 BLOCKED. Lifecycle/metadata: 24 PASS. Modern-core merge: NOT READY. Public hosting: NO.**
+**Final counts: 16 PASS, 0 PASS WITH DOCUMENTED LIMITATION, 8 BLOCKED. Lifecycle/metadata: 24 PASS. Modern-core merge: NOT READY. Public hosting: NO.**
 
 This 2026-09-14 continuation updates the original all-BLOCKED checkpoint using new mutation evidence. The earlier Phase 3 history remains in [the original checkpoint](MODERN-CORE-CHECKPOINT-20260913-PHASE3.md). Only the 24 shipped entrypoints are in scope. No archive module was imported. No module is promoted merely because a route renders.
 
@@ -21,7 +21,7 @@ PASS covers the named module in supported bundled use, not arbitrary core/editor
 | `game_fivesix` | 1.7 | PASS | PASS |
 | `game_stones` | 1.1 | PASS | PASS |
 | `glowingstream` | 1.1 | PASS | PASS |
-| `goldmine` | 1.0 | PASS | BLOCKED |
+| `goldmine` | 1.0 | PASS | PASS |
 | `lovers` | 1.0 | PASS | BLOCKED |
 | `outhouse` | 2.0 | PASS | PASS |
 | `racedwarf` | 1.1 | PASS | BLOCKED |
@@ -133,12 +133,12 @@ All ten historical rolls are forced with fixed seeds: death retaining gold/exper
 
 - Previous certification: BLOCKED. Current supported bundled scope: PASS.
 
-### goldmine (1.0): BLOCKED
+### goldmine (1.0): PASS
 
-Shared current-event POST/CSRF, mine action and consumed reward pass. A seeded no-mount death regression fixes an uninitialized outcome flag and verifies configured currency losses/experience. Remaining: alternate reward/loss and optional mount-specific branches, configured amounts and settings-editor validation.
+PASS in supported bundled scope: actual Forest HTTP forces all 20 historical mining rolls, no reward, gold, gems, combined rewards, cave-in death, exact configured gold/gem loss (0/25/50/100 percent across HTTP and retained unit evidence), no mount, tether, auto-tether, mount survival/death/player save, and rescue via all four shipped race hooks. Validated declared settings and mount preferences, current mount record and race rescue settings bind the one-use event intent and are rechecked under transaction locks. GET preserves gameplay state; anonymous/inactive, malformed action, missing/stale mount, malformed preferences/settings, stale form and replay checks pass. Final-account-write failure rolls back account/news/debug writes; failed intent remains consumed and fresh retry succeeds. Story output retains color formatting and escapes HTML. No random distribution test or gameplay rebalance.
 
-- Component route result: PARTIAL.
-- Exact metadata, descriptors, hooks, dependencies, database tables and prior lifecycle evidence remain in [the JSON record](BUNDLED-MODULE-CERTIFICATION.json).
+- `test_goldmine_deterministic_http_authority`, retained `testGoldmineDeathWithoutMountHasDefinedOutcome`, shared mount/settings editor HTTP tests, and all 24 lifecycle checks.
+- Both supported targets: Modern core [34837310102](https://github.com/jimlunsford/legend-of-the-green-dragon-resurrection/actions/runs/34837310102), baseline [34837310095](https://github.com/jimlunsford/legend-of-the-green-dragon-resurrection/actions/runs/34837310095).
 
 ### lovers (1.0): BLOCKED
 
