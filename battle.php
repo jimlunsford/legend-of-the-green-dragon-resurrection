@@ -1,4 +1,10 @@
 <?php
+// This is a caller-owned combat include, never an independent HTTP action.
+if (basename($_SERVER['SCRIPT_NAME'] ?? '') === 'battle.php' ||
+    realpath($_SERVER['SCRIPT_FILENAME'] ?? '') === __FILE__) {
+    http_response_code(404);
+    exit('Not an application endpoint.');
+}
 require_once __DIR__ . '/src/Security/ScalarState.php';
 // translator ready
 // addnews ready

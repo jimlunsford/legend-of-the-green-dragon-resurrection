@@ -1,7 +1,7 @@
 {
   "scope": "Only the 24 bundled entrypoints, verified against modules/*.php; no archive import.",
   "date": "2026-09-14",
-  "evidence": "Both supported targets PASS at 82bb591d5355ccd0e5a071f1d4fd3efd7033c7ba: 74 PHPUnit tests / 2231 assertions / 33 Python and HTTP tests / 310 PHP files linted; zero failures/skips. Modern core 34886260212 and Baseline integrity 34886260167 SUCCESS. All 24 lifecycle checks retain PASS. Final module counts remain 21 PASS / 0 limitation / 3 BLOCKED.",
+  "evidence": "Both supported targets PASS at 353ba60ee0fad71fdc46669009c8a349dc4f0ecc: 80 PHPUnit tests / 2350 assertions / 35 Python-HTTP tests / 315 PHP lint files, zero failures/skips. Modern core 34892412719 and Baseline integrity 34892412674 SUCCESS. All 24 lifecycle checks retain PASS. Counts remain 21 PASS / 0 limitation / 3 BLOCKED. Final additional direct-battle-entry and companion death/Dragon lifecycle scenarios are tied to exact-head acceptance recorded in PR #1.",
   "status_meaning": "Final certification is per module in the supported bundled scope. PASS requires actual behavior/security evidence; PARTIAL is a component route result only and final remains BLOCKED. Core editor/combat/hosting gates are tracked separately and still prevent merge.",
   "modules": [
     {
@@ -1732,7 +1732,7 @@
       "settings_preferences_result": "PASS for named defaults and raw round trips; NOT APPLICABLE for empty namespaces",
       "object_preferences_result": "NOT APPLICABLE",
       "direct_runmodule_route": "BLOCKED",
-      "direct_route_note": "Shared onboarding PASS through actual HTTP: exact identity, default-zero and preserved earned skill/uses, forged extra fields, inactive/missing module and missing file, stale preferences/account state, CSRF, duplicate/reselection/replay, late-account-write rollback, fresh retry and actual New Day skill-derived restoration. Combat level/use/state/POST/CSRF/replay/persistence/rollback and companion business schema remain BLOCKED. Both supported targets PASS at 82bb591d5355ccd0e5a071f1d4fd3efd7033c7ba: 74 PHPUnit tests / 2231 assertions / 33 Python and HTTP tests / 310 PHP files linted; zero failures/skips. Modern core 34886260212 and Baseline integrity 34886260167 SUCCESS.",
+      "direct_route_note": "Actual HTTP at 353ba60: levels 1/2/3/5, exact persisted costs, subsequent read, duplicate/replay, late-account-write rollback/fresh retry, shared malformed-input/state/CSRF/stale matrices and New Day after actual use PASS on both supported targets. Persisted buff parameters verified. This is a Forest component result, not final module certification. Complete damage/healing/aura accounting, full per-level invalid matrix, missing module/file combat scenarios, multi-target progression and other caller authority remain open. Shared specialty onboarding remains certified and unchanged.",
       "database_tables": [],
       "database_behavior": "PASS: strict fresh install/reinstall and tested metadata writes; purchase/admin transactions not certified",
       "daily_hooks": [
@@ -1755,13 +1755,13 @@
       "mariadb_11_4": "PASS for tested components; final BLOCKED for remaining gates",
       "mysql_8_4": "PASS for tested components; final BLOCKED for remaining gates",
       "warnings_errors": "No PHP warnings/errors in the passing matrix tests; unexecuted paths unverified.",
-      "security_notes": "Shared onboarding PASS through actual HTTP: exact identity, default-zero and preserved earned skill/uses, forged extra fields, inactive/missing module and missing file, stale preferences/account state, CSRF, duplicate/reselection/replay, late-account-write rollback, fresh retry and actual New Day skill-derived restoration. Combat level/use/state/POST/CSRF/replay/persistence/rollback and companion business schema remain BLOCKED. Both supported targets PASS at 82bb591d5355ccd0e5a071f1d4fd3efd7033c7ba: 74 PHPUnit tests / 2231 assertions / 33 Python and HTTP tests / 310 PHP files linted; zero failures/skips. Modern core 34886260212 and Baseline integrity 34886260167 SUCCESS.",
+      "security_notes": "Actual HTTP at 353ba60: levels 1/2/3/5, exact persisted costs, subsequent read, duplicate/replay, late-account-write rollback/fresh retry, shared malformed-input/state/CSRF/stale matrices and New Day after actual use PASS on both supported targets. Persisted buff parameters verified. This is a Forest component result, not final module certification. Complete damage/healing/aura accounting, full per-level invalid matrix, missing module/file combat scenarios, multi-target progression and other caller authority remain open. Shared specialty onboarding remains certified and unchanged.",
       "final_certification": "BLOCKED",
       "continuation_evidence": "Shared onboarding PASS through actual HTTP: exact identity, default-zero and preserved earned skill/uses, forged extra fields, inactive/missing module and missing file, stale preferences/account state, CSRF, duplicate/reselection/replay, late-account-write rollback, fresh retry and actual New Day skill-derived restoration. Combat level/use/state/POST/CSRF/replay/persistence/rollback and companion business schema remain BLOCKED. Both supported targets PASS at 82bb591d5355ccd0e5a071f1d4fd3efd7033c7ba: 74 PHPUnit tests / 2231 assertions / 33 Python and HTTP tests / 310 PHP files linted; zero failures/skips. Modern core 34886260212 and Baseline integrity 34886260167 SUCCESS.",
-      "next_required_gate": "Finish actual HTTP effect and companion lifecycle coverage; close Dragon specialty/combat/outcome authority and multi-target behavior before promotion, then general combat schema.",
+      "next_required_gate": "Finish complete effect and per-level authority matrices; close Dragon and other battle callers, including terminal/reset authority and multi-target combat, before module promotion. Then general combat schema.",
       "previous_certification": "BLOCKED",
-      "companion_business_state": "SkeletonCompanionState business validation plus producer/hydration guards passed both targets at 78696d40470c89df8fd8371ed8387a7af6395c4a (Modern core 34889623000 / Baseline 34889623022). Added Forest transaction/lifecycle assertions pending. Death/removal and Dragon clearing still unproven through HTTP.",
-      "forest_combat_boundary": "Implemented shared Forest POST/CSRF/current-state intent and transaction, exact costs 1/2/3/5, persisted buff parameters, replay, malformed-state matrices, rollback and New Day after use. CI regression corrections and added scenarios pending. Dragon/other eligible routes, complete effect scenarios and companion lifecycle remain BLOCKED. No module promotion."
+      "companion_business_state": "SkeletonCompanionState exact schema and producer/hydration guards; creation, persisted statistics, subsequent login/read, malformed state, Forest replay/rollback, deterministic Voodoo victory retention and New Day retention tested. Disabled-companion Skeleton Crew path tested with exact persisted parameters/cost/replay. Final additional seeded real HTTP death/removal/subsequent absence and actual Dragon win/reset-clear cases are in test_darkarts_companion_business_state_http; exact-head result is recorded in PR #1. Dragon authorization/replay remains a separate blocker.",
+      "forest_combat_boundary": "Actual HTTP at 353ba60: levels 1/2/3/5, exact persisted costs, subsequent read, duplicate/replay, late-account-write rollback/fresh retry, shared malformed-input/state/CSRF/stale matrices and New Day after actual use PASS on both supported targets. Persisted buff parameters verified. This is a Forest component result, not final module certification. Complete damage/healing/aura accounting, full per-level invalid matrix, missing module/file combat scenarios, multi-target progression and other caller authority remain open."
     },
     {
       "module": "specialtymysticpower",
@@ -1848,7 +1848,7 @@
       "settings_preferences_result": "PASS for named defaults and raw round trips; NOT APPLICABLE for empty namespaces",
       "object_preferences_result": "NOT APPLICABLE",
       "direct_runmodule_route": "BLOCKED",
-      "direct_route_note": "Shared onboarding PASS through actual HTTP: exact identity, default-zero and preserved earned skill/uses, forged extra fields, inactive/missing module and missing file, stale preferences/account state, CSRF, duplicate/reselection/replay, late-account-write rollback, fresh retry and actual New Day skill-derived restoration. Combat level/use/state/POST/CSRF/replay/persistence/rollback and companion business schema remain BLOCKED. Both supported targets PASS at 82bb591d5355ccd0e5a071f1d4fd3efd7033c7ba: 74 PHPUnit tests / 2231 assertions / 33 Python and HTTP tests / 310 PHP files linted; zero failures/skips. Modern core 34886260212 and Baseline integrity 34886260167 SUCCESS.",
+      "direct_route_note": "Actual HTTP at 353ba60: levels 1/2/3/5, exact persisted costs, subsequent read, duplicate/replay, late-account-write rollback/fresh retry, shared malformed-input/state/CSRF/stale matrices and New Day after actual use PASS on both supported targets. Persisted buff parameters verified. This is a Forest component result, not final module certification. Complete damage/healing/aura accounting, full per-level invalid matrix, missing module/file combat scenarios, multi-target progression and other caller authority remain open. Shared specialty onboarding remains certified and unchanged.",
       "database_tables": [],
       "database_behavior": "PASS: strict fresh install/reinstall and tested metadata writes; purchase/admin transactions not certified",
       "daily_hooks": [
@@ -1871,12 +1871,12 @@
       "mariadb_11_4": "PASS for tested components; final BLOCKED for remaining gates",
       "mysql_8_4": "PASS for tested components; final BLOCKED for remaining gates",
       "warnings_errors": "No PHP warnings/errors in the passing matrix tests; unexecuted paths unverified.",
-      "security_notes": "Shared onboarding PASS through actual HTTP: exact identity, default-zero and preserved earned skill/uses, forged extra fields, inactive/missing module and missing file, stale preferences/account state, CSRF, duplicate/reselection/replay, late-account-write rollback, fresh retry and actual New Day skill-derived restoration. Combat level/use/state/POST/CSRF/replay/persistence/rollback and companion business schema remain BLOCKED. Both supported targets PASS at 82bb591d5355ccd0e5a071f1d4fd3efd7033c7ba: 74 PHPUnit tests / 2231 assertions / 33 Python and HTTP tests / 310 PHP files linted; zero failures/skips. Modern core 34886260212 and Baseline integrity 34886260167 SUCCESS.",
+      "security_notes": "Actual HTTP at 353ba60: levels 1/2/3/5, exact persisted costs, subsequent read, duplicate/replay, late-account-write rollback/fresh retry, shared malformed-input/state/CSRF/stale matrices and New Day after actual use PASS on both supported targets. Persisted buff parameters verified. This is a Forest component result, not final module certification. Complete damage/healing/aura accounting, full per-level invalid matrix, missing module/file combat scenarios, multi-target progression and other caller authority remain open. Shared specialty onboarding remains certified and unchanged.",
       "final_certification": "BLOCKED",
       "continuation_evidence": "Shared onboarding PASS through actual HTTP: exact identity, default-zero and preserved earned skill/uses, forged extra fields, inactive/missing module and missing file, stale preferences/account state, CSRF, duplicate/reselection/replay, late-account-write rollback, fresh retry and actual New Day skill-derived restoration. Combat level/use/state/POST/CSRF/replay/persistence/rollback and companion business schema remain BLOCKED. Both supported targets PASS at 82bb591d5355ccd0e5a071f1d4fd3efd7033c7ba: 74 PHPUnit tests / 2231 assertions / 33 Python and HTTP tests / 310 PHP files linted; zero failures/skips. Modern core 34886260212 and Baseline integrity 34886260167 SUCCESS.",
-      "next_required_gate": "Finish actual HTTP effect and companion lifecycle coverage; close Dragon specialty/combat/outcome authority and multi-target behavior before promotion, then general combat schema.",
+      "next_required_gate": "Finish complete effect and per-level authority matrices; close Dragon and other battle callers, including terminal/reset authority and multi-target combat, before module promotion. Then general combat schema.",
       "previous_certification": "BLOCKED",
-      "forest_combat_boundary": "Implemented shared Forest POST/CSRF/current-state intent and transaction, exact costs 1/2/3/5, persisted buff parameters, replay, malformed-state matrices, rollback and New Day after use. CI regression corrections and added scenarios pending. Dragon/other eligible routes, complete effect scenarios and companion lifecycle remain BLOCKED. No module promotion."
+      "forest_combat_boundary": "Actual HTTP at 353ba60: levels 1/2/3/5, exact persisted costs, subsequent read, duplicate/replay, late-account-write rollback/fresh retry, shared malformed-input/state/CSRF/stale matrices and New Day after actual use PASS on both supported targets. Persisted buff parameters verified. This is a Forest component result, not final module certification. Complete damage/healing/aura accounting, full per-level invalid matrix, missing module/file combat scenarios, multi-target progression and other caller authority remain open."
     },
     {
       "module": "specialtythiefskills",
@@ -1963,7 +1963,7 @@
       "settings_preferences_result": "PASS for named defaults and raw round trips; NOT APPLICABLE for empty namespaces",
       "object_preferences_result": "NOT APPLICABLE",
       "direct_runmodule_route": "BLOCKED",
-      "direct_route_note": "Shared onboarding PASS through actual HTTP: exact identity, default-zero and preserved earned skill/uses, forged extra fields, inactive/missing module and missing file, stale preferences/account state, CSRF, duplicate/reselection/replay, late-account-write rollback, fresh retry and actual New Day skill-derived restoration. Combat level/use/state/POST/CSRF/replay/persistence/rollback and companion business schema remain BLOCKED. Both supported targets PASS at 82bb591d5355ccd0e5a071f1d4fd3efd7033c7ba: 74 PHPUnit tests / 2231 assertions / 33 Python and HTTP tests / 310 PHP files linted; zero failures/skips. Modern core 34886260212 and Baseline integrity 34886260167 SUCCESS.",
+      "direct_route_note": "Actual HTTP at 353ba60: levels 1/2/3/5, exact persisted costs, subsequent read, duplicate/replay, late-account-write rollback/fresh retry, shared malformed-input/state/CSRF/stale matrices and New Day after actual use PASS on both supported targets. Persisted buff parameters verified. This is a Forest component result, not final module certification. Complete damage/healing/aura accounting, full per-level invalid matrix, missing module/file combat scenarios, multi-target progression and other caller authority remain open. Shared specialty onboarding remains certified and unchanged.",
       "database_tables": [],
       "database_behavior": "PASS: strict fresh install/reinstall and tested metadata writes; purchase/admin transactions not certified",
       "daily_hooks": [
@@ -1986,29 +1986,27 @@
       "mariadb_11_4": "PASS for tested components; final BLOCKED for remaining gates",
       "mysql_8_4": "PASS for tested components; final BLOCKED for remaining gates",
       "warnings_errors": "No PHP warnings/errors in the passing matrix tests; unexecuted paths unverified.",
-      "security_notes": "Shared onboarding PASS through actual HTTP: exact identity, default-zero and preserved earned skill/uses, forged extra fields, inactive/missing module and missing file, stale preferences/account state, CSRF, duplicate/reselection/replay, late-account-write rollback, fresh retry and actual New Day skill-derived restoration. Combat level/use/state/POST/CSRF/replay/persistence/rollback and companion business schema remain BLOCKED. Both supported targets PASS at 82bb591d5355ccd0e5a071f1d4fd3efd7033c7ba: 74 PHPUnit tests / 2231 assertions / 33 Python and HTTP tests / 310 PHP files linted; zero failures/skips. Modern core 34886260212 and Baseline integrity 34886260167 SUCCESS.",
+      "security_notes": "Actual HTTP at 353ba60: levels 1/2/3/5, exact persisted costs, subsequent read, duplicate/replay, late-account-write rollback/fresh retry, shared malformed-input/state/CSRF/stale matrices and New Day after actual use PASS on both supported targets. Persisted buff parameters verified. This is a Forest component result, not final module certification. Complete damage/healing/aura accounting, full per-level invalid matrix, missing module/file combat scenarios, multi-target progression and other caller authority remain open. Shared specialty onboarding remains certified and unchanged.",
       "final_certification": "BLOCKED",
       "continuation_evidence": "Shared onboarding PASS through actual HTTP: exact identity, default-zero and preserved earned skill/uses, forged extra fields, inactive/missing module and missing file, stale preferences/account state, CSRF, duplicate/reselection/replay, late-account-write rollback, fresh retry and actual New Day skill-derived restoration. Combat level/use/state/POST/CSRF/replay/persistence/rollback and companion business schema remain BLOCKED. Both supported targets PASS at 82bb591d5355ccd0e5a071f1d4fd3efd7033c7ba: 74 PHPUnit tests / 2231 assertions / 33 Python and HTTP tests / 310 PHP files linted; zero failures/skips. Modern core 34886260212 and Baseline integrity 34886260167 SUCCESS.",
-      "next_required_gate": "Finish actual HTTP effect and companion lifecycle coverage; close Dragon specialty/combat/outcome authority and multi-target behavior before promotion, then general combat schema.",
+      "next_required_gate": "Finish complete effect and per-level authority matrices; close Dragon and other battle callers, including terminal/reset authority and multi-target combat, before module promotion. Then general combat schema.",
       "previous_certification": "BLOCKED",
-      "forest_combat_boundary": "Implemented shared Forest POST/CSRF/current-state intent and transaction, exact costs 1/2/3/5, persisted buff parameters, replay, malformed-state matrices, rollback and New Day after use. CI regression corrections and added scenarios pending. Dragon/other eligible routes, complete effect scenarios and companion lifecycle remain BLOCKED. No module promotion."
+      "forest_combat_boundary": "Actual HTTP at 353ba60: levels 1/2/3/5, exact persisted costs, subsequent read, duplicate/replay, late-account-write rollback/fresh retry, shared malformed-input/state/CSRF/stale matrices and New Day after actual use PASS on both supported targets. Persisted buff parameters verified. This is a Forest component result, not final module certification. Complete damage/healing/aura accounting, full per-level invalid matrix, missing module/file combat scenarios, multi-target progression and other caller authority remain open."
     }
   ],
-  "validated_implementation_sha": "77c58792f87afad71c0db5fc77042cd39ab418b8",
-  "modern_core_run": 34842503298,
-  "baseline_integrity_run": 34842503326,
+  "validated_implementation_sha": "353ba60ee0fad71fdc46669009c8a349dc4f0ecc",
+  "modern_core_run": 34892412719,
+  "baseline_integrity_run": 34892412674,
   "supported_matrix": [
     {
       "php": "8.4.25",
       "database": "MariaDB 11.4.13",
-      "job": 103970582048,
-      "result": "PASS supported scope"
+      "result": "PASS supported component scope at 353ba60"
     },
     {
       "php": "8.5.10",
       "database": "MySQL 8.4.11",
-      "job": 103970582001,
-      "result": "PASS supported scope"
+      "result": "PASS supported component scope at 353ba60"
     }
   ],
   "counts": {

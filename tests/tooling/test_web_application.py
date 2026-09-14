@@ -40,9 +40,13 @@ class WebApplicationTests(unittest.TestCase):
         with socket.socket() as sock:
             sock.bind(('127.0.0.1', 0))
             cls.port = sock.getsockname()[1]
+        # Outside the application tree; only the loopback fixture server loads this.
+        cls.seed_file = tempfile.NamedTemporaryFile(mode='w', suffix='.php')
+        cls.seed_file.write("<?php if (($_SERVER['HTTP_X_RESURRECTION_FIXTURE'] ?? '') === 'skeleton-death') mt_srand(12345);\n")
+        cls.seed_file.flush()
         cls.server_log = tempfile.TemporaryFile(mode='w+t')
         cls.server = subprocess.Popen([shutil.which('php'), '-d', 'display_errors=1', '-d', 'error_reporting=-1',
-                                       '-d', 'zend.exception_ignore_args=1', '-S', f'127.0.0.1:{cls.port}', '-t', str(ROOT)],
+                                       '-d', 'zend.exception_ignore_args=1', '-d', 'auto_prepend_file='+cls.seed_file.name, '-S', f'127.0.0.1:{cls.port}', '-t', str(ROOT)],
                                       stdout=subprocess.DEVNULL, stderr=cls.server_log, cwd=ROOT)
         for _ in range(100):
             try:
@@ -62,6 +66,7 @@ class WebApplicationTests(unittest.TestCase):
         cls.server.terminate()
         cls.server.wait(timeout=5)
         cls.server_log.close()
+        cls.seed_file.close()
         cls.config.unlink()
 
     @staticmethod
@@ -1120,6 +1125,10 @@ function resurrectionrandomfixture_dohook($hook,$args) { mt_srand((int)getsettin
             for path in ['forest.php?op=fight&skill=DA&l=1','forest.php?op=fight&skill=MP&l=5','forest.php?op=fight&skill=TS&l=3']:
                 self.assertEqual(400,request(path)[0]); self.assertEqual(before,state())
             anonymous=self._security_client(login=None); self.assertIn(anonymous(url,{'level':'1'})[0],[302,303,403]); self.assertEqual(before,state())
+            for path in ['battle.php','battle.php?op=fight&skill=DA&l=1','battle.php/extra?op=fight&skill=DA&l=1']:
+                for data in [None,{'level':'1','skill':'DA'}]:
+                    self.assertEqual(404,request(path,data)[0]); self.assertEqual(before,state())
+                    self.assertEqual(404,anonymous(path,data)[0]); self.assertEqual(before,state())
         finally:
             self.query("DELETE FROM settings WHERE setting='enablecompanions'")
             for row in companion_setting: self.query("INSERT INTO settings(setting,value) VALUES ('enablecompanions',?)",[row['value']])
@@ -1139,7 +1148,7 @@ function resurrectionrandomfixture_dohook($hook,$args) { mt_srand((int)getsettin
         self.query('UPDATE modules SET active=0')
         self.query("UPDATE modules SET active=1 WHERE modulename='specialtydarkarts'")
         call=self._security_client()
-        def request(url,form=None): self._security_allow(player,url); return call(url,form)
+        def request(url,form=None,fixture=None): self._security_allow(player,url); return call(url,form,fixture=fixture)
         def encode(value):
             return subprocess.run([shutil.which('php'),'-r','echo serialize(json_decode(stream_get_contents(STDIN),true));'],input=json.dumps(value),text=True,capture_output=True,cwd=ROOT,check=True).stdout
         def companions():
@@ -1178,6 +1187,18 @@ function resurrectionrandomfixture_dohook($hook,$args) { mt_srand((int)getsettin
             self.assertEqual(skeleton['attack'],retained['attack']); before=snapshot()
             self.assertEqual(409,request('forest.php?op=specialty',victoryform)[0]); self.assertEqual(before,snapshot())
             self.assertEqual(200,request('newday.php?continue=1')[0]); self.assertEqual(retained,companions()['skeleton_warrior'])
+            # A fixed RNG seed drives the real companion damage/removal path.
+            lethal={'enemies':[dict(enemy,creaturehealth=100000000,creatureattack=100000,creaturedefense=100000)],'options':{'type':'forest'}}
+            wounded=dict(skeleton,hitpoints=1)
+            self.query('UPDATE accounts SET badguy=?,companions=?,hitpoints=1000000000,maxhitpoints=1000000000,attack=1,defense=1 WHERE acctid=?',[encode(lethal),encode({'skeleton_warrior':wounded}),player])
+            status,body=request('forest.php?op=specialty'); self.assertEqual(200,status,body[:2000])
+            deathform=self._security_fields(body)|{'level':'3'}
+            status,body=request('forest.php?op=specialty',deathform,fixture='skeleton-death')
+            self.assertEqual(200,status,body[:2000]); self.assertIn('Your skeleton warrior crumbles to dust.',body)
+            self.assertEqual([],companions()); before=snapshot()
+            self.assertEqual(409,request('forest.php?op=specialty',deathform,fixture='skeleton-death')[0]); self.assertEqual(before,snapshot())
+            status,body=request('forest.php?op=specialty'); self.assertEqual(200,status)
+            self.assertEqual(200,request('forest.php?op=specialty',self._security_fields(body)|{'level':'2'},fixture='skeleton-death')[0]); self.assertEqual([],companions())
             # Return to a live encounter before injecting malformed persisted companions.
             self.query('UPDATE accounts SET badguy=? WHERE acctid=?',[encode({'enemies':[enemy],'options':{'type':'forest'}}),player])
             # Valid persistent runtime flags and injury survive read-only hydration.
@@ -1203,6 +1224,17 @@ function resurrectionrandomfixture_dohook($hook,$args) { mt_srand((int)getsettin
             # Recovery is explicit fixture/admin repair, never silent state deletion.
             self.query('UPDATE accounts SET companions=? WHERE acctid=?',[encode({'skeleton_warrior':skeleton}),player])
             self.assertEqual(200,request('village.php')[0]); self.assertEqual(skeleton,companions()['skeleton_warrior'])
+            # Retained Dragon lifecycle, through a real win and its generated continuation.
+            # This is NOT certification of the still-legacy Dragon HTTP authority.
+            dragon={'creaturename':'The Green Dragon','creaturelevel':18,'creatureweapon':'Great Flaming Maw',
+                'creatureattack':1,'creaturedefense':1,'creaturehealth':1,'diddamage':0,'type':'dragon'}
+            self.query("UPDATE accounts SET badguy=?,level=15,hitpoints=150,maxhitpoints=150,attack=1,defense=1,bufflist='a:0:{}' WHERE acctid=?",[encode(dragon),player])
+            self.query("UPDATE module_userprefs SET value='5' WHERE userid=? AND modulename='specialtydarkarts' AND setting='uses'",[player])
+            status,body=request('dragon.php?op=fight&skill=DA&l=2'); self.assertEqual(200,status,body[:2000])
+            self.assertIn('skeleton_warrior',companions())
+            link=re.search(r'dragon\.php\?op=prologue1(?:&amp;|&)flawless=[01]',body)
+            self.assertIsNotNone(link,body[:2000]); self.assertEqual(200,request(html.unescape(link.group(0)))[0])
+            self.assertEqual([],companions()); self.assertEqual('1',self.query('SELECT dragonkills FROM accounts WHERE acctid=?',[player])[0]['dragonkills'])
         finally:
             self.query('UPDATE accounts SET '+','.join(k+'=?' for k in original)+' WHERE acctid=?',[*original.values(),player])
             self.query('DELETE FROM module_userprefs WHERE userid=?',[player])
@@ -1361,9 +1393,10 @@ function resurrectionrandomfixture_dohook($hook,$args) { mt_srand((int)getsettin
         class NoRedirect(urllib.request.HTTPRedirectHandler):
             def redirect_request(self, *args): return None
         client=urllib.request.build_opener(urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar()),NoRedirect)
-        def request(url, data=None):
+        def request(url, data=None, fixture=None):
             req=urllib.request.Request(f'http://127.0.0.1:{self.port}/'+url,
-                data=None if data is None else urllib.parse.urlencode(data).encode())
+                data=None if data is None else urllib.parse.urlencode(data).encode(),
+                headers={} if fixture is None else {'X-Resurrection-Fixture':fixture})
             try: response=client.open(req,timeout=20)
             except urllib.error.HTTPError as error: response=error
             body=response.read().decode('utf-8',errors='replace')

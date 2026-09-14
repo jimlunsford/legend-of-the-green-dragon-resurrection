@@ -834,3 +834,101 @@ Companion-only implementation `78696d40470c89df8fd8371ed8387a7af6395c4a` passed 
 The corrected implementation `33b5408493353c3dc6a45cdbccfee802cd894ef2` passed strict analysis but Modern core 34890886760 exposed two HTTP fixture expectations: MP regeneration retains the PDO-loaded level string "10", and anonymous forced navigation uses the retained 302 redirect. No effect formula or redirect implementation was changed to satisfy the tests. Dark Arts companion HTTP passed; remaining completed Forest matrices passed before the final redirect assertion. Baseline integrity 34890886751 passed. Corrections retain exact persisted value/type expectations. Additional pending checks cover deterministic Voodoo terminal clearing, skeleton victory/New Day retention, the companions-disabled fallback, a fresh-intent insufficient budget distinct from stale preferences, and required diddamage/integral target identity.
 
 Additional level-1 skeleton fixture at `b3e6ac6c4e9d139b28974937243628c44f0f1239` incorrectly expected attack 7.5. The unchanged historical formula is round(1/4+2)*round(1/3+2)+1.5 = 5.5. Modern core 34892137466 correctly failed that new unit fixture; Baseline integrity 34892137478 passed. The fixture is corrected to 5.5 without modifying either formula or validator.
+
+
+## Accepted Forest component checkpoint and final publication tests
+
+Actual starting SHA: `e70429e22d7c0c47570db998e609677c5dcfa2a2`. Accepted implementation ending SHA: `353ba60ee0fad71fdc46669009c8a349dc4f0ecc` (five appended commits). This subsequent checkpoint/direct-entry/lifecycle-test commit is the publication tip; its literal SHA, final commit count and exact-head workflow results are recorded in PR #1 and the execution report, avoiding a self-referential commit hash.
+
+Repository: https://github.com/jimlunsford/legend-of-the-green-dragon-resurrection. Branch `modernization/core-modernization`. Main remains `999cec6f9c655a840320d982d673bb863c68c2b2`. PR #1 OPEN / DRAFT / NOT READY / NOT MERGED. No actual merge SHA. Phase 3 INCOMPLETE. Modern-core merge NO. Public hosting NO.
+
+### Verified acceptance at the implementation SHA
+
+Both PHP 8.4.25 + MariaDB 11.4.13 and PHP 8.5.10 + MySQL 8.4.11 passed: **80 PHPUnit tests / 2,350 assertions / 35 Python-HTTP tests / 315 linted PHP files / zero failures / zero skips**. Legacy PHPStan level 0 retains seven baseline findings with no new errors. Infrastructure level 6 has zero errors and no baseline. Composer strict validation, locked install and audit pass. Fresh installation, authentication, all 24 lifecycle checks, retained module suites and unchanged specialty onboarding regressions pass.
+
+Modern core **34892412719 SUCCESS**; Baseline integrity **34892412674 SUCCESS**. Earlier failed commits/runs remain in history as recorded above. No coverage or gate was removed. Final publication adds direct battle.php rejection and seeded companion death/removal plus actual Dragon lifecycle tests; those additions require the exact-head run linked in PR #1. They are not retroactively attributed to the implementation run.
+
+### All bundled module statuses
+
+**21 PASS / 0 PASS WITH DOCUMENTED LIMITATION / 3 BLOCKED; 24 lifecycle PASS.** The 24/24 module-certification milestone is NOT reached.
+
+| Module | Final certification |
+|---|---|
+| cedrikspotions | PASS |
+| crazyaudrey | PASS |
+| dag | PASS |
+| darkhorse | PASS |
+| drinks | PASS |
+| fairy | PASS |
+| findgem | PASS |
+| findgold | PASS |
+| foilwench | PASS |
+| game_dice | PASS |
+| game_fivesix | PASS |
+| game_stones | PASS |
+| glowingstream | PASS |
+| goldmine | PASS |
+| lovers | PASS |
+| outhouse | PASS |
+| racedwarf | PASS |
+| raceelf | PASS |
+| racehuman | PASS |
+| racetroll | PASS |
+| sethsong | PASS |
+| specialtydarkarts | BLOCKED |
+| specialtymysticpower | BLOCKED |
+| specialtythiefskills | BLOCKED |
+
+### Specialty and companion evidence
+
+| Requirement | Result and precise scope |
+|---|---|
+| Dark Arts final status | BLOCKED, no promotion |
+| Dark Arts level 1 | Forest POST creates the real skeleton; exact cost 1 and persisted max HP/attack/defense at player level 10 are 43/26.5/14.5; subsequent login/read, replay and rollback covered |
+| Dark Arts level 2 | Forest POST cost 2, persistence/replay/rollback; positive historical Voodoo minimum deterministically kills a one-HP target, proving terminal clearing and companion retention |
+| Dark Arts level 3 | Forest POST cost 3; persisted five-round curse has four rounds remaining and badguydmgmod 0.5; replay/rollback covered |
+| Dark Arts level 5 | Forest POST cost 5; four remaining rounds, badguyatkmod/badguydefmod 0; replay/rollback covered |
+| Skeleton Crew fallback | Companions disabled: cost 1 (9 to 8); at level 10, four minions, max damage 6, four remaining rounds, no companion, replay rejected |
+| Companion business schema | Exact named skeleton fields/text/ability/ignorelimit, finite bounded positive HP/statistics, HP at most max HP, formula-consistent creation statistics, optional boolean used/suspended only; unchanged ScalarState |
+| Companion malformed state | Missing fields, wrong types, impossible/oversized statistics, malformed encoding/root, object payloads, unsupported flags/abilities/lifetime/nested extensions reject before gameplay with no state change; no silent repair/deletion |
+| Companion creation/persistence/combat | Actual Forest action and stored formula statistics, used flag and surviving health verified; subsequent authenticated hydration preserves the state |
+| Companion replay/rollback | Forest duplicate/replay preserves state; late account-write failure rolls back prior uses and player/combat/companion persistence; fresh form retries. No crash-safe exactly-once claim |
+| Companion lifetime | No round counter or expire-after-fight rule invented. Living skeleton survives victory and New Day. Final publication adds deterministic seeded HTTP death/removal, replay and next-action absence, plus actual Dragon victory/continuation clearing |
+| Mystical Powers final status | BLOCKED, no promotion |
+| Mystical Powers 1/2/3/5 | Each Forest POST consumes exact cost 1/2/3/5 and persists state, with replay/rollback/fresh retry. Persisted effects: regen string "10" and aura; Earth Fist min 1/max 30/one minion/area flag; lifetap 1; damage shield 2. Four rounds remain after the action |
+| Thieving Skills final status | BLOCKED, no promotion |
+| Thieving Skills 1/2/3/5 | Each Forest POST consumes exact cost 1/2/3/5 and persists state, with replay/rollback/fresh retry. Persisted effects: enemy attack 0.5; player attack 2; enemy attack 0; player attack/defense 3. Four rounds remain |
+| New Day after real use | Each selected specialty uses level 5 through Forest HTTP: uses 9 to 4, then New Day restores floor(15/3)+specialtybonus, retaining selection |
+| Complete effects/authority | Still incomplete: exact damage/healing/aura accounting across all supported scenarios, full per-level invalid matrix, missing module/file combat tests, multi-target progression and other caller authority. Shared onboarding was retained, not rebuilt |
+
+### Authority, combat schema and failure behavior
+
+| Requirement | Evidence/status |
+|---|---|
+| Shared authority | One Forest dispatcher derives selected specialty/module/preferences/effects from server state, locks/rechecks through existing player transaction and accepts only supported posted level |
+| Exact use consumption | All twelve Forest actions verify stored 9 minus level and subsequent read; companion creation also verifies 5 to 4; fallback 9 to 8 |
+| Insufficient/zero/negative/malformed uses | Shared HTTP coverage includes fresh-context insufficient budget, zero use, negative, nonnumeric, serialized-looking and excessive stored values; no state mutation |
+| Earned skill | Server predicate requires skill at least action level; changed-to-zero stored skill rejects stale form. Full independent per-level insufficient-skill matrix remains open |
+| Wrong/no/inactive specialty | Shared Forest HTTP rejection with unchanged state; active-module rejection exercised for each specialty. Full per-level cross-specialty matrix remains open |
+| Typed input/effect injection | Missing/zero/negative/nonnumeric/array/unsupported/excessive levels and extra client effect/identity/state fields reject |
+| POST/CSRF | Forest specialty GET renders without game mutation; legacy Forest skill/l GET rejects; missing/bad CSRF rejects; anonymous request retains login redirect |
+| Intent/replay | State-bound session action intent; duplicate and replay checked for all twelve actions; consumed failures require fresh forms. No universal exactly-once claim |
+| Missing/malformed/dead/terminal/stale combat | No/empty/malformed/object state, invalid stats/identity/flags, dead/zero/negative target, changed target HP and cleared combat reject without effect. Full per-level matrix and broader routes remain open |
+| Validated combat fields | Exact enemies/options envelope; bounded count, integer identity/level, name/weapon, HP/attack/defense, gold/experience, playerstarthp, diddamage and finite flags, target eligibility, type/maxattacks/surprise/experience maps; seeded optional NULL text retained |
+| Rollback/error behavior | Preferences, player, buffs, companion and combat are within Forest transaction. Late account CHECK failure produces controlled 500 and unchanged snapshots; fresh retry works. Validation gives controlled 400/409; no PHP error page |
+| Combat persistence/termination | All twelve actions persist changed combat; deterministic Voodoo win clears terminal state and rejects replay. Full normal combat/reward/defeat progression remains unclosed |
+| Recovery | Malformed state is preserved and rejected for explicit repair, not silently reinterpreted or deleted. General combat recovery remains BLOCKED |
+| Direct battle.php | Final publication rejects standalone authenticated/anonymous GET/POST and PATH_INFO requests before bootstrap. Caller includes remain supported; this is not closure of all callers |
+| General schema milestone | NOT closed. SpecialtyCombatState is narrow Forest specialty validation; dead-enemy multi-target progression, general Forest/Dragon/training/PvP/buff schemas remain work |
+
+### Remaining core gates and preservation
+
+Dragon-point authority was not reached: dk/pdk remain unclosed. Meaningful GET remains in ordinary Forest actions, Dragon specialty combat/prologue reset, dragon-point allocation, petition administration, clans, equipment, stables, training and legacy editors. The specialty GET family cannot be removed globally. Those routes retain unproven replay/failure semantics.
+
+Mail send/reply/systemmail, petitions, clans, bank/economy, weapons/armor, mounts/stables, training/masters, broader PvP, administrator/content editors, remaining serialized business schemas, expiration cleanup and account-deletion failure semantics remain BLOCKED. Existing protected PvP behavior is retained. `lib/expire_chars.php` still advances `last_char_expire` before cleanup completes.
+
+Serialization inventory: **89 sites / 44 files / 32 writers-checks / 56 ScalarState reads / one centralized unserialize**. New business validators: SkeletonCompanionState and SpecialtyCombatState. ScalarState itself is unchanged.
+
+Historical tag `historical-source-1.1.2`: object `51cab4fbe58a234651a3177a56289b18bc152b4d`, source `bdc29df9bc344774b41e0ad7cae7f6ed2f7512e2`, tree `4013a0ccc5227e87cd7a22de00b7c322d7aa237c`, 417 files / 11 preservation commits. Historical repositories untouched; no moved tag. VPS untouched. No public runtime, deployment, release/version tag/package, archive import, framework rewrite, gameplay rebalance, new modernization branch, PR #2, merge or Phase 4.
+
+Exact next Phase 3 step: finish the complete specialty effect/invalid-authority matrices, then close Dragon and remaining battle-caller specialty/terminal authority and multi-target state before promoting any specialty. Only after all three qualify, record 24/24 and continue general combat schema closure. **Phase 3 INCOMPLETE / modern-core merge NO / public hosting NO.**
