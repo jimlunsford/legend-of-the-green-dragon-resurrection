@@ -23,7 +23,7 @@ function resurrection_combat_context(array $specialty): string {
     $session['user']['bufflist'] = serialize($session['bufflist']);
     $state = [];
     foreach (['acctid','specialty','badguy','companions','bufflist','hitpoints','maxhitpoints','attack','defense','level','alive','lasthit','specialinc','location'] as $key) $state[$key]=(string)$session['user'][$key];
-    $context = hash('sha256',json_encode([$state,$specialty], JSON_THROW_ON_ERROR));
+    $context = hash('sha256',json_encode([$state,$specialty,(bool)getsetting('enablecompanions',true)], JSON_THROW_ON_ERROR));
     calculate_buff_fields();
     return $context;
 }

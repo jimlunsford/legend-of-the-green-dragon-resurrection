@@ -10,7 +10,7 @@ final class SpecialtyCombatStateTest extends TestCase
     {
         return ['enemies'=>[['creatureid'=>'1','creaturelevel'=>10,'creaturehealth'=>1000,
             'creatureattack'=>10,'creaturedefense'=>10,'creaturegold'=>10,'creatureexp'=>10,
-            'playerstarthp'=>100,'creaturename'=>'Opponent','creatureweapon'=>'Claws']],
+            'playerstarthp'=>100,'diddamage'=>0,'creaturename'=>'Opponent','creatureweapon'=>'Claws']],
             'options'=>['type'=>'forest']];
     }
     public function testLiveStateRoundTripsWithoutReinterpretation(): void
@@ -31,6 +31,11 @@ final class SpecialtyCombatStateTest extends TestCase
             'creaturegold'=>INF,'creatureexp'=>2147483648,'creatureid'=>false,'dead'=>true,
             'terminal'=>true,'istarget'=>[],'cannotbetarget'=>true] as $key=>$value) {
             $state=$this->state(); $state['enemies'][0][$key]=$value; $cases[]=$state;
+        }
+        foreach (['creatureid','creaturelevel'] as $key) {
+            foreach ([1.5,'1.5'] as $value) {
+                $state=$this->state(); $state['enemies'][0][$key]=$value; $cases[]=$state;
+            }
         }
         foreach ([[],['type'=>'dragon'],['type'=>'forest','maxattacks'=>0],
             ['type'=>'forest','experience'=>[99=>10]],['type'=>'forest','terminal'=>true]] as $options) {

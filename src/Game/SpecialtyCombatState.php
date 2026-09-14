@@ -40,6 +40,9 @@ final class SpecialtyCombatState
             $flags = ['dead','istarget','diddamage','expgained','killedplayer','alwaysattacks','hidehitpoints','forest','graveyard','cannotbetarget','essentialleader','fleesifalone'];
             if (array_diff(array_keys($enemy), [...$numeric,...$text,...$flags]) !== []) throw new \DomainException('Unexpected combat field.');
             foreach ($numeric as $key) self::number($enemy[$key] ?? null, in_array($key,['creatureid','creaturelevel','playerstarthp'],true)?1:0,2147483647);
+            foreach (['creatureid','creaturelevel'] as $key) {
+                if ((float)$enemy[$key] !== floor((float)$enemy[$key])) throw new \DomainException('Invalid combat identity.');
+            }
             foreach ($text as $key) {
                 if (!array_key_exists($key,$enemy)) {
                     if (in_array($key,['creaturename','creatureweapon'],true)) throw new \DomainException('Missing combat name.');
@@ -49,6 +52,7 @@ final class SpecialtyCombatState
                 if (!is_string($enemy[$key]) || strlen($enemy[$key]) > 4096) throw new \DomainException('Invalid combat text.');
             }
             if ($enemy['creaturename'] === '' || (isset($enemy['type']) && $enemy['type'] !== 'forest')) throw new \DomainException('Invalid combat identity.');
+            self::flag($enemy['diddamage'] ?? null);
             foreach ($flags as $key) if (array_key_exists($key,$enemy)) self::flag($enemy[$key]);
             if ($enemy['creaturehealth'] <= 0 || !empty($enemy['dead']) || !empty($enemy['killedplayer'])) throw new \DomainException('Terminal specialty target.');
             if (!empty($enemy['istarget'])) {

@@ -1018,6 +1018,7 @@ function resurrectionrandomfixture_dohook($hook,$args) { mt_srand((int)getsettin
         original=self.query('SELECT * FROM accounts WHERE acctid=?',[player])[0]
         prefs=self.query('SELECT * FROM module_userprefs WHERE userid=?',[player])
         registry=self.query('SELECT modulename,active FROM modules')
+        companion_setting=self.query("SELECT value FROM settings WHERE setting='enablecompanions'")
         self.query('UPDATE modules SET active=0')
         self.query("UPDATE modules SET active=1 WHERE modulename IN ('specialtydarkarts','specialtymysticpower','specialtythiefskills')")
         call=self._security_client(); url='forest.php?op=specialty'
@@ -1033,7 +1034,7 @@ function resurrectionrandomfixture_dohook($hook,$args) { mt_srand((int)getsettin
                 for key,value in [('uses',uses),('skill',skill)]:
                     self.query('INSERT INTO module_userprefs(modulename,setting,userid,value) VALUES (?,?,?,?) ON DUPLICATE KEY UPDATE value=VALUES(value)',[module,key,player,value])
         def state():
-            return self.query('SELECT specialty,gold,gems,experience,hitpoints,attack,defense,badguy,companions,bufflist FROM accounts WHERE acctid=?',[player])+self.query("SELECT modulename,setting,value FROM module_userprefs WHERE userid=? AND modulename IN ('specialtydarkarts','specialtymysticpower','specialtythiefskills') ORDER BY modulename,setting",[player])
+            return self.query('SELECT specialty,gold,gems,experience,hitpoints,maxhitpoints,alive,turns,age,attack,defense,badguy,companions,bufflist FROM accounts WHERE acctid=?',[player])+self.query("SELECT modulename,setting,value FROM module_userprefs WHERE userid=? AND modulename IN ('specialtydarkarts','specialtymysticpower','specialtythiefskills') ORDER BY modulename,setting",[player])
         def form(level='1'):
             status,body=request(url); self.assertEqual(200,status,body[:1800]); return self._security_fields(body)|{'level':level}
         def decoded(encoded):
@@ -1048,7 +1049,7 @@ function resurrectionrandomfixture_dohook($hook,$args) { mt_srand((int)getsettin
                         self.assertEqual(200,request(url,data)[0])
                         after=state(); self.assertNotEqual(before[0]['badguy'],after[0]['badguy'])
                         effects={('DA','3'):{'badguydmgmod':.5},('DA','5'):{'badguyatkmod':0,'badguydefmod':0},
-                            ('MP','1'):{'regen':10,'aura':True},('MP','2'):{'minioncount':1,'minbadguydamage':1,'maxbadguydamage':30,'areadamage':True},
+                            ('MP','1'):{'regen':'10','aura':True},('MP','2'):{'minioncount':1,'minbadguydamage':1,'maxbadguydamage':30,'areadamage':True},
                             ('MP','3'):{'lifetap':1},('MP','5'):{'damageshield':2},('TS','1'):{'badguyatkmod':.5},
                             ('TS','2'):{'atkmod':2},('TS','3'):{'badguyatkmod':0},('TS','5'):{'atkmod':3,'defmod':3}}
                         if (spec,level) in effects:
@@ -1077,6 +1078,7 @@ function resurrectionrandomfixture_dohook($hook,$args) { mt_srand((int)getsettin
                 for uses in ['0','-1','broken','9999999999','a:0:{}']:
                     prepare(spec,uses=uses)
                     rejected({'level':'1'},409 if uses not in ['0'] else 403)
+                prepare(spec,uses='4'); rejected(form('5'))
                 prepare(spec); data=form('5')
                 self.query("UPDATE module_userprefs SET value='4' WHERE userid=? AND modulename=? AND setting='uses'",[player,module]); rejected(data)
                 prepare(spec); data=form()
@@ -1084,6 +1086,15 @@ function resurrectionrandomfixture_dohook($hook,$args) { mt_srand((int)getsettin
                 prepare(spec); data=form()
                 self.query('UPDATE modules SET active=0 WHERE modulename=?',[module]); rejected(data)
                 self.query('UPDATE modules SET active=1 WHERE modulename=?',[module])
+            prepare('DA')
+            self.query("INSERT INTO settings(setting,value) VALUES ('enablecompanions','0') ON DUPLICATE KEY UPDATE value='0'")
+            data=form(); self.assertEqual(200,request(url,data)[0])
+            result=state(); buff=decoded(result[0]['bufflist'])['da1']
+            self.assertEqual(4,buff['rounds']); self.assertEqual(4,buff['minioncount']); self.assertEqual(6,buff['maxbadguydamage'])
+            self.assertEqual([],decoded(result[0]['companions'])); rejected(data)
+            self.assertEqual('8',self.query("SELECT value FROM module_userprefs WHERE userid=? AND modulename='specialtydarkarts' AND setting='uses'",[player])[0]['value'])
+            self.query("DELETE FROM settings WHERE setting='enablecompanions'")
+            for row in companion_setting: self.query("INSERT INTO settings(setting,value) VALUES ('enablecompanions',?)",[row['value']])
             for level in ['', '0','-1','2.0','six','4','9999999999']:
                 prepare(); data=form(); data['level']=level; rejected(data,400)
             prepare(); data=form(); del data['level']; rejected(data,400)
@@ -1108,8 +1119,10 @@ function resurrectionrandomfixture_dohook($hook,$args) { mt_srand((int)getsettin
             prepare(); before=state(); self.assertEqual(200,request(url)[0]); self.assertEqual(before,state())
             for path in ['forest.php?op=fight&skill=DA&l=1','forest.php?op=fight&skill=MP&l=5','forest.php?op=fight&skill=TS&l=3']:
                 self.assertEqual(400,request(path)[0]); self.assertEqual(before,state())
-            anonymous=self._security_client(login=None); self.assertIn(anonymous(url,{'level':'1'})[0],[303,403]); self.assertEqual(before,state())
+            anonymous=self._security_client(login=None); self.assertIn(anonymous(url,{'level':'1'})[0],[302,303,403]); self.assertEqual(before,state())
         finally:
+            self.query("DELETE FROM settings WHERE setting='enablecompanions'")
+            for row in companion_setting: self.query("INSERT INTO settings(setting,value) VALUES ('enablecompanions',?)",[row['value']])
             self.query('UPDATE accounts SET '+','.join(k+'=?' for k in original)+' WHERE acctid=?',[*original.values(),player])
             self.query('DELETE FROM module_userprefs WHERE userid=?',[player])
             for row in prefs: self.query('INSERT INTO module_userprefs(modulename,setting,userid,value) VALUES (?,?,?,?)',[row['modulename'],row['setting'],player,row['value']])
@@ -1153,6 +1166,20 @@ function resurrectionrandomfixture_dohook($hook,$args) { mt_srand((int)getsettin
             self.assertEqual({'fight':True},skeleton['abilities']); self.assertIs(skeleton['used'],True)
             self.assertEqual('4',self.query("SELECT value FROM module_userprefs WHERE userid=? AND modulename='specialtydarkarts' AND setting='uses'",[player])[0]['value'])
             call=self._security_client(); self.assertEqual(200,request('village.php')[0]); self.assertEqual(skeleton,companions()['skeleton_warrior'])
+            # Voodoo's positive minimum damage deterministically ends a one-HP fight.
+            # A living skeleton has no expireafterfight flag and must survive victory.
+            terminal={'enemies':[dict(enemy,creaturehealth=1)],'options':{'type':'forest'}}
+            self.query('UPDATE accounts SET badguy=? WHERE acctid=?',[encode(terminal),player])
+            status,body=request('forest.php?op=specialty'); self.assertEqual(200,status,body[:2000])
+            victoryform=self._security_fields(body)|{'level':'2'}
+            status,body=request('forest.php?op=specialty',victoryform); self.assertEqual(200,status,body[:2000])
+            self.assertEqual('',self.query('SELECT badguy FROM accounts WHERE acctid=?',[player])[0]['badguy'])
+            retained=companions()['skeleton_warrior']; self.assertEqual(skeleton['hitpoints'],retained['hitpoints'])
+            self.assertEqual(skeleton['attack'],retained['attack']); before=snapshot()
+            self.assertEqual(409,request('forest.php?op=specialty',victoryform)[0]); self.assertEqual(before,snapshot())
+            self.assertEqual(200,request('newday.php?continue=1')[0]); self.assertEqual(retained,companions()['skeleton_warrior'])
+            # Return to a live encounter before injecting malformed persisted companions.
+            self.query('UPDATE accounts SET badguy=? WHERE acctid=?',[encode({'enemies':[enemy],'options':{'type':'forest'}}),player])
             # Valid persistent runtime flags and injury survive read-only hydration.
             for flags in [{'used':False,'suspended':True},{'used':True,'suspended':False}]:
                 state=dict(skeleton,hitpoints=1,**flags)
