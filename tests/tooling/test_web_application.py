@@ -261,6 +261,17 @@ function resurrectionhttpfixture_run() { echo 'fixture-executed'; exit; }
                 self.assertEqual(409,request(save,form)[0])
             finally: self.query('ALTER TABLE module_settings DROP CONSTRAINT fixture_editor_log')
             _,body=request(base); self.assertEqual(200,request(save,{**self._security_fields(body,save),'transcost':'5','transmuteturns':'5'})[0])
+            # Consume the exact configuration written through HTTP, as an ordinary player.
+            potion_before=self.query('SELECT gems,race,bufflist FROM accounts WHERE acctid=?',[player])[0]
+            try:
+                self.query("UPDATE accounts SET superuser=0,gems=100,race='Human',bufflist='a:0:{}' WHERE acctid=?",[player]); call=self._security_client()
+                potion='runmodule.php?module=cedrikspotions&op=gems'; _,body=request(potion)
+                purchase=html.unescape(re.search(r'<form action=[\'\"]([^\'\"]+)',body).group(1))
+                self.assertEqual(200,request(purchase,dict(self._security_fields(body),wish='5',gemcount='10'))[0])
+                actual=self.query('SELECT gems,bufflist FROM accounts WHERE acctid=?',[player])[0]
+                self.assertEqual('95',actual['gems']); self.assertIn('s:6:"rounds";i:5;',actual['bufflist'])
+            finally:
+                self.query('UPDATE accounts SET gems=?,race=?,bufflist=?,superuser=128 WHERE acctid=?',[potion_before['gems'],potion_before['race'],potion_before['bufflist'],player]); call=self._security_client()
             base,save=urls('darkhorse'); text='Tavern " onfocus="alert(1) <script>é</script> \\ O\'Reilly'
             _,body=request(base); self.assertEqual(200,request(save,{**self._security_fields(body,save),'tavernname':text})[0])
             _,body=request(base); self.assertNotIn('<script>é</script>',body); self.assertIn('&lt;script&gt;é&lt;/script&gt;',body)
@@ -450,7 +461,8 @@ function resurrectionhttpfixture_run() { echo 'fixture-executed'; exit; }
 
     def test_darkhorse_mounted_entry_and_exit_http(self):
         player=self.query('SELECT acctid FROM accounts WHERE login=?',['WebPlayer'])[0]['acctid']
-        original=self.query('SELECT hashorse,specialinc,specialmisc,gold,superuser FROM accounts WHERE acctid=?',[player])[0]
+        original=self.query('SELECT hashorse,specialinc,specialmisc,gold,superuser,turns FROM accounts WHERE acctid=?',[player])[0]
+        forest_saved=self.query('SELECT value FROM settings WHERE setting=?',['forestchance'])
         saved=self.query('SELECT value FROM module_settings WHERE modulename=? AND setting=?',['darkhorse','tavernname'])
         self.query('UPDATE modules SET active=1')
         self.query('INSERT INTO mounts(mountname,mountcategory) VALUES (?,?)',['Tavern fixture','Fixture'])
@@ -487,14 +499,21 @@ function resurrectionhttpfixture_run() { echo 'fixture-executed'; exit; }
             self.assertEqual(200,request(leave,form)[0]); self.assertEqual('',state()[0]['specialinc']); after=state()
             # After the event has ended, the same POST cannot re-enter/charge/reward.
             request(leave,form); self.assertEqual(after,state())
-            # Persisted, server-selected event entry also works without a tavern mount.
-            self.query("UPDATE accounts SET hashorse=0,specialinc='module:darkhorse' WHERE acctid=?",[player])
+            # The real Forest selector discovers the encounter without a tavern mount.
+            self.query('UPDATE modules SET active=0'); self.query('UPDATE modules SET active=1 WHERE modulename=?',['darkhorse'])
+            self.query('INSERT INTO settings(setting,value) VALUES (?,?) ON DUPLICATE KEY UPDATE value=VALUES(value)',['forestchance','100'])
+            self.query("UPDATE accounts SET hashorse=0,specialinc='',turns=10 WHERE acctid=?",[player])
+            _,body=request('forest.php?eventhandler=module:darkhorse&op=tavern'); self.assertEqual('',state()[0]['specialinc'])
+            status,body=request('forest.php?op=search'); self.assertEqual(200,status,body[:1000]); self.assertIn('cluster of trees',body)
+            self.assertEqual('module:darkhorse',state()[0]['specialinc']); self.assertEqual('1000',state()[0]['gold'])
             _,body=request('forest.php?op=tavern'); self.assertIn('Configured Tavern',body)
             leave='forest.php?op=leaveleave'; _,body=request(leave); form=self._security_fields(body,leave)
             self.assertEqual(200,request(leave,form)[0]); self.assertEqual('',state()[0]['specialinc'])
             self.query('UPDATE accounts SET hashorse=? WHERE acctid=?',[ident,player]); _,body=request(url); form=self._security_fields(body,url)
             self.query('DELETE FROM mounts WHERE mountid=?',[ident]); self.assertEqual(403,request(url,form)[0])
         finally:
+            self.query('DELETE FROM settings WHERE setting=?',['forestchance'])
+            if forest_saved: self.query('INSERT INTO settings(setting,value) VALUES (?,?)',['forestchance',forest_saved[0]['value']])
             self.query('DELETE FROM module_objprefs WHERE objtype=? AND objid=?',['mounts',ident]); self.query('DELETE FROM mounts WHERE mountid=?',[ident])
             self.query('UPDATE accounts SET '+','.join(k+'=?' for k in original)+' WHERE acctid=?',[*original.values(),player])
             if saved: self.query('UPDATE module_settings SET value=? WHERE modulename=? AND setting=?',[saved[0]['value'],'darkhorse','tavernname'])
