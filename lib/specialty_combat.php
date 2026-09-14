@@ -72,6 +72,9 @@ function resurrection_forest_specialty(): never {
             $GLOBALS['module_prefs'] = [];
             $victory = false; $defeat = false;
             require __DIR__ . '/../battle.php';
+            // battle.php assigns these include-scope result flags.
+            /** @var bool $victory */
+            /** @var bool $defeat */
             require_once __DIR__ . '/forestoutcomes.php';
             if ($victory) {
                 forestvictory($newenemies,$options['denyflawless'] ?? false);

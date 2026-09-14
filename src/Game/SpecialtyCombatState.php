@@ -32,7 +32,7 @@ final class SpecialtyCombatState
                 self::number($value,0,2147483647);
             }
         }
-        $targets = 0; $alive = 0;
+        $targets = 0;
         foreach ($state['enemies'] as $index=>$enemy) {
             if (!is_int($index) || $index < 0 || !is_array($enemy)) throw new \DomainException('Invalid combat enemy.');
             $numeric = ['creatureid','creaturelevel','creaturehealth','creatureattack','creaturedefense','creaturegold','creatureexp','playerstarthp'];
@@ -51,14 +51,13 @@ final class SpecialtyCombatState
             if ($enemy['creaturename'] === '' || (isset($enemy['type']) && $enemy['type'] !== 'forest')) throw new \DomainException('Invalid combat identity.');
             foreach ($flags as $key) if (array_key_exists($key,$enemy)) self::flag($enemy[$key]);
             if ($enemy['creaturehealth'] <= 0 || !empty($enemy['dead']) || !empty($enemy['killedplayer'])) throw new \DomainException('Terminal specialty target.');
-            $alive++;
             if (!empty($enemy['istarget'])) {
                 if (!empty($enemy['cannotbetarget'])) throw new \DomainException('Ineligible combat target.');
                 $targets++;
             }
         }
         // A newly generated encounter may not yet have autosettarget's flag.
-        if ($alive === 0 || $targets > 1) throw new \DomainException('Invalid specialty target.');
+        if ($targets > 1) throw new \DomainException('Invalid specialty target.');
         if ($targets === 0) {
             $available = array_filter($state['enemies'], static fn(array $enemy): bool => empty($enemy['cannotbetarget']));
             if ($available === []) throw new \DomainException('No specialty target.');

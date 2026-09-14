@@ -1065,8 +1065,8 @@ function resurrectionrandomfixture_dohook($hook,$args) { mt_srand((int)getsettin
                         finally: self.query('ALTER TABLE accounts DROP CONSTRAINT fixture_specialty_failure')
                         rejected(data); self.assertEqual(200,request(url,form(level))[0])
                 # Real consumption followed by the shipped New Day restoration.
-                prepare(spec); self.assertEqual(200,request(url,form('3'))[0])
-                self.assertEqual('6',self.query('SELECT value FROM module_userprefs WHERE userid=? AND modulename=? AND setting=?',[player,module,'uses'])[0]['value'])
+                prepare(spec); self.assertEqual(200,request(url,form('5'))[0])
+                self.assertEqual('4',self.query('SELECT value FROM module_userprefs WHERE userid=? AND modulename=? AND setting=?',[player,module,'uses'])[0]['value'])
                 self.query("UPDATE accounts SET badguy='' WHERE acctid=?",[player])
                 self.assertEqual(200,request('newday.php?continue=1')[0])
                 bonus=self.query("SELECT value FROM settings WHERE setting='specialtybonus'")
