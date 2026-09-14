@@ -40,6 +40,13 @@ function handle_event($location, $baseLink=false, $needHeader=false)
 
 	if ($session['user']['specialinc']!=""){
 		$specialinc = $session['user']['specialinc'];
+        // A disabled secured encounter must not silently consume its persisted state.
+        if (str_starts_with($specialinc,'module:')) {
+            $pending=substr($specialinc,7);
+            if (resurrection_secured_event($pending) && !is_module_active($pending)) {
+                http_response_code(403); exit('Event unavailable.');
+            }
+        }
 		$session['user']['specialinc'] = "";
 		if ($needHeader !== false) {
 			page_header($needHeader);

@@ -96,6 +96,9 @@ function goldmine_dohook($hookname,$args){
 function goldmine_runevent($type)
 {
 	global $session;
+	$authority = goldmine_authority();
+	$settings = $authority['settings'];
+	$prefs = $authority['prefs'];
 	// The only type of event we care about are the forest.
 	$from = "forest.php?";
 
@@ -105,14 +108,14 @@ function goldmine_runevent($type)
 	$horsecandie = 0;
 	$horsecansave = 0;
 	if ($hashorse) {
-		$horsecanenter = get_module_objpref('mounts', $hashorse, 'entermine');
+		$horsecanenter = $prefs['entermine'];
 		// See if we automatically tether;
-		if (e_rand(1, 100) <= get_module_setting("alwaystether"))
+		if (e_rand(1, 100) <= $settings['alwaystether'])
 			$horsecanenter = 0;
 		if ($horsecanenter) {
 			// The mount cannot die or save you if it cannot enter
-			$horsecandie = get_module_objpref('mounts', $hashorse, 'dieinmine');
-			$horsecansave = get_module_objpref('mounts', $hashorse, 'saveplayer');
+			$horsecandie = $prefs['dieinmine'];
+			$horsecansave = $prefs['saveplayer'];
 		}
 		require_once("lib/mountname.php");
 		list($mountname, $lcmountname) = getmountname();
@@ -139,7 +142,7 @@ function goldmine_runevent($type)
 			// tether it.  Set enter percent to 0 (the default), to always
 			// tether.
 			if (e_rand(1, 100) > $horsecanenter && $hashorse) {
-				$msg = get_module_objpref('mounts',$hashorse, 'tethermsg');
+				$msg = $prefs['tethermsg'];
 				if ($msg) output ($msg);
 				else {
 					output("`&Seeing that the mine entrance is too small for %s`&, you tether it off to the side of the entrance.`n", $lcmountname);
@@ -221,7 +224,7 @@ function goldmine_runevent($type)
 					if (e_rand(1,100) <= $horsecandie) $horsedead = 1;
 					output("You have been crushed under a ton of rock.`n`nPerhaps the next adventurer will recover your body and bury it properly.`n");
 					if ($horsedead) {
-						$msg = get_module_objpref('mounts', $hashorse, 'deathmsg');
+						$msg = $prefs['deathmsg'];
 						if ($msg) output ($msg);
 						else {
 							output("%s`7's bones were buried right alongside yours.", $mountname);
@@ -247,8 +250,8 @@ function goldmine_runevent($type)
 					$session['user']['experience']+=$exp;
 					$session['user']['alive']=false;
 					$session['user']['hitpoints']=0;
-					$gemlost = round(get_module_setting("percentgemloss")/100 * $session['user']['gems'], 0);
-					$goldlost = round(get_module_setting("percentgoldloss")/100 * $session['user']['gold'], 0);
+					$gemlost = round($settings['percentgemloss']/100 * $session['user']['gems'], 0);
+					$goldlost = round($settings['percentgoldloss']/100 * $session['user']['gold'], 0);
 					debuglog("lost $goldlost gold and $gemlost gems by dying in the goldmine");
 					output("`^%s gold `&and `%%s %s`& were lost when you were buried!", $goldlost, $gemlost, translate_inline($gemlost == 1?"gem":"gems"));
 					$session['user']['gold'] -= $goldlost;
@@ -257,7 +260,7 @@ function goldmine_runevent($type)
 					addnews("%s was completely buried after becoming greedy digging in the mines.",$session['user']['name']);
 				} else {
 					if (isset($horsesave) && $horsesave) {
-						$msg = get_module_objpref('mounts', $hashorse, 'savemsg');
+						$msg = $prefs['savemsg'];
 						if ($msg) output ($msg);
 						else {
 							output("%s`7 managed to drag you to safety in the nick of time!`n", $mountname);
@@ -276,6 +279,51 @@ function goldmine_runevent($type)
 			}
 		}
 	}
+}
+
+/** Read the same declared preference contract used by the shared mount editor.
+ * The event transaction locks these rows; no client values select an outcome.
+ */
+function goldmine_authority(bool $lock=false): array {
+    global $session;
+    require_once 'lib/typed_editor.php';
+    $suffix=$lock?' FOR UPDATE':'';
+    $active=db_query('SELECT active FROM '.db_prefix('modules').' WHERE modulename=?'.$suffix,true,['goldmine']);
+    if (count($active)!==1 || (int)$active[0]['active']!==1) throw new DomainException('Mine inactive.');
+    $info=goldmine_getmoduleinfo();
+    $read=static function (array $layout,array $values): array {
+        $result=[];
+        foreach (\Resurrection\Http\SettingDescriptor::declare($layout) as $key=>$descriptor) {
+            try { $result[$key]=\Resurrection\Http\SettingDescriptor::value($descriptor,$values[$key] ?? $descriptor['default']); }
+            catch (InvalidArgumentException $error) { throw new DomainException('Invalid mine configuration.'); }
+        }
+        return $result;
+    };
+    $settings=$read($info['settings'],resurrection_settings_values('goldmine',$lock));
+    $id=filter_var($session['user']['hashorse'],FILTER_VALIDATE_INT,['options'=>['min_range'=>0,'max_range'=>2147483647]]);
+    if ($id===false) throw new DomainException('Invalid mount identity.');
+    $mount=[]; $prefs=[];
+    if ($id) {
+        $rows=db_query('SELECT * FROM '.db_prefix('mounts').' WHERE mountid=?'.$suffix,true,[$id]);
+        if (count($rows)!==1) throw new DomainException('Mount no longer exists.');
+        $mount=$rows[0];
+        foreach (db_query('SELECT setting,value FROM '.db_prefix('module_objprefs').' WHERE modulename=? AND objtype=? AND objid=? ORDER BY setting'.$suffix,true,['goldmine','mounts',$id]) as $row) $prefs[$row['setting']]=$row['value'];
+        $prefs=$read($info['prefs-mounts'],$prefs);
+    }
+    $race=$session['user']['race'];
+    $raceModule=['Human'=>'racehuman','Elf'=>'raceelf','Dwarf'=>'racedwarf','Troll'=>'racetroll'][$race] ?? null;
+    $raceState=[];
+    if ($raceModule!==null) {
+        $raceState['active']=db_query('SELECT active FROM '.db_prefix('modules').' WHERE modulename=?'.$suffix,true,[$raceModule]);
+        if (isset($raceState['active'][0]) && (int)$raceState['active'][0]['active']===1) {
+            $layout=get_module_info($raceModule)['settings'];
+            $values=resurrection_settings_values($raceModule,$lock);
+            $raceState['settings']=$read(['minedeathchance'=>$layout['minedeathchance']],$values);
+            // The historical hook must read the validated, current database value.
+            $GLOBALS['module_settings'][$raceModule]=array_replace($GLOBALS['module_settings'][$raceModule] ?? [],$values);
+        }
+    }
+    return ['settings'=>$settings,'mount'=>$mount,'prefs'=>$prefs,'race'=>$race,'raceState'=>$raceState];
 }
 
 function goldmine_run(){

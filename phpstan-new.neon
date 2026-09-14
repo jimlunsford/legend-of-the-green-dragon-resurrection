@@ -19,6 +19,7 @@ parameters:
     bootstrapFiles:
         - lib/constants.php
     scanFiles:
+        - modules/goldmine.php
         - lib/su_access.php
         - lib/gamelog.php
         - lib/buffs.php

@@ -30,6 +30,10 @@ function resurrection_run_event(string $module,string $type,string $baseLink,cal
     if ($op==='search') $op='';
     $url=$baseLink.'op='.rawurlencode($op);
     $intent=$context['generation'].':'.$op;
+    if ($module==='goldmine') {
+        try { $intent.=':'.hash('sha256',json_encode(goldmine_authority(),JSON_THROW_ON_ERROR)); }
+        catch (DomainException $error) { http_response_code(409); exit('Invalid mine state.'); }
+    }
     if (($_SERVER['REQUEST_METHOD'] ?? '')!=='POST') {
         $session['user']['specialinc']='module:'.$module;
         output('Continue this encounter?');
@@ -39,12 +43,17 @@ function resurrection_run_event(string $module,string $type,string $baseLink,cal
     }
     resurrection_consume_action('forest-event',$intent);
     try {
-        resurrection_player_mutation(function () use ($run,$op) {
+        resurrection_player_mutation(function () use ($run,$op,$module,$intent,$context) {
             global $session;
+            if ($module==='goldmine') {
+                $locked=goldmine_authority(true);
+                if ($intent!==$context['generation'].':'.$op.':'.hash('sha256',json_encode($locked,JSON_THROW_ON_ERROR))) throw new DomainException('Mine state changed.');
+            }
             $session['user']['specialinc']='';
             httpset('op',$op);
             $run();
         });
     } catch (DomainException $error) { http_response_code(409); exit('Event state changed.'); }
+    catch (Throwable $error) { http_response_code(500); exit('Event could not be completed. Reload before retrying.'); }
     if ($session['user']['specialinc']==='') unset($_SESSION['event_action']);
 }

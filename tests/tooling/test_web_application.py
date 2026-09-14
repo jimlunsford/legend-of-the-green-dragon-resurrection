@@ -214,7 +214,7 @@ function resurrectionhttpfixture_run() { echo 'fixture-executed'; exit; }
             self.query('DELETE FROM settings WHERE setting=?', ['fixture_dependency'])
 
     @contextmanager
-    def _seeded_module_actions(self):
+    def _seeded_module_actions(self, location='header-runmodule'):
         # Installed only in this disposable fixture. Production e_rand remains unchanged.
         name='resurrectionrng'+os.urandom(4).hex(); path=ROOT/'modules'/f'{name}.php'
         with path.open('x') as file:
@@ -224,13 +224,114 @@ function resurrectionrandomfixture_dohook($hook,$args) { mt_srand((int)getsettin
 """.replace('resurrectionrandomfixture',name))
         try:
             self.query('INSERT INTO modules(modulename,active,version) VALUES (?,1,?)',[name,'1.0'])
-            self.query('INSERT INTO module_hooks(modulename,location,`function`,priority,whenactive) VALUES (?,?,?,100,?)',[name,'header-runmodule',name+'_dohook',''])
+            self.query('INSERT INTO module_hooks(modulename,location,`function`,priority,whenactive) VALUES (?,?,?,100,?)',[name,location,name+'_dohook',''])
             yield lambda seed: self.query('INSERT INTO settings(setting,value) VALUES (?,?) ON DUPLICATE KEY UPDATE value=VALUES(value)',['fixture_rng_seed',str(seed)])
         finally:
             self.query('DELETE FROM module_hooks WHERE modulename=?',[name])
             self.query('DELETE FROM modules WHERE modulename=?',[name])
             self.query('DELETE FROM settings WHERE setting=?',['fixture_rng_seed'])
             path.unlink()
+
+    def test_goldmine_deterministic_http_authority(self):
+        player=self.query('SELECT acctid FROM accounts WHERE login=?',['WebPlayer'])[0]['acctid']
+        original=self.query('SELECT * FROM accounts WHERE acctid=?',[player])[0]
+        saved=self.query('SELECT * FROM module_settings WHERE modulename IN (?,?,?,?,?)',['goldmine','racehuman','raceelf','racedwarf','racetroll'])
+        self.query('UPDATE modules SET active=1')
+        self.query('INSERT INTO mounts(mountname,mountcategory,mountbuff) VALUES (?,?,?)',['Mine fixture','Fixture','a:0:{}'])
+        mount=int(self.query('SELECT mountid FROM mounts WHERE mountname=?',['Mine fixture'])[0]['mountid'])
+        call=self._security_client()
+        def request(url,form=None): self._security_allow(player,url); return call(url,form)
+        def setting(key,value,module='goldmine'):
+            self.query('INSERT INTO module_settings(modulename,setting,value) VALUES (?,?,?) ON DUPLICATE KEY UPDATE value=VALUES(value)',[module,key,str(value)])
+        def pref(key,value):
+            self.query('INSERT INTO module_objprefs(modulename,objtype,objid,setting,value) VALUES (?,?,?,?,?) ON DUPLICATE KEY UPDATE value=VALUES(value)',['goldmine','mounts',mount,key,str(value)])
+        def state(): return self.query('SELECT gold,gems,turns,alive,hitpoints,experience,hashorse,specialinc,bufflist FROM accounts WHERE acctid=?',[player])[0]
+        def reset(horse=0,race='Human',turns=10):
+            self.query('UPDATE accounts SET gold=1000,gems=20,turns=?,alive=1,hitpoints=100,maxhitpoints=100,experience=100,level=7,hashorse=?,race=?,specialty=?,specialinc=?,bufflist=? WHERE acctid=?',[turns,horse,race,'DA','module:goldmine','a:0:{}',player])
+        url='forest.php?op=mine'
+        def form():
+            before=state(); status,body=request(url); self.assertEqual(200,status,body[:1000]); self.assertEqual(before,state())
+            fields=self._security_fields(body)
+            self.assertEqual(403,request(url,{})[0]); self.assertEqual(before,state())
+            return fields
+        def mine():
+            fields=form(); status,body=request(url,{**fields,'gold':999999,'gems':99999,'outcome':18,'racesave':1,'hashorse':0,'percentgoldloss':0})
+            self.assertEqual(200,status,body[:2000]); after=state()
+            request(url,fields); self.assertEqual(after,state())
+            return after,body
+        try:
+            with self._seeded_module_actions('header-forest') as seed:
+                setting('alwaystether',0); setting('percentgoldloss',50); setting('percentgemloss',25)
+                for race in ['human','elf','dwarf','troll']: setting('minedeathchance',90,'race'+race)
+                # Every historical mining roll is deterministic, including both collapse rolls.
+                seeds=[75,6,91,12,27,10,23,2,3,15,20,48,7,49,4,24,22,30,16,0]
+                for roll,rng in enumerate(seeds,1):
+                    reset(); seed(rng); after,body=mine()
+                    gold,gems,turns=[int(after[k]) for k in ['gold','gems','turns']]
+                    if roll<=5: self.assertEqual((1000,20,9),(gold,gems,turns))
+                    elif roll<=10:
+                        self.assertTrue(1035<=gold<=1140); self.assertEqual((20,9),(gems,turns))
+                    elif roll<=15:
+                        self.assertEqual((1000,9),(gold,turns)); self.assertTrue(21<=gems<=22)
+                    elif roll<=18:
+                        self.assertTrue(1070<=gold<=1280); self.assertTrue(21<=gems<=23); self.assertEqual(9,turns)
+                    else: self.assertIn('massive cave in',body)
+                    self.assertEqual('',after['specialinc'])
+                # No mount death and exact configured percentage loss, including endpoints.
+                for loss,expectedGold,expectedGems in [(0,1000,20),(25,750,15),(100,0,0)]:
+                    setting('percentgoldloss',loss); setting('percentgemloss',loss); reset(); seed(0)
+                    after,_=mine(); self.assertEqual([0,0,110,expectedGold,expectedGems],[int(after[k]) for k in ['alive','hitpoints','experience','gold','gems']])
+                setting('percentgoldloss',50); setting('percentgemloss',25)
+                # Real shipped rescue hooks, no archive race dependency.
+                for race in ['Human','Elf','Dwarf','Troll']:
+                    setting('minedeathchance',0,'race'+race.lower()); reset(race=race); seed(0)
+                    after,_=mine(); self.assertEqual([1,100,0,1000,20],[int(after[k]) for k in ['alive','hitpoints','turns','gold','gems']])
+                    setting('minedeathchance',90,'race'+race.lower())
+                # Mount seed 47 collapses after automatic-tether and entrance rolls.
+                for enter,auto,die,save,alive,kept,text in [
+                    (0,0,100,100,0,True,'tether'),(100,100,100,100,0,True,'tether'),
+                    (100,0,0,0,0,True,'managed to escape'),(100,0,100,0,0,False,'bones'),
+                    (100,0,100,100,1,True,'drag you to safety')]:
+                    setting('alwaystether',auto)
+                    for key,value in [('entermine',enter),('dieinmine',die),('saveplayer',save)]: pref(key,value)
+                    reset(mount); seed(47); after,body=mine()
+                    self.assertEqual(alive,int(after['alive'])); self.assertEqual(mount if kept else 0,int(after['hashorse'])); self.assertIn(text,body)
+                # Preferences preserve LoGD color text while HTML is escaped by output().
+                pref('savemsg','`2SAFE <img src=x onerror=alert(1)>'); reset(mount); seed(47)
+                after,body=mine(); self.assertIn('SAFE',body); self.assertNotIn('<img src=x onerror=',body)
+                # Stale forms bind the mount record, preference values, settings and race chance.
+                for change in [lambda:pref('saveplayer',0),lambda:setting('percentgoldloss',51),
+                               lambda:setting('minedeathchance',89,'racehuman'),
+                               lambda:self.query('UPDATE mounts SET mountname=? WHERE mountid=?',['Changed fixture',mount])]:
+                    reset(mount); fields=form(); change(); before=state()
+                    self.assertEqual(409,request(url,fields)[0]); self.assertEqual(before,state())
+                for key,bad in [('entermine','101'),('dieinmine','-1'),('saveplayer','bad')]:
+                    old=self.query('SELECT value FROM module_objprefs WHERE modulename=? AND objid=? AND setting=?',['goldmine',mount,key])[0]['value']
+                    pref(key,bad); reset(mount); before=state(); self.assertEqual(409,request(url)[0]); self.assertEqual(before,state()); pref(key,old)
+                setting('percentgoldloss','101'); reset(); before=state(); self.assertEqual(409,request(url)[0]); self.assertEqual(before,state()); setting('percentgoldloss',50)
+                reset(254); before=state(); self.assertEqual(409,request(url)[0]); self.assertEqual(before,state())
+                reset(); before=state()
+                for bad in ['forest.php?op[]=mine','forest.php?op=forged']:
+                    self.assertEqual(400,request(bad)[0]); self.assertEqual(before,state())
+                fields=form(); self.query('UPDATE modules SET active=0 WHERE modulename=?',['goldmine']); before=state()
+                request(url,fields); self.assertEqual(before,state()); self.query('UPDATE modules SET active=1 WHERE modulename=?',['goldmine'])
+                self.assertIn(self._security_client(None)(url,fields)[0],[302,303,403]); self.assertEqual(before,state())
+                # Final-account failure rolls back debug/news and currency together; fresh retry works.
+                reset(); seed(0); fields=form(); before=state()
+                counts=[self.query('SELECT COUNT(*) AS n FROM '+table)[0]['n'] for table in ['debuglog','news']]
+                self.query('ALTER TABLE accounts ADD CONSTRAINT fixture_mine_failure CHECK (alive=1)')
+                try: self.assertEqual(500,request(url,fields)[0])
+                finally: self.query('ALTER TABLE accounts DROP CONSTRAINT fixture_mine_failure')
+                self.assertEqual(before,state()); self.assertEqual(counts,[self.query('SELECT COUNT(*) AS n FROM '+table)[0]['n'] for table in ['debuglog','news']])
+                self.assertEqual(409,request(url,fields)[0]); self.assertEqual(before,state())
+                after,_=mine(); self.assertEqual(0,int(after['alive']))
+                reset(turns=0); seed(0); after,_=mine(); self.assertEqual([1000,20,1],[int(after[k]) for k in ['gold','gems','alive']])
+        finally:
+            self.query('UPDATE accounts SET '+','.join(k+'=?' for k in original if k!='acctid')+' WHERE acctid=?',[*[v for k,v in original.items() if k!='acctid'],player])
+            self.query('DELETE FROM module_objprefs WHERE modulename=? AND objid=?',['goldmine',mount]); self.query('DELETE FROM mounts WHERE mountid=?',[mount])
+            for module in ['goldmine','racehuman','raceelf','racedwarf','racetroll']: self.query('DELETE FROM module_settings WHERE modulename=?',[module])
+            for row in saved: setting(row['setting'],row['value'],row['modulename'])
+            self.query('UPDATE modules SET active=0')
 
     def test_outhouse_configured_outcomes_http(self):
         player=self.query('SELECT acctid FROM accounts WHERE login=?',['WebPlayer'])[0]['acctid']
