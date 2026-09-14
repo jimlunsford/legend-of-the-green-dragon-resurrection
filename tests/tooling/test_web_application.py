@@ -1013,9 +1013,111 @@ function resurrectionrandomfixture_dohook($hook,$args) { mt_srand((int)getsettin
             self.query('UPDATE modules SET active=0')
 
 
+    def test_forest_specialty_post_authority_and_rollback(self):
+        player=self.query('SELECT acctid FROM accounts WHERE login=?',['WebPlayer'])[0]['acctid']
+        original=self.query('SELECT * FROM accounts WHERE acctid=?',[player])[0]
+        prefs=self.query('SELECT * FROM module_userprefs WHERE userid=?',[player])
+        registry=self.query('SELECT modulename,active FROM modules')
+        self.query('UPDATE modules SET active=0')
+        self.query("UPDATE modules SET active=1 WHERE modulename IN ('specialtydarkarts','specialtymysticpower','specialtythiefskills')")
+        call=self._security_client(); url='forest.php?op=specialty'
+        def request(path,data=None): self._security_allow(player,path); return call(path,data)
+        def encode(value):
+            return subprocess.run([shutil.which('php'),'-r','echo serialize(json_decode(stream_get_contents(STDIN),true));'],input=json.dumps(value),text=True,capture_output=True,cwd=ROOT,check=True).stdout
+        enemy=self.query('SELECT * FROM creatures ORDER BY creatureid LIMIT 1')[0]
+        enemy.update(creaturehealth=1000000,creatureattack=1,creaturedefense=1,creaturelevel=10,playerstarthp=10000,diddamage=0)
+        combat={'enemies':[enemy],'options':{'type':'forest'}}
+        def prepare(spec='DA',uses='9',skill='15',state=None):
+            self.query("UPDATE accounts SET level=10,alive=1,race='Human',specialty=?,dragonkills=0,dragonpoints='a:0:{}',badguy=?,companions='a:0:{}',bufflist='a:0:{}',hitpoints=10000,maxhitpoints=10000,attack=10,defense=10000,specialinc='' WHERE acctid=?",[spec,encode(combat if state is None else state),player])
+            for module in ['specialtydarkarts','specialtymysticpower','specialtythiefskills']:
+                for key,value in [('uses',uses),('skill',skill)]:
+                    self.query('INSERT INTO module_userprefs(modulename,setting,userid,value) VALUES (?,?,?,?) ON DUPLICATE KEY UPDATE value=VALUES(value)',[module,key,player,value])
+        def state():
+            return self.query('SELECT specialty,gold,gems,experience,hitpoints,attack,defense,badguy,companions,bufflist FROM accounts WHERE acctid=?',[player])+self.query("SELECT modulename,setting,value FROM module_userprefs WHERE userid=? AND modulename IN ('specialtydarkarts','specialtymysticpower','specialtythiefskills') ORDER BY modulename,setting",[player])
+        def form(level='1'):
+            status,body=request(url); self.assertEqual(200,status,body[:1800]); return self._security_fields(body)|{'level':level}
+        def decoded(encoded):
+            return json.loads(subprocess.run([shutil.which('php'),'-r',"require 'src/Security/ScalarState.php'; echo json_encode(\\Resurrection\\Security\\ScalarState::read(stream_get_contents(STDIN)),JSON_THROW_ON_ERROR);"],input=encoded,text=True,capture_output=True,cwd=ROOT,check=True).stdout)
+        def rejected(data,expected=409):
+            before=state(); status,body=request(url,data); self.assertEqual(expected,status,body[:2000]); self.assertEqual(before,state())
+        try:
+            for spec,module in [('DA','specialtydarkarts'),('MP','specialtymysticpower'),('TS','specialtythiefskills')]:
+                for level in ['1','2','3','5']:
+                    with self.subTest(spec=spec,level=level):
+                        prepare(spec); data=form(level); before=state()
+                        self.assertEqual(200,request(url,data)[0])
+                        after=state(); self.assertNotEqual(before[0]['badguy'],after[0]['badguy'])
+                        effects={('DA','3'):{'badguydmgmod':.5},('DA','5'):{'badguyatkmod':0,'badguydefmod':0},
+                            ('MP','1'):{'regen':10,'aura':True},('MP','2'):{'minioncount':1,'minbadguydamage':1,'maxbadguydamage':30,'areadamage':True},
+                            ('MP','3'):{'lifetap':1},('MP','5'):{'damageshield':2},('TS','1'):{'badguyatkmod':.5},
+                            ('TS','2'):{'atkmod':2},('TS','3'):{'badguyatkmod':0},('TS','5'):{'atkmod':3,'defmod':3}}
+                        if (spec,level) in effects:
+                            buff=decoded(after[0]['bufflist'])[spec.lower()+level]
+                            self.assertEqual(4,buff['rounds'])
+                            for key,value in effects[spec,level].items(): self.assertEqual(value,buff[key])
+                        self.assertEqual(str(9-int(level)),self.query('SELECT value FROM module_userprefs WHERE userid=? AND modulename=? AND setting=?',[player,module,'uses'])[0]['value'])
+                        self.assertEqual(200,request('village.php')[0]); self.assertEqual(after,state())
+                        rejected(data); rejected(data)
+                        # A late account-write constraint rejects after the preference write.
+                        prepare(spec); data=form(level); before=state()
+                        self.query("ALTER TABLE accounts ADD CONSTRAINT fixture_specialty_failure CHECK (login <> 'WebPlayer' OR badguy = '"+before[0]['badguy'].replace("'","''")+"')")
+                        try: rejected(data,500)
+                        finally: self.query('ALTER TABLE accounts DROP CONSTRAINT fixture_specialty_failure')
+                        rejected(data); self.assertEqual(200,request(url,form(level))[0])
+                # Real consumption followed by the shipped New Day restoration.
+                prepare(spec); self.assertEqual(200,request(url,form('3'))[0])
+                self.assertEqual('6',self.query('SELECT value FROM module_userprefs WHERE userid=? AND modulename=? AND setting=?',[player,module,'uses'])[0]['value'])
+                self.query("UPDATE accounts SET badguy='' WHERE acctid=?",[player])
+                self.assertEqual(200,request('newday.php?continue=1')[0])
+                bonus=self.query("SELECT value FROM settings WHERE setting='specialtybonus'")
+                expected=5+int(bonus[0]['value'] if bonus else 1)
+                self.assertEqual(str(expected),self.query('SELECT value FROM module_userprefs WHERE userid=? AND modulename=? AND setting=?',[player,module,'uses'])[0]['value'])
+                self.assertEqual(spec,self.query('SELECT specialty FROM accounts WHERE acctid=?',[player])[0]['specialty'])
+                # Stored authority failures, including unchanged state on missing/invalid form.
+                for uses in ['0','-1','broken','9999999999','a:0:{}']:
+                    prepare(spec,uses=uses)
+                    rejected({'level':'1'},409 if uses not in ['0'] else 403)
+                prepare(spec); data=form('5')
+                self.query("UPDATE module_userprefs SET value='4' WHERE userid=? AND modulename=? AND setting='uses'",[player,module]); rejected(data)
+                prepare(spec); data=form()
+                self.query("UPDATE module_userprefs SET value='0' WHERE userid=? AND modulename=? AND setting='skill'",[player,module]); rejected(data)
+                prepare(spec); data=form()
+                self.query('UPDATE modules SET active=0 WHERE modulename=?',[module]); rejected(data)
+                self.query('UPDATE modules SET active=1 WHERE modulename=?',[module])
+            for level in ['', '0','-1','2.0','six','4','9999999999']:
+                prepare(); data=form(); data['level']=level; rejected(data,400)
+            prepare(); data=form(); del data['level']; rejected(data,400)
+            prepare(); data=form(); del data['level']; data['level[]']='1'; rejected(data,400)
+            for field in ['damage','healing','companion','uses','skill','specialty','target','buff']:
+                prepare(); data=form(); data[field]='999'; rejected(data,400)
+            for token in ['csrf_token','action_token']:
+                prepare(); data=form(); del data[token]; rejected(data,403 if token=='csrf_token' else 409)
+                prepare(); data=form(); data[token]='bad'; rejected(data,403 if token=='csrf_token' else 409)
+            for spec in ['', 'MP']:
+                prepare(); data=form(); self.query('UPDATE accounts SET specialty=? WHERE acctid=?',[spec,player]); rejected(data)
+            malformed=[{},[],{'enemies':[],'options':{'type':'forest'}}]
+            for key,value in [('creaturehealth',0),('creaturehealth',-1),('creaturehealth','invalid'),('creaturehealth',2147483648),('creatureattack',[]),('creaturedefense',-1),('creatureid',0),('dead',True),('istarget',[]),('terminal',True)]:
+                malformed.append({'enemies':[dict(enemy,**{key:value})],'options':{'type':'forest'}})
+            for malformed_state in malformed:
+                prepare(state=malformed_state); rejected({'level':'1'})
+            for encoded in ['', 'broken','O:8:"stdClass":0:{}']:
+                prepare(); self.query('UPDATE accounts SET badguy=? WHERE acctid=?',[encoded,player]); rejected({'level':'1'})
+            prepare(); data=form(); self.query("UPDATE accounts SET badguy='' WHERE acctid=?",[player]); rejected(data)
+            prepare(); data=form(); changed={'enemies':[dict(enemy,creaturehealth=999999)],'options':{'type':'forest'}}
+            self.query('UPDATE accounts SET badguy=? WHERE acctid=?',[encode(changed),player]); rejected(data)
+            prepare(); before=state(); self.assertEqual(200,request(url)[0]); self.assertEqual(before,state())
+            for path in ['forest.php?op=fight&skill=DA&l=1','forest.php?op=fight&skill=MP&l=5','forest.php?op=fight&skill=TS&l=3']:
+                self.assertEqual(400,request(path)[0]); self.assertEqual(before,state())
+            anonymous=self._security_client(login=None); self.assertIn(anonymous(url,{'level':'1'})[0],[303,403]); self.assertEqual(before,state())
+        finally:
+            self.query('UPDATE accounts SET '+','.join(k+'=?' for k in original)+' WHERE acctid=?',[*original.values(),player])
+            self.query('DELETE FROM module_userprefs WHERE userid=?',[player])
+            for row in prefs: self.query('INSERT INTO module_userprefs(modulename,setting,userid,value) VALUES (?,?,?,?)',[row['modulename'],row['setting'],player,row['value']])
+            for row in registry: self.query('UPDATE modules SET active=? WHERE modulename=?',[row['active'],row['modulename']])
+
     def test_darkarts_companion_business_state_http(self):
-        # Real historical Forest action proves the producer/consumer representation.
-        # GET authority, replay and transaction certification remain separate blockers.
+        # Real Forest POST action proves the producer/consumer representation.
+        # Broader route and complete module certification remain separate blockers.
         player=self.query('SELECT acctid FROM accounts WHERE login=?',['WebPlayer'])[0]['acctid']
         original=self.query('SELECT * FROM accounts WHERE acctid=?',[player])[0]
         prefs=self.query('SELECT * FROM module_userprefs WHERE userid=?',[player])
@@ -1040,8 +1142,12 @@ function resurrectionrandomfixture_dohook($hook,$args) { mt_srand((int)getsettin
             self.query("UPDATE accounts SET level=10,alive=1,race='Human',specialty='DA',dragonkills=0,dragonpoints='a:0:{}',badguy=?,companions='a:0:{}',bufflist='a:0:{}',hitpoints=10000,maxhitpoints=10000,attack=1,defense=10000,specialinc='' WHERE acctid=?",[encode({'enemies':[enemy],'options':{'type':'forest'}}),player])
             for key,value in [('skill','15'),('uses','5')]:
                 self.query("INSERT INTO module_userprefs(modulename,setting,userid,value) VALUES ('specialtydarkarts',?,?,?) ON DUPLICATE KEY UPDATE value=VALUES(value)",[key,player,value])
-            status,body=request('forest.php?op=fight&skill=DA&l=1'); self.assertEqual(200,status,body[:2000])
+            status,body=request('forest.php?op=specialty'); self.assertEqual(200,status,body[:2000])
+            form=self._security_fields(body)|{'level':'1'}
+            status,body=request('forest.php?op=specialty',form); self.assertEqual(200,status,body[:2000])
             skeleton=companions()['skeleton_warrior']
+            consumed=snapshot()
+            self.assertEqual(409,request('forest.php?op=specialty',form)[0]); self.assertEqual(consumed,snapshot())
             self.assertEqual(43,skeleton['maxhitpoints']); self.assertGreater(skeleton['hitpoints'],0)
             self.assertEqual(26.5,skeleton['attack']); self.assertEqual(14.5,skeleton['defense'])
             self.assertEqual({'fight':True},skeleton['abilities']); self.assertIs(skeleton['used'],True)
@@ -1065,7 +1171,7 @@ function resurrectionrandomfixture_dohook($hook,$args) { mt_srand((int)getsettin
                 with self.subTest(payload=payload[:100]):
                     self.query('UPDATE accounts SET companions=? WHERE acctid=?',[payload,player]); before=snapshot()
                     for fields in [None,{'skill':'DA','l':'1','companions':'forged'}]:
-                        status,body=request('forest.php?op=fight&skill=DA&l=1',fields)
+                        status,body=request('forest.php?op=specialty',fields)
                         self.assertEqual(409,status,body[:1000]); self.assertEqual(before,snapshot())
             # Recovery is explicit fixture/admin repair, never silent state deletion.
             self.query('UPDATE accounts SET companions=? WHERE acctid=?',[encode({'skeleton_warrior':skeleton}),player])

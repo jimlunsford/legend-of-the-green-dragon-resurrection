@@ -125,7 +125,7 @@ function forestvictory($enemies,$denyflawless=false){
 	}
 }
 
-function forestdefeat($enemies,$where="in the forest"){
+function forestdefeat($enemies,$where="in the forest",$finishpage=true){
 	global $session;
 	$percent=getsetting('forestexploss',10);
 	addnav("Daily news","news.php");
@@ -160,7 +160,7 @@ function forestdefeat($enemies,$where="in the forest"){
 	output("`4All gold on hand has been lost!`n");
 	output("`4%s %% of experience has been lost!`b`n",$percent);
 	output("You may begin fighting again tomorrow.");
-	page_footer();
+	if ($finishpage) page_footer();
 }
 
 function buffbadguy($badguy){
