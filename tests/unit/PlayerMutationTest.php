@@ -147,6 +147,7 @@ final class PlayerMutationTest extends TestCase
         db_query('UPDATE modules SET active=1 WHERE modulename=?',true,['drinks']);
         $drink=db_query('SELECT * FROM drinks WHERE harddrink=1 ORDER BY drinkid LIMIT 1')[0];
         $drinkId=(int)$drink['drinkid'];
+        $settingRows=db_query('SELECT setting,value FROM module_settings WHERE modulename=?',true,['drinks']);
         db_query('UPDATE accounts SET gold=10000,level=5 WHERE acctid=?',true,[$id]);
         $GLOBALS['baseaccount']=db_query('SELECT * FROM accounts WHERE acctid=?',true,[$id])[0];
         $GLOBALS['session']['user']=$GLOBALS['baseaccount'];
@@ -163,6 +164,33 @@ final class PlayerMutationTest extends TestCase
             catch (\DomainException $error) { self::assertSame('Drink limit reached.',$error->getMessage()); }
             self::assertSame($gold,$GLOBALS['session']['user']['gold']);
             set_module_pref('harddrinks',0,'drinks');
+            set_module_setting('hardlimit',1,'drinks'); set_module_setting('maxdrunk',0,'drinks');
+            drinks_purchase($drinkId); // Exactly at maxdrunk remains allowed historically.
+            self::assertSame(1,(int)get_module_pref('harddrinks','drinks'));
+            try { drinks_purchase($drinkId); self::fail('Configured quota bypass'); }
+            catch (\DomainException $error) { self::assertSame('Drink limit reached.',$error->getMessage()); }
+            set_module_pref('harddrinks',0,'drinks'); set_module_pref('drunkeness',1,'drinks');
+            try { drinks_purchase($drinkId); self::fail('Configured drunkenness bypass'); }
+            catch (\DomainException $error) { self::assertSame('Drink limit reached.',$error->getMessage()); }
+            set_module_setting('hardlimit',2147483647,'drinks'); set_module_setting('maxdrunk',100,'drinks');
+            set_module_pref('drunkeness',100,'drinks'); drinks_purchase($drinkId);
+            self::assertSame(100,(int)get_module_pref('drunkeness','drinks'));
+            foreach ([['maxdrunk',101],['maxdrunk',-1],['hardlimit',-1],['hardlimit','1e2']] as [$key,$value]) {
+                set_module_setting($key,$value,'drinks');
+                $before=db_query('SELECT gold FROM accounts WHERE acctid=?',true,[$id]);
+                try { drinks_purchase($drinkId); self::fail('Invalid configured limit accepted'); }
+                catch (\DomainException $error) { self::assertSame('Invalid drink limits.',$error->getMessage()); }
+                self::assertSame($before,db_query('SELECT gold FROM accounts WHERE acctid=?',true,[$id]));
+                set_module_setting('hardlimit',3,'drinks'); set_module_setting('maxdrunk',66,'drinks');
+            }
+            $turns=(int)$GLOBALS['session']['user']['turns'];
+            resurrection_player_mutation(static function () { modulehook('newday',['turnstoday'=>''],false,'drinks'); });
+            self::assertSame(0,(int)get_module_pref('drunkeness','drinks'));
+            self::assertSame(0,(int)get_module_pref('harddrinks','drinks'));
+            self::assertSame(max(0,$turns-1),(int)$GLOBALS['session']['user']['turns']);
+            resurrection_player_mutation(static function () { modulehook('newday',['turnstoday'=>''],false,'drinks'); });
+            self::assertSame(max(0,$turns-1),(int)$GLOBALS['session']['user']['turns']);
+            $gold=$GLOBALS['session']['user']['gold'];
             db_query('UPDATE drinks SET active=0 WHERE drinkid=?',true,[$drinkId]);
             try { drinks_purchase($drinkId); self::fail('Inactive drink purchased'); }
             catch (\DomainException $error) { self::assertSame('Drink unavailable.',$error->getMessage()); }
@@ -172,6 +200,9 @@ final class PlayerMutationTest extends TestCase
             self::assertSame((string)$gold,db_query('SELECT gold FROM accounts WHERE acctid=?',true,[$id])[0]['gold']);
             self::assertSame(0,(int)get_module_pref('harddrinks','drinks'));
         } finally {
+            db_query('DELETE FROM module_settings WHERE modulename=?',true,['drinks']);
+            foreach ($settingRows as $row) db_query('INSERT INTO module_settings(modulename,setting,value) VALUES (?,?,?)',true,['drinks',$row['setting'],$row['value']]);
+            $GLOBALS['module_settings']=[];
             db_query('UPDATE drinks SET active=?,costperlevel=? WHERE drinkid=?',true,[$drink['active'],$drink['costperlevel'],$drinkId]);
             $fields=['gold','level','hitpoints','turns','bufflist','loggedin'];
             db_query('UPDATE accounts SET '.implode(',',array_map(static fn($key)=>db_identifier($key).'=?',$fields)).' WHERE acctid=?',true,[...array_map(static fn($key)=>$original[$key],$fields),$id]);

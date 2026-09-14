@@ -11,6 +11,7 @@ import shutil
 import socket
 import subprocess
 import time
+import tempfile
 import unittest
 import urllib.error
 import urllib.parse
@@ -38,9 +39,10 @@ class WebApplicationTests(unittest.TestCase):
         with socket.socket() as sock:
             sock.bind(('127.0.0.1', 0))
             cls.port = sock.getsockname()[1]
+        cls.server_log = tempfile.TemporaryFile(mode='w+t')
         cls.server = subprocess.Popen([shutil.which('php'), '-d', 'display_errors=1', '-d', 'error_reporting=-1',
                                        '-d', 'zend.exception_ignore_args=1', '-S', f'127.0.0.1:{cls.port}', '-t', str(ROOT)],
-                                      stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, cwd=ROOT)
+                                      stdout=subprocess.DEVNULL, stderr=cls.server_log, cwd=ROOT)
         for _ in range(100):
             try:
                 with socket.create_connection(('127.0.0.1', cls.port), timeout=.1):
@@ -58,6 +60,7 @@ class WebApplicationTests(unittest.TestCase):
     def tearDownClass(cls):
         cls.server.terminate()
         cls.server.wait(timeout=5)
+        cls.server_log.close()
         cls.config.unlink()
 
     @staticmethod
@@ -220,6 +223,9 @@ function resurrectionhttpfixture_run() { echo 'fixture-executed'; exit; }
             except urllib.error.HTTPError as error: response=error
             body=response.read().decode('utf-8',errors='replace')
             self.assertNotRegex(body,r'(?i)(fatal error|warning:|deprecated:|notice:)',body[:2000])
+            if response.status == 500:
+                self.server_log.seek(0)
+                body += '\n'.join(self.server_log.read().splitlines()[-8:])
             return response.status,body
         if login:
             _,body=request('home.php')
@@ -242,11 +248,19 @@ function resurrectionhttpfixture_run() { echo 'fixture-executed'; exit; }
             self.assertIsNotNone(match,body[:2000]); result[key]=match.group(1)
         return result
 
+    def _security_target(self, login):
+        source=self.query('SELECT * FROM accounts WHERE login=?',['FixtureAdmin'])[0]
+        source.pop('acctid'); source.update(login=login,name=login,superuser='0',loggedin='0')
+        columns=list(source)
+        self.query('INSERT INTO accounts ('+','.join('`'+key+'`' for key in columns)+') VALUES ('+','.join('?' for _ in columns)+')',list(source.values()))
+        ident=self.query('SELECT acctid FROM accounts WHERE login=?',[login])[0]['acctid']
+        self.query("INSERT INTO accounts_output(acctid,output) VALUES (?,'')",[ident])
+        return ident
+
     def test_dag_funded_pvp_and_failure_rollback(self):
         player=self.query('SELECT acctid FROM accounts WHERE login=?',['WebPlayer'])[0]['acctid']
         original=self.query('SELECT * FROM accounts WHERE acctid=?',[player])[0]
-        target=self.query('SELECT acctid FROM accounts WHERE login=?',['FixtureAdmin'])[0]['acctid']
-        target_original=self.query('SELECT * FROM accounts WHERE acctid=?',[target])[0]
+        target=self._security_target('PvpVictimFixture')
         modules=self.query('SELECT modulename,active FROM modules')
         self.query('UPDATE modules SET active=1')
         request=self._security_client()
@@ -314,7 +328,9 @@ function resurrectionhttpfixture_run() { echo 'fixture-executed'; exit; }
                 self.assertEqual(409,call(url,self._security_fields(body))[0]); self.assertEqual(before,snapshot())
         finally:
             self.query('DELETE FROM bounty WHERE target=?',[target])
-            for row in [original,target_original]:
+            self.query('DELETE FROM accounts_output WHERE acctid=?',[target])
+            self.query('DELETE FROM accounts WHERE acctid=?',[target])
+            for row in [original]:
                 keys=[k for k in row if k not in ['acctid','allowednavs','restorepage']]
                 self.query('UPDATE accounts SET '+','.join('`'+k+'`=?' for k in keys)+' WHERE acctid=?',[*[row[k] for k in keys],row['acctid']])
             for row in modules: self.query('UPDATE modules SET active=? WHERE modulename=?',[row['active'],row['modulename']])
@@ -329,7 +345,8 @@ function resurrectionhttpfixture_run() { echo 'fixture-executed'; exit; }
         listing=base+'&op=viewbounties&type=1&sort=1&dir=1&admin=true'
         cleanup=base+'&op=cleanup'
         def call(url,fields=None): self._security_allow(player,url); return request(url,fields)
-        target=self.query('SELECT acctid,name FROM accounts WHERE login=?',['FixtureAdmin'])[0]
+        ident=self._security_target('DagAdminTargetFixture')
+        target=self.query('SELECT acctid,name FROM accounts WHERE acctid=?',[ident])[0]
         try:
             anon=self._security_client(None)
             for url in [base,place,cleanup,base+'&op=closebounty&id=1']:
@@ -375,6 +392,8 @@ function resurrectionhttpfixture_run() { echo 'fixture-executed'; exit; }
             self.assertEqual([],self.query('SELECT * FROM bounty WHERE target=?',[target['acctid']]))
         finally:
             self.query('DELETE FROM bounty WHERE target=?',[target['acctid']])
+            self.query('DELETE FROM accounts_output WHERE acctid=?',[target['acctid']])
+            self.query('DELETE FROM accounts WHERE acctid=?',[target['acctid']])
             self.query('UPDATE accounts SET superuser=? WHERE acctid=?',[original['superuser'],player])
             self.query('UPDATE modules SET active=0')
 
@@ -436,6 +455,59 @@ function resurrectionhttpfixture_run() { echo 'fixture-executed'; exit; }
             self.query('DELETE FROM module_userprefs WHERE modulename=? AND userid=?',['drinks',player])
             for row in prefs: self.query('INSERT INTO module_userprefs(modulename,setting,userid,value) VALUES (?,?,?,?)',['drinks',row['setting'],player,row['value']])
             self.query('UPDATE accounts SET superuser=? WHERE acctid=?',[original['superuser'],player])
+            self.query('UPDATE modules SET active=0')
+
+    def test_potions_configured_prices_and_random_bounds(self):
+        player=self.query('SELECT acctid FROM accounts WHERE login=?',['WebPlayer'])[0]['acctid']
+        original=self.query('SELECT gold,gems,charm,maxhitpoints,hitpoints,race,specialty,bufflist FROM accounts WHERE acctid=?',[player])[0]
+        settings=self.query('SELECT setting,value FROM module_settings WHERE modulename=?',['cedrikspotions'])
+        prefs=self.query('SELECT setting,value FROM module_userprefs WHERE modulename=? AND userid=?',['cedrikspotions',player])
+        self.query('UPDATE modules SET active=1')
+        request=self._security_client()
+        url='runmodule.php?module=cedrikspotions&op=gems'
+        action='runmodule.php?module=cedrikspotions&op=gems'
+        def setting(key,value):
+            self.query('INSERT INTO module_settings(modulename,setting,value) VALUES (?,?,?) ON DUPLICATE KEY UPDATE value=VALUES(value)',['cedrikspotions',key,str(value)])
+        def buy(wish,quantity):
+            self._security_allow(player,url); status,body=request(url); self.assertEqual(200,status,body[:1000])
+            form=self._security_fields(body)
+            match=re.search(r'<form action=[\'"]([^\'"]+)[\'"] method=[\'"]POST',body)
+            actual=html.unescape(match.group(1))
+            self._security_allow(player,actual)
+            post={**form,'wish':str(wish),'gemcount':str(quantity),'cost':'0','randcost':'0'}
+            status,body=request(actual,post)
+            saved=self.query('SELECT gems,charm,maxhitpoints,hitpoints,race,specialty,bufflist FROM accounts WHERE acctid=?',[player])
+            self._security_allow(player,actual); self.assertEqual(409,request(actual,post)[0]); self.assertEqual(saved,self.query('SELECT gems,charm,maxhitpoints,hitpoints,race,specialty,bufflist FROM accounts WHERE acctid=?',[player]))
+            return status,body
+        try:
+            setting('random',0)
+            for wish,key in enumerate(['charmcost','maxcost','tempcost','forgcost','transcost'],1):
+                setting(key,wish+1)
+                self.query("UPDATE accounts SET gems=100,charm=10,maxhitpoints=10,hitpoints=10,race='Human',specialty='DA',bufflist='a:0:{}' WHERE acctid=?",[player])
+                status,body=buy(wish,3*(wish+1)+1); self.assertEqual(200,status,body[:1000])
+                self.assertEqual(str(100-((wish+1) if wish>=4 else 3*(wish+1))),self.query('SELECT gems FROM accounts WHERE acctid=?',[player])[0]['gems'])
+            setting('random',1); setting('minrand',1); setting('maxrand',10)
+            for cost in [1,10]:
+                setting('randcost',cost); self.query('UPDATE accounts SET gems=100 WHERE acctid=?',[player])
+                self.assertEqual(200,buy(1,3*cost)[0]); self.assertEqual(str(100-3*cost),self.query('SELECT gems FROM accounts WHERE acctid=?',[player])[0]['gems'])
+            for low,high,cost in [(9,2,5),(0,10,5),(1,11,5),(1,10,0),(1,10,'1e1')]:
+                setting('minrand',low); setting('maxrand',high); setting('randcost',cost)
+                before=self.query('SELECT gems,charm FROM accounts WHERE acctid=?',[player])
+                self.assertEqual(400,buy(1,10)[0]); self.assertEqual(before,self.query('SELECT gems,charm FROM accounts WHERE acctid=?',[player]))
+            setting('random',0); setting('charmcost',2)
+            self.query('UPDATE accounts SET gems=1 WHERE acctid=?',[player]); before=self.query('SELECT gems,charm FROM accounts WHERE acctid=?',[player])
+            self.assertEqual(200,buy(1,2)[0]); self.assertEqual(before,self.query('SELECT gems,charm FROM accounts WHERE acctid=?',[player]))
+            for quantity in ['0','-1','1e2','2147483648','bad']:
+                self.assertEqual(400,buy(1,quantity)[0]); self.assertEqual(before,self.query('SELECT gems,charm FROM accounts WHERE acctid=?',[player]))
+            # Max valid offered amount, single-dose reset retains historical charge.
+            setting('forgcost',10); self.query('UPDATE accounts SET gems=2147483647 WHERE acctid=?',[player])
+            self.assertEqual(200,buy(4,2147483647)[0]); self.assertEqual('2147483637',self.query('SELECT gems FROM accounts WHERE acctid=?',[player])[0]['gems'])
+        finally:
+            self.query('UPDATE accounts SET '+','.join(k+'=?' for k in original)+' WHERE acctid=?',[*original.values(),player])
+            self.query('DELETE FROM module_settings WHERE modulename=?',['cedrikspotions'])
+            for row in settings: self.query('INSERT INTO module_settings(modulename,setting,value) VALUES (?,?,?)',['cedrikspotions',row['setting'],row['value']])
+            self.query('DELETE FROM module_userprefs WHERE modulename=? AND userid=?',['cedrikspotions',player])
+            for row in prefs: self.query('INSERT INTO module_userprefs(modulename,setting,userid,value) VALUES (?,?,?,?)',['cedrikspotions',row['setting'],player,row['value']])
             self.query('UPDATE modules SET active=0')
 
     def test_darkhorse_shared_jackpot_concurrency(self):
@@ -546,6 +618,7 @@ function resurrectionhttpfixture_run() { echo 'fixture-executed'; exit; }
             return self.query('SELECT gold,specialmisc FROM accounts WHERE acctid=?',[player])[0]
         def state(): return json.loads(snapshot()['specialmisc'])
         def page(url):
+            self.query('UPDATE accounts SET lasthit=UTC_TIMESTAMP() WHERE acctid=?',[player])
             allow(url); status,body=request(url); self.assertEqual(200,status,body[:1000]); return body
         status,body=request('home.php')
         csrf=re.search(r'name=[\'"]csrf_token[\'"] value=[\'"]([a-f0-9]{64})',body).group(1)

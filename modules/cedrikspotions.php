@@ -34,7 +34,7 @@ function cedrikspotions_getmoduleinfo(){
 			"random"=>"Is the cost per point of potion random,bool|0",
 			"minrand"=>"Minimum cost per point of effect,range,1,9,1|2",
 			"maxrand"=>"Maximum cost per point of effect,range,2,10,1|5",
-			"randcost"=>"Current random cost,rang,1,10,1|2",
+			"randcost"=>"Current random cost,range,1,10,1|2",
 			"Note: Each <x> amount of gems spent will give the effect the potion.  The actual effects can vary based on configuration.,note",
 			"Cedrik's Potion Shop - Effects,title",
 			"transmuteturns"=>"How many turns will the transmutation sickness last?,range,1,20,1|10",
@@ -77,8 +77,7 @@ function cedrikspotions_dohook($hookname,$args){
 		break;
 	case "newday-runonce":
 		if (get_module_setting("random")){
-			$min = get_module_setting("minrand");
-			$max = get_module_setting("maxrand");
+            [$min,$max] = cedrikspotions_random_bounds();
 			$randcost = e_rand($min,$max);
 			set_module_setting("randcost",$randcost);
 		}
@@ -252,7 +251,8 @@ function cedrikspotions_run(){
 			rawoutput("</form>");
 		}else{
             $gemcount=$quantity;
-            if (!is_numeric($cost) || $cost<=0 || $cost>2147483647) { http_response_code(400); exit('Invalid potion cost.'); }
+            try { $cost = cedrikspotions_price((int)$wish); }
+            catch (DomainException $error) { http_response_code(400); exit('Invalid potion cost.'); }
             try {
                 resurrection_player_mutation(function () use ($gemcount,$cost,$wish,$barkeep) {
                     global $session;
@@ -373,5 +373,30 @@ function cedrikspotions_run(){
 	}
 	rawoutput("</span>");
 	page_footer();
+}
+
+/** Exact configured vocabulary; quantity still means gems offered, as historically. */
+function cedrikspotions_price(int $wish): int {
+    $keys=[1=>'charmcost',2=>'maxcost',3=>'tempcost',4=>'forgcost',5=>'transcost'];
+    if (!isset($keys[$wish])) throw new DomainException('Unknown potion.');
+    $random = get_module_setting('random','cedrikspotions');
+    if (!in_array((string)$random,['0','1'],true)) throw new DomainException('Invalid price mode.');
+    if ((string)$random === '1') {
+        [$min,$max] = cedrikspotions_random_bounds();
+        $cost = get_module_setting('randcost','cedrikspotions');
+    } else {
+        $min=1; $max=10; $cost=get_module_setting($keys[$wish],'cedrikspotions');
+    }
+    $price=filter_var($cost,FILTER_VALIDATE_INT,['options'=>['min_range'=>$min,'max_range'=>$max]]);
+    if ($price === false) throw new DomainException('Invalid potion price.');
+    return $price;
+}
+
+/** @return array{int,int} */
+function cedrikspotions_random_bounds(): array {
+    $min=filter_var(get_module_setting('minrand','cedrikspotions'),FILTER_VALIDATE_INT,['options'=>['min_range'=>1,'max_range'=>9]]);
+    $max=filter_var(get_module_setting('maxrand','cedrikspotions'),FILTER_VALIDATE_INT,['options'=>['min_range'=>2,'max_range'=>10]]);
+    if ($min === false || $max === false || $min>$max) throw new DomainException('Invalid random potion bounds.');
+    return [$min,$max];
 }
 ?>

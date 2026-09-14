@@ -198,7 +198,7 @@ function drinks_editor(){
 		}
 	}elseif ($op=="add"){
 		/* We're adding a new drink, make an empty row */
-		$row = array();
+		$row = \Resurrection\Http\DrinkInput::parse([]);
 		$row['drinkid'] = 0;
 	}
 

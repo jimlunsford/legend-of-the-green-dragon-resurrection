@@ -17,8 +17,8 @@ $iname = getsetting("innname", LOCATION_INN);
 $battle = false;
 
 page_header("PvP Combat!");
-$op = httpget('op');
-$act = httpget('act');
+$op = (string)httpget('op');
+$act = (string)httpget('act');
 
 require_once 'lib/player_mutation.php';
 require_once 'src/Security/PvpState.php';
@@ -147,6 +147,7 @@ if ($battle){
     unset($GLOBALS['pvp_mail_notifications']);
     http_response_code(409); exit('PvP action no longer available. Reload before retrying.');
 } catch (Throwable $error) {
+    error_log('PvP transaction failed: '.get_class($error).' at '.basename($error->getFile()).':'.$error->getLine());
     unset($GLOBALS['pvp_mail_notifications']);
     http_response_code(500); exit('PvP action failed. No result was committed. Reload before retrying.');
 }
