@@ -956,7 +956,7 @@
       "settings_preferences_result": "PASS for named defaults and raw round trips; NOT APPLICABLE for empty namespaces",
       "object_preferences_result": "NOT APPLICABLE",
       "direct_runmodule_route": "BLOCKED",
-      "direct_route_note": "Existing hook semantics and issued Inn route render PASS. Value-changing conversation/flirt/chat routes still require daily-stage authorization, POST/CSRF and replay closure.",
+      "direct_route_note": "Historical model: seenlover is one daily availability flag. Sex selects Violet/Seth; marriedto=INT_MAX selects a single NPC-married visit, otherwise flirt=1..7 are independent alternatives. Chat is read-only. POST/CSRF/state-bound one-use intent and locked transaction now protect effects; actual HTTP outcome, rejection, persistence, reset and rollback coverage added. Supported-target CI verification pending before promotion.",
       "database_tables": [],
       "database_behavior": "PASS: strict fresh install/reinstall and tested metadata writes; purchase/admin transactions not certified",
       "daily_hooks": [
@@ -971,10 +971,10 @@
       "mariadb_11_4": "PASS for tested components; final BLOCKED for remaining gates",
       "mysql_8_4": "PASS for tested components; final BLOCKED for remaining gates",
       "warnings_errors": "No PHP warnings/errors in the passing matrix tests; unexecuted paths unverified.",
-      "security_notes": "Existing hook semantics and issued Inn route render PASS. Value-changing conversation/flirt/chat routes still require daily-stage authorization, POST/CSRF and replay closure.",
+      "security_notes": "Historical model: seenlover is one daily availability flag. Sex selects Violet/Seth; marriedto=INT_MAX selects a single NPC-married visit, otherwise flirt=1..7 are independent alternatives. Chat is read-only. POST/CSRF/state-bound one-use intent and locked transaction now protect effects; actual HTTP outcome, rejection, persistence, reset and rollback coverage added. Supported-target CI verification pending before promotion.",
       "final_certification": "BLOCKED",
       "continuation_evidence": "See CORE-ROUTE-SECURITY.md for component gates and exact test names; prior lifecycle evidence is retained.",
-      "next_required_gate": "Secure conversation/flirt/chat daily stages, POST/CSRF and one-use replay before certifying effects.",
+      "next_required_gate": "Run new Lovers HTTP coverage on both supported targets; no sequential-stage requirement exists.",
       "previous_certification": "BLOCKED"
     },
     {

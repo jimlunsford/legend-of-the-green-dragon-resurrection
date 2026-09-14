@@ -232,6 +232,161 @@ function resurrectionrandomfixture_dohook($hook,$args) { mt_srand((int)getsettin
             self.query('DELETE FROM settings WHERE setting=?',['fixture_rng_seed'])
             path.unlink()
 
+    def test_lovers_alternative_choices_daily_authority_http(self):
+        player=self.query('SELECT acctid FROM accounts WHERE login=?',['WebPlayer'])[0]['acctid']
+        original=self.query('SELECT * FROM accounts WHERE acctid=?',[player])[0]
+        prefs=self.query('SELECT * FROM module_userprefs WHERE userid=?',[player])
+        settings=self.query('SELECT * FROM settings WHERE setting IN (?,?,?)',['bard','barmaid','innname'])
+        modules=self.query('SELECT modulename,active FROM modules')
+        self.query('UPDATE modules SET active=1')
+        call=self._security_client(); url='runmodule.php?module=lovers&op=flirt'
+        def pref(value):
+            self.query('INSERT INTO module_userprefs(modulename,setting,userid,value) VALUES (?,?,?,?) ON DUPLICATE KEY UPDATE value=VALUES(value)',['lovers','seenlover',player,str(value)])
+        def setup(sex=0,charm=1,married=0,turns=10):
+            self.query('UPDATE accounts SET sex=?,charm=?,marriedto=?,turns=?,alive=1,hitpoints=100,maxhitpoints=100,specialinc=?,bufflist=?,race=?,specialty=? WHERE acctid=?',[sex,charm,married,turns,'','a:0:{}','Human','DA',player]); pref(0)
+        def state():
+            return [self.query('SELECT gold,gems,turns,charm,marriedto,hitpoints,bufflist FROM accounts WHERE acctid=?',[player])[0],
+                self.query('SELECT value FROM module_userprefs WHERE modulename=? AND setting=? AND userid=?',['lovers','seenlover',player]),
+                self.query('SELECT newsid FROM news WHERE accountid=? ORDER BY newsid',[player]),
+                self.query('SELECT id FROM debuglog WHERE actor=? ORDER BY id',[player])]
+        def adversarial(path,data=None):
+            # Permit transport through the legacy nav filter only for negative tests, so
+            # the new business boundary must itself reject a forged or replayed action.
+            self._security_allow(player,path); return call(path,data)
+        def forms():
+            # Enter via the real Inn link and submit the real rendered form. Neither
+            # Lovers entry nor its valid POST receives fixture navigation authorization.
+            self._security_allow(player,'inn.php')
+            status,body=call('inn.php'); self.assertEqual(200,status)
+            self.assertIn('runmodule.php?module=lovers',html.unescape(body))
+            entry=next(html.unescape(link) for link in re.findall(r'href=[\'\"]([^\'\"]+)',body) if html.unescape(link).startswith(url))
+            before=state(); status,body=call(entry); self.assertEqual(200,status,body[:1500]); self.assertEqual(before,state())
+            found=[]
+            for action,part in re.findall(r'<form\b[^>]*action="([^"]+)"[^>]*>(.*?)</form>',body,re.S):
+                if html.unescape(action)!=url: continue
+                data=self._security_fields(part)
+                for key,value in re.findall(r'name="(action|flirt)" value="([^"]+)"',part): data[key]=value
+                found.append(data)
+            self.assertEqual(1 if int(self.query('SELECT marriedto FROM accounts WHERE acctid=?',[player])[0]['marriedto'])==4294967295 else 7,len(found))
+            return found,body
+        try:
+            with self._seeded_module_actions() as seed:
+                # Each choice is independently available on both NPC paths. Low/high
+                # random branches use charm=1 and fixed seeds, never a stage counter.
+                lows=[0,2,1,1,24,2]; highs=[1,5,14,0,19,5]
+                for sex in [0,1]:
+                    for choice in range(1,8):
+                        for positive in [False,True]:
+                            with self.subTest(sex=sex,choice=choice,positive=positive):
+                                setup(sex,22 if choice==7 and positive else 1)
+                                seed((highs if positive else lows)[choice-1] if choice<7 else 0)
+                                available,body=forms(); data=available[choice-1]
+                                self.assertEqual(str(choice),data['flirt'])
+                                status,body=call(url,data); self.assertEqual(200,status,body[:2000])
+                                self.assertIn('show in 5 minutes' if sex==1 and choice==6 and not positive else ('Violet' if sex==0 else 'Seth'),body)
+                                saved=state(); account=saved[0]
+                                expected_charm=22 if choice==7 and positive else (2 if positive and choice<7 else (0 if choice in [4,5,6] else 1))
+                                self.assertEqual(expected_charm,int(account['charm']))
+                                self.assertEqual(8 if choice==6 and positive else (0 if choice==7 and not positive else 10),int(account['turns']))
+                                self.assertEqual(4294967295 if choice==7 and positive else 0,int(account['marriedto']))
+                                self.assertEqual([{'value':'1'}],saved[1])
+                                self.assertEqual(choice==7 and positive,'lover' in account['bufflist'])
+                                self.assertIn(adversarial(url,data)[0],[409]); self.assertEqual(saved,state())
+                                self.assertEqual(409,adversarial(url,available[0 if choice!=1 else 1])[0]); self.assertEqual(saved,state())
+                                self.assertEqual(409,adversarial(url)[0]); self.assertEqual(saved,state())
+                    # Married visit historically has no choice, and both +/- charm outcomes.
+                    for rng,delta in [(0,-1),(1,1)]:
+                        setup(sex,10,4294967295); seed(rng)
+                        available,_=forms(); self.assertNotIn('flirt',available[0])
+                        status,body=call(url,available[0]); self.assertEqual(200,status,body[:1500])
+                        saved=state(); self.assertEqual(10+delta,int(saved[0]['charm']))
+                        self.assertEqual(delta==1,'lover' in saved[0]['bufflist']); self.assertEqual([{'value':'1'}],saved[1])
+                        self.assertEqual(409,adversarial(url,available[0])[0]); self.assertEqual(saved,state())
+                    # Capped positive charm and exhaustion floors preserve old formulas.
+                    for charm,turns,choice,expected_charm,expected_turns in [(30,10,1,30,10),(18,1,6,19,0),(18,0,6,19,0)]:
+                        setup(sex,charm,turns=turns); seed(1); available,_=forms()
+                        self.assertEqual(200,call(url,available[choice-1])[0]); saved=state()[0]
+                        self.assertEqual((expected_charm,expected_turns),(int(saved['charm']),int(saved['turns'])))
+                setup(); available,_=forms(); before=state()
+                self.assertIn(self._security_client(None)(url,available[0])[0],[302,303,403]); self.assertEqual(before,state())
+                for patch in [{'csrf_token':None},{'csrf_token':'0'*64}]:
+                    data=available[0]|patch
+                    if data['csrf_token'] is None: del data['csrf_token']
+                    self.assertEqual(403,adversarial(url,data)[0]); self.assertEqual(before,state())
+                for bad in [None,'0','-1','8','999999999999999999999','x','1.0']:
+                    setup(); available,_=forms(); data=available[0].copy(); before=state()
+                    if bad is None: del data['flirt']
+                    else: data['flirt']=bad
+                    self.assertEqual(400,call(url,data)[0]); self.assertEqual(before,state())
+                for patch in [{'flirt[]':'1'},{'action':'visit'},{'marriedto':'4294967295'},{'sex':'1'},
+                              {'effect':'charm'},{'charm':'999'},{'gold':'999'},{'gems':'999'},{'turns':'999'},
+                              {'hitpoints':'999'},{'seenlover':'0'},{'partner':'forged'},{'op':'chat'}]:
+                    setup(); available,_=forms(); before=state()
+                    self.assertEqual(400,call(url,available[0]|patch)[0]); self.assertEqual(before,state())
+                setup(); available,_=forms(); before=state()
+                duplicated=list(available[0].items())+[('flirt','7')]
+                self.assertEqual(400,call(url,duplicated)[0]); self.assertEqual(before,state())
+                setup(married=4294967295); available,_=forms(); before=state()
+                self.assertEqual(400,call(url,available[0]|{'flirt':'1'})[0]); self.assertEqual(before,state())
+                for key,value in [('sex',1),('marriedto',4294967295),('charm',5),('turns',9),('alive',0),('hitpoints',0),('specialinc','module:goldmine')]:
+                    setup(); available,_=forms(); self.query('UPDATE accounts SET '+key+'=? WHERE acctid=?',[value,player]); before=state()
+                    self.assertEqual(409,call(url,available[0])[0]); self.assertEqual(before,state())
+                for value in ['1','-1','garbage','2']:
+                    setup(); available,_=forms(); pref(value); before=state()
+                    self.assertEqual(409,call(url,available[0])[0]); self.assertEqual(before,state())
+                setup(); available,_=forms(); self.query('UPDATE modules SET active=0 WHERE modulename=?',['lovers']); before=state()
+                status,body=call(url,available[0]); self.assertIn('no longer active',body); self.assertEqual(before,state())
+                self.query('UPDATE modules SET active=1 WHERE modulename=?',['lovers'])
+                for married in [0,4294967295]:
+                    setup(married=married); before=state()
+                    self.assertEqual(400,adversarial(url+'&flirt=1')[0]); self.assertEqual(before,state())
+                # Absence of the default row is not a GET write.
+                setup(); self.query('DELETE FROM module_userprefs WHERE modulename=? AND setting=? AND userid=?',['lovers','seenlover',player]); forms()
+                self.assertEqual([],state()[1])
+                # Real final-account CHECK failures roll back news/debug and the preference.
+                for choice,charm in [(6,18),(7,1),(7,22)]:
+                    setup(charm=charm); available,_=forms(); before=state()
+                    self.query("ALTER TABLE accounts ADD CONSTRAINT fixture_lovers_failure CHECK (login <> 'WebPlayer' OR (turns=10 AND marriedto=0))")
+                    try: self.assertEqual(500,call(url,available[choice-1])[0])
+                    finally: self.query('ALTER TABLE accounts DROP CONSTRAINT fixture_lovers_failure')
+                    self.assertEqual(before,state())
+                    self.assertEqual(409,adversarial(url,available[choice-1])[0]); self.assertEqual(before,state())
+                    available,_=forms(); self.assertEqual(200,call(url,available[choice-1])[0])
+                # Normal New Day resets availability; the previous day's form stays stale.
+                setup(); seed(1); available,_=forms(); old=available[1]
+                self.assertEqual(200,call(url,available[0])[0]); self.assertEqual(409,adversarial(url)[0])
+                self.query('UPDATE accounts SET lasthit=? WHERE acctid=?',['2000-01-01 00:00:00',player])
+                self.assertEqual(200,adversarial('newday.php?continue=1')[0]); self.assertEqual([{'value':'0'}],state()[1])
+                self.assertEqual(409,adversarial(url,old)[0])
+                available,_=forms(); self.assertEqual(200,call(url,available[0])[0]); persisted=state()
+                call=self._security_client(); adversarial('inn.php'); self.assertEqual(persisted,state())
+                # NPC-married New Day attrition and divorce are historical daily rules.
+                for sex in [0,1]:
+                    for charm,rng,after_day,married_after in [(10,1,10,4294967295),(1,0,0,0)]:
+                        setup(sex,charm,4294967295); seed(rng); available,_=forms()
+                        self.assertEqual(200,call(url,available[0])[0])
+                        self.query('UPDATE accounts SET dragonkills=0,lasthit=? WHERE acctid=?',['2000-01-01 00:00:00',player])
+                        self.assertEqual(200,adversarial('newday.php?continue=1')[0])
+                        saved=state(); self.assertEqual(after_day,int(saved[0]['charm']))
+                        self.assertEqual(married_after,int(saved[0]['marriedto'])); self.assertEqual([{'value':'0'}],saved[1])
+                        available,_=forms(); self.assertEqual(200,call(url,available[0])[0])
+                # Configured names keep apostrophes, slashes, UTF-8 and color, while markup escapes.
+                for setting in ['bard','barmaid','innname']:
+                    self.query('INSERT INTO settings(setting,value) VALUES (?,?) ON DUPLICATE KEY UPDATE value=VALUES(value)',[setting,"`2O'Reilly \\ 雪 <img src=x>"])
+                for sex in [0,1]:
+                    setup(sex); available,body=forms(); self.assertNotIn('<img src=x>',body); self.assertIn('&lt;img',body); self.assertIn('雪',body)
+                    self.assertEqual(200,call(url,available[0])[0])
+                    for act in ['', 'armor' if sex==0 else 'fat', 'sports' if sex==0 else 'gossip']:
+                        before=state(); status,body=adversarial('runmodule.php?module=lovers&op=chat&act='+act)
+                        self.assertEqual(200,status); self.assertEqual(before,state()); self.assertNotIn('<img src=x>',body)
+        finally:
+            self.query('UPDATE accounts SET '+','.join(k+'=?' for k in original if k!='acctid')+' WHERE acctid=?',[*[v for k,v in original.items() if k!='acctid'],player])
+            self.query('DELETE FROM module_userprefs WHERE userid=?',[player])
+            for row in prefs: self.query('INSERT INTO module_userprefs(modulename,setting,userid,value) VALUES (?,?,?,?)',[row['modulename'],row['setting'],player,row['value']])
+            for key in ['bard','barmaid','innname']: self.query('DELETE FROM settings WHERE setting=?',[key])
+            for row in settings: self.query('INSERT INTO settings(setting,value) VALUES (?,?)',[row['setting'],row['value']])
+            for row in modules: self.query('UPDATE modules SET active=? WHERE modulename=?',[row['active'],row['modulename']])
+
     def test_goldmine_deterministic_http_authority(self):
         player=self.query('SELECT acctid FROM accounts WHERE login=?',['WebPlayer'])[0]['acctid']
         original=self.query('SELECT * FROM accounts WHERE acctid=?',[player])[0]

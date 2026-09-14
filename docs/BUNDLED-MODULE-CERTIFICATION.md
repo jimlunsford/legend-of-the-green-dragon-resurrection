@@ -142,7 +142,7 @@ PASS in supported bundled scope: actual Forest HTTP forces all 20 historical min
 
 ### lovers (1.0): BLOCKED
 
-Existing hook semantics and issued Inn route render PASS. Value-changing conversation/flirt/chat routes still require daily-stage authorization, POST/CSRF and replay closure.
+Historical model: seenlover is one daily availability flag. Sex selects Violet/Seth; marriedto=INT_MAX selects a single NPC-married visit, otherwise flirt=1..7 are independent alternatives. Chat is read-only. POST/CSRF/state-bound one-use intent and locked transaction now protect effects; actual HTTP outcome, rejection, persistence, reset and rollback coverage added. Supported-target CI verification pending before promotion.
 
 - Component route result: BLOCKED.
 - Exact metadata, descriptors, hooks, dependencies, database tables and prior lifecycle evidence remain in [the JSON record](BUNDLED-MODULE-CERTIFICATION.json).

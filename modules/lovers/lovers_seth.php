@@ -1,7 +1,7 @@
 <?php
-function lovers_seth(){
+function lovers_seth(?int $choice = null){
 	global $session;
-	$seenlover = get_module_pref("seenlover");
+	$seenlover = 0; // Entry and locked daily authority are checked by lovers_run().
 	$partner = get_partner();
 
 	if ($seenlover==0){
@@ -35,21 +35,21 @@ function lovers_seth(){
 			}
 		}else{
 			//not married.
-			if (httpget("flirt")==""){
+			if ($choice === null){
 				//haven't flirted yet
 				addnav("Flirt");
-				addnav("Wink","runmodule.php?module=lovers&op=flirt&flirt=1");
-				addnav("Flutter Eyelashes","runmodule.php?module=lovers&op=flirt&flirt=2");
-				addnav("Drop Hanky","runmodule.php?module=lovers&op=flirt&flirt=3");
-				addnav("Ask him to buy you a drink","runmodule.php?module=lovers&op=flirt&flirt=4");
-				addnav("Kiss him soundly","runmodule.php?module=lovers&op=flirt&flirt=5");
-				addnav("Completely seduce him","runmodule.php?module=lovers&op=flirt&flirt=6");
-				addnav("Marry him","runmodule.php?module=lovers&op=flirt&flirt=7");
+				lovers_form("Wink", 1);
+				lovers_form("Flutter Eyelashes", 2);
+				lovers_form("Drop Hanky", 3);
+				lovers_form("Ask him to buy you a drink", 4);
+				lovers_form("Kiss him soundly", 5);
+				lovers_form("Completely seduce him", 6);
+				lovers_form("Marry him", 7);
 			}else{
 				//flirting now
 				$c = $session['user']['charm'];
 				$seenlover=1;
-				switch(httpget('flirt')){
+				switch($choice){
 				case 1:
 					if (e_rand($c,2)>=2){
 						output("%s`0 grins a big toothy grin.",$partner);
@@ -139,6 +139,6 @@ function lovers_seth(){
 		//have seen lover
 		output("You think you had better not push your luck with %s`0 today.",$partner);
 	}
-	set_module_pref("seenlover",$seenlover);
+	if ($seenlover === 1) set_module_pref("seenlover", 1, "lovers");
 }
 ?>
