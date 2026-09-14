@@ -21,7 +21,7 @@ final class SkeletonCompanionStateTest extends TestCase
             $map = ['skeleton_warrior'=>$state];
             self::assertSame($map, SkeletonCompanionState::companions(ScalarState::read(serialize($map))));
         }
-        foreach ([[13,7.5,2.5],[17,10.5,2.5],[20,10.5,5.5],[27,13.5,5.5],[60,43.5,27.5]] as [$hp,$attack,$defense]) {
+        foreach ([[13,5.5,2.5],[17,10.5,2.5],[20,10.5,5.5],[27,13.5,5.5],[60,43.5,27.5]] as [$hp,$attack,$defense]) {
             $state = array_replace($this->skeleton(), ['hitpoints'=>$hp,'maxhitpoints'=>$hp,'attack'=>$attack,'defense'=>$defense]);
             $map = ['skeleton_warrior'=>$state];
             self::assertSame($map, SkeletonCompanionState::companions(ScalarState::read(serialize($map))));
