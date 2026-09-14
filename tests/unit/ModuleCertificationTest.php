@@ -41,6 +41,74 @@ final class ModuleCertificationTest extends TestCase
         translator_setup();
     }
 
+    public function testAudreyDeterministicBasketsAndDailyReset(): void
+    {
+        self::assertTrue(activate_module('crazyaudrey'));
+        injectmodule('crazyaudrey');
+        $played=get_module_pref('played','crazyaudrey');
+        $paid=get_module_pref('paidvisit','crazyaudrey');
+        try {
+            // Fixed seeds exercise the unchanged historical random sequence, not probabilities.
+            foreach ([[0,10,5,15,5],[28,10,5,12,5],[4,10,5,11,5],[1,10,5,9,5],[1,0,5,0,4],[1,0,0,0,0]] as [$seed,$turns,$charm,$expectedTurns,$expectedCharm]) {
+                foreach (['forest','module-internal'] as $type) {
+                    $GLOBALS['session']['user']['turns']=$turns;
+                    $GLOBALS['session']['user']['charm']=$charm;
+                    $GLOBALS['session']['user']['specialinc']=$type==='forest'?'module:crazyaudrey':'';
+                    set_module_pref('played',0,'crazyaudrey');
+                    set_module_pref('paidvisit',1,'crazyaudrey');
+                    $_GET=['op'=>'play']; mt_srand($seed);
+                    crazyaudrey_baskets($type);
+                    self::assertSame($expectedTurns,$GLOBALS['session']['user']['turns']);
+                    self::assertSame($expectedCharm,$GLOBALS['session']['user']['charm']);
+                    self::assertSame('',$GLOBALS['session']['user']['specialinc']);
+                    self::assertEquals($type==='forest'?0:1,get_module_pref('played','crazyaudrey'));
+                    self::assertEquals($type==='forest'?1:0,get_module_pref('paidvisit','crazyaudrey'));
+                }
+            }
+            set_module_pref('played',1,'crazyaudrey'); set_module_pref('paidvisit',1,'crazyaudrey');
+            modulehook('newday',[],false,'crazyaudrey');
+            self::assertEquals(0,get_module_pref('played','crazyaudrey'));
+            self::assertEquals(0,get_module_pref('paidvisit','crazyaudrey'));
+        } finally {
+            mt_srand(); $_GET=[];
+            set_module_pref('played',$played,'crazyaudrey'); set_module_pref('paidvisit',$paid,'crazyaudrey');
+            deactivate_module('crazyaudrey');
+        }
+    }
+
+    public function testGlowingStreamEveryShippedOutcome(): void
+    {
+        self::assertTrue(activate_module('glowingstream')); injectmodule('glowingstream');
+        try {
+            // Outcome, seed, resulting HP, turns, gems, alive. There are no module settings.
+            foreach ([[1,4,0,10,5,false],[2,5,10,9,5,true],[3,15,100,11,5,true],[4,8,50,10,6,true],
+                      [5,0,50,11,5,true],[6,1,50,11,5,true],[7,3,50,11,5,true],
+                      [8,10,100,10,5,true],[9,2,100,10,5,true],[10,17,100,10,5,true]] as [$outcome,$seed,$hp,$turns,$gems,$alive]) {
+                $GLOBALS['session']['user']=array_replace($GLOBALS['session']['user'],[
+                    'hitpoints'=>50,'maxhitpoints'=>100,'turns'=>10,'gems'=>5,'gold'=>100,'experience'=>100,'alive'=>true,'specialinc'=>'module:glowingstream']);
+                $_GET=['op'=>'drink']; mt_srand($seed); glowingstream_runevent('forest','forest.php?');
+                self::assertEquals($hp,$GLOBALS['session']['user']['hitpoints'],'outcome '.$outcome);
+                self::assertSame($turns,$GLOBALS['session']['user']['turns']);
+                self::assertSame($gems,$GLOBALS['session']['user']['gems']);
+                self::assertSame($alive,$GLOBALS['session']['user']['alive']);
+                self::assertSame(100,$GLOBALS['session']['user']['gold']);
+                self::assertSame(100,$GLOBALS['session']['user']['experience']);
+                self::assertSame('',$GLOBALS['session']['user']['specialinc']);
+            }
+            foreach ([5,15,10] as $seed) {
+                $GLOBALS['session']['user']['hitpoints']=1;
+                $GLOBALS['session']['user']['maxhitpoints']=1;
+                $GLOBALS['session']['user']['turns']=0;
+                mt_srand($seed); glowingstream_runevent('forest','forest.php?');
+                self::assertGreaterThanOrEqual(1,$GLOBALS['session']['user']['hitpoints']);
+                self::assertGreaterThanOrEqual(0,$GLOBALS['session']['user']['turns']);
+            }
+            $before=$GLOBALS['session']['user']; $_GET=['op'=>'nodrink'];
+            glowingstream_runevent('forest','forest.php?');
+            self::assertSame($before,$GLOBALS['session']['user']);
+        } finally { mt_srand(); $_GET=[]; deactivate_module('glowingstream'); }
+    }
+
     public function testCedrikVitalityCarryAndMalformedPreference(): void
     {
         self::assertTrue(activate_module('cedrikspotions'));

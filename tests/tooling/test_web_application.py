@@ -1064,6 +1064,115 @@ function resurrectionhttpfixture_run() { echo 'fixture-executed'; exit; }
             self.query('DELETE FROM module_userprefs WHERE modulename=? AND userid=?',['game_fivesix',player])
             self.query('UPDATE modules SET active=0')
 
+    def test_crazyaudrey_village_authority(self):
+        class NoRedirect(urllib.request.HTTPRedirectHandler):
+            def redirect_request(self, *args): return None
+        jar=http.cookiejar.CookieJar()
+        client=urllib.request.build_opener(urllib.request.HTTPCookieProcessor(jar),NoRedirect)
+        def request(path, fields=None):
+            req=urllib.request.Request(f'http://127.0.0.1:{self.port}/'+path,
+                data=None if fields is None else urllib.parse.urlencode(fields).encode())
+            try: response=client.open(req,timeout=15)
+            except urllib.error.HTTPError as error: response=error
+            body=response.read().decode('utf-8',errors='replace')
+            self.assertNotRegex(body,r'(?i)(fatal error|warning:|deprecated:|notice:)',body[:1500])
+            return response.status,body
+        def fields(body):
+            return {key:re.search(r'name=[\'"]'+key+r'[\'"] value=[\'"]([a-f0-9]{64})',body).group(1)
+                    for key in ['csrf_token','action_token']}
+        def allow(url):
+            value='a:1:{s:'+str(len(url))+':"'+url+'";b:1;}'
+            self.query('UPDATE accounts SET allowednavs=? WHERE acctid=?',[value,player])
+        def snapshot():
+            return self.query('SELECT gold,gems,charm,hitpoints,maxhitpoints,turns,bufflist FROM accounts WHERE acctid=?',[player])[0]
+        status,body=request('home.php')
+        csrf=re.search(r'name=[\'"]csrf_token[\'"] value=[\'"]([a-f0-9]{64})',body).group(1)
+        status,_=request('login.php',{'csrf_token':csrf,'name':'WebPlayer','password':"Synthetic web O'Reilly \\ password"})
+        self.assertEqual(303,status)
+        player=self.query('SELECT acctid FROM accounts WHERE login=?',['WebPlayer'])[0]['acctid']
+        self.query('UPDATE modules SET active=1')
+        prior=self.query('SELECT * FROM accounts WHERE acctid=?',[player])[0]
+        saved=self.query('SELECT setting,value FROM module_settings WHERE modulename=?',['crazyaudrey'])
+        savedprefs=self.query('SELECT setting,value FROM module_userprefs WHERE modulename=? AND userid=?',['crazyaudrey',player])
+        def pref(key,value):
+            self.query('INSERT INTO module_userprefs (modulename,setting,userid,value) VALUES (?,?,?,?) ON DUPLICATE KEY UPDATE value=?',['crazyaudrey',key,player,str(value),str(value)])
+        def setting(key,value):
+            self.query('INSERT INTO module_settings (modulename,setting,value) VALUES (?,?,?) ON DUPLICATE KEY UPDATE value=?',['crazyaudrey',key,str(value),str(value)])
+        def state():
+            return (snapshot(),self.query('SELECT setting,value FROM module_userprefs WHERE modulename=? AND userid=? ORDER BY setting',['crazyaudrey',player]),self.query('SELECT value FROM module_settings WHERE modulename=? AND setting=?',['crazyaudrey','profit']))
+        def get(op):
+            url='runmodule.php?module=crazyaudrey&op='+op
+            allow(url); before=state(); status,body=request(url)
+            self.assertEqual(200,status,body[-1000:]); self.assertEqual(before,state())
+            return url,fields(body)
+        try:
+            self.query('UPDATE accounts SET gold=100,turns=30,alive=1,specialinc=? WHERE acctid=?',['',player])
+            pref('played',0); pref('paidvisit',0)
+            setting('cost',7); setting('profit',11)
+            for key in ['animal','animals','lanimal','lanimals','sound','buffname']:
+                setting(key,"O'Reilly \\ chat é <img src=x onerror=alert(1)>")
+            # Bypassing allowed navigation cannot authorize a free Village basket reward.
+            url,post=get('play'); before=state()
+            self.assertEqual(409,request(url,post)[0]); self.assertEqual(before,state())
+            url,post=get('pet'); before=state()
+            self.assertEqual(403,request(url,{'action_token':post['action_token']})[0]); self.assertEqual(before,state())
+            status,body=request(url,{**post,'cost':'0','profit':'999999','played':'0'})
+            self.assertEqual(200,status); self.assertNotIn('<img src=x',body)
+            after=state(); self.assertEqual(93,int(after[0]['gold'])); self.assertEqual('18',after[2][0]['value'])
+            self.assertIn('crazyaudrey',after[0]['bufflist'])
+            allow(url); self.assertEqual(409,request(url,post)[0]); self.assertEqual(after,state())
+            url,post=get('play'); self.assertEqual(200,request(url,post)[0]); after=state()
+            self.assertEqual('1',dict((r['setting'],r['value']) for r in after[1])['played'])
+            self.assertEqual('0',dict((r['setting'],r['value']) for r in after[1])['paidvisit'])
+            allow(url); self.assertEqual(409,request(url,post)[0]); self.assertEqual(after,state())
+            url,post=get('play'); self.assertEqual(409,request(url,post)[0]); self.assertEqual(after,state())
+            # Historical repeated petting is allowed, but never a second daily basket game.
+            url,post=get('pet'); self.assertEqual(200,request(url,post)[0]); after=state()
+            url,post=get('play'); self.assertEqual(409,request(url,post)[0]); self.assertEqual(after,state())
+            self.query('UPDATE accounts SET gold=6 WHERE acctid=?',[player])
+            url,post=get('pet'); before=state(); self.assertEqual(409,request(url,post)[0]); self.assertEqual(before,state())
+            self.query('UPDATE accounts SET gold=100 WHERE acctid=?',[player])
+            for bad in ['-1','no','2147483648']:
+                setting('cost',bad); url,post=get('pet'); before=state()
+                self.assertEqual(409,request(url,post)[0]); self.assertEqual(before,state())
+            setting('cost',7)
+            # A failed final player write rolls back the earlier preference/profit/debug writes.
+            self.query('ALTER TABLE accounts ADD CONSTRAINT fixture_audrey_failure CHECK (gold <> 93)')
+            url,post=get('pet'); before=state()
+            audit=self.query('SELECT COUNT(*) AS n FROM debuglog WHERE actor=?',[player])
+            try:
+                self.assertEqual(500,request(url,post)[0]); self.assertEqual(before,state())
+                self.assertEqual(audit,self.query('SELECT COUNT(*) AS n FROM debuglog WHERE actor=?',[player]))
+            finally:
+                self.query('ALTER TABLE accounts DROP CONSTRAINT fixture_audrey_failure')
+            url,post=get('pet'); self.assertEqual(200,request(url,post)[0])
+            # Active module and authentication remain mandatory even with an issued intent.
+            url,post=get('pet'); before=state()
+            self.query('UPDATE modules SET active=0 WHERE modulename=?',['crazyaudrey'])
+            allow(url); request(url,post); self.assertEqual(before,state())
+            self.query('UPDATE modules SET active=1 WHERE modulename=?',['crazyaudrey'])
+            anonymous=urllib.request.build_opener(NoRedirect)
+            try: response=anonymous.open(urllib.request.Request(f'http://127.0.0.1:{self.port}/'+url,data=urllib.parse.urlencode(post).encode()))
+            except urllib.error.HTTPError as error: response=error
+            self.assertIn(response.status,[302,303,403]); response.close(); self.assertEqual(before,state())
+            url,old_day_post=get('pet')
+            # The actual New Day route resets both daily played and the pending paid visit.
+            pref('played',1); pref('paidvisit',1)
+            self.query('UPDATE accounts SET lasthit=?,race=?,specialty=? WHERE acctid=?',['2000-01-01 00:00:00','Human','DA',player])
+            allow('newday.php?continue=1')
+            self.assertEqual(200,request('newday.php?continue=1')[0])
+            current=dict((r['setting'],r['value']) for r in state()[1])
+            self.assertEqual('0',current['played']); self.assertEqual('0',current['paidvisit'])
+            before=state(); allow(url); self.assertEqual(409,request(url,old_day_post)[0]); self.assertEqual(before,state())
+            url,post=get('play'); before=state(); self.assertEqual(409,request(url,post)[0]); self.assertEqual(before,state())
+        finally:
+            self.query('UPDATE accounts SET '+','.join(k+'=?' for k in prior)+' WHERE acctid=?',list(prior.values())+[player])
+            self.query('DELETE FROM module_settings WHERE modulename=?',['crazyaudrey'])
+            for row in saved: setting(row['setting'],row['value'])
+            self.query('DELETE FROM module_userprefs WHERE modulename=? AND userid=?',['crazyaudrey',player])
+            for row in savedprefs: pref(row['setting'],row['value'])
+            self.query('UPDATE modules SET active=0')
+
     def test_module_purchases_post_csrf_replay_and_effects(self):
         class NoRedirect(urllib.request.HTTPRedirectHandler):
             def redirect_request(self, *args): return None
