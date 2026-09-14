@@ -1990,27 +1990,27 @@
       "previous_certification": "BLOCKED"
     }
   ],
-  "validated_implementation_sha": "ae236d69ae856231256625fe33e6f9b5b1dcefd9",
-  "modern_core_run": 34834000623,
-  "baseline_integrity_run": 34834000651,
+  "validated_implementation_sha": "58b9badd48aabb64eb572097439a7242ccb75b66",
+  "modern_core_run": 34837310102,
+  "baseline_integrity_run": 34837310095,
   "supported_matrix": [
     {
       "php": "8.4.25",
       "database": "MariaDB 11.4.13",
-      "job": 103943545770,
+      "job": 103953960563,
       "result": "PASS supported scope"
     },
     {
       "php": "8.5.10",
       "database": "MySQL 8.4.11",
-      "job": 103943545643,
+      "job": 103953960872,
       "result": "PASS supported scope"
     }
   ],
   "counts": {
-    "PASS": 15,
+    "PASS": 16,
     "PASS WITH DOCUMENTED LIMITATION": 0,
-    "BLOCKED": 9,
+    "BLOCKED": 8,
     "lifecycle_PASS": 24
   }
 }

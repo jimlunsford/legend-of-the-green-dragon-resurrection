@@ -693,3 +693,8 @@ The evidence-only head `80c493cfc9e6cd4b0d15e6acb11cf81df2ab9fc1` passed PHP 8.4
 Both related Fairy and potion Dragon carry/reset fixtures now seed the real Dragon HTTP battle through the already-existing test-only random hook. All existing victory, persistence, carry/reset and buff-removal assertions remain. No production combat formula or randomness changed. Targeted actual HTTP for both fixtures and all 74 PHPUnit tests / 2,227 assertions pass locally.
 
 This is the third appended commit in this execution. The ending SHA is now the commit containing this addendum; PR #1 and the final execution report record its literal SHA and exact-head supported-matrix run IDs after publication. Certification remains 16 PASS / 0 limited / 8 BLOCKED. Phase 3 remains incomplete, merge NOT READY and public hosting NO.
+
+
+### Certification summary reconciliation
+
+Reconciled the JSON aggregate counts and top-level workflow pointers with the already-updated per-module decisions: 16 PASS / 0 limited / 8 BLOCKED, all 24 lifecycle PASS. The validated implementation pointer is `58b9badd48aabb64eb572097439a7242ccb75b66`, Modern core 34837310102, baseline 34837310095 and supported-target jobs 103953960563 / 103953960872. Earlier aggregate pointers were stale; no certification decision changed in this reconciliation. This fourth appended commit is the final execution head; its literal SHA and final supported-matrix evidence are recorded in PR #1 and the execution report.
