@@ -342,7 +342,7 @@ Known major gates remain, so PR #1 stays OPEN/DRAFT and is not merged. No merge 
 
 ### Repository and publication state
 
-Starting verification matched the requested state exactly: main `999cec6f9c655a840320d982d673bb863c68c2b2`, branch `7b537eebc213bd470d3dd3e1b819b705fb9c5cf8`, PR #1 OPEN/DRAFT/unmerged, no other modernization branch or PR #2. Main remains unchanged. Work continues on `modernization/core-modernization` and PR #1. No published commit was rewritten or squashed; all five implementation/test commits below are descendants of the supplied starting SHA. This checkpoint is the sixth focused commit, also containing the two workflow checkout changes required to test the exact PR head.
+Starting verification matched the requested state exactly: main `999cec6f9c655a840320d982d673bb863c68c2b2`, branch `7b537eebc213bd470d3dd3e1b819b705fb9c5cf8`, PR #1 OPEN/DRAFT/unmerged, no other modernization branch or PR #2. Main remains unchanged. Work continues on `modernization/core-modernization` and PR #1. No published commit was rewritten or squashed; all five implementation/test commits below are descendants of the supplied starting SHA. The sixth focused commit records this checkpoint and the two workflow checkout changes required to test the exact PR head. A seventh evidence commit adds explicit shared-editor audit and account-snapshot rollback assertions after the final review; no production behavior changes.
 
 Implementation and regression ending SHA: `fd9b8a576d02b671a6e8a35490ed82845174381e`.
 
@@ -351,8 +351,9 @@ Implementation and regression ending SHA: `fd9b8a576d02b671a6e8a35490ed828451743
 - `90eba516e6e11e1a812b8d05d517a7f7b763413a`: Protect Dark Horse mount entry and encounter exits with POST intents
 - `a8d3497a0c4258948758da2839a9659681f9d562`: Preserve legacy setting forms and validate stable editor snapshots
 - `fd9b8a576d02b671a6e8a35490ed82845174381e`: Exercise editor-to-game configuration and actual tavern discovery
+- `82b08b5daf40f1af346e013d8d5b926ac3a3256d`: Record Cedrik and Dark Horse certification and verify the exact PR head
 
-The final repository SHA is the commit containing this appended section. A commit cannot contain its own object ID or future CI run IDs: the post-commit final SHA, exact checkout evidence and completed workflow IDs are recorded in the current checkpoint at [PR #1](https://github.com/jimlunsford/legend-of-the-green-dragon-resurrection/pull/1). Final certification publication requires those runs to pass; the implementation evidence below is not relabeled as a final-head run. The PR remains OPEN/DRAFT and has no merge commit.
+The final repository SHA is the seventh, evidence-only commit updating this appended section. A commit cannot contain its own object ID or future CI run IDs: the post-commit final SHA, exact checkout evidence and completed workflow IDs are recorded in the current checkpoint at [PR #1](https://github.com/jimlunsford/legend-of-the-green-dragon-resurrection/pull/1). Final certification publication requires those runs to pass; the implementation evidence below is not relabeled as a final-head run. The PR remains OPEN/DRAFT and has no merge commit.
 
 ### Work completed and intended persistence
 

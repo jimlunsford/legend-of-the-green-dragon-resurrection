@@ -254,10 +254,14 @@ function resurrectionhttpfixture_run() { echo 'fixture-executed'; exit; }
             self.assertEqual(409,request(save,stale)[0])
             # Failure after the first setting and its audit but before the second setting rolls back the entire patch.
             before=values('cedrikspotions')
+            audit_before=self.query('SELECT count(*) AS n FROM gamelog WHERE who=?',[player])
+            player_before=self.query('SELECT gold,gems,bufflist FROM accounts WHERE acctid=?',[player])
             self.query("ALTER TABLE module_settings ADD CONSTRAINT fixture_editor_log CHECK (modulename <> 'cedrikspotions' OR setting <> 'transmuteturns' OR value <> '5')")
             try:
                 _,body=request(base); form={**self._security_fields(body,save),'transcost':'5','transmuteturns':'5'}
                 self.assertEqual(500,request(save,form)[0]); self.assertEqual(before,values('cedrikspotions'))
+                self.assertEqual(audit_before,self.query('SELECT count(*) AS n FROM gamelog WHERE who=?',[player]))
+                self.assertEqual(player_before,self.query('SELECT gold,gems,bufflist FROM accounts WHERE acctid=?',[player]))
                 self.assertEqual(409,request(save,form)[0])
             finally: self.query('ALTER TABLE module_settings DROP CONSTRAINT fixture_editor_log')
             _,body=request(base); self.assertEqual(200,request(save,{**self._security_fields(body,save),'transcost':'5','transmuteturns':'5'})[0])
@@ -330,10 +334,14 @@ function resurrectionhttpfixture_run() { echo 'fixture-executed'; exit; }
             self.assertEqual(409,request(save,form)[0])
             # Configured range/text consumer and actual multi-write rollback.
             base,save=urls(ids[0],'goldmine'); before=snapshot()
+            audit_before=self.query('SELECT count(*) AS n FROM gamelog WHERE who=?',[player])
+            player_before=self.query('SELECT gold,gems,bufflist FROM accounts WHERE acctid=?',[player])
             _,body=request(base); form=dict(self._security_fields(body,save),entermine='100',dieinmine='0',tethermsg='<script>fixture</script>')
             self.query("ALTER TABLE module_objprefs ADD CONSTRAINT fixture_object_log CHECK (value <> '<script>fixture</script>')")
             try:
                 self.assertEqual(500,request(save,form)[0]); self.assertEqual(before,snapshot()); self.assertEqual(409,request(save,form)[0])
+                self.assertEqual(audit_before,self.query('SELECT count(*) AS n FROM gamelog WHERE who=?',[player]))
+                self.assertEqual(player_before,self.query('SELECT gold,gems,bufflist FROM accounts WHERE acctid=?',[player]))
             finally: self.query('ALTER TABLE module_objprefs DROP CONSTRAINT fixture_object_log')
             _,body=request(base); form=dict(self._security_fields(body,save),entermine='100',dieinmine='0',tethermsg='<script>fixture</script>')
             self.assertEqual(200,request(save,form)[0]); _,body=request(base); self.assertIn('&lt;script&gt;fixture&lt;/script&gt;',body)
