@@ -2,6 +2,14 @@
 require_once __DIR__ . '/../../lib/player_mutation.php';
 require_once __DIR__ . '/../../lib/e_rand.php';
 
+/** A literal, Unicode-aware subsequence search; ! is the SQL LIKE escape. */
+function dag_name_pattern(string $name): string {
+    $characters = preg_split('//u', $name, -1, PREG_SPLIT_NO_EMPTY);
+    if ($characters === false) throw new InvalidArgumentException('Invalid target text.');
+    return '%' . implode('%', array_map(static fn(string $character): string =>
+        strtr($character, ['!'=>'!!', '%'=>'!%', '_'=>'!_']), $characters)) . '%';
+}
+
 /** Trusted game service. HTTP callers must separately consume their one-use form. */
 function dag_place_bounty(int $targetId, int $amount, bool $administrator = false): int {
     global $session;

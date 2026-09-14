@@ -123,13 +123,13 @@ function dag_run_private(){
         try {
             $contractname = \Resurrection\Http\Input::string($_POST,'contractname');
             $amount = \Resurrection\Http\Input::integer($_POST,'amount',0,1);
-            if ($amount < 1 || $amount > 2147483647 || strlen($contractname) > 100) throw new InvalidArgumentException();
+            if ($amount < 1 || $amount > 2147483647 || strlen($contractname) > 100 || !mb_check_encoding($contractname,'UTF-8')) throw new InvalidArgumentException();
         } catch (InvalidArgumentException $error) { http_response_code(400); exit('Invalid bounty input.'); }
         if (httpget('subfinal') === '1') {
             $result = db_query('SELECT acctid,name,login,level,locked,age,dragonkills,pk,experience FROM ' . db_prefix('accounts') . ' WHERE name=? AND locked=0',true,[$contractname]);
         } else {
-            $name = '%' . implode('%', preg_split('//u',$contractname,-1,PREG_SPLIT_NO_EMPTY) ?: []) . '%';
-            $result = db_query('SELECT acctid,name,login,level,locked,age,dragonkills,pk,experience FROM ' . db_prefix('accounts') . ' WHERE name LIKE ? AND locked=0 LIMIT 101',true,[$name]);
+            $name = dag_name_pattern($contractname);
+            $result = db_query('SELECT acctid,name,login,level,locked,age,dragonkills,pk,experience FROM ' . db_prefix('accounts') . " WHERE name LIKE ? ESCAPE '!' AND locked=0 LIMIT 101",true,[$name]);
         }
 		if (db_num_rows($result) == 0) {
 			output("Dag Durnick sneers at you, `7\"There not be anyone I be knowin' of by that name.  Maybe ye should come back when ye got a real target in mind?\"");

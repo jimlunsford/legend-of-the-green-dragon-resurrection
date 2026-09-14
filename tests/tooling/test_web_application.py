@@ -250,7 +250,7 @@ function resurrectionhttpfixture_run() { echo 'fixture-executed'; exit; }
 
     def _security_target(self, login):
         source=self.query('SELECT * FROM accounts WHERE login=?',['FixtureAdmin'])[0]
-        source.pop('acctid'); source.update(login=login,name=login,superuser='0',loggedin='0')
+        source.pop('acctid'); source.update(login=login,name="`2O'Reilly \\ 雪 %_! <img src=x>",superuser='0',loggedin='0')
         columns=list(source)
         self.query('INSERT INTO accounts ('+','.join('`'+key+'`' for key in columns)+') VALUES ('+','.join('?' for _ in columns)+')',list(source.values()))
         ident=self.query('SELECT acctid FROM accounts WHERE login=?',[login])[0]['acctid']
@@ -268,7 +268,7 @@ function resurrectionhttpfixture_run() { echo 'fixture-executed'; exit; }
             self._security_allow(player,url); return request(url,fields)
         def prepare():
             self.query("UPDATE accounts SET gold=1000,level=5,age=20,experience=5000,attack=10000,defense=10000,hitpoints=10000,maxhitpoints=10000,playerfights=10,alive=1,badguy='',bufflist='a:0:{}',companions='a:0:{}',specialinc='',location='Degolburg',superuser=0 WHERE acctid=?",[player])
-            self.query("UPDATE accounts SET gold=0,level=5,age=20,experience=0,attack=1,defense=1,maxhitpoints=1,hitpoints=1,alive=1,loggedin=0,locked=0,slaydragon=0,pvpflag='2000-01-01 00:00:00',location='Degolburg' WHERE acctid=?",[target])
+            self.query("UPDATE accounts SET gold=0,level=5,age=20,experience=0,dragonkills=0,pk=0,attack=1,defense=1,maxhitpoints=1,hitpoints=1,alive=1,loggedin=0,locked=0,slaydragon=0,pvpflag='2000-01-01 00:00:00',location='Degolburg' WHERE acctid=?",[target])
         def snapshot():
             return [self.query('SELECT acctid,gold,experience,alive,hitpoints,playerfights,badguy,pvpflag FROM accounts WHERE acctid IN (?,?) ORDER BY acctid',[player,target]),
                 self.query('SELECT * FROM bounty WHERE target=? ORDER BY bountyid',[target]),
@@ -296,14 +296,17 @@ function resurrectionhttpfixture_run() { echo 'fixture-executed'; exit; }
                     self.assertEqual(409,call(entry,form)[0])
                 finally:
                     self.query(f'ALTER TABLE {table} DROP CONSTRAINT fixture_dag_failure')
-                prepare(); before=snapshot()
-            status,body=call(entry); form=self._security_fields(body)
-            status,body=call(entry,{**form,'amount':'999999','target':'999999','winner':'999999'})
+                if table != 'accounts': prepare(); before=snapshot()
+            # Retry the failed final write using actual preserved state, without resetting accounts.
+            retry=entry if self.query('SELECT badguy FROM accounts WHERE acctid=?',[player])[0]['badguy']=='' else 'pvp.php?op=fight'
+            status,body=call(retry); form=self._security_fields(body)
+            status,body=call(retry,{**form,'amount':'999999','target':'999999','winner':'999999'})
             self.assertEqual(200,status,body[:2000])
             for _ in range(3):
                 if self.query('SELECT alive FROM accounts WHERE acctid=?',[target])[0]['alive']=='0': break
                 fight='pvp.php?op=fight'; form=self._security_fields(body,fight)
                 status,body=call(fight,form); self.assertEqual(200,status,body[:2000])
+            self.assertNotIn('<img src=x>',body)
             self.assertEqual('0',self.query('SELECT alive FROM accounts WHERE acctid=?',[target])[0]['alive'])
             self.assertEqual('1250',self.query('SELECT gold FROM accounts WHERE acctid=?',[player])[0]['gold'])
             self.assertEqual('9',self.query('SELECT playerfights FROM accounts WHERE acctid=?',[player])[0]['playerfights'])
@@ -314,12 +317,13 @@ function resurrectionhttpfixture_run() { echo 'fixture-executed'; exit; }
             status,body=call(entry); self.assertEqual(200,status)
             self.assertEqual(409,call(entry,self._security_fields(body))[0]); self.assertEqual(after,snapshot())
             # Actor/target authority survives bypass of issued navigation.
-            for changes in ["alive=0", "playerfights=0"]:
+            # common.php derives actor alive from HP; use a consistent dead account.
+            for changes in ["alive=0,hitpoints=0", "playerfights=0"]:
                 prepare(); self.query('UPDATE accounts SET '+changes+' WHERE acctid=?',[player])
-                _,body=call(entry); before=snapshot(); self.assertEqual(409,call(entry,self._security_fields(body))[0]); self.assertEqual(before,snapshot())
+                _,body=call(entry); before=snapshot(); self.assertEqual(409,call(entry,self._security_fields(body))[0],changes); self.assertEqual(before,snapshot())
             for changes in ["alive=0","locked=1","age=0","location='Elsewhere'","level=15","loggedin=1,laston=NOW()","pvpflag='2099-01-01 00:00:00'"]:
                 prepare(); self.query('UPDATE accounts SET '+changes+' WHERE acctid=?',[target])
-                _,body=call(entry); before=snapshot(); self.assertEqual(409,call(entry,self._security_fields(body))[0]); self.assertEqual(before,snapshot())
+                _,body=call(entry); before=snapshot(); self.assertEqual(409,call(entry,self._security_fields(body))[0],changes); self.assertEqual(before,snapshot())
             prepare()
             for ident in ['-1','0','1e2','999999999999999999999','1%20OR%201=1']:
                 self.assertEqual(400,call('pvp.php?act=attack&name='+ident)[0])
@@ -374,6 +378,11 @@ function resurrectionhttpfixture_run() { echo 'fixture-executed'; exit; }
             self.assertEqual('0',bounty['setter'])
             _,body=call(base)  # actual funded overview, including location and duplicate-name grouping
             status,body=call(listing); self.assertEqual(200,status)
+            self.assertNotIn('<img src=x>',body)
+            search=base+'&op=viewbounties&type=search&admin=true'
+            status,body=call(search,{'target':target['name'],'s':'1','d':'1'})
+            self.assertEqual(200,status); self.assertNotIn('<img src=x>',body)
+            for invalid in [{'target[]':'x'},{'s':'9'},{'target':'x'*101}]: self.assertEqual(400,call(search,invalid)[0])
             close=base+'&op=closebounty&id='+bounty['bountyid']+'&admin=true'
             form=self._security_fields(body,close)
             self.assertEqual(403,call(close)[0]); self.assertEqual(403,call(close,{})[0])

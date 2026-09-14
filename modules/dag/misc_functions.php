@@ -30,7 +30,8 @@ function dag_manage(){
         \Resurrection\Http\Input::choice($_POST,'s',['','1','2','3','4','5','6','7','8'],'');
         \Resurrection\Http\Input::choice($_POST,'d',['','1','2'],'');
         foreach (['setter','getter','target'] as $field) {
-            if (strlen(\Resurrection\Http\Input::string($_POST,$field)) > 100) throw new InvalidArgumentException();
+            $filter = \Resurrection\Http\Input::string($_POST,$field);
+            if (strlen($filter) > 100 || !mb_check_encoding($filter,'UTF-8')) throw new InvalidArgumentException();
         }
     } catch (InvalidArgumentException $error) { http_response_code(400); exit('Invalid bounty filter.'); }
     if (httpget('op') === 'addbounty') resurrection_consume_action('dag-admin-place',(string)$session['user']['acctid']);
@@ -58,11 +59,11 @@ function dag_manage(){
 	rawoutput("<form action='runmodule.php?module=dag&manage=true&op=viewbounties&type=search&admin=true' method='POST'>");
 	addnav("","runmodule.php?module=dag&manage=true&op=viewbounties&type=search&admin=true");
 	output("Setter: ");
-	rawoutput("<input name='setter' value=\"".htmlentities(stripslashes(httppost('setter')))."\">");
+	rawoutput("<input name='setter' value=\"".htmlspecialchars((string)httppost('setter'),ENT_QUOTES,'UTF-8')."\">");
 	output(" Winner: ");
-	rawoutput("<input name='getter' value=\"".htmlentities(stripslashes(httppost('getter')))."\">");
+	rawoutput("<input name='getter' value=\"".htmlspecialchars((string)httppost('getter'),ENT_QUOTES,'UTF-8')."\">");
 	output(" Target: ");
-	rawoutput("<input name='target' value=\"".htmlentities(stripslashes(httppost('target')))."\">");
+	rawoutput("<input name='target' value=\"".htmlspecialchars((string)httppost('target'),ENT_QUOTES,'UTF-8')."\">");
 	output_notl("`n");
 	output("Order by: ");
 	$id = translate_inline("ID");
@@ -173,11 +174,11 @@ function dag_manage(){
         try {
             $contractname = \Resurrection\Http\Input::string($_POST,'contractname');
             $amount = \Resurrection\Http\Input::integer($_POST,'amount',0,1);
-            if ($amount < 1 || $amount > 2147483647 || strlen($contractname) > 100) throw new InvalidArgumentException();
+            if ($amount < 1 || $amount > 2147483647 || strlen($contractname) > 100 || !mb_check_encoding($contractname,'UTF-8')) throw new InvalidArgumentException();
         } catch (InvalidArgumentException $error) { http_response_code(400); exit('Invalid bounty input.'); }
         $exact = httpget('subfinal') === '1';
-        $name = $exact ? $contractname : '%' . implode('%', preg_split('//u',$contractname,-1,PREG_SPLIT_NO_EMPTY) ?: []) . '%';
-        $result = db_query('SELECT acctid,name,locked FROM ' . db_prefix('accounts') . ($exact ? ' WHERE name=?' : ' WHERE name LIKE ?') . ' AND locked=0 LIMIT 101',true,[$name]);
+        $name = $exact ? $contractname : dag_name_pattern($contractname);
+        $result = db_query('SELECT acctid,name,locked FROM ' . db_prefix('accounts') . ($exact ? ' WHERE name=?' : " WHERE name LIKE ? ESCAPE '!'") . ' AND locked=0 LIMIT 101',true,[$name]);
 		if (db_num_rows($result) == 0) {
 			output("No one by that name!");
 		} elseif(db_num_rows($result) > 100) {
@@ -376,11 +377,8 @@ function dag_manage(){
 			if (httppost('setter')>'') {
 				if ($t>"") $t.=" AND";
 				$a = httppost('setter');
-				$setter = "%";
-				for ($i=0;$i<strlen($a);$i++){
-					$setter.=$a[$i]."%";
-				}
-				$result = db_query('SELECT acctid FROM ' . db_prefix('accounts') . ' WHERE name LIKE ?',true,[$setter]);
+				$setter = dag_name_pattern($a);
+				$result = db_query('SELECT acctid FROM ' . db_prefix('accounts') . " WHERE name LIKE ? ESCAPE '!'",true,[$setter]);
 				$ids = array();
 				while ($row = db_fetch_assoc($result)){
 					array_push($ids,(int)$row['acctid']);
@@ -391,11 +389,8 @@ function dag_manage(){
 			if (httppost('getter')>'') {
 				if ($t>"") $t.=" AND";
 				$a = httppost('getter');
-				$getter = "%";
-				for ($i=0;$i<strlen($a);$i++){
-					$getter.=$a[$i]."%";
-				}
-				$result = db_query('SELECT acctid FROM ' . db_prefix('accounts') . ' WHERE name LIKE ?',true,[$getter]);
+				$getter = dag_name_pattern($a);
+				$result = db_query('SELECT acctid FROM ' . db_prefix('accounts') . " WHERE name LIKE ? ESCAPE '!'",true,[$getter]);
 				$ids = array();
 				while ($row = db_fetch_assoc($result)){
 					array_push($ids,(int)$row['acctid']);
@@ -406,11 +401,8 @@ function dag_manage(){
 			if (httppost('target')>'') {
 				if ($t>"") $t.=" AND";
 				$a = httppost('target');
-				$target = "%";
-				for ($i=0;$i<strlen($a);$i++){
-					$target.=$a[$i]."%";
-				}
-				$result = db_query('SELECT acctid FROM ' . db_prefix('accounts') . ' WHERE name LIKE ?',true,[$target]);
+				$target = dag_name_pattern($a);
+				$result = db_query('SELECT acctid FROM ' . db_prefix('accounts') . " WHERE name LIKE ? ESCAPE '!'",true,[$target]);
 				$ids = array();
 				while ($row = db_fetch_assoc($result)){
 					array_push($ids,(int)$row['acctid']);
