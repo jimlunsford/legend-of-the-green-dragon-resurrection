@@ -1,6 +1,6 @@
 # Bundled module certification
 
-**Final counts: 16 PASS, 0 PASS WITH DOCUMENTED LIMITATION, 8 BLOCKED. Lifecycle/metadata: 24 PASS. Modern-core merge: NOT READY. Public hosting: NO.**
+**Final counts: 17 PASS, 0 PASS WITH DOCUMENTED LIMITATION, 7 BLOCKED. Lifecycle/metadata: 24 PASS. Modern-core merge: NOT READY. Public hosting: NO.**
 
 This 2026-09-14 continuation updates the original all-BLOCKED checkpoint using new mutation evidence. The earlier Phase 3 history remains in [the original checkpoint](MODERN-CORE-CHECKPOINT-20260913-PHASE3.md). Only the 24 shipped entrypoints are in scope. No archive module was imported. No module is promoted merely because a route renders.
 
@@ -22,7 +22,7 @@ PASS covers the named module in supported bundled use, not arbitrary core/editor
 | `game_stones` | 1.1 | PASS | PASS |
 | `glowingstream` | 1.1 | PASS | PASS |
 | `goldmine` | 1.0 | PASS | PASS |
-| `lovers` | 1.0 | PASS | BLOCKED |
+| `lovers` | 1.0 | PASS | PASS |
 | `outhouse` | 2.0 | PASS | PASS |
 | `racedwarf` | 1.1 | PASS | BLOCKED |
 | `raceelf` | 1.0 | PASS | BLOCKED |
@@ -140,12 +140,12 @@ PASS in supported bundled scope: actual Forest HTTP forces all 20 historical min
 - `test_goldmine_deterministic_http_authority`, retained `testGoldmineDeathWithoutMountHasDefinedOutcome`, shared mount/settings editor HTTP tests, and all 24 lifecycle checks.
 - Both supported targets: Modern core [34837310102](https://github.com/jimlunsford/legend-of-the-green-dragon-resurrection/actions/runs/34837310102), baseline [34837310095](https://github.com/jimlunsford/legend-of-the-green-dragon-resurrection/actions/runs/34837310095).
 
-### lovers (1.0): BLOCKED
+### lovers (1.0): PASS
 
-Historical model: seenlover is one daily availability flag. Sex selects Violet/Seth; marriedto=INT_MAX selects a single NPC-married visit, otherwise flirt=1..7 are independent alternatives. Chat is read-only. POST/CSRF/state-bound one-use intent and locked transaction now protect effects; actual HTTP outcome, rejection, persistence, reset and rollback coverage added. Supported-target CI verification pending before promotion.
+PASS: actual Inn-to-form HTTP preserves seven alternative flirt choices on both NPC paths; married +/- charm/buff, unmarried success/no-effect/loss, bounded choices and forged effect/path rejection, living/current daily eligibility, active/authenticated module, read-only GET, POST/CSRF/state intent, stale/replay rejection, database persistence and subsequent login, actual New Day reset plus marriage attrition/divorce, final-account news/debug/preference rollback and fresh retry, escaped configured text with LoGD formatting. Evidence: test_lovers_alternative_choices_daily_authority_http.
 
-- Component route result: BLOCKED.
-- Exact metadata, descriptors, hooks, dependencies, database tables and prior lifecycle evidence remain in [the JSON record](BUNDLED-MODULE-CERTIFICATION.json).
+- Both supported targets: Modern core 34841113158, baseline 34841112989 at `72a43cc0cfd4e6e653a943a5377d7adbfc4139db`.
+- Previous certification: BLOCKED. No sequential dialogue stages were introduced.
 
 ### outhouse (2.0): PASS
 

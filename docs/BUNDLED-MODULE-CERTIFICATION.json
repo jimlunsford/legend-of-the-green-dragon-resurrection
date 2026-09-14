@@ -1,7 +1,7 @@
 {
   "scope": "Only the 24 bundled entrypoints, verified against modules/*.php; no archive import.",
   "date": "2026-09-14",
-  "evidence": "Current implementation: 74 PHPUnit tests / 2227 assertions / 30 Python and HTTP tests / 308 linted PHP files. Exact supported-target workflow evidence appears in the appended Phase 3 closure checkpoint and PR #1. Earlier aggregate totals and run IDs have been reconciled with per-module records.",
+  "evidence": "Verified Lovers implementation: 74 PHPUnit tests / 2227 assertions / 31 Python and HTTP tests / 308 linted PHP files. Both supported targets PASS at 72a43cc0cfd4e6e653a943a5377d7adbfc4139db, Modern core 34841113158 and Baseline integrity 34841112989.",
   "status_meaning": "Final certification is per module in the supported bundled scope. PASS requires actual behavior/security evidence; PARTIAL is a component route result only and final remains BLOCKED. Core editor/combat/hosting gates are tracked separately and still prevent merge.",
   "modules": [
     {
@@ -955,10 +955,10 @@
       "object_preferences": {},
       "settings_preferences_result": "PASS for named defaults and raw round trips; NOT APPLICABLE for empty namespaces",
       "object_preferences_result": "NOT APPLICABLE",
-      "direct_runmodule_route": "BLOCKED",
-      "direct_route_note": "Historical model: seenlover is one daily availability flag. Sex selects Violet/Seth; marriedto=INT_MAX selects a single NPC-married visit, otherwise flirt=1..7 are independent alternatives. Chat is read-only. POST/CSRF/state-bound one-use intent and locked transaction now protect effects; actual HTTP outcome, rejection, persistence, reset and rollback coverage added. Supported-target CI verification pending before promotion.",
+      "direct_runmodule_route": "PASS",
+      "direct_route_note": "PASS: actual Inn-to-form HTTP preserves seven alternative flirt choices on both NPC paths; married +/- charm/buff, unmarried success/no-effect/loss, bounded choices and forged effect/path rejection, living/current daily eligibility, active/authenticated module, read-only GET, POST/CSRF/state intent, stale/replay rejection, database persistence and subsequent login, actual New Day reset plus marriage attrition/divorce, final-account news/debug/preference rollback and fresh retry, escaped configured text with LoGD formatting. Evidence: test_lovers_alternative_choices_daily_authority_http.",
       "database_tables": [],
-      "database_behavior": "PASS: strict fresh install/reinstall and tested metadata writes; purchase/admin transactions not certified",
+      "database_behavior": "PASS: shared locked player transaction persists effect, daily preference, news/debug and buff together; three final-account failures roll back and require a fresh form.",
       "daily_hooks": [
         "newday"
       ],
@@ -966,15 +966,15 @@
       "integration_hooks": [
         "inn"
       ],
-      "php_8_4": "PASS for tested components; final BLOCKED for remaining gates",
-      "php_8_5": "PASS for tested components; final BLOCKED for remaining gates",
-      "mariadb_11_4": "PASS for tested components; final BLOCKED for remaining gates",
-      "mysql_8_4": "PASS for tested components; final BLOCKED for remaining gates",
+      "php_8_4": "PASS supported bundled scope",
+      "php_8_5": "PASS supported bundled scope",
+      "mariadb_11_4": "PASS supported bundled scope",
+      "mysql_8_4": "PASS supported bundled scope",
       "warnings_errors": "No PHP warnings/errors in the passing matrix tests; unexecuted paths unverified.",
-      "security_notes": "Historical model: seenlover is one daily availability flag. Sex selects Violet/Seth; marriedto=INT_MAX selects a single NPC-married visit, otherwise flirt=1..7 are independent alternatives. Chat is read-only. POST/CSRF/state-bound one-use intent and locked transaction now protect effects; actual HTTP outcome, rejection, persistence, reset and rollback coverage added. Supported-target CI verification pending before promotion.",
-      "final_certification": "BLOCKED",
-      "continuation_evidence": "See CORE-ROUTE-SECURITY.md for component gates and exact test names; prior lifecycle evidence is retained.",
-      "next_required_gate": "Run new Lovers HTTP coverage on both supported targets; no sequential-stage requirement exists.",
+      "security_notes": "PASS: actual Inn-to-form HTTP preserves seven alternative flirt choices on both NPC paths; married +/- charm/buff, unmarried success/no-effect/loss, bounded choices and forged effect/path rejection, living/current daily eligibility, active/authenticated module, read-only GET, POST/CSRF/state intent, stale/replay rejection, database persistence and subsequent login, actual New Day reset plus marriage attrition/divorce, final-account news/debug/preference rollback and fresh retry, escaped configured text with LoGD formatting. Evidence: test_lovers_alternative_choices_daily_authority_http.",
+      "final_certification": "PASS",
+      "continuation_evidence": "PASS: actual Inn-to-form HTTP preserves seven alternative flirt choices on both NPC paths; married +/- charm/buff, unmarried success/no-effect/loss, bounded choices and forged effect/path rejection, living/current daily eligibility, active/authenticated module, read-only GET, POST/CSRF/state intent, stale/replay rejection, database persistence and subsequent login, actual New Day reset plus marriage attrition/divorce, final-account news/debug/preference rollback and fresh retry, escaped configured text with LoGD formatting. Evidence: test_lovers_alternative_choices_daily_authority_http.",
+      "next_required_gate": "None in supported Lovers scope; unrelated core merge blockers remain.",
       "previous_certification": "BLOCKED"
     },
     {
@@ -1990,27 +1990,27 @@
       "previous_certification": "BLOCKED"
     }
   ],
-  "validated_implementation_sha": "58b9badd48aabb64eb572097439a7242ccb75b66",
-  "modern_core_run": 34837310102,
-  "baseline_integrity_run": 34837310095,
+  "validated_implementation_sha": "72a43cc0cfd4e6e653a943a5377d7adbfc4139db",
+  "modern_core_run": 34841113158,
+  "baseline_integrity_run": 34841112989,
   "supported_matrix": [
     {
       "php": "8.4.25",
       "database": "MariaDB 11.4.13",
-      "job": 103953960563,
+      "job": 103966069936,
       "result": "PASS supported scope"
     },
     {
       "php": "8.5.10",
       "database": "MySQL 8.4.11",
-      "job": 103953960872,
+      "job": 103966069657,
       "result": "PASS supported scope"
     }
   ],
   "counts": {
-    "PASS": 16,
+    "PASS": 17,
     "PASS WITH DOCUMENTED LIMITATION": 0,
-    "BLOCKED": 8,
+    "BLOCKED": 7,
     "lifecycle_PASS": 24
   }
 }

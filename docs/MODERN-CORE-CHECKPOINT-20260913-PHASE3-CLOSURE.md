@@ -698,3 +698,18 @@ This is the third appended commit in this execution. The ending SHA is now the c
 ### Certification summary reconciliation
 
 Reconciled the JSON aggregate counts and top-level workflow pointers with the already-updated per-module decisions: 16 PASS / 0 limited / 8 BLOCKED, all 24 lifecycle PASS. The validated implementation pointer is `58b9badd48aabb64eb572097439a7242ccb75b66`, Modern core 34837310102, baseline 34837310095 and supported-target jobs 103953960563 / 103953960872. Earlier aggregate pointers were stale; no certification decision changed in this reconciliation. This fourth appended commit is the final execution head; its literal SHA and final supported-matrix evidence are recorded in PR #1 and the execution report.
+
+
+## 2026-09-14: Lovers certified independently before race completion
+
+Actual starting SHA: `f282bc5c2b1cca7dba1755f74150a95bb1621c06`. Published Lovers implementation ending SHA: `72a43cc0cfd4e6e653a943a5377d7adbfc4139db`, one appended implementation commit. This evidence update follows that commit; subsequent race work is recorded separately. Main remains `999cec6f9c655a840320d982d673bb863c68c2b2`; PR #1 OPEN/DRAFT/NOT READY/NOT MERGED, no actual merge SHA.
+
+Lovers is PASS: 17 PASS / 0 PASS WITH DOCUMENTED LIMITATION / 7 BLOCKED; all 24 lifecycle checks PASS. The four races and three specialties remain BLOCKED at this checkpoint. `flirt=1..7` remain alternatives. Actual HTTP covers both NPC paths, married/unmarried positive/no-effect/negative effects, read-only entry, bounded input, daily consumption, persistent account/buff/news/debug state, subsequent authentication, New Day reset, married attrition/divorce, replay/stale form, three final-account rollback cases and fresh retry. Failed intents remain consumed; no universal crash-safe exactly-once claim.
+
+Both supported targets explicitly checked out `72a43cc0cfd4e6e653a943a5377d7adbfc4139db` and passed: 74 PHPUnit tests / 2,227 assertions; 31 Python/HTTP tests; 308 linted PHP files; zero failures/skips. Legacy PHPStan level 0 retains seven findings with no new errors; infrastructure level 6 has no errors/baseline. Composer strict validation, locked installation and audit PASS. Modern core 34841113158 SUCCESS (PHP 8.4/MariaDB job 103966069936; PHP 8.5/MySQL job 103966069657); Baseline integrity 34841112989 SUCCESS. Local results are supplementary. Initial navigation-counter/story-assertion fixture failures and a temporary leftover fixture-file failure are not acceptance evidence; no coverage was removed.
+
+Historical tag object `51cab4fbe58a234651a3177a56289b18bc152b4d`, source `bdc29df9bc344774b41e0ad7cae7f6ed2f7512e2`, tree `4013a0ccc5227e87cd7a22de00b7c322d7aa237c`, 417 files and 11 commits remain unchanged. Historical repositories untouched. Git HTTPS push had no credentials; authenticated Git objects matched the local tree and appended history with a non-forced branch update.
+
+Lovers effect GETs are closed. Race/specialty onboarding, specialty combat, petition administration, clans, equipment, stables, training and legacy editor GET families remain. General combat schema and the prior mail/systemmail, bank, PvP, administrator, serialized-business-state, expiration and deletion gates remain unresolved. Serialized inventory is unchanged: 87 sites / 42 files / 31 writers/checks / 55 ScalarState reads / one centralized unserialize.
+
+Phase 3 remains incomplete; modern-core merge NO; public hosting NO. No VPS, deployment, public runtime, archive import, release, tag, package, rebalance, framework rewrite or Phase 4 work. Next: finish shared HTTP race onboarding and independently promote Human, Elf, Dwarf and Troll, then specialty onboarding/combat authority.
