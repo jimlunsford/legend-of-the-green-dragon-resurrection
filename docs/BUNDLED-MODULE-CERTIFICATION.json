@@ -1,7 +1,7 @@
 {
   "scope": "Only the 24 bundled entrypoints, verified against modules/*.php; no archive import.",
   "date": "2026-09-14",
-  "evidence": "Retained all previous module/security regression requirements. Added SettingDescriptorTest, actual buff combat and vitality hooks, settings/object HTTP, configured potion consumption, Transmutation lifecycle/Dragon reset and Dark Horse entry/discovery/exit. Each supported target: 71 PHPUnit tests / 1744 assertions / 25 Python tests / 308 PHP lint files; exact completed runs and final SHA are recorded in PR #1 and the appended checkpoint.",
+  "evidence": "Current implementation: 74 PHPUnit tests / 2227 assertions / 29 Python and HTTP tests / 308 linted PHP files. Exact supported-target workflow evidence appears in the appended Phase 3 closure checkpoint and PR #1. Earlier aggregate totals and run IDs have been reconciled with per-module records.",
   "status_meaning": "Final certification is per module in the supported bundled scope. PASS requires actual behavior/security evidence; PARTIAL is a component route result only and final remains BLOCKED. Core editor/combat/hosting gates are tracked separately and still prevent merge.",
   "modules": [
     {
@@ -154,13 +154,14 @@
         "villagepercent": "How often will you see Crazy Audrey sitting in the village square?,range,0,100,1|20"
       },
       "user_preferences": {
-        "played": "Played Baskets Today?,bool|0"
+        "played": "Played Baskets Today?,bool|0",
+        "paidvisit": "Paid Village visit awaiting baskets,viewonly|0"
       },
       "object_preferences": {},
       "settings_preferences_result": "PASS for named defaults and raw round trips; NOT APPLICABLE for empty namespaces",
       "object_preferences_result": "NOT APPLICABLE",
-      "direct_runmodule_route": "BLOCKED",
-      "direct_route_note": "Shared Forest event POST/CSRF/current-state/replay path passes. Direct Village paid pet/play route is still a GET mutation without the shared transaction/action contract.",
+      "direct_runmodule_route": "PASS in supported bundled scope",
+      "direct_route_note": "Village pet/play uses authenticated active-module state, a locked player transaction, typed locked server settings, nonnegative affordable cost/profit, a paidvisit preference, daily played state, POST/CSRF and day/action-bound one-use intents. Historical repeat petting is retained; free or repeated daily basket play is rejected. Configured UTF-8/apostrophe/backslash/markup and escaped buff names pass. Actual HTTP tests cover insufficient funds, forged values, GET/no mutation, CSRF, replay, inactive/anonymous access, final-account-write rollback of account/preferences/profit/debug log, fresh retry and New Day reset. Fixed seeds exercise all basket rewards and both loss/lower-bound paths through Forest and Village callbacks; retained Forest HTTP proves current-event completion/replay. Evidence: test_module_audrey_village_authority and testAudreyDeterministicBasketsAndDailyReset.",
       "database_tables": [],
       "database_behavior": "PASS: strict fresh install/reinstall and tested metadata writes; purchase/admin transactions not certified",
       "daily_hooks": [
@@ -172,15 +173,15 @@
         "village",
         "village-desc"
       ],
-      "php_8_4": "PASS for tested components; final BLOCKED for remaining gates",
-      "php_8_5": "PASS for tested components; final BLOCKED for remaining gates",
-      "mariadb_11_4": "PASS for tested components; final BLOCKED for remaining gates",
-      "mysql_8_4": "PASS for tested components; final BLOCKED for remaining gates",
+      "php_8_4": "PASS supported bundled scope",
+      "php_8_5": "PASS supported bundled scope",
+      "mariadb_11_4": "PASS supported bundled scope",
+      "mysql_8_4": "PASS supported bundled scope",
       "warnings_errors": "No PHP warnings/errors in the passing matrix tests; unexecuted paths unverified.",
-      "security_notes": "Shared Forest event POST/CSRF/current-state/replay path passes. Direct Village paid pet/play route is still a GET mutation without the shared transaction/action contract.",
-      "final_certification": "BLOCKED",
-      "continuation_evidence": "See CORE-ROUTE-SECURITY.md for component gates and exact test names; prior lifecycle evidence is retained.",
-      "next_required_gate": "Protect and test the Village paid pet/play mutation with daily state, POST/CSRF and one-use replay handling.",
+      "security_notes": "Village pet/play uses authenticated active-module state, a locked player transaction, typed locked server settings, nonnegative affordable cost/profit, a paidvisit preference, daily played state, POST/CSRF and day/action-bound one-use intents. Historical repeat petting is retained; free or repeated daily basket play is rejected. Configured UTF-8/apostrophe/backslash/markup and escaped buff names pass. Actual HTTP tests cover insufficient funds, forged values, GET/no mutation, CSRF, replay, inactive/anonymous access, final-account-write rollback of account/preferences/profit/debug log, fresh retry and New Day reset. Fixed seeds exercise all basket rewards and both loss/lower-bound paths through Forest and Village callbacks; retained Forest HTTP proves current-event completion/replay. Evidence: test_module_audrey_village_authority and testAudreyDeterministicBasketsAndDailyReset.",
+      "final_certification": "PASS",
+      "continuation_evidence": "Village pet/play uses authenticated active-module state, a locked player transaction, typed locked server settings, nonnegative affordable cost/profit, a paidvisit preference, daily played state, POST/CSRF and day/action-bound one-use intents. Historical repeat petting is retained; free or repeated daily basket play is rejected. Configured UTF-8/apostrophe/backslash/markup and escaped buff names pass. Actual HTTP tests cover insufficient funds, forged values, GET/no mutation, CSRF, replay, inactive/anonymous access, final-account-write rollback of account/preferences/profit/debug log, fresh retry and New Day reset. Fixed seeds exercise all basket rewards and both loss/lower-bound paths through Forest and Village callbacks; retained Forest HTTP proves current-event completion/replay. Evidence: test_module_audrey_village_authority and testAudreyDeterministicBasketsAndDailyReset.",
+      "next_required_gate": "None in the supported bundled scope.",
       "previous_certification": "BLOCKED"
     },
     {
@@ -500,8 +501,8 @@
       "object_preferences": {},
       "settings_preferences_result": "PASS for named defaults and raw round trips; NOT APPLICABLE for empty namespaces",
       "object_preferences_result": "NOT APPLICABLE",
-      "direct_runmodule_route": "PARTIAL",
-      "direct_route_note": "Current Forest event POST/CSRF and one-time give action pass; scalar-only state and transactional player/pref writes. Remaining: all HP/pref/specialty/no-gem result branches with configured values and shared settings-editor closure.",
+      "direct_runmodule_route": "NOT APPLICABLE: event-only gameplay; supported event boundary PASS",
+      "direct_route_note": "All seven historical outcomes are deterministic: configured turns, net gem reward, max/current HP and specialty skill/use increments. Award boundaries 1 and 5 and both carry flags pass. No-gem give and decline paths complete without reward. Declared settings and bounded accumulated HP fail closed before rewards or recalculation. Real shared-editor invalid/boundary/replay cases and actual Dragon processing prove extra-HP carry/removal. Temporary means maximum HP that does not survive Dragon Kill; Fairy has no separate temporary-HP-only reward. Retained Forest HTTP covers current event, POST/CSRF, completion and replay. Evidence: testFairyConfiguredOutcomesCarryAndInvalidState, test_fairy_settings_and_dragon_carry_http, test_module_purchases_post_csrf_replay_and_effects.",
       "database_tables": [],
       "database_behavior": "PASS: strict fresh install/reinstall and tested metadata writes; purchase/admin transactions not certified",
       "daily_hooks": [],
@@ -509,15 +510,15 @@
         "hprecalc"
       ],
       "integration_hooks": [],
-      "php_8_4": "PASS for tested components; final BLOCKED for remaining gates",
-      "php_8_5": "PASS for tested components; final BLOCKED for remaining gates",
-      "mariadb_11_4": "PASS for tested components; final BLOCKED for remaining gates",
-      "mysql_8_4": "PASS for tested components; final BLOCKED for remaining gates",
+      "php_8_4": "PASS supported bundled scope",
+      "php_8_5": "PASS supported bundled scope",
+      "mariadb_11_4": "PASS supported bundled scope",
+      "mysql_8_4": "PASS supported bundled scope",
       "warnings_errors": "No PHP warnings/errors in the passing matrix tests; unexecuted paths unverified.",
-      "security_notes": "Current Forest event POST/CSRF and one-time give action pass; scalar-only state and transactional player/pref writes. Remaining: all HP/pref/specialty/no-gem result branches with configured values and shared settings-editor closure.",
-      "final_certification": "BLOCKED",
-      "continuation_evidence": "See CORE-ROUTE-SECURITY.md for component gates and exact test names; prior lifecycle evidence is retained.",
-      "next_required_gate": "Force all supported HP/permanent-HP/turn/specialty/no-reward branches under configured values and carry behavior.",
+      "security_notes": "All seven historical outcomes are deterministic: configured turns, net gem reward, max/current HP and specialty skill/use increments. Award boundaries 1 and 5 and both carry flags pass. No-gem give and decline paths complete without reward. Declared settings and bounded accumulated HP fail closed before rewards or recalculation. Real shared-editor invalid/boundary/replay cases and actual Dragon processing prove extra-HP carry/removal. Temporary means maximum HP that does not survive Dragon Kill; Fairy has no separate temporary-HP-only reward. Retained Forest HTTP covers current event, POST/CSRF, completion and replay. Evidence: testFairyConfiguredOutcomesCarryAndInvalidState, test_fairy_settings_and_dragon_carry_http, test_module_purchases_post_csrf_replay_and_effects.",
+      "final_certification": "PASS",
+      "continuation_evidence": "All seven historical outcomes are deterministic: configured turns, net gem reward, max/current HP and specialty skill/use increments. Award boundaries 1 and 5 and both carry flags pass. No-gem give and decline paths complete without reward. Declared settings and bounded accumulated HP fail closed before rewards or recalculation. Real shared-editor invalid/boundary/replay cases and actual Dragon processing prove extra-HP carry/removal. Temporary means maximum HP that does not survive Dragon Kill; Fairy has no separate temporary-HP-only reward. Retained Forest HTTP covers current event, POST/CSRF, completion and replay. Evidence: testFairyConfiguredOutcomesCarryAndInvalidState, test_fairy_settings_and_dragon_carry_http, test_module_purchases_post_csrf_replay_and_effects.",
+      "next_required_gate": "None in the supported bundled scope.",
       "previous_certification": "BLOCKED"
     },
     {
@@ -845,22 +846,22 @@
       "object_preferences": {},
       "settings_preferences_result": "PASS for named defaults and raw round trips; NOT APPLICABLE for empty namespaces",
       "object_preferences_result": "NOT APPLICABLE",
-      "direct_runmodule_route": "PARTIAL",
-      "direct_route_note": "Shared current-event POST/CSRF and consumed drink action pass. Historical effects unchanged; transactional bounded currency. Remaining: all value-changing branches, configured effects and settings-editor validation evidence.",
+      "direct_runmodule_route": "NOT APPLICABLE: event-only gameplay; supported event boundary PASS",
+      "direct_route_note": "All ten historical rolls are forced with fixed seeds: death retaining gold/experience, near-death HP/turn loss, full healing plus a turn, gem, turn-only and healing-only results. HP/turn lower bounds and decline are asserted. Retained real Forest HTTP proves current-event authority, POST/CSRF, completion and replay. This module declares no configurable effect values, gold gain/loss or other tunable settings; those generic checklist branches are not applicable. Optional travel remains outside bundled scope. Evidence: testGlowingStreamEveryShippedOutcome and test_module_purchases_post_csrf_replay_and_effects.",
       "database_tables": [],
       "database_behavior": "PASS: strict fresh install/reinstall and tested metadata writes; purchase/admin transactions not certified",
       "daily_hooks": [],
       "combat_hooks": [],
       "integration_hooks": [],
-      "php_8_4": "PASS for tested components; final BLOCKED for remaining gates",
-      "php_8_5": "PASS for tested components; final BLOCKED for remaining gates",
-      "mariadb_11_4": "PASS for tested components; final BLOCKED for remaining gates",
-      "mysql_8_4": "PASS for tested components; final BLOCKED for remaining gates",
+      "php_8_4": "PASS supported bundled scope",
+      "php_8_5": "PASS supported bundled scope",
+      "mariadb_11_4": "PASS supported bundled scope",
+      "mysql_8_4": "PASS supported bundled scope",
       "warnings_errors": "No PHP warnings/errors in the passing matrix tests; unexecuted paths unverified.",
-      "security_notes": "Shared current-event POST/CSRF and consumed drink action pass. Historical effects unchanged; transactional bounded currency. Remaining: all value-changing branches, configured effects and settings-editor validation evidence.",
-      "final_certification": "BLOCKED",
-      "continuation_evidence": "See CORE-ROUTE-SECURITY.md for component gates and exact test names; prior lifecycle evidence is retained.",
-      "next_required_gate": "Force every supported reward/loss/HP/turn/currency branch under configured values.",
+      "security_notes": "All ten historical rolls are forced with fixed seeds: death retaining gold/experience, near-death HP/turn loss, full healing plus a turn, gem, turn-only and healing-only results. HP/turn lower bounds and decline are asserted. Retained real Forest HTTP proves current-event authority, POST/CSRF, completion and replay. This module declares no configurable effect values, gold gain/loss or other tunable settings; those generic checklist branches are not applicable. Optional travel remains outside bundled scope. Evidence: testGlowingStreamEveryShippedOutcome and test_module_purchases_post_csrf_replay_and_effects.",
+      "final_certification": "PASS",
+      "continuation_evidence": "All ten historical rolls are forced with fixed seeds: death retaining gold/experience, near-death HP/turn loss, full healing plus a turn, gem, turn-only and healing-only results. HP/turn lower bounds and decline are asserted. Retained real Forest HTTP proves current-event authority, POST/CSRF, completion and replay. This module declares no configurable effect values, gold gain/loss or other tunable settings; those generic checklist branches are not applicable. Optional travel remains outside bundled scope. Evidence: testGlowingStreamEveryShippedOutcome and test_module_purchases_post_csrf_replay_and_effects.",
+      "next_required_gate": "None in the supported bundled scope.",
       "previous_certification": "BLOCKED"
     },
     {
@@ -1021,8 +1022,8 @@
       "object_preferences": {},
       "settings_preferences_result": "PASS for named defaults and raw round trips; NOT APPLICABLE for empty namespaces",
       "object_preferences_result": "NOT APPLICABLE",
-      "direct_runmodule_route": "PARTIAL",
-      "direct_route_note": "Paid/free use and wash pass real GET/no-effect, POST/CSRF, charge, replay and fresh-form stage rejection; used/stage prefs persist and reset at New Day. Currency cannot go negative. Remaining: forced reward/loss/gem/turn outcomes, nowash branch and settings-editor validation.",
+      "direct_runmodule_route": "PASS in supported bundled scope",
+      "direct_route_note": "Real HTTP deterministically covers paid/free entry, configured cost, paid gold/gem/turn rewards, no reward, free gold reward/no reward, no-wash penalty and currency floor, exhausted daily visits, fresh-form stage bypass, GET/no mutation, CSRF, duplicate/replay, invalid settings/preferences and actual New Day reset/fresh entry. Locked declared settings and strict used/stage values reject malformed state; intents include account/game-day context. The historical nowash comparison (roll >= badmusthit) is retained. Evidence: test_outhouse_configured_outcomes_http and retained paid/free/wash HTTP.",
       "database_tables": [],
       "database_behavior": "PASS for existing lifecycle plus tested transactional action paths; see security_notes for unclosed family gates",
       "daily_hooks": [
@@ -1032,15 +1033,15 @@
       "integration_hooks": [
         "forest"
       ],
-      "php_8_4": "PASS for tested components; final BLOCKED for remaining gates",
-      "php_8_5": "PASS for tested components; final BLOCKED for remaining gates",
-      "mariadb_11_4": "PASS for tested components; final BLOCKED for remaining gates",
-      "mysql_8_4": "PASS for tested components; final BLOCKED for remaining gates",
+      "php_8_4": "PASS supported bundled scope",
+      "php_8_5": "PASS supported bundled scope",
+      "mariadb_11_4": "PASS supported bundled scope",
+      "mysql_8_4": "PASS supported bundled scope",
       "warnings_errors": "No PHP warnings/errors in the passing matrix tests; unexecuted paths unverified.",
-      "security_notes": "Paid/free use and wash pass real GET/no-effect, POST/CSRF, charge, replay and fresh-form stage rejection; used/stage prefs persist and reset at New Day. Currency cannot go negative. Remaining: forced reward/loss/gem/turn outcomes, nowash branch and settings-editor validation.",
-      "final_certification": "BLOCKED",
-      "continuation_evidence": "See CORE-ROUTE-SECURITY.md for component gates and exact test names; prior lifecycle evidence is retained.",
-      "next_required_gate": "Force reward/no-reward/penalty/gem/turn/nowash branches with configured costs and chances.",
+      "security_notes": "Real HTTP deterministically covers paid/free entry, configured cost, paid gold/gem/turn rewards, no reward, free gold reward/no reward, no-wash penalty and currency floor, exhausted daily visits, fresh-form stage bypass, GET/no mutation, CSRF, duplicate/replay, invalid settings/preferences and actual New Day reset/fresh entry. Locked declared settings and strict used/stage values reject malformed state; intents include account/game-day context. The historical nowash comparison (roll >= badmusthit) is retained. Evidence: test_outhouse_configured_outcomes_http and retained paid/free/wash HTTP.",
+      "final_certification": "PASS",
+      "continuation_evidence": "Real HTTP deterministically covers paid/free entry, configured cost, paid gold/gem/turn rewards, no reward, free gold reward/no reward, no-wash penalty and currency floor, exhausted daily visits, fresh-form stage bypass, GET/no mutation, CSRF, duplicate/replay, invalid settings/preferences and actual New Day reset/fresh entry. Locked declared settings and strict used/stage values reject malformed state; intents include account/game-day context. The historical nowash comparison (roll >= badmusthit) is retained. Evidence: test_outhouse_configured_outcomes_http and retained paid/free/wash HTTP.",
+      "next_required_gate": "None in the supported bundled scope.",
       "previous_certification": "BLOCKED"
     },
     {
@@ -1624,8 +1625,8 @@
       "object_preferences": {},
       "settings_preferences_result": "PASS for named defaults and raw round trips; NOT APPLICABLE for empty namespaces",
       "object_preferences_result": "NOT APPLICABLE",
-      "direct_runmodule_route": "PARTIAL",
-      "direct_route_note": "GET is read-only; real POST/CSRF increments daily been once and replay cannot repeat effect. Counter is rechecked under lock; original random effects retained. Remaining: complete HP/gold/gem branches, visit exhaustion with a fresh intent and settings-editor validation.",
+      "direct_runmodule_route": "PASS in supported bundled scope",
+      "direct_route_note": "Actual HTTP forces every one of the 19 song results, plus female charm, HP floor, insufficient gold, zero gems and overfull HP. Configured fixed rewards/losses and visit limits, no-effect result, GET/no mutation, CSRF, replay, exhaustion, a second fresh valid visit and New Day reset pass. Declared ranges, paired reward bounds, nonnegative effect/counter values and locked current settings are checked before mutation. One-use intent includes account/game-day context. Historical song content, odds and effect formulas are retained. Evidence: test_sethsong_all_configured_effects_http and retained Seth HTTP/newday hook fixtures.",
       "database_tables": [],
       "database_behavior": "PASS for existing lifecycle plus tested transactional action paths; see security_notes for unclosed family gates",
       "daily_hooks": [
@@ -1635,15 +1636,15 @@
       "integration_hooks": [
         "inn"
       ],
-      "php_8_4": "PASS for tested components; final BLOCKED for remaining gates",
-      "php_8_5": "PASS for tested components; final BLOCKED for remaining gates",
-      "mariadb_11_4": "PASS for tested components; final BLOCKED for remaining gates",
-      "mysql_8_4": "PASS for tested components; final BLOCKED for remaining gates",
+      "php_8_4": "PASS supported bundled scope",
+      "php_8_5": "PASS supported bundled scope",
+      "mariadb_11_4": "PASS supported bundled scope",
+      "mysql_8_4": "PASS supported bundled scope",
       "warnings_errors": "No PHP warnings/errors in the passing matrix tests; unexecuted paths unverified.",
-      "security_notes": "GET is read-only; real POST/CSRF increments daily been once and replay cannot repeat effect. Counter is rechecked under lock; original random effects retained. Remaining: complete HP/gold/gem branches, visit exhaustion with a fresh intent and settings-editor validation.",
-      "final_certification": "BLOCKED",
-      "continuation_evidence": "See CORE-ROUTE-SECURITY.md for component gates and exact test names; prior lifecycle evidence is retained.",
-      "next_required_gate": "Force HP/gold/gem/no-effect outcomes and configured visit exhaustion/fresh-intent/reset boundaries.",
+      "security_notes": "Actual HTTP forces every one of the 19 song results, plus female charm, HP floor, insufficient gold, zero gems and overfull HP. Configured fixed rewards/losses and visit limits, no-effect result, GET/no mutation, CSRF, replay, exhaustion, a second fresh valid visit and New Day reset pass. Declared ranges, paired reward bounds, nonnegative effect/counter values and locked current settings are checked before mutation. One-use intent includes account/game-day context. Historical song content, odds and effect formulas are retained. Evidence: test_sethsong_all_configured_effects_http and retained Seth HTTP/newday hook fixtures.",
+      "final_certification": "PASS",
+      "continuation_evidence": "Actual HTTP forces every one of the 19 song results, plus female charm, HP floor, insufficient gold, zero gems and overfull HP. Configured fixed rewards/losses and visit limits, no-effect result, GET/no mutation, CSRF, replay, exhaustion, a second fresh valid visit and New Day reset pass. Declared ranges, paired reward bounds, nonnegative effect/counter values and locked current settings are checked before mutation. One-use intent includes account/game-day context. Historical song content, odds and effect formulas are retained. Evidence: test_sethsong_all_configured_effects_http and retained Seth HTTP/newday hook fixtures.",
+      "next_required_gate": "None in the supported bundled scope.",
       "previous_certification": "BLOCKED"
     },
     {
@@ -1989,27 +1990,27 @@
       "previous_certification": "BLOCKED"
     }
   ],
-  "validated_implementation_sha": "d575acfcf7631201b0f195f0fe10be11fe0d63ec",
-  "modern_core_run": 34792299180,
-  "baseline_integrity_run": 34792299186,
+  "validated_implementation_sha": "ae236d69ae856231256625fe33e6f9b5b1dcefd9",
+  "modern_core_run": 34834000623,
+  "baseline_integrity_run": 34834000651,
   "supported_matrix": [
     {
       "php": "8.4.25",
       "database": "MariaDB 11.4.13",
-      "job": 103818653164,
-      "result": "PASS tested scope"
+      "job": 103943545770,
+      "result": "PASS supported scope"
     },
     {
       "php": "8.5.10",
       "database": "MySQL 8.4.11",
-      "job": 103818653066,
-      "result": "PASS tested scope"
+      "job": 103943545643,
+      "result": "PASS supported scope"
     }
   ],
   "counts": {
-    "PASS": 8,
+    "PASS": 15,
     "PASS WITH DOCUMENTED LIMITATION": 0,
-    "BLOCKED": 16,
+    "BLOCKED": 9,
     "lifecycle_PASS": 24
   }
 }

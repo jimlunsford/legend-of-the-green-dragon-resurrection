@@ -1,6 +1,6 @@
 # Bundled module certification
 
-**Final counts: 10 PASS, 0 PASS WITH DOCUMENTED LIMITATION, 14 BLOCKED. Lifecycle/metadata: 24 PASS. Modern-core merge: NOT READY. Public hosting: NO.**
+**Final counts: 15 PASS, 0 PASS WITH DOCUMENTED LIMITATION, 9 BLOCKED. Lifecycle/metadata: 24 PASS. Modern-core merge: NOT READY. Public hosting: NO.**
 
 This 2026-09-14 continuation updates the original all-BLOCKED checkpoint using new mutation evidence. The earlier Phase 3 history remains in [the original checkpoint](MODERN-CORE-CHECKPOINT-20260913-PHASE3.md). Only the 24 shipped entrypoints are in scope. No archive module was imported. No module is promoted merely because a route renders.
 
@@ -9,26 +9,26 @@ PASS covers the named module in supported bundled use, not arbitrary core/editor
 | Module | Version | Lifecycle | Final certification |
 |---|---|---|---|
 | `cedrikspotions` | 2.6 | PASS | PASS |
-| `crazyaudrey` | 1.1 | PASS | BLOCKED |
+| `crazyaudrey` | 1.1 | PASS | PASS |
 | `dag` | 1.3 | PASS | PASS |
 | `darkhorse` | 1.1 | PASS | PASS |
 | `drinks` | 1.1 | PASS | PASS |
-| `fairy` | 1.1 | PASS | BLOCKED |
+| `fairy` | 1.1 | PASS | PASS |
 | `findgem` | 1.1 | PASS | PASS |
 | `findgold` | 1.1 | PASS | PASS |
 | `foilwench` | 1.1 | PASS | PASS |
 | `game_dice` | 1.1 | PASS | PASS |
 | `game_fivesix` | 1.7 | PASS | PASS |
 | `game_stones` | 1.1 | PASS | PASS |
-| `glowingstream` | 1.1 | PASS | BLOCKED |
+| `glowingstream` | 1.1 | PASS | PASS |
 | `goldmine` | 1.0 | PASS | BLOCKED |
 | `lovers` | 1.0 | PASS | BLOCKED |
-| `outhouse` | 2.0 | PASS | BLOCKED |
+| `outhouse` | 2.0 | PASS | PASS |
 | `racedwarf` | 1.1 | PASS | BLOCKED |
 | `raceelf` | 1.0 | PASS | BLOCKED |
 | `racehuman` | 1.0 | PASS | BLOCKED |
 | `racetroll` | 1.0 | PASS | BLOCKED |
-| `sethsong` | 1.1 | PASS | BLOCKED |
+| `sethsong` | 1.1 | PASS | PASS |
 | `specialtydarkarts` | 1.1 | PASS | BLOCKED |
 | `specialtymysticpower` | 1.0 | PASS | BLOCKED |
 | `specialtythiefskills` | 1.0 | PASS | BLOCKED |
@@ -50,12 +50,11 @@ PASS in supported bundled scope: real HTTP purchases, exact configured charges, 
 - Previous certification: BLOCKED. Current route component: PASS in the named scope.
 - Prior checkpoint evidence remains in the appended Phase 3 record.
 
-### crazyaudrey (1.1): BLOCKED
+### crazyaudrey (1.1): PASS
 
-Shared Forest event POST/CSRF/current-state/replay path passes. Direct Village paid pet/play route is still a GET mutation without the shared transaction/action contract.
+Village pet/play uses authenticated active-module state, a locked player transaction, typed locked server settings, nonnegative affordable cost/profit, a paidvisit preference, daily played state, POST/CSRF and day/action-bound one-use intents. Historical repeat petting is retained; free or repeated daily basket play is rejected. Configured UTF-8/apostrophe/backslash/markup and escaped buff names pass. Actual HTTP tests cover insufficient funds, forged values, GET/no mutation, CSRF, replay, inactive/anonymous access, final-account-write rollback of account/preferences/profit/debug log, fresh retry and New Day reset. Fixed seeds exercise all basket rewards and both loss/lower-bound paths through Forest and Village callbacks; retained Forest HTTP proves current-event completion/replay. Evidence: test_module_audrey_village_authority and testAudreyDeterministicBasketsAndDailyReset.
 
-- Component route result: BLOCKED.
-- Exact metadata, descriptors, hooks, dependencies, database tables and prior lifecycle evidence remain in [the JSON record](BUNDLED-MODULE-CERTIFICATION.json).
+- Previous certification: BLOCKED. Current supported bundled scope: PASS.
 
 ### dag (1.3): PASS
 
@@ -80,12 +79,11 @@ PASS: protected active purchase, server price, configured hardlimit/maxdrunk bou
 
 - Exact metadata, descriptors, hooks, dependencies, database tables and prior lifecycle evidence remain in [the JSON record](BUNDLED-MODULE-CERTIFICATION.json).
 
-### fairy (1.1): BLOCKED
+### fairy (1.1): PASS
 
-Current Forest event POST/CSRF and one-time give action pass; scalar-only state and transactional player/pref writes. Remaining: all HP/pref/specialty/no-gem result branches with configured values and shared settings-editor closure.
+All seven historical outcomes are deterministic: configured turns, net gem reward, max/current HP and specialty skill/use increments. Award boundaries 1 and 5 and both carry flags pass. No-gem give and decline paths complete without reward. Declared settings and bounded accumulated HP fail closed before rewards or recalculation. Real shared-editor invalid/boundary/replay cases and actual Dragon processing prove extra-HP carry/removal. Temporary means maximum HP that does not survive Dragon Kill; Fairy has no separate temporary-HP-only reward. Retained Forest HTTP covers current event, POST/CSRF, completion and replay. Evidence: testFairyConfiguredOutcomesCarryAndInvalidState, test_fairy_settings_and_dragon_carry_http, test_module_purchases_post_csrf_replay_and_effects.
 
-- Component route result: PARTIAL.
-- Exact metadata, descriptors, hooks, dependencies, database tables and prior lifecycle evidence remain in [the JSON record](BUNDLED-MODULE-CERTIFICATION.json).
+- Previous certification: BLOCKED. Current supported bundled scope: PASS.
 
 ### findgem (1.1): PASS
 
@@ -129,12 +127,11 @@ PASS: account-owned, unique-generation JSON wager envelope; stake debited atomic
 - Component route result: PASS.
 - Exact metadata and lifecycle evidence remain in [the JSON record](BUNDLED-MODULE-CERTIFICATION.json).
 
-### glowingstream (1.1): BLOCKED
+### glowingstream (1.1): PASS
 
-Shared current-event POST/CSRF and consumed drink action pass. Historical effects unchanged; transactional bounded currency. Remaining: all value-changing branches, configured effects and settings-editor validation evidence.
+All ten historical rolls are forced with fixed seeds: death retaining gold/experience, near-death HP/turn loss, full healing plus a turn, gem, turn-only and healing-only results. HP/turn lower bounds and decline are asserted. Retained real Forest HTTP proves current-event authority, POST/CSRF, completion and replay. This module declares no configurable effect values, gold gain/loss or other tunable settings; those generic checklist branches are not applicable. Optional travel remains outside bundled scope. Evidence: testGlowingStreamEveryShippedOutcome and test_module_purchases_post_csrf_replay_and_effects.
 
-- Component route result: PARTIAL.
-- Exact metadata, descriptors, hooks, dependencies, database tables and prior lifecycle evidence remain in [the JSON record](BUNDLED-MODULE-CERTIFICATION.json).
+- Previous certification: BLOCKED. Current supported bundled scope: PASS.
 
 ### goldmine (1.0): BLOCKED
 
@@ -150,12 +147,11 @@ Existing hook semantics and issued Inn route render PASS. Value-changing convers
 - Component route result: BLOCKED.
 - Exact metadata, descriptors, hooks, dependencies, database tables and prior lifecycle evidence remain in [the JSON record](BUNDLED-MODULE-CERTIFICATION.json).
 
-### outhouse (2.0): BLOCKED
+### outhouse (2.0): PASS
 
-Paid/free use and wash pass real GET/no-effect, POST/CSRF, charge, replay and fresh-form stage rejection; used/stage prefs persist and reset at New Day. Currency cannot go negative. Remaining: forced reward/loss/gem/turn outcomes, nowash branch and settings-editor validation.
+Real HTTP deterministically covers paid/free entry, configured cost, paid gold/gem/turn rewards, no reward, free gold reward/no reward, no-wash penalty and currency floor, exhausted daily visits, fresh-form stage bypass, GET/no mutation, CSRF, duplicate/replay, invalid settings/preferences and actual New Day reset/fresh entry. Locked declared settings and strict used/stage values reject malformed state; intents include account/game-day context. The historical nowash comparison (roll >= badmusthit) is retained. Evidence: test_outhouse_configured_outcomes_http and retained paid/free/wash HTTP.
 
-- Component route result: PARTIAL.
-- Exact metadata, descriptors, hooks, dependencies, database tables and prior lifecycle evidence remain in [the JSON record](BUNDLED-MODULE-CERTIFICATION.json).
+- Previous certification: BLOCKED. Current supported bundled scope: PASS.
 
 ### racedwarf (1.1): BLOCKED
 
@@ -185,12 +181,11 @@ Existing choice text, newday/stat and combined-hook behavior PASS. Actual HTTP o
 - Component route result: BLOCKED.
 - Exact metadata, descriptors, hooks, dependencies, database tables and prior lifecycle evidence remain in [the JSON record](BUNDLED-MODULE-CERTIFICATION.json).
 
-### sethsong (1.1): BLOCKED
+### sethsong (1.1): PASS
 
-GET is read-only; real POST/CSRF increments daily been once and replay cannot repeat effect. Counter is rechecked under lock; original random effects retained. Remaining: complete HP/gold/gem branches, visit exhaustion with a fresh intent and settings-editor validation.
+Actual HTTP forces every one of the 19 song results, plus female charm, HP floor, insufficient gold, zero gems and overfull HP. Configured fixed rewards/losses and visit limits, no-effect result, GET/no mutation, CSRF, replay, exhaustion, a second fresh valid visit and New Day reset pass. Declared ranges, paired reward bounds, nonnegative effect/counter values and locked current settings are checked before mutation. One-use intent includes account/game-day context. Historical song content, odds and effect formulas are retained. Evidence: test_sethsong_all_configured_effects_http and retained Seth HTTP/newday hook fixtures.
 
-- Component route result: PARTIAL.
-- Exact metadata, descriptors, hooks, dependencies, database tables and prior lifecycle evidence remain in [the JSON record](BUNDLED-MODULE-CERTIFICATION.json).
+- Previous certification: BLOCKED. Current supported bundled scope: PASS.
 
 ### specialtydarkarts (1.1): BLOCKED
 
@@ -228,3 +223,8 @@ Neither promotion certifies the shared administrator configuration/preference ed
 ## Cedrik / shared editor / Dark Horse continuation
 
 All eight previously certified modules remain PASS. Cedrik and Dark Horse are added only after both supported targets pass. Lifecycle remains 24 PASS. Goldmine gains tested shared preference infrastructure but stays BLOCKED for its configured gameplay outcomes. Other consumers are not automatically certified by a secure shared primitive. See the latest appended checkpoint for all 24 previous/final decisions and remaining gates.
+
+
+## Remaining effects continuation (2026-09-14)
+
+Five modules promoted individually: Crazy Audrey, Fairy, Glowing Stream, Outhouse and Seth. Goldmine and Lovers remain BLOCKED; all four race and all three specialty onboarding/combat gates remain BLOCKED. The original ten certifications remain intact. Test-only random fixtures are installed solely in disposable test databases and removed afterwards; production random APIs, outcomes and probabilities are unchanged. Current implementation evidence is in the appended closure checkpoint.

@@ -136,3 +136,10 @@ This does **not** certify the general Forest/training combat schema, all optiona
 Exact token recount: **87 sites / 42 files / 31 serialize / 55 ScalarState reads / one centralized unserialize**. The only removed call is the second buff restoration in newday.php. New Day now carries the already validated, restored buff list with an explicit cursor reset. No new deserializer or relaxed ScalarState limit was introduced.
 
 TransmutationState defines exact names/text/schema, positive bounded rounds, finite attack/defense modifiers from 0.1 through 2, the 0/1 New Day carry flag and the small existing runtime flag vocabulary. Malformed, stale-zero/negative/oversized, nested or unexpected state fails closed before gameplay. The normal buff container and centralized scalar reader remain in use. Vitality extra-HP bookkeeping is a bounded integer. Other combat, buff, mount, companion, mail and editor business schemas remain open.
+
+
+## Remaining effects continuation (2026-09-14)
+
+Exact token recount remains **87 sites / 42 files / 31 serialize writers / 55 ScalarState reads / one centralized unserialize**. No serialization is removed or added by these module changes, and all ScalarState class/size/depth/node/cycle/incomplete-object/canonical-completeness limits remain intact.
+
+Fairy accumulated extra HP now uses a bounded nonnegative integer (0..4294967295, missing/empty means zero) before awards and hprecalc; increment overflow fails closed. Declared Fairy carry/award settings are validated before effects. Audrey paidvisit/played and Outhouse used/stage are finite preference values; Seth visit count is a bounded nonnegative integer. These are narrow business-state validators, not certification of the entire preferences serialization envelope. Audrey configured buff names are escaped before entering the legacy trusted buff-name display. General combat, mounts, companions, remaining buffs, translated mail, core preferences, editor oldvalues and navigation business schemas remain BLOCKED.
