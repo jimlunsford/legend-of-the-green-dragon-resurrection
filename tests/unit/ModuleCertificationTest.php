@@ -312,7 +312,7 @@ final class ModuleCertificationTest extends TestCase
             self::assertSame(['DA'=>'specialtydarkarts','MP'=>'specialtymysticpower','TS'=>'specialtythiefskills'], modulehook('specialtymodules', []));
             $GLOBALS['session']['user']['specialty'] = '';
             modulehook('choose-specialty', []);
-            foreach (['DA','MP','TS'] as $spec) self::assertStringContainsString('setspecialty=' . $spec, $GLOBALS['output']);
+            foreach (['DA','MP','TS'] as $spec) self::assertStringContainsString('name="setspecialty" value="' . $spec . '"', $GLOBALS['output']);
             foreach (['DA'=>'specialtydarkarts','MP'=>'specialtymysticpower','TS'=>'specialtythiefskills'] as $spec=>$module) {
                 $GLOBALS['session']['user']['specialty'] = $spec;
                 set_module_pref('skill', 2, $module);

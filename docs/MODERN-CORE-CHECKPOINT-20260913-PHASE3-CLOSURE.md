@@ -776,3 +776,17 @@ Historical baseline unchanged: annotated tag `historical-source-1.1.2`, tag obje
 VPS untouched. No deployment, public runtime, release, version tag, ZIP/package, archive import, gameplay rebalance, UI/framework rewrite or Phase 4. Dangerous-feature disablement remains intact.
 
 **Phase 3: INCOMPLETE. Modern-core merge: NO. Public hosting: NO.** Exact next Phase 3 step: finish the shared specialty onboarding contract, then prove Dark Arts, Mystical Powers and Thieving Skills combat authority through actual HTTP (including Dark Arts companion behavior), the minimum required combat schema, and transaction/replay/failure persistence. Only after those three certifications close should general combat schema work continue in the requested order.
+
+## 2026-09-14 specialty onboarding continuation
+
+Actual published starting SHA: `33a6cf447bcbda8292283d85f0c6dcc103c51d5d`. Main verified unchanged at `999cec6f9c655a840320d982d673bb863c68c2b2`. PR #1 verified OPEN/DRAFT/unmerged. Historical annotated tag verified at `51cab4fbe58a234651a3177a56289b18bc152b4d`.
+
+Shared onboarding now uses the existing CSRF, intent and player transaction. All three choices have actual HTTP tests for server-owned initial and earned preferences, exact specialty persistence, forged/inactive/missing choices, duplicate/reselection/stale forms, late-write rollback, fresh retry and actual New Day restoration. Details and actual combat architecture are in SPECIALTY-AUTHORITY.md.
+
+Local retained PHPUnit: 74 tests / 2,231 assertions PASS. Initial full local Python run found a routing rejection-status regression in the race adversarial test; corrected dispatch precedence retains the original assertion. The expanded specialty and retained race HTTP tests then PASS. Both PHPStan configurations pass locally. Supported exact-head CI remains required, not replaced by local MariaDB 10.11.
+
+All three specialties remain BLOCKED for actual combat levels 1/2/3/5, exact cost/effect persistence, insufficient/zero uses, wrong specialty, malformed/terminal/stale combat, replay and rollback. Dark Arts companion authority/schema remains BLOCKED. Counts remain 21 PASS / 0 limitation / 3 BLOCKED; 24/24 milestone NOT reached. General combat schema remains BLOCKED, so dragon-point/mail and later priorities are not advanced.
+
+Remaining meaningful GET mutations: specialty combat; New Day dragon points; petition administration; clans; weapons/armor; stables; training; legacy editors. Remaining major core gates also include mail/systemmail, bank, broader PvP, administrator/content editors, remaining business schemas, expiration cleanup (`last_char_expire` advances early) and account-deletion failure semantics. Existing generic ScalarState and 87/42/31/55/1 inventory unchanged. No universal exactly-once claim.
+
+Ending SHA, commit total and supported CI IDs will be recorded after publication and acceptance. Phase 3 INCOMPLETE; modern-core merge NO; public hosting NO. Historical repositories/VPS untouched. No deploy, public runtime, release, archive import, formula rebalance, Phase 4, new modernization branch or PR #2.

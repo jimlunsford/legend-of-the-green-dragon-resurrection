@@ -186,3 +186,17 @@ Remaining meaningful GET families after this change: specialty onboarding/combat
 The focused New Day rescan also confirms a separate unresolved core gate: `newday.php?dk=...` can allocate a dragon point through GET before onboarding dispatch. This is not a race selection; it is not covered or certified by the race POST boundary. The existing point-allocation and general New Day authority require their own closure. Requests containing `setrace` in GET are rejected before that logic.
 
 Race acceptance: all four independently PASS on PHP 8.4/MariaDB 11.4 and PHP 8.5/MySQL 8.4 at `77c58792f87afad71c0db5fc77042cd39ab418b8`; Modern core 34842503298, Baseline integrity 34842503326. The final three specialty certifications remain BLOCKED, including onboarding, combat levels 1/2/3/5, insufficient uses, wrong specialty, absent/invalid/terminal combat, replay and exact persisted consumption at the real HTTP boundary. Retained hook-level regression is not route certification. General combat schema is unchanged and BLOCKED. Modern-core merge remains NO; public hosting remains NO.
+
+## Shared specialty onboarding continuation
+
+| Boundary | Evidence / status |
+|---|---|
+| Authentication / authorization | Authenticated account; race chosen, specialty empty, no pending event or unspent dragon points; exact active installed present bundled choice |
+| Input / SQL | Typed DA/MP/TS; reject extra request fields and malformed stored skill/uses; bound account, registry and preference queries |
+| Method / CSRF / replay | POST, existing CSRF and one-use state-bound intent; explicit choice GET rejected before New Day; stale/reselected forms rejected |
+| Persistence / rollback | Existing player transaction with account/registry/preference locks; late account-write CHECK proves preference/account rollback; fresh-form retry |
+| Output | Historical translated story; escaped choice label/form attributes |
+| Tests | `test_specialty_onboarding_http_authority`; adapted real first-login onboarding; retained race authority and hook/formula regressions |
+| Status | Implemented; supported exact-head matrix pending. Whole specialties remain BLOCKED for combat |
+
+Current meaningful GET blockers: specialty combat, New Day dragon-point allocation (both single `dk` and bulk `pdk` paths require review), petition administration, clans, weapons/armor, stables, training and legacy editors. Specialty onboarding GET no longer assigns a specialty or a fallback. General combat and remaining core mail/economy/editor/schema/cleanup gates remain BLOCKED. Full source flow and unchanged formulas: [SPECIALTY-AUTHORITY.md](SPECIALTY-AUTHORITY.md).

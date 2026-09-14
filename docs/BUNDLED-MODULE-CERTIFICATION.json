@@ -1732,7 +1732,7 @@
       "settings_preferences_result": "PASS for named defaults and raw round trips; NOT APPLICABLE for empty namespaces",
       "object_preferences_result": "NOT APPLICABLE",
       "direct_runmodule_route": "BLOCKED",
-      "direct_route_note": "Existing valid skill-level buff/use and dragon-kill/reset hook fixtures PASS. Actual HTTP onboarding and combat action authority, invalid/negative levels, unavailable uses, POST/CSRF and duplicate use remain unclosed.",
+      "direct_route_note": "Shared POST/CSRF/state-bound-intent onboarding implemented for all three specialties; actual HTTP test covers exact identity/default and earned preference persistence, forged fields, inactive/missing modules, stale state, reselection, replay, late-write rollback and New Day. Supported exact-head matrix pending. Combat levels, use authority, combat/companion schemas, replay and rollback remain BLOCKED.",
       "database_tables": [],
       "database_behavior": "PASS: strict fresh install/reinstall and tested metadata writes; purchase/admin transactions not certified",
       "daily_hooks": [
@@ -1755,10 +1755,10 @@
       "mariadb_11_4": "PASS for tested components; final BLOCKED for remaining gates",
       "mysql_8_4": "PASS for tested components; final BLOCKED for remaining gates",
       "warnings_errors": "No PHP warnings/errors in the passing matrix tests; unexecuted paths unverified.",
-      "security_notes": "Existing valid skill-level buff/use and dragon-kill/reset hook fixtures PASS. Actual HTTP onboarding and combat action authority, invalid/negative levels, unavailable uses, POST/CSRF and duplicate use remain unclosed.",
+      "security_notes": "Shared POST/CSRF/state-bound-intent onboarding implemented for all three specialties; actual HTTP test covers exact identity/default and earned preference persistence, forged fields, inactive/missing modules, stale state, reselection, replay, late-write rollback and New Day. Supported exact-head matrix pending. Combat levels, use authority, combat/companion schemas, replay and rollback remain BLOCKED.",
       "final_certification": "BLOCKED",
       "continuation_evidence": "See CORE-ROUTE-SECURITY.md for component gates and exact test names; prior lifecycle evidence is retained.",
-      "next_required_gate": "Complete actual HTTP onboarding and specialty combat level/use/state/POST/CSRF/duplicate authority matrix.",
+      "next_required_gate": "Prove shared HTTP specialty combat authority and Dark Arts companion business state, then all levels/costs, stale/malformed combat, replay, persistence and rollback. Onboarding matrix pending.",
       "previous_certification": "BLOCKED"
     },
     {
@@ -1846,7 +1846,7 @@
       "settings_preferences_result": "PASS for named defaults and raw round trips; NOT APPLICABLE for empty namespaces",
       "object_preferences_result": "NOT APPLICABLE",
       "direct_runmodule_route": "BLOCKED",
-      "direct_route_note": "Existing valid skill-level buff/use and dragon-kill/reset hook fixtures PASS. Actual HTTP onboarding and combat action authority, invalid/negative levels, unavailable uses, POST/CSRF and duplicate use remain unclosed.",
+      "direct_route_note": "Shared POST/CSRF/state-bound-intent onboarding implemented for all three specialties; actual HTTP test covers exact identity/default and earned preference persistence, forged fields, inactive/missing modules, stale state, reselection, replay, late-write rollback and New Day. Supported exact-head matrix pending. Combat levels, use authority, combat/companion schemas, replay and rollback remain BLOCKED.",
       "database_tables": [],
       "database_behavior": "PASS: strict fresh install/reinstall and tested metadata writes; purchase/admin transactions not certified",
       "daily_hooks": [
@@ -1869,10 +1869,10 @@
       "mariadb_11_4": "PASS for tested components; final BLOCKED for remaining gates",
       "mysql_8_4": "PASS for tested components; final BLOCKED for remaining gates",
       "warnings_errors": "No PHP warnings/errors in the passing matrix tests; unexecuted paths unverified.",
-      "security_notes": "Existing valid skill-level buff/use and dragon-kill/reset hook fixtures PASS. Actual HTTP onboarding and combat action authority, invalid/negative levels, unavailable uses, POST/CSRF and duplicate use remain unclosed.",
+      "security_notes": "Shared POST/CSRF/state-bound-intent onboarding implemented for all three specialties; actual HTTP test covers exact identity/default and earned preference persistence, forged fields, inactive/missing modules, stale state, reselection, replay, late-write rollback and New Day. Supported exact-head matrix pending. Combat levels, use authority, combat/companion schemas, replay and rollback remain BLOCKED.",
       "final_certification": "BLOCKED",
       "continuation_evidence": "See CORE-ROUTE-SECURITY.md for component gates and exact test names; prior lifecycle evidence is retained.",
-      "next_required_gate": "Complete actual HTTP onboarding and specialty combat level/use/state/POST/CSRF/duplicate authority matrix.",
+      "next_required_gate": "Prove shared HTTP specialty combat authority and Dark Arts companion business state, then all levels/costs, stale/malformed combat, replay, persistence and rollback. Onboarding matrix pending.",
       "previous_certification": "BLOCKED"
     },
     {
@@ -1960,7 +1960,7 @@
       "settings_preferences_result": "PASS for named defaults and raw round trips; NOT APPLICABLE for empty namespaces",
       "object_preferences_result": "NOT APPLICABLE",
       "direct_runmodule_route": "BLOCKED",
-      "direct_route_note": "Existing valid skill-level buff/use and dragon-kill/reset hook fixtures PASS. Actual HTTP onboarding and combat action authority, invalid/negative levels, unavailable uses, POST/CSRF and duplicate use remain unclosed.",
+      "direct_route_note": "Shared POST/CSRF/state-bound-intent onboarding implemented for all three specialties; actual HTTP test covers exact identity/default and earned preference persistence, forged fields, inactive/missing modules, stale state, reselection, replay, late-write rollback and New Day. Supported exact-head matrix pending. Combat levels, use authority, combat/companion schemas, replay and rollback remain BLOCKED.",
       "database_tables": [],
       "database_behavior": "PASS: strict fresh install/reinstall and tested metadata writes; purchase/admin transactions not certified",
       "daily_hooks": [
@@ -1983,10 +1983,10 @@
       "mariadb_11_4": "PASS for tested components; final BLOCKED for remaining gates",
       "mysql_8_4": "PASS for tested components; final BLOCKED for remaining gates",
       "warnings_errors": "No PHP warnings/errors in the passing matrix tests; unexecuted paths unverified.",
-      "security_notes": "Existing valid skill-level buff/use and dragon-kill/reset hook fixtures PASS. Actual HTTP onboarding and combat action authority, invalid/negative levels, unavailable uses, POST/CSRF and duplicate use remain unclosed.",
+      "security_notes": "Shared POST/CSRF/state-bound-intent onboarding implemented for all three specialties; actual HTTP test covers exact identity/default and earned preference persistence, forged fields, inactive/missing modules, stale state, reselection, replay, late-write rollback and New Day. Supported exact-head matrix pending. Combat levels, use authority, combat/companion schemas, replay and rollback remain BLOCKED.",
       "final_certification": "BLOCKED",
       "continuation_evidence": "See CORE-ROUTE-SECURITY.md for component gates and exact test names; prior lifecycle evidence is retained.",
-      "next_required_gate": "Complete actual HTTP onboarding and specialty combat level/use/state/POST/CSRF/duplicate authority matrix.",
+      "next_required_gate": "Prove shared HTTP specialty combat authority and Dark Arts companion business state, then all levels/costs, stale/malformed combat, replay, persistence and rollback. Onboarding matrix pending.",
       "previous_certification": "BLOCKED"
     }
   ],

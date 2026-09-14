@@ -10,6 +10,12 @@ require_once("lib/sanitize.php");
 require_once("lib/buffs.php");
 
 require_once('lib/race_onboarding.php');
+require_once('lib/specialty_onboarding.php');
+if (isset($_GET['setspecialty'])) { http_response_code(403); exit('Specialty selection requires a form.'); }
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && !isset($_POST['setrace']) && (isset($_POST['setspecialty']) || ($_POST['onboarding'] ?? null) === 'specialty')) {
+    $resline = httpget('resurrection') === 'true' ? '&resurrection=true' : '';
+    resurrection_specialty_onboarding();
+}
 if (isset($_GET['setrace'])) { http_response_code(403); exit('Race selection requires a form.'); }
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && (isset($_POST['setrace']) || isset($_POST['onboarding']) ||
     !$session['user']['race'] || $session['user']['race'] === RACE_UNKNOWN)) {

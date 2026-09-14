@@ -227,3 +227,7 @@ All eight previously certified modules remain PASS. Cedrik and Dark Horse are ad
 Five modules promoted individually: Crazy Audrey, Fairy, Glowing Stream, Outhouse and Seth. Goldmine and Lovers remain BLOCKED; all four race and all three specialty onboarding/combat gates remain BLOCKED. The original ten certifications remain intact. Test-only random fixtures are installed solely in disposable test databases and removed afterwards; production random APIs, outcomes and probabilities are unchanged. Current implementation evidence is in the appended closure checkpoint.
 
 Latest supported implementation `77c58792f87afad71c0db5fc77042cd39ab418b8`: 74 PHPUnit tests / 2,231 assertions / 32 Python and HTTP tests / 309 PHP files linted; zero failures or skips on either supported target. Modern core 34842503298 and Baseline integrity 34842503326 SUCCESS. Three specialty certifications remain BLOCKED; this is not Phase 3 completion.
+
+## Specialty onboarding continuation
+
+The shared onboarding implementation and actual HTTP evidence are described in [SPECIALTY-AUTHORITY.md](SPECIALTY-AUTHORITY.md). All three specialties remain BLOCKED until their actual combat boundary is proven. Counts remain **21 PASS / 0 PASS WITH DOCUMENTED LIMITATION / 3 BLOCKED**. This implementation awaits the supported exact-head CI matrix; hook/formula tests do not substitute for HTTP certification.

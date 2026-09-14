@@ -232,6 +232,117 @@ function resurrectionrandomfixture_dohook($hook,$args) { mt_srand((int)getsettin
             self.query('DELETE FROM settings WHERE setting=?',['fixture_rng_seed'])
             path.unlink()
 
+    def test_specialty_onboarding_http_authority(self):
+        player=self.query('SELECT acctid FROM accounts WHERE login=?',['WebPlayer'])[0]['acctid']
+        original=self.query('SELECT * FROM accounts WHERE acctid=?',[player])[0]
+        prefs=self.query('SELECT * FROM module_userprefs WHERE userid=?',[player])
+        modules=self.query('SELECT modulename,active FROM modules')
+        self.query('UPDATE modules SET active=1')
+        call=self._security_client(); url='newday.php?continue=1'
+        specialties={'DA':'specialtydarkarts','MP':'specialtymysticpower','TS':'specialtythiefskills'}
+        def setup():
+            self.query('DELETE FROM module_userprefs WHERE userid=? AND modulename IN (?,?,?)',[player,*specialties.values()])
+            self.query('UPDATE accounts SET race=?,specialty=?,location=?,specialinc=?,dragonkills=0,dragonpoints=?,alive=1,hitpoints=100,bufflist=? WHERE acctid=?',
+                ['Human','','Unselected location','','a:0:{}','a:0:{}',player])
+        def state():
+            return self.query('SELECT race,location,specialty,gold,gems,turns,age,attack,defense,dragonkills FROM accounts WHERE acctid=?',[player])[0] | {'internal': self.query('SELECT modulename,setting,value FROM module_userprefs WHERE userid=? AND modulename IN (?,?,?) ORDER BY modulename,setting',[player,*specialties.values()])}
+        def adversarial(path,data=None): self._security_allow(player,path); return call(path,data)
+        def form():
+            self._security_allow(player,'newday.php'); before=state()
+            status,body=call('newday.php'); self.assertEqual(200,status,body[:1000]); self.assertEqual(before,state())
+            found={}
+            for action,part in re.findall(r'<form\b[^>]*action="([^"]+)"[^>]*>(.*?)</form>',body,re.S):
+                if html.unescape(action)!=url: continue
+                choice=re.search(r'name="setspecialty" value="([^"]+)"',part)
+                if choice: found[choice[1]]=self._security_fields(part)|{'onboarding':'specialty','setspecialty':choice[1]}
+            return found,body
+        try:
+            for spec,module in specialties.items():
+                with self.subTest(specialty=spec):
+                    setup(); forms,body=form(); self.assertEqual(set(specialties),set(forms))
+                    self.assertNotIn('href=\'newday.php?setspecialty=',body)
+                    before=state(); self.assertIn(self._security_client(None)(url,forms[spec])[0],[302,303,403]); self.assertEqual(before,state())
+                    for patch in [{'csrf_token':None},{'csrf_token':'0'*64}]:
+                        data=forms[spec]|patch
+                        if data['csrf_token'] is None: del data['csrf_token']
+                        self.assertEqual(403,adversarial(url,data)[0]); self.assertEqual(before,state())
+                    forms,_=form()
+                    self.assertEqual(200,call(url,forms[spec])[0]); after=state()
+                    self.assertEqual(spec,after['specialty']); self.assertEqual(before['location'],after['location'])
+                    self.assertEqual([{'setting':'skill','value':'0'},{'setting':'uses','value':'0'}], self.query('SELECT setting,value FROM module_userprefs WHERE userid=? AND modulename=? ORDER BY setting',[player,module]))
+                    self.assertEqual({k:v for k,v in before.items() if k not in ['specialty','internal']},{k:v for k,v in after.items() if k not in ['specialty','internal']})
+                    self.assertEqual(409,adversarial(url,forms[spec])[0]); self.assertEqual(after,state())
+                    alternative=next(v for k,v in forms.items() if k!=spec)
+                    self.assertEqual(409,adversarial(url,alternative)[0]); self.assertEqual(after,state())
+                    # A separate authenticated request reloads the committed identity/preferences.
+                    call=self._security_client(); adversarial('inn.php'); self.assertEqual(after,state())
+                    # Actual New Day uses the stored skill and historical configured bonus.
+                    self.query('UPDATE accounts SET lasthit=? WHERE acctid=?',['2000-01-01 00:00:00',player])
+                    self.assertEqual(200,adversarial('newday.php?continue=1')[0])
+                    bonus=int(self.query('SELECT value FROM settings WHERE setting=?',['specialtybonus'])[0]['value']) if self.query('SELECT value FROM settings WHERE setting=?',['specialtybonus']) else 1
+                    self.assertEqual(spec,state()['specialty'])
+                    self.assertEqual(str(bonus),self.query('SELECT value FROM module_userprefs WHERE userid=? AND modulename=? AND setting=?',[player,module,'uses'])[0]['value'])
+                    # Legitimately cleared specialty retains earned state, never client input.
+                    setup()
+                    for key,value in [('skill','9'),('uses','2')]:
+                        self.query('INSERT INTO module_userprefs(modulename,setting,userid,value) VALUES (?,?,?,?)',[module,key,player,value])
+                    forms,_=form(); self.assertEqual(200,call(url,forms[spec])[0])
+                    self.assertEqual([{'setting':'skill','value':'9'},{'setting':'uses','value':'2'}],self.query('SELECT setting,value FROM module_userprefs WHERE userid=? AND modulename=? ORDER BY setting',[player,module]))
+                    self.query('UPDATE accounts SET lasthit=? WHERE acctid=?',['2000-01-01 00:00:00',player])
+                    self.assertEqual(200,adversarial('newday.php?continue=1')[0])
+                    self.assertEqual(str(3+bonus),self.query('SELECT value FROM module_userprefs WHERE userid=? AND modulename=? AND setting=?',[player,module,'uses'])[0]['value'])
+                    setup(); forms,_=form(); self.query('UPDATE modules SET active=0 WHERE modulename=?',[module]); before=state()
+                    self.assertEqual(409,call(url,forms[spec])[0]); self.assertEqual(before,state())
+                    offered,_=form(); self.assertNotIn(spec,offered)
+                    self.query('UPDATE modules SET active=1 WHERE modulename=?',[module])
+                    setup(); forms,_=form()
+                    self.query('UPDATE modules SET modulename=? WHERE modulename=?',['fixture_missing_specialty',module])
+                    try:
+                        before=state(); self.assertEqual(409,call(url,forms[spec])[0]); self.assertEqual(before,state())
+                        offered,_=form(); self.assertNotIn(spec,offered)
+                    finally: self.query('UPDATE modules SET modulename=? WHERE modulename=?',[module,'fixture_missing_specialty'])
+                    setup(); forms,_=form()
+                    path=ROOT/'modules'/(module+'.php'); hidden=path.with_suffix('.fixture-hidden')
+                    path.rename(hidden)
+                    try:
+                        before=state(); self.assertEqual(409,call(url,forms[spec])[0]); self.assertEqual(before,state())
+                    finally: hidden.rename(path)
+                    for malformed in ['-1','1.5','garbage','a:0:{}']:
+                        setup(); forms,_=form()
+                        self.query('INSERT INTO module_userprefs(modulename,setting,userid,value) VALUES (?,?,?,?)',[module,'uses',player,malformed])
+                        before=state(); self.assertEqual(409,call(url,forms[spec])[0]); self.assertEqual(before,state())
+                    setup(); forms,_=form()
+                    self.query('INSERT INTO module_userprefs(modulename,setting,userid,value) VALUES (?,?,?,?)',[module,'skill',player,'3'])
+                    before=state(); self.assertEqual(409,call(url,forms[spec])[0]); self.assertEqual(before,state())
+                    setup(); forms,_=form(); before=state()
+                    self.assertEqual(403,adversarial('newday.php?setspecialty='+spec)[0]); self.assertEqual(before,state())
+                    # Fail the final account write after preference writes; all must roll back.
+                    forms,_=form()
+                    self.query("ALTER TABLE accounts ADD CONSTRAINT fixture_specialty_failure CHECK (login <> 'WebPlayer' OR specialty='')")
+                    try: self.assertEqual(500,call(url,forms[spec])[0])
+                    finally: self.query('ALTER TABLE accounts DROP CONSTRAINT fixture_specialty_failure')
+                    self.assertEqual(before,state()); self.assertEqual(409,adversarial(url,forms[spec])[0]); self.assertEqual(before,state())
+                    forms,_=form(); self.assertEqual(200,call(url,forms[spec])[0]); self.assertEqual(spec,state()['specialty'])
+            for patch in [{'setspecialty':'Unknown'},{'setspecialty':'../modules/specialtydarkarts.php'},{'setspecialty':'specialtydarkarts'},{'setspecialty':''},
+                          {'setspecialty[]':'DA'},{'module':'specialtydarkarts'},{'module':'../common.php'},{'location':'Forged'},
+                          {'skill':'999'},{'uses':'999'},{'prefs[skill]':'999'},{'setspecialty':'news'},{'attack':'999'},{'defense':'999'},{'name':'DA'},{'onboarding':'race'}]:
+                setup(); forms,_=form(); before=state()
+                self.assertEqual(400,call(url,forms['DA']|patch)[0]); self.assertEqual(before,state())
+            setup(); forms,_=form(); missing=forms['DA'].copy(); del missing['setspecialty']; before=state()
+            self.assertEqual(400,call(url,missing)[0]); self.assertEqual(before,state())
+            for key,value in [('race','Horrible Gelatinous Blob'),('specialinc','module:goldmine'),('dragonkills',1),('specialty','MP'),('age',999)]:
+                setup(); forms,_=form(); self.query('UPDATE accounts SET '+key+'=? WHERE acctid=?',[value,player]); before=state()
+                self.assertEqual(409,call(url,forms['DA'])[0]); self.assertEqual(before,state())
+            # No implicit GET fallback when every bundled specialty is inactive.
+            setup()
+            for module in specialties.values(): self.query('UPDATE modules SET active=0 WHERE modulename=?',[module])
+            before=state(); offered,body=form(); self.assertEqual({},offered); self.assertIn('No active bundled specialties',body); self.assertEqual(before,state())
+        finally:
+            self.query('DELETE FROM module_userprefs WHERE userid=?',[player])
+            for row in prefs: self.query('INSERT INTO module_userprefs(modulename,setting,userid,value) VALUES (?,?,?,?)',[row['modulename'],row['setting'],row['userid'],row['value']])
+            self.query('UPDATE accounts SET '+','.join(k+'=?' for k in original if k!='acctid')+' WHERE acctid=?',[*[v for k,v in original.items() if k!='acctid'],player])
+            for row in modules: self.query('UPDATE modules SET active=? WHERE modulename=?',[row['active'],row['modulename']])
+
     def test_race_onboarding_http_authority(self):
         player=self.query('SELECT acctid FROM accounts WHERE login=?',['WebPlayer'])[0]['acctid']
         original=self.query('SELECT * FROM accounts WHERE acctid=?',[player])[0]
@@ -1989,10 +2100,10 @@ function resurrectionrandomfixture_dohook($hook,$args) { mt_srand((int)getsettin
         self.assertEqual('village.php', headers['Location'])
         self.assertNotEqual(initial_id, session_id())
         authenticated_id = session_id()
-        self.query('UPDATE modules SET active=1 WHERE modulename=?',['racehuman'])
+        self.query('UPDATE modules SET active=1 WHERE modulename IN (?,?)',['racehuman','specialtymysticpower'])
         status, headers, body = request('village.php')
         # First login follows the game's existing character onboarding, including
-        # active Human POST selection and the still-legacy specialty fallback.
+        # active Human and Mystical Powers POST selection.
         if status in (302, 303) and headers['Location'] == 'newday.php':
             status, _, body = request('newday.php')
             self.assertEqual(200, status, headers.get('Location', 'Unexpected HTTP status'))
@@ -2001,11 +2112,11 @@ function resurrectionrandomfixture_dohook($hook,$args) { mt_srand((int)getsettin
             self.assertEqual(200,status)
             status, _, body=request(issued_link(body,'newday.php?continue=1'))
             self.assertEqual(200,status)
-            for _ in range(3):
-                if 'No Races Installed' not in body and 'No Specialties Installed' not in body:
-                    break
-                status, headers, body = request(issued_link(body, 'newday.php?continue=1'))
-                self.assertEqual(200, status, headers.get('Location', 'Unexpected HTTP status'))
+            specialty_form=self._security_fields(body) | {'onboarding':'specialty','setspecialty':'MP'}
+            status, _, body=request('newday.php?continue=1',specialty_form)
+            self.assertEqual(200,status)
+            status, _, body=request(issued_link(body,'newday.php?continue=1'))
+            self.assertEqual(200,status)
             status, headers, body = request(issued_link(body, 'village.php'))
         self.assertEqual(200, status, headers.get('Location', 'Unexpected HTTP status'))
         self.assertIn('WebPlayer', body)
