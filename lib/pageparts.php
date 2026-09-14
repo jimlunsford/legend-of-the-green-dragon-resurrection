@@ -57,7 +57,7 @@ function page_header(){
 	calculate_buff_fields();
 
 	$header = $template['header'];
-	$header=str_replace("{title}",$title,$header);
+	$header=str_replace("{title}",htmlspecialchars($title,ENT_QUOTES|ENT_SUBSTITUTE,"UTF-8"),$header);
 	$header.=tlbutton_pop();
 }
 

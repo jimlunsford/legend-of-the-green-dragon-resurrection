@@ -264,6 +264,7 @@ final class ModuleCertificationTest extends TestCase
                 self::assertSame([], modulehook('validforestloc', [], false, $module));
             }
             $GLOBALS['playermount'] = ['mountid'=>1];
+            $GLOBALS['session']['user']['hashorse']=1;
             set_module_objpref('mounts', 1, 'findtavern', 0, 'darkhorse');
             $events = module_collect_events('forest');
             self::assertCount(8, $events);

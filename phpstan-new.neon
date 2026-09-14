@@ -6,6 +6,7 @@ parameters:
         - lib/player_mutation.php
         - lib/typed_editor.php
         - lib/darkhorse_game.php
+        - lib/darkhorse_entry.php
         - lib/event_security.php
         - modules/dag/security.php
         - modules/drinks/security.php

@@ -441,6 +441,59 @@ function resurrectionhttpfixture_run() { echo 'fixture-executed'; exit; }
             for row in settings: self.query('INSERT INTO module_settings(modulename,setting,value) VALUES (?,?,?)',['cedrikspotions',row['setting'],row['value']])
             self.query('UPDATE modules SET active=0')
 
+    def test_darkhorse_mounted_entry_and_exit_http(self):
+        player=self.query('SELECT acctid FROM accounts WHERE login=?',['WebPlayer'])[0]['acctid']
+        original=self.query('SELECT hashorse,specialinc,specialmisc,gold,superuser FROM accounts WHERE acctid=?',[player])[0]
+        saved=self.query('SELECT value FROM module_settings WHERE modulename=? AND setting=?',['darkhorse','tavernname'])
+        self.query('UPDATE modules SET active=1')
+        self.query('INSERT INTO mounts(mountname,mountcategory) VALUES (?,?)',['Tavern fixture','Fixture'])
+        ident=self.query('SELECT mountid FROM mounts WHERE mountname=?',['Tavern fixture'])[0]['mountid']
+        call=self._security_client(); url='runmodule.php?module=darkhorse&op=enter'
+        def request(path,data=None): self._security_allow(player,path); return call(path,data)
+        def state(): return self.query('SELECT hashorse,specialinc,specialmisc,gold FROM accounts WHERE acctid=?',[player])
+        def preference(value): self.query('INSERT INTO module_objprefs(modulename,objtype,setting,objid,value) VALUES (?,?,?,?,?) ON DUPLICATE KEY UPDATE value=VALUES(value)',['darkhorse','mounts','findtavern',ident,str(value)])
+        try:
+            self.query("UPDATE accounts SET hashorse=0,specialinc='',specialmisc='',gold=1000 WHERE acctid=?",[player])
+            self.assertIn(self._security_client(login=None)(url)[0],[302,303,403])
+            self.assertEqual(403,request(url+'&mountid='+str(ident)+'&findtavern=1')[0])
+            self.query('UPDATE accounts SET hashorse=? WHERE acctid=?',[ident,player])
+            for value in ['0','2','true','1e0']:
+                preference(value); before=state(); self.assertEqual(403,request(url)[0]); self.assertEqual(before,state())
+            preference(1); before=state(); status,body=request(url); self.assertEqual(200,status); self.assertEqual(before,state())
+            form=self._security_fields(body,url)
+            for bad in [{},dict(form,csrf_token='bad')]: self.assertEqual(403,request(url,bad)[0]); self.assertEqual(before,state())
+            # Authoritative object changes invalidate an already rendered entrance.
+            self.query('UPDATE mounts SET mountname=? WHERE mountid=?',['Changed Tavern fixture',ident]); self.assertEqual(409,request(url,form)[0])
+            _,body=request(url); form=self._security_fields(body,url)
+            preference(0); self.assertEqual(403,request(url,form)[0]); preference(1)
+            # The same typed settings editor supplies the real displayed tavern name.
+            self.query('UPDATE accounts SET superuser=128 WHERE acctid=?',[player]); call=self._security_client()
+            edit='configuration.php?op=modulesettings&module=darkhorse'; save=edit+'&save=1'
+            _,body=request(edit); title='Configured Tavern <script>safe</script>'
+            self.assertEqual(200,request(save,dict(self._security_fields(body,save),tavernname=title))[0])
+            self.query('UPDATE accounts SET superuser=0 WHERE acctid=?',[player]); call=self._security_client()
+            _,body=request(url); form=dict(self._security_fields(body,url),mountid='999',findtavern='0',gold='0')
+            status,body=request(url,form); self.assertEqual(200,status,body[:2000]); self.assertIn('Configured Tavern',body); self.assertNotIn('<script>safe</script>',body)
+            self.assertEqual('module:darkhorse',state()[0]['specialinc']); self.assertEqual('1000',state()[0]['gold']); self.assertEqual(409,request(url,form)[0])
+            leave='forest.php?op=leave'; before=state(); _,body=request(leave); self.assertEqual(before,state()); form=self._security_fields(body,leave)
+            self.assertEqual(403,request(leave,{})[0]); self.assertEqual(before,state())
+            self.assertEqual(200,request(leave,form)[0]); self.assertEqual('',state()[0]['specialinc']); after=state()
+            # After the event has ended, the same POST cannot re-enter/charge/reward.
+            request(leave,form); self.assertEqual(after,state())
+            # Persisted, server-selected event entry also works without a tavern mount.
+            self.query("UPDATE accounts SET hashorse=0,specialinc='module:darkhorse' WHERE acctid=?",[player])
+            _,body=request('forest.php?op=tavern'); self.assertIn('Configured Tavern',body)
+            leave='forest.php?op=leaveleave'; _,body=request(leave); form=self._security_fields(body,leave)
+            self.assertEqual(200,request(leave,form)[0]); self.assertEqual('',state()[0]['specialinc'])
+            self.query('UPDATE accounts SET hashorse=? WHERE acctid=?',[ident,player]); _,body=request(url); form=self._security_fields(body,url)
+            self.query('DELETE FROM mounts WHERE mountid=?',[ident]); self.assertEqual(403,request(url,form)[0])
+        finally:
+            self.query('DELETE FROM module_objprefs WHERE objtype=? AND objid=?',['mounts',ident]); self.query('DELETE FROM mounts WHERE mountid=?',[ident])
+            self.query('UPDATE accounts SET '+','.join(k+'=?' for k in original)+' WHERE acctid=?',[*original.values(),player])
+            if saved: self.query('UPDATE module_settings SET value=? WHERE modulename=? AND setting=?',[saved[0]['value'],'darkhorse','tavernname'])
+            self.query('UPDATE modules SET active=0')
+
+
     def _security_client(self, login='WebPlayer', password="Synthetic web O'Reilly \\ password"):
         class NoRedirect(urllib.request.HTTPRedirectHandler):
             def redirect_request(self, *args): return None
@@ -1444,6 +1497,8 @@ function resurrectionhttpfixture_run() { echo 'fixture-executed'; exit; }
             status, _, body = request(issued_link(body, 'forest.php?op=tavern'))
             self.assertEqual(200, status)
             status, _, body = request(issued_link(body, 'forest.php?op=leave'))
+            self.assertEqual(200, status)
+            status, _, body = request('forest.php?op=leave', self._security_fields(body,'forest.php?op=leave'))
             self.assertEqual(200, status)
             status, _, body = request(issued_link(body, 'village.php'))
             self.assertEqual(200, status)

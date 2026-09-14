@@ -23,17 +23,9 @@ function darkhorse_getmoduleinfo(){
 }
 
 function darkhorse_tavernmount() {
-	global $playermount;
-	if (isset($playermount) && is_array($playermount) && array_key_exists("mountid",$playermount)){
-		$id = $playermount['mountid'];
-	}else{
-		$id = 0;
-	}
-	// We need the module parameter here because this function can be
-	// called from the named event condition and this module might not be loaded
-	// at that point.
-	$tavern = get_module_objpref("mounts", $id, "findtavern", "darkhorse");
-	return $tavern;
+    require_once 'lib/darkhorse_entry.php';
+    try { resurrection_darkhorse_mount_context(); return true; }
+    catch (DomainException $error) { return false; }
 }
 
 function darkhorse_install(){
@@ -339,6 +331,8 @@ function darkhorse_runevent($type, $link){
 		addnav("Return to the Main Room",$from."op=tavern");
 		break;
 	case "leave":
+        require_once "lib/darkhorse_entry.php";
+        if (!resurrection_darkhorse_leave($from."op=leave")) break;
 		output("You duck out of the tavern, and wander into the thick foliage around you.");
 		output("That strange mist revisits you, making your mind buzz.");
 		output("The mist clears, and you find yourself again where you were before the mist first covered you.");
@@ -348,6 +342,8 @@ function darkhorse_runevent($type, $link){
 		$session['user']['specialinc']="";
 		break;
 	case "leaveleave":
+        require_once "lib/darkhorse_entry.php";
+        if (!resurrection_darkhorse_leave($from."op=leaveleave")) break;
 		output("You decide that the tavern holds no appeal for you today.");
 		$session['user']['specialinc']="";
 		break;
@@ -357,14 +353,13 @@ function darkhorse_runevent($type, $link){
 
 function darkhorse_run(){
     global $session;
-    if (empty($session['loggedin']) || !darkhorse_tavernmount()) { http_response_code(403); exit('Tavern unavailable.'); }
-	$op = httpget('op');
-	if ($op == "enter") {
-		httpset("op", "tavern");
-		page_header(get_module_setting("tavernname"));
-		darkhorse_runevent("forest", "forest.php?");
-		// Preserve the server-selected tavern event while the player is inside.
-		page_footer();
-	}
+    require_once 'lib/darkhorse_entry.php';
+    if (($_GET['op'] ?? '')!=='enter') { http_response_code(400); exit('Invalid tavern action.'); }
+    page_header(get_module_setting('tavernname'));
+    if (resurrection_darkhorse_enter()) {
+        httpset('op','tavern');
+        darkhorse_runevent('forest','forest.php?');
+    }
+    page_footer();
 }
 ?>
