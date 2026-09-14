@@ -325,7 +325,7 @@ function resurrectionrandomfixture_dohook($hook,$args) { mt_srand((int)getsettin
                     forms,_=form(); self.assertEqual(200,call(url,forms[spec])[0]); self.assertEqual(spec,state()['specialty'])
             for patch in [{'setspecialty':'Unknown'},{'setspecialty':'../modules/specialtydarkarts.php'},{'setspecialty':'specialtydarkarts'},{'setspecialty':''},
                           {'setspecialty[]':'DA'},{'module':'specialtydarkarts'},{'module':'../common.php'},{'location':'Forged'},
-                          {'skill':'999'},{'uses':'999'},{'prefs[skill]':'999'},{'setspecialty':'news'},{'attack':'999'},{'defense':'999'},{'name':'DA'},{'onboarding':'race'}]:
+                          {'skill':'999'},{'uses':'999'},{'prefs[skill]':'999'},{'setspecialty':'drinks'},{'attack':'999'},{'defense':'999'},{'name':'DA'},{'onboarding':'race'}]:
                 setup(); forms,_=form(); before=state()
                 self.assertEqual(400,call(url,forms['DA']|patch)[0]); self.assertEqual(before,state())
             setup(); forms,_=form(); missing=forms['DA'].copy(); del missing['setspecialty']; before=state()

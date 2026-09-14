@@ -197,6 +197,8 @@ Race acceptance: all four independently PASS on PHP 8.4/MariaDB 11.4 and PHP 8.5
 | Persistence / rollback | Existing player transaction with account/registry/preference locks; late account-write CHECK proves preference/account rollback; fresh-form retry |
 | Output | Historical translated story; escaped choice label/form attributes |
 | Tests | `test_specialty_onboarding_http_authority`; adapted real first-login onboarding; retained race authority and hook/formula regressions |
-| Status | Implemented; supported exact-head matrix pending. Whole specialties remain BLOCKED for combat |
+| Status | Onboarding PASS on both supported targets at `82bb591d5355ccd0e5a071f1d4fd3efd7033c7ba`. Whole specialties remain BLOCKED for combat |
 
 Current meaningful GET blockers: specialty combat, New Day dragon-point allocation (both single `dk` and bulk `pdk` paths require review), petition administration, clans, weapons/armor, stables, training and legacy editors. Specialty onboarding GET no longer assigns a specialty or a fallback. General combat and remaining core mail/economy/editor/schema/cleanup gates remain BLOCKED. Full source flow and unchanged formulas: [SPECIALTY-AUTHORITY.md](SPECIALTY-AUTHORITY.md).
+
+Both supported targets PASS at 82bb591d5355ccd0e5a071f1d4fd3efd7033c7ba: 74 PHPUnit tests / 2231 assertions / 33 Python and HTTP tests / 310 PHP files linted; zero failures/skips. Modern core 34886260212 and Baseline integrity 34886260167 SUCCESS. Jobs: 104117559745 (PHP 8.4.25 / MariaDB 11.4.13) and 104117559301 (PHP 8.5.10 / MySQL 8.4.11). Both logs explicitly checked out the implementation SHA.

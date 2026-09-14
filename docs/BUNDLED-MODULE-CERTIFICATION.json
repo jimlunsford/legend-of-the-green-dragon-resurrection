@@ -1,7 +1,7 @@
 {
   "scope": "Only the 24 bundled entrypoints, verified against modules/*.php; no archive import.",
   "date": "2026-09-14",
-  "evidence": "Verified implementation: 74 PHPUnit tests / 2231 assertions / 32 Python and HTTP tests / 309 linted PHP files. Both supported targets PASS at 77c58792f87afad71c0db5fc77042cd39ab418b8, Modern core 34842503298 and Baseline integrity 34842503326. Lovers was independently promoted after both targets passed at 72a43cc0cfd4e6e653a943a5377d7adbfc4139db.",
+  "evidence": "Both supported targets PASS at 82bb591d5355ccd0e5a071f1d4fd3efd7033c7ba: 74 PHPUnit tests / 2231 assertions / 33 Python and HTTP tests / 310 PHP files linted; zero failures/skips. Modern core 34886260212 and Baseline integrity 34886260167 SUCCESS. All 24 lifecycle checks retain PASS. Final module counts remain 21 PASS / 0 limitation / 3 BLOCKED.",
   "status_meaning": "Final certification is per module in the supported bundled scope. PASS requires actual behavior/security evidence; PARTIAL is a component route result only and final remains BLOCKED. Core editor/combat/hosting gates are tracked separately and still prevent merge.",
   "modules": [
     {
@@ -1732,7 +1732,7 @@
       "settings_preferences_result": "PASS for named defaults and raw round trips; NOT APPLICABLE for empty namespaces",
       "object_preferences_result": "NOT APPLICABLE",
       "direct_runmodule_route": "BLOCKED",
-      "direct_route_note": "Shared POST/CSRF/state-bound-intent onboarding implemented for all three specialties; actual HTTP test covers exact identity/default and earned preference persistence, forged fields, inactive/missing modules, stale state, reselection, replay, late-write rollback and New Day. Supported exact-head matrix pending. Combat levels, use authority, combat/companion schemas, replay and rollback remain BLOCKED.",
+      "direct_route_note": "Shared onboarding PASS through actual HTTP: exact identity, default-zero and preserved earned skill/uses, forged extra fields, inactive/missing module and missing file, stale preferences/account state, CSRF, duplicate/reselection/replay, late-account-write rollback, fresh retry and actual New Day skill-derived restoration. Combat level/use/state/POST/CSRF/replay/persistence/rollback and companion business schema remain BLOCKED. Both supported targets PASS at 82bb591d5355ccd0e5a071f1d4fd3efd7033c7ba: 74 PHPUnit tests / 2231 assertions / 33 Python and HTTP tests / 310 PHP files linted; zero failures/skips. Modern core 34886260212 and Baseline integrity 34886260167 SUCCESS.",
       "database_tables": [],
       "database_behavior": "PASS: strict fresh install/reinstall and tested metadata writes; purchase/admin transactions not certified",
       "daily_hooks": [
@@ -1755,10 +1755,10 @@
       "mariadb_11_4": "PASS for tested components; final BLOCKED for remaining gates",
       "mysql_8_4": "PASS for tested components; final BLOCKED for remaining gates",
       "warnings_errors": "No PHP warnings/errors in the passing matrix tests; unexecuted paths unverified.",
-      "security_notes": "Shared POST/CSRF/state-bound-intent onboarding implemented for all three specialties; actual HTTP test covers exact identity/default and earned preference persistence, forged fields, inactive/missing modules, stale state, reselection, replay, late-write rollback and New Day. Supported exact-head matrix pending. Combat levels, use authority, combat/companion schemas, replay and rollback remain BLOCKED.",
+      "security_notes": "Shared onboarding PASS through actual HTTP: exact identity, default-zero and preserved earned skill/uses, forged extra fields, inactive/missing module and missing file, stale preferences/account state, CSRF, duplicate/reselection/replay, late-account-write rollback, fresh retry and actual New Day skill-derived restoration. Combat level/use/state/POST/CSRF/replay/persistence/rollback and companion business schema remain BLOCKED. Both supported targets PASS at 82bb591d5355ccd0e5a071f1d4fd3efd7033c7ba: 74 PHPUnit tests / 2231 assertions / 33 Python and HTTP tests / 310 PHP files linted; zero failures/skips. Modern core 34886260212 and Baseline integrity 34886260167 SUCCESS.",
       "final_certification": "BLOCKED",
-      "continuation_evidence": "See CORE-ROUTE-SECURITY.md for component gates and exact test names; prior lifecycle evidence is retained.",
-      "next_required_gate": "Prove shared HTTP specialty combat authority and Dark Arts companion business state, then all levels/costs, stale/malformed combat, replay, persistence and rollback. Onboarding matrix pending.",
+      "continuation_evidence": "Shared onboarding PASS through actual HTTP: exact identity, default-zero and preserved earned skill/uses, forged extra fields, inactive/missing module and missing file, stale preferences/account state, CSRF, duplicate/reselection/replay, late-account-write rollback, fresh retry and actual New Day skill-derived restoration. Combat level/use/state/POST/CSRF/replay/persistence/rollback and companion business schema remain BLOCKED. Both supported targets PASS at 82bb591d5355ccd0e5a071f1d4fd3efd7033c7ba: 74 PHPUnit tests / 2231 assertions / 33 Python and HTTP tests / 310 PHP files linted; zero failures/skips. Modern core 34886260212 and Baseline integrity 34886260167 SUCCESS.",
+      "next_required_gate": "Prove shared HTTP specialty combat authority and Dark Arts companion business state, then all levels/costs, stale/malformed combat, replay, persistence and rollback. Onboarding is closed.",
       "previous_certification": "BLOCKED"
     },
     {
@@ -1846,7 +1846,7 @@
       "settings_preferences_result": "PASS for named defaults and raw round trips; NOT APPLICABLE for empty namespaces",
       "object_preferences_result": "NOT APPLICABLE",
       "direct_runmodule_route": "BLOCKED",
-      "direct_route_note": "Shared POST/CSRF/state-bound-intent onboarding implemented for all three specialties; actual HTTP test covers exact identity/default and earned preference persistence, forged fields, inactive/missing modules, stale state, reselection, replay, late-write rollback and New Day. Supported exact-head matrix pending. Combat levels, use authority, combat/companion schemas, replay and rollback remain BLOCKED.",
+      "direct_route_note": "Shared onboarding PASS through actual HTTP: exact identity, default-zero and preserved earned skill/uses, forged extra fields, inactive/missing module and missing file, stale preferences/account state, CSRF, duplicate/reselection/replay, late-account-write rollback, fresh retry and actual New Day skill-derived restoration. Combat level/use/state/POST/CSRF/replay/persistence/rollback and companion business schema remain BLOCKED. Both supported targets PASS at 82bb591d5355ccd0e5a071f1d4fd3efd7033c7ba: 74 PHPUnit tests / 2231 assertions / 33 Python and HTTP tests / 310 PHP files linted; zero failures/skips. Modern core 34886260212 and Baseline integrity 34886260167 SUCCESS.",
       "database_tables": [],
       "database_behavior": "PASS: strict fresh install/reinstall and tested metadata writes; purchase/admin transactions not certified",
       "daily_hooks": [
@@ -1869,10 +1869,10 @@
       "mariadb_11_4": "PASS for tested components; final BLOCKED for remaining gates",
       "mysql_8_4": "PASS for tested components; final BLOCKED for remaining gates",
       "warnings_errors": "No PHP warnings/errors in the passing matrix tests; unexecuted paths unverified.",
-      "security_notes": "Shared POST/CSRF/state-bound-intent onboarding implemented for all three specialties; actual HTTP test covers exact identity/default and earned preference persistence, forged fields, inactive/missing modules, stale state, reselection, replay, late-write rollback and New Day. Supported exact-head matrix pending. Combat levels, use authority, combat/companion schemas, replay and rollback remain BLOCKED.",
+      "security_notes": "Shared onboarding PASS through actual HTTP: exact identity, default-zero and preserved earned skill/uses, forged extra fields, inactive/missing module and missing file, stale preferences/account state, CSRF, duplicate/reselection/replay, late-account-write rollback, fresh retry and actual New Day skill-derived restoration. Combat level/use/state/POST/CSRF/replay/persistence/rollback and companion business schema remain BLOCKED. Both supported targets PASS at 82bb591d5355ccd0e5a071f1d4fd3efd7033c7ba: 74 PHPUnit tests / 2231 assertions / 33 Python and HTTP tests / 310 PHP files linted; zero failures/skips. Modern core 34886260212 and Baseline integrity 34886260167 SUCCESS.",
       "final_certification": "BLOCKED",
-      "continuation_evidence": "See CORE-ROUTE-SECURITY.md for component gates and exact test names; prior lifecycle evidence is retained.",
-      "next_required_gate": "Prove shared HTTP specialty combat authority and Dark Arts companion business state, then all levels/costs, stale/malformed combat, replay, persistence and rollback. Onboarding matrix pending.",
+      "continuation_evidence": "Shared onboarding PASS through actual HTTP: exact identity, default-zero and preserved earned skill/uses, forged extra fields, inactive/missing module and missing file, stale preferences/account state, CSRF, duplicate/reselection/replay, late-account-write rollback, fresh retry and actual New Day skill-derived restoration. Combat level/use/state/POST/CSRF/replay/persistence/rollback and companion business schema remain BLOCKED. Both supported targets PASS at 82bb591d5355ccd0e5a071f1d4fd3efd7033c7ba: 74 PHPUnit tests / 2231 assertions / 33 Python and HTTP tests / 310 PHP files linted; zero failures/skips. Modern core 34886260212 and Baseline integrity 34886260167 SUCCESS.",
+      "next_required_gate": "Prove shared HTTP specialty combat authority and Dark Arts companion business state, then all levels/costs, stale/malformed combat, replay, persistence and rollback. Onboarding is closed.",
       "previous_certification": "BLOCKED"
     },
     {
@@ -1960,7 +1960,7 @@
       "settings_preferences_result": "PASS for named defaults and raw round trips; NOT APPLICABLE for empty namespaces",
       "object_preferences_result": "NOT APPLICABLE",
       "direct_runmodule_route": "BLOCKED",
-      "direct_route_note": "Shared POST/CSRF/state-bound-intent onboarding implemented for all three specialties; actual HTTP test covers exact identity/default and earned preference persistence, forged fields, inactive/missing modules, stale state, reselection, replay, late-write rollback and New Day. Supported exact-head matrix pending. Combat levels, use authority, combat/companion schemas, replay and rollback remain BLOCKED.",
+      "direct_route_note": "Shared onboarding PASS through actual HTTP: exact identity, default-zero and preserved earned skill/uses, forged extra fields, inactive/missing module and missing file, stale preferences/account state, CSRF, duplicate/reselection/replay, late-account-write rollback, fresh retry and actual New Day skill-derived restoration. Combat level/use/state/POST/CSRF/replay/persistence/rollback and companion business schema remain BLOCKED. Both supported targets PASS at 82bb591d5355ccd0e5a071f1d4fd3efd7033c7ba: 74 PHPUnit tests / 2231 assertions / 33 Python and HTTP tests / 310 PHP files linted; zero failures/skips. Modern core 34886260212 and Baseline integrity 34886260167 SUCCESS.",
       "database_tables": [],
       "database_behavior": "PASS: strict fresh install/reinstall and tested metadata writes; purchase/admin transactions not certified",
       "daily_hooks": [
@@ -1983,10 +1983,10 @@
       "mariadb_11_4": "PASS for tested components; final BLOCKED for remaining gates",
       "mysql_8_4": "PASS for tested components; final BLOCKED for remaining gates",
       "warnings_errors": "No PHP warnings/errors in the passing matrix tests; unexecuted paths unverified.",
-      "security_notes": "Shared POST/CSRF/state-bound-intent onboarding implemented for all three specialties; actual HTTP test covers exact identity/default and earned preference persistence, forged fields, inactive/missing modules, stale state, reselection, replay, late-write rollback and New Day. Supported exact-head matrix pending. Combat levels, use authority, combat/companion schemas, replay and rollback remain BLOCKED.",
+      "security_notes": "Shared onboarding PASS through actual HTTP: exact identity, default-zero and preserved earned skill/uses, forged extra fields, inactive/missing module and missing file, stale preferences/account state, CSRF, duplicate/reselection/replay, late-account-write rollback, fresh retry and actual New Day skill-derived restoration. Combat level/use/state/POST/CSRF/replay/persistence/rollback and companion business schema remain BLOCKED. Both supported targets PASS at 82bb591d5355ccd0e5a071f1d4fd3efd7033c7ba: 74 PHPUnit tests / 2231 assertions / 33 Python and HTTP tests / 310 PHP files linted; zero failures/skips. Modern core 34886260212 and Baseline integrity 34886260167 SUCCESS.",
       "final_certification": "BLOCKED",
-      "continuation_evidence": "See CORE-ROUTE-SECURITY.md for component gates and exact test names; prior lifecycle evidence is retained.",
-      "next_required_gate": "Prove shared HTTP specialty combat authority and Dark Arts companion business state, then all levels/costs, stale/malformed combat, replay, persistence and rollback. Onboarding matrix pending.",
+      "continuation_evidence": "Shared onboarding PASS through actual HTTP: exact identity, default-zero and preserved earned skill/uses, forged extra fields, inactive/missing module and missing file, stale preferences/account state, CSRF, duplicate/reselection/replay, late-account-write rollback, fresh retry and actual New Day skill-derived restoration. Combat level/use/state/POST/CSRF/replay/persistence/rollback and companion business schema remain BLOCKED. Both supported targets PASS at 82bb591d5355ccd0e5a071f1d4fd3efd7033c7ba: 74 PHPUnit tests / 2231 assertions / 33 Python and HTTP tests / 310 PHP files linted; zero failures/skips. Modern core 34886260212 and Baseline integrity 34886260167 SUCCESS.",
+      "next_required_gate": "Prove shared HTTP specialty combat authority and Dark Arts companion business state, then all levels/costs, stale/malformed combat, replay, persistence and rollback. Onboarding is closed.",
       "previous_certification": "BLOCKED"
     }
   ],

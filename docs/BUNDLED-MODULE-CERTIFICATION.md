@@ -186,21 +186,21 @@ Actual HTTP forces every one of the 19 song results, plus female charm, HP floor
 
 ### specialtydarkarts (1.1): BLOCKED
 
-Existing valid skill-level buff/use and dragon-kill/reset hook fixtures PASS. Actual HTTP onboarding and combat action authority, invalid/negative levels, unavailable uses, POST/CSRF and duplicate use remain unclosed.
+Shared onboarding PASS through actual HTTP on both supported targets (see latest continuation below). Existing skill-level buff/use and Dragon-reset hook fixtures remain PASS. Actual combat authority, invalid/negative levels, unavailable uses, current combat, POST/CSRF, replay, persistence and rollback remain BLOCKED.
 
 - Component route result: BLOCKED.
 - Exact metadata, descriptors, hooks, dependencies, database tables and prior lifecycle evidence remain in [the JSON record](BUNDLED-MODULE-CERTIFICATION.json).
 
 ### specialtymysticpower (1.0): BLOCKED
 
-Existing valid skill-level buff/use and dragon-kill/reset hook fixtures PASS. Actual HTTP onboarding and combat action authority, invalid/negative levels, unavailable uses, POST/CSRF and duplicate use remain unclosed.
+Shared onboarding PASS through actual HTTP on both supported targets (see latest continuation below). Existing skill-level buff/use and Dragon-reset hook fixtures remain PASS. Actual combat authority, invalid/negative levels, unavailable uses, current combat, POST/CSRF, replay, persistence and rollback remain BLOCKED.
 
 - Component route result: BLOCKED.
 - Exact metadata, descriptors, hooks, dependencies, database tables and prior lifecycle evidence remain in [the JSON record](BUNDLED-MODULE-CERTIFICATION.json).
 
 ### specialtythiefskills (1.0): BLOCKED
 
-Existing valid skill-level buff/use and dragon-kill/reset hook fixtures PASS. Actual HTTP onboarding and combat action authority, invalid/negative levels, unavailable uses, POST/CSRF and duplicate use remain unclosed.
+Shared onboarding PASS through actual HTTP on both supported targets (see latest continuation below). Existing skill-level buff/use and Dragon-reset hook fixtures remain PASS. Actual combat authority, invalid/negative levels, unavailable uses, current combat, POST/CSRF, replay, persistence and rollback remain BLOCKED.
 
 - Component route result: BLOCKED.
 - Exact metadata, descriptors, hooks, dependencies, database tables and prior lifecycle evidence remain in [the JSON record](BUNDLED-MODULE-CERTIFICATION.json).
@@ -230,4 +230,4 @@ Latest supported implementation `77c58792f87afad71c0db5fc77042cd39ab418b8`: 74 P
 
 ## Specialty onboarding continuation
 
-The shared onboarding implementation and actual HTTP evidence are described in [SPECIALTY-AUTHORITY.md](SPECIALTY-AUTHORITY.md). All three specialties remain BLOCKED until their actual combat boundary is proven. Counts remain **21 PASS / 0 PASS WITH DOCUMENTED LIMITATION / 3 BLOCKED**. This implementation awaits the supported exact-head CI matrix; hook/formula tests do not substitute for HTTP certification.
+The shared onboarding implementation and actual HTTP evidence are described in [SPECIALTY-AUTHORITY.md](SPECIALTY-AUTHORITY.md). All three specialties remain BLOCKED until their actual combat boundary is proven. Counts remain **21 PASS / 0 PASS WITH DOCUMENTED LIMITATION / 3 BLOCKED**. Both supported targets PASS at 82bb591d5355ccd0e5a071f1d4fd3efd7033c7ba: 74 PHPUnit tests / 2231 assertions / 33 Python and HTTP tests / 310 PHP files linted; zero failures/skips. Modern core 34886260212 and Baseline integrity 34886260167 SUCCESS. Hook/formula tests do not substitute for HTTP combat certification.
