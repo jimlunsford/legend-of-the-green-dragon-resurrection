@@ -26,7 +26,8 @@ try {
     \Resurrection\Http\Input::choice($_GET,'act',['','attack'],'');
     \Resurrection\Http\Input::choice($_GET,'op',['','fight','run'],'');
     \Resurrection\Http\Input::choice($_GET,'inn',['','1'],'');
-    \Resurrection\Http\Input::choice($_GET,'auto',['','five','ten','full'],'');
+    $automatic = \Resurrection\Http\Input::choice($_GET,'auto',['','five','ten','full'],'');
+    if ($automatic !== '' && (!getsetting('autofight',0) || ($automatic === 'full' && !getsetting('autofightfull',0)))) throw new InvalidArgumentException();
     foreach (['skill','l','newtarget','type'] as $key) {
         if (\Resurrection\Http\Input::string($_GET,$key) !== '') throw new InvalidArgumentException();
     }
@@ -79,69 +80,72 @@ try {
             $rows = db_query('SELECT alive,pvpflag FROM '.db_prefix('accounts').' WHERE acctid=? FOR UPDATE',true,[$options['target']]);
             if (count($rows) !== 1 || !$rows[0]['alive'] || $rows[0]['pvpflag'] !== $options['reservation']) throw new DomainException('PvP target changed.');
         }
+        // Inn/bodyguard behavior comes from the recorded opponent, never a round parameter.
+        $recorded = \Resurrection\Security\PvpState::read($session['user']['badguy'],(int)$session['user']['acctid']);
+        $_GET['inn'] = $recorded['enemies'][0]['location'] === $iname ? '1' : '';
         $battle = true;
-if ($op=="run"){
-  output("Your pride prevents you from running");
-  $op="fight";
-  httpset('op', $op);
-}
+        if ($op=="run"){
+          output("Your pride prevents you from running");
+          $op="fight";
+          httpset('op', $op);
+        }
 
-$skill = httpget('skill');
-if ($skill!=""){
-  output("Your honor prevents you from using any special ability");
-  $skill="";
-  httpset('skill', $skill);
-}
-if ($op=="fight" || $op=="run"){
-	$battle=true;
-}
-if ($battle){
+        $skill = httpget('skill');
+        if ($skill!=""){
+          output("Your honor prevents you from using any special ability");
+          $skill="";
+          httpset('skill', $skill);
+        }
+        if ($op=="fight" || $op=="run"){
+        	$battle=true;
+        }
+        if ($battle){
 
-	require("battle.php");
+        	require("battle.php");
 
-	if ($victory){
-		$killedin = $badguy['location'];
-		$handled = pvpvictory($badguy, $killedin, $options);
+        	if ($victory){
+        		$killedin = $badguy['location'];
+        		$handled = pvpvictory($badguy, $killedin, $options);
 
-		// Handled will be true if a module has already done the addnews or
-		// whatever was needed.
-		if (!$handled) {
-			if ($killedin==$iname){
-				addnews("`4%s`3 defeated `4%s`3 by sneaking into their room in the inn!",$session['user']['name'],$badguy['creaturename']);
-			}else{
-				addnews("`4%s`3 defeated `4%s`3 in fair combat in the fields of %s.", $session['user']['name'],$badguy['creaturename'], $killedin);
-			}
-		}
+        		// Handled will be true if a module has already done the addnews or
+        		// whatever was needed.
+        		if (!$handled) {
+        			if ($killedin==$iname){
+        				addnews("`4%s`3 defeated `4%s`3 by sneaking into their room in the inn!",$session['user']['name'],$badguy['creaturename']);
+        			}else{
+        				addnews("`4%s`3 defeated `4%s`3 in fair combat in the fields of %s.", $session['user']['name'],$badguy['creaturename'], $killedin);
+        			}
+        		}
 
-		$op = "";
-		httpset('op', $op);
-		if ($killedin==$iname){
-			addnav("Return to the inn","inn.php");
-		} else {
-			villagenav();
-		}
-		if ($session['user']['hitpoints'] <= 0) {
-			output("`n`n`&Using a bit of cloth nearby, you manage to staunch your wounds so that you do not die as well.");
-			$session['user']['hitpoints'] = 1;
-		}
-	}elseif($defeat){
-		$killedin = $badguy['location'];
-		$taunt = select_taunt_array();
-		// This is okay because system mail which is all it's used for is
-		// not translated
-		$handled = pvpdefeat($badguy, $killedin, $taunt, $options);
-		// Handled will be true if a module has already done the addnews or
-		// whatever was needed.
-		if (!$handled) {
-			if ($killedin == $iname) {
-				addnews("`%%s`5 has been slain while breaking into the inn room of `^%s`5 in order to attack them.`n%s`0", $session['user']['name'], $badguy['creaturename'], $taunt);
-			}else {
-				addnews("`%%s`5 has been slain while attacking `^%s`5 in the fields of `&%s`5.`n%s`0", $session['user']['name'], $badguy['creaturename'], $killedin, $taunt);
-			}
-		}
-    }
-    if ($victory || $defeat) $session['user']['badguy'] = '';
-}
+        		$op = "";
+        		httpset('op', $op);
+        		if ($killedin==$iname){
+        			addnav("Return to the inn","inn.php");
+        		} else {
+        			villagenav();
+        		}
+        		if ($session['user']['hitpoints'] <= 0) {
+        			output("`n`n`&Using a bit of cloth nearby, you manage to staunch your wounds so that you do not die as well.");
+        			$session['user']['hitpoints'] = 1;
+        		}
+        	}elseif($defeat){
+        		$killedin = $badguy['location'];
+        		$taunt = select_taunt_array();
+        		// This is okay because system mail which is all it's used for is
+        		// not translated
+        		$handled = pvpdefeat($badguy, $killedin, $taunt, $options);
+        		// Handled will be true if a module has already done the addnews or
+        		// whatever was needed.
+        		if (!$handled) {
+        			if ($killedin == $iname) {
+        				addnews("`%%s`5 has been slain while breaking into the inn room of `^%s`5 in order to attack them.`n%s`0", $session['user']['name'], $badguy['creaturename'], $taunt);
+        			}else {
+        				addnews("`%%s`5 has been slain while attacking `^%s`5 in the fields of `&%s`5.`n%s`0", $session['user']['name'], $badguy['creaturename'], $killedin, $taunt);
+        			}
+        		}
+            }
+            if ($victory || $defeat) $session['user']['badguy'] = '';
+        }
     });
 } catch (DomainException $error) {
     unset($GLOBALS['pvp_mail_notifications']);
@@ -159,7 +163,14 @@ foreach ($notifications as $notification) {
 }
 if (!$victory && !$defeat) {
     $extra = httpget('inn') === '1' ? '&inn=1' : '';
-    resurrection_pvp_form('pvp.php?op=fight'.$extra,'pvp-round',hash('sha256',$session['user']['badguy']),'Fight');
+    $context = hash('sha256',$session['user']['badguy']);
+    resurrection_pvp_form('pvp.php?op=fight'.$extra,'pvp-round',$context,'Fight');
+    if (getsetting('autofight',0)) {
+        foreach (['five'=>'For 5 Rounds','ten'=>'For 10 Rounds'] as $auto=>$label) {
+            resurrection_pvp_form('pvp.php?op=fight'.$extra.'&auto='.$auto,'pvp-round',$context,$label);
+        }
+        if (getsetting('autofightfull',0)) resurrection_pvp_form('pvp.php?op=fight'.$extra.'&auto=full','pvp-round',$context,'Until End');
+    }
 }
 page_footer();
 

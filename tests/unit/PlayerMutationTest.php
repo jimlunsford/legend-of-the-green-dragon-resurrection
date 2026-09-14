@@ -183,6 +183,7 @@ final class PlayerMutationTest extends TestCase
                 self::assertSame($before,db_query('SELECT gold FROM accounts WHERE acctid=?',true,[$id]));
                 set_module_setting('hardlimit',3,'drinks'); set_module_setting('maxdrunk',66,'drinks');
             }
+            $GLOBALS['session']['user']['prefs']=[]; // Match normal authenticated hydration before output-producing hooks.
             $turns=(int)$GLOBALS['session']['user']['turns'];
             resurrection_player_mutation(static function () { modulehook('newday',['turnstoday'=>''],false,'drinks'); });
             self::assertSame(0,(int)get_module_pref('drunkeness','drinks'));
@@ -204,7 +205,7 @@ final class PlayerMutationTest extends TestCase
             foreach ($settingRows as $row) db_query('INSERT INTO module_settings(modulename,setting,value) VALUES (?,?,?)',true,['drinks',$row['setting'],$row['value']]);
             $GLOBALS['module_settings']=[];
             db_query('UPDATE drinks SET active=?,costperlevel=? WHERE drinkid=?',true,[$drink['active'],$drink['costperlevel'],$drinkId]);
-            $fields=['gold','level','hitpoints','turns','bufflist','loggedin'];
+            $fields=['gold','level','hitpoints','turns','bufflist','loggedin','prefs'];
             db_query('UPDATE accounts SET '.implode(',',array_map(static fn($key)=>db_identifier($key).'=?',$fields)).' WHERE acctid=?',true,[...array_map(static fn($key)=>$original[$key],$fields),$id]);
             db_query('UPDATE modules SET active=0 WHERE modulename=?',true,['drinks']);
             db_query('DELETE FROM module_userprefs WHERE modulename=? AND userid=?',true,['drinks',$id]);
