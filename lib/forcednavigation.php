@@ -21,6 +21,13 @@ function do_forced_nav($anonymous,$overrideforced){
             }
             $_SESSION['auth_privileges'] = (int)$session['user']['superuser'];
 			$session['bufflist']=\Resurrection\Security\ScalarState::read($session['user']['bufflist']);
+            // Preserve the existing potion validator's controlled 400 response.
+            // Validate it before the shared map check can classify a null entry.
+            if (is_array($session['bufflist']) && array_key_exists('transmute',$session['bufflist'])) {
+                require_once __DIR__ . '/../src/Game/TransmutationState.php';
+                try { \Resurrection\Game\TransmutationState::read($session['bufflist']['transmute']); }
+                catch (DomainException $error) { http_response_code(400); exit('Invalid stored potion state.'); }
+            }
             try {
                 $session['bufflist']=\Resurrection\Game\SpecialtyBuffState::collection($session['bufflist']);
             } catch (DomainException $error) {

@@ -293,3 +293,15 @@ semantics and remaining companion/area interactions are not closed. Ordinary
 Forest mutation authority, general combat/rewards/defeat/recovery and the other
 Phase 3 core gates remain BLOCKED. No 24/24 milestone, merge, hosting or Phase 4.
 Exact-head CI acceptance is recorded in PR #1 after publication.
+
+### Retained Transmutation error contract
+
+Full run 34961216418 completed all 46 tests on both targets but failed the
+existing Transmutation malformed-state assertion (expected 400, got 409).
+All five new specialty HTTP tests passed. Hydration now calls the existing
+TransmutationState validator before the shared collection check, preserving
+its controlled 400 response for null/malformed potion entries. Specialty
+corruption remains 409. Neither validator nor the retained test is weakened.
+Local recheck passes 83 PHPUnit tests/2398 assertions and authentication,
+Transmutation persistence/failure, and the specialty corruption matrix.
+New final-head acceptance is required and recorded in PR #1.

@@ -1,7 +1,7 @@
 {
   "scope": "Only the 24 bundled entrypoints, verified against modules/*.php; no archive import.",
   "date": "2026-09-15",
-  "evidence": "2026-09-15 continuation from 37bc7d2af907d8ae3b512d51fc0d583e17d627a3: adverse defeat/shield/duration HTTP tests and SpecialtyBuffState. Local focused acceptance recorded in SPECIALTY-ADVERSE-ACCOUNTING-20260915.md. Exact-head supported-target acceptance must be recorded in PR #1. Retain 21 PASS / 0 limitation / 3 BLOCKED; all 24 lifecycle checks retained.",
+  "evidence": "2026-09-15 continuation from 37bc7d2af907d8ae3b512d51fc0d583e17d627a3: adverse defeat/shield/duration HTTP tests and SpecialtyBuffState. Local focused acceptance recorded in SPECIALTY-ADVERSE-ACCOUNTING-20260915.md. Exact-head supported-target acceptance must be recorded in PR #1. Retain 21 PASS / 0 limitation / 3 BLOCKED; all 24 lifecycle checks retained. Full run 34961216418 completed all 46 HTTP/tooling tests per target with one retained Transmutation 400-versus-409 failure; all new specialty cases passed. Follow-up preserves the existing potion validator response before the shared map check; local regression and specialty corruption recheck PASS. Final exact-head acceptance remains in PR #1.",
   "status_meaning": "Final certification is per module in the supported bundled scope. PASS requires actual behavior/security evidence; PARTIAL is a component route result only and final remains BLOCKED. Core editor/combat/hosting gates are tracked separately and still prevent merge.",
   "modules": [
     {

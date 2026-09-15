@@ -151,3 +151,19 @@ editors, remaining serialized schemas, expiration and account-deletion failure
 semantics remain BLOCKED. lib/expire_chars.php still advances last_char_expire
 too early. Historical repositories/tag and VPS untouched. No deployment, public
 runtime, release, package, new branch, PR #2, merge or Phase 4.
+
+## Full-suite regression correction
+
+At b14d4b1c8cb77199bf50f7dd981fd42228ac47fd, Modern core 34961216418
+completed 46 tests on each target with exactly one failure: the retained
+Transmutation malformed-entry response expected HTTP 400 but hydration returned
+409 first. PHP 8.4/MariaDB took 1182.508 seconds and PHP 8.5/MySQL 1317.247
+seconds for that suite. All new specialty cases passed; this failed run is
+preserved, not accepted. Baseline 34961216432 passed.
+
+The correction delegates Transmutation validation before shared map validation,
+preserving the established potion 400 response while specialties still reject
+with 409. No test assertion changed. Local authentication + Transmutation +
+specialty corruption matrix: three HTTP tests PASS in 44.596 seconds; PHPUnit
+83/2398 and both static-analysis gates PASS. The final publication now comprises
+three commits. The new exact final SHA and CI IDs are recorded in PR #1.

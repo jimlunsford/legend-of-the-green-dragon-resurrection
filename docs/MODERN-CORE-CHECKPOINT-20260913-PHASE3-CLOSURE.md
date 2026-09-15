@@ -1075,3 +1075,28 @@ new modernization branch, PR #2 or Phase 4.
 Next: close Dragon's actual specialty/prologue/outcome mutation authority, then
 defeated-target progression and remaining companion/area/transition accounting;
 reassess each specialty independently before proceeding to general combat closure.
+
+### 2026-09-15 follow-up: preserve the certified potion response
+
+The two-commit candidate ended at b14d4b1c8cb77199bf50f7dd981fd42228ac47fd.
+Modern core 34961216418 finished all 46 Python/HTTP tests on both targets with
+one retained Transmutation response-code failure (400 expected, 409 returned).
+All five new specialty tests and the retained specialty tests passed; PHPUnit
+83/2398, lint317, both analysis gates, Composer and baseline gates passed.
+Python durations: 1182.508s on PHP8.4/MariaDB11.4; 1317.247s on PHP8.5/MySQL8.4.
+Baseline integrity 34961216432 SUCCESS. This failed full run is preserved.
+
+A third coherent commit restores existing TransmutationState validation ahead
+of the shared collection check, including its controlled 400 response. The
+specialty validator and existing potion assertions remain unchanged. Local
+PHPUnit83/2398, both analysis gates, and three focused HTTP tests (authentication,
+Transmutation persistence/failure, specialty corruption) pass; HTTP44.596s.
+No deadline change is necessary: both full jobs completed within 25 minutes.
+
+Actual execution starting SHA remains 37bc7d2af907d8ae3b512d51fc0d583e17d627a3;
+commits added now three. The final ending SHA is this follow-up commit, with its
+new exact-head workflow IDs and final acceptance recorded in PR #1. The earlier
+two-commit publication above is superseded by this appended record, not removed.
+All certification decisions, open Dragon/progression/general combat and other
+Phase3 blockers, serialization inventory and preservation guarantees above remain.
+PR1 OPEN/DRAFT/NOT READY/NOT MERGED; Phase3 INCOMPLETE; merge NO; hosting NO.
