@@ -1271,6 +1271,205 @@ function resurrectionrandomfixture_dohook($hook,$args) { mt_srand((int)getsettin
                                 self.assertEqual(400,anonymous(url,data)[0])
                                 self.assertEqual(before,f['snapshot']())
 
+    @contextmanager
+    def _specialty_terminal_capture(self):
+        # Observe the real terminal hook inside the same transaction, before the
+        # caller clears combat. No outcome, RNG, HP or formula is substituted.
+        module='resurrectionspecialtyobserver'
+        path=ROOT/'modules'/(module+'.php')
+        path.write_text('''<?php
+function resurrectionspecialtyobserver_getmoduleinfo() { return ['name'=>'Fixture observer','version'=>'1','author'=>'Tests','category'=>'Tests']; }
+function resurrectionspecialtyobserver_dohook($hook,$args) {
+    global $session, $companions;
+    db_query('INSERT INTO fixture_specialty_terminal (payload) VALUES (?)',true,
+        [json_encode(['hook'=>$hook,'enemy'=>$args,'hp'=>$session['user']['hitpoints'],'buffs'=>$session['bufflist'],'companions'=>$companions],JSON_THROW_ON_ERROR)]);
+    return $args;
+}
+''')
+        self.query('CREATE TABLE fixture_specialty_terminal (payload LONGTEXT NOT NULL) ENGINE=InnoDB')
+        self.query('INSERT INTO modules(modulename,active,version) VALUES (?,1,?)',[module,'1'])
+        for hook in ['battle-victory','battle-defeat']:
+            self.query('INSERT INTO module_hooks(modulename,location,`function`,whenactive,priority) VALUES (?,?,?,?,?)',[module,hook,module+'_dohook','',100])
+        try:
+            yield lambda: [json.loads(row['payload']) for row in self.query('SELECT payload FROM fixture_specialty_terminal')]
+        finally:
+            self.query('DELETE FROM module_hooks WHERE modulename=?',[module])
+            self.query('DELETE FROM modules WHERE modulename=?',[module])
+            self.query('DROP TABLE fixture_specialty_terminal')
+            path.unlink()
+
+    def test_specialty_adverse_defeat_accounting(self):
+        # spec, level, enemy attack/defense, starting HP, exact terminal enemy
+        # HP, retained rounds, and ordered historical combat messages.
+        cases=[
+            ('DA',1,1000,1000,1,100000,None,['RIPOSTED for 22 points']),
+            ('DA',2,120,80,24,99737,None,['doll hurting it for 263 points','RIPOSTED for 24 points']),
+            ('DA',3,1000,1000,11,100000,5,['RIPOSTED for 11 points']),
+            ('DA',3,1000,80,89,99960,4,['You hit Accounting Target for 40 points','hits you for 89 points']),
+            ('MP',1,1000,80,167,99960,4,['regenerate for 10 health','You hit Accounting Target for 40 points','hits you for 177 points']),
+            ('MP',2,120,80,24,99999,4,['earth pummels Accounting Target for 1 points','RIPOSTED for 24 points']),
+            ('MP',3,1000,1000,22,100000,4,['RIPOSTED for 22 points','weapon wails as you deal no damage']),
+            ('MP',5,1000,80,177,99606,4,['You hit Accounting Target for 40 points','hits you for 177 points','hitting for 354 damage']),
+            ('TS',1,1000,80,70,99960,4,['You hit Accounting Target for 40 points','hits you for 70 points']),
+            ('TS',2,1000,80,177,99912,4,['You hit Accounting Target for 88 points','hits you for 177 points']),
+            ('TS',3,1000,1000,22,100000,5,['RIPOSTED for 22 points']),
+            ('TS',5,1000,80,104,99865,4,['You hit Accounting Target for 135 points','hits you for 104 points']),
+        ]
+        with self._specialty_accounting_fixture() as f, self._specialty_terminal_capture() as terminal:
+            for spec,level,attack,defense,hp,targethp,rounds,messages in cases:
+                with self.subTest(specialty=spec,level=level,defense=defense):
+                    self.query('DELETE FROM fixture_specialty_terminal')
+                    combat={'enemies':[dict(f['enemy'],creatureattack=attack,creaturedefense=defense)],'options':{'type':'forest','didsurprise':1}}
+                    f['prepare'](spec,hitpoints=hp,gold=1000,experience=1000,badguy=f['encode'](combat))
+                    before=f['snapshot']()[0]; stale=f['form'](1); data=f['form'](level)
+                    status,body=f['request'](data=data); self.assertEqual(200,status,body[:2000])
+                    after=f['snapshot']()[0]; events=terminal(); self.assertEqual(1,len(events)); event=events[0]
+                    self.assertEqual('battle-defeat',event['hook']); self.assertEqual(0,event['hp'])
+                    self.assertEqual(targethp,event['enemy']['creaturehealth']); self.assertTrue(event['enemy']['killedplayer'])
+                    self.assertEqual(['0','0','0','900',''],[after[k] for k in ['hitpoints','alive','gold','experience','badguy']])
+                    for key in ['gems','turns','attack','defense']: self.assertEqual(before[key],after[key])
+                    self.assertEqual(str(9-level),self.query('SELECT value FROM module_userprefs WHERE userid=? AND modulename=? AND setting=?',[f['player'],f['modules'][spec],'uses'])[0]['value'])
+                    buffs=f['decode'](after['bufflist']); key=spec.lower()+str(level)
+                    if rounds is None: self.assertNotIn(key,buffs)
+                    else: self.assertEqual(rounds,buffs[key]['rounds'])
+                    companions=f['decode'](after['companions'])
+                    if spec=='DA' and level==1:
+                        self.assertEqual(43,companions['skeleton_warrior']['hitpoints'])
+                        self.assertEqual(event['companions'],companions)
+                    else: self.assertEqual([],companions)
+                    text=re.sub(r'\s+',' ',html.unescape(re.sub('<[^>]+>',' ',body)))
+                    offsets=[text.index(message) for message in messages]
+                    self.assertEqual(sorted(offsets),offsets)
+                    self.assertNotIn('You have slain',text)
+                    if 'RIPOSTED' in messages[-1]: self.assertNotIn('Accounting Target hits you for',text)
+                    f['rejected'](data); f['rejected'](data); f['rejected'](stale)
+                    self.assertEqual(events,terminal())
+                    self.assertEqual(200,f['request']('news.php')[0]); read=f['snapshot']()[0]
+                    if spec=='DA' and level==1:
+                        suspended=f['decode'](read['companions'])
+                        self.assertEqual(dict(companions['skeleton_warrior'],suspended=True),suspended['skeleton_warrior'])
+                        read['companions']=after['companions']
+                    self.assertEqual(after,read)
+
+    def test_specialty_shield_terminal_and_lifetap_adversity(self):
+        with self._specialty_accounting_fixture() as f, self._specialty_terminal_capture() as terminal:
+            # A one-HP difference chooses live combat, real defeat, or historical
+            # simultaneous lethal victory with the Forest mushroom recovery.
+            for hp,targethp,endinghp,endingtarget,outcome in [
+                (178,395,1,1,None),(177,395,0,1,'battle-defeat'),
+                (178,394,1,0,'battle-victory'),(177,394,1,0,'battle-victory'),
+                (1,393,1,-1,'battle-victory')]:
+                with self.subTest(hp=hp,targethp=targethp):
+                    self.query('DELETE FROM fixture_specialty_terminal')
+                    f['prepare']('MP',hitpoints=hp,gold=1000,gems=0,experience=1000,badguy=f['encode']({'enemies':[dict(f['enemy'],creatureattack=1000,creaturehealth=targethp)],'options':{'type':'forest','didsurprise':1}}))
+                    before=f['snapshot']()[0]; old=f['form'](1); data=f['form'](5)
+                    status,body=f['request'](data=data); self.assertEqual(200,status,body[:2000]); after=f['snapshot']()[0]
+                    self.assertEqual(endinghp,int(after['hitpoints']))
+                    self.assertEqual(4,f['decode'](after['bufflist'])['mp5']['rounds'])
+                    self.assertEqual('4',self.query("SELECT value FROM module_userprefs WHERE userid=? AND modulename='specialtymysticpower' AND setting='uses'",[f['player']])[0]['value'])
+                    text=re.sub(r'\s+',' ',html.unescape(re.sub('<[^>]+>',' ',body)))
+                    self.assertLess(text.index('hits you for 177 points'),text.index('hitting for 354 damage'))
+                    events=terminal()
+                    if outcome is None:
+                        self.assertEqual([],events); self.assertEqual(endingtarget,f['decode'](after['badguy'])['enemies'][0]['creaturehealth'])
+                        for key in ['alive','gold','gems','experience','turns']: self.assertEqual(before[key],after[key])
+                    else:
+                        self.assertEqual(1,len(events)); self.assertEqual(outcome,events[0]['hook'])
+                        self.assertEqual(endingtarget,events[0]['enemy']['creaturehealth']); self.assertEqual('',after['badguy'])
+                        if outcome=='battle-victory':
+                            self.assertEqual(['1','1008','1','1014'],[after[k] for k in ['alive','gold','gems','experience']])
+                            self.assertEqual(1 if hp>177 else 0,events[0]['hp'])
+                            self.assertEqual(hp<=177,'restorative properties' in text)
+                        else: self.assertEqual(['0','0','0','900'],[after[k] for k in ['alive','gold','gems','experience']])
+                    f['rejected'](data); f['rejected'](old); self.assertEqual(events,terminal())
+            # Unsuccessful Lifetap cannot heal negative damage or compound it.
+            f['prepare']('MP',hitpoints=500,badguy=f['encode']({'enemies':[dict(f['enemy'],creatureattack=1000,creaturedefense=1000)],'options':{'type':'forest','didsurprise':1}}))
+            data=f['form'](3); status,body=f['request'](data=data); self.assertEqual(200,status,body[:2000])
+            after=f['snapshot']()[0]
+            self.assertEqual(301,int(after['hitpoints'])) # 500 - 22 riposte - 177 attack
+            self.assertEqual(100000,f['decode'](after['badguy'])['enemies'][0]['creaturehealth'])
+            self.assertEqual(4,f['decode'](after['bufflist'])['mp3']['rounds']); f['rejected'](data)
+
+    def test_specialty_duration_consumes_active_phases(self):
+        with self._specialty_accounting_fixture() as f:
+            # Every persistent specialty buff through its natural last round.
+            # DA1 uses the supported minion fallback; skeleton has no round TTL.
+            self.query("UPDATE settings SET value='0' WHERE setting='enablecompanions'")
+            for spec,levels in [('DA',[1,3,5]),('MP',[1,2,3,5]),('TS',[1,2,3,5])]:
+                for level in levels:
+                    with self.subTest(specialty=spec,level=level):
+                        f['prepare'](spec,hitpoints=5000,maxhitpoints=10000)
+                        data=f['form'](level); key=spec.lower()+str(level)
+                        for round_number in range(1,6):
+                            status,body=f['request'](data=data) if round_number==1 else f['request']('forest.php?op=fight')
+                            self.assertEqual(200,status,body[:2000]); buffs=f['decode'](f['snapshot']()[0]['bufflist'])
+                            if round_number<5: self.assertEqual(5-round_number,buffs[key]['rounds'])
+                            else: self.assertNotIn(key,buffs)
+                            self.assertEqual(str(9-level),self.query('SELECT value FROM module_userprefs WHERE userid=? AND modulename=? AND setting=?',[f['player'],f['modules'][spec],'uses'])[0]['value'])
+                        self.assertEqual(200,f['request']('forest.php?op=fight')[0]); self.assertNotIn(key,f['decode'](f['snapshot']()[0]['bufflist']))
+                        f['rejected'](data)
+            # Wither Soul cannot cause ordinary enemy retaliation while active.
+            # At one HP the player survives five rounds, then dies on round six.
+            f['prepare']('DA',hitpoints=1,badguy=f['encode']({'enemies':[dict(f['enemy'],creatureattack=1000)],'options':{'type':'forest','didsurprise':1}}))
+            data=f['form'](5)
+            for n in range(5):
+                self.assertEqual(200,(f['request'](data=data) if n==0 else f['request']('forest.php?op=fight'))[0])
+                self.assertEqual('1',f['snapshot']()[0]['hitpoints'])
+            self.assertNotIn('da5',f['decode'](f['snapshot']()[0]['bufflist']))
+            self.assertEqual(200,f['request']('forest.php?op=fight')[0]); self.assertEqual('0',f['snapshot']()[0]['alive']); f['rejected'](data)
+
+    def test_specialty_buff_business_schema_rejects_corruption(self):
+        with self._specialty_accounting_fixture() as f:
+            self.query("UPDATE settings SET value='0' WHERE setting='enablecompanions'")
+            for spec,levels in [('DA',[1,3,5]),('MP',[1,2,3,5]),('TS',[1,2,3,5])]:
+                for level in levels:
+                    f['prepare'](spec,hitpoints=5000,maxhitpoints=10000)
+                    self.assertEqual(200,f['request'](data=f['form'](level))[0])
+                    valid=f['decode'](f['snapshot']()[0]['bufflist']); key=spec.lower()+str(level)
+                    old=f['form'](1)
+                    missing=dict(valid[key]); del missing['rounds']
+                    corrupt=[[],missing]
+                    for field,value in [('rounds',0),('rounds',-1),('rounds',6),('atkmod','NaN'),('lifetap',999),('used',2),('suspended','yes'),('schema','forged'),('tempstat-attack',100),('effectmsg','<img src=x onerror=alert(1)>')]:
+                        corrupt.append(dict(valid[key],**{field:value}))
+                    encoded=[f['encode']({key:value}) for value in corrupt]
+                    encoded += ['broken','O:8:"stdClass":0:{}',f['encode']('not a map'),f['encode']({key:None})]
+                    for state in encoded:
+                        with self.subTest(specialty=spec,level=level,state=state[:90]):
+                            self.query('UPDATE accounts SET bufflist=? WHERE acctid=?',[state,f['player']])
+                            before=f['snapshot']()
+                            for path,data in [('forest.php?op=specialty',None),('forest.php?op=specialty',old),('forest.php?op=fight',None)]:
+                                status,body=f['request'](path,data)
+                                self.assertEqual(409,status,body[:2000]); self.assertIn('Invalid stored buff state',body)
+                                self.assertEqual(before,f['snapshot']())
+                    self.query('UPDATE accounts SET bufflist=? WHERE acctid=?',[f['encode'](valid),f['player']])
+                    self.assertEqual(200,f['request']()[0])
+
+    def test_specialty_final_round_victory_and_defeat(self):
+        with self._specialty_accounting_fixture() as f, self._specialty_terminal_capture() as terminal:
+            self.query("UPDATE settings SET value='0' WHERE setting='enablecompanions'")
+            for spec,levels in [('DA',[1,3,5]),('MP',[1,2,3,5]),('TS',[1,2,3,5])]:
+                for level in levels:
+                    for outcome in ['victory','defeat']:
+                        if spec=='DA' and level==5 and outcome=='defeat': continue # zero attack AND defense
+                        with self.subTest(specialty=spec,level=level,outcome=outcome):
+                            f['prepare'](spec,hitpoints=5000,maxhitpoints=10000)
+                            data=f['form'](level); self.assertEqual(200,f['request'](data=data)[0])
+                            buffs=f['decode'](f['snapshot']()[0]['bufflist']); key=spec.lower()+str(level)
+                            buffs[key]['rounds']=1
+                            target=dict(f['enemy'],creaturehealth=1 if outcome=='victory' else 100000,creatureattack=1 if outcome=='victory' else 1000,creaturedefense=1 if outcome=='victory' else 1000)
+                            f['prepare'](spec,bufflist=f['encode'](buffs),hitpoints=500 if outcome=='victory' else 1,badguy=f['encode']({'enemies':[target],'options':{'type':'forest','didsurprise':1}}))
+                            old=f['form'](1); before=f['snapshot']()[0]
+                            status,body=f['request']('forest.php?op=fight'); self.assertEqual(200,status,body[:2000])
+                            after=f['snapshot']()[0]; remaining=f['decode'](after['bufflist'])
+                            # Defense-only activation is skipped on early weapon victory
+                            # or lethal riposte, though its modifier already affected the roll.
+                            retained=(spec,level) in [('DA',3),('TS',1),('TS',3)]
+                            if retained: self.assertEqual(1,remaining[key]['rounds'])
+                            else: self.assertNotIn(key,remaining)
+                            self.assertEqual('1' if outcome=='victory' else '0',after['alive'])
+                            self.assertEqual('9',self.query('SELECT value FROM module_userprefs WHERE userid=? AND modulename=? AND setting=?',[f['player'],f['modules'][spec],'uses'])[0]['value'])
+                            f['rejected'](data); f['rejected'](old)
+
     def test_specialty_gameplay_accounting(self):
         # Fixed RNG, actual producer + battle + committed HTTP result. These
         # explicit totals account for hits/ripostes as well as the named effect.

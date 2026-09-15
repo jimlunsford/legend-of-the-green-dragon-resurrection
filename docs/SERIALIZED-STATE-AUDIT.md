@@ -177,3 +177,31 @@ Accepted Forest component at 353ba60ee0fad71fdc46669009c8a349dc4f0ecc: both supp
 No serialization writer, reader or validator changed. Inventory remains **89 sites / 44 files / 32 writers-checks / 56 ScalarState::read calls / one centralized unserialize**. ScalarState, SkeletonCompanionState and SpecialtyCombatState are unchanged.
 
 Actual HTTP consumption covers specialty gameplay, regeneration/aura expiration, two-live-target Earth Fist and stale selected-target rejection. This is not a buff business schema. Malformed specialty modifier structures, broader combat families, dead-target progression and general recovery remain BLOCKED. The narrow validator still rejects dead enemies anywhere in the envelope and preserves malformed state for explicit repair. [Evidence and limits](SPECIALTY-COMBAT-ACCOUNTING.md).
+
+
+## 2026-09-15: adverse specialty accounting and buff business schema
+
+Continuation from `37bc7d2af907d8ae3b512d51fc0d583e17d627a3`.
+`SpecialtyBuffState` validates the finite DA/MP/TS identifiers, exact producer
+messages/modifiers/schema, numeric creation fields, positive remaining duration,
+and actual engine flags. Authoritative hydration rejects malformed collections
+with HTTP 409 before route gameplay, preserving the stored blob for explicit
+repair. Buff application and field calculation validate specialty shapes too.
+Other named array buffs remain uncertified; this is not the general buff schema.
+`ScalarState::read()`, `SkeletonCompanionState` and `SpecialtyCombatState` are unchanged.
+No new serialization reader or writer: 89 sites / 44 files / 32 writers-checks /
+56 ScalarState reads / one centralized unserialize remains the inventory.
+
+New deterministic HTTP tests cover lethal riposte/retaliation, exact Forest
+defeat settlement, shield simultaneous-lethal victory and mushroom recovery,
+failed Lifetap, all persistent five-round specialty effects, terminal activation
+phase boundaries, and malformed-buff rejection before specialty/ordinary rounds.
+Historical costs, formulas, messages and death/victory behavior are unchanged.
+See [adverse accounting and limits](SPECIALTY-ADVERSE-ACCOUNTING-20260915.md).
+
+All three specialties remain BLOCKED: **21 PASS / 0 limitation / 3 BLOCKED**.
+Dragon/prologue GET authority, dead-target progression, full multi-target terminal
+semantics and remaining companion/area interactions are not closed. Ordinary
+Forest mutation authority, general combat/rewards/defeat/recovery and the other
+Phase 3 core gates remain BLOCKED. No 24/24 milestone, merge, hosting or Phase 4.
+Exact-head CI acceptance is recorded in PR #1 after publication.

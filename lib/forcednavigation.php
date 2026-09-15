@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/../src/Security/ScalarState.php';
+require_once __DIR__ . '/../src/Game/SpecialtyBuffState.php';
 // translator ready
 // addnews ready
 // mail ready
@@ -20,7 +21,11 @@ function do_forced_nav($anonymous,$overrideforced){
             }
             $_SESSION['auth_privileges'] = (int)$session['user']['superuser'];
 			$session['bufflist']=\Resurrection\Security\ScalarState::read($session['user']['bufflist']);
-			if (!is_array($session['bufflist'])) $session['bufflist']=array();
+            try {
+                $session['bufflist']=\Resurrection\Game\SpecialtyBuffState::collection($session['bufflist']);
+            } catch (DomainException $error) {
+                http_response_code(409); exit('Invalid stored buff state. No game action was completed.');
+            }
 			$session['user']['dragonpoints']=\Resurrection\Security\ScalarState::read($session['user']['dragonpoints']);
 			$session['user']['prefs']=\Resurrection\Security\ScalarState::read($session['user']['prefs']);
 			if (!is_array($session['user']['dragonpoints'])) $session['user']['dragonpoints']=array();

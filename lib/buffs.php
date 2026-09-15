@@ -1,6 +1,7 @@
 <?php
 require_once __DIR__ . '/../src/Security/ScalarState.php';
 require_once __DIR__ . '/../src/Game/Expression.php';
+require_once __DIR__ . '/../src/Game/SpecialtyBuffState.php';
 require_once __DIR__ . '/../src/Compatibility/array_cursor.php';
 // addnews ready
 // translator ready
@@ -10,6 +11,7 @@ $buffreplacements = array();
 $debuggedbuffs = array();
 function calculate_buff_fields(){
 	global $session, $badguy, $buffreplacements, $debuggedbuffs;
+	\Resurrection\Game\SpecialtyBuffState::collection($session['bufflist']);
 	if (!$session['bufflist']) return;
 
 	//run temp stats
@@ -86,6 +88,7 @@ function apply_buff($name,$buff){
 		restore_buff_fields();
 	}
 	$buff = modulehook("modify-buff", array("name"=>$name, "buff"=>$buff));
+	\Resurrection\Game\SpecialtyBuffState::collection([$name=>$buff['buff']]);
 	$session['bufflist'][$name] = $buff['buff'];
 	calculate_buff_fields();
 }

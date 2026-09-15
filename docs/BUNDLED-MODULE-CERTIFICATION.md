@@ -265,3 +265,31 @@ New evidence includes actual modifiers, Lifetap hit/riposte healing, shield refl
 **21 PASS / 0 PASS WITH DOCUMENTED LIMITATION / 3 BLOCKED; 24 lifecycle PASS.** No promotion. General combat BLOCKED; Phase 3 incomplete; merge NO; hosting NO.
 
 Implementation CI: Modern core 34898989358 hit the 15-minute job deadline on both targets (cancelled, no assertion failure in completed tests); full HTTP acceptance was not reached. Both passed 80 PHPUnit tests / 2,350 assertions / 315 lint files, Composer and both PHPStan gates. Baseline integrity 34898989352 SUCCESS. Final publication raises the job limit to 25 minutes without dropping checks; new exact-head acceptance is required. Final publication acceptance uses new exact-head runs recorded in PR #1.
+
+
+## 2026-09-15: adverse specialty accounting and buff business schema
+
+Continuation from `37bc7d2af907d8ae3b512d51fc0d583e17d627a3`.
+`SpecialtyBuffState` validates the finite DA/MP/TS identifiers, exact producer
+messages/modifiers/schema, numeric creation fields, positive remaining duration,
+and actual engine flags. Authoritative hydration rejects malformed collections
+with HTTP 409 before route gameplay, preserving the stored blob for explicit
+repair. Buff application and field calculation validate specialty shapes too.
+Other named array buffs remain uncertified; this is not the general buff schema.
+`ScalarState::read()`, `SkeletonCompanionState` and `SpecialtyCombatState` are unchanged.
+No new serialization reader or writer: 89 sites / 44 files / 32 writers-checks /
+56 ScalarState reads / one centralized unserialize remains the inventory.
+
+New deterministic HTTP tests cover lethal riposte/retaliation, exact Forest
+defeat settlement, shield simultaneous-lethal victory and mushroom recovery,
+failed Lifetap, all persistent five-round specialty effects, terminal activation
+phase boundaries, and malformed-buff rejection before specialty/ordinary rounds.
+Historical costs, formulas, messages and death/victory behavior are unchanged.
+See [adverse accounting and limits](SPECIALTY-ADVERSE-ACCOUNTING-20260915.md).
+
+All three specialties remain BLOCKED: **21 PASS / 0 limitation / 3 BLOCKED**.
+Dragon/prologue GET authority, dead-target progression, full multi-target terminal
+semantics and remaining companion/area interactions are not closed. Ordinary
+Forest mutation authority, general combat/rewards/defeat/recovery and the other
+Phase 3 core gates remain BLOCKED. No 24/24 milestone, merge, hosting or Phase 4.
+Exact-head CI acceptance is recorded in PR #1 after publication.
