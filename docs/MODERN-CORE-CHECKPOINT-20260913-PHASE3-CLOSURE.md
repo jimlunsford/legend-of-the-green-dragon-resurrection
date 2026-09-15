@@ -973,3 +973,105 @@ Exact next Phase 3 step: finish adverse riposte/defeat effect accounting and rem
 Final diff review corrected an over-broad cleanup substitution in the older skeleton HTTP fixture: it again deletes/restores only its own enablecompanions setting. The four-setting cleanup remains confined to the new accounting fixture. Final exact-head validation includes this test-isolation correction.
 
 The initial Modern core run was retained as an infrastructure deadline failure: both jobs were cancelled after 15 minutes. PHP 8.4 reached and passed the non-exposing caller matrix; PHP 8.5 passed gameplay, aura and the independent level matrix before cancellation. No completed test reported an assertion failure. The final commit raises only timeout-minutes to 25, preserves every test and supported target, and includes the fixture-isolation correction and evidence. Full final acceptance is required separately.
+
+## 2026-09-15: adverse specialty accounting and narrow buff validation
+
+Actual starting SHA `37bc7d2af907d8ae3b512d51fc0d583e17d627a3` was verified
+against live GitHub before edits. Main was and remains
+`999cec6f9c655a840320d982d673bb863c68c2b2`. PR #1 is OPEN, DRAFT, NOT READY,
+NOT MERGED. Existing branch `modernization/core-modernization` only.
+
+Implementation ending SHA: `060b97560786c9cdf71551f857c66fe669a4ad00`.
+Implementation tree: `223890c272c5c1efc4c591903a4089f972d8c7cb`.
+One implementation commit plus this appended documentation checkpoint: two
+commits in this execution. The final publication SHA (the commit containing this
+checkpoint), new exact-head workflow IDs and final supported-target results are
+recorded in the PR #1 publication receipt, avoiding a self-referential commit hash.
+
+### What is proved locally
+
+- Exact lethal riposte/retaliation and defeat accounting for DA1/2/3, MP1/2/3/5,
+  TS1/2/3/5, including unchanged gems/turns, exact cost, gold loss, 10% XP loss,
+  HP/alive state, terminal target HP before clearing, replay and stale forms.
+- DA5 one-HP survival through five immune rounds; ordinary defeat after expiration.
+- Skeleton retained at 43/43 after player defeat and suspended on shades entry.
+- Shield exact 40 weapon +177 incoming +354 reflection, both-live, defeat,
+  target-zero/negative victory, and simultaneous lethal mushroom recovery to 1 HP.
+- Lifetap failed attacks cause no healing or extra damage; retained positive/cap
+  evidence still passes.
+- All eleven persistent buff variants decrement over their actual active phases;
+  final-round victory/defeat tests distinguish defense-only unconsumed duration.
+- SpecialtyBuffState validates source-owned identifiers/messages/modifiers,
+  numeric creation fields, duration and flags. Hydration rejects corrupt state
+  with 409 before gameplay and preserves it for explicit repair. Application and
+  calculation also validate. All persistent variants have HTTP malformed-state
+  matrices before specialty and ordinary Forest rounds.
+
+Detailed exact values and scope limits:
+[SPECIALTY-ADVERSE-ACCOUNTING-20260915.md](SPECIALTY-ADVERSE-ACCOUNTING-20260915.md).
+
+Local PHP 8.4.25/MariaDB 10.11.18: **83 PHPUnit tests / 2398 assertions**, zero
+failures/skips in the accepted run. Five new HTTP tests pass, alongside selected
+retained gameplay/healing and authentication checks. Focused runs: six HTTP tests
+in 35.497 seconds; three HTTP tests in 59.496 seconds (authentication overlaps).
+Legacy PHPStan level 0 retains its seven baseline findings with zero new errors;
+infrastructure level 6 passes with no baseline. Historical integrity passes.
+Final CI must still run the complete **46 Python/HTTP tests** and all other gates
+on both supported targets at the final publication SHA. Expected tracked lint
+count is **317**, up two for validator and unit test; temporary fixture modules
+are not release/source files.
+
+Implementation workflows: Modern core **34961019350**, Baseline integrity
+**34961019338**. They were launched at the implementation SHA, not final-head
+acceptance. The final documentation push supersedes any in-flight implementation
+run under existing concurrency rules. Final receipt uses newly issued workflow
+IDs, not the earlier accepted 34900560524/34900560494 regression floor.
+
+### Preserved useful findings and corrections
+
+The first adverse fixture incorrectly expected a dead player's shades read to
+leave the companion byte-identical. Source and HTTP evidence showed historical
+suspended=true addition; the test now proves that exact transition. Initial buff
+validation rejected PDO's legitimate string level stored as regeneration; only
+canonical numeric strings for that producer field are now admitted. No formulas
+or death behavior were changed to make tests pass. Temporary local runtime/setup
+failures are not represented as product failures or accepted test runs.
+
+### Certification and remaining authority
+
+Dark Arts BLOCKED. Mystical Powers BLOCKED. Thieving Skills BLOCKED.
+**21 PASS / 0 PASS WITH DOCUMENTED LIMITATION / 3 BLOCKED**, all 24 lifecycle
+checks retained. No 24/24 milestone. Onboarding and the already-certified Forest
+authority matrix were not redesigned.
+
+Dragon specialty/prologue/continuation/victory GET authority, stale/replay/rollback
+proofs and server-owned prologue reward state remain OPEN. Defeated-target
+progression, next-live-target authority, final multi-target settlement, combined
+area/companion outcomes and transition duration semantics remain BLOCKED.
+SpecialtyCombatState still rejects dead targets in its envelope; it was not
+weakened to declare progression complete. General combat schema/rewards/defeat/
+recovery, ordinary Forest POST authority and New Day dk/pdk are not closed.
+
+Meaningful GET/replay risks remain ordinary Forest, Dragon/prologue, dk/pdk,
+petitions, clans, equipment, stables, training and legacy editors. Mail send/reply/
+systemmail, petition administration, clans, bank/economy, weapons/armor,
+mounts/stables, training/masters, broader PvP, administrator/content editors,
+remaining serialized business schemas, expiration and account-deletion failure
+semantics remain major Phase 3 blockers. last_char_expire still advances too early.
+
+Serialization unchanged: **89 sites /44 files /32 writers-checks /56 ScalarState
+reads /one centralized unserialize**. Retain SkeletonCompanionState and
+SpecialtyCombatState; add SpecialtyBuffState. ScalarState itself unchanged.
+The validator does not certify unrelated buffs or Dragon action authority.
+
+Historical tag object `51cab4fbe58a234651a3177a56289b18bc152b4d`, source
+`bdc29df9bc344774b41e0ad7cae7f6ed2f7512e2`, tree
+`4013a0ccc5227e87cd7a22de00b7c322d7aa237c`, 417 files and 11 preservation commits
+verified unchanged locally and required in final CI. Historical repositories and
+VPS untouched. No deployment, public runtime, release/tag/ZIP/package, merge,
+new modernization branch, PR #2 or Phase 4.
+
+**Phase 3 INCOMPLETE. Modern-core merge NO. Public hosting NO.**
+Next: close Dragon's actual specialty/prologue/outcome mutation authority, then
+defeated-target progression and remaining companion/area/transition accounting;
+reassess each specialty independently before proceeding to general combat closure.
