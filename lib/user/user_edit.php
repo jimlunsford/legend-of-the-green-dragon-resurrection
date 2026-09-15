@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/../../src/Compatibility/array_cursor.php';
 $result = db_query("SELECT * FROM " . db_prefix("accounts") . " WHERE acctid='$userid'");
 $row = db_fetch_assoc($result);
 $petition=httpget("returnpetition");
@@ -19,7 +20,7 @@ if ($session['user']['superuser'] & SU_EDIT_DONATIONS) {
 addnav("Bans");
 addnav("Set up ban","user.php?op=setupban&userid={$row['acctid']}");
 if (httpget("subop")==""){
-	rawoutput("<form action='user.php?op=special&userid=$userid$returnpetition' method='POST'>");
+	rawoutput("<form action='user.php?op=special&userid=$userid$returnpetition' method='POST'>" . resurrection_csrf_field());
 	addnav("","user.php?op=special&userid=$userid$returnpetition");
 	$grant = translate_inline("Grant New Day");
 	rawoutput("<input type='submit' class='button' name='newday' value='$grant'>");
@@ -29,7 +30,7 @@ if (httpget("subop")==""){
 	rawoutput("<input type='submit' class='button' name='clearvalidation' value='$mark'>");
 	rawoutput("</form>");
 		//Show a user's usertable
-	rawoutput("<form action='user.php?op=save&userid=$userid$returnpetition' method='POST'>");
+	rawoutput("<form action='user.php?op=save&userid=$userid$returnpetition' method='POST'>" . resurrection_csrf_field());
 	addnav("","user.php?op=save&userid=$userid$returnpetition");
 	$save = translate_inline("Save");
 	rawoutput("<input type='submit' class='button' value='$save'>");
@@ -67,7 +68,7 @@ if (httpget("subop")==""){
 	if (count($info['prefs']) > 0) {
 		$data = array();
 		$msettings = array();
-		while (list($key,$val)=each($info['prefs'])){
+		while (list($key,$val)=resurrection_array_next($info['prefs'])){
 			// Handle vals which are arrays.
 			if (is_array($val)) {
 				$v = $val[0];
@@ -86,7 +87,7 @@ if (httpget("subop")==""){
 		while ($row = db_fetch_assoc($result)){
 			$data[$row['setting']] = $row['value'];
 		}
-		rawoutput("<form action='user.php?op=savemodule&module=$module&userid=$userid$returnpetition' method='POST'>");
+		rawoutput("<form action='user.php?op=savemodule&module=$module&userid=$userid$returnpetition' method='POST'>" . resurrection_csrf_field());
 		addnav("","user.php?op=savemodule&module=$module&userid=$userid$returnpetition");
 		tlschema("module-$module");
 		showform($msettings,$data);

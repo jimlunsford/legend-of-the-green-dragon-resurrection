@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/../src/Compatibility/array_cursor.php';
 // addnews ready
 // translator ready
 // mail ready
@@ -124,7 +125,7 @@ function forestvictory($enemies,$denyflawless=false){
 	}
 }
 
-function forestdefeat($enemies,$where="in the forest"){
+function forestdefeat($enemies,$where="in the forest",$finishpage=true){
 	global $session;
 	$percent=getsetting('forestexploss',10);
 	addnav("Daily news","news.php");
@@ -159,7 +160,7 @@ function forestdefeat($enemies,$where="in the forest"){
 	output("`4All gold on hand has been lost!`n");
 	output("`4%s %% of experience has been lost!`b`n",$percent);
 	output("You may begin fighting again tomorrow.");
-	page_footer();
+	if ($finishpage) page_footer();
 }
 
 function buffbadguy($badguy){
@@ -169,7 +170,7 @@ function buffbadguy($badguy){
 	if ($dk === false) {
 		//make badguys get harder as you advance in dragon kills.
 		$dk = 0;
-		while(list($key, $val)=each($session['user']['dragonpoints'])) {
+		while(list($key, $val)=resurrection_array_next($session['user']['dragonpoints'])) {
 			if ($val=="at" || $val=="de") $dk++;
 		}
 		$dk += (int)(($session['user']['maxhitpoints']-($session['user']['level']*10))/5);

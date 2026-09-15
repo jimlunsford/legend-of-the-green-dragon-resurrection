@@ -20,13 +20,35 @@ function dag_sortbountieslevel($x, $y) {
 }
 
 function dag_manage(){
+    global $session;
+    require_once 'modules/dag/security.php';
+    check_su_access(SU_EDIT_USERS);
+    try {
+        \Resurrection\Http\Input::choice($_GET,'type',['','1','2','3','search'],'');
+        \Resurrection\Http\Input::choice($_GET,'sort',['','1','2','3','4','5','6','7','8'],'');
+        \Resurrection\Http\Input::choice($_GET,'dir',['','1','2'],'');
+        \Resurrection\Http\Input::choice($_POST,'s',['','1','2','3','4','5','6','7','8'],'');
+        \Resurrection\Http\Input::choice($_POST,'d',['','1','2'],'');
+        foreach (['setter','getter','target'] as $field) {
+            $filter = \Resurrection\Http\Input::string($_POST,$field);
+            if (strlen($filter) > 100 || !mb_check_encoding($filter,'UTF-8')) throw new InvalidArgumentException();
+        }
+    } catch (InvalidArgumentException $error) { http_response_code(400); exit('Invalid bounty filter.'); }
+    if (httpget('op') === 'addbounty') resurrection_consume_action('dag-admin-place',(string)$session['user']['acctid']);
+    if (httpget('op') === 'cleanup') resurrection_consume_action('dag-admin-cleanup',(string)$session['user']['acctid']);
+    if (httpget('op') === 'closebounty') resurrection_require_post();
 	page_header("Dag's Bounty Lists");
 	require_once("lib/superusernav.php");
 	superusernav();
 
 	// Add some bounty expiration for closed bounties
-	$sql = "DELETE FROM " . db_prefix("bounty") . " WHERE status=1 AND windate <'".date("Y-m-d H:i:s",strtotime("-".(getsetting("expirecontent",180)/10)." days"))."'";
-	db_query($sql);
+    if (httpget('op') === 'cleanup') {
+        db_query('DELETE FROM ' . db_prefix('bounty') . ' WHERE status=1 AND windate<?',true,
+            [date('Y-m-d H:i:s',strtotime('-'.((int)getsetting('expirecontent',180)/10).' days'))]);
+    }
+    $cleanup = 'runmodule.php?module=dag&manage=true&op=cleanup';
+    addnav('',$cleanup);
+    rawoutput('<form method="POST" action="'.$cleanup.'">'.resurrection_action_fields('dag-admin-cleanup',(string)$session['user']['acctid']).'<button class="button">Clean up closed bounties</button></form>');
 
 	addnav("Actions");
 	addnav("A?View All Bounties","runmodule.php?module=dag&manage=true&op=viewbounties&type=1&sort=1&dir=1&admin=true");
@@ -37,11 +59,11 @@ function dag_manage(){
 	rawoutput("<form action='runmodule.php?module=dag&manage=true&op=viewbounties&type=search&admin=true' method='POST'>");
 	addnav("","runmodule.php?module=dag&manage=true&op=viewbounties&type=search&admin=true");
 	output("Setter: ");
-	rawoutput("<input name='setter' value=\"".htmlentities(stripslashes(httppost('setter')))."\">");
+	rawoutput("<input name='setter' value=\"".htmlspecialchars((string)httppost('setter'),ENT_QUOTES,'UTF-8')."\">");
 	output(" Winner: ");
-	rawoutput("<input name='getter' value=\"".htmlentities(stripslashes(httppost('getter')))."\">");
+	rawoutput("<input name='getter' value=\"".htmlspecialchars((string)httppost('getter'),ENT_QUOTES,'UTF-8')."\">");
 	output(" Target: ");
-	rawoutput("<input name='target' value=\"".htmlentities(stripslashes(httppost('target')))."\">");
+	rawoutput("<input name='target' value=\"".htmlspecialchars((string)httppost('target'),ENT_QUOTES,'UTF-8')."\">");
 	output_notl("`n");
 	output("Order by: ");
 	$id = translate_inline("ID");
@@ -94,18 +116,16 @@ function dag_manage(){
 		for($i=0;$i<db_num_rows($result);$i++){
 			$row = db_fetch_assoc($result);
 				$amount = (int)$row['amount'];
-				$sql = "SELECT name,alive,sex,level,laston,loggedin,lastip,uniqueid FROM " . db_prefix("accounts") . " WHERE acctid={$row['target']}";
-				$result2 = db_query($sql);
+				$result2 = db_query('SELECT name,alive,sex,level,laston,loggedin,lastip,uniqueid,location FROM ' . db_prefix('accounts') . ' WHERE acctid=?',true,[(int)$row['target']]);
 				if (db_num_rows($result2) == 0) {
 					/* this person has been deleted, clear bounties */
-					$sql = "UPDATE " . db_prefix("bounty") . " SET status=1 WHERE target={$row['target']}";
-					db_query($sql);
+
 					continue;
 				}
 				$row2 = db_fetch_assoc($result2);
 				$yesno = 0;
 				for($j=0;$j<=$i;$j++){
-					if($listing[$j]['Name'] == $row2['name']) {
+					if(isset($listing[$j]) && $listing[$j]['Name'] == $row2['name']) {
 						$listing[$j]['Amount'] = $listing[$j]['Amount'] + $amount;
 						$yesno = 1;
 					}
@@ -124,6 +144,7 @@ function dag_manage(){
 			rawoutput("</td><td>");
 			output_notl("`^%s`0", $listing[$i]['Name']);
 			rawoutput("</td><td>");
+			$loggedin = false;
 			output($loggedin ? "`#Online`0" : $listing[$i]['Location']);
 			rawoutput("</td><td>");
 			output($listing[$i]['Sex']?"`!Female`0":"`!Male`0");
@@ -138,6 +159,7 @@ function dag_manage(){
 		rawoutput("</table>");
 		output("`n`n`c`bAdd Bounty`b`c`n");
 		rawoutput("<form action='runmodule.php?module=dag&manage=true&op=addbounty&admin=true' method='POST'>");
+        rawoutput(resurrection_action_fields('dag-admin-place',(string)$session['user']['acctid']));
 		output("`2Target: ");
 		rawoutput("<input name='contractname'>");
 		output_notl("`n");
@@ -149,17 +171,14 @@ function dag_manage(){
 		rawoutput("</form>");
 		addnav("","runmodule.php?module=dag&manage=true&op=addbounty&admin=true");
 	}else if ($op == "addbounty") {
-		if (httpget('subfinal')==1){
-			$sql = "SELECT acctid,name,login,level,locked,age,dragonkills,pk,experience FROM " . db_prefix("accounts") . " WHERE name='".addslashes(rawurldecode(stripslashes(httppost('contractname'))))."' AND locked=0";
-		}else{
-			$contractname = stripslashes(rawurldecode(httppost('contractname')));
-			$name="%";
-			for ($x=0;$x<strlen($contractname);$x++){
-				$name.=substr($contractname,$x,1)."%";
-			}
-			$sql = "SELECT acctid,name,login,level,locked,age,dragonkills,pk,experience FROM " . db_prefix("accounts") . " WHERE name LIKE '".addslashes($name)."' AND locked=0";
-		}
-		$result = db_query($sql);
+        try {
+            $contractname = \Resurrection\Http\Input::string($_POST,'contractname');
+            $amount = \Resurrection\Http\Input::integer($_POST,'amount',0,1);
+            if ($amount < 1 || $amount > 2147483647 || strlen($contractname) > 100 || !mb_check_encoding($contractname,'UTF-8')) throw new InvalidArgumentException();
+        } catch (InvalidArgumentException $error) { http_response_code(400); exit('Invalid bounty input.'); }
+        $exact = httpget('subfinal') === '1';
+        $name = $exact ? $contractname : dag_name_pattern($contractname);
+        $result = db_query('SELECT acctid,name,locked FROM ' . db_prefix('accounts') . ($exact ? ' WHERE name=?' : " WHERE name LIKE ? ESCAPE '!'") . ' AND locked=0 LIMIT 101',true,[$name]);
 		if (db_num_rows($result) == 0) {
 			output("No one by that name!");
 		} elseif(db_num_rows($result) > 100) {
@@ -167,15 +186,16 @@ function dag_manage(){
 		} elseif(db_num_rows($result) > 1) {
 			output("Select the correct name:`n");
 			rawoutput("<form action='runmodule.php?module=dag&manage=true&op=addbounty&subfinal=1&admin=true' method='POST'>");
+        rawoutput(resurrection_action_fields('dag-admin-place',(string)$session['user']['acctid']));
 			output("`2Target: ");
 			rawoutput("<select name='contractname'>");
 			for ($i=0;$i<db_num_rows($result);$i++){
 				$row = db_fetch_assoc($result);
-				rawoutput("<option value=\"".rawurlencode($row['name'])."\">".full_sanitize($row['name'])."</option>");
+				rawoutput("<option value=\"".htmlspecialchars($row['name'],ENT_QUOTES,'UTF-8')."\">".full_sanitize($row['name'])."</option>");
 			}
 			rawoutput("</select>");
 			output_notl("`n`n");
-			$amount = httppost('amount');
+			// Amount is already typed.
 			output("`2Amount to Place: ");
 			rawoutput("<input name='amount' id='amount' width='5' value='$amount'>");
 			output_notl("`n`n");
@@ -189,20 +209,21 @@ function dag_manage(){
 			if ($row['locked']) {
 				output("Target is a locked user.");
 			}
-			$amt = (int)httppost('amount');
+			$amt = $amount;
 			if ($amt <= 0) {
 				output("That bounty value make no sense.");
 			} else {
 				// All good!
-				$sql = "INSERT INTO " . db_prefix("bounty") . " (amount, target, setter, setdate) VALUES ($amt, ".$row['acctid'].", 0, '".date("Y-m-d H:i:s")."')";
-				db_query($sql);
+				try { dag_place_bounty((int)$row['acctid'],$amt,true); }
+                catch (DomainException $error) { http_response_code(400); exit('Bounty cannot be placed.'); }
 				output("Bounty added!");
 			}
 		}
 	} else if ($op == "viewbounties") {
 		$type = httpget('type');
-		$sort = httpget('sort');
-		$dir = httpget('dir');
+        $sort = httpget('sort');
+        $dir = httpget('dir');
+        $t=''; $s=' ORDER BY bountyid'; $d=' DESC';
 		output("`c`bThe Bounty List`b`c`n");
 		if ($type == 1) {
 			output("`c`bViewing: `3All Bounties`b`c");
@@ -356,15 +377,11 @@ function dag_manage(){
 			if (httppost('setter')>'') {
 				if ($t>"") $t.=" AND";
 				$a = httppost('setter');
-				$setter = "%";
-				for ($i=0;$i<strlen($a);$i++){
-					$setter.=$a[$i]."%";
-				}
-				$sql = "SELECT acctid FROM " . db_prefix("accounts") . " WHERE name LIKE '$setter'";
-				$result = db_query($sql);
+				$setter = dag_name_pattern($a);
+				$result = db_query('SELECT acctid FROM ' . db_prefix('accounts') . " WHERE name LIKE ? ESCAPE '!'",true,[$setter]);
 				$ids = array();
 				while ($row = db_fetch_assoc($result)){
-					array_push($ids,$row['acctid']);
+					array_push($ids,(int)$row['acctid']);
 				}
 				if (count($ids)==0) $ids[0]=0;
 				$t .= " setter IN (".join(",",$ids).")";
@@ -372,15 +389,11 @@ function dag_manage(){
 			if (httppost('getter')>'') {
 				if ($t>"") $t.=" AND";
 				$a = httppost('getter');
-				$getter = "%";
-				for ($i=0;$i<strlen($a);$i++){
-					$getter.=$a[$i]."%";
-				}
-				$sql = "SELECT acctid FROM " . db_prefix("accounts") . " WHERE name LIKE '$getter'";
-				$result = db_query($sql);
+				$getter = dag_name_pattern($a);
+				$result = db_query('SELECT acctid FROM ' . db_prefix('accounts') . " WHERE name LIKE ? ESCAPE '!'",true,[$getter]);
 				$ids = array();
 				while ($row = db_fetch_assoc($result)){
-					array_push($ids,$row['acctid']);
+					array_push($ids,(int)$row['acctid']);
 				}
 				if (count($ids)==0) $ids[0]=0;
 				$t .= " winner IN (".join(",",$ids).")";
@@ -388,15 +401,11 @@ function dag_manage(){
 			if (httppost('target')>'') {
 				if ($t>"") $t.=" AND";
 				$a = httppost('target');
-				$target = "%";
-				for ($i=0;$i<strlen($a);$i++){
-					$target.=$a[$i]."%";
-				}
-				$sql = "SELECT acctid FROM " . db_prefix("accounts") . " WHERE name LIKE '$target'";
-				$result = db_query($sql);
+				$target = dag_name_pattern($a);
+				$result = db_query('SELECT acctid FROM ' . db_prefix('accounts') . " WHERE name LIKE ? ESCAPE '!'",true,[$target]);
 				$ids = array();
 				while ($row = db_fetch_assoc($result)){
-					array_push($ids,$row['acctid']);
+					array_push($ids,(int)$row['acctid']);
 				}
 				if (count($ids)==0) $ids[0]=0;
 				$t .= " target IN (".join(",",$ids).")";
@@ -422,8 +431,7 @@ function dag_manage(){
 			if ($row['target']==0) {
 				$target['name'] = translate_inline("`2Green Dragon");
 			} else {
-				$sql = "SELECT name FROM " . db_prefix("accounts") . " WHERE acctid=".(int)$row['target'];
-				$result2 = db_query($sql);
+				$result2 = db_query('SELECT name FROM ' . db_prefix('accounts') . ' WHERE acctid=?',true,[(int)$row['target']]);
 				if (db_num_rows($result2) == 0) {
 					$target['name'] = translate_inline("`4Deleted Character");
 				} else {
@@ -433,8 +441,7 @@ function dag_manage(){
 			if ($row['setter']==0) {
 				$setter['name'] = translate_inline("`2Green Dragon");
 			}else {
-				$sql = "SELECT name FROM " . db_prefix("accounts") . " WHERE acctid=".(int)$row['setter'];
-				$result3 = db_query($sql);
+				$result3 = db_query('SELECT name FROM ' . db_prefix('accounts') . ' WHERE acctid=?',true,[(int)$row['setter']]);
 				if (db_num_rows($result3) == 0) {
 					$setter['name'] = translate_inline("`4Deleted Character");
 				} else {
@@ -445,8 +452,7 @@ function dag_manage(){
 			if (($row['winner']==0) && $row['status'] == 1) {
 				$winner['name'] = translate_inline("`2Green Dragon");
 			} elseif ($row['status'] == 1) {
-				$sql = "SELECT name FROM " . db_prefix("accounts") . " WHERE acctid=".(int)$row['winner'];
-					$result4 = db_query($sql);
+				$result4 = db_query('SELECT name FROM ' . db_prefix('accounts') . ' WHERE acctid=?',true,[(int)$row['winner']]);
 				if (db_num_rows($result4) == 0) {
 					$winner['name'] = translate_inline("`2Deleted Character");
 				} else {
@@ -473,7 +479,7 @@ function dag_manage(){
 			if ($row['status'] == 0) {
 				$link = "runmodule.php?module=dag&manage=true&op=closebounty&id={$row['bountyid']}&admin=true";
 				$close = translate_inline("Close");
-				rawoutput("<a href=\"$link\">$close</a>");
+				rawoutput('<form method="POST" action="'.htmlspecialchars($link,ENT_QUOTES,'UTF-8').'">'.resurrection_action_fields('dag-admin-close-'.(int)$row['bountyid'],(string)$session['user']['acctid']).'<button class="button">'.htmlspecialchars($close,ENT_QUOTES,'UTF-8').'</button></form>');
 				addnav("",$link);
 			} else {
 				rawoutput("&nbsp;");
@@ -483,9 +489,14 @@ function dag_manage(){
 		rawoutput("</table>");
 	} else if ($op == "closebounty") {
 		$windate = date("Y-m-d H:i:s");
-		$bountyid = (int)httpget('id');
-		$sql = "UPDATE " . db_prefix("bounty") . " SET status=1,winner=0,windate=\"$windate\" WHERE bountyid=$bountyid";
-		db_query($sql);
+		try { $bountyid = \Resurrection\Http\Input::integer($_GET,'id',0,1); }
+        catch (InvalidArgumentException $error) { http_response_code(400); exit('Invalid bounty ID.'); }
+        if ($bountyid < 1 || $bountyid > 2147483647) { http_response_code(400); exit('Invalid bounty ID.'); }
+        resurrection_consume_action('dag-admin-close-'.$bountyid,(string)$session['user']['acctid']);
+        if (count(db_query('SELECT bountyid FROM '.db_prefix('bounty').' WHERE bountyid=?',true,[$bountyid])) !== 1) {
+            http_response_code(404); exit('Bounty not found.');
+        }
+        db_query('UPDATE ' . db_prefix('bounty') . ' SET status=1,winner=0,windate=? WHERE bountyid=? AND status=0',true,[$windate,$bountyid]);
 		output("Bounty closed.");
 	// ***END ADD***
 	}
@@ -493,28 +504,22 @@ function dag_manage(){
 }
 
 function dag_pvpwin($args){
-	global $badguy,$session;
+	global $session;
+    if (!is_array($args['badguy'] ?? null) || !isset($args['badguy']['acctid'])) throw new DomainException('Missing defeated PvP target.');
+    $badguy = $args['badguy'];
 	// ***ADDED***
 	// By Andrew Senger
 	// Added for Bounty Code
 	// Bounty Check - Andrew Senger
 	// Check for Bounty
-	$sql = "SELECT bountyid,amount,setter FROM " . db_prefix("bounty") . " WHERE status=0 AND setdate<='".date("Y-m-d H:i:s")."' AND target=".$badguy['acctid'];
-	$result = db_query($sql);
+    $totgoodamt = 0;
+    $totbadamt = 0;
+    $result = db_query('SELECT bountyid,amount,setter FROM ' . db_prefix('bounty') . ' WHERE status=0 AND setdate<=? AND target=?', true, [date('Y-m-d H:i:s'), (int)$badguy['acctid']]);
 	if (db_num_rows($result) > 0) {
 		$totgoodamt = 0;
 		$totbadamt = 0;
-		for($i=0;$i<db_num_rows($result);$i++){
-			$row = db_fetch_assoc($result);
-			if ($row['setter'] == $session['user']['acctid']) {
-				$totbadamt += $row['amount'];
-			} else {
-				$totgoodamt += $row['amount'];
-				$windate = date("Y-m-d H:i:s");
-				$sql = "UPDATE " . db_prefix("bounty") . " SET status=1,winner=".$session['user']['acctid'].",windate=\"$windate\" WHERE bountyid=".$row['bountyid'];
-				db_query($sql);
-			}
-		}
+        require_once 'modules/dag/security.php';
+        [$totgoodamt,$totbadamt] = dag_claim_bounties((int)$badguy['acctid']);
 		if ($totgoodamt > 0) {
 			output("`@When you turn around, Dag Durnick is standing there.");
 			output("\"%s`# had a bounty of `^%s`# on th' head`@\", he says as he tosses you a leather purse which clinks with the sounds of your new fortune.`n`n", $badguy['creaturename'], $totgoodamt);
@@ -526,7 +531,7 @@ function dag_pvpwin($args){
 	// End Check for Bounty
 	// Add Bounty Gold
 	if ($totgoodamt > 0) {
-		$session['user']['gold']+=$totgoodamt;
+        // Credit already committed atomically with bounty closure.
 		debuglog("gained ".$totgoodamt." gold bounty for killing ", $badguy['acctid']);
 	}
 	// End Add Bounty Gold

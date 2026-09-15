@@ -1,4 +1,6 @@
 <?php
+require_once __DIR__ . '/src/Security/ScalarState.php';
+require_once __DIR__ . '/src/Compatibility/array_cursor.php';
 // addnews ready
 // mail ready
 // translator ready
@@ -51,7 +53,7 @@ if ($op=="deactivate"){
 		$row['maxhitpoints'] = $row['maxhitpoints'] + $row['maxhitpointsperlevel'] * $session['user']['level'];
 		$row['hitpoints'] = $row['maxhitpoints'];
 		$row = modulehook("alter-companion", $row);
-		$row['abilities'] = @unserialize($row['abilities']);
+		$row['abilities'] = \Resurrection\Security\ScalarState::read($row['abilities']);
 		require_once("lib/buffs.php");
 		apply_companion($row['name'], $row);
 		output("`\$Succesfully taken `^%s`\$ as companion.", $row['name']);
@@ -88,7 +90,7 @@ if ($op=="deactivate"){
 			$keys = "";
 			$vals = "";
 			$i = 0;
-			while(list($key, $val) = each($companion)) {
+			while(list($key, $val) = resurrection_array_next($companion)) {
 				if (is_array($val)) $val = addslashes(serialize($val));
 				$sql .= (($i > 0) ? ", " : "") . "$key='$val'";
 				$keys .= (($i > 0) ? ", " : "") . "$key";
@@ -116,7 +118,7 @@ if ($op=="deactivate"){
 		$module = httpget("module");
 		$post = httpallpost();
 		reset($post);
-		while(list($key, $val) = each($post)) {
+		while(list($key, $val) = resurrection_array_next($post)) {
 			set_module_objpref("companions", $id, $key, $val, $module);
 		}
 		output("`^Saved!`0`n");
@@ -212,7 +214,7 @@ if ($op==""){
 		} else {
 			output("Companion Editor:`n");
 			$row = db_fetch_assoc($result);
-			$row['abilities'] = @unserialize($row['abilities']);
+			$row['abilities'] = \Resurrection\Security\ScalarState::read($row['abilities']);
 			companionform($row);
 		}
 	}

@@ -1,4 +1,11 @@
 <?php
+// This is a caller-owned combat include, never an independent HTTP action.
+if (basename($_SERVER['SCRIPT_NAME'] ?? '') === 'battle.php' ||
+    realpath($_SERVER['SCRIPT_FILENAME'] ?? '') === __FILE__) {
+    http_response_code(404);
+    exit('Not an application endpoint.');
+}
+require_once __DIR__ . '/src/Security/ScalarState.php';
 // translator ready
 // addnews ready
 // mail ready
@@ -18,7 +25,7 @@ global $companions,$companion,$newcompanions,$count,$defended,$needtostopfightin
 tlschema("battle");
 
 $newcompanions = array();
-$attackstack = @unserialize($session['user']['badguy']);
+$attackstack = \Resurrection\Security\ScalarState::read($session['user']['badguy']);
 if (isset($attackstack['enemies'])) $enemies = $attackstack['enemies'];
 if (isset($attackstack['options'])) $options = $attackstack['options'];
 
@@ -388,12 +395,12 @@ if ($op != "newtarget") {
 							if (!isset($badguy['creatureexp'])) $badguy['creatureexp'] = 0;
 							$session['user']['experience'] += round($badguy['creatureexp']/count($newenemies));
 							output("`#You receive `^%s`# experience!`n`0",round($badguy['creatureexp']/count($newenemies)));
-							$options['experience'][$index] = $badguy['creatureexp'];
+							$options['experience'][$index] = $badguy['creatureexp'] ?? 0;
 							$options['experiencegained'][$index] = round($badguy['creatureexp']/count($newenemies));
 							$badguy['expgained']=true;
 						}
 					} else {
-						$options['experience'][$index] = $badguy['creatureexp'];
+						$options['experience'][$index] = $badguy['creatureexp'] ?? 0;
 					}
 				}else{
 					$alive++;

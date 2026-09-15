@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/../../src/Security/ScalarState.php';
 $mail = db_prefix('mail');
 $accounts = db_prefix('accounts');
 $sql = "SELECT $mail.*, $accounts.name FROM $mail LEFT JOIN $accounts ON $accounts.acctid=$mail.msgfrom WHERE msgto=\"".$session['user']['acctid']."\" AND messageid=\"".$id."\"";
@@ -12,12 +13,12 @@ if (db_num_rows($result)>0){
 			$row['name']=$row['msgfrom'];
 		}
 		// No translation for subject if it's not an array
-		$row_subject = @unserialize($row['subject']);
+		$row_subject = \Resurrection\Security\ScalarState::read($row['subject']);
 		if ($row_subject !== false) {
 			$row['subject'] = call_user_func_array("sprintf_translate", $row_subject);
 		}
 		// No translation for body if it's not an array
-		$row_body = @unserialize($row['body']);
+		$row_body = \Resurrection\Security\ScalarState::read($row['body']);
 		if ($row_body !== false) {
 			$row['body'] = call_user_func_array("sprintf_translate", $row_body);
 		}
@@ -47,9 +48,13 @@ if (db_num_rows($result)>0){
 	} else {
 		rawoutput("<td>&nbsp;</td>");
 	}
-	rawoutput("<td><a href='mail.php?op=del&id={$row['messageid']}' class='motd'>$del</a></td>
-		</tr><tr>
-		<td><a href='mail.php?op=unread&id={$row['messageid']}' class='motd'>$unread</a></td>");
+    foreach (['del'=>$del, 'unread'=>$unread] as $action=>$label) {
+        rawoutput("<td><form action='mail.php?op=$action' method='post'>");
+        rawoutput(resurrection_csrf_field());
+        rawoutput("<input type='hidden' name='id' value='{$row['messageid']}'>");
+        rawoutput("<button type='submit'>" . htmlspecialchars($label, ENT_QUOTES, 'UTF-8') . '</button></form></td>');
+    }
+
 	// Don't allow reporting of system messages as abuse.
 	if ((int)$row['msgfrom']!=0) {
 		rawoutput("<td><a href=\"petition.php?problem=".rawurlencode($problem)."&abuse=yes\" class='motd'>$report</a></td>");

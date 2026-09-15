@@ -1,4 +1,6 @@
 <?php
+require_once __DIR__ . '/src/Security/ScalarState.php';
+require_once __DIR__ . '/src/Compatibility/array_cursor.php';
 // translator ready
 // addnews ready
 // mail ready
@@ -6,6 +8,20 @@ require_once("common.php");
 require_once("lib/http.php");
 require_once("lib/sanitize.php");
 require_once("lib/buffs.php");
+
+require_once('lib/race_onboarding.php');
+require_once('lib/specialty_onboarding.php');
+if (isset($_GET['setspecialty'])) { http_response_code(403); exit('Specialty selection requires a form.'); }
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && !isset($_POST['setrace']) && (isset($_POST['setspecialty']) || ($_POST['onboarding'] ?? null) === 'specialty')) {
+    $resline = httpget('resurrection') === 'true' ? '&resurrection=true' : '';
+    resurrection_specialty_onboarding();
+}
+if (isset($_GET['setrace'])) { http_response_code(403); exit('Race selection requires a form.'); }
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && (isset($_POST['setrace']) || isset($_POST['onboarding']) ||
+    !$session['user']['race'] || $session['user']['race'] === RACE_UNKNOWN)) {
+    $resline = httpget('resurrection') === 'true' ? '&resurrection=true' : '';
+    resurrection_race_onboarding();
+}
 
 tlschema("newday");
 //mass_module_prepare(array("newday-intercept", "newday"));
@@ -143,11 +159,13 @@ if ($dp < $dkills) {
 	}
 
 	//clear all standard buffs
-	$tempbuf = unserialize($session['user']['bufflist']);
+    restore_buff_fields(); // Carry raw effects, not already-applied temporary stat flags.
+	$tempbuf = $session['bufflist']; // Already hydrated and business-validated in common.php.
+    reset($tempbuf); // Buff calculation may have exhausted the hydrated array cursor.
 	$session['user']['bufflist']="";
 	strip_all_buffs();
 	tlschema("buffs");
-	while(list($key,$val)=@each($tempbuf)){
+	while(list($key,$val)=resurrection_array_next($tempbuf)){
 		if (array_key_exists('survivenewday', $val) &&
 				$val['survivenewday']==1){
 			//$session['bufflist'][$key]=$val;
@@ -169,13 +187,13 @@ if ($dp < $dkills) {
 
 	reset($session['user']['dragonpoints']);
 	$dkff=0;
-	while(list($key,$val)=each($session['user']['dragonpoints'])){
+	while(list($key,$val)=resurrection_array_next($session['user']['dragonpoints'])){
 		if ($val=="ff"){
 			$dkff++;
 		}
 	}
 	if ($session['user']['hashorse']){
-		$buff = unserialize($playermount['mountbuff']);
+		$buff = \Resurrection\Security\ScalarState::read($playermount['mountbuff']);
 		if (!isset($buff['schema']) || $buff['schema'] == "")
 			$buff['schema']="mounts";
 		apply_buff('mount',$buff);
@@ -288,32 +306,9 @@ if ($dp < $dkills) {
 	require_once("lib/extended-battle.php");
 	unsuspend_companions("allowinshades");
 
-	if (!getsetting("newdaycron",0)) {
-		//check last time we did this vs now to see if it was a different game day.
-		$lastnewdaysemaphore = convertgametime(strtotime(getsetting("newdaySemaphore","0000-00-00 00:00:00") . " +0000"));
-		$gametoday = gametime();
-		if (gmdate("Ymd",$gametoday)!=gmdate("Ymd",$lastnewdaysemaphore)){
-				// it appears to be a different game day, acquire semaphore and
-				// check again.
-            $sql = "LOCK TABLES " . db_prefix("settings") . " WRITE";
-            db_query($sql);
-            clearsettings();
-            $lastnewdaysemaphore = convertgametime(strtotime(getsetting("newdaySemaphore","0000-00-00 00:00:00") . " +0000"));
-                $gametoday = gametime();
-            if (gmdate("Ymd",$gametoday)!=gmdate("Ymd",$lastnewdaysemaphore)){
-                //we need to run the hook, update the setting, and unlock.
-                savesetting("newdaySemaphore",gmdate("Y-m-d H:i:s"));
-                $sql = "UNLOCK TABLES";
-                db_query($sql);
-				require("lib/newday/newday_runonce.php");
-			}else{
-	            //someone else beat us to it, unlock.
-                $sql = "UNLOCK TABLES";
-                db_query($sql);
-			}
-		}
+    // Global maintenance is exclusively owned by cron.php and its advisory lock.
+    // A legacy setting must never reopen maintenance from a player HTTP request.
 
-	}
 	$args = modulehook("newday",
 			array("resurrection"=>$resurrection, "turnstoday"=>$turnstoday));
 	$turnstoday = $args['turnstoday'];

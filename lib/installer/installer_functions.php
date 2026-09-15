@@ -1,11 +1,12 @@
 <?php
+require_once __DIR__ . '/../../src/Compatibility/array_cursor.php';
 function create_db($dbname){
 	output("`n`2Attempting to create your database...`n");
-	$sql = "CREATE DATABASE $dbname";
-	mysql_query($sql);
-	$error = mysql_error();
+	$sql = "CREATE DATABASE " . db_identifier($dbname) . " CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci";
+	db_query($sql);
+	$error = db_error();
 	if ($error == ""){
-		if (mysql_select_db($dbname)){
+		if (db_select_db($dbname)){
 			output("`@Success!`2  I was able to create the database and connect to it!`n");
 		}else{
 			output("`\$It seems I was not successful.`2  I didn't get any errors trying to create the database, but I was not able to connect to it.");
@@ -36,7 +37,7 @@ function descriptors($prefix=""){
 	require_once("lib/all_tables.php");
 	$array = get_all_tables();
 	$out = array();
-	while (list($key,$val)=each($array)){
+	while (list($key,$val)=resurrection_array_next($array)){
 		$out[$prefix.$key]=$val;
 	}
 	return $out;
@@ -45,7 +46,7 @@ function descriptors($prefix=""){
 //This function is borrowed from the php manual.
 function return_bytes($val) {
 	$val = trim($val);
-	$last = strtolower($val{strlen($val)-1});
+	$last = strtolower($val[strlen($val)-1]);
 	switch($last) {
 		// The 'G' modifier is available since PHP 5.1.0
 		case 'g':

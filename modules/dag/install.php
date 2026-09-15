@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/../../src/Compatibility/array_cursor.php';
 function dag_install_private(){
 	global $session;
 	module_addhook("inn-desc");
@@ -14,7 +15,7 @@ function dag_install_private(){
 	$result = db_query($sql);
 	$bountytableisthere=false;
 	while ($row = db_fetch_assoc($result)){
-		list($key,$val)=each($row);
+		list($key,$val)=resurrection_array_next($row);
 		if ($val==db_prefix("bounty")){
 			$bountytableisthere=true;
 			break;
@@ -29,15 +30,15 @@ function dag_install_private(){
 			amount int(11) unsigned NOT NULL default '0',
 			target int(11) unsigned NOT NULL default '0',
 			setter int(11) unsigned NOT NULL default '0',
-			setdate datetime NOT NULL default '0000-00-00 00:00:00',
+			setdate datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
 			status int(11) unsigned NOT NULL default '0',
 			winner int(11) unsigned NOT NULL default '0',
-			windate datetime NOT NULL default '0000-00-00 00:00:00',
+			windate datetime NULL DEFAULT NULL,
 			PRIMARY KEY (bountyid),
 			INDEX(status),
 			INDEX(target),
 			INDEX(status,target)
-		) Type=INNODB";
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci";
 		db_query($sql);
 	}
 	//look to see if we're migrating bounties from the old system.

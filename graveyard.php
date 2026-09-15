@@ -1,4 +1,11 @@
 <?php
+// Torment never offers specialties. Hiding navigation is not authorization.
+foreach (['skill','l'] as $field) {
+    if (array_key_exists($field, $_GET) || array_key_exists($field, $_POST)) {
+        http_response_code(400);
+        exit('Specialties are unavailable in graveyard combat.');
+    }
+}
 // addnews ready.
 // translator ready
 // mail ready

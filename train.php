@@ -1,4 +1,14 @@
 <?php
+// Masters never offer specialties. Reject forged legacy parameters before any
+// bootstrap or training mutation, including parameters sent in a POST body.
+foreach (['skill','l'] as $field) {
+    if (array_key_exists($field, $_GET) || array_key_exists($field, $_POST)) {
+        http_response_code(400);
+        exit('Specialties are unavailable in training.');
+    }
+}
+require_once __DIR__ . '/src/Security/ScalarState.php';
+require_once __DIR__ . '/src/Compatibility/array_cursor.php';
 //addnews ready
 // mail ready
 // translator ready
@@ -82,7 +92,7 @@ if (db_num_rows($result) > 0 && $session['user']['level'] <= 14){
 			if ($session['user']['experience']>=$exprequired){
 				$dk = 0;
 				restore_buff_fields();
-				while(list($key, $val)=each($session['user']['dragonpoints'])) {
+				while(list($key, $val)=resurrection_array_next($session['user']['dragonpoints'])) {
 					if ($val=="at" || $val=="de") $dk++;
 				}
 				$dk += (int)(($session['user']['maxhitpoints'] -
@@ -111,7 +121,7 @@ if (db_num_rows($result) > 0 && $session['user']['level'] <= 14){
 
 				$battle=true;
 				if ($victory) {
-					$badguy = unserialize($session['user']['badguy']);
+					$badguy = \Resurrection\Security\ScalarState::read($session['user']['badguy']);
 					$badguy = $badguy['enemies'][0];
 					output("With a flurry of blows you dispatch your master.`n");
 				}

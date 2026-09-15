@@ -1,5 +1,6 @@
 <?php
-$config = unserialize($session['user']['donationconfig']);
+require_once __DIR__ . '/../../src/Security/ScalarState.php';
+$config = \Resurrection\Security\ScalarState::read($session['user']['donationconfig']);
 $expense = round(($session['user']['level']*(10+log($session['user']['level']))),0);
 $pay = httpget('pay');
 if ($pay){

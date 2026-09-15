@@ -1,4 +1,6 @@
 <?php
+require_once __DIR__ . '/../src/Security/ScalarState.php';
+require_once __DIR__ . '/../src/Compatibility/array_cursor.php';
 /**
  * Library Functions for page output.
  *		translator ready
@@ -317,7 +319,7 @@ function blocknav($link,$partial=false){
 	}
 	if ($partial){
 		reset($blockednavs['unblockpartial']);
-		while (list($key,$val)=each($blockednavs['unblockpartial'])){
+		while (list($key,$val)=resurrection_array_next($blockednavs['unblockpartial'])){
 			if (substr($link,0,strlen($val))==$val ||
 					substr($val,0,strlen($link))==$link){
 				unset($blockednavs['unblockpartial'][$val]);
@@ -346,7 +348,7 @@ function unblocknav($link,$partial=false){
 	}
 	if ($partial){
 		reset($blockednavs['blockpartial']);
-		while (list($key,$val)=each($blockednavs['blockpartial'])){
+		while (list($key,$val)=resurrection_array_next($blockednavs['blockpartial'])){
 			if (substr($link,0,strlen($val))==$val ||
 					substr($val,0,strlen($link))==$link){
 				unset($blockednavs['blockpartial'][$val]);
@@ -525,13 +527,13 @@ function is_blocked($link)
 	global $blockednavs;
 	if (isset($blockednavs['blockfull'][$link])) return true;
 	reset($blockednavs['blockpartial']);
-	while (list($l,$dummy)=each($blockednavs['blockpartial'])){
+	while (list($l,$dummy)=resurrection_array_next($blockednavs['blockpartial'])){
 		$shouldblock = false;
 		if (substr($link,0,strlen($l))==$l) {
 			if (isset($blockednavs['unblockfull'][$link]) &&
 					$blockednavs['unblockfull'][$link]) return false;
 			reset($blockednavs['unblockpartial']);
-			while (list($l2,$dummy)= each($blockednavs['unblockpartial'])){
+			while (list($l2,$dummy)= resurrection_array_next($blockednavs['unblockpartial'])){
 				if (substr($link,0,strlen($l2))==$l2){
 					return false;
 				}
@@ -560,7 +562,7 @@ function count_viable_navs($section)
 	$val = $navbysection[$section];
 	reset($val);
 	if (count($val) > 0) {
-		while(list($k, $nav) = each($val)) {
+		while(list($k, $nav) = resurrection_array_next($val)) {
 			if (is_array($nav) && count($nav) > 0) {
 				$link = $nav[1]; // [0] is the text, [1] is the link
 				if (!is_blocked($link)) $count++;
@@ -586,10 +588,10 @@ function checknavs() {
 
 	// If we have any links which are going to be stuck in, return true
 	reset($navbysection);
-	while(list($key, $val) = each($navbysection)) {
+	while(list($key, $val) = resurrection_array_next($navbysection)) {
 		if (count_viable_navs($key) > 0) {
 			reset($val);
-			while(list($k, $v) = each($val)) {
+			while(list($k, $v) = resurrection_array_next($val)) {
 				if (is_array($v) && count($v) > 0) return true;
 			}
 		}
@@ -608,14 +610,14 @@ function buildnavs(){
 	global $navbysection, $navschema, $session, $navnocollapse;
 	reset($navbysection);
 	$builtnavs="";
-	while (list($key,$val)=each($navbysection)){
+	while (list($key,$val)=resurrection_array_next($navbysection)){
 		$tkey = $key;
 		$navbanner="";
 		if (count_viable_navs($key)>0){
 			if ($key>"") {
 				if ($session['loggedin']) tlschema($navschema[$key]);
 				if (substr($key,0,7)=="!array!"){
-					$key = unserialize(substr($key,7));
+					$key = \Resurrection\Security\ScalarState::read(substr($key,7));
 				}
 				$navbanner = private_addnav($key);
 				if ($session['loggedin']) tlschema();
@@ -627,8 +629,9 @@ function buildnavs(){
 
 			if ($tkey > "" && (!array_key_exists($tkey,$navnocollapse) || !$navnocollapse[$tkey])) {
 				// Generate the collapsable section header
-				$args = array("name"=>"nh-{$key}",
-						"title"=>($key ? $key : "Unnamed Navs"));
+                // A translated heading is an argument array, not an HTML/string identifier.
+                $args = array("name"=>is_array($key) ? "nh-".hash('sha256',$tkey) : "nh-{$key}",
+                        "title"=>is_array($key) ? sprintf_translate($key) : ($key ? $key : "Unnamed Navs"));
 				$args = modulehook("collapse-nav{", $args);
 				if (isset($args['content']))
 					$collapseheader = $args['content'];
@@ -641,9 +644,11 @@ function buildnavs(){
 
 			reset($val);
 			$sublinks = "";
-			while (list($k,$v)=each($val)){
+			while (list($k,$v)=resurrection_array_next($val)){
 				if (is_array($v) && count($v)>0){
-					$sublinks .=   call_user_func_array("private_addnav",$v);
+					// Navigation metadata is not a PHP named argument.
+                    unset($v['translate']);
+                    $sublinks .= call_user_func_array('private_addnav', array_values($v));
 				}//end if
 			}//end while
 
@@ -870,7 +875,7 @@ function navcount(){
 	global $session,$navbysection;
 	$c=count($session['allowednavs']);
 	reset($navbysection);
-	while (list($key,$val)=each($navbysection)){
+	while (list($key,$val)=resurrection_array_next($navbysection)){
 		if (is_array($val)) $c+=count($val);
 	}
 	reset($navbysection);

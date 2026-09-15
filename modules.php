@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/src/Compatibility/array_cursor.php';
 // addnews ready
 // translator ready
 // mail ready
@@ -16,8 +17,18 @@ superusernav();
 addnav("Module Categories");
 
 addnav("",$REQUEST_URI);
-$op = httpget('op');
-$module = httpget('module');
+try {
+    $op = \Resurrection\Http\Input::choice($_GET, 'op', ['', 'mass', 'install', 'uninstall', 'activate', 'deactivate', 'reinstall'], '');
+    $module = \Resurrection\Http\Input::string($_GET, 'module');
+} catch (InvalidArgumentException $error) { http_response_code(400); exit('Invalid module request.'); }
+if ($op !== '') {
+    if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
+        $action = htmlspecialchars($_SERVER['REQUEST_URI'], ENT_QUOTES, 'UTF-8');
+        rawoutput('<form action="' . $action . '" method="POST">' . resurrection_csrf_field() . '<input type="submit" class="button" value="Confirm module operation"></form>');
+        page_footer();
+    }
+    resurrection_require_post();
+}
 
 if ($op == 'mass'){
 	if (httppost("activate")) $op = "activate";
@@ -34,8 +45,11 @@ if (is_array($module)){
 	if ($module) $modules = array($module);
 	else $modules = array();
 }
+foreach ($modules as $candidate) {
+    if (!is_string($candidate) || !preg_match('/\A[A-Za-z][A-Za-z0-9_]*\z/', $candidate)) { http_response_code(400); exit('Invalid module name.'); }
+}
 reset($modules);
-while (list($key,$module)=each($modules)){
+while (list($key,$module)=resurrection_array_next($modules)){
 	$op = $theOp;
 	output("`2Performing `^%s`2 on `%%s`0`n", translate_inline($op), $module);
 	if($op=="install"){
@@ -64,10 +78,7 @@ while (list($key,$module)=each($modules)){
 		httpset('op', "");
 		invalidatedatacache("inject-$module");
 	}elseif($op=="reinstall"){
-		$sql = "UPDATE " . db_prefix("modules") . " SET filemoddate='0000-00-00 00:00:00' WHERE modulename='$module'";
-		db_query($sql);
-		// We don't care about the return value here at all.
-		injectmodule($module, true);
+		install_module($module, true);
 		$op="";
 		httpset('op', "");
 		invalidatedatacache("inject-$module");
@@ -86,11 +97,13 @@ foreach ($seencats as $cat=>$count) {
 	addnav(array(" ?%s - (%s modules)", $cat, $count), "modules.php?cat=$cat");
 }
 
-$cat = httpget('cat');
+$cat = \Resurrection\Http\Input::string($_GET, 'cat');
+if ($cat !== '' && !isset($seencats[$cat])) { $cat = ''; }
+$catHtml = htmlspecialchars($cat, ENT_QUOTES, 'UTF-8');
 
 if ($op==""){
 	if ($cat) {
-		$sortby=httpget('sortby');
+		$sortby=\Resurrection\Http\Input::choice($_GET, 'sortby', ['active', 'formalname', 'moduleauthor', 'installdate'], 'installdate');
 		if (!$sortby) $sortby="installdate";
 		$order=httpget('order');
 		$tcat = translate_inline($cat);
@@ -110,7 +123,7 @@ if ($op==""){
 		$installstr = translate_inline("by %s");
 		$active = translate_inline("`@Active`0");
 		$inactive = translate_inline("`\$Inactive`0");
-		rawoutput("<form action='modules.php?op=mass&cat=$cat' method='POST'>");
+		rawoutput("<form action='modules.php?op=mass&cat=$catHtml' method='POST'>" . resurrection_csrf_field());
 		addnav("","modules.php?op=mass&cat=$cat");
 		rawoutput("<table border='0' cellpadding='2' cellspacing='1' bgcolor='#999999'>",true);
 		rawoutput("<tr class='trhead'><td>&nbsp;</td><td>$ops</td><td><a href='modules.php?cat=$cat&sortby=active&order=".($sortby=="active"?!$order:1)."'>$status</a></td><td><a href='modules.php?cat=$cat&sortby=formalname&order=".($sortby=="formalname"?!$order:1)."'>$mname</a></td><td><a href='modules.php?cat=$cat&sortby=moduleauthor&order=".($sortby=="moduleauthor"?!$order:1)."'>$mauth</a></td><td><a href='modules.php?cat=$cat&sortby=installdate&order=".($sortby=="installdate"?!$order:0)."'>$inon</a></td></tr>");
@@ -118,8 +131,8 @@ if ($op==""){
 		addnav("","modules.php?cat=$cat&sortby=formalname&order=".($sortby=="formalname"?!$order:1));
 		addnav("","modules.php?cat=$cat&sortby=moduleauthor&order=".($sortby=="moduleauthor"?!$order:1));
 		addnav("","modules.php?cat=$cat&sortby=installdate&order=".($sortby=="installdate"?$order:0));
-		$sql = "SELECT * FROM " . db_prefix("modules") . " WHERE category='$cat' ORDER BY ".$sortby." ".($order?"ASC":"DESC");
-		$result = db_query($sql);
+		$sql = "SELECT * FROM " . db_prefix("modules") . " WHERE category=? ORDER BY ".db_identifier($sortby)." ".($order?"ASC":"DESC");
+		$result = db_query($sql, true, [$cat]);
 		if (db_num_rows($result)==0){
 			rawoutput("<tr class='trlight'><td colspan='6' align='center'>");
 			output("`i-- No Modules Installed--`i");
@@ -192,7 +205,7 @@ if ($op==""){
 		rawoutput("<input type='submit' name='uninstall' class='button' value='$uninstall'>");
 		rawoutput("</form>");
 	} else {
-		$sorting=httpget('sorting');
+		$sorting=\Resurrection\Http\Input::choice($_GET, 'sorting', ['name', 'author', 'category', 'shortname'], 'shortname');
 		if (!$sorting) $sorting="shortname";
 		$order=httpget('order');
 		output("`bUninstalled Modules`b`n");
@@ -202,7 +215,7 @@ if ($op==""){
 		$mauth = translate_inline("Module Author");
 		$categ = translate_inline("Category");
 		$fname = translate_inline("Filename");
-		rawoutput("<form action='modules.php?op=mass&cat=$cat' method='POST'>");
+		rawoutput("<form action='modules.php?op=mass&cat=$catHtml' method='POST'>" . resurrection_csrf_field());
 		addnav("","modules.php?op=mass&cat=$cat");
 		rawoutput("<table border='0' cellpadding='2' cellspacing='1' bgcolor='#999999'>",true);
 		rawoutput("<tr class='trhead'><td>&nbsp;</td><td>$ops</td><td><a href='modules.php?sorting=name&order=".($sorting=="name"?!$order:0)."'>$mname</a></td><td><a href='modules.php?sorting=author&order=".($sorting=="author"?!$order:0)."'>$mauth</a></td><td><a href='modules.php?sorting=category&order=".($sorting=="category"?!$order:0)."'>$categ</a></td><td><a href='modules.php?sorting=shortname&order=".($sorting=="shortname"?!$order:0)."'>$fname</a></td></tr>");
@@ -280,7 +293,7 @@ if ($op==""){
 					rawoutput("<td colspan='6'>");
 					output("`bRequires:`b`n");
 					reset($moduleinfo[$i]['requires']);
-					while (list($key,$val)=each($moduleinfo[$i]['requires'])){
+					while (list($key,$val)=resurrection_array_next($moduleinfo[$i]['requires'])){
 						$info = explode("|",$val);
 						if (module_check_requirements(array($key=>$val))){
 							output_notl("`@");

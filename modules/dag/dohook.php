@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/../../src/Compatibility/array_cursor.php';
 function dag_dohook_private($hookname,$args){
 	require_once("modules/dag/misc_functions.php");
 	global $session;
@@ -9,8 +10,7 @@ function dag_dohook_private($hookname,$args){
 	case "dragonkill":
 		// handle bounties -- they go away on defeat of green dragon
 		$windate = date("Y-m-d H:i:s");
-		$sql = "UPDATE " . db_prefix("bounty") . " SET status=1,winner=0,windate='$windate' WHERE target={$session['user']['acctid']} AND status=0";
-		db_query($sql);
+		db_query('UPDATE ' . db_prefix('bounty') . ' SET status=1,winner=0,windate=? WHERE target=? AND status=0',true,[$windate,(int)$session['user']['acctid']]);
 		break;
 	case "inn-desc":
 		if (getsetting("pvp",1)) {
@@ -26,8 +26,7 @@ function dag_dohook_private($hookname,$args){
 	case "delete_character":
 		// handle bounties -- they go away on character deletion
 		$windate = date("Y-m-d H:i:s");
-		$sql = "UPDATE " . db_prefix("bounty") . " SET status=1,winner=0,windate='$windate' WHERE target={$args['acctid']} AND status=0";
-		db_query($sql);
+		db_query('UPDATE ' . db_prefix('bounty') . ' SET status=1,winner=0,windate=? WHERE target=? AND status=0',true,[$windate,(int)$args['acctid']]);
 		break;
 	case "superuser":
 		if ($session['user']['superuser'] & SU_EDIT_USERS) {
@@ -44,7 +43,7 @@ function dag_dohook_private($hookname,$args){
 		$info = dag_getmoduleinfo();
 		$parts = array();
 		$values = array();
-		while(list($key,$val)= each($info['settings'])) {
+		while(list($key,$val)= resurrection_array_next($info['settings'])) {
 			if (is_array($val)) {
 				$x = explode("|", $val[0]);
 			} else {

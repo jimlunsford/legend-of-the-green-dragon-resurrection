@@ -1,6 +1,6 @@
 # Legend of the Green Dragon - Resurrection
 
-**Foundation / historical characterization phase. No Resurrection version or release has been assigned.**
+**Modern core engineering in progress. No Resurrection version or release has been assigned.**
 
 **The historical source contains known high-severity security defects and unsupported runtime assumptions. Do not deploy the historical baseline to the public Internet.**
 
@@ -25,11 +25,11 @@ The goal is to preserve recognizable gameplay, atmosphere, progression and modul
 - [Module archive](https://github.com/jimlunsford/lotgd-modules), commit `ef92e2df4e27ff29eb596b2b27ce3c9ab2c15187`.
 - Annotated baseline marker: `historical-source-1.1.2`, not a Resurrection release.
 
-The original 11 preservation commits and 417 core files are retained. Historical TXT documentation remains intact. The separate 187-entrypoint module archive is reference material, not an automatically supported module set. See [PROVENANCE.md](PROVENANCE.md).
+The original 11 preservation commits and exact 417-file core tree remain reachable under the immutable historical tag. Historical TXT documentation remains intact. The separate 187-entrypoint module archive is reference material, not an automatically supported module set. See [PROVENANCE.md](PROVENANCE.md).
 
 ## Development model
 
-Historical behavior → characterize → modernize → compare → secure → verify.
+Modernize and test the core boundaries first. Compare specific gameplay behavior against the preserved baseline when needed.
 
 Characterize desired gameplay, not security bugs. Known defects remain open until corrected and tested. No public historical runtime belongs on a developer's production server. The disposable lab must not expose a host port and must constrain outbound networking.
 
@@ -39,10 +39,12 @@ Start with:
 python3 scripts/verify-historical-baseline.py
 python3 scripts/validate-project.py
 python3 -m unittest discover -s tests/tooling -v
-python3 lab/historical-1.1.2/lab.py preflight
+composer install
+composer check
+vendor/bin/phpstan analyse -c phpstan-new.neon
 ```
 
-The integrity commands do not execute the legacy application. Lab implementation and evidence status are documented separately; a passing static check is not a successful historical install.
+The integrity commands do not execute the application. The modern CI matrix also performs a real strict fresh installation, installs all 24 bundled modules inactive, and verifies account creation, authentication, session rotation, village rendering, commentary moderation and logout. See the phase-2 checkpoint for exact evidence and remaining security/module gates. PHP 5 lab work is deferred; public hosting remains unapproved.
 
 ## Project documents
 
@@ -55,7 +57,11 @@ The integrity commands do not execute the legacy application. Lab implementation
 - [Characterization plan](docs/CHARACTERIZATION-PLAN.md)
 - [Historical lab](lab/historical-1.1.2/README.md)
 - [Descendant research](docs/DESCENDANT-RESEARCH.md)
-- [Foundation checkpoint](docs/FOUNDATION-CHECKPOINT-20260913.md)
+- [Foundation checkpoint, historical record](docs/FOUNDATION-CHECKPOINT-20260913.md)
+- [Modern core phase-1 checkpoint](docs/MODERN-CORE-CHECKPOINT-20260913.md)
+- [Modern core phase-2 checkpoint](docs/MODERN-CORE-CHECKPOINT-20260913-PHASE2.md)
+- [Modern local installation](docs/MODERN-INSTALLATION.md)
+- [Raw request contract](docs/REQUEST-SEMANTICS.md)
 
 ## Licensing
 
@@ -66,3 +72,7 @@ Resurrection is a **noncommercial project**. The inherited [LICENSE.txt](LICENSE
 Original game design and code: **Eric Stevens and JT Traub**. Continued development: the **DragonPrime Development Team** and individually credited contributors/module authors.
 
 **Jim Lunsford** preserved these files on GitHub in 2019 and is the Resurrection project's preservation/modernization maintainer. He is not an original LoGD author. The 2019 uploads are preservation history, not the original software's development dates.
+
+## Modern core work
+
+Modernization is in progress on `modernization/core-modernization`. The engineering/driver tests do not establish an installable or publicly hostable game. See [platform targets](docs/SUPPORTED-PLATFORMS.md) and [validation scope](docs/ENGINEERING-VALIDATION.md). PHP 5 characterization is deferred during this phase.

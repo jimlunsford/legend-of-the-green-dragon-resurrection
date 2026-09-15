@@ -23,26 +23,14 @@ function darkhorse_getmoduleinfo(){
 }
 
 function darkhorse_tavernmount() {
-	global $playermount;
-	if (isset($playermount) && is_array($playermount) && array_key_exists("mountid",$playermount)){
-		$id = $playermount['mountid'];
-	}else{
-		$id = 0;
-	}
-	// We need the module parameter here because this function can be
-	// called from the eventchance eval and this module might not be loaded
-	// at that point.
-	$tavern = get_module_objpref("mounts", $id, "findtavern", "darkhorse");
-	return $tavern;
+    require_once 'lib/darkhorse_entry.php';
+    try { resurrection_darkhorse_mount_context(); return true; }
+    catch (DomainException $error) { return false; }
 }
 
 function darkhorse_install(){
-	module_addeventhook("forest",
-			"require_once(\"modules/darkhorse.php\");
-			return (darkhorse_tavernmount() ? 0 : 100);");
-	module_addeventhook("travel",
-			"require_once(\"modules/darkhorse.php\");
-			return (darkhorse_tavernmount() ? 0 : 100);");
+    module_addeventhook('forest', 'bundled:darkhorse-without-tavern-mount');
+    module_addeventhook('travel', 'bundled:darkhorse-without-tavern-mount');
 	$sql = "DESCRIBE " . db_prefix("mounts");
 	$result = db_query($sql);
 	while($row = db_fetch_assoc($result)) {
@@ -90,6 +78,7 @@ function darkhorse_dohook($hookname,$args){
 }
 
 function darkhorse_checkday(){
+    global $session;
 	// Reset special-in just in case checkday kicks in.
 	$session['user']['specialinc']="";
 	checkday();
@@ -99,7 +88,11 @@ function darkhorse_checkday(){
 
 function darkhorse_bartender($from){
 	global $session;
-	$what = httpget('what');
+    // Internal event-dispatch marker is not a player form field.
+    unset($_POST['i_am_a_hack']);
+	require_once 'lib/darkhorse_game.php';
+	try { $what = \Resurrection\Http\Input::choice($_GET, 'what', ['', 'colors', 'enemies'], ''); }
+    catch (InvalidArgumentException $error) { http_response_code(400); exit('Invalid request.'); }
 	if ($what==""){
 		output("The grizzled old man behind the bar reminds you very much of a strip of beef jerky.`n`n");
 		$dname = translate_inline($session['user']['sex']?"lasshie":"shon");
@@ -113,7 +106,9 @@ function darkhorse_bartender($from){
 		output("You are about to answer when you realize the question was rhetorical.`n`n");
 		output("He continues, \"`%To do colorsh, here'sh what you need to do.  Firsht, you ushe a &#0096; mark (found right above the tab key) followed by 1, 2, 3, 4, 5, 6, 7, !, @, #, $, %, ^, &, ), q or Q.  Each of thoshe correshpondsh with a color to look like this: `n`1&#0096;1 `2&#0096;2 `3&#0096;3 `4&#0096;4 `5&#0096;5 `6&#0096;6 `7&#0096;7 `n`!&#0096;! `@&#0096;@ `#&#0096;# `\$&#0096;\$ `%&#0096;% `^&#0096;^ `&&#0096;& `n `)&#0096;) `q&#0096;q `Q&#0096;Q `n`% got it?`0\"`n  You can practice below:", true);
 		rawoutput("<form action=\"".$from."op=bartender&what=colors\" method='POST'>");
-		$testtext = httppost('testtext');
+		try { $testtext = \Resurrection\Http\Input::string($_POST, 'testtext'); }
+        catch (InvalidArgumentException $error) { http_response_code(400); exit('Invalid text.'); }
+        if (strlen($testtext)>4096) { http_response_code(400); exit('Text too long.'); }
 		$try = translate_inline("Try");
 		rawoutput("<input name='testtext' id='testtext'><input type='submit' class='button' value='$try'></form>");
 		addnav("",$from."op=bartender&what=colors");
@@ -124,7 +119,9 @@ function darkhorse_bartender($from){
 		}
 		output("`0`n`nThese colors can be used in your name, and in any conversations you have.");
 	}else if($what=="enemies"){
-		$who = httpget('who');
+		try { $who = \Resurrection\Http\Input::string($_GET, 'who'); }
+        catch (InvalidArgumentException $error) { http_response_code(400); exit('Invalid name.'); }
+        if (strlen($who)>25) { http_response_code(400); exit('Invalid name.'); }
 		if ($who==""){
 			output("\"`7Sho, you want to learn about your enemiesh, do you?  Who do you want to know about?  Well?  Shpeak up!  It only costs `^100`7 gold per person for information.`0\"");
 			$subop = httpget('subop');
@@ -136,12 +133,14 @@ function darkhorse_bartender($from){
 			}else{
 				addnav("Search Again",$from."op=bartender&what=enemies");
 				$search = "%";
-				$name = httppost('name');
+				try { $name = \Resurrection\Http\Input::string($_POST, 'name'); }
+                catch (InvalidArgumentException $error) { http_response_code(400); exit('Invalid search.'); }
+                if (mb_strlen($name, 'UTF-8')>50) { http_response_code(400); exit('Invalid search.'); }
 				for ($i=0;$i<strlen($name);$i++){
 					$search.=substr($name,$i,1)."%";
 				}
-				$sql = "SELECT name,alive,location,sex,level,laston,loggedin,login FROM " . db_prefix("accounts") . " WHERE (locked=0 AND name LIKE '$search') ORDER BY level DESC";
-				$result = db_query($sql);
+				$sql = "SELECT name,alive,location,sex,level,laston,loggedin,login FROM " . db_prefix("accounts") . " WHERE (locked=0 AND name LIKE ?) ORDER BY level DESC LIMIT 101";
+				$result = db_query($sql, true, [$search]);
 				$max = db_num_rows($result);
 				if ($max > 100) {
 					output("`n`n\"`7Hey, whatsh you think yoush doin'.  That'sh too many namesh to shay.  I'll jusht tell you 'bout shome of them.`0`n");
@@ -160,9 +159,23 @@ function darkhorse_bartender($from){
 				rawoutput("</table>");
 			}
 		}else{
+            $url=$from.'op=bartender&what=enemies&who='.rawurlencode($who);
+            $context='information:'.$who;
+            if ($_SERVER['REQUEST_METHOD']!=='POST') {
+                addnav('', $url);
+                rawoutput('<form method="POST" action="'.htmlspecialchars($url,ENT_QUOTES,'UTF-8').'">');
+                rawoutput(resurrection_action_fields('darkhorse_information',$context));
+                rawoutput('<button class="button">Buy information for 100 gold</button></form>');
+                addnav('Return to Main Room',$from.'op=tavern');
+                return;
+            }
+            resurrection_consume_action('darkhorse_information',$context);
+            if (array_diff(array_keys($_POST),['csrf_token','action_token'])!==[]) { http_response_code(400); exit('Unknown field.'); }
+            resurrection_player_mutation(function () use ($who) {
+                global $session;
 			if ($session['user']['gold']>=100){
-				$sql = "SELECT name,acctid,alive,location,maxhitpoints,gold,sex,level,weapon,armor,attack,race,defense,charm FROM " . db_prefix("accounts") . " WHERE login='$who'";
-				$result = db_query($sql);
+				$sql = "SELECT name,acctid,alive,location,maxhitpoints,gold,sex,level,weapon,armor,attack,race,defense,charm FROM " . db_prefix("accounts") . " WHERE login=? AND locked=0";
+				$result = db_query($sql, true, [$who]);
 				if (db_num_rows($result)>0){
 					$row = db_fetch_assoc($result);
 					$row = modulehook("adjuststats", $row);
@@ -208,6 +221,7 @@ function darkhorse_bartender($from){
 				output("`4`bAttack:`b`6 Eleventy billion`n");
 				output("`4`bDefense:`b`6 Super Duper`n");
 			}
+            });
 		}
 	}
 	addnav("Return to the Main Room",$from."op=tavern");
@@ -270,6 +284,33 @@ function darkhorse_runevent($type, $link){
 		darkhorse_bartender($from);
 		break;
 	case "oldman":
+        require_once 'lib/darkhorse_game.php';
+        try {
+            $wager = \Resurrection\Game\DarkHorseState::read((string)$session['user']['specialmisc'], (int)$session['user']['acctid']);
+            if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+                resurrection_consume_action('darkhorse_abandon', hash('sha256', (string)$session['user']['specialmisc']));
+                $game = \Resurrection\Http\Input::string($_POST, 'game');
+                resurrection_player_mutation(function () use ($wager, $game) {
+                    global $session;
+                    $state = \Resurrection\Game\DarkHorseState::abandon($wager, (int)$session['user']['acctid'], $game);
+                    $session['user']['specialmisc'] = \Resurrection\Game\DarkHorseState::write($state, (int)$session['user']['acctid']);
+                });
+                $wager['active'] = false;
+            }
+            if ($wager['active'] ?? false) {
+                $_SESSION['darkhorse_return'] = $gameret;
+                addnav('Resume game', 'runmodule.php?module=' . $wager['game']);
+                $url = $from . 'op=oldman';
+                addnav('', $url);
+                output('Your game is still active. Abandoning it forfeits the committed stake of %s gold.', $wager['wager']);
+                rawoutput('<form method="POST" action="' . htmlspecialchars($url, ENT_QUOTES, 'UTF-8') . '">');
+                rawoutput(resurrection_action_fields('darkhorse_abandon', hash('sha256', (string)$session['user']['specialmisc'])));
+                rawoutput('<button name="game" value="' . $wager['game'] . '" class="button">Abandon game</button></form>');
+                break;
+            }
+        } catch (DomainException|InvalidArgumentException $error) {
+            http_response_code(409); exit('Invalid or inactive wager.');
+        }
 		darkhorse_checkday();
 		addnav("Old Man");
 		modulehook("darkhorsegame", array("return"=>$gameret));
@@ -286,10 +327,12 @@ function darkhorse_runevent($type, $link){
 			if ($c > 1) output(" I can play several games!`0\"");
 			else output(" Shall we play a game?`0\"");
 		}
-		$session['user']['specialmisc']="";
+
 		addnav("Return to the Main Room",$from."op=tavern");
 		break;
 	case "leave":
+        require_once "lib/darkhorse_entry.php";
+        if (!resurrection_darkhorse_leave($from."op=leave")) break;
 		output("You duck out of the tavern, and wander into the thick foliage around you.");
 		output("That strange mist revisits you, making your mind buzz.");
 		output("The mist clears, and you find yourself again where you were before the mist first covered you.");
@@ -299,6 +342,8 @@ function darkhorse_runevent($type, $link){
 		$session['user']['specialinc']="";
 		break;
 	case "leaveleave":
+        require_once "lib/darkhorse_entry.php";
+        if (!resurrection_darkhorse_leave($from."op=leaveleave")) break;
 		output("You decide that the tavern holds no appeal for you today.");
 		$session['user']['specialinc']="";
 		break;
@@ -307,14 +352,14 @@ function darkhorse_runevent($type, $link){
 }
 
 function darkhorse_run(){
-	$op = httpget('op');
-	if ($op == "enter") {
-		httpset("op", "tavern");
-		page_header(get_module_setting("tavernname"));
-		darkhorse_runevent("forest", "forest.php?");
-		// Clear the specialinc, just in case.
-		$session['user']['specialinc']="";
-		page_footer();
-	}
+    global $session;
+    require_once 'lib/darkhorse_entry.php';
+    if (($_GET['op'] ?? '')!=='enter') { http_response_code(400); exit('Invalid tavern action.'); }
+    page_header(get_module_setting('tavernname'));
+    if (resurrection_darkhorse_enter()) {
+        httpset('op','tavern');
+        darkhorse_runevent('forest','forest.php?');
+    }
+    page_footer();
 }
 ?>

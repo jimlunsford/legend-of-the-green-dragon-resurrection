@@ -10,6 +10,14 @@ require_once("lib/taunt.php");
 require_once("lib/events.php");
 require_once("lib/battle-skills.php");
 
+require_once __DIR__ . '/lib/specialty_combat.php';
+if (httpget('op') === 'specialty') resurrection_forest_specialty();
+// Legacy specialty URLs in Forest cannot spend a round, uses or rewards.
+if (array_key_exists('skill', $_GET) || array_key_exists('l', $_GET) ||
+    array_key_exists('skill', $_POST) || array_key_exists('l', $_POST)) {
+    http_response_code(400); exit('Use the current specialty form.');
+}
+
 tlschema("forest");
 
 $fight = false;

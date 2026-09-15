@@ -25,3 +25,12 @@ __pycache__/
 .DS_Store
 .vscode/
 .idea/
+# Modern development dependencies and generated diagnostics
+/vendor/
+/.phpunit.cache/
+/.phpstan-cache/
+/var/
+*.log
+*.sql
+*.backup
+*.bak

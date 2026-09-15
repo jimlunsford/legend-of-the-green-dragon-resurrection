@@ -49,6 +49,7 @@ function reltime($date,$short=true){
 }
 
 function relativedate($indate){
+    if ($indate === null || $indate === "") { return translate_inline("Never", "datetime"); }
 	$laston = round((strtotime("now")-strtotime($indate)) / 86400,0) . " days";
 	tlschema("datetime");
 	if (substr($laston,0,2)=="1 ")
@@ -75,7 +76,7 @@ function checkday() {
 			$post = $_POST;
 			unset($post['i_am_a_hack']);
 			if (count($post) > 0){
-				$session['user']['lasthit'] = "0000-00-00 00:00:00";
+				$session['user']['lasthit'] = null;
 				return;
 			} else {
 				$session=$revertsession;
@@ -91,7 +92,7 @@ function checkday() {
 function is_new_day($now=0){
 	global $session;
 
-	if ($session['user']['lasthit'] == "0000-00-00 00:00:00") {
+	if (empty($session['user']['lasthit']) || $session['user']['lasthit'] == "0000-00-00 00:00:00") {
 		return true;
 	}
 	$t1 = gametime();

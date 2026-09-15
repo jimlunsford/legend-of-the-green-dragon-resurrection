@@ -52,10 +52,9 @@ function racedwarf_install(){
 
 function racedwarf_uninstall(){
 	global $session;
-	$vname = get_module_setting("villagename", "racedwarf");;
+	$vname = getsetting("villagename", LOCATION_FIELDS);
 	$gname = get_module_setting("villagename");
-	$sql = "UPDATE " . db_prefix("accounts") . " SET location='$vname' WHERE location = '$gname'";
-	db_query($sql);
+	db_query('UPDATE ' . db_prefix('accounts') . ' SET location=? WHERE location=?', true, [$vname, $gname]);
 	if ($session['user']['location'] == $gname)
 		$session['user']['location'] = $vname;
 	// Force anyone who was a Dwarf to rechoose race
@@ -63,8 +62,7 @@ function racedwarf_uninstall(){
 	db_query($sql);
 	if ($session['user']['race'] == 'Dwarf')
 		$session['user']['race'] = RACE_UNKNOWN;
-	$sql = "UPDATE ". db_prefix("companions") ." SET location='all' WHERE location ='$vname'";
-	db_query($sql);
+	db_query('UPDATE ' . db_prefix('companions') . ' SET companionlocation=? WHERE companionlocation=?', true, ['all', $gname]);
 	return true;
 }
 
@@ -91,25 +89,17 @@ function racedwarf_dohook($hookname,$args){
 		if ($args['setting'] == "villagename" && $args['module']=="racedwarf") {
 			if ($session['user']['location'] == $args['old'])
 				$session['user']['location'] = $args['new'];
-			$sql = "UPDATE " . db_prefix("accounts") .
-				" SET location='" . addslashes($args['new']) .
-				"' WHERE location='" . addslashes($args['old']) . "'";
-			db_query($sql);
-			$sql = "UPDATE ".db_prefix("companions")." SET location='".$args['new']." WHERE location='".$args['old']."'";
-			db_query($sql);
+			db_query('UPDATE ' . db_prefix('accounts') . ' SET location=? WHERE location=?', true, [$args['new'], $args['old']]);
+			db_query('UPDATE ' . db_prefix('companions') . ' SET companionlocation=? WHERE companionlocation=?', true, [$args['new'], $args['old']]);
 			if (is_module_active("cities")) {
-				$sql = "UPDATE " . db_prefix("module_userprefs") .
-					" SET value='" . addslashes($args['new']) .
-					"' WHERE modulename='cities' AND setting='homecity'" .
-					"AND value='" . addslashes($args['old']) . "'";
-				db_query($sql);
+				db_query('UPDATE ' . db_prefix('module_userprefs') . ' SET value=? WHERE modulename=? AND setting=? AND value=?', true, [$args['new'], 'cities', 'homecity', $args['old']]);
 			}
 		}
 		break;
 	case "chooserace":
-		output("<a href='newday.php?setrace=$race$resline'>Deep in the subterranean strongholds of %s</a>, home to the noble and fierce `#Dwarven`0 people whose desire for privacy and treasure bears no resemblance to their tiny stature.`n`n", $city, true);
-		addnav("`#Dwarf`0","newday.php?setrace=$race$resline");
-		addnav("","newday.php?setrace=$race$resline");
+		output("Deep in the subterranean strongholds of %s, home to the noble and fierce `#Dwarven`0 people whose desire for privacy and treasure bears no resemblance to their tiny stature.`n`n", $city);
+		require_once('lib/race_onboarding.php');
+		resurrection_race_form($race);
 		break;
 	case "setrace":
 		if ($session['user']['race']==$race){

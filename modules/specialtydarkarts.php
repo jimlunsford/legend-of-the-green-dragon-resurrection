@@ -79,15 +79,10 @@ function specialtydarkarts_dohook($hookname,$args){
 		set_module_pref("skill", 0);
 		break;
 	case "choose-specialty":
-		if ($session['user']['specialty'] == "" ||
-				$session['user']['specialty'] == '0') {
-			addnav("$ccode$name`0","newday.php?setspecialty=$spec$resline");
-			$t1 = translate_inline("Killing a lot of woodland creatures");
-			$t2 = appoencode(translate_inline("$ccode$name`0"));
-			rawoutput("<a href='newday.php?setspecialty=$spec$resline'>$t1 ($t2)</a><br>");
-			addnav("","newday.php?setspecialty=$spec$resline");
-		}
-		break;
+        require_once __DIR__ . '/../lib/specialty_onboarding.php';
+        output("Killing a lot of woodland creatures");
+        resurrection_specialty_form($spec);
+        break;
 	case "set-specialty":
 		if($session['user']['specialty'] == $spec) {
 			page_header($name);
@@ -164,7 +159,9 @@ function specialtydarkarts_dohook($hookname,$args){
 		break;
 	case "apply-specialties":
 		$skill = httpget('skill');
-		$l = httpget('l');
+		$level = httpget('l');
+        if (!is_string($level) || !in_array($level, ['1', '2', '3', '5'], true)) return $args;
+        $l = (int)$level;
 		if ($skill==$spec){
 			if (get_module_pref("uses") >= $l){
 				switch($l){

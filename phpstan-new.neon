@@ -1,0 +1,44 @@
+parameters:
+    level: 6
+    paths:
+        - src
+        - lib/accounts.php
+        - lib/player_mutation.php
+        - lib/race_onboarding.php
+        - lib/specialty_onboarding.php
+        - lib/specialty_combat.php
+        - lib/typed_editor.php
+        - lib/darkhorse_game.php
+        - lib/darkhorse_entry.php
+        - lib/event_security.php
+        - modules/dag/security.php
+        - modules/drinks/security.php
+        - lib/mail_security.php
+        - lib/web_security.php
+        - lib/commentary_security.php
+        - lib/installer/fresh_install.php
+        - lib/installer/bundled_modules.php
+        - scripts/install.php
+    bootstrapFiles:
+        - lib/constants.php
+    scanFiles:
+        - lib/forestoutcomes.php
+        - lib/translator.php
+        - lib/pageparts.php
+        - modules/goldmine.php
+        - lib/su_access.php
+        - lib/gamelog.php
+        - lib/buffs.php
+        - lib/http.php
+        - lib/e_rand.php
+        - lib/dbwrapper_pdo.php
+        - lib/constants.php
+        - lib/datacache.php
+        - lib/settings.php
+        - lib/modules.php
+        - lib/output.php
+        - lib/all_tables.php
+        - lib/tabledescriptor.php
+    tmpDir: .phpstan-cache/new
+    parallel:
+        maximumNumberOfProcesses: 1

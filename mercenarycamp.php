@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/src/Security/ScalarState.php';
 // translator ready
 // addnews ready
 // mail ready
@@ -212,7 +213,7 @@ if ($op==""){
 		$row['maxhitpoints'] = $row['maxhitpoints'] + $row['maxhitpointsperlevel'] * $session['user']['level'];
 		$row['hitpoints'] = $row['maxhitpoints'];
 		$row = modulehook("alter-companion", $row);
-		$row['abilities'] = @unserialize($row['abilities']);
+		$row['abilities'] = \Resurrection\Security\ScalarState::read($row['abilities']);
 		require_once("lib/buffs.php");
 		if (apply_companion($row['name'], $row)) {
 			output("`QYou hand over `^%s gold`Q and `%%s %s`Q.`n`n", (int)$row['companioncostgold'], (int)$row['companioncostgems'],translate_inline($row['companioncostgems'] == 1?"gem":"gems"));

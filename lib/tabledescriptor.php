@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/../src/Compatibility/array_cursor.php';
 // translator ready
 // addnews ready
 // mail ready
@@ -32,7 +33,7 @@ function synctable($tablename,$descriptor,$nodrop=false){
 		$existing = table_create_descriptor($tablename);
 		reset($descriptor);
 		$changes = array();
-		while (list($key,$val)=each($descriptor)){
+		while (list($key,$val)=resurrection_array_next($descriptor)){
 			if ($key == "RequireMyISAM") continue;
 			$val['type'] = descriptor_sanitize_type($val['type']);
 			if (!isset($val['name'])) {
@@ -88,7 +89,7 @@ function synctable($tablename,$descriptor,$nodrop=false){
 		//drop no longer needed columns
 		if (!$nodrop){
 			reset($existing);
-			while (list($key,$val)=each($existing)){
+			while (list($key,$val)=resurrection_array_next($existing)){
 				//This column no longer exists.
 				if ($val['type']=="key" || $val['type']=="unique key"){
 					$sql = "DROP KEY {$val['name']}";
@@ -111,11 +112,11 @@ function synctable($tablename,$descriptor,$nodrop=false){
 }//end function
 
 function table_create_from_descriptor($tablename,$descriptor){
-	$sql = "CREATE TABLE $tablename (\n";
+	$sql = "CREATE TABLE " . db_identifier($tablename) . " (\n";
 	$type = "INNODB";
 	reset($descriptor);
 	$i=0;
-	while (list($key,$val)=each($descriptor)){
+	while (list($key,$val)=resurrection_array_next($descriptor)){
 		if ($key === "RequireMyISAM" && $val == 1) {
 			// Let's hope that we don't run into badly formatted strings
 			// but you know what, if we do, tough
@@ -152,7 +153,7 @@ function table_create_from_descriptor($tablename,$descriptor){
 		$sql .= descriptor_createsql($val);
 		$i++;
 	}
-	$sql .= ") engine=$type";
+	$sql .= ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci";
 	return $sql;
 }
 
@@ -206,6 +207,18 @@ function table_create_descriptor($tablename){
 }
 
 function descriptor_createsql($input){
+    if (isset($input['columns'])) {
+        $columns = is_array($input['columns']) ? $input['columns'] : explode(',', $input['columns']);
+        $quoted = [];
+        foreach ($columns as $column) {
+            if (!preg_match('/\\A([A-Za-z0-9_]+)(\\([1-9][0-9]*\\))?\\z/', trim($column), $parts)) {
+                throw new InvalidArgumentException('Invalid index column.');
+            }
+            $quoted[] = db_identifier($parts[1]) . ($parts[2] ?? '');
+        }
+        $input['columns'] = implode(',', $quoted);
+    }
+
 	$input['type'] = descriptor_sanitize_type($input['type']);
 	if ($input['type']=="key" || $input['type']=='unique key'){
 		//this is a standard index
@@ -226,7 +239,7 @@ function descriptor_createsql($input){
 		}
 		if (substr($input['type'],0,7)=="unique ") $input['unique'] = true;
 		$return = (isset($input['unique']) && $input['unique']?"UNIQUE ":"")
-			."KEY {$input['name']} "
+			."KEY " . db_identifier($input['name']) . " "
 			."({$input['columns']})";
 	}elseif ($input['type']=="primary key"){
 		//this is a primary key
@@ -236,11 +249,13 @@ function descriptor_createsql($input){
 	}else{
 		//this is a standard column
 		if (!array_key_exists('extra', $input)) $input['extra']="";
-		$return = $input['name']." "
+		$return = db_identifier($input['name'])." "
 			.$input['type']
 			.(isset($input['null']) && $input['null']?"":" NOT NULL")
-			.(isset($input['default']) &&
-					$input['default']>""?" default '{$input['default']}'":"")
+			.(array_key_exists('default', $input)
+                ? " DEFAULT " . (preg_match('/text|blob/', $input['type']) ? "(" : "")
+                    . "'" . str_replace("'", "''", (string)$input['default']) . "'"
+                    . (preg_match('/text|blob/', $input['type']) ? ")" : "") : "")
 			." ".$input['extra'];
 	}
 	return $return;
