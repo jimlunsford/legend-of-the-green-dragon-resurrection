@@ -1138,7 +1138,7 @@ function resurrectionrandomfixture_dohook($hook,$args) { mt_srand((int)getsettin
             for row in registry: self.query('UPDATE modules SET active=? WHERE modulename=?',[row['active'],row['modulename']])
 
     @contextmanager
-    def _specialty_accounting_fixture(self):
+    def _specialty_accounting_fixture(self, route='forest'):
         player=self.query('SELECT acctid FROM accounts WHERE login=?',['WebPlayer'])[0]['acctid']
         original=self.query('SELECT * FROM accounts WHERE acctid=?',[player])[0]
         prefs=self.query('SELECT * FROM module_userprefs WHERE userid=?',[player])
@@ -1151,7 +1151,7 @@ function resurrectionrandomfixture_dohook($hook,$args) { mt_srand((int)getsettin
         self.query("UPDATE modules SET active=1 WHERE modulename IN ('specialtydarkarts','specialtymysticpower','specialtythiefskills')")
         for key,value in setting_values.items():
             self.query('INSERT INTO settings(setting,value) VALUES (?,?) ON DUPLICATE KEY UPDATE value=VALUES(value)',[key,value])
-        call=self._security_client(); url='forest.php?op=specialty'
+        call=self._security_client(); url=route+'.php?op=specialty'
         def request(path=url,data=None):
             self._security_allow(player,path)
             return call(path,data,fixture='specialty-accounting')
@@ -1161,8 +1161,12 @@ function resurrectionrandomfixture_dohook($hook,$args) { mt_srand((int)getsettin
             return json.loads(subprocess.run([shutil.which('php'),'-r',"require 'src/Security/ScalarState.php'; echo json_encode(\\Resurrection\\Security\\ScalarState::read(stream_get_contents(STDIN)),JSON_THROW_ON_ERROR);"],input=value,text=True,capture_output=True,cwd=ROOT,check=True).stdout)
         enemy=self.query('SELECT * FROM creatures ORDER BY creatureid LIMIT 1')[0]
         enemy.update(creaturename='Accounting Target',creaturehealth=100000,creatureattack=120,creaturedefense=80,creaturelevel=10,playerstarthp=500,diddamage=0)
+        if route=='dragon':
+            enemy={k:v for k,v in enemy.items() if k in ['creaturename','creatureweapon','creaturelevel','creatureattack','creaturedefense','creaturehealth','diddamage','playerstarthp']}
+            enemy.update(type='dragon',creaturelevel=18)
         def prepare(spec,**changes):
-            values=dict(level=10,alive=1,race='Human',specialty=spec,dragonkills=0,dragonpoints='a:0:{}',badguy=encode({'enemies':[enemy],'options':{'type':'forest','didsurprise':1}}),companions='a:0:{}',bufflist='a:0:{}',hitpoints=500,maxhitpoints=1000,attack=100,defense=50,specialinc='',superuser=0)
+            values=dict(level=10,alive=1,race='Human',specialty=spec,dragonkills=0,dragonpoints='a:0:{}',badguy=encode({'enemies':[enemy],'options':{'type':route,'didsurprise':1}}),companions='a:0:{}',bufflist='a:0:{}',hitpoints=500,maxhitpoints=1000,attack=100,defense=50,specialinc='',superuser=0)
+            if route=='dragon': values['level']=15
             values.update(changes)
             self.query('UPDATE accounts SET '+','.join(k+'=?' for k in values)+' WHERE acctid=?',[*values.values(),player])
             for module in modules.values():
@@ -1172,6 +1176,9 @@ function resurrectionrandomfixture_dohook($hook,$args) { mt_srand((int)getsettin
             return self.query('SELECT specialty,gold,gems,experience,hitpoints,maxhitpoints,alive,turns,age,attack,defense,badguy,companions,bufflist FROM accounts WHERE acctid=?',[player])+self.query("SELECT modulename,setting,value FROM module_userprefs WHERE userid=? ORDER BY modulename,setting",[player])
         def form(level):
             status,body=request(); self.assertEqual(200,status,body[:2000])
+            if route=='dragon':
+                forms=[part for action,part in re.findall(r'<form[^>]*action="([^"]+)"[^>]*>(.*?)</form>',body,re.S) if html.unescape(action)==url]
+                self.assertTrue(forms,body[:2000]); body=forms[0]
             return self._security_fields(body)|{'level':str(level)}
         def rejected(data,expected=409):
             before=snapshot(); status,body=request(data=data)
@@ -1189,6 +1196,136 @@ function resurrectionrandomfixture_dohook($hook,$args) { mt_srand((int)getsettin
                 self.query('INSERT INTO module_hooks ('+','.join('`'+k+'`' for k in row)+') VALUES ('+','.join('?' for _ in row)+')',list(row.values()))
             self.query("DELETE FROM settings WHERE setting IN ('enablecompanions','dropmingold','forestgemchance','instantexp')")
             for row in settings: self.query('INSERT INTO settings(setting,value) VALUES (?,?)',[row['setting'],row['value']])
+
+    def test_dragon_specialty_authority_matrix(self):
+        with self._specialty_accounting_fixture('dragon') as f:
+            for spec,module in f['modules'].items():
+                for level in [1,2,3,5]:
+                    with self.subTest(specialty=spec,level=level):
+                        f['prepare'](spec); data=f['form'](level); stale=f['form'](level)
+                        before=f['snapshot'](); status,body=f['request'](data=data)
+                        self.assertEqual(200,status,body[:2000]); after=f['snapshot']()
+                        self.assertNotEqual(before[0]['badguy'],after[0]['badguy'])
+                        self.assertEqual(str(9-level),self.query('SELECT value FROM module_userprefs WHERE userid=? AND modulename=? AND setting=?',[f['player'],module,'uses'])[0]['value'])
+                        buffs=f['decode'](after[0]['bufflist']); companions=f['decode'](after[0]['companions'])
+                        if spec=='DA' and level==1:
+                            self.assertTrue(companions==[] or companions['skeleton_warrior']['maxhitpoints']==60)
+                        elif spec=='DA' and level==2: self.assertNotIn('da2',buffs)
+                        else: self.assertEqual(4,buffs[spec.lower()+str(level)]['rounds'])
+                        f['rejected'](data); f['rejected'](data); f['rejected'](stale)
+                        self.assertEqual(200,f['request']('dragon.php?op=fight')[0]); self.assertEqual(after,f['snapshot']())
+                    for case in ['wrong','none','inactive','skill','uses','zero','malformed','negative','excessive','missing','malformed-combat','zero-hp','negative-hp','dead','terminal','stale','csrf','invalid-csrf','unsupported','malformed-level','handler']:
+                        with self.subTest(specialty=spec,level=level,case=case):
+                            f['prepare'](spec); data=f['form'](level); expected=409
+                            if case in ['wrong','none']:
+                                self.query('UPDATE accounts SET specialty=? WHERE acctid=?',['' if case=='none' else ('MP' if spec=='DA' else 'DA'),f['player']])
+                            elif case=='inactive': self.query('UPDATE modules SET active=0 WHERE modulename=?',[module])
+                            elif case=='handler': self.query("UPDATE module_hooks SET `function`='missing_handler' WHERE modulename=? AND location='apply-specialties'",[module])
+                            elif case in ['skill','uses','zero','malformed','negative','excessive']:
+                                value={'skill':str(level-1),'uses':str(level-1),'zero':'0','malformed':'broken','negative':'-1','excessive':'9999999999'}[case]
+                                self.query('UPDATE module_userprefs SET value=? WHERE userid=? AND modulename=? AND setting=?',[value,f['player'],module,'skill' if case=='skill' else 'uses'])
+                            elif case in ['missing','malformed-combat']:
+                                self.query('UPDATE accounts SET badguy=? WHERE acctid=?',['' if case=='missing' else 'broken',f['player']])
+                            elif case in ['zero-hp','negative-hp','dead','terminal','stale']:
+                                change={'zero-hp':{'creaturehealth':0},'negative-hp':{'creaturehealth':-1},'dead':{'dead':True},'terminal':{'terminal':True},'stale':{'creaturename':'Another Dragon'}}[case]
+                                self.query('UPDATE accounts SET badguy=? WHERE acctid=?',[f['encode']({'enemies':[dict(f['enemy'],**change)],'options':{'type':'dragon','didsurprise':1}}),f['player']])
+                            elif case in ['csrf','invalid-csrf']:
+                                if case=='csrf': del data['csrf_token']
+                                else: data['csrf_token']='invalid'
+                                expected=403
+                            else: data['level']='4' if case=='unsupported' else '2.0'; expected=400
+                            try: f['rejected'](data,expected)
+                            finally:
+                                self.query('UPDATE modules SET active=1 WHERE modulename=?',[module])
+                                self.query("UPDATE module_hooks SET `function`=? WHERE modulename=? AND location='apply-specialties'",[module+'_dohook',module])
+                    # Independent insufficient authority, using a currently valid lower-level form.
+                    if level>1:
+                        for key in ['skill','uses']:
+                            f['prepare'](spec)
+                            self.query('UPDATE module_userprefs SET value=? WHERE userid=? AND modulename=? AND setting=?',[str(level-1),f['player'],module,key])
+                            f['rejected'](f['form'](level))
+
+    def test_dragon_transitions_rewards_and_rollback(self):
+        with self._specialty_accounting_fixture('dragon') as f, self._specialty_terminal_capture() as terminal:
+            player=f['player']; request=f['request']; encode=f['encode']; decode=f['decode']
+            def extra():
+                return [f['snapshot'](),self.query('SELECT dragonkills,slaydragon,level,charm,dragonpoints FROM accounts WHERE acctid=?',[player]),
+                    self.query('SELECT newsid FROM news WHERE accountid=? ORDER BY newsid',[player]),
+                    self.query('SELECT id FROM debuglog WHERE actor=? ORDER BY id',[player]),terminal()]
+            def combat(**changes): return encode({'enemies':[dict(f['enemy'],**changes)],'options':{'type':'dragon','didsurprise':1}})
+            def ordinary(path='dragon.php?op=fight'):
+                status,body=request(path); self.assertEqual(200,status,body[:2000])
+                return self._security_fields(body,path)
+            # Entry GET cannot replace combat or start the surprise round.
+            f['prepare']('DA',badguy='',hitpoints=150,maxhitpoints=150,attack=100,defense=100)
+            before=extra(); status,body=request('dragon.php'); self.assertEqual(200,status,body[:2000]); self.assertEqual(before,extra())
+            begin=self._security_fields(body,'dragon.php?op=begin')
+            for fields in [{},dict(begin,csrf_token='bad')]: self.assertEqual(403,request('dragon.php?op=begin',fields)[0]); self.assertEqual(before,extra())
+            status,body=request('dragon.php?op=begin',begin); self.assertEqual(200,status,body[:2000])
+            live=extra(); self.assertEqual('dragon',decode(f['snapshot']()[0]['badguy'])['options']['type'])
+            self.assertEqual(409,request('dragon.php?op=begin',begin)[0]); self.assertEqual(live,extra())
+            for op in ['','fight','run','specialty']:
+                before=extra(); self.assertEqual(200,request('dragon.php'+('?op='+op if op else ''))[0]); self.assertEqual(before,extra())
+            for query in ['op=fight&skill=DA&l=2','op=prologue1&flawless=1','op=fight&newtarget=0','op=fight&auto=full']:
+                before=extra(); self.assertEqual(400,request('dragon.php?'+query)[0]); self.assertEqual(before,extra())
+            # Stale identity includes prologue, completed kill, and different combat family.
+            for changed in ['',combat(creaturehealth=0),encode({'dragonVictory':True,'dragonkills':0}),
+                            encode({'enemies':[f['enemy']],'options':{'type':'forest'}})]:
+                f['prepare']('DA'); data=f['form'](2)
+                self.query('UPDATE accounts SET badguy=? WHERE acctid=?',[changed,player]); f['rejected'](data)
+            f['prepare']('DA'); data=f['form'](2)
+            self.query('UPDATE accounts SET dragonkills=1 WHERE acctid=?',[player]); f['rejected'](data)
+            # Forced failures after specialty preference writes and terminal news writes.
+            for terminal_round in [False,True]:
+                f['prepare']('DA',badguy=combat(creaturehealth=1 if terminal_round else 100000),hitpoints=150,maxhitpoints=150)
+                data=f['form'](2); before=extra()
+                self.query("ALTER TABLE accounts ADD CONSTRAINT fixture_dragon_failure CHECK (login <> 'WebPlayer' OR badguy NOT LIKE '%"+('dragonVictory' if terminal_round else 'istarget')+"%')")
+                try:
+                    status,body=request(data=data); self.assertEqual(500,status,body[:2000]); self.assertEqual(before,extra())
+                    f['rejected'](data)
+                finally: self.query('ALTER TABLE accounts DROP CONSTRAINT fixture_dragon_failure')
+                status,body=request(data=f['form'](2)); self.assertEqual(200,status,body[:2000])
+            # Exact persisted, server-derived flawless outcome. Continuation is a separate one-use transaction.
+            self.query('DELETE FROM fixture_specialty_terminal')
+            f['prepare']('DA',badguy=combat(creaturehealth=1,creatureattack=1,creaturedefense=1),hitpoints=150,maxhitpoints=150,gold=1000,gems=10,charm=0)
+            # Generate a real companion before the lethal Voodoo round.
+            f['prepare']('DA',badguy=combat(creatureattack=1,creaturedefense=1),hitpoints=150,maxhitpoints=150,gold=1000,gems=10,charm=0)
+            self.assertEqual(200,request(data=f['form'](1))[0]); skeleton=decode(f['snapshot']()[0]['companions'])
+            self.assertIn('skeleton_warrior',skeleton)
+            self.query('UPDATE accounts SET badguy=? WHERE acctid=?',[combat(creaturehealth=1,creatureattack=1,creaturedefense=1),player])
+            stale_fight=ordinary(); data=f['form'](2)
+            status,body=request(data=data); self.assertEqual(200,status,body[:2000])
+            outcome=decode(f['snapshot']()[0]['badguy']); self.assertEqual({'dragonVictory':True,'dragonkills':0},outcome)
+            self.assertEqual('6',self.query("SELECT value FROM module_userprefs WHERE userid=? AND modulename='specialtydarkarts' AND setting='uses'",[player])[0]['value'])
+            self.assertEqual(dict(skeleton['skeleton_warrior'],used=False),decode(f['snapshot']()[0]['companions'])['skeleton_warrior'])
+            self.assertEqual('battle-victory',terminal()[-1]['hook'])
+            continuation=self._security_fields(body,'dragon.php?op=prologue1'); before=extra()
+            f['rejected'](data); self.assertEqual(409,request('dragon.php?op=fight',stale_fight)[0]); self.assertEqual(before,extra())
+            self.assertEqual(200,request('dragon.php?op=prologue1')[0]); self.assertEqual(before,extra())
+            for fields,code in [({},403),(dict(continuation,csrf_token='bad'),403),(dict(continuation,flawless='1'),400)]:
+                self.assertEqual(code,request('dragon.php?op=prologue1',fields)[0]); self.assertEqual(before,extra())
+            continuation=ordinary('dragon.php?op=prologue1')
+            self.query("ALTER TABLE accounts ADD CONSTRAINT fixture_dragon_reset CHECK (login <> 'WebPlayer' OR dragonkills <> 1)")
+            try:
+                status,body=request('dragon.php?op=prologue1',continuation); self.assertEqual(500,status,body[:2000]); self.assertEqual(before,extra())
+                self.assertEqual(409,request('dragon.php?op=prologue1',continuation)[0]); self.assertEqual(before,extra())
+            finally: self.query('ALTER TABLE accounts DROP CONSTRAINT fixture_dragon_reset')
+            continuation=ordinary('dragon.php?op=prologue1')
+            status,body=request('dragon.php?op=prologue1',continuation); self.assertEqual(200,status,body[:2000])
+            after=self.query('SELECT dragonkills,level,gold,gems,charm,specialty,badguy,bufflist,companions FROM accounts WHERE acctid=?',[player])[0]
+            self.assertEqual(['1','1','250','11','5','',''],[after[k] for k in ['dragonkills','level','gold','gems','charm','specialty','badguy']])
+            self.assertEqual([],decode(after['bufflist'])); self.assertEqual([],decode(after['companions']))
+            for row in self.query("SELECT value FROM module_userprefs WHERE userid=? AND setting IN ('skill','uses') AND modulename IN ('specialtydarkarts','specialtymysticpower','specialtythiefskills')",[player]): self.assertEqual('0',row['value'])
+            before=extra()
+            for path,fields in [('dragon.php?op=prologue1',continuation),('dragon.php?op=specialty',data),('dragon.php?op=fight',stale_fight),('dragon.php?op=begin',begin)]:
+                self.assertEqual(409,request(path,fields)[0]); self.assertEqual(before,extra())
+            # Dragon defeat retains XP, loses all gold and clears combat exactly once.
+            f['prepare']('MP',badguy=combat(creatureattack=100000,creaturedefense=100000),hitpoints=1,maxhitpoints=150,gold=1000,experience=1000)
+            data=f['form'](3); status,body=request(data=data); self.assertEqual(200,status,body[:2000])
+            after=f['snapshot']()[0]
+            self.assertEqual(['0','0','0','1000',''],[after[k] for k in ['alive','hitpoints','gold','experience','badguy']])
+            self.assertEqual('6',self.query("SELECT value FROM module_userprefs WHERE userid=? AND modulename='specialtymysticpower' AND setting='uses'",[player])[0]['value'])
+            self.assertEqual('battle-defeat',terminal()[-1]['hook']); before=extra(); f['rejected'](data); self.assertEqual(before,extra())
 
     def test_specialty_independent_level_authority(self):
         with self._specialty_accounting_fixture() as f:
@@ -1687,10 +1824,12 @@ function resurrectionspecialtyobserver_dohook($hook,$args) {
                 'creatureattack':1,'creaturedefense':1,'creaturehealth':1,'diddamage':0,'type':'dragon'}
             self.query("UPDATE accounts SET badguy=?,level=15,hitpoints=150,maxhitpoints=150,attack=1,defense=1,bufflist='a:0:{}' WHERE acctid=?",[encode(dragon),player])
             self.query("UPDATE module_userprefs SET value='5' WHERE userid=? AND modulename='specialtydarkarts' AND setting='uses'",[player])
-            status,body=request('dragon.php?op=fight&skill=DA&l=2'); self.assertEqual(200,status,body[:2000])
+            status,body=request('dragon.php?op=specialty'); self.assertEqual(200,status,body[:2000])
+            forms=[part for action,part in re.findall(r'<form[^>]*action="([^"]+)"[^>]*>(.*?)</form>',body,re.S) if action=='dragon.php?op=specialty']
+            status,body=request('dragon.php?op=specialty',self._security_fields(forms[0])|{'level':'2'}); self.assertEqual(200,status,body[:2000])
             self.assertIn('skeleton_warrior',companions())
-            link=re.search(r'dragon\.php\?op=prologue1(?:&amp;|&)flawless=[01]',body)
-            self.assertIsNotNone(link,body[:2000]); self.assertEqual(200,request(html.unescape(link.group(0)))[0])
+            link=re.search(r'dragon\.php\?op=prologue1',body)
+            self.assertIsNotNone(link,body[:2000]); self.assertEqual(200,request('dragon.php?op=prologue1',self._security_fields(body,'dragon.php?op=prologue1'))[0])
             self.assertEqual([],companions()); self.assertEqual('1',self.query('SELECT dragonkills FROM accounts WHERE acctid=?',[player])[0]['dragonkills'])
         finally:
             self.query('UPDATE accounts SET '+','.join(k+'=?' for k in original)+' WHERE acctid=?',[*original.values(),player])
@@ -1730,8 +1869,9 @@ function resurrectionspecialtyobserver_dohook($hook,$args) {
                 with self._seeded_module_actions('header-dragon') as seed:
                     seed(0)
                     status,body=request('dragon.php?op=fight'); self.assertEqual(200,status,body[:1500])
+                    status,body=request('dragon.php?op=fight',self._security_fields(body,'dragon.php?op=fight')); self.assertEqual(200,status,body[:1500])
                 link=re.search(r'href=[\'"](dragon.php\?op=prologue1[^\'"]*)',body); self.assertIsNotNone(link,body[:1500])
-                status,body=request(html.unescape(link.group(1))); self.assertEqual(200,status,body[:1500])
+                status,body=request(html.unescape(link.group(1)),self._security_fields(body,'dragon.php?op=prologue1')); self.assertEqual(200,status,body[:1500])
                 state=self.query('SELECT dragonkills,maxhitpoints,bufflist FROM accounts WHERE acctid=?',[player])[0]
                 self.assertEqual('1',state['dragonkills']); self.assertEqual(str(25 if carry else 10),state['maxhitpoints']); self.assertNotIn('transmute',state['bufflist'])
                 self.assertEqual(str(15 if carry else 0),self.query('SELECT value FROM module_userprefs WHERE userid=? AND modulename=? AND setting=?',[player,'fairy','extrahps'])[0]['value'])
@@ -1772,8 +1912,9 @@ function resurrectionspecialtyobserver_dohook($hook,$args) {
                 with self._seeded_module_actions('header-dragon') as seed:
                     seed(0)
                     status,body=request('dragon.php?op=fight'); self.assertEqual(200,status,body[:1500])
+                    status,body=request('dragon.php?op=fight',self._security_fields(body,'dragon.php?op=fight')); self.assertEqual(200,status,body[:1500])
                 link=re.search(r'href=[\'"](dragon.php\?op=prologue1[^\'"]*)',body); self.assertIsNotNone(link,body[:1500])
-                status,body=request(html.unescape(link.group(1))); self.assertEqual(200,status,body[:1500])
+                status,body=request(html.unescape(link.group(1)),self._security_fields(body,'dragon.php?op=prologue1')); self.assertEqual(200,status,body[:1500])
                 state=self.query('SELECT dragonkills,maxhitpoints,bufflist FROM accounts WHERE acctid=?',[player])[0]
                 self.assertEqual('1',state['dragonkills']); self.assertEqual(str(25 if carry else 10),state['maxhitpoints']); self.assertNotIn('transmute',state['bufflist'])
                 self.assertEqual(str(15 if carry else 0),self.query('SELECT value FROM module_userprefs WHERE userid=? AND modulename=? AND setting=?',[player,'cedrikspotions','extrahps'])[0]['value'])

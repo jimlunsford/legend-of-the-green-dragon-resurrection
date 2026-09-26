@@ -1,13 +1,15 @@
 <?php
 require_once __DIR__ . '/specialty_onboarding.php';
 require_once __DIR__ . '/../src/Game/SpecialtyCombatState.php';
+require_once __DIR__ . '/../src/Game/DragonCombatState.php';
 
 /** @return array{module:string,skill:int,uses:int} */
-function resurrection_combat_specialty(bool $lock = false): array {
+function resurrection_combat_specialty(bool $lock = false, string $type = 'forest'): array {
     global $session;
     if (empty($session['loggedin']) || empty($session['user']['alive']) || $session['user']['hitpoints'] <= 0 ||
         $session['user']['specialinc'] !== '') throw new DomainException('Specialty unavailable.');
-    \Resurrection\Game\SpecialtyCombatState::read($session['user']['badguy']);
+    if ($type === 'dragon') \Resurrection\Game\DragonCombatState::read($session['user']['badguy']);
+    else \Resurrection\Game\SpecialtyCombatState::read($session['user']['badguy']);
     $choices = resurrection_specialty_choices($lock);
     $selected = $session['user']['specialty'];
     if (!isset($choices[$selected])) throw new DomainException('Specialty unavailable.');
@@ -36,9 +38,9 @@ function resurrection_combat_context(array $specialty): string {
     return $context;
 }
 
-function resurrection_combat_forms(): void {
+function resurrection_combat_forms(string $type = 'forest'): void {
     global $session;
-    try { $specialty = resurrection_combat_specialty(); }
+    try { $specialty = resurrection_combat_specialty(false, $type); }
     catch (DomainException) { return; }
     $labels = [
         'DA'=>[1=>'Skeleton Crew',2=>'Voodoo',3=>'Curse Spirit',5=>'Wither Soul'],
@@ -46,11 +48,11 @@ function resurrection_combat_forms(): void {
         'TS'=>[1=>'Insult',2=>'Poison Attack',3=>'Hidden Attack',5=>'Backstab'],
     ];
     // Bind the committed-form state, after battle has serialized buffs/companions.
-    $context = resurrection_combat_context($specialty);
-    $url = 'forest.php?op=specialty'; addnav('',$url);
+    $context = $type === 'dragon' ? resurrection_dragon_context($specialty) : resurrection_combat_context($specialty);
+    $url = $type . '.php?op=specialty'; addnav('',$url);
     foreach ($labels[$session['user']['specialty']] as $level=>$label) {
         if ($specialty['skill'] < $level || $specialty['uses'] < $level) continue;
-        rawoutput('<form method="POST" action="'.$url.'">'.resurrection_action_fields('forest-specialty',$context).
+        rawoutput('<form method="POST" action="'.$url.'">'.resurrection_action_fields($type.'-specialty',$context).
             '<input type="hidden" name="level" value="'.$level.'"><button class="button">'.
             htmlspecialchars(translate_inline($label),ENT_QUOTES|ENT_SUBSTITUTE,'UTF-8').' ('.$level.')</button></form>');
     }

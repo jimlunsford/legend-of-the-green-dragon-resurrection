@@ -12,8 +12,8 @@ concurrency:
 jobs:
   engineering:
     runs-on: ubuntu-latest
-    # Expanded independent HTTP matrices exceed the previous 15-minute ceiling.
-    timeout-minutes: 25
+    # Retained matrices plus Dragon authority/outcomes exceed the former 25-minute ceiling.
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
