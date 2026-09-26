@@ -217,3 +217,10 @@ corruption remains 409. Neither validator nor the retained test is weakened.
 Local recheck passes 83 PHPUnit tests/2398 assertions and authentication,
 Transmutation persistence/failure, and the specialty corruption matrix.
 New final-head acceptance is required and recorded in PR #1.
+
+
+## 2026-09-26: Dragon state and outcome schemas
+
+Token-based recount of tracked shipped PHP (excluding tests, scripts and lab; comments ignored): **93 sites / 46 files / 34 serialize writers/checks / 58 ScalarState::read calls / one centralized unserialize implementation**. Relative to 89/44/32/56/1, Dragon adds two writer sites in `lib/dragon_combat.php` and two compatibility reads in `src/Game/DragonCombatState.php`.
+
+`DragonCombatState::read` checks the actual flat legacy Dragon or one-enemy envelope, type/identity/flags and finite statistics; new persisted envelopes receive an opaque server-owned encounter identity. `DragonCombatState::victory` checks a three-field pending outcome (typed flawless boolean, exact kill count and encounter identity). Neither schema trusts a request outcome or restores objects. `SpecialtyCombatState` now permits consistent nonpositive-HP, dead, untargeted enemy history only with an eligible live target remaining. Contradictions and terminal encounters reject. `SkeletonCompanionState`, `SpecialtyBuffState` and `ScalarState::read()` retain their existing protections. Malformed state is rejected and preserved for explicit repair. Broader arbitrary enemy/buff/editor schemas are still uncertified. Exact test and acceptance limits are in DRAGON-AUTHORITY-20260926.md and PR #1.

@@ -1287,6 +1287,10 @@ function resurrectionrandomfixture_dohook($hook,$args) { mt_srand((int)getsettin
 
     def test_dragon_specialty_authority_matrix(self):
         with self._specialty_accounting_fixture('dragon') as f:
+            anonymous=self._security_client(login=None); before=f['snapshot']()
+            for op in ['begin','fight','specialty','prologue1','godmode','restart']:
+                for fields in [None,{'level':'2','csrf_token':'forged','action_token':'forged'}]:
+                    self.assertIn(anonymous('dragon.php?op='+op,fields)[0],[302,303,403]); self.assertEqual(before,f['snapshot']())
             for spec,module in f['modules'].items():
                 for level in [1,2,3,5]:
                     with self.subTest(specialty=spec,level=level):
@@ -1337,7 +1341,7 @@ function resurrectionrandomfixture_dohook($hook,$args) { mt_srand((int)getsettin
         with self._specialty_accounting_fixture('dragon') as f, self._specialty_terminal_capture() as terminal:
             player=f['player']; request=f['request']; encode=f['encode']; decode=f['decode']
             def extra():
-                return [f['snapshot'](),self.query('SELECT dragonkills,slaydragon,level,charm,dragonpoints FROM accounts WHERE acctid=?',[player]),
+                return [f['snapshot'](),self.query('SELECT dragonkills,slaydragon,level,charm,dragonpoints,authversion FROM accounts WHERE acctid=?',[player]),
                     self.query('SELECT newsid FROM news WHERE accountid=? ORDER BY newsid',[player]),
                     self.query('SELECT id FROM debuglog WHERE actor=? ORDER BY id',[player]),terminal()]
             def combat(**changes): return encode({'enemies':[dict(f['enemy'],**changes)],'options':{'type':'dragon','didsurprise':1}})
@@ -1374,21 +1378,24 @@ function resurrectionrandomfixture_dohook($hook,$args) { mt_srand((int)getsettin
             self.query('UPDATE accounts SET superuser=0 WHERE acctid=?',[player])
             before=extra(); self.assertEqual(409,request('dragon.php?op=godmode',god)[0]); self.assertEqual(before,extra())
             self.query('UPDATE accounts SET superuser=2048 WHERE acctid=?',[player])
+            status,body=request('dragon.php?op=fight'); self.assertEqual(200,status,body[:2000])
+            # Privilege changes rotate CSRF; obtain a current form after regrant.
+            restart=self._security_fields(body,'dragon.php?op=restart')
             status,body=request('dragon.php?op=restart',restart); self.assertEqual(200,status,body[:2000])
             one=decode(f['snapshot']()[0]['badguy'])['options']['dragonEncounter']
             stale=f['form'](2); restart=self._security_fields(body,'dragon.php?op=restart')
             status,body=request('dragon.php?op=restart',restart); self.assertEqual(200,status,body[:2000])
             two=decode(f['snapshot']()[0]['badguy'])['options']['dragonEncounter']; self.assertNotEqual(one,two); f['rejected'](stale)
             # Forced failures after specialty preference writes and terminal news writes.
-            for terminal_round in [False,True]:
-                f['prepare']('DA',badguy=combat(creaturehealth=1 if terminal_round else 100000),hitpoints=150,maxhitpoints=150)
-                data=f['form'](2); before=extra()
+            for spec,level,terminal_round in [('DA',1,False),('MP',1,False),('TS',2,False),('DA',2,False),('DA',2,True)]:
+                f['prepare'](spec,badguy=combat(creaturehealth=1 if terminal_round else 100000),hitpoints=150,maxhitpoints=150)
+                data=f['form'](level); before=extra()
                 self.query("ALTER TABLE accounts ADD CONSTRAINT fixture_dragon_failure CHECK (login <> 'WebPlayer' OR badguy NOT LIKE '%"+('dragonVictory' if terminal_round else 'istarget')+"%')")
                 try:
                     status,body=request(data=data); self.assertEqual(500,status,body[:2000]); self.assertEqual(before,extra())
                     f['rejected'](data)
                 finally: self.query('ALTER TABLE accounts DROP CONSTRAINT fixture_dragon_failure')
-                status,body=request(data=f['form'](2)); self.assertEqual(200,status,body[:2000])
+                status,body=request(data=f['form'](level)); self.assertEqual(200,status,body[:2000])
             # Exact persisted, server-derived flawless outcome. Continuation is a separate one-use transaction.
             self.query('DELETE FROM fixture_specialty_terminal')
             f['prepare']('DA',badguy=combat(creaturehealth=1,creatureattack=1,creaturedefense=1),hitpoints=150,maxhitpoints=150,gold=1000,gems=10,charm=0)
@@ -1396,6 +1403,7 @@ function resurrectionrandomfixture_dohook($hook,$args) { mt_srand((int)getsettin
             f['prepare']('DA',badguy=combat(creatureattack=1,creaturedefense=1),hitpoints=150,maxhitpoints=150,gold=1000,gems=10,charm=0)
             self.assertEqual(200,request(data=f['form'](1))[0]); skeleton=decode(f['snapshot']()[0]['companions'])
             self.assertIn('skeleton_warrior',skeleton)
+            self.assertEqual(60,skeleton['skeleton_warrior']['hitpoints']); self.assertEqual(60,skeleton['skeleton_warrior']['maxhitpoints'])
             self.query('UPDATE accounts SET badguy=? WHERE acctid=?',[combat(creaturehealth=1,creatureattack=1,creaturedefense=1),player])
             stale_fight=ordinary(); data=f['form'](2)
             status,body=request(data=data); self.assertEqual(200,status,body[:2000])
@@ -1415,7 +1423,9 @@ function resurrectionrandomfixture_dohook($hook,$args) { mt_srand((int)getsettin
                 self.assertEqual(409,request('dragon.php?op=prologue1',continuation)[0]); self.assertEqual(before,extra())
             finally: self.query('ALTER TABLE accounts DROP CONSTRAINT fixture_dragon_reset')
             continuation=ordinary('dragon.php?op=prologue1')
+            authversion=self.query('SELECT authversion FROM accounts WHERE acctid=?',[player])
             status,body=request('dragon.php?op=prologue1',continuation); self.assertEqual(200,status,body[:2000])
+            self.assertEqual(authversion,self.query('SELECT authversion FROM accounts WHERE acctid=?',[player]))
             after=self.query('SELECT dragonkills,level,gold,gems,charm,specialty,badguy,bufflist,companions FROM accounts WHERE acctid=?',[player])[0]
             self.assertEqual(['1','1','250','11','5','',''],[after[k] for k in ['dragonkills','level','gold','gems','charm','specialty','badguy']])
             self.assertEqual([],decode(after['bufflist'])); self.assertEqual([],decode(after['companions']))

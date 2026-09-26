@@ -305,3 +305,8 @@ corruption remains 409. Neither validator nor the retained test is weakened.
 Local recheck passes 83 PHPUnit tests/2398 assertions and authentication,
 Transmutation persistence/failure, and the specialty corruption matrix.
 New final-head acceptance is required and recorded in PR #1.
+
+
+## 2026-09-26: Dragon authority and initial defeated-target closure
+
+See [the Dragon execution record](DRAGON-AUTHORITY-20260926.md) for the route inventory, tests, state contracts and independent certification decisions. Dragon now owns POST/CSRF/state-bound transactional combat and stored-outcome continuation; the historical reset preserves modern login generations. The narrow Forest validator accepts consistent dead-A/live-B history, with focused TS2 progression/settlement tests. Remaining Dark Arts companion/fallback, Mystical Powers aura/area/combined ordering, and TS1/3/5 progression/combined-modifier cases prevent promotion. Counts remain **21 PASS / 0 limitation / 3 BLOCKED**. Final exact-head CI evidence is recorded in PR #1; earlier accepted workflow IDs do not validate this new tree.

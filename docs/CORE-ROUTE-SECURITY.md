@@ -277,3 +277,10 @@ corruption remains 409. Neither validator nor the retained test is weakened.
 Local recheck passes 83 PHPUnit tests/2398 assertions and authentication,
 Transmutation persistence/failure, and the specialty corruption matrix.
 New final-head acceptance is required and recorded in PR #1.
+
+
+## 2026-09-26: Dragon caller authority supersedes the earlier Dragon GET finding
+
+`dragon.php` now delegates to `lib/dragon_combat.php`. Introduction, combat and prologue GET requests only offer forms. Begin, fight, specialty and continuation mutations require authentication, allowed server-owned state, POST, CSRF and scoped state-bound one-use intents. Developer God Mode/restart retain role checks. Old skill/level/flawless/auto/target query injection rejects. A unique encounter identity binds live combat and the stored victory marker; the current Dragon Kill count also binds continuation. Battle, preference/account writes, companions/buffs, outcome news and the later reset/reward hooks are covered by caller-owned transactions. The reset preserves `authversion`. See [the full route/hook inventory and test boundaries](DRAGON-AUTHORITY-20260926.md).
+
+This closes the implementation of the named Dragon GET mutations, subject to the final exact-head HTTP acceptance recorded in PR #1. It does not certify all companion/buff/combined-effect gameplay. The focused dead-A/live-B validator and TS2 test do not authorize ordinary Forest GET fight/run/target routes. Other meaningful GET/replay findings remain: ordinary Forest, New Day dk/pdk, petitions, clans, equipment, stables, training and legacy content editors. Broader rewards/defeat, PvP, mail and account-deletion/expiration remain open.
