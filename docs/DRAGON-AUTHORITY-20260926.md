@@ -14,7 +14,7 @@ Phase 3 continuation from `ebcd70988478553a67d645dcffa6f05573e0338e` on `moderni
 | Victory | Battle flags followed by news and request-carried flawless value | Battle-derived result, victory news and a typed pending outcome persist atomically. The pending outcome contains server-derived flawless status, current kill count and the unique encounter identity. It is never accepted as live combat. |
 | `?op=prologue1` | GET story, full account reset and reward; request `flawless` trusted | GET continuation form only. POST requires pending stored victory and an independent one-use intent. Story, historical reset/rewards, hooks and clearing occur in a second player transaction. Request flawless/outcome/destination values reject. |
 | Defeat | Nontransactional loss and dead state | Actual battle defeat, news/debug writes, gold loss, HP/alive state and combat clearing are committed once with the round. Historical Dragon defeat does not deduct Forest XP. |
-| After prologue | News / subsequent New Day | Historical news destination retained. Buffs, companions and combat clear; specialties reset through the shipped `dragonkill` hooks. Modern `authversion` survives the reset. |
+| After prologue | News / subsequent New Day | Historical news destination retained. Buffs, companions and combat clear; specialties reset through the shipped `dragonkill` hooks. Modern `authversion` survives the reset. A stored Dragon victory permits continuation at zero HP after simultaneous lethal shield damage; only the prologue restores HP, preserving the historical difference from Forest recovery. |
 
 The shared engine is `battle.php`, including `apply-specialties`, battle-buff and companion processing, `battle-victory` and `battle-defeat`. The Dragon caller owns the round/outcome transaction. Forest retains its separate caller and Forest reward/defeat calculations. Dragon does not call Forest settlement. There is no public Dragon include endpoint; the legacy direct `battle.php` denial remains.
 
@@ -28,7 +28,7 @@ The retained Dragon hooks are `buffdragon`, `fightoptions`, battle hooks, `hprec
 
 The historical reset-by-column loop also reset the newly introduced `authversion` column. This would revoke the current authenticated generation and roll back the generation counter. The reset now explicitly preserves it. Tests assert both the stored generation and subsequent replay rejection after actual completion.
 
-A failed mutation rolls back preference writes, player/combat state, buff/companion changes and related transactional news/debug/observer rows. An attempted intent remains consumed; a fresh form can retry. Authentication/bootstrap metrics and navigation bookkeeping are not gameplay outcome state.
+A failed mutation rolls back preference writes, player/combat state, buff/companion changes and related transactional news/debug/observer rows. Simultaneous-lethal Dragon shield tests cover exact-zero and negative Dragon HP, zero player HP, non-flawless rewards and continuation replay. An attempted intent remains consumed; a fresh form can retry. Authentication/bootstrap metrics and navigation bookkeeping are not gameplay outcome state.
 
 ## Defeated targets
 

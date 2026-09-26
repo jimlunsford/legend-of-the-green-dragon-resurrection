@@ -1440,6 +1440,23 @@ function resurrectionrandomfixture_dohook($hook,$args) { mt_srand((int)getsettin
             self.assertEqual(['0','0','0','1000',''],[after[k] for k in ['alive','hitpoints','gold','experience','badguy']])
             self.assertEqual('6',self.query("SELECT value FROM module_userprefs WHERE userid=? AND modulename='specialtymysticpower' AND setting='uses'",[player])[0]['value'])
             self.assertEqual('battle-defeat',terminal()[-1]['hook']); before=extra(); f['rejected'](data); self.assertEqual(before,extra())
+            # Historical Dragon simultaneous lethal shield victory still reaches
+            # prologue at zero player HP. No Forest mushroom recovery is invented.
+            for dragon_hp in [394,393]:
+                self.query('DELETE FROM fixture_specialty_terminal')
+                f['prepare']('MP',badguy=combat(creaturehealth=dragon_hp,creatureattack=1000),hitpoints=177,maxhitpoints=150,gold=1000,gems=10,charm=0)
+                data=f['form'](5); status,body=request(data=data); self.assertEqual(200,status,body[:2000])
+                after=f['snapshot']()[0]; self.assertEqual('0',after['hitpoints']); self.assertEqual('0',after['alive'])
+                self.assertEqual(False,decode(after['badguy'])['dragonVictory'])
+                self.assertEqual('battle-victory',terminal()[0]['hook']); self.assertEqual(dragon_hp-394,terminal()[0]['enemy']['creaturehealth'])
+                continuation=self._security_fields(body,'dragon.php?op=prologue1')
+                before=extra(); self.assertEqual(200,request('dragon.php?op=prologue1')[0]); self.assertEqual(before,extra())
+                status,body=request('dragon.php?op=prologue1',continuation); self.assertEqual(200,status,body[:2000])
+                result=self.query('SELECT dragonkills,hitpoints,alive,gold,gems,badguy,bufflist FROM accounts WHERE acctid=?',[player])[0]
+                self.assertEqual(['1','10','1','100','10',''],[result[k] for k in ['dragonkills','hitpoints','alive','gold','gems','badguy']])
+                self.assertEqual([],decode(result['bufflist'])); before=extra()
+                self.assertEqual(409,request('dragon.php?op=prologue1',continuation)[0]); self.assertEqual(before,extra())
+
 
     def test_specialty_independent_level_authority(self):
         with self._specialty_accounting_fixture() as f:

@@ -15,15 +15,15 @@ function resurrection_dragon_context(?array $specialty = null): string {
 
 function resurrection_dragon_authority(string $op): void {
     global $session;
-    if (empty($session['loggedin']) || empty($session['user']['alive']) ||
+    if (empty($session['loggedin']) ||
         $session['user']['level'] < 15 || $session['user']['specialinc'] !== '') throw new DomainException();
     if (in_array($op,['restart','godmode'],true) && !($session['user']['superuser'] & SU_DEVELOPER)) throw new DomainException();
     if ($op === 'prologue1') {
         \Resurrection\Game\DragonCombatState::victory($session['user']['badguy'], (int)$session['user']['dragonkills']);
     } elseif ($op === 'begin') {
-        if ($session['user']['hitpoints'] <= 0 || $session['user']['badguy'] !== '') throw new DomainException();
+        if (empty($session['user']['alive']) || $session['user']['hitpoints'] <= 0 || $session['user']['badguy'] !== '') throw new DomainException();
     } else {
-        if ($session['user']['hitpoints'] <= 0) throw new DomainException();
+        if (empty($session['user']['alive']) || $session['user']['hitpoints'] <= 0) throw new DomainException();
         \Resurrection\Game\DragonCombatState::read($session['user']['badguy']);
     }
 }
@@ -37,13 +37,13 @@ function resurrection_dragon_form(string $op, string $label, string $extra = '')
 
 function resurrection_dragon_forms(): void {
     global $session;
-    if (empty($session['user']['alive'])) { addnav('Daily news','news.php'); return; }
     try {
         resurrection_dragon_authority('prologue1');
         addnav('Continue','dragon.php?op=prologue1');
         resurrection_dragon_form('prologue1','Continue');
         return;
     } catch (DomainException) { /* Live combat is a different validated state. */ }
+    if (empty($session['user']['alive'])) { addnav('Daily news','news.php'); return; }
     resurrection_dragon_authority('fight');
     resurrection_dragon_form('fight','Fight');
     if (getsetting('autofight',0)) {
@@ -78,6 +78,9 @@ function resurrection_dragon_round(string $op, string $level, string $auto): voi
     /** @var bool $victory */
     /** @var bool $defeat */
     if ($victory) {
+        // Shield can kill both combatants. The historical Dragon prologue,
+        // unlike Forest's mushroom recovery, restores health at completion.
+        $session['user']['alive'] = $session['user']['hitpoints'] > 0;
         $flawless = $newenemies[0]['diddamage'] != 1;
         output('`&With a mighty final blow, `@The Green Dragon`& lets out a tremendous bellow and falls at your feet, dead at last.');
         addnews('`&%s has slain the hideous creature known as `@The Green Dragon`&.  All across the land, people rejoice!', $session['user']['name']);
