@@ -33,13 +33,15 @@ final class SpecialtyCombatState
             }
         }
         $targets = 0;
+        $available = 0;
         foreach ($state['enemies'] as $index=>$enemy) {
             if (!is_int($index) || $index < 0 || !is_array($enemy)) throw new \DomainException('Invalid combat enemy.');
             $numeric = ['creatureid','creaturelevel','creaturehealth','creatureattack','creaturedefense','creaturegold','creatureexp','playerstarthp'];
             $text = ['creaturename','creatureweapon','creaturelose','creaturewin','createdby','creatureaiscript','type','denyflawless'];
             $flags = ['dead','istarget','diddamage','expgained','killedplayer','alwaysattacks','hidehitpoints','forest','graveyard','cannotbetarget','essentialleader','fleesifalone'];
             if (array_diff(array_keys($enemy), [...$numeric,...$text,...$flags]) !== []) throw new \DomainException('Unexpected combat field.');
-            foreach ($numeric as $key) self::number($enemy[$key] ?? null, in_array($key,['creatureid','creaturelevel','playerstarthp'],true)?1:0,2147483647);
+            foreach ($numeric as $key) self::number($enemy[$key] ?? null,
+                $key === 'creaturehealth' ? -2147483647 : (in_array($key,['creatureid','creaturelevel','playerstarthp'],true)?1:0),2147483647);
             foreach (['creatureid','creaturelevel'] as $key) {
                 if ((float)$enemy[$key] !== floor((float)$enemy[$key])) throw new \DomainException('Invalid combat identity.');
             }
@@ -54,7 +56,16 @@ final class SpecialtyCombatState
             if ($enemy['creaturename'] === '' || (isset($enemy['type']) && $enemy['type'] !== 'forest')) throw new \DomainException('Invalid combat identity.');
             self::flag($enemy['diddamage'] ?? null);
             foreach ($flags as $key) if (array_key_exists($key,$enemy)) self::flag($enemy[$key]);
-            if ($enemy['creaturehealth'] <= 0 || !empty($enemy['dead']) || !empty($enemy['killedplayer'])) throw new \DomainException('Terminal specialty target.');
+            if (!empty($enemy['killedplayer'])) throw new \DomainException('Terminal specialty target.');
+            // The battle engine retains defeated enemies for final reward settlement.
+            // They remain immutable participants, never eligible targets. Both the
+            // numeric result and terminal flags must agree before another round.
+            if ($enemy['creaturehealth'] <= 0) {
+                if (empty($enemy['dead']) || !empty($enemy['istarget'])) throw new \DomainException('Inconsistent defeated target.');
+                continue;
+            }
+            if (!empty($enemy['dead'])) throw new \DomainException('Inconsistent live target.');
+            if (empty($enemy['cannotbetarget'])) $available++;
             if (!empty($enemy['istarget'])) {
                 if (!empty($enemy['cannotbetarget'])) throw new \DomainException('Ineligible combat target.');
                 $targets++;
@@ -62,10 +73,7 @@ final class SpecialtyCombatState
         }
         // A newly generated encounter may not yet have autosettarget's flag.
         if ($targets > 1) throw new \DomainException('Invalid specialty target.');
-        if ($targets === 0) {
-            $available = array_filter($state['enemies'], static fn(array $enemy): bool => empty($enemy['cannotbetarget']));
-            if ($available === []) throw new \DomainException('No specialty target.');
-        }
+        if ($available === 0) throw new \DomainException('No specialty target.');
         return $state;
     }
 
@@ -73,7 +81,7 @@ final class SpecialtyCombatState
     {
         // PDO creature rows contain numeric strings; derived combat values are numbers.
         if ((!is_int($value) && !is_float($value) && !is_string($value)) ||
-            (is_string($value) && !preg_match('/^(0|[1-9][0-9]*)(\.[0-9]+)?$/D',$value)) ||
+            (is_string($value) && !preg_match($min < 0 ? '/^-?(0|[1-9][0-9]*)(\.[0-9]+)?$/D' : '/^(0|[1-9][0-9]*)(\.[0-9]+)?$/D',$value)) ||
             !is_numeric($value) || !is_finite((float)$value) || $value < $min || $value > $max) {
             throw new \DomainException('Invalid combat statistic.');
         }

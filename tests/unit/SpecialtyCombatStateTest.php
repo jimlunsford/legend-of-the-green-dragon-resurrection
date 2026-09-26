@@ -44,6 +44,24 @@ final class SpecialtyCombatStateTest extends TestCase
         foreach ($cases as $state) $this->reject(serialize($state));
         foreach (['','broken','O:8:"stdClass":0:{}',str_repeat('x',1048577)] as $encoded) $this->reject($encoded);
     }
+    public function testDefeatedHistoryRequiresConsistentFlagsAndALiveTarget(): void
+    {
+        foreach ([0,-1,'-100'] as $hp) {
+            $state=$this->state();
+            $state['enemies'][]=$state['enemies'][0]+['istarget'=>true];
+            $state['enemies'][0]['creaturehealth']=$hp;
+            $state['enemies'][0]['dead']=true;
+            $state['enemies'][0]['istarget']=false;
+            $state['options']['experience']=[0=>10];
+            self::assertSame($state,SpecialtyCombatState::read(serialize($state)));
+            $bad=$state; $bad['enemies'][0]['istarget']=true; $this->reject(serialize($bad));
+            $bad=$state; $bad['enemies'][0]['dead']=false; $this->reject(serialize($bad));
+            $bad=$state; unset($bad['enemies'][0]['dead']); $this->reject(serialize($bad));
+            $bad=$state; $bad['enemies'][0]['creaturehealth']=1; $this->reject(serialize($bad));
+            $bad=$state; $bad['enemies'][1]=$bad['enemies'][0]; $this->reject(serialize($bad));
+            $bad=$state; $bad['enemies'][0]['killedplayer']=true; $this->reject(serialize($bad));
+        }
+    }
     private function reject(string $encoded): void
     {
         try { SpecialtyCombatState::read($encoded); self::fail('Invalid combat accepted'); }

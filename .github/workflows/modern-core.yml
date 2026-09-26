@@ -64,6 +64,6 @@ jobs:
       - run: vendor/bin/phpstan analyse -c phpstan-new.neon --no-progress --memory-limit=1G
       - run: python3 scripts/verify-historical-baseline.py
       - run: python3 scripts/validate-project.py
-      - run: python3 -m unittest discover -s tests/tooling -v
+      - run: python3 -m unittest discover -s tests/tooling -v -f
         env:
           RESURRECTION_TEST_DB_HOST: 127.0.0.1:${{ job.services.database.ports[3306] }}

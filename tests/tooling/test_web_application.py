@@ -1197,6 +1197,94 @@ function resurrectionrandomfixture_dohook($hook,$args) { mt_srand((int)getsettin
             self.query("DELETE FROM settings WHERE setting IN ('enablecompanions','dropmingold','forestgemchance','instantexp')")
             for row in settings: self.query('INSERT INTO settings(setting,value) VALUES (?,?)',[row['setting'],row['value']])
 
+    def test_defeated_target_progression_exact_zero_negative_and_terminal(self):
+        with self._specialty_accounting_fixture() as f, self._specialty_terminal_capture() as terminal:
+            player=f['player']; encode=f['encode']; decode=f['decode']
+            self.query("UPDATE settings SET value='1' WHERE setting='forestgemchance'")
+            for starting_hp in [88,87]:
+                for outcome in ['victory','defeat']:
+                    with self.subTest(first_target_hp=starting_hp,outcome=outcome):
+                        self.query('DELETE FROM fixture_specialty_terminal')
+                        a=dict(f['enemy'],creaturehealth=starting_hp,creatureexp=100,creaturegold=0,istarget=True)
+                        b=dict(f['enemy'],creatureid=2,creaturename='Second Target',creatureattack=1000,creatureexp=200,creaturegold=0,istarget=False)
+                        f['prepare']('TS',badguy=encode({'enemies':[a,b],'options':{'type':'forest','didsurprise':1,'maxattacks':1}}),gold=1000,gems=10,experience=1000,turns=20)
+                        stale=f['form'](2); first=f['form'](2)
+                        status,body=f['request'](data=first); self.assertEqual(200,status,body[:2000])
+                        state=f['snapshot']()[0]; combat=decode(state['badguy']); corpse=combat['enemies'][0]
+                        self.assertEqual(starting_hp-88,corpse['creaturehealth']); self.assertTrue(corpse['dead']); self.assertFalse(corpse['istarget'])
+                        self.assertTrue(combat['enemies'][1]['istarget']); self.assertFalse(combat['enemies'][1]['dead'])
+                        self.assertEqual(100000,combat['enemies'][1]['creaturehealth'])
+                        self.assertEqual(['500','1000','1000','10'],[state[k] for k in ['hitpoints','experience','gold','gems']])
+                        self.assertEqual(4,decode(state['bufflist'])['ts2']['rounds']); self.assertEqual([],terminal())
+                        f['rejected'](first); f['rejected'](stale)
+                        # Every request-side target/stat override rejects against the actual progressed state.
+                        for patch in [{'newtarget':'0'},{'newtarget':'2'},{'creaturehealth':'100000'},{'enemy':'0'}]:
+                            f['rejected'](dict(f['form'](2),**patch),400)
+                        fresh=f['form'](2); status,body=f['request'](data=fresh); self.assertEqual(200,status,body[:2000])
+                        state=f['snapshot']()[0]; progressed=decode(state['badguy'])
+                        self.assertEqual(corpse,progressed['enemies'][0])
+                        self.assertEqual(99912,progressed['enemies'][1]['creaturehealth'])
+                        self.assertEqual('323',state['hitpoints']); self.assertEqual('1000',state['experience'])
+                        self.assertEqual(4,decode(state['bufflist'])['ts2']['rounds'])
+                        self.assertEqual('5',self.query("SELECT value FROM module_userprefs WHERE userid=? AND modulename='specialtythiefskills' AND setting='uses'",[player])[0]['value'])
+                        f['rejected'](fresh); f['rejected'](first)
+                        stale=f['form'](2)
+                        if outcome=='victory':
+                            progressed['enemies'][1]['creaturehealth']=88
+                            self.query('UPDATE accounts SET badguy=? WHERE acctid=?',[encode(progressed),player])
+                        else: self.query('UPDATE accounts SET hitpoints=177 WHERE acctid=?',[player])
+                        f['rejected'](stale)
+                        final=f['form'](2); status,body=f['request'](data=final); self.assertEqual(200,status,body[:2000])
+                        after=f['snapshot']()[0]
+                        self.assertEqual('',after['badguy']); self.assertEqual([],decode(after['companions']))
+                        self.assertEqual('3',self.query("SELECT value FROM module_userprefs WHERE userid=? AND modulename='specialtythiefskills' AND setting='uses'",[player])[0]['value'])
+                        self.assertEqual(2,len(terminal()))
+                        self.assertEqual(['battle-'+outcome]*2,[event['hook'] for event in terminal()])
+                        self.assertEqual(starting_hp-88,terminal()[0]['enemy']['creaturehealth'])
+                        self.assertEqual(0 if outcome=='victory' else 99824,terminal()[1]['enemy']['creaturehealth'])
+                        expected=['1','323','1000','1150','11'] if outcome=='victory' else ['0','0','0','900','10']
+                        self.assertEqual(expected,[after[k] for k in ['alive','hitpoints','gold','experience','gems']])
+                        before=terminal(); f['rejected'](final); f['rejected'](fresh); f['rejected'](first); self.assertEqual(before,terminal())
+
+    def test_dragon_effect_accounting_duration_and_corruption(self):
+        cases=[('DA',2,120,4914,99737),('DA',3,1000,4911,99960),('DA',5,1000,5000,99951),
+            ('MP',1,120,5015,99955),('MP',2,120,4914,99984),('MP',3,120,5045,99955),
+            ('MP',5,1000,4823,99606),('TS',1,1000,4930,99960),('TS',2,120,5000,99907),
+            ('TS',3,1000,5000,99942),('TS',5,1000,4896,99865)]
+        with self._specialty_accounting_fixture('dragon') as f:
+            def fight():
+                status,body=f['request']('dragon.php?op=fight'); self.assertEqual(200,status,body[:2000])
+                status,body=f['request']('dragon.php?op=fight',self._security_fields(body,'dragon.php?op=fight')); self.assertEqual(200,status,body[:2000])
+            for spec,level,attack,hp,targethp in cases:
+                with self.subTest(spec=spec,level=level):
+                    state={'enemies':[dict(f['enemy'],creatureattack=attack)],'options':{'type':'dragon','didsurprise':1}}
+                    f['prepare'](spec,badguy=f['encode'](state),hitpoints=5000,maxhitpoints=10000)
+                    status,body=f['request'](data=f['form'](level)); self.assertEqual(200,status,body[:2000])
+                    after=f['snapshot']()[0]
+                    self.assertEqual(hp,int(after['hitpoints']),body[-2000:]); self.assertEqual(targethp,f['decode'](after['badguy'])['enemies'][0]['creaturehealth'])
+                    key=spec.lower()+str(level)
+                    if key=='da2': self.assertNotIn(key,f['decode'](after['bufflist'])); continue
+                    self.assertEqual(4,f['decode'](after['bufflist'])[key]['rounds'])
+                    for remaining in [3,2,1,0,0]:
+                        fight(); buffs=f['decode'](f['snapshot']()[0]['bufflist'])
+                        if remaining: self.assertEqual(remaining,buffs[key]['rounds'])
+                        else: self.assertNotIn(key,buffs)
+                    self.assertEqual(str(9-level),self.query('SELECT value FROM module_userprefs WHERE userid=? AND modulename=? AND setting=?',[f['player'],f['modules'][spec],'uses'])[0]['value'])
+            # Genuine persisted producers supply the starting schema for corruption tests.
+            for spec,level in [('DA',3),('MP',1),('MP',2),('MP',3),('MP',5),('TS',1),('TS',2),('TS',3),('TS',5)]:
+                f['prepare'](spec); self.assertEqual(200,f['request'](data=f['form'](level))[0])
+                buffs=f['decode'](f['snapshot']()[0]['bufflist']); key=spec.lower()+str(level)
+                for patch in [{'rounds':0},{'rounds':6},{'forged':1},{'schema':'forged'}]:
+                    corrupt=dict(buffs); corrupt[key]=dict(buffs[key],**patch)
+                    self.query('UPDATE accounts SET bufflist=? WHERE acctid=?',[f['encode'](corrupt),f['player']]); before=f['snapshot']()
+                    for path,data in [('dragon.php?op=fight',None),('dragon.php?op=specialty',None),('dragon.php?op=specialty',{'level':str(level)})]:
+                        self.assertEqual(409,f['request'](path,data)[0]); self.assertEqual(before,f['snapshot']())
+                self.query('UPDATE accounts SET bufflist=? WHERE acctid=?',[f['encode'](buffs),f['player']])
+            f['prepare']('DA'); self.assertEqual(200,f['request'](data=f['form'](1))[0])
+            for encoded in ['broken',f['encode']({'skeleton_warrior':{'hitpoints':1}})]:
+                self.query('UPDATE accounts SET companions=? WHERE acctid=?',[encoded,f['player']]); before=f['snapshot']()
+                self.assertEqual(409,f['request']()[0]); self.assertEqual(before,f['snapshot']())
+
     def test_dragon_specialty_authority_matrix(self):
         with self._specialty_accounting_fixture('dragon') as f:
             for spec,module in f['modules'].items():
@@ -1275,6 +1363,22 @@ function resurrectionrandomfixture_dohook($hook,$args) { mt_srand((int)getsettin
                 self.query('UPDATE accounts SET badguy=? WHERE acctid=?',[changed,player]); f['rejected'](data)
             f['prepare']('DA'); data=f['form'](2)
             self.query('UPDATE accounts SET dragonkills=1 WHERE acctid=?',[player]); f['rejected'](data)
+            # Developer controls retain their historical capability behind POST and role checks.
+            f['prepare']('DA',hitpoints=150,maxhitpoints=150,defense=100000)
+            for op in ['godmode','restart']:
+                before=extra(); self.assertEqual(409,request('dragon.php?op='+op)[0]); self.assertEqual(before,extra())
+            self.query('UPDATE accounts SET superuser=2048 WHERE acctid=?',[player])
+            status,body=request('dragon.php?op=fight'); self.assertEqual(200,status,body[:2000])
+            restart=self._security_fields(body,'dragon.php?op=restart'); god=self._security_fields(body,'dragon.php?op=godmode')
+            # Role removal invalidates a previously offered developer action.
+            self.query('UPDATE accounts SET superuser=0 WHERE acctid=?',[player])
+            before=extra(); self.assertEqual(409,request('dragon.php?op=godmode',god)[0]); self.assertEqual(before,extra())
+            self.query('UPDATE accounts SET superuser=2048 WHERE acctid=?',[player])
+            status,body=request('dragon.php?op=restart',restart); self.assertEqual(200,status,body[:2000])
+            one=decode(f['snapshot']()[0]['badguy'])['options']['dragonEncounter']
+            stale=f['form'](2); restart=self._security_fields(body,'dragon.php?op=restart')
+            status,body=request('dragon.php?op=restart',restart); self.assertEqual(200,status,body[:2000])
+            two=decode(f['snapshot']()[0]['badguy'])['options']['dragonEncounter']; self.assertNotEqual(one,two); f['rejected'](stale)
             # Forced failures after specialty preference writes and terminal news writes.
             for terminal_round in [False,True]:
                 f['prepare']('DA',badguy=combat(creaturehealth=1 if terminal_round else 100000),hitpoints=150,maxhitpoints=150)
@@ -1295,7 +1399,7 @@ function resurrectionrandomfixture_dohook($hook,$args) { mt_srand((int)getsettin
             self.query('UPDATE accounts SET badguy=? WHERE acctid=?',[combat(creaturehealth=1,creatureattack=1,creaturedefense=1),player])
             stale_fight=ordinary(); data=f['form'](2)
             status,body=request(data=data); self.assertEqual(200,status,body[:2000])
-            outcome=decode(f['snapshot']()[0]['badguy']); self.assertEqual({'dragonVictory':True,'dragonkills':0},outcome)
+            outcome=decode(f['snapshot']()[0]['badguy']); self.assertEqual({'dragonVictory':True,'dragonkills':0}, {k:v for k,v in outcome.items() if k!='dragonEncounter'}); self.assertRegex(outcome['dragonEncounter'],r'^[a-f0-9]{32}$')
             self.assertEqual('6',self.query("SELECT value FROM module_userprefs WHERE userid=? AND modulename='specialtydarkarts' AND setting='uses'",[player])[0]['value'])
             self.assertEqual(dict(skeleton['skeleton_warrior'],used=False),decode(f['snapshot']()[0]['companions'])['skeleton_warrior'])
             self.assertEqual('battle-victory',terminal()[-1]['hook'])

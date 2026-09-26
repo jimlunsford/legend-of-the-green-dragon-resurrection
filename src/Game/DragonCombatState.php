@@ -18,11 +18,12 @@ final class DragonCombatState
             !is_array($state['options'] ?? null)) throw new \DomainException('Invalid Dragon encounter.');
         $options = $state['options'];
         if (($options['type'] ?? null) !== 'dragon' ||
-            array_diff(array_keys($options), ['type','maxattacks','didsurprise']) !== []) {
+            array_diff(array_keys($options), ['type','maxattacks','didsurprise','dragonEncounter']) !== []) {
             throw new \DomainException('Invalid Dragon options.');
         }
-        if (isset($options['maxattacks'])) self::number($options['maxattacks'], 1);
-        if (isset($options['didsurprise'])) self::flag($options['didsurprise']);
+        if (array_key_exists('dragonEncounter',$options)) self::encounter($options['dragonEncounter']);
+        if (array_key_exists('maxattacks',$options)) self::number($options['maxattacks'], 1, 100);
+        if (array_key_exists('didsurprise',$options)) self::flag($options['didsurprise']);
         $enemy = $state['enemies'][0];
         if (!is_array($enemy) || array_diff(array_keys($enemy), ['creaturename','creatureweapon',
             'creaturelevel','creatureattack','creaturedefense','creaturehealth','diddamage','type',
@@ -39,26 +40,32 @@ final class DragonCombatState
             throw new \DomainException('Invalid Dragon identity.');
         }
         self::flag($enemy['diddamage'] ?? null);
-        foreach (['dead','istarget','killedplayer'] as $key) if (isset($enemy[$key])) self::flag($enemy[$key]);
-        if (isset($enemy['playerstarthp'])) self::number($enemy['playerstarthp'], 1);
+        foreach (['dead','istarget','killedplayer'] as $key) if (array_key_exists($key,$enemy)) self::flag($enemy[$key]);
+        if (array_key_exists('playerstarthp',$enemy)) self::number($enemy['playerstarthp'], 1);
         if (!empty($enemy['dead']) || !empty($enemy['killedplayer'])) throw new \DomainException('Terminal Dragon.');
         return $state;
     }
 
-    /** @return array{dragonVictory:bool,dragonkills:int} */
+    /** @return array{dragonVictory:bool,dragonkills:int,dragonEncounter:string} */
     public static function victory(mixed $encoded, int $kills): array
     {
         $state = ScalarState::read($encoded);
-        if (!is_array($state) || count($state) !== 2 || !is_bool($state['dragonVictory'] ?? null) ||
+        if (!is_array($state) || count($state) !== 3 || !is_bool($state['dragonVictory'] ?? null) ||
             ($state['dragonkills'] ?? null) !== $kills) throw new \DomainException('No pending Dragon victory.');
-        return ['dragonVictory'=>$state['dragonVictory'], 'dragonkills'=>$kills];
+        self::encounter($state['dragonEncounter'] ?? null);
+        return ['dragonVictory'=>$state['dragonVictory'], 'dragonkills'=>$kills, 'dragonEncounter'=>$state['dragonEncounter']];
     }
 
-    private static function number(mixed $value, int $min): void
+    private static function encounter(mixed $value): void
+    {
+        if (!is_string($value) || !preg_match('/^[a-f0-9]{32}$/D',$value)) throw new \DomainException('Invalid Dragon encounter identity.');
+    }
+
+    private static function number(mixed $value, int $min, int $max = 2147483647): void
     {
         if ((!is_int($value) && !is_float($value) && !is_string($value)) ||
             (is_string($value) && !preg_match('/^(0|[1-9][0-9]*)(\.[0-9]+)?$/D',$value)) ||
-            !is_numeric($value) || !is_finite((float)$value) || $value < $min || $value > 2147483647) {
+            !is_numeric($value) || !is_finite((float)$value) || $value < $min || $value > $max) {
             throw new \DomainException('Invalid Dragon statistic.');
         }
     }

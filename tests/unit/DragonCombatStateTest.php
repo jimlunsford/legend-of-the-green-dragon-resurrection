@@ -45,7 +45,7 @@ final class DragonCombatStateTest extends TestCase
     public function testVictoryIsTypedBoundToKillCountAndNeverLiveCombat(): void
     {
         foreach ([false,true] as $flawless) {
-            $state=['dragonVictory'=>$flawless,'dragonkills'=>2];
+            $state=['dragonVictory'=>$flawless,'dragonkills'=>2,'dragonEncounter'=>str_repeat('a',32)];
             self::assertSame($state,DragonCombatState::victory(serialize($state),2));
             try { DragonCombatState::read(serialize($state)); self::fail('Outcome accepted as combat'); }
             catch (\DomainException) { self::assertTrue(true); }

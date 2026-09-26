@@ -7,7 +7,7 @@ function resurrection_dragon_context(?array $specialty = null): string {
     global $session;
     $combat = resurrection_combat_context($specialty ?? ['module'=>'','skill'=>0,'uses'=>0]);
     $state = [];
-    foreach (['dragonkills','dragonpoints','slaydragon','gold','gems','experience','charm','age','race','specialmisc'] as $key) {
+    foreach (['dragonkills','dragonpoints','slaydragon','gold','gems','experience','charm','age','race','specialmisc','superuser'] as $key) {
         $state[$key] = $session['user'][$key];
     }
     return hash('sha256', json_encode([$combat,$state], JSON_THROW_ON_ERROR));
@@ -17,6 +17,7 @@ function resurrection_dragon_authority(string $op): void {
     global $session;
     if (empty($session['loggedin']) || empty($session['user']['alive']) ||
         $session['user']['level'] < 15 || $session['user']['specialinc'] !== '') throw new DomainException();
+    if (in_array($op,['restart','godmode'],true) && !($session['user']['superuser'] & SU_DEVELOPER)) throw new DomainException();
     if ($op === 'prologue1') {
         \Resurrection\Game\DragonCombatState::victory($session['user']['badguy'], (int)$session['user']['dragonkills']);
     } elseif ($op === 'begin') {
@@ -52,14 +53,23 @@ function resurrection_dragon_forms(): void {
         if (getsetting('autofightfull',0)) resurrection_dragon_form('fight','Until End','<input type="hidden" name="auto" value="full">');
     }
     resurrection_combat_forms('dragon');
+    if ($session['user']['superuser'] & SU_DEVELOPER) {
+        resurrection_dragon_form('godmode','GOD MODE');
+        resurrection_dragon_form('restart','Restart encounter');
+    }
 }
 
 /** Round, terminal message/news and durable outcome are one player transaction. */
 function resurrection_dragon_round(string $op, string $level, string $auto): void {
     global $session, $badguy, $newenemies;
-    if ($op === 'begin') resurrection_dragon_create();
-    $_GET = ['op'=>$op === 'begin' ? '' : 'fight'];
+    if (in_array($op,['begin','restart'],true)) resurrection_dragon_create();
+    $state = \Resurrection\Game\DragonCombatState::read($session['user']['badguy']);
+    $state['options']['dragonEncounter'] ??= bin2hex(random_bytes(16));
+    $encounter = $state['options']['dragonEncounter'];
+    $session['user']['badguy'] = serialize($state);
+    $_GET = ['op'=>in_array($op,['begin','restart'],true) ? '' : 'fight'];
     if ($op === 'specialty') $_GET += ['skill'=>$session['user']['specialty'],'l'=>$level];
+    if ($op === 'godmode') $_GET['skill'] = 'godmode';
     if ($auto !== '') $_GET['auto'] = $auto;
     if ($op === 'run') output("The creature's tail blocks the only exit to its lair!");
     $GLOBALS['module_prefs'] = [];
@@ -71,7 +81,7 @@ function resurrection_dragon_round(string $op, string $level, string $auto): voi
         $flawless = $newenemies[0]['diddamage'] != 1;
         output('`&With a mighty final blow, `@The Green Dragon`& lets out a tremendous bellow and falls at your feet, dead at last.');
         addnews('`&%s has slain the hideous creature known as `@The Green Dragon`&.  All across the land, people rejoice!', $session['user']['name']);
-        $session['user']['badguy'] = serialize(['dragonVictory'=>$flawless,'dragonkills'=>(int)$session['user']['dragonkills']]);
+        $session['user']['badguy'] = serialize(['dragonVictory'=>$flawless,'dragonkills'=>(int)$session['user']['dragonkills'],'dragonEncounter'=>$encounter]);
     } elseif ($defeat) {
         $taunt = select_taunt_array();
         if ($session['user']['sex']) {
@@ -94,7 +104,7 @@ function resurrection_dragon_round(string $op, string $level, string $auto): voi
 function resurrection_dragon_controller(): void {
     global $session;
     try {
-        $op = \Resurrection\Http\Input::choice($_GET,'op',['','begin','fight','run','specialty','prologue1'],'');
+        $op = \Resurrection\Http\Input::choice($_GET,'op',['','begin','fight','run','specialty','prologue1','godmode','restart'],'');
         if (array_diff(array_keys($_GET),['op','c','nointro']) !== [] ||
             (isset($_GET['nointro']) && !in_array($_GET['nointro'],['0','1'],true))) throw new InvalidArgumentException();
         if ($op === '') $op = $session['user']['badguy'] === '' ? 'begin' : 'fight';
