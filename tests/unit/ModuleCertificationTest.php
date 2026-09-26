@@ -210,6 +210,28 @@ final class ModuleCertificationTest extends TestCase
         self::assertSame(1,activate_buffs('defense')['defmod']);
     }
 
+    public function testCombatContextSurvivesTransmutationHydrationAndBindsChanges(): void
+    {
+        require_once 'lib/specialty_combat.php';
+        apply_buff('transmute',\Resurrection\Game\TransmutationState::create(20,.5,.75,1));
+        // Combat appends this after fields_calculated; common.php restores it first.
+        $GLOBALS['session']['bufflist']['transmute']['used']=0;
+        $specialty=['module'=>'','skill'=>0,'uses'=>0];
+        $before=resurrection_combat_context($specialty);
+        restore_buff_fields();
+        $stored=serialize($GLOBALS['session']['bufflist']);
+        $GLOBALS['session']['bufflist']=\Resurrection\Security\ScalarState::read($stored);
+        $GLOBALS['session']['bufflist']['transmute']=\Resurrection\Game\TransmutationState::read($GLOBALS['session']['bufflist']['transmute']);
+        calculate_buff_fields();
+        self::assertSame($before,resurrection_combat_context($specialty));
+        foreach (['rounds'=>19,'atkmod'=>.75,'defmod'=>.5,'survivenewday'=>0] as $field=>$value) {
+            $GLOBALS['session']['bufflist']=\Resurrection\Security\ScalarState::read($stored);
+            $GLOBALS['session']['bufflist']['transmute'][$field]=$value;
+            calculate_buff_fields();
+            self::assertNotSame($before,resurrection_combat_context($specialty));
+        }
+    }
+
     public function testGoldmineDeathWithoutMountHasDefinedOutcome(): void
     {
         self::assertTrue(activate_module('racehuman'));

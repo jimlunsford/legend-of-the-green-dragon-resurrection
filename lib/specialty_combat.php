@@ -2,6 +2,7 @@
 require_once __DIR__ . '/specialty_onboarding.php';
 require_once __DIR__ . '/../src/Game/SpecialtyCombatState.php';
 require_once __DIR__ . '/../src/Game/DragonCombatState.php';
+require_once __DIR__ . '/../src/Game/TransmutationState.php';
 
 /** @return array{module:string,skill:int,uses:int} */
 function resurrection_combat_specialty(bool $lock = false, string $type = 'forest'): array {
@@ -30,6 +31,11 @@ function resurrection_combat_specialty(bool $lock = false, string $type = 'fores
 function resurrection_combat_context(array $specialty): string {
     global $session;
     restore_buff_fields();
+    // Match common.php hydration, including runtime-flag order, before signing.
+    // A battle appends flags in execution order; the potion schema canonicalizes them.
+    if (array_key_exists('transmute', $session['bufflist'])) {
+        $session['bufflist']['transmute'] = \Resurrection\Game\TransmutationState::read($session['bufflist']['transmute']);
+    }
     $session['user']['bufflist'] = serialize($session['bufflist']);
     $state = [];
     foreach (['acctid','specialty','badguy','companions','bufflist','hitpoints','maxhitpoints','attack','defense','level','alive','lasthit','specialinc','location'] as $key) $state[$key]=(string)$session['user'][$key];

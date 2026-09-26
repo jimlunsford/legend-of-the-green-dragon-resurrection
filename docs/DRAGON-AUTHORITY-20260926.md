@@ -47,6 +47,8 @@ The focused HTTP progression fixture uses Thieving Skills level 2. Target A star
 
 The existing Dark Arts Dragon lifecycle, Fairy health-carry and Potions health-carry tests now follow generated POST forms. Their gameplay assertions remain. No existing test was removed. The workflow timeout is 45 minutes for the expanded matrices; HTTP execution stops at the first failure, while a successful run still executes the entire suite.
 
+The retained Potions test exposed a form-context regression on both supported targets: battle appends Transmutation runtime flags in execution order, while request hydration reconstructs them in schema order. The shared combat context now applies that same strict potion schema before signing. A unit regression proves hydration stability while changed duration, attack/defense modifiers and survival policy still invalidate the context. The original immediate victory-to-prologue HTTP submission remains the acceptance test; it does not refresh a rejected form to mask the mismatch.
+
 ## Independent certification decisions
 
 | Specialty | Decision | Remaining evidence before PASS |
