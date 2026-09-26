@@ -24,7 +24,7 @@ PASS covers the named module in supported bundled use, not arbitrary core/editor
 | `goldmine` | 1.0 | PASS | PASS |
 | `lovers` | 1.0 | PASS | PASS |
 | `outhouse` | 2.0 | PASS | PASS |
-| `racedwarf` | 1.1 | PASS | BLOCKED |
+| `racedwarf` | 1.1 | PASS | PASS |
 | `raceelf` | 1.0 | PASS | PASS |
 | `racehuman` | 1.0 | PASS | PASS |
 | `racetroll` | 1.0 | PASS | PASS |
@@ -153,12 +153,12 @@ Real HTTP deterministically covers paid/free entry, configured cost, paid gold/g
 
 - Previous certification: BLOCKED. Current supported bundled scope: PASS.
 
-### racedwarf (1.1): BLOCKED
+### racedwarf (1.1): PASS
 
-Existing choice text, newday/stat and combined-hook behavior PASS. Actual HTTP onboarding choice/invalid choice/POST/CSRF/persistence/reselection matrix remains unimplemented; Cities excluded.
+PASS: test_race_onboarding_http_authority follows real rendered POST forms and independently proves active choice display, authenticated/CSRF authority, exact race/main-village persistence, forged race/module/filename/location/stat rejection, stale/inactive/anonymous denial, no selection GET, no automatic inactive fallback, duplicate/reselection/replay rejection, final-account rollback and fresh retry. Cities remains absent. Both supported targets pass at 77c58792f87afad71c0db5fc77042cd39ab418b8, Modern core 34842503298 and Baseline integrity 34842503326. Dwarf creature-gold modifier and no-Cities location semantics remain unchanged.
 
-- Component route result: BLOCKED.
-- Exact metadata, descriptors, hooks, dependencies, database tables and prior lifecycle evidence remain in [the JSON record](BUNDLED-MODULE-CERTIFICATION.json).
+- Recovery correction: the Markdown row and subsection were stale; JSON and the accepted race-onboarding matrix already recorded PASS. This is reconciliation, not a new promotion.
+- Exact metadata and lifecycle evidence remain in [the JSON record](BUNDLED-MODULE-CERTIFICATION.json).
 
 ### raceelf (1.0): PASS
 
@@ -310,3 +310,12 @@ New final-head acceptance is required and recorded in PR #1.
 ## 2026-09-26: Dragon authority and initial defeated-target closure
 
 See [the Dragon execution record](DRAGON-AUTHORITY-20260926.md) for the route inventory, tests, state contracts and independent certification decisions. Dragon now owns POST/CSRF/state-bound transactional combat and stored-outcome continuation; the historical reset preserves modern login generations. The narrow Forest validator accepts consistent dead-A/live-B history, with focused TS2 progression/settlement tests. Remaining Dark Arts companion/fallback, Mystical Powers aura/area/combined ordering, and TS1/3/5 progression/combined-modifier cases prevent promotion. Counts remain **21 PASS / 0 limitation / 3 BLOCKED**. Final exact-head CI evidence is recorded in PR #1; earlier accepted workflow IDs do not validate this new tree.
+
+
+## 2026-09-26 recovery and Thieving Skills continuation
+
+Recovered exact SHA `4bd0569e43567f29908434826c9d5dc23ad47460` is accepted by Modern core **36271747607** and Baseline integrity **36271747672**, both completed SUCCESS. Both supported targets passed PHPUnit **88 tests / 2,462 assertions**, Python/HTTP **50 tests**, lint **321 PHP files**, both PHPStan gates and all Composer gates, with zero failures/skips. All 24 lifecycle checks and the retained potion Dragon-reset test pass. The earlier cancelled/failed candidates remain history.
+
+The continuation adds twelve TS1/TS3/TS5 zero/negative-target and victory/defeat scenarios, plus the naturally combined Insult, Backstab, Poison Attack and Hidden Attack sequence through expiration in both Forest and Dragon. These are test obligations until the separate ending-SHA acceptance in PR #1; the recovered parent result does not accept new tests. Defense-only activation, exact use budgets, dead-A immutability, B arithmetic, stale/replay rejection and settlement are asserted. Application source and formulas are unchanged.
+
+Counts remain **21 PASS / 0 limitation / 3 BLOCKED**. Thieving Skills still requires the combined-effects-across-targets and final-active-round/terminal/rollback boundary. Dark Arts and Mystical Powers retain their independently listed companion, area, progression and combination gaps. No 24/24 claim or general-combat closure.

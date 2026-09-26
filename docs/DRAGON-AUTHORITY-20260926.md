@@ -60,3 +60,8 @@ The retained Potions test exposed a form-context regression on both supported ta
 Counts remain **21 PASS / 0 PASS WITH DOCUMENTED LIMITATION / 3 BLOCKED**. All 24 lifecycle checks remain in the regression suite. The 24/24 milestone is not claimed; broader general combat work is not started under that conditional instruction.
 
 Ordinary Forest GET combat/search/run/target authority, general reward/defeat/recovery, New Day `dk`/`pdk`, mail send/reply/systemmail, petition administration, clans, economy, equipment, stables, training, broader PvP, administrator/content editors, remaining serialized business schemas, expiration and account-deletion failure semantics remain blockers. `last_char_expire` still advances before cleanup. Phase 3 is INCOMPLETE; merge NO; public hosting NO. No deployment, release, public runtime, VPS operation, historical-repository change, new modernization branch, PR #2 or Phase 4 work.
+
+
+## 2026-09-26: Recovery acceptance, then a separate test candidate
+
+Recovery verified the clean local checkout, remote branch and PR #1 all at `4bd0569e43567f29908434826c9d5dc23ad47460`. Modern core 36271747607 and Baseline integrity 36271747672 finished SUCCESS, including the retained potion regression on both targets. Counts: PHPUnit 88/2462, Python/HTTP 50, lint 321, zero failures/skips. The additional same-specialty Thieving Skills matrix specifies actual four-buff casts and exact damage/HP/duration through natural expiration in Forest and Dragon. The added target matrix specifies TS1/TS3/TS5 zero/negative progression and later victory/defeat. These new obligations require the separate ending-SHA CI in PR #1. They do not close companion, remaining area-effect or combined-terminal certification gaps.

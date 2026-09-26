@@ -1118,3 +1118,38 @@ Historical baseline remains tag object `51cab4fbe58a234651a3177a56289b18bc152b4d
 
 
 The follow-up also preserves historical Dragon shield ordering when both combatants die: a typed stored victory, rather than positive current HP, authorizes prologue. Live combat still requires positive HP and alive state. The caller persists the derived zero-HP alive flag consistently so a just-issued continuation remains valid across hydration; the prologue restores health using the unchanged reset formula. Added exact-zero/negative Dragon HP tests cover non-flawless rewards and replay. No Forest mushroom recovery is imported into Dragon.
+
+
+## 2026-09-26 recovery-first continuation
+
+Last trusted checkpoint supplied for recovery: `ebcd70988478553a67d645dcffa6f05573e0338e`. Actual recovered local/remote/PR head: `4bd0569e43567f29908434826c9d5dc23ad47460`. Checkout: `/workspace/scratch/603e3667e733/legend-of-the-green-dragon-resurrection`. Branch remains `modernization/core-modernization`; no staged, unstaged or untracked leftovers. Inspection preceded every edit. No cleanup, stash, reset or history rewrite occurred.
+
+Five published commits were reconstructed from local Git and GitHub comparison, in order; all belong to PR #1:
+
+| SHA | Subject |
+|---|---|
+| e095e8c02ab8f25bd8912347ca6cb5b9f0402938 | Secure Dragon combat and kill continuation with state-bound transactions |
+| ccc7debf59d647d7ebfb1ce46109c7ccfa484b97 | Validate defeated-target progression and bind Dragon encounter identities |
+| ad899bd3e66b50016439f9b99d1d282a100538a8 | Preserve login generations through Dragon resets and record remaining certification gates |
+| ab3e1d662f0ce023e38fe43786164fd591ddaec5 | Preserve Dragon prologue after simultaneous lethal shield victory |
+| 4bd0569e43567f29908434826c9d5dc23ad47460 | Canonicalize Transmutation before binding combat action contexts |
+
+The Transmutation correction was already committed and pushed, not abandoned local work. It applies the existing strict potion representation before signing and retains meaningful-change rejection. Its new unit regression and the unchanged immediate-submit potion Dragon-reset HTTP test pass on both supported targets. Documentation changes exist in the last three commits, but no separate later documentation commit was found.
+
+| Candidate | Modern core | Result | Baseline integrity | Result |
+|---|---|---|---|---|
+| e095e8c | 36269415043 | Cancelled/superseded; Dragon transition failure was logged before cancellation | 36269415070 | SUCCESS |
+| ccc7deb | 36269871774 | FAILURE on both targets, stale CSRF fixture after privilege restoration | 36269871779 | SUCCESS |
+| ad899bd | 36270404405 | Cancelled/superseded by simultaneous-lethal correction | 36270404419 | SUCCESS |
+| ab3e1d6 | 36270602884 | FAILURE on both targets, retained potion continuation returned 409 | 36270602889 | SUCCESS |
+| 4bd0569 | 36271747607 | SUCCESS, accepted recovered head | 36271747672 | SUCCESS |
+
+Exact recovered-head totals on each supported target: **88 PHPUnit tests / 2,462 assertions / 50 Python-HTTP tests / 321 PHP lint files / zero failures and skips**. Both PHPStan gates, Composer strict validation, locked install, audit, all 24 module lifecycle checks and historical integrity PASS. HTTP times: PHP 8.4/MariaDB **1581.760 seconds**; PHP 8.5/MySQL **1764.852 seconds**. The known-good floor advances to 4bd0569 only after both jobs and the whole Modern core workflow completed successfully.
+
+After that recovery gate, the continuation adds two real HTTP test matrices: TS1/TS3/TS5 zero/negative target A, untouched corpse, server-selected B, fresh action, exact cost/effect/adverse arithmetic, final victory and later-target defeat with replay rejection; and all four naturally coexisting Thieving Skills effects through exact arithmetic and expiration in Forest and Dragon. The draft was syntax-reviewed and historical roll arithmetic inspected locally. This environment has PHP 8.3 without the supported database/runtime dependencies, so no local supported-matrix acceptance is claimed. The separate final candidate is frozen for GitHub acceptance; its SHA and completed workflow IDs are recorded in PR #1. The parent's passing workflows do not accept that new candidate.
+
+The Dwarf Markdown row/subsection is reconciled to its already-PASS JSON and accepted race HTTP evidence. Counts remain **21 PASS / 0 limitation / 3 BLOCKED**, not a new promotion. All three specialties remain independently BLOCKED. Dark Arts needs Dragon companion injury/death/player-defeat/fallback and transition combinations. Mystical Powers needs aura/companion and Earth Fist/Lifetap/shield transition/combined-terminal evidence. Thieving Skills requires acceptance of these new matrices and then combined buffs crossing targets with final-active-round/terminal/rollback ordering. General combat is not started under the conditional 24/24 instruction.
+
+No application source, workflow, formulas or business schema is changed in this continuation. Serialization remains 93/46/34/58/1. Ordinary Forest mutation/reward/defeat/recovery, New Day dk/pdk, mail/systemmail, petitions, clans, bank/economy, weapons/armor, mounts/stables, training/masters, broader PvP, administrator/content editors, broader serialized schemas, expiration cleanup and account-deletion failure semantics remain open. `last_char_expire` still advances before cleanup completes.
+
+Main remains `999cec6f9c655a840320d982d673bb863c68c2b2`. PR #1 OPEN, DRAFT, NOT READY, NOT MERGED. Tag object `51cab4fbe58a234651a3177a56289b18bc152b4d`, historical source `bdc29df9bc344774b41e0ad7cae7f6ed2f7512e2`, tree `4013a0ccc5227e87cd7a22de00b7c322d7aa237c`, 417 files and 11 preservation commits verified. Historical repositories and VPS untouched. No deployment, release, public runtime, new modernization branch, PR #2 or Phase 4. **Phase 3 INCOMPLETE; merge NO; public hosting NO.**

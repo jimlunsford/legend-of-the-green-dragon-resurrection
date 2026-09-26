@@ -1246,6 +1246,105 @@ function resurrectionrandomfixture_dohook($hook,$args) { mt_srand((int)getsettin
                         self.assertEqual(expected,[after[k] for k in ['alive','hitpoints','gold','experience','gems']])
                         before=terminal(); f['rejected'](final); f['rejected'](fresh); f['rejected'](first); self.assertEqual(before,terminal())
 
+    def test_defeated_target_thieving_remaining_progression_and_terminal(self):
+        # Weapon kills skip defense-only activation; TS1/TS3 retain five
+        # rounds on A, while TS5 spends an offense round. No formula changes.
+        cases=[(1,40,40,70,5),(3,40,58,0,5),(5,135,135,104,4)]
+        with self._specialty_accounting_fixture() as f, self._specialty_terminal_capture() as terminal:
+            encode=f['encode']; decode=f['decode']; player=f['player']
+            self.query("UPDATE settings SET value='1' WHERE setting='forestgemchance'")
+            for level,weapon_damage,round_damage,incoming,first_rounds in cases:
+                for overkill in [0,1]:
+                    for outcome in ['victory','defeat']:
+                        with self.subTest(level=level,overkill=overkill,outcome=outcome):
+                            self.query('DELETE FROM fixture_specialty_terminal')
+                            a=dict(f['enemy'],creaturehealth=weapon_damage-overkill,creatureexp=100,creaturegold=0,istarget=True)
+                            b=dict(f['enemy'],creatureid=2,creaturename='Second Target',creatureattack=1000,creatureexp=200,creaturegold=0,istarget=False)
+                            f['prepare']('TS',badguy=encode({'enemies':[a,b],'options':{'type':'forest','didsurprise':1,'maxattacks':1}}),gold=1000,gems=10,experience=1000,turns=20)
+                            # Earned skill 45 supports fifteen remaining uses, enough
+                            # for three legitimate Backstabs without replenishment.
+                            self.query("UPDATE module_userprefs SET value=CASE setting WHEN 'skill' THEN '45' ELSE '15' END WHERE userid=? AND modulename='specialtythiefskills' AND setting IN ('skill','uses')",[player])
+                            stale=f['form'](level); first=f['form'](level)
+                            status,body=f['request'](data=first); self.assertEqual(200,status,body[:2000])
+                            state=f['snapshot']()[0]; combat=decode(state['badguy']); corpse=combat['enemies'][0]; key='ts'+str(level)
+                            self.assertEqual(-overkill,corpse['creaturehealth']); self.assertTrue(corpse['dead']); self.assertFalse(corpse['istarget'])
+                            self.assertTrue(combat['enemies'][1]['istarget']); self.assertFalse(combat['enemies'][1]['dead'])
+                            self.assertEqual(100000,combat['enemies'][1]['creaturehealth'])
+                            self.assertEqual(['500','1000','1000','10'],[state[k] for k in ['hitpoints','experience','gold','gems']])
+                            self.assertEqual(first_rounds,decode(state['bufflist'])[key]['rounds']); self.assertEqual([],terminal())
+                            self.assertEqual(str(15-level),self.query("SELECT value FROM module_userprefs WHERE userid=? AND modulename='specialtythiefskills' AND setting='uses'",[player])[0]['value'])
+                            f['rejected'](first); f['rejected'](stale)
+                            f['rejected'](dict(f['form'](level),newtarget='0'),400)
+                            fresh=f['form'](level); status,body=f['request'](data=fresh); self.assertEqual(200,status,body[:2000])
+                            state=f['snapshot']()[0]; progressed=decode(state['badguy'])
+                            self.assertEqual(corpse,progressed['enemies'][0]); self.assertEqual(100000-round_damage,progressed['enemies'][1]['creaturehealth'])
+                            self.assertEqual(500-incoming,int(state['hitpoints'])); self.assertEqual(4,decode(state['bufflist'])[key]['rounds'])
+                            self.assertEqual(['1000','1000','10'],[state[k] for k in ['experience','gold','gems']]); self.assertEqual([],terminal())
+                            self.assertEqual(str(15-2*level),self.query("SELECT value FROM module_userprefs WHERE userid=? AND modulename='specialtythiefskills' AND setting='uses'",[player])[0]['value'])
+                            f['rejected'](fresh); f['rejected'](first)
+                            stale_b=f['form'](level)
+                            if outcome=='victory':
+                                progressed['enemies'][1]['creaturehealth']=weapon_damage-overkill
+                            elif level==3:
+                                # Hidden Attack stops enemy attacks, not the
+                                # historical weapon riposte against high defense.
+                                progressed['enemies'][1]['creaturedefense']=1000
+                            self.query('UPDATE accounts SET badguy=?,hitpoints=? WHERE acctid=?',[encode(progressed),500-incoming if outcome=='victory' else (22 if level==3 else incoming),player])
+                            f['rejected'](stale_b)
+                            final=f['form'](level); status,body=f['request'](data=final); self.assertEqual(200,status,body[:2000])
+                            after=f['snapshot']()[0]; events=terminal()
+                            self.assertEqual('',after['badguy']); self.assertEqual([],decode(after['companions']))
+                            self.assertEqual(str(15-3*level),self.query("SELECT value FROM module_userprefs WHERE userid=? AND modulename='specialtythiefskills' AND setting='uses'",[player])[0]['value'])
+                            self.assertEqual(['battle-'+outcome]*2,[event['hook'] for event in events]); self.assertEqual(-overkill,events[0]['enemy']['creaturehealth'])
+                            final_target=-overkill if outcome=='victory' else 100000-round_damage-(0 if level==3 else weapon_damage)
+                            self.assertEqual(final_target,events[1]['enemy']['creaturehealth'])
+                            expected=['1',str(500-incoming),'1000','1150','11'] if outcome=='victory' else ['0','0','0','900','10']
+                            self.assertEqual(expected,[after[k] for k in ['alive','hitpoints','gold','experience','gems']])
+                            retained=first_rounds if outcome=='victory' else (5 if level==3 else 4)
+                            self.assertEqual(retained,decode(after['bufflist'])[key]['rounds'])
+                            self.assertEqual('21' if outcome=='victory' and level==3 else '20',after['turns'])
+                            f['rejected'](final); f['rejected'](fresh); f['rejected'](first); self.assertEqual(events,terminal())
+
+    def test_dragon_and_forest_thieving_combined_modifiers_and_natural_expiration(self):
+        # All four effects can coexist through normal same-specialty casts.
+        # Values include historical power-move and riposte damage, not just
+        # raw multipliers. Each request starts from the same fixture RNG seed.
+        rounds=[
+            (1,4930,99960,14,{'ts1':4}),
+            (5,4930,99824,9,{'ts1':3,'ts5':4}),
+            (2,4930,99447,7,{'ts1':2,'ts5':3,'ts2':4}),
+            (3,4930,99006,4,{'ts1':1,'ts5':2,'ts2':3,'ts3':4}),
+            (None,4930,98565,4,{'ts5':1,'ts2':2,'ts3':3}),
+            (None,4930,98124,4,{'ts2':1,'ts3':2}),
+            (None,4930,98018,4,{'ts3':1}),
+            (None,4930,97960,4,{}),
+            (None,4753,97920,4,{}),
+        ]
+        for route in ['forest','dragon']:
+            with self.subTest(route=route), self._specialty_accounting_fixture(route) as f:
+                enemy=dict(f['enemy'],creatureattack=1000)
+                f['prepare']('TS',badguy=f['encode']({'enemies':[enemy],'options':{'type':route,'didsurprise':1}}),hitpoints=5000,maxhitpoints=10000)
+                self.query("UPDATE module_userprefs SET value=CASE setting WHEN 'skill' THEN '45' ELSE '15' END WHERE userid=? AND modulename='specialtythiefskills' AND setting IN ('skill','uses')",[f['player']])
+                before=f['snapshot']()[0]
+                for level,hp,targethp,uses,remaining in rounds:
+                    stale=f['form'](1)
+                    if level is not None:
+                        data=f['form'](level); status,body=f['request'](data=data)
+                    elif route=='dragon':
+                        path='dragon.php?op=fight'; status,body=f['request'](path); self.assertEqual(200,status,body[:2000])
+                        status,body=f['request'](path,self._security_fields(body,path))
+                    else:
+                        status,body=f['request']('forest.php?op=fight')
+                    self.assertEqual(200,status,body[:2000]); state=f['snapshot']()[0]
+                    self.assertEqual(hp,int(state['hitpoints'])); self.assertEqual(targethp,f['decode'](state['badguy'])['enemies'][0]['creaturehealth'])
+                    buffs=f['decode'](state['bufflist'])
+                    self.assertEqual(remaining,{k:v['rounds'] for k,v in (buffs.items() if isinstance(buffs,dict) else [])})
+                    self.assertEqual(str(uses),self.query("SELECT value FROM module_userprefs WHERE userid=? AND modulename='specialtythiefskills' AND setting='uses'",[f['player']])[0]['value'])
+                    for key in ['gold','gems','experience','alive','attack','defense','turns']: self.assertEqual(before[key],state[key])
+                    self.assertEqual([],f['decode'](state['companions'])); f['rejected'](stale)
+                    if level is not None: f['rejected'](data)
+
+
     def test_dragon_effect_accounting_duration_and_corruption(self):
         cases=[('DA',2,120,4914,99737),('DA',3,1000,4911,99960),('DA',5,1000,5000,99951),
             ('MP',1,120,5015,99955),('MP',2,120,4914,99984),('MP',3,120,5045,99955),
