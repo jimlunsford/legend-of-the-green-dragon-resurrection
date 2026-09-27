@@ -1345,6 +1345,136 @@ function resurrectionrandomfixture_dohook($hook,$args) { mt_srand((int)getsettin
                     if level is not None: f['rejected'](data)
 
 
+    def test_darkarts_injured_companion_target_transition_and_terminal(self):
+        # Voodoo kills A before the companion phase. The injured, real-produced
+        # skeleton must carry to B, including when B kills the player first.
+        with self._specialty_accounting_fixture() as f, self._specialty_terminal_capture() as terminal:
+            player=f['player']; encode=f['encode']; decode=f['decode']
+            self.query("UPDATE settings SET value='1' WHERE setting='forestgemchance'")
+            for overkill in [0,1]:
+                for outcome in ['victory','defeat']:
+                    with self.subTest(overkill=overkill,outcome=outcome):
+                        weak=dict(f['enemy'],creatureattack=1,creaturedefense=1)
+                        f['prepare']('DA',badguy=encode({'enemies':[weak],'options':{'type':'forest','didsurprise':1}}))
+                        self.assertEqual(200,f['request'](data=f['form'](1))[0])
+                        skeleton=decode(f['snapshot']()[0]['companions'])['skeleton_warrior']
+                        self.assertEqual(43,skeleton['hitpoints'])
+                        skeleton=dict(skeleton,hitpoints=30)
+                        a=dict(f['enemy'],creaturehealth=263-overkill,creatureexp=100,creaturegold=0,istarget=True)
+                        b=dict(f['enemy'],creatureid=2,creaturename='Second Target',creatureexp=200,creaturegold=0,istarget=False)
+                        self.query('UPDATE accounts SET badguy=?,companions=?,hitpoints=500,gold=1000,gems=10,experience=1000,turns=20 WHERE acctid=?',
+                            [encode({'enemies':[a,b],'options':{'type':'forest','didsurprise':1,'maxattacks':1}}),encode({'skeleton_warrior':skeleton}),player])
+                        self.query('DELETE FROM fixture_specialty_terminal')
+                        stale=f['form'](2); first=f['form'](2)
+                        status,body=f['request'](data=first); self.assertEqual(200,status,body[:2000])
+                        after=f['snapshot']()[0]; progressed=decode(after['badguy']); corpse=progressed['enemies'][0]
+                        self.assertEqual(-overkill,corpse['creaturehealth']); self.assertTrue(corpse['dead']); self.assertFalse(corpse['istarget'])
+                        self.assertTrue(progressed['enemies'][1]['istarget']); self.assertEqual(100000,progressed['enemies'][1]['creaturehealth'])
+                        self.assertEqual(dict(skeleton,used=False),decode(after['companions'])['skeleton_warrior'])
+                        self.assertEqual(['500','1000','10','1000'],[after[k] for k in ['hitpoints','gold','gems','experience']])
+                        self.assertEqual([],terminal()); f['rejected'](first); f['rejected'](stale)
+                        # Malformation after actual progression cannot silently heal or
+                        # discard the companion, spend uses, or change either target.
+                        valid=after['companions']; fresh=f['form'](2)
+                        self.query('UPDATE accounts SET companions=? WHERE acctid=?',[encode({'skeleton_warrior':dict(skeleton,hitpoints=0)}),player])
+                        f['rejected'](fresh)
+                        self.query('UPDATE accounts SET companions=? WHERE acctid=?',[valid,player])
+                        if outcome=='victory':
+                            progressed['enemies'][1]['creaturehealth']=263-overkill
+                        else:
+                            progressed['enemies'][1].update(creatureattack=1000,creaturedefense=1000)
+                        self.query('UPDATE accounts SET badguy=?,hitpoints=? WHERE acctid=?',[encode(progressed),500 if outcome=='victory' else 11,player])
+                        f['rejected'](fresh)
+                        final=f['form'](2 if outcome=='victory' else 3)
+                        status,body=f['request'](data=final); self.assertEqual(200,status,body[:2000])
+                        after=f['snapshot']()[0]; events=terminal()
+                        self.assertEqual('',after['badguy']); self.assertEqual(['battle-'+outcome]*2,[e['hook'] for e in events])
+                        self.assertEqual(-overkill,events[0]['enemy']['creaturehealth'])
+                        self.assertEqual(-overkill if outcome=='victory' else 100000,events[1]['enemy']['creaturehealth'])
+                        self.assertEqual(30,decode(after['companions'])['skeleton_warrior']['hitpoints'])
+                        expected=['1','500','1000','11','1150'] if outcome=='victory' else ['0','0','0','10','900']
+                        self.assertEqual(expected,[after[k] for k in ['alive','hitpoints','gold','gems','experience']])
+                        self.assertEqual('4' if outcome=='victory' else '3',self.query("SELECT value FROM module_userprefs WHERE userid=? AND modulename='specialtydarkarts' AND setting='uses'",[player])[0]['value'])
+                        f['rejected'](final); f['rejected'](first); self.assertEqual(events,terminal())
+
+    def test_mystic_combined_final_round_simultaneous_terminal(self):
+        # Regeneration then Lifetap adds exactly level+40 HP before 177 damage.
+        # Shield returns 354. The one-HP target difference distinguishes defeat
+        # from simultaneous victory without changing the historical formulas.
+        for route in ['forest','dragon']:
+            with self._specialty_accounting_fixture(route) as f, self._specialty_terminal_capture() as terminal:
+                player=f['player']; encode=f['encode']; decode=f['decode']
+                for targethp in [393,394,395]:
+                    with self.subTest(route=route,targethp=targethp):
+                        f['prepare']('MP',hitpoints=5000,maxhitpoints=10000)
+                        for level in [1,3]: self.assertEqual(200,f['request'](data=f['form'](level))[0])
+                        buffs=decode(f['snapshot']()[0]['bufflist'])
+                        for key in ['mp1','mp3']: buffs[key]['rounds']=1
+                        enemy=dict(f['enemy'],creaturehealth=targethp,creatureattack=1000)
+                        if route=='forest': enemy.update(creaturegold=0,creatureexp=100)
+                        self.query('UPDATE accounts SET badguy=?,bufflist=?,hitpoints=?,gold=1000,gems=10,experience=1000 WHERE acctid=?',
+                            [encode({'enemies':[enemy],'options':{'type':route,'didsurprise':1}}),encode(buffs),127 if route=='forest' else 122,player])
+                        self.query('DELETE FROM fixture_specialty_terminal')
+                        old=f['form'](1); data=f['form'](5)
+                        status,body=f['request'](data=data); self.assertEqual(200,status,body[:2000])
+                        after=f['snapshot']()[0]; events=terminal(); victory=targethp<=394
+                        self.assertEqual(1,len(events)); self.assertEqual('battle-victory' if victory else 'battle-defeat',events[0]['hook'])
+                        self.assertEqual(0,events[0]['hp']); self.assertEqual(targethp-394,events[0]['enemy']['creaturehealth'])
+                        remaining=decode(after['bufflist']); self.assertNotIn('mp1',remaining); self.assertNotIn('mp3',remaining)
+                        self.assertEqual(4,remaining['mp5']['rounds']); self.assertEqual([],decode(after['companions']))
+                        self.assertEqual('0',self.query("SELECT value FROM module_userprefs WHERE userid=? AND modulename='specialtymysticpower' AND setting='uses'",[player])[0]['value'])
+                        self.assertEqual('1' if route=='forest' and victory else '0',after['hitpoints'])
+                        self.assertEqual('1' if route=='forest' and victory else '0',after['alive'])
+                        if route=='dragon' and victory:
+                            self.assertIs(False,decode(after['badguy'])['dragonVictory'])
+                            self.assertEqual(['1000','10','1000'],[after[k] for k in ['gold','gems','experience']])
+                        else:
+                            self.assertEqual('',after['badguy'])
+                            self.assertEqual('1000' if victory else '0',after['gold'])
+                            if not victory: self.assertEqual('900' if route=='forest' else '1000',after['experience'])
+                        f['rejected'](data); f['rejected'](old); self.assertEqual(events,terminal())
+
+    def test_thieving_combined_target_terminal_rollback(self):
+        # Insult survives A's early weapon kill; Poison spends its offense
+        # round. Its final remaining round then expires during B settlement.
+        with self._specialty_accounting_fixture() as f, self._specialty_terminal_capture() as terminal:
+            player=f['player']; encode=f['encode']; decode=f['decode']
+            self.query("UPDATE settings SET value='1' WHERE setting='forestgemchance'")
+            for outcome in ['victory','defeat']:
+                with self.subTest(outcome=outcome):
+                    f['prepare']('TS',hitpoints=5000,maxhitpoints=10000)
+                    self.assertEqual(200,f['request'](data=f['form'](1))[0])
+                    a=dict(f['enemy'],creaturehealth=88,creatureexp=100,creaturegold=0,istarget=True)
+                    b=dict(f['enemy'],creatureid=2,creaturename='Second Target',creatureattack=1000,creatureexp=200,creaturegold=0,istarget=False)
+                    self.query('UPDATE accounts SET badguy=?,hitpoints=500,gold=1000,gems=10,experience=1000,turns=20 WHERE acctid=?',
+                        [encode({'enemies':[a,b],'options':{'type':'forest','didsurprise':1,'maxattacks':1}}),player])
+                    self.query('DELETE FROM fixture_specialty_terminal')
+                    first=f['form'](2); self.assertEqual(200,f['request'](data=first)[0])
+                    after=f['snapshot']()[0]; progressed=decode(after['badguy']); corpse=progressed['enemies'][0]; buffs=decode(after['bufflist'])
+                    self.assertEqual(0,corpse['creaturehealth']); self.assertFalse(corpse['istarget']); self.assertTrue(corpse['dead'])
+                    self.assertEqual(100000,progressed['enemies'][1]['creaturehealth']); self.assertTrue(progressed['enemies'][1]['istarget'])
+                    self.assertEqual({'ts1':4,'ts2':4},{k:v['rounds'] for k,v in buffs.items()}); self.assertEqual([],terminal())
+                    f['rejected'](first); stale=f['form'](1)
+                    buffs['ts2']['rounds']=1
+                    if outcome=='victory': progressed['enemies'][1]['creaturehealth']=88
+                    self.query('UPDATE accounts SET badguy=?,bufflist=?,hitpoints=? WHERE acctid=?',[encode(progressed),encode(buffs),500 if outcome=='victory' else 70,player])
+                    f['rejected'](stale); data=f['form'](1); before=f['snapshot']()
+                    # Force failure after both target hooks and preference writes.
+                    self.query("ALTER TABLE accounts ADD CONSTRAINT fixture_combined_terminal CHECK (login <> 'WebPlayer' OR badguy <> '')")
+                    try:
+                        self.assertEqual(500,f['request'](data=data)[0]); self.assertEqual(before,f['snapshot']()); self.assertEqual([],terminal())
+                        f['rejected'](data)
+                    finally: self.query('ALTER TABLE accounts DROP CONSTRAINT fixture_combined_terminal')
+                    final=f['form'](1); status,body=f['request'](data=final); self.assertEqual(200,status,body[:2000])
+                    after=f['snapshot']()[0]; events=terminal(); remaining=decode(after['bufflist'])
+                    self.assertEqual('',after['badguy']); self.assertEqual(['battle-'+outcome]*2,[e['hook'] for e in events])
+                    self.assertEqual(0,events[0]['enemy']['creaturehealth']); self.assertEqual(0 if outcome=='victory' else 99912,events[1]['enemy']['creaturehealth'])
+                    self.assertNotIn('ts2',remaining); self.assertEqual(5 if outcome=='victory' else 4,remaining['ts1']['rounds'])
+                    expected=['1','500','1000','11','1150'] if outcome=='victory' else ['0','0','0','10','900']
+                    self.assertEqual(expected,[after[k] for k in ['alive','hitpoints','gold','gems','experience']])
+                    self.assertEqual('5',self.query("SELECT value FROM module_userprefs WHERE userid=? AND modulename='specialtythiefskills' AND setting='uses'",[player])[0]['value'])
+                    f['rejected'](final); f['rejected'](first); self.assertEqual(events,terminal())
+
     def test_dragon_effect_accounting_duration_and_corruption(self):
         cases=[('DA',2,120,4914,99737),('DA',3,1000,4911,99960),('DA',5,1000,5000,99951),
             ('MP',1,120,5015,99955),('MP',2,120,4914,99984),('MP',3,120,5045,99955),
