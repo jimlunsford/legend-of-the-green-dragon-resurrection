@@ -374,3 +374,26 @@ engineering acceptance stays tied to the candidate above. Stop after publication
 Next engineering task, in a separate execution: close Mystical Powers' remaining
 Earth Fist/Lifetap/shield target progression and expiration, and aura/companion
 ordering, then independently reassess its bundled certification.
+
+## Mystical Powers supported-boundary candidate, 2026-09-27
+
+Starting head `816e709e91a51edfa0d3801200f90550757897b6`. This candidate adds
+six HTTP tests and evidence only, closing Earth Fist/Lifetap/shield target
+progression, regeneration/aura transitions, exact expiration, companion ordering,
+real combined effects, terminal outcomes, stale/replay rejection and late-write
+rollback/fresh retry. Production code, schemas, dependencies and workflows do not
+change. All 51 retained HTTP methods are AST-identical.
+
+Candidate certification: **24 PASS / 0 limitations / 0 BLOCKED; all 24 lifecycle
+PASS**. Exact-head supported-matrix acceptance remains **PENDING**, with last
+accepted counts 23/0/1. See [the full evidence](MYSTICAL-POWERS-20260927.md).
+Local floor: 88 PHPUnit / 2,462 assertions; focused HTTP and nine tooling tests;
+321 lint files; both PHPStan gates and Composer pass. Full suite collects 66
+Python/tooling/HTTP tests, not yet claimed as a completed supported-matrix run.
+
+PR #1 will record the exact candidate SHA and bounded workflow inspection.
+Phase 3 INCOMPLETE; merge NO; public hosting NO. PR remains OPEN, DRAFT, NOT READY,
+NOT MERGED. Main remains `999cec6f9c655a840320d982d673bb863c68c2b2`.
+Historical integrity: expected tag object, source/tree, 417 files and 11 commits
+PASS. No VPS, release, deployment, general combat or another subsystem work.
+Next task: exact-candidate CI acceptance; general combat requires a new execution.

@@ -1,7 +1,7 @@
 {
   "scope": "Only the 24 bundled entrypoints, verified against modules/*.php; no archive import.",
   "date": "2026-09-27",
-  "evidence": "Current decision: 23 PASS / 0 limitation / 1 BLOCKED; all 24 lifecycle PASS. Dark Arts accepted at be545112cd8dd7471a3d70e66bc884f211f549b6 by Modern core 36306254008 and Baseline integrity 36306254020, both SUCCESS. Each supported target passes 88 PHPUnit tests / 2462 assertions, 60 Python/tooling/HTTP tests (51 HTTP + 9 tooling), 321 lint files, both PHPStan checks and Composer validation/locked install/audit; zero supported-matrix failures/skips. PHP 8.4.26 / MariaDB 11.4.13 and PHP 8.5.11 / MySQL 8.4.11. Mystical Powers alone remains BLOCKED. Phase 3 INCOMPLETE; merge NO; public hosting NO. Documentation-head CI is recorded separately in PR #1.",
+  "evidence": "Candidate decision: 24 PASS / 0 limitations / 0 BLOCKED; all 24 lifecycle PASS. Mystical Powers supported boundary closed by six new exact HTTP tests; see MYSTICAL-POWERS-20260927.md. Exact-candidate CI acceptance PENDING; last accepted counts remain 23/0/1 at 816e709. Local PHP 8.4.26/MariaDB 11.4.13: 88 PHPUnit tests / 2462 assertions, focused HTTP and nine tooling tests, 321 PHP lint, both PHPStan gates and Composer PASS. Full 66-test Python/tooling/HTTP matrix is pending and must not be inferred from collection. Phase 3 INCOMPLETE; merge NO; public hosting NO. Candidate SHA and exact CI IDs/results are in PR #1.",
   "status_meaning": "Final certification is per module in the supported bundled scope. PASS requires actual behavior/security evidence; PARTIAL is a component route result only and final remains BLOCKED. Core editor/combat/hosting gates are tracked separately and still prevent merge.",
   "modules": [
     {
@@ -1849,8 +1849,8 @@
       "object_preferences": {},
       "settings_preferences_result": "PASS for named defaults and raw round trips; NOT APPLICABLE for empty namespaces",
       "object_preferences_result": "NOT APPLICABLE",
-      "direct_runmodule_route": "BLOCKED",
-      "direct_route_note": "Onboarding and prior Forest persistence/rollback/New Day/lifecycle retained. Added deterministic consumed-effect accounting, all twelve level authority matrices, unavailable module/file/handler rejection, train/graveyard specialty injection rejection, Voodoo terminal rewards, live-target Earth Fist area damage and stale target selection rejection. See SPECIALTY-COMBAT-ACCOUNTING.md for exact results and limits. Final module remains BLOCKED.",
+      "direct_runmodule_route": "PASS",
+      "direct_route_note": "Shared onboarding and Forest/Dragon specialty routes PASS in the bundled candidate boundary. Direct runmodule has no gameplay action. Exact-candidate CI acceptance pending.",
       "database_tables": [],
       "database_behavior": "PASS: strict fresh install/reinstall and tested metadata writes; purchase/admin transactions not certified",
       "daily_hooks": [
@@ -1868,19 +1868,19 @@
         "dragonkill"
       ],
       "integration_hooks": [],
-      "php_8_4": "PASS for tested components; final BLOCKED for remaining gates",
-      "php_8_5": "PASS for tested components; final BLOCKED for remaining gates",
-      "mariadb_11_4": "PASS for tested components; final BLOCKED for remaining gates",
-      "mysql_8_4": "PASS for tested components; final BLOCKED for remaining gates",
+      "php_8_4": "PASS local focused candidate evidence; full exact-head CI acceptance pending",
+      "php_8_5": "Retained boundary accepted; new candidate exact-head CI pending",
+      "mariadb_11_4": "PASS local focused candidate evidence; full exact-head CI acceptance pending",
+      "mysql_8_4": "Retained boundary accepted; new candidate exact-head CI pending",
       "warnings_errors": "No PHP warnings/errors in the passing matrix tests; unexecuted paths unverified.",
-      "security_notes": "Onboarding and prior Forest persistence/rollback/New Day/lifecycle retained. Added deterministic consumed-effect accounting, all twelve level authority matrices, unavailable module/file/handler rejection, train/graveyard specialty injection rejection, Voodoo terminal rewards, live-target Earth Fist area damage and stale target selection rejection. See SPECIALTY-COMBAT-ACCOUNTING.md for exact results and limits. Final module remains BLOCKED.",
-      "final_certification": "BLOCKED",
+      "security_notes": "Strict validators retained. Exact server-selected target progression, costs, healing/damage, aura/companion ordering, expiration, terminal outcomes, stale-state rejection, replay and multi-write rollback proven by retained and new HTTP tests. No general combat certification.",
+      "final_certification": "PASS",
       "continuation_evidence": "Shared onboarding PASS through actual HTTP: exact identity, default-zero and preserved earned skill/uses, forged extra fields, inactive/missing module and missing file, stale preferences/account state, CSRF, duplicate/reselection/replay, late-account-write rollback, fresh retry and actual New Day skill-derived restoration. Combat level/use/state/POST/CSRF/replay/persistence/rollback and companion business schema remain BLOCKED. Both supported targets PASS at 82bb591d5355ccd0e5a071f1d4fd3efd7033c7ba: 74 PHPUnit tests / 2231 assertions / 33 Python and HTTP tests / 310 PHP files linted; zero failures/skips. Modern core 34886260212 and Baseline integrity 34886260167 SUCCESS.",
-      "next_required_gate": "Earth Fist/Lifetap/shield multi-target progression and expiration across progression; aura/companion ordering. Combined regeneration/Lifetap/shield simultaneous terminal evidence is accepted.",
+      "next_required_gate": "Accept the exact published candidate only after Modern core and Baseline integrity succeed; stop before general combat.",
       "previous_certification": "BLOCKED",
       "forest_combat_boundary": "Actual HTTP at 353ba60: levels 1/2/3/5, exact persisted costs, subsequent read, duplicate/replay, late-account-write rollback/fresh retry, shared malformed-input/state/CSRF/stale matrices and New Day after actual use PASS on both supported targets. Persisted buff parameters verified. This is a Forest component result, not final module certification. Complete damage/healing/aura accounting, full per-level invalid matrix, missing module/file combat scenarios, multi-target progression and other caller authority remain open.",
       "dragon_progression_execution": "Dragon authority and outcome implementation plus real HTTP tests added; see DRAGON-AUTHORITY-20260926.md and final exact-head PR #1 evidence. Certification remains BLOCKED.",
-      "current_evidence": "Shared onboarding, Forest/Dragon authority, costs, schemas, replay, rollback and existing accounting/lifetime evidence remain accepted. Final-round regeneration/Lifetap/shield exact-zero/negative victory and defeat combinations in both callers pass at 2bfe8fc3c7cee4a8a8ac0c3647571a318d243634. Other historical checkpoint fields preserve earlier limits."
+      "current_evidence": "Candidate supported bundled PASS, with six new HTTP tests closing remaining progression/expiration/aura-companion and combined-effect gaps. Detailed independent review: MYSTICAL-POWERS-20260927.md. Exact-head CI acceptance pending. Earlier checkpoint fields are historical, superseded for the current candidate decision."
     },
     {
       "module": "specialtythiefskills",

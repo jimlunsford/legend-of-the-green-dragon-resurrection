@@ -1659,6 +1659,255 @@ function resurrectionrandomfixture_dohook($hook,$args) { mt_srand((int)getsettin
                         self.assertEqual('4' if outcome=='victory' else '3',self.query("SELECT value FROM module_userprefs WHERE userid=? AND modulename='specialtydarkarts' AND setting='uses'",[player])[0]['value'])
                         f['rejected'](final); f['rejected'](first); self.assertEqual(events,terminal())
 
+    @contextmanager
+    def _mystic_progression_fixture(self):
+        with self._specialty_accounting_fixture() as f:
+            e,d,player=f['encode'],f['decode'],f['player']
+            def patch(**values):
+                self.query('UPDATE accounts SET '+','.join(k+'=?' for k in values)+' WHERE acctid=?',[*values.values(),player])
+            def combat(hp,attack=1000,defense=80):
+                a=dict(f['enemy'],creaturehealth=hp,creatureattack=attack,creaturedefense=defense,creatureexp=100,creaturegold=0,istarget=True)
+                b=dict(a,creatureid=2,creaturename='Second Target',creaturehealth=100000,creatureexp=200,istarget=False)
+                return e({'enemies':[a,b],'options':{'type':'forest','didsurprise':1,'maxattacks':1}})
+            def prepare(**values):
+                defaults=dict(badguy=combat(100000),hitpoints=5000,maxhitpoints=10000,gold=1000,gems=10,experience=1000,turns=20)
+                defaults.update(values); f['prepare']('MP',**defaults)
+                for key,value in [('uses','40'),('skill','120')]:
+                    self.query("UPDATE module_userprefs SET value=? WHERE userid=? AND modulename='specialtymysticpower' AND setting=?",[value,player,key])
+            def uses():
+                return int(self.query("SELECT value FROM module_userprefs WHERE userid=? AND modulename='specialtymysticpower' AND setting='uses'",[player])[0]['value'])
+            def cast(level):
+                stale=f['form'](1); data=f['form'](level); before=uses()
+                status,body=f['request'](data=data); self.assertEqual(200,status,body[:2500])
+                self.assertEqual(before-level,uses()); f['rejected'](data); f['rejected'](stale)
+                saved=f['snapshot']()
+                if saved[0]['badguy']: self.assertEqual(200,f['request']()[0])
+                self.assertEqual(saved,f['snapshot']())
+                return body,data
+            def fight():
+                stale=f['form'](1); before=uses()
+                status,body=f['request']('forest.php?op=fight'); self.assertEqual(200,status,body[:2500])
+                self.assertEqual(before,uses()); f['rejected'](stale)
+                return body
+            def state():
+                a=f['snapshot']()[0]
+                return a,d(a['badguy']) if a['badguy'] else {},d(a['bufflist'])
+            yield f|dict(patch=patch,combat=combat,prepare_mp=prepare,uses=uses,cast=cast,fight=fight,state=state)
+
+    def test_mystic_effect_target_progression_and_fresh_recast(self):
+        # Earth Fist rolls 16 at player level 15; Lifetap heals the 40-point
+        # weapon hit; Lightning Aura reflects 177*2 after that weapon hit.
+        with self._mystic_progression_fixture() as f, self._specialty_terminal_capture() as terminal:
+            for level,damage,attack,playerlevel,hp in [(2,16,120,15,4914),(3,40,1000,10,4863),(5,394,1000,10,4823)]:
+                for delta in [1,0,-1]:
+                    with self.subTest(level=level,delta=delta):
+                        f['prepare_mp'](level=playerlevel,badguy=f['combat'](damage+delta,attack))
+                        body,first=f['cast'](level); a,c,b=f['state']()
+                        self.assertEqual(delta,c['enemies'][0]['creaturehealth'])
+                        self.assertEqual(100000,c['enemies'][1]['creaturehealth'])
+                        self.assertEqual(4,b['mp'+str(level)]['rounds'])
+                        self.assertEqual(hp if delta>0 or level==5 else (5040 if level==3 else 5000),int(a['hitpoints']))
+                        self.assertEqual(delta<=0,bool(c['enemies'][0]['dead']))
+                        self.assertEqual(delta<=0,bool(c['enemies'][1]['istarget']))
+                        self.assertEqual([],terminal())
+                        self.assertEqual(['1000','1000','10'],[a[k] for k in ['gold','experience','gems']])
+                        if delta>0:
+                            f['fight'](); a,c,b=f['state']()
+                            self.assertTrue(c['enemies'][0]['dead']); self.assertTrue(c['enemies'][1]['istarget'])
+                        corpse=c['enemies'][0]
+                        for patch in [{'newtarget':'0'},{'newtarget':'2'},{'enemy':'0'}]:
+                            f['rejected'](dict(f['form'](level),**patch),400)
+                        before=int(a['hitpoints']); body,second=f['cast'](level); a,c,b=f['state']()
+                        self.assertEqual(corpse,c['enemies'][0]); self.assertEqual(100000-damage,c['enemies'][1]['creaturehealth'])
+                        self.assertEqual(before+({2:-86,3:-137,5:-177}[level]),int(a['hitpoints']))
+                        self.assertEqual(4,b['mp'+str(level)]['rounds']); self.assertEqual(40-2*level,f['uses']())
+                        self.assertEqual([],terminal()); self.assertEqual('1000',a['experience'])
+                        f['rejected'](first); f['rejected'](second)
+
+    def test_mystic_expiration_at_target_transition(self):
+        with self._mystic_progression_fixture() as f:
+            for level,damage,attack,playerlevel in [(1,40,1000,10),(2,16,120,15),(3,40,1000,10),(5,394,1000,10)]:
+                for rounds in [3,1]:
+                    with self.subTest(level=level,rounds=rounds):
+                        f['prepare_mp'](level=playerlevel); f['cast'](level)
+                        a,c,b=f['state'](); key='mp'+str(level); b[key]['rounds']=rounds
+                        old=f['form'](1)
+                        f['patch'](badguy=f['combat'](damage,attack),bufflist=f['encode'](b),hitpoints=5000)
+                        f['rejected'](old); f['fight'](); a,c,b=f['state']()
+                        self.assertEqual(0,c['enemies'][0]['creaturehealth']); self.assertTrue(c['enemies'][1]['istarget'])
+                        self.assertEqual({1:5010,2:5000,3:5040,5:4823}[level],int(a['hitpoints']))
+                        if rounds==1: self.assertNotIn(key,b)
+                        else: self.assertEqual(rounds-1,b[key]['rounds'])
+                        corpse=c['enemies'][0]; before=int(a['hitpoints'])
+                        f['fight'](); a,c,b=f['state']()
+                        active=rounds>1
+                        self.assertEqual(corpse,c['enemies'][0])
+                        self.assertEqual(100000-(damage if active and level in [2,5] else (45 if level==2 else 40)),c['enemies'][1]['creaturehealth'])
+                        self.assertEqual(before+({1:-167,2:-86,3:-137,5:-177}[level] if active else (0 if level==2 else -177)),int(a['hitpoints']))
+                        if active: self.assertEqual(1,b[key]['rounds'])
+                        else: self.assertNotIn(key,b)
+                        self.assertEqual(40-level,f['uses']())
+
+    def test_mystic_progressed_terminal_healing_shield_and_rollback(self):
+        with self._mystic_progression_fixture() as f, self._specialty_terminal_capture() as terminal:
+            # A is already legitimately defeated before each distinct B outcome.
+            for level,firsthp in [(1,40),(3,40),(5,394)]:
+                for outcome in ['victory','defeat']:
+                    with self.subTest(level=level,outcome=outcome):
+                        self.query('DELETE FROM fixture_specialty_terminal')
+                        f['prepare_mp'](badguy=f['combat'](firsthp)); f['cast'](level)
+                        a,c,b=f['state'](); self.assertTrue(c['enemies'][0]['dead'])
+                        corpse=c['enemies'][0]; b['mp'+str(level)]['rounds']=1
+                        c['enemies'][1]['creaturehealth']=(394 if level==5 else 40) if outcome=='victory' else 100000
+                        # Lifetap heals before death is assessed. Shield continues
+                        # reflecting even when the incoming hit is lethal.
+                        hp=167 if level==5 else (127 if outcome=='defeat' else 1)
+                        f['patch'](badguy=f['encode'](c),bufflist=f['encode'](b),hitpoints=hp)
+                        stale=f['form'](1); f['cast'](3 if level==1 else 1); a,c,b=f['state'](); events=terminal()
+                        self.assertEqual('',a['badguy']); self.assertEqual(2,len(events))
+                        self.assertEqual(['battle-'+outcome]*2,[x['hook'] for x in events])
+                        self.assertEqual(corpse['creaturehealth'],events[0]['enemy']['creaturehealth'])
+                        self.assertEqual(0 if outcome=='victory' else (99606 if level==5 else 99960),events[1]['enemy']['creaturehealth'])
+                        self.assertEqual(({1:51,3:51,5:1}[level] if outcome=='victory' else 0),int(a['hitpoints']))
+                        self.assertEqual('1' if outcome=='victory' else '0',a['alive'])
+                        self.assertNotIn('mp'+str(level),b); self.assertEqual(40-level-(3 if level==1 else 1),f['uses']())
+                        f['rejected'](stale); self.assertEqual(events,terminal())
+            # Real regeneration + Lifetap + shield, with A killed by reflection.
+            # B still living makes simultaneous A/player death a defeat.
+            for hp,outcome in [(127,'defeat'),(128,None)]:
+                self.query('DELETE FROM fixture_specialty_terminal')
+                f['prepare_mp'](); f['cast'](1); f['cast'](3)
+                a,c,b=f['state']()
+                for key in ['mp1','mp3']: b[key]['rounds']=1
+                f['patch'](badguy=f['combat'](394),bufflist=f['encode'](b),hitpoints=hp)
+                failed=f['form'](5); before=f['snapshot']()
+                # This CHECK is reached after preference, buff, HP, target and
+                # (in defeat) observer writes. Every write must roll back.
+                self.query("ALTER TABLE accounts ADD CONSTRAINT fixture_mp_progression CHECK (login <> 'WebPlayer' OR hitpoints="+str(hp)+")")
+                try:
+                    f['rejected'](failed,500); self.assertEqual(before,f['snapshot']()); self.assertEqual([],terminal())
+                finally: self.query('ALTER TABLE accounts DROP CONSTRAINT fixture_mp_progression')
+                f['rejected'](failed); body,data=f['cast'](5); a,c,b=f['state']()
+                self.assertEqual(31,f['uses']()); self.assertNotIn('mp1',b); self.assertNotIn('mp3',b); self.assertEqual(4,b['mp5']['rounds'])
+                if outcome:
+                    self.assertEqual(['0','0','0','900'],[a[k] for k in ['alive','hitpoints','gold','experience']])
+                    self.assertEqual(['battle-defeat']*2,[x['hook'] for x in terminal()])
+                    self.assertEqual([0,100000],[x['enemy']['creaturehealth'] for x in terminal()])
+                else:
+                    self.assertEqual('1',a['hitpoints']); self.assertEqual(0,c['enemies'][0]['creaturehealth'])
+                    self.assertTrue(c['enemies'][1]['istarget']); self.assertEqual(100000,c['enemies'][1]['creaturehealth'])
+                    self.assertEqual([],terminal()); self.assertEqual('1000',a['experience'])
+                saved=terminal(); f['rejected'](data); self.assertEqual(saved,terminal())
+
+    def test_mystic_aura_companion_progression_natural_expiration(self):
+        with self._mystic_progression_fixture() as f:
+            # The bundled forgetfulness potion resets specialty without clearing
+            # companions; onboarding can select MP. Retain real DA producer state,
+            # as in the existing healing-aura test, without casting DA as MP.
+            f['prepare']('DA',badguy=f['combat'](100000,1,1))
+            self.assertEqual(200,f['request'](data=f['form'](1))[0])
+            companion=f['decode'](f['snapshot']()[0]['companions']); companion['skeleton_warrior']['hitpoints']=30
+            for transition in [1,5]:
+                with self.subTest(transition_round=transition):
+                    f['prepare_mp'](badguy=f['combat'](74 if transition==1 else 100000,1,1),companions=f['encode'](companion),hitpoints=995,maxhitpoints=1000)
+                    for n in range(1,7):
+                        if n==5 and transition==5:
+                            a,c,b=f['state'](); c['enemies'][0]['creaturehealth']=74
+                            f['patch'](badguy=f['encode'](c))
+                        if n==6: f['patch'](hitpoints=990)
+                        body,_=f['cast'](1) if n==1 else (f['fight'](),None)
+                        a,c,b=f['state'](); comp=f['decode'](a['companions'])['skeleton_warrior']
+                        self.assertEqual(min(43,30+3*min(n,5)),comp['hitpoints'])
+                        self.assertEqual(990 if n==6 else 1000,int(a['hitpoints']))
+                        if n<5: self.assertEqual(5-n,b['mp1']['rounds'])
+                        else: self.assertNotIn('mp1',b)
+                        text=re.sub(r'\s+',' ',html.unescape(re.sub('<[^>]+>',' ',body)))
+                        if n<=5:
+                            self.assertIn('regenerates for '+str(3 if n<5 else 1)+' health',text)
+                            self.assertLess(text.index('healing aura'),text.index('You hit'))
+                        else: self.assertNotIn('healing aura',text)
+                        self.assertLess(text.index('You hit'),text.index('RIPOSTE'))
+                        self.assertLess(text.index('RIPOSTE'),text.index('Skeleton Warrior hits'))
+                        if n>=transition:
+                            self.assertEqual(-1,c['enemies'][0]['creaturehealth']); self.assertTrue(c['enemies'][1]['istarget'])
+                            self.assertEqual(100000-76*(n-transition),c['enemies'][1]['creaturehealth'])
+                        self.assertEqual(39,f['uses']()); self.assertEqual('1000',a['experience'])
+
+            # Aura heals before the companion's exact-zero killing strike and
+            # the historical retaliation that still occurs at zero enemy HP.
+            f['prepare_mp'](badguy=f['combat'](71,40,1),companions=f['encode'](companion),hitpoints=995,maxhitpoints=1000)
+            body,_=f['cast'](1); a,c,b=f['state']()
+            self.assertEqual(7,f['decode'](a['companions'])['skeleton_warrior']['hitpoints']) # 30+3-26
+            self.assertEqual(0,c['enemies'][0]['creaturehealth']); self.assertTrue(c['enemies'][1]['istarget'])
+            self.assertEqual('1000',a['hitpoints']); self.assertEqual(4,b['mp1']['rounds'])
+            text=re.sub(r'\s+',' ',html.unescape(re.sub('<[^>]+>',' ',body)))
+            positions=[text.index(x) for x in ['healing aura','You hit Accounting Target for 47',
+                'you RIPOSTE for 14','Skeleton Warrior hits Accounting Target for 10','hits Skeleton Warrior for 26']]
+            self.assertEqual(sorted(positions),positions)
+            c['enemies'][1]['creatureattack']=1; f['patch'](badguy=f['encode'](c))
+            f['fight'](); a,c,b=f['state']()
+            self.assertEqual(10,f['decode'](a['companions'])['skeleton_warrior']['hitpoints'])
+            self.assertEqual([0,99924],[x['creaturehealth'] for x in c['enemies']]); self.assertEqual(3,b['mp1']['rounds'])
+
+    def test_mystic_all_effects_cross_target_and_expire_naturally(self):
+        # All four effects come from real MP casts. Earth Fist consumes an RNG
+        # draw, producing a 24-point weapon riposte and 62-point enemy hit;
+        # shield returns 48+124, Lifetap never heals negative damage.
+        with self._mystic_progression_fixture() as f:
+            f['prepare_mp'](badguy=f['combat'](100000,120))
+            expected=[(1,5010,99955,{'mp1':4}),
+                (3,5065,99910,{'mp1':3,'mp3':4}),
+                (5,5120,99865,{'mp1':2,'mp3':3,'mp5':4}),
+                (2,5044,100000,{'mp1':1,'mp3':2,'mp5':3,'mp2':4}),
+                (None,4968,99827,{'mp3':1,'mp5':2,'mp2':3}),
+                (None,4882,99654,{'mp5':1,'mp2':2}),
+                (None,4796,99481,{'mp2':1}),
+                (None,4710,99480,{}),(None,4710,99435,{})]
+            for n,(level,hp,targethp,rounds) in enumerate(expected,1):
+                if n==4:
+                    a,c,b=f['state'](); c['enemies'][0]['creaturehealth']=173
+                    f['patch'](badguy=f['encode'](c))
+                body,_=f['cast'](level) if level else (f['fight'](),None)
+                a,c,b=f['state']()
+                self.assertEqual(hp,int(a['hitpoints']))
+                self.assertEqual(targethp,c['enemies'][1 if n>=4 else 0]['creaturehealth'])
+                self.assertEqual(rounds,{k:v['rounds'] for k,v in (b.items() if isinstance(b,dict) else [])})
+                if n>=4:
+                    self.assertEqual(0,c['enemies'][0]['creaturehealth']); self.assertTrue(c['enemies'][0]['dead'])
+                    self.assertTrue(c['enemies'][1]['istarget'])
+                self.assertEqual('1000',a['experience']); self.assertEqual('1000',a['gold'])
+            self.assertEqual(29,f['uses']())
+
+    def test_mystic_aura_companion_and_earth_fist_terminal(self):
+        with self._mystic_progression_fixture() as f, self._specialty_terminal_capture() as terminal:
+            f['prepare']('DA',badguy=f['combat'](100000,1,1))
+            self.assertEqual(200,f['request'](data=f['form'](1))[0])
+            companion=f['decode'](f['snapshot']()[0]['companions']); companion['skeleton_warrior']['hitpoints']=30
+            for effect in ['aura','earth']:
+                for outcome in ['victory','defeat']:
+                    with self.subTest(effect=effect,outcome=outcome):
+                        self.query('DELETE FROM fixture_specialty_terminal')
+                        f['prepare_mp'](level=15,badguy=f['combat'](47,1,1),companions=f['encode'](companion),hitpoints=995,maxhitpoints=1000)
+                        f['cast'](1); a,c,b=f['state']()
+                        self.assertEqual(0,c['enemies'][0]['creaturehealth']); self.assertEqual(35,f['decode'](a['companions'])['skeleton_warrior']['hitpoints'])
+                        b['mp1']['rounds']=1
+                        if effect=='earth':
+                            # Obtain the exact real producer before selecting a
+                            # final-active-round boundary, as retained tests do.
+                            f['cast'](2); a,c,produced=f['state'](); b['mp2']=produced['mp2']; b['mp2']['rounds']=1
+                        c['enemies'][1].update(creatureattack=120 if effect=='earth' else 1000,creaturedefense=80,
+                            creaturehealth=(16 if effect=='earth' else 40) if outcome=='victory' else 100000)
+                        current=f['decode'](a['companions']); current['skeleton_warrior']['hitpoints']=30
+                        f['patch'](badguy=f['encode'](c),bufflist=f['encode'](b),companions=f['encode'](current),hitpoints=1)
+                        f['cast'](3); a,c,b=f['state'](); events=terminal()
+                        self.assertEqual('',a['badguy']); self.assertEqual(['battle-'+outcome]*2,[x['hook'] for x in events])
+                        self.assertEqual((16 if effect=='earth' else 56) if outcome=='victory' else 0,int(a['hitpoints']))
+                        self.assertEqual(35,f['decode'](a['companions'])['skeleton_warrior']['hitpoints'])
+                        self.assertNotIn('mp1',b); self.assertNotIn('mp2',b)
+                        self.assertEqual(0 if outcome=='victory' else (99984 if effect=='earth' else 99960),events[1]['enemy']['creaturehealth'])
+                        self.assertEqual(False,f['decode'](a['companions'])['skeleton_warrior']['used'])
+                        self.assertEqual(34 if effect=='earth' else 36,f['uses']())
+
     def test_mystic_combined_final_round_simultaneous_terminal(self):
         # Regeneration then Lifetap adds exactly level+40 HP before 177 damage.
         # Shield returns 354. The one-HP target difference distinguishes defeat

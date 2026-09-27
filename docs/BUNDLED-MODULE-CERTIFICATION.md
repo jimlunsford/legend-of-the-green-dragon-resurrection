@@ -1,6 +1,6 @@
 # Bundled module certification
 
-**Final counts: 23 PASS, 0 PASS WITH DOCUMENTED LIMITATION, 1 BLOCKED. Lifecycle/metadata: 24 PASS. Modern-core merge: NOT READY. Public hosting: NO.**
+**Candidate counts: 24 PASS, 0 PASS WITH DOCUMENTED LIMITATION, 0 BLOCKED. Exact-candidate CI acceptance PENDING; last accepted counts 23/0/1. Lifecycle/metadata: 24 PASS. Modern-core merge: NOT READY. Public hosting: NO.**
 
 This 2026-09-14 continuation updates the original all-BLOCKED checkpoint using new mutation evidence. The earlier Phase 3 history remains in [the original checkpoint](MODERN-CORE-CHECKPOINT-20260913-PHASE3.md). Only the 24 shipped entrypoints are in scope. No archive module was imported. No module is promoted merely because a route renders.
 
@@ -30,7 +30,7 @@ PASS covers the named module in supported bundled use, not arbitrary core/editor
 | `racetroll` | 1.0 | PASS | PASS |
 | `sethsong` | 1.1 | PASS | PASS |
 | `specialtydarkarts` | 1.1 | PASS | PASS |
-| `specialtymysticpower` | 1.0 | PASS | BLOCKED |
+| `specialtymysticpower` | 1.0 | PASS | PASS |
 | `specialtythiefskills` | 1.0 | PASS | PASS |
 
 ## Shared evidence
@@ -191,12 +191,19 @@ PASS in supported bundled Dark Arts scope: retained onboarding; levels 1/2/3/5 a
 - Final supported bundled module result: PASS; certification 23/0/1.
 - Mystical Powers remains BLOCKED; all 24 lifecycle checks remain PASS.
 
-### specialtymysticpower (1.0): BLOCKED
+### specialtymysticpower (1.0): PASS
 
-Shared onboarding, Forest and Dragon specialty authority, exact costs, invalid level/use/state rejection, POST/CSRF, replay, persistence, rollback, New Day restoration, buff schemas and retained Dragon-reset hooks have accepted component evidence through `72ab600`. Mystical Powers remains BLOCKED for area-effect target progression and aura/companion ordering. Final-round regeneration/Lifetap/shield simultaneous terminal evidence is accepted at `2bfe8fc`.
+Candidate promotion: retained onboarding, Forest/Dragon authority, exact costs,
+malformed/stale rejection, POST/CSRF, replay, rollback, New Day, schema and Dragon
+outcome evidence is complemented by six exact HTTP tests closing Earth Fist,
+Lifetap and shield progression; regeneration/aura transitions and expiration;
+companion ordering, injury and terminal outcomes; all-four-effect natural
+expiration; late-write rollback and fresh retry. See the independent
+[Mystical Powers evidence](MYSTICAL-POWERS-20260927.md).
 
-- Component route result: BLOCKED.
-- Exact metadata, descriptors, hooks, dependencies, database tables and prior lifecycle evidence remain in [the JSON record](BUNDLED-MODULE-CERTIFICATION.json).
+- Final supported bundled candidate result: PASS. Exact-head CI acceptance PENDING.
+- The 24/24 candidate milestone does not complete Phase 3 or permit merge/hosting.
+- Exact metadata and retained lifecycle evidence remain in the JSON record.
 
 ### specialtythiefskills (1.0): PASS
 
@@ -380,3 +387,10 @@ engineering acceptance stays tied to the candidate above. Stop after publication
 Next engineering task, in a separate execution: close Mystical Powers' remaining
 Earth Fist/Lifetap/shield target progression and expiration, and aura/companion
 ordering, then independently reassess its bundled certification.
+
+## Mystical Powers candidate milestone, 2026-09-27
+
+24 PASS / 0 limitations / 0 BLOCKED in this candidate; all 24 lifecycle PASS.
+Exact-candidate CI acceptance is pending, so last accepted counts remain 23/0/1.
+The [new evidence](MYSTICAL-POWERS-20260927.md) supersedes earlier MP blockers
+without rewriting their history. Phase 3 INCOMPLETE; merge NO; hosting NO.
