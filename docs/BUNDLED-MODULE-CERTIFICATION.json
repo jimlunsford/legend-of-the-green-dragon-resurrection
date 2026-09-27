@@ -1,7 +1,7 @@
 {
   "scope": "Only the 24 bundled entrypoints, verified against modules/*.php; no archive import.",
   "date": "2026-09-27",
-  "evidence": "Current decision: 22 PASS / 0 limitation / 2 BLOCKED; all 24 lifecycle PASS. Recovered 72ab600 is accepted. Exact specialty evidence candidate 2bfe8fc3c7cee4a8a8ac0c3647571a318d243634 passes Modern core 36285456622 and Baseline integrity 36285456697 on both supported targets: 88 PHPUnit tests / 2462 assertions, 55 Python/tooling and HTTP tests, 321 lint files, all Composer and both PHPStan gates. No supported-target failures/skips. The baseline-only job separately skips the database-dependent HTTP class. Thieving Skills is independently promoted; Dark Arts and Mystical Powers retain specific remaining gates. See PHASE3-RECOVERY-20260927.md. Final documentation-head acceptance belongs in PR #1.",
+  "evidence": "Current decision: 23 PASS / 0 limitation / 1 BLOCKED; all 24 lifecycle PASS. Dark Arts accepted at be545112cd8dd7471a3d70e66bc884f211f549b6 by Modern core 36306254008 and Baseline integrity 36306254020, both SUCCESS. Each supported target passes 88 PHPUnit tests / 2462 assertions, 60 Python/tooling/HTTP tests (51 HTTP + 9 tooling), 321 lint files, both PHPStan checks and Composer validation/locked install/audit; zero supported-matrix failures/skips. PHP 8.4.26 / MariaDB 11.4.13 and PHP 8.5.11 / MySQL 8.4.11. Mystical Powers alone remains BLOCKED. Phase 3 INCOMPLETE; merge NO; public hosting NO. Documentation-head CI is recorded separately in PR #1.",
   "status_meaning": "Final certification is per module in the supported bundled scope. PASS requires actual behavior/security evidence; PARTIAL is a component route result only and final remains BLOCKED. Core editor/combat/hosting gates are tracked separately and still prevent merge.",
   "modules": [
     {
@@ -1731,8 +1731,8 @@
       "object_preferences": {},
       "settings_preferences_result": "PASS for named defaults and raw round trips; NOT APPLICABLE for empty namespaces",
       "object_preferences_result": "NOT APPLICABLE",
-      "direct_runmodule_route": "BLOCKED",
-      "direct_route_note": "Onboarding and prior Forest persistence/rollback/New Day/lifecycle retained. Added deterministic consumed-effect accounting, all twelve level authority matrices, unavailable module/file/handler rejection, train/graveyard specialty injection rejection, Voodoo terminal rewards, live-target Earth Fist area damage and stale target selection rejection. See SPECIALTY-COMBAT-ACCOUNTING.md for exact results and limits. Final module remains BLOCKED.",
+      "direct_runmodule_route": "NOT APPLICABLE: empty run entrypoint; actions use New Day, Forest and Dragon",
+      "direct_route_note": "PASS in supported bundled Dark Arts scope: retained onboarding; levels 1/2/3/5 and exact costs; Forest/Dragon authority; adverse/defeat accounting and duration; SkeletonCompanionState, SpecialtyCombatState and SpecialtyBuffState; New Day after actual use; malformed/stale state and module/file/handler rejection; encounter identity, stored Dragon victory and forged flawless rejection. Accepted companion evidence closes injury/death/removal ordering, healthy/injured carry on player defeat, zero/negative Forest target progression, stale-target rejection, final victory, Dragon exact-zero companion death versus overkill, pending victory/continuation/cleanup, fallback producer and existing-warrior coexistence, real combined casts and natural expiration, terminal ordering, replay, rollback and fresh-form retry. No supported Dark Arts behavior gap remains identified. Evidence: be545112cd8dd7471a3d70e66bc884f211f549b6, Modern core 36306254008 SUCCESS and Baseline integrity 36306254020 SUCCESS; see DARK-ARTS-COMPANION-20260927.md. Earlier continuation fields retain historical checkpoint limits, superseded by this acceptance.",
       "database_tables": [],
       "database_behavior": "PASS: strict fresh install/reinstall and tested metadata writes; purchase/admin transactions not certified",
       "daily_hooks": [
@@ -1750,20 +1750,20 @@
         "dragonkill"
       ],
       "integration_hooks": [],
-      "php_8_4": "PASS for tested components; final BLOCKED for remaining gates",
-      "php_8_5": "PASS for tested components; final BLOCKED for remaining gates",
-      "mariadb_11_4": "PASS for tested components; final BLOCKED for remaining gates",
-      "mysql_8_4": "PASS for tested components; final BLOCKED for remaining gates",
+      "php_8_4": "PASS in supported bundled module scope",
+      "php_8_5": "PASS in supported bundled module scope",
+      "mariadb_11_4": "PASS in supported bundled module scope",
+      "mysql_8_4": "PASS in supported bundled module scope",
       "warnings_errors": "No PHP warnings/errors in the passing matrix tests; unexecuted paths unverified.",
-      "security_notes": "Onboarding and prior Forest persistence/rollback/New Day/lifecycle retained. Added deterministic consumed-effect accounting, all twelve level authority matrices, unavailable module/file/handler rejection, train/graveyard specialty injection rejection, Voodoo terminal rewards, live-target Earth Fist area damage and stale target selection rejection. See SPECIALTY-COMBAT-ACCOUNTING.md for exact results and limits. Final module remains BLOCKED.",
-      "final_certification": "BLOCKED",
+      "security_notes": "PASS in supported bundled Dark Arts scope: retained onboarding; levels 1/2/3/5 and exact costs; Forest/Dragon authority; adverse/defeat accounting and duration; SkeletonCompanionState, SpecialtyCombatState and SpecialtyBuffState; New Day after actual use; malformed/stale state and module/file/handler rejection; encounter identity, stored Dragon victory and forged flawless rejection. Accepted companion evidence closes injury/death/removal ordering, healthy/injured carry on player defeat, zero/negative Forest target progression, stale-target rejection, final victory, Dragon exact-zero companion death versus overkill, pending victory/continuation/cleanup, fallback producer and existing-warrior coexistence, real combined casts and natural expiration, terminal ordering, replay, rollback and fresh-form retry. No supported Dark Arts behavior gap remains identified. Evidence: be545112cd8dd7471a3d70e66bc884f211f549b6, Modern core 36306254008 SUCCESS and Baseline integrity 36306254020 SUCCESS; see DARK-ARTS-COMPANION-20260927.md. Earlier continuation fields retain historical checkpoint limits, superseded by this acceptance.",
+      "final_certification": "PASS",
       "continuation_evidence": "Shared onboarding PASS through actual HTTP: exact identity, default-zero and preserved earned skill/uses, forged extra fields, inactive/missing module and missing file, stale preferences/account state, CSRF, duplicate/reselection/replay, late-account-write rollback, fresh retry and actual New Day skill-derived restoration. Combat level/use/state/POST/CSRF/replay/persistence/rollback and companion business schema remain BLOCKED. Both supported targets PASS at 82bb591d5355ccd0e5a071f1d4fd3efd7033c7ba: 74 PHPUnit tests / 2231 assertions / 33 Python and HTTP tests / 310 PHP files linted; zero failures/skips. Modern core 34886260212 and Baseline integrity 34886260167 SUCCESS.",
-      "next_required_gate": "Terminal exact-candidate Modern core acceptance on PHP 8.4/MariaDB and PHP 8.5/MySQL plus Baseline integrity. Then perform documentation-only Dark Arts promotion to PASS (23/0/1). No remaining supported Dark Arts behavior gap identified; Mystical Powers remains separate.",
+      "next_required_gate": "None identified for supported bundled Dark Arts scope. Mystical Powers and general Phase 3 core gates remain independent blockers.",
       "previous_certification": "BLOCKED",
       "companion_business_state": "SkeletonCompanionState exact schema and producer/hydration guards; creation, persisted statistics, subsequent login/read, malformed state, Forest replay/rollback, deterministic Voodoo victory retention and New Day retention tested. Disabled-companion Skeleton Crew path tested with exact persisted parameters/cost/replay. Final additional seeded real HTTP death/removal/subsequent absence and actual Dragon win/reset-clear cases are in test_darkarts_companion_business_state_http; exact-head result is recorded in PR #1. Dragon authorization/replay remains a separate blocker.",
       "forest_combat_boundary": "Actual HTTP at 353ba60: levels 1/2/3/5, exact persisted costs, subsequent read, duplicate/replay, late-account-write rollback/fresh retry, shared malformed-input/state/CSRF/stale matrices and New Day after actual use PASS on both supported targets. Persisted buff parameters verified. This is a Forest component result, not final module certification. Complete damage/healing/aura accounting, full per-level invalid matrix, missing module/file combat scenarios, multi-target progression and other caller authority remain open.",
       "dragon_progression_execution": "Dragon authority and outcome implementation plus real HTTP tests added; see DRAGON-AUTHORITY-20260926.md and final exact-head PR #1 evidence. Certification remains BLOCKED.",
-      "current_evidence": "Shared accepted onboarding, Forest/Dragon authority, all levels, exact costs, schemas, adverse accounting, duration, New Day, stale-state, replay and rollback remain retained. The remaining companion injury/death, player defeat, target progression, Dragon continuation, fallback and combined-effect tests now pass locally on PHP 8.4.26 / MariaDB 11.4.13. Final Dark Arts certification remains BLOCKED solely pending exact-candidate acceptance on both supported CI targets. No remaining Dark Arts behavior gap was identified in this bounded review. See [the companion evidence and historical ordering](DARK-ARTS-COMPANION-20260927.md)."
+      "current_evidence": "PASS in supported bundled Dark Arts scope: retained onboarding; levels 1/2/3/5 and exact costs; Forest/Dragon authority; adverse/defeat accounting and duration; SkeletonCompanionState, SpecialtyCombatState and SpecialtyBuffState; New Day after actual use; malformed/stale state and module/file/handler rejection; encounter identity, stored Dragon victory and forged flawless rejection. Accepted companion evidence closes injury/death/removal ordering, healthy/injured carry on player defeat, zero/negative Forest target progression, stale-target rejection, final victory, Dragon exact-zero companion death versus overkill, pending victory/continuation/cleanup, fallback producer and existing-warrior coexistence, real combined casts and natural expiration, terminal ordering, replay, rollback and fresh-form retry. No supported Dark Arts behavior gap remains identified. Evidence: be545112cd8dd7471a3d70e66bc884f211f549b6, Modern core 36306254008 SUCCESS and Baseline integrity 36306254020 SUCCESS; see DARK-ARTS-COMPANION-20260927.md. Earlier continuation fields retain historical checkpoint limits, superseded by this acceptance."
     },
     {
       "module": "specialtymysticpower",
@@ -2001,25 +2001,25 @@
       "current_evidence": "PASS: shared onboarding, all four independent Forest/Dragon actions and authority failures, exact costs and modifier/adverse accounting, all-four-effect natural expiration, per-action zero/negative target progression and victory/defeat, combined Insult/Poison target carry/final-round expiration, terminal account/preference/hook rollback and fresh retry, malformed state, module/file/handler availability, New Day and Dragon reset. Exact evidence: 2bfe8fc3c7cee4a8a8ac0c3647571a318d243634, Modern core 36285456622, Baseline integrity 36285456697. Historical continuation fields below preserve earlier checkpoint limits."
     }
   ],
-  "validated_implementation_sha": "2bfe8fc3c7cee4a8a8ac0c3647571a318d243634",
-  "modern_core_run": 36285456622,
-  "baseline_integrity_run": 36285456697,
+  "validated_implementation_sha": "be545112cd8dd7471a3d70e66bc884f211f549b6",
+  "modern_core_run": 36306254008,
+  "baseline_integrity_run": 36306254020,
   "supported_matrix": [
     {
       "php": "8.4.26",
       "database": "MariaDB 11.4.13",
-      "result": "PASS supported component scope at 2bfe8fc3c7cee4a8a8ac0c3647571a318d243634"
+      "result": "PASS supported bundled scope at be545112cd8dd7471a3d70e66bc884f211f549b6"
     },
     {
       "php": "8.5.11",
       "database": "MySQL 8.4.11",
-      "result": "PASS supported component scope at 2bfe8fc3c7cee4a8a8ac0c3647571a318d243634"
+      "result": "PASS supported bundled scope at be545112cd8dd7471a3d70e66bc884f211f549b6"
     }
   ],
   "counts": {
-    "PASS": 22,
+    "PASS": 23,
     "PASS WITH DOCUMENTED LIMITATION": 0,
-    "BLOCKED": 2,
+    "BLOCKED": 1,
     "lifecycle_PASS": 24
   },
   "recovery_checkpoint": {
@@ -2071,8 +2071,8 @@
   "darkarts_companion_20260927": {
     "starting_sha": "ea1f3563c14188f9e1f536785c71c5b699f332f0",
     "record": "DARK-ARTS-COMPANION-20260927.md",
-    "acceptance": "PENDING exact-candidate CI; final status and workflow IDs recorded in PR #1",
-    "final_certification": "BLOCKED",
+    "acceptance": "SUCCESS on both exact-candidate supported targets and Baseline integrity",
+    "final_certification": "PASS",
     "new_http_tests": 5,
     "collected_python_tooling_http_tests": 60,
     "local_phpunit_tests": 88,
@@ -2080,6 +2080,15 @@
     "local_focused_http_tests": 8,
     "production_source_changes": false,
     "business_validator_changes": false,
-    "remaining_behavior_gap": null
+    "remaining_behavior_gap": null,
+    "accepted_sha": "be545112cd8dd7471a3d70e66bc884f211f549b6",
+    "modern_core_run": 36306254008,
+    "baseline_integrity_run": 36306254020,
+    "phpunit_tests": 88,
+    "assertions": 2462,
+    "python_tooling_http_tests": 60,
+    "lint_files": 321,
+    "supported_target_failures": 0,
+    "supported_target_skips": 0
   }
 }

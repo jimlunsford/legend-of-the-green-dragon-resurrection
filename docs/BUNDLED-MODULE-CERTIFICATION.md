@@ -1,6 +1,6 @@
 # Bundled module certification
 
-**Final counts: 22 PASS, 0 PASS WITH DOCUMENTED LIMITATION, 2 BLOCKED. Lifecycle/metadata: 24 PASS. Modern-core merge: NOT READY. Public hosting: NO.**
+**Final counts: 23 PASS, 0 PASS WITH DOCUMENTED LIMITATION, 1 BLOCKED. Lifecycle/metadata: 24 PASS. Modern-core merge: NOT READY. Public hosting: NO.**
 
 This 2026-09-14 continuation updates the original all-BLOCKED checkpoint using new mutation evidence. The earlier Phase 3 history remains in [the original checkpoint](MODERN-CORE-CHECKPOINT-20260913-PHASE3.md). Only the 24 shipped entrypoints are in scope. No archive module was imported. No module is promoted merely because a route renders.
 
@@ -29,7 +29,7 @@ PASS covers the named module in supported bundled use, not arbitrary core/editor
 | `racehuman` | 1.0 | PASS | PASS |
 | `racetroll` | 1.0 | PASS | PASS |
 | `sethsong` | 1.1 | PASS | PASS |
-| `specialtydarkarts` | 1.1 | PASS | BLOCKED |
+| `specialtydarkarts` | 1.1 | PASS | PASS |
 | `specialtymysticpower` | 1.0 | PASS | BLOCKED |
 | `specialtythiefskills` | 1.0 | PASS | PASS |
 
@@ -184,12 +184,12 @@ Actual HTTP forces every one of the 19 song results, plus female charm, HP floor
 
 - Previous certification: BLOCKED. Current supported bundled scope: PASS.
 
-### specialtydarkarts (1.1): BLOCKED
+### specialtydarkarts (1.1): PASS
 
-Shared accepted onboarding, Forest/Dragon authority, all levels, exact costs, schemas, adverse accounting, duration, New Day, stale-state, replay and rollback remain retained. The remaining companion injury/death, player defeat, target progression, Dragon continuation, fallback and combined-effect tests now pass locally on PHP 8.4.26 / MariaDB 11.4.13. Final Dark Arts certification remains BLOCKED solely pending exact-candidate acceptance on both supported CI targets. No remaining Dark Arts behavior gap was identified in this bounded review. See [the companion evidence and historical ordering](DARK-ARTS-COMPANION-20260927.md).
+PASS in supported bundled Dark Arts scope: retained onboarding; levels 1/2/3/5 and exact costs; Forest/Dragon authority; adverse/defeat accounting and duration; SkeletonCompanionState, SpecialtyCombatState and SpecialtyBuffState; New Day after actual use; malformed/stale state and module/file/handler rejection; encounter identity, stored Dragon victory and forged flawless rejection. Accepted companion evidence closes injury/death/removal ordering, healthy/injured carry on player defeat, zero/negative Forest target progression, stale-target rejection, final victory, Dragon exact-zero companion death versus overkill, pending victory/continuation/cleanup, fallback producer and existing-warrior coexistence, real combined casts and natural expiration, terminal ordering, replay, rollback and fresh-form retry. No supported Dark Arts behavior gap remains identified. Evidence: be545112cd8dd7471a3d70e66bc884f211f549b6, Modern core 36306254008 SUCCESS and Baseline integrity 36306254020 SUCCESS; see DARK-ARTS-COMPANION-20260927.md. Earlier continuation fields retain historical checkpoint limits, superseded by this acceptance.
 
-- Accepted result: BLOCKED pending exact-head supported-matrix CI; counts remain 22/0/2.
-- Promotion to 23/0/1 requires terminal acceptance, recorded in PR #1.
+- Final supported bundled module result: PASS; certification 23/0/1.
+- Mystical Powers remains BLOCKED; all 24 lifecycle checks remain PASS.
 
 ### specialtymysticpower (1.0): BLOCKED
 
@@ -329,3 +329,54 @@ See [the recovery record](PHASE3-RECOVERY-20260927.md). Exact SHA `72ab600fdc8c9
 ### Accepted specialty continuation and independent decision
 
 Exact candidate `2bfe8fc3c7cee4a8a8ac0c3647571a318d243634` passes Modern core **36285456622** and Baseline integrity **36285456697**. Both supported targets: 88 PHPUnit tests / 2,462 assertions, **55** Python/tooling and HTTP tests, 321 lint files, zero runtime-matrix failures/skips, all Composer and both PHPStan gates. All three new regression matrices pass. **Thieving Skills is PASS; totals are 22 PASS / 0 limitation / 2 BLOCKED, with 24 lifecycle PASS.** Dark Arts retains companion combat/fallback transition gaps; Mystical Powers retains area-effect progression and aura/companion gaps. Full independent reasoning and exact boundaries are in [the recovery record](PHASE3-RECOVERY-20260927.md). Application source, workflows and serialized readers/writers are unchanged. The 24/24 gate remains open; general combat development has not begun. Phase 3 incomplete, merge NO, hosting NO, PR #1 draft. The final documentation commit requires its own terminal exact-head acceptance recorded in PR #1.
+
+
+## Accepted Dark Arts certification, 2026-09-27
+
+Engineering candidate `be545112cd8dd7471a3d70e66bc884f211f549b6` is accepted.
+Modern core **36306254008** and Baseline integrity **36306254020** are terminal
+**SUCCESS**, inspected once without redispatch. Actual matrix job logs establish:
+
+| Job | PHP | Database | PHPUnit | Assertions | Python/tooling/HTTP | PHP lint |
+|---|---|---|---|---|---|---|
+| 108583392551 | 8.4.26 | MariaDB 11.4.13 | 88 | 2,462 | 60 | 321 |
+| 108583392420 | 8.5.11 | MySQL 8.4.11 | 88 | 2,462 | 60 | 321 |
+
+Each target has zero failures and zero skips. Both legacy and infrastructure
+PHPStan pass. Composer strict validation, locked install and security audit pass
+with no vulnerability advisories. All 24 bundled lifecycle checks remain PASS.
+The 60 Python tests comprise 51 HTTP and nine tooling tests.
+
+**specialtydarkarts: PASS. Certification: 23 PASS / 0 PASS WITH DOCUMENTED
+LIMITATION / 1 BLOCKED. specialtymysticpower is the sole blocked bundled module.**
+The retained onboarding, all four levels/costs, Forest/Dragon authority, schemas,
+adverse/defeat accounting, duration, New Day, malformed/stale state, unavailable
+module/file/handler, encounter identity, stored victory and forged flawless
+rejection evidence remains accepted. The five companion methods and retained
+injured-carry/business-state cases pass on both targets, closing injury/death,
+healthy/injured companion player-defeat carry, target progression/stale target,
+final settlement, exact-zero Dragon companion death versus overkill, pending
+victory/continuation/cleanup, fallback producer/coexistence, real combined effects,
+natural expiration, terminal ordering, replay, rollback and fresh retry.
+No supported Dark Arts behavior gap remains identified. See
+[DARK-ARTS-COMPANION-20260927.md](DARK-ARTS-COMPANION-20260927.md) for exact tests and
+historical ordering. This acceptance supersedes its pending-CI decision and the
+earlier Dark Arts blocked checkpoint entries; prior checkpoint history is retained.
+
+This closeout changes documentation only. Serialization inventory and trust-boundary
+implementation are unchanged, so SERIALIZED-STATE-AUDIT.md requires no update.
+Historical integrity PASS: annotated tag `historical-source-1.1.2` object
+`51cab4fbe58a234651a3177a56289b18bc152b4d`, source
+`bdc29df9bc344774b41e0ad7cae7f6ed2f7512e2`, tree
+`4013a0ccc5227e87cd7a22de00b7c322d7aa237c`, 417 files, 11 preservation commits.
+Historical repositories are unchanged. Main remains
+`999cec6f9c655a840320d982d673bb863c68c2b2`.
+
+Phase 3 **INCOMPLETE**; modern-core merge **NO**; public hosting **NO**.
+PR #1 stays OPEN, DRAFT, NOT READY, NOT MERGED. No Mystical Powers development,
+general combat, other subsystem, Phase 4, VPS, deployment, release or tag work.
+Documentation-head SHA and its one-time workflow inspection are recorded in PR #1;
+engineering acceptance stays tied to the candidate above. Stop after publication.
+Next engineering task, in a separate execution: close Mystical Powers' remaining
+Earth Fist/Lifetap/shield target progression and expiration, and aura/companion
+ordering, then independently reassess its bundled certification.
