@@ -2006,12 +2006,12 @@
   "baseline_integrity_run": 36285456697,
   "supported_matrix": [
     {
-      "php": "8.4.25",
+      "php": "8.4.26",
       "database": "MariaDB 11.4.13",
       "result": "PASS supported component scope at 2bfe8fc3c7cee4a8a8ac0c3647571a318d243634"
     },
     {
-      "php": "8.5.10",
+      "php": "8.5.11",
       "database": "MySQL 8.4.11",
       "result": "PASS supported component scope at 2bfe8fc3c7cee4a8a8ac0c3647571a318d243634"
     }
