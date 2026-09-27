@@ -1203,6 +1203,290 @@ function resurrectionrandomfixture_dohook($hook,$args) { mt_srand((int)getsettin
         return request(url,self._security_fields(body,url))
 
     @contextmanager
+    def _training_fixture(self):
+        with self._specialty_accounting_fixture() as f:
+            masters=self.query('SELECT * FROM masters ORDER BY creatureid')
+            keys=['automaster','multimaster','companionslevelup','displaymasternews','referminlevel','refereraward','autofight','autofightfull']
+            saved={k:self.query('SELECT * FROM settings WHERE setting=?',[k]) for k in keys}
+            def setting(k,v): self.query('INSERT INTO settings(setting,value) VALUES (?,?) ON DUPLICATE KEY UPDATE value=VALUES(value)',[k,str(v)])
+            for k,v in dict(automaster=0,multimaster=1,companionslevelup=1,displaymasternews=1,referminlevel=4,refereraward=25,autofight=1,autofightfull=1).items(): setting(k,v)
+            def prepare(**changes):
+                values=dict(level=10,experience=15143,hitpoints=500,maxhitpoints=100,attack=100,defense=50,
+                    seenmaster=0,badguy='',specialty='',soulpoints=50,turns=20,gold=1000,gems=10,referer=0,refererawarded=0)
+                values.update(changes); f['prepare']('TS',**values)
+            def master(hp=100000,attack=120,defense=80):
+                self.query('UPDATE masters SET creaturehealth=?,creatureattack=?,creaturedefense=? WHERE creaturelevel=10',[hp,attack,defense])
+            def snapshot():
+                row=self.query('SELECT * FROM accounts WHERE acctid=?',[f['player']])[0]
+                ignore=['allowednavs','restorepage','laston','lastip','gentime','gentimecount','gensize','uniqueid','loggedin']
+                return [{k:v for k,v in row.items() if k not in ignore}]+self.query('SELECT modulename,setting,value FROM module_userprefs WHERE userid=? ORDER BY modulename,setting',[f['player']])
+            def form(op='fight',**fields):
+                code,body=f['request']('train.php?op='+op); self.assertEqual(200,code,body[:3000])
+                parts=[part for url,part in re.findall(r'<form[^>]*action="([^"]+)"[^>]*>(.*?)</form>',body,re.S) if html.unescape(url)=='train.php?op='+op]
+                self.assertTrue(parts,body[:2500]); return self._security_fields(parts[0])|fields
+            def action(data,op='fight'): return f['request']('train.php?op='+op,data)
+            def reject(data,op='fight',status=409):
+                before=snapshot(); code,body=action(data,op); self.assertEqual(status,code,body[:3000]); self.assertEqual(before,snapshot())
+            def enter(**changes):
+                prepare(**changes); data=form('challenge'); code,body=action(data,'challenge'); self.assertEqual(200,code,body[:3000]); return data
+            f.update(prepare_training=prepare,training_master=master,training_snapshot=snapshot,training_form=form,
+                training_action=action,training_reject=reject,enter=enter,setting=setting,masters=masters)
+            try: yield f
+            finally:
+                for row in masters: self.query('REPLACE INTO masters ('+','.join(row)+') VALUES ('+','.join('?' for _ in row)+')',list(row.values()))
+                for k in keys:
+                    self.query('DELETE FROM settings WHERE setting=?',[k])
+                    for row in saved[k]: self.query('INSERT INTO settings(setting,value) VALUES (?,?)',[k,row['value']])
+
+    def test_training_entry_authority_and_stale_round(self):
+        with self._training_fixture() as f:
+            f['training_master'](attack=1000); f['prepare_training'](hitpoints=5000)
+            snap=f['training_snapshot']; form=f['training_form']; action=f['training_action']; reject=f['training_reject']
+            before=snap()
+            for path in ['train.php','train.php?op=question','train.php?op=challenge','train.php?op=autochallenge','train.php?op=fight','train.php?op=run']:
+                self.assertEqual(200,f['request'](path)[0]); self.assertEqual(before,snap())
+            for field in ['victory','master','level','experience','eligible','advancement','target','creaturehealth','attack','defense','reward','skill','l']:
+                data=form('challenge'); reject(dict(data,**{field:'1'}),'challenge',400)
+                self.assertEqual(400,f['request']('train.php?op=challenge&'+field+'=1')[0]); self.assertEqual(before,snap())
+            data=form('challenge')
+            reject({},'challenge',403); reject(dict(data,csrf_token='bad'),'challenge',403)
+            reject({k:v for k,v in data.items() if k!='action_token'},'challenge',409)
+            self.assertIn(self._security_client(None)('train.php?op=challenge',data)[0],[302,303,403])
+            self.assertEqual(before,snap())
+            stale=form('challenge'); code,body=action(data,'challenge'); self.assertEqual(200,code,body[:3000]); reject(data,'challenge'); reject(stale,'challenge')
+            state=f['decode'](snap()[0]['badguy']); self.assertEqual('10',str(state['enemies'][0]['creatureid'])); self.assertEqual(10,state['options']['traininglevel']); self.assertEqual('1',snap()[0]['seenmaster'])
+            before=snap(); stale=form(); data=form(); self.assertEqual(before,snap()); code,body=action(data); self.assertEqual(200,code,body[:3000])
+            after=snap(); enemy=f['decode'](after[0]['badguy'])['enemies'][0]
+            self.assertEqual(('5000',100000),(before[0]['hitpoints'],f['decode'](before[0]['badguy'])['enemies'][0]['creaturehealth'])); self.assertEqual(('4823',99960),(after[0]['hitpoints'],enemy['creaturehealth']))
+            self.assertTrue(enemy['istarget']); reject(data); reject(stale)
+            self.assertEqual(200,f['request']('train.php?op=fight')[0]); self.assertEqual(after,snap())
+
+    def test_training_eligibility_shipped_masters_and_dragon_scale(self):
+        with self._training_fixture() as f:
+            prepare=f['prepare_training']; form=f['training_form']; action=f['training_action']; snap=f['training_snapshot']
+            # Actual preserved master row, no requested identity or stat substitution.
+            for level,exp,ident in [(1,100,1),(10,15143,10),(12,23840,12),(14,36071,14)]:
+                prepare(level=level,experience=exp,maxhitpoints=level*10,hitpoints=1000,attack=1,defense=1000,race='Elf')
+                code,body=action(form('challenge'),'challenge'); self.assertEqual(200,code,body[:3000])
+                state=f['decode'](snap()[0]['badguy']); enemy=state['enemies'][0]
+                self.assertEqual(str(ident),str(enemy['creatureid'])); self.assertEqual(str(level),str(enemy['creaturelevel']))
+                row=next(x for x in f['masters'] if int(x['creatureid'])==ident)
+                for key in ['creatureattack','creaturedefense']: self.assertEqual(float(row[key]),float(enemy[key]))
+                self.assertEqual(int(row['creaturehealth']),enemy['trainingmaxhp'])
+                if level==12: self.assertIn('another Elf',enemy['creaturelose'])
+            prepare(experience=15142); code,body=action(form('challenge'),'challenge'); self.assertEqual(200,code,body[:2000]); after=snap()[0]
+            self.assertEqual('',after['badguy']); self.assertEqual('10',after['level']); self.assertEqual('1',after['seenmaster']); self.assertEqual('15142',after['experience'])
+            f['training_reject']({},'challenge',403)
+            for patch in [dict(level=0),dict(level=15),dict(level=65535),dict(hitpoints=0,alive=0),dict(alive=0),dict(specialinc='event')]:
+                prepare(**patch); before=snap(); code,_=f['request']('train.php?op=challenge'); self.assertIn(code,[409,200]); self.assertEqual(before,snap())
+                self.assertIn(action({},'challenge')[0],[409,403]); self.assertEqual(before,snap())
+            prepare(level=1,experience=100,dragonkills=4,maxhitpoints=10,hitpoints=10)
+            self.assertEqual(200,action(form('challenge'),'challenge')[0]); self.assertEqual('',snap()[0]['badguy']) # DK requirement is 200.
+            f['training_master'](); prepare(dragonkills=4,dragonpoints=f['encode'](['at','de','hp']),experience=16143,maxhitpoints=110)
+            self.assertEqual(200,action(form('challenge'),'challenge')[0]); enemy=f['decode'](snap()[0]['badguy'])['enemies'][0]
+            self.assertEqual(100005,enemy['trainingmaxhp']); self.assertEqual(120,enemy['creatureattack']); self.assertEqual(80,enemy['creaturedefense'])
+            # Missing nearest master cannot create combat; fixture removal is explicitly restored.
+            self.query('DELETE FROM masters'); prepare(); before=snap(); self.assertEqual(409,f['request']('train.php?op=challenge')[0]); self.assertEqual(before,snap())
+
+    def test_training_victory_zero_negative_replay_and_next_level(self):
+        with self._training_fixture() as f, self._specialty_terminal_capture() as terminal:
+            f['training_master'](hp=10000,attack=0,defense=0)
+            for hp in [10,9]:
+                f['enter'](attack=0,defense=1000,specialty='TS')
+                row=f['training_snapshot']()[0]; state=f['decode'](row['badguy']); state['enemies'][0]['creaturehealth']=hp
+                buff={'proof':{'name':'Fixture','schema':'train','effectmsg':'','effectnodmgmsg':'','effectfailmsg':'','rounds':3,'allowintrain':1,'minioncount':1,'minbadguydamage':10,'maxbadguydamage':10}}
+                self.query('UPDATE accounts SET badguy=?,bufflist=? WHERE acctid=?',[f['encode'](state),f['encode'](buff),f['player']])
+                self.query('DELETE FROM fixture_specialty_terminal')
+                before=f['training_snapshot'](); stale=f['training_form'](); data=f['training_form']()
+                code,body=f['training_action'](data); self.assertEqual(200,code,body[:3000]); after=f['training_snapshot']()
+                observed=terminal(); self.assertEqual(1,len(observed)); self.assertEqual(hp-10,observed[0]['enemy']['creaturehealth'])
+                expected=before[0]|dict(level='11',maxhitpoints='110',soulpoints='55',attack='1',defense='1001',seenmaster='0',badguy='')
+                # Overfull HP remains overfull; historical heal is a floor, never a cap.
+                for key in ['level','maxhitpoints','soulpoints','attack','defense','seenmaster','badguy','hitpoints','experience','gold','gems','turns','location','dragonkills','dragonpoints','authversion','race','specialty','alive']:
+                    self.assertEqual(expected[key],after[0][key],key)
+                self.assertEqual('16',self.query("SELECT value FROM module_userprefs WHERE userid=? AND modulename='specialtythiefskills' AND setting='skill'",[f['player']])[0]['value'])
+                f['training_reject'](data); f['training_reject'](stale); f['training_reject'](data,'challenge')
+                for path in ['train.php?op=challenge&victory=1','train.php?op=challenge&master=10']:
+                    self.assertEqual(400,f['request'](path)[0]); self.assertEqual(after,f['training_snapshot']())
+                self.assertEqual(200,f['request']('train.php?op=question')[0]); self.assertEqual(after,f['training_snapshot']())
+                # Experience was not spent, but is below level 11's 19121 requirement.
+                self.assertEqual(200,f['training_action'](f['training_form']('challenge'),'challenge')[0]); self.assertEqual('11',f['training_snapshot']()[0]['level']); self.assertEqual('',f['training_snapshot']()[0]['badguy'])
+
+    def test_training_settlement_rollback_and_defeat(self):
+        with self._training_fixture() as f, self._specialty_terminal_capture() as terminal:
+            for win in [True,False]:
+                f['training_master'](hp=10000,attack=0 if win else 10000,defense=0)
+                f['enter'](attack=0,defense=1000,hitpoints=1000)
+                row=f['training_snapshot']()[0]; state=f['decode'](row['badguy']); state['enemies'][0]['creaturehealth']=10 if win else 10000
+                buffs={'proof':{'name':'Fixture','schema':'train','effectmsg':'','effectnodmgmsg':'','effectfailmsg':'','rounds':3,'allowintrain':1,'minioncount':1,'minbadguydamage':10,'maxbadguydamage':10}} if win else {}
+                if not win:
+                    buffs={'retained':dict(name='Retained',schema='train',rounds=3,atkmod=2),'expires':dict(name='Expires',schema='train',rounds=3,atkmod=2,expireafterfight=1)}
+                    skeleton=dict(name='`4Skeleton Warrior',hitpoints=20,maxhitpoints=43,attack=26.5,defense=14.5,dyingtext='`$Your skeleton warrior crumbles to dust.`n',abilities=dict(fight=True),ignorelimit=True)
+                    self.query('UPDATE accounts SET companions=? WHERE acctid=?',[f['encode']({'skeleton_warrior':skeleton}),f['player']])
+                self.query('UPDATE accounts SET badguy=?,bufflist=?,hitpoints=1,defense=0 WHERE acctid=?',[f['encode'](state),f['encode'](buffs),f['player']])
+                self.query('DELETE FROM fixture_specialty_terminal')
+                before=f['training_snapshot'](); news=self.query('SELECT count(*) AS n FROM news WHERE accountid=?',[f['player']]); data=f['training_form']()
+                self.query("ALTER TABLE accounts ADD CONSTRAINT fixture_training_failure CHECK (login <> 'WebPlayer' OR badguy <> '')")
+                try:
+                    f['training_reject'](data,status=500); self.assertEqual([],terminal()); self.assertEqual(news,self.query('SELECT count(*) AS n FROM news WHERE accountid=?',[f['player']]))
+                finally: self.query('ALTER TABLE accounts DROP CONSTRAINT fixture_training_failure')
+                f['training_reject'](data); code,body=f['training_action'](f['training_form']()); self.assertEqual(200,code,body[:3000]); after=f['training_snapshot']()[0]
+                self.assertEqual('11' if win else '10',after['level']); self.assertEqual('110' if win else '100',after['hitpoints']); self.assertEqual('1',after['alive']); self.assertEqual('',after['badguy'])
+                self.assertEqual('0' if win else '1',after['seenmaster']); self.assertEqual(1,len(terminal()))
+                for key in ['experience','gold','gems','turns','location','dragonkills','authversion']:
+                    self.assertEqual(before[0][key],after[key],key)
+                if not win:
+                    for key in ['maxhitpoints','attack','defense','soulpoints']: self.assertEqual(before[0][key],after[key])
+                    buffs=f['decode'](after['bufflist']); self.assertNotIn('expires',buffs); self.assertEqual(3,buffs['retained']['rounds']); self.assertFalse(buffs['retained']['suspended'])
+                    companion=f['decode'](after['companions'])['skeleton_warrior']; self.assertEqual(20,companion['hitpoints']); self.assertFalse(companion['suspended'])
+                    self.assertNotIn('name="action_token"',f['request']('train.php?op=challenge')[1]); f['training_reject'](data,'challenge')
+
+    def test_training_corrupt_state_preserved_and_repaired(self):
+        with self._training_fixture() as f:
+            f['training_master'](); f['enter'](); base=f['training_snapshot']()[0]; valid=f['decode'](base['badguy']); encode=f['encode']
+            cases=['broken','O:8:"stdClass":0:{}',encode(False),encode([]),encode({'enemies':[],'options':{'type':'train'}})]
+            for key,value in [('creatureid',999),('creatureid',[]),('creaturelevel',11),('creaturehealth',0),('creaturehealth',-1),('creaturehealth',99999999),('creatureattack',[]),('creatureattack',121),('creaturedefense',-1),('dead',True),('istarget',False),('killedplayer',True),('reward',999),('trainingmaxhp',1)]:
+                state=json.loads(json.dumps(valid)); state['enemies'][0][key]=value; cases.append(encode(state))
+            for options in [dict(type='forest'),dict(traininglevel=11),dict(encounter='bad'),dict(experience=[999])]:
+                state=json.loads(json.dumps(valid)); state['options'].update(options); cases.append(encode(state))
+            state=json.loads(json.dumps(valid)); state['enemies']*=2; cases.append(encode(state))
+            for value in cases:
+                self.query('UPDATE accounts SET badguy=? WHERE acctid=?',[value,f['player']]); before=f['training_snapshot']()
+                for data in [None,{'csrf_token':'bad'}]:
+                    code,body=f['request']('train.php?op=fight',data); self.assertEqual(409,code,body[:2500]); self.assertNotRegex(body,r'Warning:|Fatal error:|SQLSTATE'); self.assertEqual(before,f['training_snapshot']())
+            self.query('UPDATE accounts SET badguy=? WHERE acctid=?',[base['badguy'],f['player']])
+            for column,value in [('bufflist',encode(False)),('bufflist','broken'),('bufflist','O:8:"stdClass":0:{}'),('companions','O:8:"stdClass":0:{}'),('bufflist',encode({'bad':{'rounds':1,'atkmod':[]}})),('companions',encode({'bad':{'hitpoints':-1}}))]:
+                self.query('UPDATE accounts SET '+column+'=? WHERE acctid=?',[value,f['player']]); before=f['training_snapshot'](); code,body=f['request']('train.php?op=fight'); self.assertIn(code,[400,409]); self.assertEqual(before,f['training_snapshot']()); self.assertNotRegex(body,r'Warning:|Fatal error:|SQLSTATE')
+                self.query('UPDATE accounts SET '+column+'=? WHERE acctid=?',[base[column],f['player']])
+            self.assertEqual(200,f['training_action'](f['training_form']())[0])
+
+    def test_training_buffs_companions_and_context_canonicalization(self):
+        with self._training_fixture() as f:
+            f['training_master'](); encode=f['encode']; decode=f['decode']; snap=f['training_snapshot']
+            guard=dict(name='Training guard',hitpoints=1000,maxhitpoints=1000,attack=2,defense=3,abilities=dict(fight=True),
+                attackperlevel=1,defenseperlevel=2,maxhitpointsperlevel=3,allowintrain=1)
+            skeleton=dict(name='`4Skeleton Warrior',hitpoints=43,maxhitpoints=43,attack=26.5,defense=14.5,
+                dyingtext='`$Your skeleton warrior crumbles to dust.`n',abilities=dict(fight=True),ignorelimit=True)
+            buffs={'excluded':dict(name='Fixture',schema='train',effectmsg='',effectnodmgmsg='',effectfailmsg='',rounds=5,regen=10),'allowed':dict(name='Fixture',schema='train',effectmsg='',effectnodmgmsg='',effectfailmsg='',rounds=5,regen=3,allowintrain=1)}
+            f['enter'](companions=encode(dict(skeleton_warrior=skeleton,guard=guard)),bufflist=encode(buffs))
+            before=snap()[0]; data=f['training_form'](); state=decode(before['badguy'])
+            # Reorder each record, preserving collection execution order, then use the existing intent.
+            state['enemies'][0]=dict(reversed(list(state['enemies'][0].items())))
+            buffstate=decode(before['bufflist']); companions=decode(before['companions'])
+            buffstate={k:dict(reversed(list(v.items()))) for k,v in buffstate.items()}
+            companions={k:dict(reversed(list(v.items()))) for k,v in companions.items()}
+            self.query('UPDATE accounts SET badguy=?,bufflist=?,companions=? WHERE acctid=?',[encode(state),encode(buffstate),encode(companions),f['player']])
+            code,body=f['training_action'](data); self.assertEqual(200,code,body[:3000]); after=snap()[0]
+            actual=decode(after['companions']); self.assertEqual(43,actual['skeleton_warrior']['hitpoints']); self.assertTrue(actual['skeleton_warrior']['suspended'])
+            self.assertNotIn('Skeleton Warrior hits',body); self.assertIn('Training guard',body)
+            plain=html.unescape(re.sub(r'<[^>]*>','',body)); companion_move=re.search(r'Training guard (?:hits|tries to hit)',plain); player_move=re.search(r'You (?:hit|try to hit)',plain)
+            master_move=re.search(r'Sensei Noetha (?:hits you|tries to hit you)',plain)
+            self.assertIsNotNone(companion_move); self.assertIsNotNone(player_move); self.assertIsNotNone(master_move)
+            self.assertLess(player_move.start(),master_move.start()); self.assertLess(master_move.start(),companion_move.start())
+            actualbuffs=decode(after['bufflist']); self.assertEqual(5,actualbuffs['excluded']['rounds']); self.assertTrue(actualbuffs['excluded']['suspended']); self.assertLess(actualbuffs['allowed']['rounds'],buffstate['allowed']['rounds'])
+            # Every material participant/state change invalidates a form without another round.
+            for column,value in [('experience',15144),('hitpoints',400),('attack',99),('seenmaster',0),('level',11),('dragonkills',1),('location','Elsewhere')]:
+                old=snap()[0][column]; data=f['training_form'](); self.query('UPDATE accounts SET '+column+'=? WHERE acctid=?',[value,f['player']]); f['training_reject'](data)
+                self.query('UPDATE accounts SET '+column+'=? WHERE acctid=?',[old,f['player']])
+            for column in ['bufflist','companions']:
+                old=snap()[0][column]; data=f['training_form'](); changed=decode(old)
+                if column=='bufflist': changed['allowed']['rounds']+=1
+                else: changed['guard']['hitpoints']-=1
+                self.query('UPDATE accounts SET '+column+'=? WHERE acctid=?',[encode(changed),f['player']]); f['training_reject'](data)
+                self.query('UPDATE accounts SET '+column+'=? WHERE acctid=?',[old,f['player']])
+            # Winning phase excludes the skeleton, then historical advancement heals/grows surviving companions.
+            state=decode(snap()[0]['badguy']); state['enemies'][0]['creaturehealth']=1
+            self.query('UPDATE accounts SET badguy=?,bufflist=? WHERE acctid=?',[encode(state),encode({'finish':dict(name='Fixture',schema='train',effectmsg='',effectnodmgmsg='',effectfailmsg='',rounds=2,allowintrain=1,minioncount=1,minbadguydamage=10,maxbadguydamage=10)}),f['player']])
+            self.assertEqual(200,f['training_action'](f['training_form']())[0]); after=decode(snap()[0]['companions'])
+            self.assertEqual(43,after['skeleton_warrior']['hitpoints']); self.assertFalse(after['skeleton_warrior']['suspended'])
+            self.assertEqual(3,after['guard']['attack']); self.assertEqual(5,after['guard']['defense']); self.assertEqual(1003,after['guard']['maxhitpoints']); self.assertEqual(1003,after['guard']['hitpoints'])
+
+    def test_training_autochallenge_maximum_and_multimaster(self):
+        with self._training_fixture() as f:
+            f['setting']('automaster',1); f['training_master'](attack=0); f['prepare_training'](experience=19121,hitpoints=50)
+            before=f['training_snapshot'](); data=f['training_form']('autochallenge'); self.assertEqual(before,f['training_snapshot']()); f['training_reject'](data,'autochallenge')
+            f['prepare_training'](experience=19122,hitpoints=50)
+            before=f['training_snapshot'](); data=f['training_form']('autochallenge'); self.assertEqual(before,f['training_snapshot']())
+            self.assertEqual(200,f['training_action'](data,'autochallenge')[0]); self.assertEqual('100',f['training_snapshot']()[0]['hitpoints']); f['training_reject'](data,'autochallenge')
+            # Level 14 is last training master. Level 15 cannot recreate combat or bypass Dragon progression.
+            for multi in [0,1]:
+                f['setting']('automaster',0); f['setting']('multimaster',multi)
+                f['enter'](level=14,experience=36071,maxhitpoints=140,hitpoints=1000,attack=0,defense=1000)
+                state=f['decode'](f['training_snapshot']()[0]['badguy']); state['enemies'][0]['creaturehealth']=1
+                self.query('UPDATE accounts SET badguy=?,bufflist=? WHERE acctid=?',[f['encode'](state),f['encode']({'finish':dict(name='Fixture',schema='train',effectmsg='',effectnodmgmsg='',effectfailmsg='',rounds=2,allowintrain=1,minioncount=1,minbadguydamage=10,maxbadguydamage=10)}),f['player']])
+                data=f['training_form'](); self.assertEqual(200,f['training_action'](data)[0]); after=f['training_snapshot']()
+                self.assertEqual('15',after[0]['level']); self.assertEqual('150',after[0]['maxhitpoints']); self.assertEqual(str(1-multi),after[0]['seenmaster'])
+                self.assertIn('memories',f['request']('train.php')[1]); self.assertEqual(after,f['training_snapshot']()); f['training_reject'](data); f['training_reject'](data,'challenge')
+            # Multimaster permits a fresh earned next level when experience already satisfies it.
+            f['setting']('multimaster',1); f['enter'](experience=19121,attack=0,defense=1000)
+            state=f['decode'](f['training_snapshot']()[0]['badguy']); state['enemies'][0]['creaturehealth']=1
+            self.query('UPDATE accounts SET badguy=?,bufflist=? WHERE acctid=?',[f['encode'](state),f['encode']({'finish':dict(name='Fixture',schema='train',effectmsg='',effectnodmgmsg='',effectfailmsg='',rounds=2,allowintrain=1,minioncount=1,minbadguydamage=10,maxbadguydamage=10)}),f['player']])
+            self.assertEqual(200,f['training_action'](f['training_form']())[0]); self.assertEqual('11',f['training_snapshot']()[0]['level'])
+            self.assertEqual(200,f['training_action'](f['training_form']('challenge'),'challenge')[0])
+            state=f['decode'](f['training_snapshot']()[0]['badguy']); self.assertEqual('11',str(state['enemies'][0]['creatureid']))
+
+    def test_training_referral_and_specialty_rollback(self):
+        with self._training_fixture() as f:
+            ref=self.query("SELECT acctid,donation FROM accounts WHERE login='FixtureAdmin'")[0]
+            f['training_master'](attack=0); f['enter'](attack=0,defense=1000,specialty='TS',referer=ref['acctid'])
+            state=f['decode'](f['training_snapshot']()[0]['badguy']); state['enemies'][0]['creaturehealth']=1
+            self.query('UPDATE accounts SET badguy=?,bufflist=? WHERE acctid=?',[f['encode'](state),f['encode']({'finish':dict(name='Fixture',schema='train',effectmsg='',effectnodmgmsg='',effectfailmsg='',rounds=2,allowintrain=1,minioncount=1,minbadguydamage=10,maxbadguydamage=10)}),f['player']])
+            data=f['training_form'](); before=f['training_snapshot'](); mail=self.query('SELECT count(*) AS n FROM mail WHERE msgto=?',[ref['acctid']])
+            self.query("ALTER TABLE accounts ADD CONSTRAINT fixture_training_referral CHECK (login <> 'WebPlayer' OR level <> 11)")
+            try:
+                f['training_reject'](data,status=500); self.assertEqual(before,f['training_snapshot']())
+                self.assertEqual(ref['donation'],self.query('SELECT donation FROM accounts WHERE acctid=?',[ref['acctid']])[0]['donation'])
+                self.assertEqual(mail,self.query('SELECT count(*) AS n FROM mail WHERE msgto=?',[ref['acctid']]))
+            finally: self.query('ALTER TABLE accounts DROP CONSTRAINT fixture_training_referral')
+            try:
+                self.assertEqual(200,f['training_action'](f['training_form']())[0]); f['training_reject'](data)
+                self.assertEqual(int(ref['donation'])+25,int(self.query('SELECT donation FROM accounts WHERE acctid=?',[ref['acctid']])[0]['donation']))
+                self.assertEqual('1',f['training_snapshot']()[0]['refererawarded']); self.assertEqual(int(mail[0]['n'])+1,int(self.query('SELECT count(*) AS n FROM mail WHERE msgto=?',[ref['acctid']])[0]['n']))
+            finally: self.query('UPDATE accounts SET donation=? WHERE acctid=?',[ref['donation'],ref['acctid']])
+
+    def test_training_entry_rollback_settings_and_autofight(self):
+        with self._training_fixture() as f:
+            f['training_master'](attack=0,defense=0); f['prepare_training'](attack=1,defense=1000)
+            before=f['training_snapshot'](); data=f['training_form']('challenge')
+            self.query("ALTER TABLE accounts ADD CONSTRAINT fixture_training_entry CHECK (login <> 'WebPlayer' OR seenmaster <> 1)")
+            try: f['training_reject'](data,'challenge',500)
+            finally: self.query('ALTER TABLE accounts DROP CONSTRAINT fixture_training_entry')
+            self.assertEqual(before,f['training_snapshot']()); f['training_reject'](data,'challenge')
+            self.assertEqual(200,f['training_action'](f['training_form']('challenge'),'challenge')[0])
+            for rounds in ['five','ten','full']:
+                data=f['training_form'](rounds=rounds)
+                if rounds=='full':
+                    # Fully supported until-end action uses a small remaining live target.
+                    state=f['decode'](f['training_snapshot']()[0]['badguy']); state['enemies'][0]['creaturehealth']=1
+                    self.query('UPDATE accounts SET badguy=? WHERE acctid=?',[f['encode'](state),f['player']]); data=f['training_form'](rounds=rounds)
+                code,body=f['training_action'](data); self.assertEqual(200,code,body[:2500]); f['training_reject'](data)
+            f['enter'](attack=1,defense=1000)
+            data=f['training_form'](); f['setting']('multimaster',0); f['training_reject'](data); f['setting']('multimaster',1)
+            data=f['training_form'](); self.query('UPDATE masters SET creatureattack=1 WHERE creaturelevel=10'); f['training_reject'](data); self.query('UPDATE masters SET creatureattack=0 WHERE creaturelevel=10')
+            data=f['training_form'](); self.query("UPDATE module_userprefs SET value='16' WHERE userid=? AND modulename='specialtythiefskills' AND setting='skill'",[f['player']]); f['training_reject'](data)
+            for rounds in ['one','999','0']:
+                f['training_reject'](f['training_form'](rounds=rounds),status=400)
+            f['setting']('autofight',0); f['training_reject'](f['training_form'](rounds='five'),status=400)
+
+    def test_training_specialty_growth_and_bundled_racial_buffs(self):
+        with self._training_fixture() as f:
+            for spec,race,stat,expression in [('DA','Elf','defmod','(<defense>?(1+((1+floor(<level>/5))/<defense>)):0)'),
+                ('MP','Troll','atkmod','(<attack>?(1+((1+floor(<level>/5))/<attack>)):0)'),
+                ('TS','Elf','defmod','(<defense>?(1+((1+floor(<level>/5))/<defense>)):0)')]:
+                f['training_master'](attack=0)
+                racial=dict(name='Racial benefit',schema='module-race'+race.lower(),rounds=-1,allowintrain=1,allowinpvp=1,**{stat:expression})
+                f['enter'](attack=100,defense=100,specialty=spec,race=race,bufflist=f['encode']({'racialbenefit':racial}))
+                self.query("UPDATE module_userprefs SET value='17' WHERE userid=? AND modulename=? AND setting='skill'",[f['player'],f['modules'][spec]])
+                state=f['decode'](f['training_snapshot']()[0]['badguy']); state['enemies'][0]['creaturehealth']=1
+                finish=dict(name='Finish',schema='train',rounds=2,allowintrain=1,minioncount=1,minbadguydamage=10,maxbadguydamage=10,effectmsg='',effectnodmgmsg='',effectfailmsg='')
+                self.query('UPDATE accounts SET badguy=?,bufflist=? WHERE acctid=?',[f['encode'](state),f['encode']({'racialbenefit':racial,'finish':finish}),f['player']])
+                data=f['training_form'](); code,body=f['training_action'](data); self.assertEqual(200,code,body[:2500]); after=f['training_snapshot']()[0]
+                self.assertEqual(('11','101','101'),(after['level'],after['attack'],after['defense']))
+                prefs=self.query('SELECT setting,value FROM module_userprefs WHERE userid=? AND modulename=? ORDER BY setting',[f['player'],f['modules'][spec]])
+                self.assertEqual([{'setting':'skill','value':'18'},{'setting':'uses','value':'10'}],prefs)
+                buff=f['decode'](after['bufflist'])['racialbenefit']; self.assertEqual(expression,buff[stat]); self.assertEqual(-1,buff['rounds']); self.assertFalse(buff.get('suspended',False)); f['training_reject'](data)
+
+    @contextmanager
     def _ordinary_forest_fixture(self):
         with self._specialty_accounting_fixture() as f:
             request=f['request']; url='forest.php?op=fight'

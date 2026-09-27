@@ -1290,3 +1290,25 @@ DRAFT, NOT READY, NOT MERGED. Historical tag/source/tree, 417 files and 11 commi
 PASS. Phase 3 INCOMPLETE; merge NO; public hosting NO. No VPS, deployment, release,
 version tag or another subsystem. Next task is narrow exact-candidate CI acceptance
 or correction in a new execution. Stop after publication and bounded inspection.
+
+## Training/master authority candidate, 2026-09-27
+
+Starting HEAD `bc942057570559beb0bec82084d7108da756ac3c`; main unchanged at
+`999cec6f9c655a840320d982d673bb863c68c2b2`. This bounded slice implements
+server-owned eligibility/master selection, protected entry/fights, validated live
+training state, historical advancement/defeat, replay/stale rejection, participant
+rules and transactional settlement/rollback. [Full evidence and route inventory](TRAINING-MASTER-AUTHORITY-20260927.md).
+
+Training/master combat is BLOCKED pending the new exact-head supported matrix.
+Broader combat stays BLOCKED, including PvP, module callers and graveyard/remaining
+families. No other family or subsystem was begun. The prior ordinary Modern run
+36315549242 was observed IN_PROGRESS and Baseline 36315549203 SUCCESS during
+initial verification, without repeated polling or separate closeout. Accepted
+bundled-module totals remain 23/0/1; candidate evidence remains 24/0/0. A cancelled
+standalone Mystical Powers run is not a test failure.
+
+PR #1 OPEN/DRAFT/NOT READY/NOT MERGED; Phase 3 INCOMPLETE; merge NO; public hosting
+NO. No main/history/workflow/dependency changes, VPS, deployment or release.
+Publish one coherent candidate, observe/dispatch exact-head CI, inspect within the
+bounded rule, and stop. Next task is exact-candidate acceptance or narrow correction,
+not another combat family.

@@ -417,3 +417,20 @@ battle.php protection is retained. See [the route inventory and exact evidence](
 PR #1 records the exact SHA, CI IDs/states and bounded stop. Module evidence remains
 candidate 24/0/0, last recorded accepted 23/0/1. Phase 3 INCOMPLETE, merge NO, public
 hosting NO. No other subsystem, deployment, VPS, release or Phase 4 work.
+
+## Training/master combat candidate, 2026-09-27
+
+Starting at `bc942057570559beb0bec82084d7108da756ac3c`, training entry,
+automatic-challenge healing/news, rounds and advancement now belong to the
+protected POST/player-transaction boundary. Client master/victory/stat/target
+parameters reject. GET presents only; server-owned master selection, eligibility,
+normal rounds, terminal ordering, exact settlement, stale/replay rejection and
+late-write rollback are covered by [the dedicated training evidence](TRAINING-MASTER-AUTHORITY-20260927.md).
+The extracted historical settlement preserves specialty/race/companion behavior
+and referral writes; external notifications execute after commit. A narrowly owned
+training state validator leaves Forest and ScalarState rules unchanged.
+
+Training/master acceptance is **BLOCKED pending exact candidate CI**. Broader
+combat remains BLOCKED. Last accepted bundled modules remain 23/0/1, candidate
+module evidence 24/0/0; no earlier-slice promotion is performed here. PR #1 remains
+OPEN/DRAFT/NOT READY/NOT MERGED. Phase 3 INCOMPLETE; merge NO; public hosting NO.

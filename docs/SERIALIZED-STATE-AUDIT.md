@@ -261,3 +261,23 @@ record-field ordering but retain meaningful enemy/buff/companion collection orde
 Ordinary GET never calls the mutation engine. Local evidence PASS; exact-head CI
 acceptance PENDING, recorded in PR #1. Broader general combat and serialized-state
 closure remain BLOCKED. See [the exact tests and limits](ORDINARY-FOREST-COMBAT-20260927.md).
+
+## Training/master state candidate, 2026-09-27
+
+`src/Game/TrainingCombatState.php` adds a family-owned ScalarState business read:
+one server-selected live master, nearest-level identity, historical Dragon-scaled
+statistics/HP bounds, single live target, training level and encounter identity.
+Forest rewards/options and terminal continuation are rejected. `train.php` no
+longer reads a request-created victory encounter; `lib/training_combat.php`
+validates the raw persisted buff root before normalized data can conceal it,
+selects the stored master only from authoritative nearest-level rows, and writes
+the validated server-created encounter. `ScalarState::read()` and the ordinary
+Forest schema are unchanged. No raw unserialize or dynamic execution is added.
+
+Malformed combat/buff/companion state is preserved for operator repair, without
+advancement, automatic defeat or clearing. Context canonicalizes record fields
+while preserving effect/companion order. Local HTTP matrices cover corrupt roots,
+objects, serialization, identities, levels, HP/stats, targets, effects, repair,
+stale state, settlement and rollback. See [training evidence](TRAINING-MASTER-AUTHORITY-20260927.md).
+Training acceptance remains BLOCKED pending exact candidate CI; broader serialized
+state closure is not claimed.
