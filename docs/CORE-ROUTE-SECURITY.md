@@ -299,3 +299,27 @@ See [the recovery record](PHASE3-RECOVERY-20260927.md). Exact SHA `72ab600fdc8c9
 ### Accepted specialty continuation and independent decision
 
 Exact candidate `2bfe8fc3c7cee4a8a8ac0c3647571a318d243634` passes Modern core **36285456622** and Baseline integrity **36285456697**. Both supported targets: 88 PHPUnit tests / 2,462 assertions, **55** Python/tooling and HTTP tests, 321 lint files, zero runtime-matrix failures/skips, all Composer and both PHPStan gates. All three new regression matrices pass. **Thieving Skills is PASS; totals are 22 PASS / 0 limitation / 2 BLOCKED, with 24 lifecycle PASS.** Dark Arts retains companion combat/fallback transition gaps; Mystical Powers retains area-effect progression and aura/companion gaps. Full independent reasoning and exact boundaries are in [the recovery record](PHASE3-RECOVERY-20260927.md). Application source, workflows and serialized readers/writers are unchanged. The 24/24 gate remains open; general combat development has not begun. Phase 3 incomplete, merge NO, hosting NO, PR #1 draft. The final documentation commit requires its own terminal exact-head acceptance recorded in PR #1.
+
+
+## Dark Arts companion-only checkpoint, 2026-09-27
+
+Starting accepted head `ea1f3563c14188f9e1f536785c71c5b699f332f0`. Five added
+HTTP methods cover exact companion injury/death ordering in Forest and Dragon,
+healthy/injured companion carry on player defeat, zero/negative target progression,
+final settlement, Dragon pending victory and clearing, fallback minions, live
+replacement, combined-effect natural expiration, rollback and replay. Historical
+zero-HP retaliation and producer-setting semantics are preserved. No production
+source or business-validator changes. The terminal test observer additionally
+verifies cleanup. See [the complete bounded record](DARK-ARTS-COMPANION-20260927.md).
+
+Local PHP 8.4.26 / MariaDB 11.4.13: 88 PHPUnit tests / 2,462 assertions and
+authentication plus seven Dark Arts HTTP methods pass. Full suite collects
+60 Python/tooling/HTTP tests; its two-runtime result is not inferred from the
+focused run. Exact candidate SHA and workflow IDs/state are recorded in PR #1.
+Until both exact-head workflows pass, Dark Arts remains BLOCKED for acceptance,
+with no additional behavior gap identified. Accepted counts remain 22 PASS /
+0 limitations / 2 BLOCKED; 24 lifecycle PASS. Mystical Powers is unchanged.
+Next task is exact-candidate acceptance and documentation-only promotion to
+23/0/1 if justified. Phase 3 INCOMPLETE; merge NO; public hosting NO; PR #1
+OPEN/DRAFT/NOT READY/NOT MERGED. No general combat, Phase 4, VPS, deployment,
+release or tag work. Stop at the bounded CI checkpoint.

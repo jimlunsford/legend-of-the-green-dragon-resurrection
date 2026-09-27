@@ -186,10 +186,10 @@ Actual HTTP forces every one of the 19 song results, plus female charm, HP floor
 
 ### specialtydarkarts (1.1): BLOCKED
 
-Shared onboarding, Forest and Dragon specialty authority, exact costs, invalid level/use/state rejection, POST/CSRF, replay, persistence, rollback, New Day restoration, buff schemas and retained Dragon-reset hooks have accepted component evidence through `72ab600`. Dark Arts remains BLOCKED for companion combat injury/death ordering across target and Dragon boundaries, fallback-minion transitions and remaining combined effects.
+Shared accepted onboarding, Forest/Dragon authority, all levels, exact costs, schemas, adverse accounting, duration, New Day, stale-state, replay and rollback remain retained. The remaining companion injury/death, player defeat, target progression, Dragon continuation, fallback and combined-effect tests now pass locally on PHP 8.4.26 / MariaDB 11.4.13. Final Dark Arts certification remains BLOCKED solely pending exact-candidate acceptance on both supported CI targets. No remaining Dark Arts behavior gap was identified in this bounded review. See [the companion evidence and historical ordering](DARK-ARTS-COMPANION-20260927.md).
 
-- Component route result: BLOCKED.
-- Exact metadata, descriptors, hooks, dependencies, database tables and prior lifecycle evidence remain in [the JSON record](BUNDLED-MODULE-CERTIFICATION.json).
+- Accepted result: BLOCKED pending exact-head supported-matrix CI; counts remain 22/0/2.
+- Promotion to 23/0/1 requires terminal acceptance, recorded in PR #1.
 
 ### specialtymysticpower (1.0): BLOCKED
 

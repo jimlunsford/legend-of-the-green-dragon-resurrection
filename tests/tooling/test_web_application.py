@@ -1345,6 +1345,268 @@ function resurrectionrandomfixture_dohook($hook,$args) { mt_srand((int)getsettin
                     if level is not None: f['rejected'](data)
 
 
+    @contextmanager
+    def _darkarts_companion_fixture(self, route):
+        with self._specialty_accounting_fixture(route) as f:
+            encode,decode,player=f['encode'],f['decode'],f['player']
+            def combat(attack=40, defense=1, hp=100000):
+                return encode({'enemies':[dict(f['enemy'],creatureattack=attack,
+                    creaturedefense=defense,creaturehealth=hp)],
+                    'options':{'type':route,'didsurprise':1}})
+            def prepare(**changes):
+                f['prepare']('DA',badguy=combat(),gold=1000,gems=10,experience=1000,turns=20,**changes)
+                # A trained DA player can afford the real combined sequence.
+                for key,value in [('uses','40'),('skill','120')]:
+                    self.query("UPDATE module_userprefs SET value=? WHERE userid=? AND modulename='specialtydarkarts' AND setting=?",[value,player,key])
+            def uses():
+                return int(self.query("SELECT value FROM module_userprefs WHERE userid=? AND modulename='specialtydarkarts' AND setting='uses'",[player])[0]['value'])
+            def cast(level):
+                data=f['form'](level); before=uses()
+                status,body=f['request'](data=data); self.assertEqual(200,status,body[:2500])
+                self.assertEqual(before-level,uses())
+                after=f['snapshot'](); f['rejected'](data)
+                # A separate request rehydrates the exact committed business state.
+                if after[0]['badguy']:
+                    path='dragon.php?op=prologue1' if route=='dragon' and 'dragonVictory' in after[0]['badguy'] else route+'.php?op=specialty'
+                    self.assertEqual(200,f['request'](path)[0])
+                else: self.assertEqual(302 if after[0]['alive']=='0' else 200,f['request']('village.php')[0])
+                self.assertEqual(after,f['snapshot']())
+                return body,data
+            def patch(**values):
+                self.query('UPDATE accounts SET '+','.join(k+'=?' for k in values)+' WHERE acctid=?',[*values.values(),player])
+            def state():
+                a=f['snapshot']()[0]
+                return a,decode(a['companions']),decode(a['bufflist'])
+            def ordered(body,*messages):
+                text=re.sub(r'\s+',' ',html.unescape(re.sub('<[^>]+>',' ',body)))
+                position=-1
+                for message in messages:
+                    found=text.find(message,position+1); self.assertGreater(found,position,text)
+                    position=found
+            yield f|dict(combat=combat,prepare_da=prepare,cast=cast,patch=patch,uses=uses,state=state,ordered=ordered)
+
+    def test_darkarts_companion_injury_death_defeat_and_rollback(self):
+        for route,maxhp,injured,hurt in [('forest',43,17,13),('dragon',60,37,12)]:
+            with self.subTest(route=route), self._darkarts_companion_fixture(route) as f, self._specialty_terminal_capture() as terminal:
+                d,e=f['decode'],f['encode']; f['prepare_da']()
+                body,created=f['cast'](1); a,c,b=f['state']()
+                self.assertEqual(injured,c['skeleton_warrior']['hitpoints'])
+                self.assertEqual(maxhp,c['skeleton_warrior']['maxhitpoints'])
+                self.assertEqual('500',a['hitpoints']); self.assertEqual(99929 if route=='forest' else 99923,d(a['badguy'])['enemies'][0]['creaturehealth'])
+                f['ordered'](body,'You hit Accounting Target for 47 points','you RIPOSTE for 14 points',
+                    'Skeleton Warrior hits Accounting Target','hits Skeleton Warrior for '+str(maxhp-injured)+' points')
+                # Curse halves companion retaliation with historical integer rounding.
+                body,_=f['cast'](3); a,c,b=f['state'](); wounded=c
+                self.assertEqual(injured-hurt,c['skeleton_warrior']['hitpoints'])
+                self.assertEqual(4,b['da3']['rounds']); self.assertEqual('500',a['hitpoints'])
+                self.assertEqual(99858 if route=='forest' else 99846,d(a['badguy'])['enemies'][0]['creaturehealth'])
+                f['ordered'](body,'You hit Accounting Target for 47 points','deals only half damage',
+                    'Skeleton Warrior hits Accounting Target','hits Skeleton Warrior for '+str(hurt)+' points')
+                # Lethal companion riposte/retaliation is a multi-write transition.
+                f['patch'](badguy=f['combat'](120,80)); failed=f['form'](3); before=f['snapshot']()
+                escaped=before[0]['companions'].replace("'","''")
+                self.query("ALTER TABLE accounts ADD CONSTRAINT fixture_da_companion CHECK (login <> 'WebPlayer' OR companions='"+escaped+"')")
+                try:
+                    f['rejected'](failed,500); self.assertEqual([],terminal())
+                finally: self.query('ALTER TABLE accounts DROP CONSTRAINT fixture_da_companion')
+                f['rejected'](failed); self.assertEqual(before,f['snapshot']())
+                body,death=f['cast'](3); a,c,b=f['state']()
+                self.assertEqual([],c); self.assertNotIn('da1',b); self.assertEqual(4,b['da3']['rounds'])
+                self.assertEqual('500',a['hitpoints']); self.assertEqual(99955,d(a['badguy'])['enemies'][0]['creaturehealth'])
+                self.assertEqual(1,body.count('Your skeleton warrior crumbles to dust.'))
+                f['ordered'](body,'You hit Accounting Target','Skeleton Warrior tries to hit Accounting Target',
+                    'hits Skeleton Warrior','Your skeleton warrior crumbles to dust.')
+                body,_=f['cast'](3); self.assertNotIn('Skeleton Warrior',body); self.assertEqual([],f['state']()[1])
+                self.assertEqual(99910,d(f['state']()[0]['badguy'])['enemies'][0]['creaturehealth']); f['rejected'](death)
+                # Death never summons fallback minions; a fresh cast explicitly replaces it.
+                f['patch'](badguy=f['combat'](1)); body,_=f['cast'](1)
+                self.assertEqual(maxhp,f['state']()[1]['skeleton_warrior']['hitpoints']); self.assertNotIn('da1',f['state']()[2])
+                healthy=f['state']()[1]
+                f['patch'](companions=e(wounded)); f['cast'](1)
+                self.assertEqual(1,len(f['state']()[1])); self.assertEqual(healthy,f['state']()[1])
+                for companion in [healthy,wounded]:
+                    with self.subTest(companion_hp=companion['skeleton_warrior']['hitpoints']):
+                        f['prepare_da'](companions=e(companion),hitpoints=89)
+                        f['patch'](badguy=f['combat'](1000,80)); self.query('DELETE FROM fixture_specialty_terminal')
+                        body,dead=f['cast'](3); a,c,b=f['state'](); events=terminal()
+                        self.assertEqual(['0','0','0','900' if route=='forest' else '1000'],[a[k] for k in ['alive','hitpoints','gold','experience']])
+                        self.assertEqual('',a['badguy']); self.assertEqual(dict(companion['skeleton_warrior'],used=False),c['skeleton_warrior'])
+                        self.assertEqual(4,b['da3']['rounds']); self.assertEqual(['battle-defeat'],[x['hook'] for x in events])
+                        self.assertEqual(99960,events[0]['enemy']['creaturehealth']); self.assertEqual(c,events[0]['companions'])
+                        self.assertNotIn('Skeleton Warrior hits',body); self.assertNotIn('crumbles to dust',body)
+                        f['rejected'](dead); self.assertEqual(events,terminal())
+
+    def test_darkarts_companion_combined_natural_expiration(self):
+        cases=[('forest',[99929,99858,99787,99475,99163,98851,98539,98258],[17,4,4,4,4,4,4,4]),
+               ('dragon',[99923,99846,99758,99430,99102,98774,98446,98153],[37,25,25,25,25,25,25,25])]
+        rounds=[{}, {'da3':4}, {'da3':3,'da5':4}, {'da3':2,'da5':3},
+                {'da3':1,'da5':2}, {'da5':1}, {}, {}]
+        for route,targets,companions in cases:
+            with self.subTest(route=route), self._darkarts_companion_fixture(route) as f:
+                f['prepare_da']()
+                for n,level in enumerate([1,3,5,2,2,2,2,2]):
+                    body,_=f['cast'](level); a,c,b=f['state']()
+                    self.assertEqual(targets[n],f['decode'](a['badguy'])['enemies'][0]['creaturehealth'])
+                    self.assertEqual(companions[n],c['skeleton_warrior']['hitpoints'])
+                    self.assertEqual(487 if n==7 else 500,int(a['hitpoints']))
+                    self.assertEqual(rounds[n],{k:v['rounds'] for k,v in b.items()} if b else {})
+                    self.assertNotIn('da2',b)
+                    if n in [5,6]:
+                        f['ordered'](body,'doll hurting it for 263 points','You hit Accounting Target',
+                            'Skeleton Warrior hits Accounting Target','Your curse has faded.' if n==5 else "Your victim's soul has been restored.")
+                self.assertEqual(21,f['uses']())
+
+    def test_darkarts_companion_target_progression_and_terminal_order(self):
+        with self._darkarts_companion_fixture('forest') as f, self._specialty_terminal_capture() as terminal:
+            d,e=f['decode'],f['encode']
+            self.query("UPDATE settings SET value='1' WHERE setting='forestgemchance'")
+            for overkill in [0,1]:
+                with self.subTest(overkill=overkill):
+                    f['prepare_da'](); f['cast'](1); f['cast'](3)
+                    self.assertEqual(4,f['state']()[1]['skeleton_warrior']['hitpoints'])
+                    a=dict(f['enemy'],creatureattack=40,creaturedefense=1,creaturehealth=71-overkill,
+                           creatureexp=100,creaturegold=0,istarget=True)
+                    b=dict(a,creatureid=2,creaturename='Second Target',creaturehealth=100000,
+                           creatureexp=200,istarget=False)
+                    f['patch'](badguy=e({'enemies':[a,b],'options':{'type':'forest','didsurprise':1,'maxattacks':1}}))
+                    self.query('DELETE FROM fixture_specialty_terminal'); stale=f['form'](3)
+                    body,first=f['cast'](3); account,c,buffs=f['state'](); state=d(account['badguy'])
+                    corpse=state['enemies'][0]
+                    self.assertEqual(-overkill,corpse['creaturehealth']); self.assertTrue(corpse['dead']); self.assertFalse(corpse['istarget'])
+                    self.assertTrue(state['enemies'][1]['istarget']); self.assertEqual(100000,state['enemies'][1]['creaturehealth'])
+                    self.assertEqual(['500','1000','10','1000'],[account[k] for k in ['hitpoints','gold','gems','experience']])
+                    self.assertEqual([],terminal()); self.assertEqual(4,buffs['da3']['rounds']); f['rejected'](stale)
+                    if overkill:
+                        self.assertEqual(4,c['skeleton_warrior']['hitpoints']); self.assertNotIn('crumbles to dust',body)
+                    else:
+                        self.assertEqual([],c); self.assertEqual(1,body.count('Your skeleton warrior crumbles to dust.'))
+                    # A fresh action uses B; Wither Soul protects the injured survivor.
+                    body,_=f['cast'](5); account,c,buffs=f['state'](); state=d(account['badguy'])
+                    self.assertEqual(corpse,state['enemies'][0])
+                    self.assertEqual(99929 if overkill else 99951,state['enemies'][1]['creaturehealth'])
+                    self.assertEqual({'da3':3,'da5':4},{k:v['rounds'] for k,v in buffs.items()})
+                    if overkill:
+                        self.assertEqual(4,c['skeleton_warrior']['hitpoints'])
+                        f['ordered'](body,'You hit Second Target','Skeleton Warrior hits Second Target')
+                    else: self.assertNotIn('Skeleton Warrior',body)
+                    state['enemies'][1]['creaturehealth']=263-overkill
+                    f['patch'](badguy=e(state)); body,final=f['cast'](2); account,finalc,buffs=f['state']()
+                    self.assertEqual('',account['badguy']); self.assertEqual(['1','500','1000','11','1150'],[account[k] for k in ['alive','hitpoints','gold','gems','experience']])
+                    self.assertEqual(26,f['uses']()); self.assertEqual(2,len(terminal()))
+                    self.assertEqual(['battle-victory']*2,[x['hook'] for x in terminal()])
+                    self.assertEqual([-overkill,-overkill],[x['enemy']['creaturehealth'] for x in terminal()])
+                    self.assertEqual({'da3':3,'da5':4},{k:v['rounds'] for k,v in buffs.items()})
+                    if overkill:
+                        self.assertEqual(dict(c['skeleton_warrior'],used=False),finalc['skeleton_warrior'])
+                    else: self.assertEqual([],finalc)
+                    events=terminal(); f['rejected'](first); f['rejected'](final); self.assertEqual(events,terminal())
+
+    def test_darkarts_dragon_companion_simultaneous_victory_and_expiration(self):
+        with self._darkarts_companion_fixture('dragon') as f, self._specialty_terminal_capture() as terminal:
+            d,e=f['decode'],f['encode']; request=f['request']
+            for overkill in [0,1]:
+                with self.subTest(overkill=overkill):
+                    f['prepare_da'](); f['cast'](1)
+                    for _ in range(3): f['cast'](3)
+                    account,c,b=f['state'](); self.assertEqual(1,c['skeleton_warrior']['hitpoints'])
+                    b['da3']['rounds']=1 # Valid last-active-round state of the real producer.
+                    f['patch'](badguy=f['combat'](hp=77-overkill),bufflist=e(b))
+                    self.query('DELETE FROM fixture_specialty_terminal')
+                    path='dragon.php?op=fight'; status,body=request(path); self.assertEqual(200,status)
+                    action=self._security_fields(body,path); beforeuses=f['uses']()
+                    status,body=request(path,action); self.assertEqual(200,status,body[:2500])
+                    account,c,b=f['state'](); events=terminal(); pending=d(account['badguy'])
+                    self.assertTrue(pending['dragonVictory']); self.assertEqual(0,pending['dragonkills'])
+                    self.assertEqual('500',account['hitpoints']); self.assertEqual(beforeuses,f['uses']()); self.assertNotIn('da3',b)
+                    self.assertEqual(['battle-victory'],[x['hook'] for x in events]); self.assertEqual(-overkill,events[0]['enemy']['creaturehealth'])
+                    self.assertEqual(c,events[0]['companions'])
+                    if overkill:
+                        self.assertEqual(1,c['skeleton_warrior']['hitpoints']); self.assertNotIn('crumbles to dust',body)
+                        f['ordered'](body,'Skeleton Warrior hits Accounting Target','Your curse has faded.')
+                    else:
+                        self.assertEqual([],c); self.assertEqual(1,body.count('Your skeleton warrior crumbles to dust.'))
+                        f['ordered'](body,'Skeleton Warrior hits Accounting Target','hits Skeleton Warrior for 12 points',
+                            'Your skeleton warrior crumbles to dust.','Your curse has faded.')
+                    continuation=self._security_fields(body,'dragon.php?op=prologue1')
+                    before=f['snapshot'](); self.assertEqual(409,request(path,action)[0]); self.assertEqual(before,f['snapshot']())
+                    self.assertEqual(200,request('dragon.php?op=prologue1')[0]); self.assertEqual(before,f['snapshot']())
+                    status,body=request('dragon.php?op=prologue1',continuation); self.assertEqual(200,status,body[:2500])
+                    self.assertEqual([],f['state']()[1]); self.assertEqual('',f['state']()[0]['badguy'])
+                    self.assertEqual(['1','1'],list(self.query('SELECT dragonkills,level FROM accounts WHERE acctid=?',[f['player']])[0].values()))
+                    after=f['snapshot'](); self.assertEqual(409,request('dragon.php?op=prologue1',continuation)[0]); self.assertEqual(after,f['snapshot']()); self.assertEqual(events,terminal())
+
+    def test_darkarts_fallback_minions_combined_and_terminal(self):
+        cases=[('forest',4,6,8,[99921,99842,99758,99474,99190,98900,98610,98339]),
+               ('dragon',6,9,20,[99901,99802,99697,99377,99057,98767,98477,98206])]
+        rounds=[{'da1':4},{'da1':3,'da3':4},{'da1':2,'da3':3,'da5':4},
+                {'da1':1,'da3':2,'da5':3},{'da3':1,'da5':2},{'da5':1},{},{}]
+        for route,count,damage,minionhit,targets in cases:
+            with self.subTest(route=route), self._darkarts_companion_fixture(route) as f, self._specialty_terminal_capture() as terminal:
+                d,e=f['decode'],f['encode'];f['prepare_da']();stale=f['form'](1)
+                self.query("UPDATE settings SET value='0' WHERE setting='enablecompanions'");f['rejected'](stale)
+                for field in ['enablecompanions','companion','minioncount']:
+                    f['rejected'](f['form'](1)|{field:'1'},400)
+                for n,level in enumerate([1,3,5,2,2,2,2,2]):
+                    body,_=f['cast'](level); a,c,b=f['state']()
+                    self.assertEqual([],c);self.assertNotIn('Skeleton Warrior',body)
+                    self.assertEqual(targets[n],d(a['badguy'])['enemies'][0]['creaturehealth'])
+                    self.assertEqual(487 if n==7 else 500,int(a['hitpoints']))
+                    self.assertEqual(rounds[n],{k:v['rounds'] for k,v in b.items()} if b else {})
+                    if n==0:
+                        self.assertEqual(count,b['da1']['minioncount']);self.assertEqual(damage,b['da1']['maxbadguydamage'])
+                        fallback=b['da1']
+                    if n==4:f['ordered'](body,'An undead minion','doll hurting it','You hit Accounting Target','Your skeleton minions crumble to dust.')
+                # Historical setting selects the DA1 producer; it does not suspend
+                # a previously created warrior. Prove coexistence instead of
+                # inventing a disabled-companion cleanup policy.
+                self.query("UPDATE settings SET value='1' WHERE setting='enablecompanions'")
+                f['prepare_da']();f['cast'](1);old=f['form'](1)
+                self.query("UPDATE settings SET value='0' WHERE setting='enablecompanions'");f['rejected'](old)
+                body,_=f['cast'](1);account,c,buffs=f['state']()
+                self.assertEqual(99845 if route=='forest' else 99803,d(account['badguy'])['enemies'][0]['creaturehealth'])
+                self.assertEqual('500',account['hitpoints']);self.assertEqual(4,buffs['da1']['rounds']);self.assertEqual(38,f['uses']())
+                f['ordered'](body,'An undead minion','You hit Accounting Target','Skeleton Warrior hits Accounting Target')
+                if route=='forest':
+                    self.assertEqual([],c);self.assertEqual(1,body.count('Your skeleton warrior crumbles to dust.'))
+                else:self.assertEqual(37,c['skeleton_warrior']['hitpoints'])
+                if route=='forest':
+                    f['prepare_da'](bufflist=e({'da1':dict(fallback,rounds=1)}))
+                    a=dict(f['enemy'],creatureattack=40,creaturedefense=1,creaturehealth=minionhit,istarget=True)
+                    b=dict(a,creatureid=2,creaturename='Second Target',creaturehealth=100000,istarget=False)
+                    f['patch'](badguy=e({'enemies':[a,b],'options':{'type':'forest','didsurprise':1,'maxattacks':1}}))
+                    self.query('DELETE FROM fixture_specialty_terminal');old=f['form'](3)
+                    f['cast'](3);account,c,buffs=f['state']();progressed=d(account['badguy'])
+                    self.assertEqual(0,progressed['enemies'][0]['creaturehealth']);self.assertTrue(progressed['enemies'][0]['dead'])
+                    self.assertTrue(progressed['enemies'][1]['istarget']);self.assertEqual(100000,progressed['enemies'][1]['creaturehealth'])
+                    self.assertNotIn('da1',buffs);self.assertEqual(5,buffs['da3']['rounds']);self.assertEqual([],c);self.assertEqual([],terminal());f['rejected'](old)
+                    f['cast'](2);account,c,buffs=f['state']();progressed=d(account['badguy'])
+                    self.assertEqual(99729,progressed['enemies'][1]['creaturehealth']);self.assertEqual('493',account['hitpoints'])
+                    self.assertEqual([],c);self.assertNotIn('da1',buffs);self.assertEqual(4,buffs['da3']['rounds']);self.assertEqual([],terminal())
+                # Last-round fallback can itself end the encounter before player,
+                # companion or defensive effects. The schema is a real cast's output.
+                for outcome in ['victory','defeat']:
+                    f['prepare_da'](bufflist=e({'da1':dict(fallback,rounds=1)}),hitpoints=1 if outcome=='defeat' else 500)
+                    f['patch'](badguy=f['combat'](1000 if outcome=='defeat' else 40,1000 if outcome=='defeat' else 1,
+                                                100000 if outcome=='defeat' else minionhit))
+                    self.query('DELETE FROM fixture_specialty_terminal')
+                    body,action=f['cast'](3);a,c,b=f['state']();events=terminal()
+                    self.assertEqual([],c);self.assertNotIn('da1',b);self.assertEqual(5,b['da3']['rounds'])
+                    self.assertEqual(['battle-'+outcome],[x['hook'] for x in events])
+                    self.assertEqual(100000-minionhit if outcome=='defeat' else 0,events[0]['enemy']['creaturehealth'])
+                    f['ordered'](body,'An undead minion','Your skeleton minions crumble to dust.')
+                    self.assertNotIn('Skeleton Warrior',body)
+                    if outcome=='defeat':
+                        self.assertEqual(['0','0',''],[a[k] for k in ['alive','hitpoints','badguy']])
+                    elif route=='dragon':
+                        self.assertTrue(d(a['badguy'])['dragonVictory'])
+                        continuation=self._security_fields(body,'dragon.php?op=prologue1')
+                        before=f['snapshot']();self.assertEqual(200,f['request']('dragon.php?op=prologue1')[0]);self.assertEqual(before,f['snapshot']())
+                        self.assertEqual(200,f['request']('dragon.php?op=prologue1',continuation)[0])
+                        after=f['snapshot']();self.assertEqual([],f['state']()[1]);self.assertEqual([],f['state']()[2])
+                        self.assertEqual(409,f['request']('dragon.php?op=prologue1',continuation)[0]);self.assertEqual(after,f['snapshot']())
+                    else:self.assertEqual('',a['badguy'])
+                    f['rejected'](action);self.assertEqual(events,terminal())
+
     def test_darkarts_injured_companion_target_transition_and_terminal(self):
         # Voodoo kills A before the companion phase. The injured, real-produced
         # skeleton must carry to B, including when B kills the player first.
@@ -1793,7 +2055,9 @@ function resurrectionspecialtyobserver_dohook($hook,$args) {
             self.query('DELETE FROM module_hooks WHERE modulename=?',[module])
             self.query('DELETE FROM modules WHERE modulename=?',[module])
             self.query('DROP TABLE fixture_specialty_terminal')
+            self.assertEqual([],self.query("SHOW TABLES LIKE 'fixture_specialty_terminal'"))
             path.unlink()
+            self.assertFalse(path.exists())
 
     def test_specialty_adverse_defeat_accounting(self):
         # spec, level, enemy attack/defense, starting HP, exact terminal enemy
