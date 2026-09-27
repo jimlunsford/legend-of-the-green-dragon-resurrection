@@ -1,7 +1,7 @@
 {
   "scope": "Only the 24 bundled entrypoints, verified against modules/*.php; no archive import.",
-  "date": "2026-09-26",
-  "evidence": "2026-09-15 continuation from 37bc7d2af907d8ae3b512d51fc0d583e17d627a3: adverse defeat/shield/duration HTTP tests and SpecialtyBuffState. Local focused acceptance recorded in SPECIALTY-ADVERSE-ACCOUNTING-20260915.md. Exact-head supported-target acceptance must be recorded in PR #1. Retain 21 PASS / 0 limitation / 3 BLOCKED; all 24 lifecycle checks retained. Full run 34961216418 completed all 46 HTTP/tooling tests per target with one retained Transmutation 400-versus-409 failure; all new specialty cases passed. Follow-up preserves the existing potion validator response before the shared map check; local regression and specialty corruption recheck PASS. Final exact-head acceptance remains in PR #1. 2026-09-26: Dragon controller/schema, server-owned prologue outcomes, authversion preservation, and defeated-target history validation added. See DRAGON-AUTHORITY-20260926.md for exact scope and independently remaining specialty gates. This does not promote a module. Final exact ending SHA and supported-target CI acceptance are recorded in the PR #1 execution checkpoint; the existing validated_implementation_sha and workflow fields retain prior accepted evidence. Recovery 2026-09-26: the clean local branch, remote branch and PR #1 matched 4bd0569e43567f29908434826c9d5dc23ad47460. All five published commits after ebcd709 were retained. Exact-head Modern core 36271747607 and Baseline integrity 36271747672 completed SUCCESS. Both targets: PHPUnit 88/2462, Python/HTTP 50, PHP lint 321, zero failures/skips; both PHPStan gates and Composer gates PASS. Retained Transmutation Dragon-reset regression PASS. New TS1/TS3/TS5 progression and same-specialty combined-modifier/expiration matrices are added as test obligations, with their separate exact-head acceptance recorded in PR #1. No specialty is promoted.",
+  "date": "2026-09-27",
+  "evidence": "Current decision: 22 PASS / 0 limitation / 2 BLOCKED; all 24 lifecycle PASS. Recovered 72ab600 is accepted. Exact specialty evidence candidate 2bfe8fc3c7cee4a8a8ac0c3647571a318d243634 passes Modern core 36285456622 and Baseline integrity 36285456697 on both supported targets: 88 PHPUnit tests / 2462 assertions, 55 Python/tooling and HTTP tests, 321 lint files, all Composer and both PHPStan gates. No supported-target failures/skips. The baseline-only job separately skips the database-dependent HTTP class. Thieving Skills is independently promoted; Dark Arts and Mystical Powers retain specific remaining gates. See PHASE3-RECOVERY-20260927.md. Final documentation-head acceptance belongs in PR #1.",
   "status_meaning": "Final certification is per module in the supported bundled scope. PASS requires actual behavior/security evidence; PARTIAL is a component route result only and final remains BLOCKED. Core editor/combat/hosting gates are tracked separately and still prevent merge.",
   "modules": [
     {
@@ -1758,11 +1758,12 @@
       "security_notes": "Onboarding and prior Forest persistence/rollback/New Day/lifecycle retained. Added deterministic consumed-effect accounting, all twelve level authority matrices, unavailable module/file/handler rejection, train/graveyard specialty injection rejection, Voodoo terminal rewards, live-target Earth Fist area damage and stale target selection rejection. See SPECIALTY-COMBAT-ACCOUNTING.md for exact results and limits. Final module remains BLOCKED.",
       "final_certification": "BLOCKED",
       "continuation_evidence": "Shared onboarding PASS through actual HTTP: exact identity, default-zero and preserved earned skill/uses, forged extra fields, inactive/missing module and missing file, stale preferences/account state, CSRF, duplicate/reselection/replay, late-account-write rollback, fresh retry and actual New Day skill-derived restoration. Combat level/use/state/POST/CSRF/replay/persistence/rollback and companion business schema remain BLOCKED. Both supported targets PASS at 82bb591d5355ccd0e5a071f1d4fd3efd7033c7ba: 74 PHPUnit tests / 2231 assertions / 33 Python and HTTP tests / 310 PHP files linted; zero failures/skips. Modern core 34886260212 and Baseline integrity 34886260167 SUCCESS.",
-      "next_required_gate": "Complete Dragon skeleton injury/death/player-defeat and fallback-minion ordering; defeated-target companion HP carry/death/final settlement, specialty buff transitions and remaining combined effects.",
+      "next_required_gate": "Companion combat injury/death ordering across targets and Dragon, fallback-minion transitions and remaining combined effects. Injured HP carry, early player defeat and final Voodoo settlement are accepted.",
       "previous_certification": "BLOCKED",
       "companion_business_state": "SkeletonCompanionState exact schema and producer/hydration guards; creation, persisted statistics, subsequent login/read, malformed state, Forest replay/rollback, deterministic Voodoo victory retention and New Day retention tested. Disabled-companion Skeleton Crew path tested with exact persisted parameters/cost/replay. Final additional seeded real HTTP death/removal/subsequent absence and actual Dragon win/reset-clear cases are in test_darkarts_companion_business_state_http; exact-head result is recorded in PR #1. Dragon authorization/replay remains a separate blocker.",
       "forest_combat_boundary": "Actual HTTP at 353ba60: levels 1/2/3/5, exact persisted costs, subsequent read, duplicate/replay, late-account-write rollback/fresh retry, shared malformed-input/state/CSRF/stale matrices and New Day after actual use PASS on both supported targets. Persisted buff parameters verified. This is a Forest component result, not final module certification. Complete damage/healing/aura accounting, full per-level invalid matrix, missing module/file combat scenarios, multi-target progression and other caller authority remain open.",
-      "dragon_progression_execution": "Dragon authority and outcome implementation plus real HTTP tests added; see DRAGON-AUTHORITY-20260926.md and final exact-head PR #1 evidence. Certification remains BLOCKED."
+      "dragon_progression_execution": "Dragon authority and outcome implementation plus real HTTP tests added; see DRAGON-AUTHORITY-20260926.md and final exact-head PR #1 evidence. Certification remains BLOCKED.",
+      "current_evidence": "Shared onboarding, Forest and Dragon specialty authority, exact costs, invalid level/use/state rejection, POST/CSRF, replay, persistence, rollback, New Day restoration, buff schemas and retained Dragon-reset hooks have accepted component evidence through `72ab600`. Dark Arts remains BLOCKED for companion combat injury/death ordering across target and Dragon boundaries, fallback-minion transitions and remaining combined effects. See PHASE3-RECOVERY-20260927.md; older continuation_evidence and forest_combat_boundary fields preserve earlier checkpoint scope. At 2bfe8fc3c7cee4a8a8ac0c3647571a318d243634, injured companion HP carry through Voodoo zero/negative target progression, malformed state rejection, final victory and early player defeat are accepted."
     },
     {
       "module": "specialtymysticpower",
@@ -1875,10 +1876,11 @@
       "security_notes": "Onboarding and prior Forest persistence/rollback/New Day/lifecycle retained. Added deterministic consumed-effect accounting, all twelve level authority matrices, unavailable module/file/handler rejection, train/graveyard specialty injection rejection, Voodoo terminal rewards, live-target Earth Fist area damage and stale target selection rejection. See SPECIALTY-COMBAT-ACCOUNTING.md for exact results and limits. Final module remains BLOCKED.",
       "final_certification": "BLOCKED",
       "continuation_evidence": "Shared onboarding PASS through actual HTTP: exact identity, default-zero and preserved earned skill/uses, forged extra fields, inactive/missing module and missing file, stale preferences/account state, CSRF, duplicate/reselection/replay, late-account-write rollback, fresh retry and actual New Day skill-derived restoration. Combat level/use/state/POST/CSRF/replay/persistence/rollback and companion business schema remain BLOCKED. Both supported targets PASS at 82bb591d5355ccd0e5a071f1d4fd3efd7033c7ba: 74 PHPUnit tests / 2231 assertions / 33 Python and HTTP tests / 310 PHP files linted; zero failures/skips. Modern core 34886260212 and Baseline integrity 34886260167 SUCCESS.",
-      "next_required_gate": "Complete Dragon aura/companion ordering and multi-target Earth Fist/Lifetap/shield progression, transition durations and combined simultaneous-terminal cases.",
+      "next_required_gate": "Earth Fist/Lifetap/shield multi-target progression and expiration across progression; aura/companion ordering. Combined regeneration/Lifetap/shield simultaneous terminal evidence is accepted.",
       "previous_certification": "BLOCKED",
       "forest_combat_boundary": "Actual HTTP at 353ba60: levels 1/2/3/5, exact persisted costs, subsequent read, duplicate/replay, late-account-write rollback/fresh retry, shared malformed-input/state/CSRF/stale matrices and New Day after actual use PASS on both supported targets. Persisted buff parameters verified. This is a Forest component result, not final module certification. Complete damage/healing/aura accounting, full per-level invalid matrix, missing module/file combat scenarios, multi-target progression and other caller authority remain open.",
-      "dragon_progression_execution": "Dragon authority and outcome implementation plus real HTTP tests added; see DRAGON-AUTHORITY-20260926.md and final exact-head PR #1 evidence. Certification remains BLOCKED."
+      "dragon_progression_execution": "Dragon authority and outcome implementation plus real HTTP tests added; see DRAGON-AUTHORITY-20260926.md and final exact-head PR #1 evidence. Certification remains BLOCKED.",
+      "current_evidence": "Shared onboarding, Forest/Dragon authority, costs, schemas, replay, rollback and existing accounting/lifetime evidence remain accepted. Final-round regeneration/Lifetap/shield exact-zero/negative victory and defeat combinations in both callers pass at 2bfe8fc3c7cee4a8a8ac0c3647571a318d243634. Other historical checkpoint fields preserve earlier limits."
     },
     {
       "module": "specialtythiefskills",
@@ -1964,10 +1966,10 @@
       "object_preferences": {},
       "settings_preferences_result": "PASS for named defaults and raw round trips; NOT APPLICABLE for empty namespaces",
       "object_preferences_result": "NOT APPLICABLE",
-      "direct_runmodule_route": "BLOCKED",
-      "direct_route_note": "Onboarding and prior Forest persistence/rollback/New Day/lifecycle retained. Added deterministic consumed-effect accounting, all twelve level authority matrices, unavailable module/file/handler rejection, train/graveyard specialty injection rejection, Voodoo terminal rewards, live-target Earth Fist area damage and stale target selection rejection. See SPECIALTY-COMBAT-ACCOUNTING.md for exact results and limits. Final module remains BLOCKED.",
+      "direct_runmodule_route": "NOT APPLICABLE: empty run entrypoint; actions use New Day, Forest and Dragon",
+      "direct_route_note": "PASS: shared onboarding, all four independent Forest/Dragon actions and authority failures, exact costs and modifier/adverse accounting, all-four-effect natural expiration, per-action zero/negative target progression and victory/defeat, combined Insult/Poison target carry/final-round expiration, terminal account/preference/hook rollback and fresh retry, malformed state, module/file/handler availability, New Day and Dragon reset. Exact evidence: 2bfe8fc3c7cee4a8a8ac0c3647571a318d243634, Modern core 36285456622, Baseline integrity 36285456697. Historical continuation fields below preserve earlier checkpoint limits.",
       "database_tables": [],
-      "database_behavior": "PASS: strict fresh install/reinstall and tested metadata writes; purchase/admin transactions not certified",
+      "database_behavior": "PASS: fresh install/reinstall, tested metadata/preferences, named specialty action transactions and terminal rollback/retry; unrelated administrator/core mutations remain separate.",
       "daily_hooks": [
         "newday"
       ],
@@ -1983,40 +1985,41 @@
         "dragonkill"
       ],
       "integration_hooks": [],
-      "php_8_4": "PASS for tested components; final BLOCKED for remaining gates",
-      "php_8_5": "PASS for tested components; final BLOCKED for remaining gates",
-      "mariadb_11_4": "PASS for tested components; final BLOCKED for remaining gates",
-      "mysql_8_4": "PASS for tested components; final BLOCKED for remaining gates",
+      "php_8_4": "PASS in supported bundled module scope",
+      "php_8_5": "PASS in supported bundled module scope",
+      "mariadb_11_4": "PASS in supported bundled module scope",
+      "mysql_8_4": "PASS in supported bundled module scope",
       "warnings_errors": "No PHP warnings/errors in the passing matrix tests; unexecuted paths unverified.",
-      "security_notes": "Onboarding and prior Forest persistence/rollback/New Day/lifecycle retained. Added deterministic consumed-effect accounting, all twelve level authority matrices, unavailable module/file/handler rejection, train/graveyard specialty injection rejection, Voodoo terminal rewards, live-target Earth Fist area damage and stale target selection rejection. See SPECIALTY-COMBAT-ACCOUNTING.md for exact results and limits. Final module remains BLOCKED.",
-      "final_certification": "BLOCKED",
+      "security_notes": "PASS: shared onboarding, all four independent Forest/Dragon actions and authority failures, exact costs and modifier/adverse accounting, all-four-effect natural expiration, per-action zero/negative target progression and victory/defeat, combined Insult/Poison target carry/final-round expiration, terminal account/preference/hook rollback and fresh retry, malformed state, module/file/handler availability, New Day and Dragon reset. Exact evidence: 2bfe8fc3c7cee4a8a8ac0c3647571a318d243634, Modern core 36285456622, Baseline integrity 36285456697. Historical continuation fields below preserve earlier checkpoint limits.",
+      "final_certification": "PASS",
       "continuation_evidence": "Shared onboarding PASS through actual HTTP: exact identity, default-zero and preserved earned skill/uses, forged extra fields, inactive/missing module and missing file, stale preferences/account state, CSRF, duplicate/reselection/replay, late-account-write rollback, fresh retry and actual New Day skill-derived restoration. Combat level/use/state/POST/CSRF/replay/persistence/rollback and companion business schema remain BLOCKED. Both supported targets PASS at 82bb591d5355ccd0e5a071f1d4fd3efd7033c7ba: 74 PHPUnit tests / 2231 assertions / 33 Python and HTTP tests / 310 PHP files linted; zero failures/skips. Modern core 34886260212 and Baseline integrity 34886260167 SUCCESS.",
-      "next_required_gate": "Require exact-head acceptance of the added TS1/TS3/TS5 zero/negative target progression, adverse/terminal and combined-modifier natural-expiration matrices. Then close combined buffs crossing target transitions and their final-active-round/terminal/rollback ordering before independent certification.",
+      "next_required_gate": "None identified for supported bundled Thieving Skills scope. Ordinary Forest authority and broader Phase 3 core gates remain independent blockers.",
       "previous_certification": "BLOCKED",
       "forest_combat_boundary": "Actual HTTP at 353ba60: levels 1/2/3/5, exact persisted costs, subsequent read, duplicate/replay, late-account-write rollback/fresh retry, shared malformed-input/state/CSRF/stale matrices and New Day after actual use PASS on both supported targets. Persisted buff parameters verified. This is a Forest component result, not final module certification. Complete damage/healing/aura accounting, full per-level invalid matrix, missing module/file combat scenarios, multi-target progression and other caller authority remain open.",
       "dragon_progression_execution": "Dragon authority and outcome implementation plus real HTTP tests added; see DRAGON-AUTHORITY-20260926.md and final exact-head PR #1 evidence. Certification remains BLOCKED.",
-      "recovery_continuation": "Tests added: test_defeated_target_thieving_remaining_progression_and_terminal and test_dragon_and_forest_thieving_combined_modifiers_and_natural_expiration. The latter uses actual same-specialty casts on Forest and Dragon; no synthetic cross-specialty combination. Final exact-head results are recorded in PR #1, not inferred from the recovered parent."
+      "recovery_continuation": "Tests added: test_defeated_target_thieving_remaining_progression_and_terminal and test_dragon_and_forest_thieving_combined_modifiers_and_natural_expiration. The latter uses actual same-specialty casts on Forest and Dragon; no synthetic cross-specialty combination. Final exact-head results are recorded in PR #1, not inferred from the recovered parent.",
+      "current_evidence": "PASS: shared onboarding, all four independent Forest/Dragon actions and authority failures, exact costs and modifier/adverse accounting, all-four-effect natural expiration, per-action zero/negative target progression and victory/defeat, combined Insult/Poison target carry/final-round expiration, terminal account/preference/hook rollback and fresh retry, malformed state, module/file/handler availability, New Day and Dragon reset. Exact evidence: 2bfe8fc3c7cee4a8a8ac0c3647571a318d243634, Modern core 36285456622, Baseline integrity 36285456697. Historical continuation fields below preserve earlier checkpoint limits."
     }
   ],
-  "validated_implementation_sha": "4bd0569e43567f29908434826c9d5dc23ad47460",
-  "modern_core_run": 36271747607,
-  "baseline_integrity_run": 36271747672,
+  "validated_implementation_sha": "2bfe8fc3c7cee4a8a8ac0c3647571a318d243634",
+  "modern_core_run": 36285456622,
+  "baseline_integrity_run": 36285456697,
   "supported_matrix": [
     {
       "php": "8.4.25",
       "database": "MariaDB 11.4.13",
-      "result": "PASS supported component scope at 4bd0569e43567f29908434826c9d5dc23ad47460"
+      "result": "PASS supported component scope at 2bfe8fc3c7cee4a8a8ac0c3647571a318d243634"
     },
     {
       "php": "8.5.10",
       "database": "MySQL 8.4.11",
-      "result": "PASS supported component scope at 4bd0569e43567f29908434826c9d5dc23ad47460"
+      "result": "PASS supported component scope at 2bfe8fc3c7cee4a8a8ac0c3647571a318d243634"
     }
   ],
   "counts": {
-    "PASS": 21,
+    "PASS": 22,
     "PASS WITH DOCUMENTED LIMITATION": 0,
-    "BLOCKED": 3,
+    "BLOCKED": 2,
     "lifecycle_PASS": 24
   },
   "recovery_checkpoint": {
@@ -2031,5 +2034,38 @@
     "lint_files": 321,
     "failures": 0,
     "skips": 0
+  },
+  "recovery_20260927": {
+    "accepted_sha": "72ab600fdc8c959ec3240bdc5abaa72f39bd178e",
+    "modern_core_run": 36273713605,
+    "baseline_integrity_run": 36273713736,
+    "phpunit_tests": 88,
+    "assertions": 2462,
+    "python_tooling_http_tests": 52,
+    "lint_files": 321,
+    "supported_target_failures": 0,
+    "supported_target_skips": 0,
+    "baseline_only_skipped_classes": 1,
+    "published_commits_after_ebcd709": 6,
+    "record": "PHASE3-RECOVERY-20260927.md"
+  },
+  "historical_evidence": "2026-09-15 continuation from 37bc7d2af907d8ae3b512d51fc0d583e17d627a3: adverse defeat/shield/duration HTTP tests and SpecialtyBuffState. Local focused acceptance recorded in SPECIALTY-ADVERSE-ACCOUNTING-20260915.md. Exact-head supported-target acceptance must be recorded in PR #1. Retain 21 PASS / 0 limitation / 3 BLOCKED; all 24 lifecycle checks retained. Full run 34961216418 completed all 46 HTTP/tooling tests per target with one retained Transmutation 400-versus-409 failure; all new specialty cases passed. Follow-up preserves the existing potion validator response before the shared map check; local regression and specialty corruption recheck PASS. Final exact-head acceptance remains in PR #1. 2026-09-26: Dragon controller/schema, server-owned prologue outcomes, authversion preservation, and defeated-target history validation added. See DRAGON-AUTHORITY-20260926.md for exact scope and independently remaining specialty gates. This does not promote a module. Final exact ending SHA and supported-target CI acceptance are recorded in the PR #1 execution checkpoint; the existing validated_implementation_sha and workflow fields retain prior accepted evidence. Recovery 2026-09-26: the clean local branch, remote branch and PR #1 matched 4bd0569e43567f29908434826c9d5dc23ad47460. All five published commits after ebcd709 were retained. Exact-head Modern core 36271747607 and Baseline integrity 36271747672 completed SUCCESS. Both targets: PHPUnit 88/2462, Python/HTTP 50, PHP lint 321, zero failures/skips; both PHPStan gates and Composer gates PASS. Retained Transmutation Dragon-reset regression PASS. New TS1/TS3/TS5 progression and same-specialty combined-modifier/expiration matrices are added as test obligations, with their separate exact-head acceptance recorded in PR #1. No specialty is promoted.",
+  "specialty_continuation_20260927": {
+    "accepted_sha": "2bfe8fc3c7cee4a8a8ac0c3647571a318d243634",
+    "modern_core_run": 36285456622,
+    "baseline_integrity_run": 36285456697,
+    "phpunit_tests": 88,
+    "assertions": 2462,
+    "python_tooling_http_tests": 55,
+    "lint_files": 321,
+    "new_http_tests": 3,
+    "new_scenarios": 12,
+    "promoted": [
+      "specialtythiefskills"
+    ],
+    "remaining_blocked": [
+      "specialtydarkarts",
+      "specialtymysticpower"
+    ]
   }
 }

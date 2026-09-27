@@ -1,6 +1,6 @@
 # Bundled module certification
 
-**Final counts: 21 PASS, 0 PASS WITH DOCUMENTED LIMITATION, 3 BLOCKED. Lifecycle/metadata: 24 PASS. Modern-core merge: NOT READY. Public hosting: NO.**
+**Final counts: 22 PASS, 0 PASS WITH DOCUMENTED LIMITATION, 2 BLOCKED. Lifecycle/metadata: 24 PASS. Modern-core merge: NOT READY. Public hosting: NO.**
 
 This 2026-09-14 continuation updates the original all-BLOCKED checkpoint using new mutation evidence. The earlier Phase 3 history remains in [the original checkpoint](MODERN-CORE-CHECKPOINT-20260913-PHASE3.md). Only the 24 shipped entrypoints are in scope. No archive module was imported. No module is promoted merely because a route renders.
 
@@ -31,7 +31,7 @@ PASS covers the named module in supported bundled use, not arbitrary core/editor
 | `sethsong` | 1.1 | PASS | PASS |
 | `specialtydarkarts` | 1.1 | PASS | BLOCKED |
 | `specialtymysticpower` | 1.0 | PASS | BLOCKED |
-| `specialtythiefskills` | 1.0 | PASS | BLOCKED |
+| `specialtythiefskills` | 1.0 | PASS | PASS |
 
 ## Shared evidence
 
@@ -186,23 +186,23 @@ Actual HTTP forces every one of the 19 song results, plus female charm, HP floor
 
 ### specialtydarkarts (1.1): BLOCKED
 
-Shared onboarding PASS through actual HTTP on both supported targets (see latest continuation below). Existing skill-level buff/use and Dragon-reset hook fixtures remain PASS. Actual combat authority, invalid/negative levels, unavailable uses, current combat, POST/CSRF, replay, persistence and rollback remain BLOCKED.
+Shared onboarding, Forest and Dragon specialty authority, exact costs, invalid level/use/state rejection, POST/CSRF, replay, persistence, rollback, New Day restoration, buff schemas and retained Dragon-reset hooks have accepted component evidence through `72ab600`. Dark Arts remains BLOCKED for companion combat injury/death ordering across target and Dragon boundaries, fallback-minion transitions and remaining combined effects.
 
 - Component route result: BLOCKED.
 - Exact metadata, descriptors, hooks, dependencies, database tables and prior lifecycle evidence remain in [the JSON record](BUNDLED-MODULE-CERTIFICATION.json).
 
 ### specialtymysticpower (1.0): BLOCKED
 
-Shared onboarding PASS through actual HTTP on both supported targets (see latest continuation below). Existing skill-level buff/use and Dragon-reset hook fixtures remain PASS. Actual combat authority, invalid/negative levels, unavailable uses, current combat, POST/CSRF, replay, persistence and rollback remain BLOCKED.
+Shared onboarding, Forest and Dragon specialty authority, exact costs, invalid level/use/state rejection, POST/CSRF, replay, persistence, rollback, New Day restoration, buff schemas and retained Dragon-reset hooks have accepted component evidence through `72ab600`. Mystical Powers remains BLOCKED for area-effect target progression and aura/companion ordering. Final-round regeneration/Lifetap/shield simultaneous terminal evidence is accepted at `2bfe8fc`.
 
 - Component route result: BLOCKED.
 - Exact metadata, descriptors, hooks, dependencies, database tables and prior lifecycle evidence remain in [the JSON record](BUNDLED-MODULE-CERTIFICATION.json).
 
-### specialtythiefskills (1.0): BLOCKED
+### specialtythiefskills (1.0): PASS
 
-Shared onboarding PASS through actual HTTP on both supported targets (see latest continuation below). Existing skill-level buff/use and Dragon-reset hook fixtures remain PASS. Actual combat authority, invalid/negative levels, unavailable uses, current combat, POST/CSRF, replay, persistence and rollback remain BLOCKED.
+Shared onboarding, Forest and Dragon specialty authority, exact costs, invalid level/use/state rejection, POST/CSRF, replay, persistence, rollback, New Day restoration, buff schemas and retained Dragon-reset hooks have accepted component evidence through `72ab600`. PASS in supported bundled scope. Accepted TS1/TS2/TS3/TS5 target progression and all-four-effect expiration are complemented by exact combined target-transition, final-active-round, terminal rollback and fresh-retry evidence at `2bfe8fc`. See [the independent decision and exact CI evidence](PHASE3-RECOVERY-20260927.md). Ordinary Forest/general core authority remains a separate merge blocker.
 
-- Component route result: BLOCKED.
+- Final supported bundled module result: PASS.
 - Exact metadata, descriptors, hooks, dependencies, database tables and prior lifecycle evidence remain in [the JSON record](BUNDLED-MODULE-CERTIFICATION.json).
 
 ## Second Phase 3 continuation evidence
@@ -319,3 +319,13 @@ Recovered exact SHA `4bd0569e43567f29908434826c9d5dc23ad47460` is accepted by Mo
 The continuation adds twelve TS1/TS3/TS5 zero/negative-target and victory/defeat scenarios, plus the naturally combined Insult, Backstab, Poison Attack and Hidden Attack sequence through expiration in both Forest and Dragon. These are test obligations until the separate ending-SHA acceptance in PR #1; the recovered parent result does not accept new tests. Defense-only activation, exact use budgets, dead-A immutability, B arithmetic, stale/replay rejection and settlement are asserted. Application source and formulas are unchanged.
 
 Counts remain **21 PASS / 0 limitation / 3 BLOCKED**. Thieving Skills still requires the combined-effects-across-targets and final-active-round/terminal/rollback boundary. Dark Arts and Mystical Powers retain their independently listed companion, area, progression and combination gaps. No 24/24 claim or general-combat closure.
+
+
+## 2026-09-27: recovery verified from published history
+
+See [the recovery record](PHASE3-RECOVERY-20260927.md). Exact SHA `72ab600fdc8c959ec3240bdc5abaa72f39bd178e` is ACCEPTED by Modern core 36273713605 and Baseline integrity 36273713736. Both supported targets passed 88 PHPUnit tests / 2,462 assertions, 52 Python/tooling and HTTP tests, 321 PHP lint files, both PHPStan and all Composer gates, with no runtime-matrix failures or skips. The baseline-only job separately skips the database-dependent HTTP class. The Transmutation and authversion regressions remain accepted; Dwarf documentation agrees with JSON. All six recovered commits are retained. New specialty test candidate acceptance is recorded separately; no parent result is substituted for it.
+
+
+### Accepted specialty continuation and independent decision
+
+Exact candidate `2bfe8fc3c7cee4a8a8ac0c3647571a318d243634` passes Modern core **36285456622** and Baseline integrity **36285456697**. Both supported targets: 88 PHPUnit tests / 2,462 assertions, **55** Python/tooling and HTTP tests, 321 lint files, zero runtime-matrix failures/skips, all Composer and both PHPStan gates. All three new regression matrices pass. **Thieving Skills is PASS; totals are 22 PASS / 0 limitation / 2 BLOCKED, with 24 lifecycle PASS.** Dark Arts retains companion combat/fallback transition gaps; Mystical Powers retains area-effect progression and aura/companion gaps. Full independent reasoning and exact boundaries are in [the recovery record](PHASE3-RECOVERY-20260927.md). Application source, workflows and serialized readers/writers are unchanged. The 24/24 gate remains open; general combat development has not begun. Phase 3 incomplete, merge NO, hosting NO, PR #1 draft. The final documentation commit requires its own terminal exact-head acceptance recorded in PR #1.

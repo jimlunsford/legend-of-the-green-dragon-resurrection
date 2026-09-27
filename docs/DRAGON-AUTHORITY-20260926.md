@@ -65,3 +65,13 @@ Ordinary Forest GET combat/search/run/target authority, general reward/defeat/re
 ## 2026-09-26: Recovery acceptance, then a separate test candidate
 
 Recovery verified the clean local checkout, remote branch and PR #1 all at `4bd0569e43567f29908434826c9d5dc23ad47460`. Modern core 36271747607 and Baseline integrity 36271747672 finished SUCCESS, including the retained potion regression on both targets. Counts: PHPUnit 88/2462, Python/HTTP 50, lint 321, zero failures/skips. The additional same-specialty Thieving Skills matrix specifies actual four-buff casts and exact damage/HP/duration through natural expiration in Forest and Dragon. The added target matrix specifies TS1/TS3/TS5 zero/negative progression and later victory/defeat. These new obligations require the separate ending-SHA CI in PR #1. They do not close companion, remaining area-effect or combined-terminal certification gaps.
+
+
+## 2026-09-27: recovery verified from published history
+
+See [the recovery record](PHASE3-RECOVERY-20260927.md). Exact SHA `72ab600fdc8c959ec3240bdc5abaa72f39bd178e` is ACCEPTED by Modern core 36273713605 and Baseline integrity 36273713736. Both supported targets passed 88 PHPUnit tests / 2,462 assertions, 52 Python/tooling and HTTP tests, 321 PHP lint files, both PHPStan and all Composer gates, with no runtime-matrix failures or skips. The baseline-only job separately skips the database-dependent HTTP class. The Transmutation and authversion regressions remain accepted; Dwarf documentation agrees with JSON. All six recovered commits are retained. New specialty test candidate acceptance is recorded separately; no parent result is substituted for it.
+
+
+### Accepted specialty continuation and independent decision
+
+Exact candidate `2bfe8fc3c7cee4a8a8ac0c3647571a318d243634` passes Modern core **36285456622** and Baseline integrity **36285456697**. Both supported targets: 88 PHPUnit tests / 2,462 assertions, **55** Python/tooling and HTTP tests, 321 lint files, zero runtime-matrix failures/skips, all Composer and both PHPStan gates. All three new regression matrices pass. **Thieving Skills is PASS; totals are 22 PASS / 0 limitation / 2 BLOCKED, with 24 lifecycle PASS.** Dark Arts retains companion combat/fallback transition gaps; Mystical Powers retains area-effect progression and aura/companion gaps. Full independent reasoning and exact boundaries are in [the recovery record](PHASE3-RECOVERY-20260927.md). Application source, workflows and serialized readers/writers are unchanged. The 24/24 gate remains open; general combat development has not begun. Phase 3 incomplete, merge NO, hosting NO, PR #1 draft. The final documentation commit requires its own terminal exact-head acceptance recorded in PR #1.
