@@ -397,3 +397,23 @@ NOT MERGED. Main remains `999cec6f9c655a840320d982d673bb863c68c2b2`.
 Historical integrity: expected tag object, source/tree, 417 files and 11 commits
 PASS. No VPS, release, deployment, general combat or another subsystem work.
 Next task: exact-candidate CI acceptance; general combat requires a new execution.
+
+## Ordinary Forest combat candidate, 2026-09-27
+
+The ordinary Forest route now separates GET presentation from state-bound POST
+search, attack, escape and cave discovery. CSRF, one-use intents and the existing
+locked player transaction cover normal encounter creation/surprise, live rounds,
+target progression and final victory/defeat settlement. Client target switching and
+stat/reward/outcome overrides reject. GET automatic-fight links cannot advance a
+round; configured multiple-round choices are explicit POST fields. The engine and
+historical outcome formulas are unchanged. Pending events keep their established
+owners through an explicit search-to-entry handoff, avoiding nested transactions.
+
+**Ordinary authority: local evidence PASS; exact-candidate CI PENDING. Broader
+general combat remains BLOCKED.** Six new HTTP matrices prove live/terminal state,
+replay, rewards, rollback, malformed-state preservation and explicit repair. Retained
+round tests submit the new forms without removing gameplay assertions. Direct
+battle.php protection is retained. See [the route inventory and exact evidence](ORDINARY-FOREST-COMBAT-20260927.md).
+PR #1 records the exact SHA, CI IDs/states and bounded stop. Module evidence remains
+candidate 24/0/0, last recorded accepted 23/0/1. Phase 3 INCOMPLETE, merge NO, public
+hosting NO. No other subsystem, deployment, VPS, release or Phase 4 work.

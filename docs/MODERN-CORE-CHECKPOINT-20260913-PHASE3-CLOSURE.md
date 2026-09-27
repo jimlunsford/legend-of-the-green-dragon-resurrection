@@ -1261,3 +1261,32 @@ NOT MERGED. Main remains `999cec6f9c655a840320d982d673bb863c68c2b2`.
 Historical integrity: expected tag object, source/tree, 417 files and 11 commits
 PASS. No VPS, release, deployment, general combat or another subsystem work.
 Next task: exact-candidate CI acceptance; general combat requires a new execution.
+
+## 2026-09-27: Ordinary Forest authority candidate
+
+Starting head `0944188301c588ff7d0ff447983b63e6b7f58049`. Ordinary Forest GET
+presentation is separated from scoped POST search/attack/escape/cave discovery;
+CSRF, replay contexts, target authority, normal/multi-target progression, historical
+reward and defeat settlement, late-write rollback, malformed-state rejection and
+explicit repair have local passing evidence. New Forest consumer schemas sit above
+the unchanged ScalarState reader. Historical battle formulas/order are unchanged.
+
+Local floor: **91 PHPUnit / 2,505 assertions; 7 final ordinary/auth HTTP tests;
+20 focused integration HTTP tests; nine tooling checks; 327 PHP lint files; both
+PHPStan gates and Composer PASS**. Full suite collects 72 Python tests (63 HTTP + 9
+tooling). Exact candidate SHA, workflow IDs and bounded inspection are recorded in
+PR #1. **Candidate acceptance PENDING**, not substituted with parent CI.
+Detailed route inventory, exact assertions and limitations:
+[ORDINARY-FOREST-COMBAT-20260927.md](ORDINARY-FOREST-COMBAT-20260927.md).
+
+Mystical run 36313854531 was still IN_PROGRESS at the one initial inspection.
+No waiting or module-promotion closeout: last recorded accepted 23/0/1; candidate
+24/0/0. Module certification does not complete Phase 3. Broader general combat
+remains BLOCKED for alternate families/producers/consumers; all other listed core
+blockers remain, including last_char_expire advancing before cleanup completes.
+
+Main remains `999cec6f9c655a840320d982d673bb863c68c2b2`; PR #1 remains OPEN,
+DRAFT, NOT READY, NOT MERGED. Historical tag/source/tree, 417 files and 11 commits
+PASS. Phase 3 INCOMPLETE; merge NO; public hosting NO. No VPS, deployment, release,
+version tag or another subsystem. Next task is narrow exact-candidate CI acceptance
+or correction in a new execution. Stop after publication and bounded inspection.

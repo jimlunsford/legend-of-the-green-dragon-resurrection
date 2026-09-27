@@ -42,7 +42,7 @@ class WebApplicationTests(unittest.TestCase):
             cls.port = sock.getsockname()[1]
         # Outside the application tree; only the loopback fixture server loads this.
         cls.seed_file = tempfile.NamedTemporaryFile(mode='w', suffix='.php')
-        cls.seed_file.write("<?php if (in_array($_SERVER['HTTP_X_RESURRECTION_FIXTURE'] ?? '', ['skeleton-death','specialty-accounting'], true)) mt_srand(12345);\n")
+        cls.seed_file.write("<?php if (in_array($_SERVER['HTTP_X_RESURRECTION_FIXTURE'] ?? '', ['skeleton-death','specialty-accounting'], true)) mt_srand(12345); if (($_SERVER['HTTP_X_RESURRECTION_FIXTURE'] ?? '') === 'ordinary-flee-failure') mt_srand(3);\n")
         cls.seed_file.flush()
         cls.server_log = tempfile.TemporaryFile(mode='w+t')
         cls.server = subprocess.Popen([shutil.which('php'), '-d', 'display_errors=1', '-d', 'error_reporting=-1',
@@ -998,7 +998,7 @@ function resurrectionrandomfixture_dohook($hook,$args) { mt_srand((int)getsettin
             encoded=subprocess.run([shutil.which('php'),'-r','echo serialize(json_decode(stream_get_contents(STDIN),true));'],input=json.dumps(combat),text=True,capture_output=True,cwd=ROOT,check=True).stdout
             self.query("UPDATE accounts SET badguy=?,hitpoints=10000,maxhitpoints=10000,attack=1,defense=100,specialinc='' WHERE acctid=?",[encoded,player])
             for remaining in range(5,-1,-1):
-                status,body=request('forest.php?op=fight'); self.assertEqual(200,status,body[:1500])
+                status,body=self._ordinary_attack(request); self.assertEqual(200,status,body[:1500])
                 if remaining: self.assertEqual(remaining,buffs()['transmute']['rounds'])
                 else: self.assertNotIn('transmute',buffs())
             self.query("UPDATE accounts SET badguy='' WHERE acctid=?",[player])
@@ -1197,6 +1197,221 @@ function resurrectionrandomfixture_dohook($hook,$args) { mt_srand((int)getsettin
             self.query("DELETE FROM settings WHERE setting IN ('enablecompanions','dropmingold','forestgemchance','instantexp')")
             for row in settings: self.query('INSERT INTO settings(setting,value) VALUES (?,?)',[row['setting'],row['value']])
 
+    def _ordinary_attack(self, request):
+        url='forest.php?op=fight'
+        status,body=request(url); self.assertEqual(200,status,body[:2000])
+        return request(url,self._security_fields(body,url))
+
+    @contextmanager
+    def _ordinary_forest_fixture(self):
+        with self._specialty_accounting_fixture() as f:
+            request=f['request']; url='forest.php?op=fight'
+            def form(op='fight',**fields):
+                status,body=request('forest.php?op='+op)
+                self.assertEqual(200,status,body[:2000])
+                parts=[part for url,part in re.findall(r'<form[^>]*action="([^"]+)"[^>]*>(.*?)</form>',body,re.S) if html.unescape(url)=='forest.php?op='+op]
+                self.assertTrue(parts,body[:2000])
+                return self._security_fields(parts[0])|fields
+            def action(data,op='fight'): return request('forest.php?op='+op,data)
+            def reject(data,op='fight',status=409):
+                before=f['snapshot'](); code,body=action(data,op)
+                self.assertEqual(status,code,body[:2000]); self.assertEqual(before,f['snapshot']())
+            f.update(ordinary_form=form,action=action,reject=reject)
+            yield f
+
+    def test_ordinary_forest_http_authority_and_context(self):
+        with self._ordinary_forest_fixture() as f:
+            f['prepare']('TS',specialty='',badguy=f['encode']({'enemies':[dict(f['enemy'],creatureattack=1000)],'options':{'type':'forest','didsurprise':1}}),gold=1000,gems=10,experience=1000,turns=20)
+            before=f['snapshot']()
+            for path in ['forest.php?op=fight','forest.php?op=run','forest.php?op=newtarget&newtarget=1','forest.php?op=fight&auto=full','forest.php']:
+                status,body=f['request'](path); self.assertEqual(200,status,body[:2000]); self.assertEqual(before,f['snapshot']())
+            form=f['ordinary_form']; action=f['action']; reject=f['reject']
+            data=form(); reject({k:v for k,v in data.items() if k!='csrf_token'},status=403)
+            reject(dict(data,csrf_token='0'*64),status=403)
+            reject({k:v for k,v in data.items() if k!='action_token'})
+            for key in ['target','newtarget','targetid','index','creaturehealth','creatureattack','creaturedefense','creaturelevel','creatureexp','creaturegold','gems','reward','multiplier','victory','dead','istarget','skill','l']:
+                reject(dict(form(),**{key:'1'}),status=400)
+            old=form(); data=form(); code,body=action(data); self.assertEqual(200,code,body[:2000])
+            after=f['snapshot']()[0]; combat=f['decode'](after['badguy'])
+            self.assertEqual('323',after['hitpoints']); self.assertEqual(99960,combat['enemies'][0]['creaturehealth'])
+            self.assertTrue(combat['enemies'][0]['istarget']); self.assertEqual([],f['decode'](after['companions']))
+            self.assertEqual(['1000','1000','10'],[after[k] for k in ['gold','experience','gems']])
+            reject(data); reject(old)
+            persisted=f['snapshot'](); form(); self.assertEqual(persisted,f['snapshot']())
+            # Equivalent associative key ordering leaves the current intent valid.
+            data=form(); reordered=dict(reversed(list(combat.items())))
+            reordered['enemies']=[dict(reversed(list(combat['enemies'][0].items())))]
+            self.query('UPDATE accounts SET badguy=? WHERE acctid=?',[f['encode'](reordered),f['player']])
+            code,body=action(data); self.assertEqual(200,code,body[:2000])
+            # A restart with otherwise identical stats has a new server encounter identity.
+            data=form(); combat=f['decode'](f['snapshot']()[0]['badguy']); combat['options']['encounter']='a'*32
+            self.query('UPDATE accounts SET badguy=? WHERE acctid=?',[f['encode'](combat),f['player']]); reject(data)
+            anonymous=self._security_client(login=None)
+            self.assertIn(anonymous('forest.php?op=fight')[0],[302,303,403])
+            self.assertIn(anonymous('forest.php?op=fight',data)[0],[302,303,403])
+
+    def test_ordinary_forest_progression_rewards_and_rollback(self):
+        with self._ordinary_forest_fixture() as f, self._specialty_terminal_capture() as terminal:
+            encode=f['encode']; decode=f['decode']; form=f['ordinary_form']; action=f['action']; reject=f['reject']
+            self.query("UPDATE settings SET value='1' WHERE setting='forestgemchance'")
+            for instant in [0,1]:
+                self.query("UPDATE settings SET value=? WHERE setting='instantexp'",[str(instant)])
+                for hp in [40,39]:
+                    a=dict(f['enemy'],creaturehealth=hp,creatureexp=100,creaturegold=40,istarget=True)
+                    b=dict(f['enemy'],creatureid=2,creaturename='Second Target',creatureattack=1000,creaturehealth=100000,creatureexp=200,creaturegold=60,istarget=False)
+                    f['prepare']('TS',specialty='',badguy=encode({'enemies':[a,b],'options':{'type':'forest','didsurprise':1,'maxattacks':1}}),gold=1000,gems=10,experience=1000,turns=20)
+                    stale=form(); first=form(); code,body=action(first); self.assertEqual(200,code,body[:2000])
+                    after=f['snapshot']()[0]; combat=decode(after['badguy']); corpse=combat['enemies'][0]
+                    self.assertEqual(hp-40,corpse['creaturehealth']); self.assertTrue(corpse['dead']); self.assertFalse(corpse['istarget'])
+                    self.assertTrue(combat['enemies'][1]['istarget']); self.assertEqual(100000,combat['enemies'][1]['creaturehealth'])
+                    self.assertEqual(['500',str(1000+50*instant),'1000','10'],[after[k] for k in ['hitpoints','experience','gold','gems']])
+                    reject(first); reject(stale); reject(dict(form(),newtarget='0'),status=400)
+                    fresh=form(); self.assertEqual(200,action(fresh)[0]); progressed=decode(f['snapshot']()[0]['badguy'])
+                    self.assertEqual(corpse,progressed['enemies'][0]); self.assertEqual(99960,progressed['enemies'][1]['creaturehealth']); reject(fresh)
+                    stale=form(); progressed['enemies'][1]['creaturehealth']=40
+                    self.query('UPDATE accounts SET badguy=? WHERE acctid=?',[encode(progressed),f['player']]); reject(stale)
+                    self.query('DELETE FROM fixture_specialty_terminal'); data=form(); before=f['snapshot']()
+                    self.query("ALTER TABLE accounts ADD CONSTRAINT fixture_ordinary_terminal CHECK (login <> 'WebPlayer' OR badguy <> '')")
+                    try:
+                        code,body=action(data); self.assertEqual(500,code,body[:2000]); self.assertEqual(before,f['snapshot']()); self.assertEqual([],terminal()); reject(data)
+                    finally: self.query('ALTER TABLE accounts DROP CONSTRAINT fixture_ordinary_terminal')
+                    final=form(); code,body=action(final); self.assertEqual(200,code,body[:2000]); after=f['snapshot']()[0]
+                    self.assertEqual('',after['badguy']); self.assertEqual('1150',after['experience']); self.assertEqual('11',after['gems'])
+                    self.assertEqual('1044',after['gold']); self.assertEqual(2,len(terminal())); self.assertEqual(['battle-victory']*2,[x['hook'] for x in terminal()])
+                    self.assertEqual(['323','1'],[after[k] for k in ['hitpoints','alive']]); reject(final); reject(first)
+
+    def test_ordinary_forest_defeat_and_rollback(self):
+        with self._ordinary_forest_fixture() as f, self._specialty_terminal_capture() as terminal:
+            enemy=dict(f['enemy'],creatureattack=1000,creaturegold=100,creatureexp=100)
+            f['prepare']('TS',specialty='',hitpoints=177,badguy=f['encode']({'enemies':[enemy],'options':{'type':'forest','didsurprise':1}}),gold=1000,gems=10,experience=1000,turns=20)
+            form=f['ordinary_form']; action=f['action']; reject=f['reject']; stale=form(); data=form(); before=f['snapshot']()
+            news=self.query('SELECT * FROM news ORDER BY newsid')
+            self.query("ALTER TABLE accounts ADD CONSTRAINT fixture_ordinary_terminal CHECK (login <> 'WebPlayer' OR badguy <> '')")
+            try:
+                code,body=action(data); self.assertEqual(500,code,body[:2000]); self.assertEqual(before,f['snapshot']()); self.assertEqual(news,self.query('SELECT * FROM news ORDER BY newsid')); self.assertEqual([],terminal()); reject(data)
+            finally: self.query('ALTER TABLE accounts DROP CONSTRAINT fixture_ordinary_terminal')
+            final=form(); code,body=action(final); self.assertEqual(200,code,body[:2000]); after=f['snapshot']()[0]
+            self.assertEqual(['0','0','0','10','900',''],[after[k] for k in ['alive','hitpoints','gold','gems','experience','badguy']])
+            self.assertEqual([],f['decode'](after['bufflist'])); self.assertEqual([],f['decode'](after['companions']))
+            self.assertEqual('battle-defeat',terminal()[0]['hook']); self.assertEqual(99960,terminal()[0]['enemy']['creaturehealth'])
+            self.assertEqual(len(news)+1,len(self.query('SELECT * FROM news'))); reject(final); reject(stale)
+
+    def test_ordinary_forest_malformed_preserved_and_repair(self):
+        with self._ordinary_forest_fixture() as f:
+            import copy
+            f['prepare']('TS',specialty=''); valid=f['snapshot']()[0]['badguy']; base=f['decode'](valid)
+            cases=['','a:0:{}','broken','O:8:"stdClass":0:{}',f['encode'](True),f['encode']({'enemies':[],'options':{'type':'forest'}})]
+            patches=[('creatureid',0),('creatureid',1.5),('creaturehealth',True),('creaturehealth',-1),('creatureattack',-1),('creaturedefense',[]),('creaturelevel','1e2'),('creatureexp',-1),('creaturegold',{}),('dead',True),('istarget',[]),('cannotbetarget',True),('unknown',1)]
+            for key,value in patches:
+                state=copy.deepcopy(base); state['enemies'][0][key]=value; cases.append(f['encode'](state))
+            for options in [{'type':'pvp'},{'type':'forest','maxattacks':0},{'type':'forest','didsurprise':[]},{'type':'forest','experience':[99999]},{'type':'forest','unknown':True}]:
+                state=copy.deepcopy(base); state['options']=options; cases.append(f['encode'](state))
+            state=copy.deepcopy(base); state['enemies']=[dict(f['enemy'],istarget=True),dict(f['enemy'],istarget=True)]; cases.append(f['encode'](state))
+            state=copy.deepcopy(base); state['enemies']=[f['enemy']]*101; cases.append(f['encode'](state))
+            for bad in cases:
+                self.query('UPDATE accounts SET badguy=? WHERE acctid=?',[bad,f['player']]); before=f['snapshot']()
+                code,body=f['request']('forest.php?op=fight'); self.assertEqual(409,code,body[:2000]); self.assertEqual(before,f['snapshot']())
+                code,body=f['action']({'csrf_token':'0'*64,'action_token':'0'*64}); self.assertEqual(409,code,body[:2000]); self.assertEqual(before,f['snapshot']())
+            # Explicit operator repair restores the original valid encounter, never a silent reset.
+            self.query('UPDATE accounts SET badguy=? WHERE acctid=?',[valid,f['player']]); self.assertEqual(200,f['action'](f['ordinary_form']())[0])
+            for field,value in [('bufflist','a:1:{s:1:"x";i:2;}'),('bufflist',f['encode']({'unknown':{'rounds':1,'atkmod':[]}})),('companions','a:1:{s:1:"x";i:2;}'),('companions',f['encode']({'unknown':{'hitpoints':1,'attack':[]}}))]:
+                f['prepare']('TS',specialty='',**{field:value}); before=f['snapshot'](); code,body=f['request']('forest.php?op=fight')
+                self.assertEqual(409,code,body[:2000]); self.assertEqual(before,f['snapshot']())
+
+    def test_ordinary_forest_search_escape_and_event_handoff(self):
+        with self._ordinary_forest_fixture() as f:
+            saved=self.query("SELECT * FROM settings WHERE setting IN ('forestchance','autofight','autofightfull')")
+            try:
+                for key,value in [('forestchance','0'),('autofight','1'),('autofightfull','1')]:
+                    self.query('INSERT INTO settings(setting,value) VALUES (?,?) ON DUPLICATE KEY UPDATE value=VALUES(value)',[key,value])
+                f['prepare']('TS',specialty='',badguy='',gold=1000,gems=10,experience=1000,turns=20)
+                before=f['snapshot'](); data=f['ordinary_form']('search'); self.assertEqual(before,f['snapshot']())
+                f['reject']({},'search',403)
+                stale=f['ordinary_form']('search'); code,body=f['action'](data,'search'); self.assertEqual(200,code,body[:3000])
+                after=f['snapshot']()[0]; state=f['decode'](after['badguy']); self.assertEqual('19',after['turns'])
+                self.assertRegex(state['options']['encounter'],r'^[a-f0-9]{32}$'); f['reject'](data,'search'); f['reject'](stale,'search')
+                # The form emitted by the mutating response must work immediately after DB hydration.
+                data=self._security_fields(body,'forest.php?op=run'); code,body=f['action'](data,'run'); self.assertEqual(200,code,body[:3000]); f['reject'](data,'run')
+                # Independently establish the deterministic successful escape.
+                f['prepare']('TS',specialty='',gold=1000,gems=10,experience=1000,turns=20)
+                data=f['ordinary_form']('run'); code,body=f['action'](data,'run'); self.assertEqual(200,code,body[:2000]); f['reject'](data,'run')
+                after=f['snapshot']()[0]
+                self.assertEqual('',after['badguy']); self.assertEqual(['500','1000','1000','10'],[after[k] for k in ['hitpoints','experience','gold','gems']])
+                # Search failure is late enough to roll back turn, encounter and surprise HP.
+                f['prepare']('TS',specialty='',badguy='',turns=20); data=f['ordinary_form']('search'); before=f['snapshot']()
+                self.query("ALTER TABLE accounts ADD CONSTRAINT fixture_ordinary_search CHECK (login <> 'WebPlayer' OR turns <> 19)")
+                try:
+                    code,body=f['action'](data,'search'); self.assertEqual(500,code,body[:2000]); self.assertEqual(before,f['snapshot']()); f['reject'](data,'search')
+                finally:self.query('ALTER TABLE accounts DROP CONSTRAINT fixture_ordinary_search')
+                self.assertEqual(200,f['action'](f['ordinary_form']('search'),'search')[0])
+                # Cave discovery used to mutate seendragon on GET. Its own scoped POST is replay-safe.
+                f['prepare']('TS',specialty='',badguy='',level=15,seendragon=0)
+                data=f['ordinary_form']('dragon'); self.assertEqual('0',self.query('SELECT seendragon FROM accounts WHERE acctid=?',[f['player']])[0]['seendragon'])
+                self.assertEqual(200,f['action'](data,'dragon')[0]); self.assertEqual('1',self.query('SELECT seendragon FROM accounts WHERE acctid=?',[f['player']])[0]['seendragon']); f['reject'](data,'dragon')
+                # One POST may select the historically configured five/ten/full action, never a GET.
+                for rounds in ['five','ten','full']:
+                    hp=45 if rounds=='full' else 100000
+                    enemy=dict(f['enemy'],creaturehealth=hp,creaturegold=0,creatureexp=100)
+                    f['prepare']('TS',specialty='',badguy=f['encode']({'enemies':[enemy],'options':{'type':'forest','didsurprise':1}}))
+                    data=f['ordinary_form'](rounds=rounds); code,body=f['action'](data); self.assertEqual(200,code,body[:2000]); f['reject'](data)
+                    if rounds=='full': self.assertEqual('',f['snapshot']()[0]['badguy'])
+                    else: self.assertLess(f['decode'](f['snapshot']()[0]['badguy'])['enemies'][0]['creaturehealth'],99955)
+                # Legacy target and automatic query parameters cannot authorize mutations.
+                f['prepare']('TS',specialty='')
+                for query in ['&newtarget=0','&auto=full','&type=thrill']:
+                    data=f['ordinary_form'](); before=f['snapshot'](); code,body=f['request']('forest.php?op=fight'+query,data)
+                    self.assertEqual(400,code,body[:2000]); self.assertEqual(before,f['snapshot']())
+                # The failed-escape seed retains the target and executes enemy retaliation only.
+                enemy=dict(f['enemy'],creatureattack=1000)
+                f['prepare']('TS',specialty='',hitpoints=5000,maxhitpoints=10000,badguy=f['encode']({'enemies':[enemy],'options':{'type':'forest','didsurprise':1}}))
+                call=self._security_client()
+                def failure_request(data=None):
+                    self._security_allow(f['player'],'forest.php?op=run')
+                    return call('forest.php?op=run',data,fixture='ordinary-flee-failure')
+                code,body=failure_request(); data=self._security_fields(body,'forest.php?op=run')
+                code,body=failure_request(data); self.assertEqual(200,code,body[:2000]); after=f['snapshot']()[0]
+                self.assertEqual(100000,f['decode'](after['badguy'])['enemies'][0]['creaturehealth'])
+                self.assertEqual('3936',after['hitpoints']); before=f['snapshot'](); self.assertEqual(409,failure_request(data)[0]); self.assertEqual(before,f['snapshot']())
+            finally:
+                self.query("DELETE FROM settings WHERE setting IN ('forestchance','autofight','autofightfull')")
+                for row in saved:self.query('INSERT INTO settings(setting,value) VALUES (?,?)',[row['setting'],row['value']])
+
+    def test_ordinary_forest_shield_simultaneous_terminal_and_companion(self):
+        with self._ordinary_forest_fixture() as f, self._specialty_terminal_capture() as terminal:
+            e,d=f['encode'],f['decode']; player=f['player']
+            # Obtain the actual certified shield producer, then consume it through ordinary attack.
+            f['prepare']('MP',hitpoints=5000,maxhitpoints=10000)
+            self.assertEqual(200,f['request'](data=f['form'](5))[0]); shield=d(f['snapshot']()[0]['bufflist'])
+            for targethp in [394,393,395]:
+                enemy=dict(f['enemy'],creatureattack=1000,creaturehealth=targethp,creaturegold=0,creatureexp=100)
+                f['prepare']('MP',hitpoints=177,bufflist=e(shield),badguy=e({'enemies':[enemy],'options':{'type':'forest','didsurprise':1}}),gold=1000,gems=10,experience=1000,turns=20)
+                self.query('DELETE FROM fixture_specialty_terminal'); data=f['ordinary_form'](); code,body=f['action'](data); self.assertEqual(200,code,body[:2000])
+                after=f['snapshot']()[0]; victory=targethp<=394
+                self.assertEqual('',after['badguy']); self.assertEqual('battle-victory' if victory else 'battle-defeat',terminal()[0]['hook'])
+                self.assertEqual(targethp-394,terminal()[0]['enemy']['creaturehealth']); self.assertEqual(0,terminal()[0]['hp'])
+                self.assertEqual('1' if victory else '0',after['hitpoints']); self.assertEqual('1' if victory else '0',after['alive'])
+                self.assertEqual(3,d(after['bufflist'])['mp5']['rounds']); f['reject'](data)
+            # Real skeleton plus real regeneration: ordinary action uses existing validation and ordering.
+            f['prepare']('DA',hitpoints=5000,maxhitpoints=10000,badguy=e({'enemies':[dict(f['enemy'],creatureattack=40,creaturedefense=1)],'options':{'type':'forest','didsurprise':1}}))
+            self.assertEqual(200,f['request'](data=f['form'](1))[0]); skeleton=d(f['snapshot']()[0]['companions'])
+            skeleton['skeleton_warrior']['hitpoints']=30
+            weak=e({'enemies':[dict(f['enemy'],creatureattack=1,creaturedefense=1)],'options':{'type':'forest','didsurprise':1}})
+            f['prepare']('MP',companions=e(skeleton),hitpoints=5000,maxhitpoints=10000,badguy=weak)
+            self.assertEqual(200,f['request'](data=f['form'](1))[0]); buffs=d(f['snapshot']()[0]['bufflist']); skeleton=d(f['snapshot']()[0]['companions'])
+            f['prepare']('MP',hitpoints=500,companions=e(skeleton),bufflist=e(buffs),badguy=weak); stale=f['ordinary_form'](); data=f['ordinary_form']()
+            before=f['snapshot']()
+            self.query("ALTER TABLE accounts ADD CONSTRAINT fixture_ordinary_companion CHECK (login <> 'WebPlayer' OR hitpoints <> 510)")
+            try:
+                code,body=f['action'](data); self.assertEqual(500,code,body[:2000]); self.assertEqual(before,f['snapshot']()); f['reject'](data)
+            finally:self.query('ALTER TABLE accounts DROP CONSTRAINT fixture_ordinary_companion')
+            data=f['ordinary_form']()
+            code,body=f['action'](data); self.assertEqual(200,code,body[:2000]); after=f['snapshot']()[0]
+            self.assertEqual(3,d(after['bufflist'])['mp1']['rounds']); self.assertEqual('510',after['hitpoints'])
+            expected=dict(skeleton['skeleton_warrior'],hitpoints=36,used=True)
+            self.assertEqual({'skeleton_warrior':expected},d(after['companions'])); f['reject'](data); f['reject'](stale)
+            fresh=f['ordinary_form'](); skeleton=d(after['companions']); key=next(iter(skeleton)); skeleton[key]['hitpoints']-=1
+            self.query('UPDATE accounts SET companions=? WHERE acctid=?',[e(skeleton),player]); f['reject'](fresh)
+
     def test_defeated_target_progression_exact_zero_negative_and_terminal(self):
         with self._specialty_accounting_fixture() as f, self._specialty_terminal_capture() as terminal:
             player=f['player']; encode=f['encode']; decode=f['decode']
@@ -1334,7 +1549,7 @@ function resurrectionrandomfixture_dohook($hook,$args) { mt_srand((int)getsettin
                         path='dragon.php?op=fight'; status,body=f['request'](path); self.assertEqual(200,status,body[:2000])
                         status,body=f['request'](path,self._security_fields(body,path))
                     else:
-                        status,body=f['request']('forest.php?op=fight')
+                        status,body=self._ordinary_attack(f['request'])
                     self.assertEqual(200,status,body[:2000]); state=f['snapshot']()[0]
                     self.assertEqual(hp,int(state['hitpoints'])); self.assertEqual(targethp,f['decode'](state['badguy'])['enemies'][0]['creaturehealth'])
                     buffs=f['decode'](state['bufflist'])
@@ -1686,7 +1901,7 @@ function resurrectionrandomfixture_dohook($hook,$args) { mt_srand((int)getsettin
                 return body,data
             def fight():
                 stale=f['form'](1); before=uses()
-                status,body=f['request']('forest.php?op=fight'); self.assertEqual(200,status,body[:2500])
+                status,body=self._ordinary_attack(f['request']); self.assertEqual(200,status,body[:2500])
                 self.assertEqual(before,uses()); f['rejected'](stale)
                 return body
             def state():
@@ -2411,22 +2626,22 @@ function resurrectionspecialtyobserver_dohook($hook,$args) {
                         f['prepare'](spec,hitpoints=5000,maxhitpoints=10000)
                         data=f['form'](level); key=spec.lower()+str(level)
                         for round_number in range(1,6):
-                            status,body=f['request'](data=data) if round_number==1 else f['request']('forest.php?op=fight')
+                            status,body=f['request'](data=data) if round_number==1 else self._ordinary_attack(f['request'])
                             self.assertEqual(200,status,body[:2000]); buffs=f['decode'](f['snapshot']()[0]['bufflist'])
                             if round_number<5: self.assertEqual(5-round_number,buffs[key]['rounds'])
                             else: self.assertNotIn(key,buffs)
                             self.assertEqual(str(9-level),self.query('SELECT value FROM module_userprefs WHERE userid=? AND modulename=? AND setting=?',[f['player'],f['modules'][spec],'uses'])[0]['value'])
-                        self.assertEqual(200,f['request']('forest.php?op=fight')[0]); self.assertNotIn(key,f['decode'](f['snapshot']()[0]['bufflist']))
+                        self.assertEqual(200,self._ordinary_attack(f['request'])[0]); self.assertNotIn(key,f['decode'](f['snapshot']()[0]['bufflist']))
                         f['rejected'](data)
             # Wither Soul cannot cause ordinary enemy retaliation while active.
             # At one HP the player survives five rounds, then dies on round six.
             f['prepare']('DA',hitpoints=1,badguy=f['encode']({'enemies':[dict(f['enemy'],creatureattack=1000)],'options':{'type':'forest','didsurprise':1}}))
             data=f['form'](5)
             for n in range(5):
-                self.assertEqual(200,(f['request'](data=data) if n==0 else f['request']('forest.php?op=fight'))[0])
+                self.assertEqual(200,(f['request'](data=data) if n==0 else self._ordinary_attack(f['request']))[0])
                 self.assertEqual('1',f['snapshot']()[0]['hitpoints'])
             self.assertNotIn('da5',f['decode'](f['snapshot']()[0]['bufflist']))
-            self.assertEqual(200,f['request']('forest.php?op=fight')[0]); self.assertEqual('0',f['snapshot']()[0]['alive']); f['rejected'](data)
+            self.assertEqual(200,self._ordinary_attack(f['request'])[0]); self.assertEqual('0',f['snapshot']()[0]['alive']); f['rejected'](data)
 
     def test_specialty_buff_business_schema_rejects_corruption(self):
         with self._specialty_accounting_fixture() as f:
@@ -2469,7 +2684,7 @@ function resurrectionspecialtyobserver_dohook($hook,$args) {
                             target=dict(f['enemy'],creaturehealth=1 if outcome=='victory' else 100000,creatureattack=1 if outcome=='victory' else 1000,creaturedefense=1 if outcome=='victory' else 1000)
                             f['prepare'](spec,bufflist=f['encode'](buffs),hitpoints=500 if outcome=='victory' else 1,badguy=f['encode']({'enemies':[target],'options':{'type':'forest','didsurprise':1}}))
                             old=f['form'](1); before=f['snapshot']()[0]
-                            status,body=f['request']('forest.php?op=fight'); self.assertEqual(200,status,body[:2000])
+                            status,body=self._ordinary_attack(f['request']); self.assertEqual(200,status,body[:2000])
                             after=f['snapshot']()[0]; remaining=f['decode'](after['bufflist'])
                             # Defense-only activation is skipped on early weapon victory
                             # or lethal riposte, though its modifier already affected the roll.
@@ -2523,7 +2738,7 @@ function resurrectionspecialtyobserver_dohook($hook,$args) {
             # Same deterministic unmodified damage roll: 177 incoming damage.
             # Curse rounds 177*0.5 to 89; shield reflects 177*2 = 354.
             f['prepare']('DA',badguy=f['encode']({'enemies':[dict(f['enemy'],creatureattack=1000)],'options':{'type':'forest','didsurprise':1}}),hitpoints=5000,maxhitpoints=10000)
-            self.assertEqual(200,f['request']('forest.php?op=fight')[0])
+            self.assertEqual(200,self._ordinary_attack(f['request'])[0])
             self.assertEqual(4823,int(f['snapshot']()[0]['hitpoints']))
             self.assertEqual(99960,f['decode'](f['snapshot']()[0]['badguy'])['enemies'][0]['creaturehealth'])
 
@@ -2537,7 +2752,7 @@ function resurrectionspecialtyobserver_dohook($hook,$args) {
             f['prepare']('MP',badguy=f['encode'](weak),hitpoints=995,maxhitpoints=1000,companions=f['encode']({'skeleton_warrior':skeleton}))
             data=f['form'](1)
             for round_number in range(1,6):
-                status,body=f['request'](data=data) if round_number==1 else f['request']('forest.php?op=fight')
+                status,body=f['request'](data=data) if round_number==1 else self._ordinary_attack(f['request'])
                 self.assertEqual(200,status,body[:2000]); after=f['snapshot']()[0]
                 text=re.sub(r'\s+',' ',html.unescape(re.sub('<[^>]+>',' ',body)))
                 self.assertLess(text.index('regenerate'),text.index('You hit Accounting Target'))
@@ -2550,7 +2765,7 @@ function resurrectionspecialtyobserver_dohook($hook,$args) {
                 if round_number<5: self.assertEqual(5-round_number,buffs['mp1']['rounds'])
                 else: self.assertNotIn('mp1',buffs)
             self.query('UPDATE accounts SET hitpoints=990 WHERE acctid=?',[f['player']])
-            self.assertEqual(200,f['request']('forest.php?op=fight')[0]); self.assertEqual(990,int(f['snapshot']()[0]['hitpoints']))
+            self.assertEqual(200,self._ordinary_attack(f['request'])[0]); self.assertEqual(990,int(f['snapshot']()[0]['hitpoints']))
             f['rejected'](data)
             # Lifetap cannot heal above max HP or remove HP from a full player.
             for hp in [995,1000]:
@@ -2844,7 +3059,9 @@ function resurrectionspecialtyobserver_dohook($hook,$args) {
             self.query('INSERT INTO settings(setting,value) VALUES (?,?) ON DUPLICATE KEY UPDATE value=VALUES(value)',['forestchance','100'])
             self.query("UPDATE accounts SET hashorse=0,specialinc='',turns=10 WHERE acctid=?",[player])
             _,body=request('forest.php?eventhandler=module:darkhorse&op=tavern'); self.assertEqual('',state()[0]['specialinc'])
-            status,body=request('forest.php?op=search'); self.assertEqual(200,status,body[:1000]); self.assertIn('cluster of trees',body)
+            status,body=request('forest.php?op=search'); self.assertEqual(200,status,body[:1000])
+            status,body=request('forest.php?op=search',self._security_fields(body,'forest.php?op=search')); self.assertEqual(200,status,body[:1000])
+            status,body=request('forest.php'); self.assertEqual(200,status,body[:1000]); self.assertIn('cluster of trees',body)
             self.assertEqual('module:darkhorse',state()[0]['specialinc']); self.assertEqual('1000',state()[0]['gold'])
             _,body=request('forest.php?op=tavern'); self.assertIn('Configured Tavern',body)
             leave='forest.php?op=leaveleave'; _,body=request(leave); form=self._security_fields(body,leave)

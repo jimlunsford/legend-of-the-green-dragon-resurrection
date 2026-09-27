@@ -239,3 +239,25 @@ See [the recovery record](PHASE3-RECOVERY-20260927.md). Exact SHA `72ab600fdc8c9
 ### Accepted specialty continuation and independent decision
 
 Exact candidate `2bfe8fc3c7cee4a8a8ac0c3647571a318d243634` passes Modern core **36285456622** and Baseline integrity **36285456697**. Both supported targets: 88 PHPUnit tests / 2,462 assertions, **55** Python/tooling and HTTP tests, 321 lint files, zero runtime-matrix failures/skips, all Composer and both PHPStan gates. All three new regression matrices pass. **Thieving Skills is PASS; totals are 22 PASS / 0 limitation / 2 BLOCKED, with 24 lifecycle PASS.** Dark Arts retains companion combat/fallback transition gaps; Mystical Powers retains area-effect progression and aura/companion gaps. Full independent reasoning and exact boundaries are in [the recovery record](PHASE3-RECOVERY-20260927.md). Application source, workflows and serialized readers/writers are unchanged. The 24/24 gate remains open; general combat development has not begun. Phase 3 incomplete, merge NO, hosting NO, PR #1 draft. The final documentation commit requires its own terminal exact-head acceptance recorded in PR #1.
+
+## 2026-09-27: Ordinary Forest consumer schemas
+
+Token-based recount: **94 sites / 47 files / 34 serialize writers-checks /
+59 ScalarState reads / one centralized unserialize**. The sole new read is
+`ForestCombatState::read`; `ScalarState::read` is unchanged. The Forest encounter
+producer moved to its caller-owned library without adding serialization authority.
+
+`ForestCombatState` checks the ordinary ordered enemy envelope, live/defeated target
+consistency, options, finite statistics, reward-ledger correspondence and new
+server-generated encounter identity. `ForestBuffState` and `ForestCompanionState`
+check battle-consumer types and delegate exact specialty, Transmutation and Skeleton
+Warrior producer invariants to the existing validators. These do not certify every
+configured producer or alternate combat family. Specialty state gains only optional
+validated encounter metadata, not permission for unrelated ordinary shapes.
+
+Malformed data rejects and remains stored for explicit repair. No normalization,
+implicit combat clearing or object restoration. Canonical action contexts ignore
+record-field ordering but retain meaningful enemy/buff/companion collection order.
+Ordinary GET never calls the mutation engine. Local evidence PASS; exact-head CI
+acceptance PENDING, recorded in PR #1. Broader general combat and serialized-state
+closure remain BLOCKED. See [the exact tests and limits](ORDINARY-FOREST-COMBAT-20260927.md).

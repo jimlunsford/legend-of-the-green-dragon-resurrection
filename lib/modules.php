@@ -1022,7 +1022,7 @@ function module_collect_events($type, $allowinactive=false)
 	return modulehook("collect-events", $events);
 }
 
-function module_events($eventtype, $basechance, $baseLink = false) {
+function module_events($eventtype, $basechance, $baseLink = false, $defer = false) {
 	if ($baseLink === false){
 		global $PHP_SELF;
 		$baseLink = basename($_SERVER['SCRIPT_NAME'] ?? '') . '?';
@@ -1049,6 +1049,13 @@ function module_events($eventtype, $basechance, $baseLink = false) {
 				httpset('op', "");
                 require_once 'lib/event_security.php';
                 if (resurrection_secured_event($event['modulename'])) resurrection_event_context($event['modulename'],$eventtype);
+                if ($defer) {
+                    global $session;
+                    $session['user']['specialinc']='module:'.$event['modulename'];
+                    addnav('Continue encounter','forest.php');
+                    httpset('op',$op);
+                    return 1;
+                }
                 module_do_event($eventtype, $event['modulename'], false, $baseLink);
 				httpset('op', $op);
 				return 1;
