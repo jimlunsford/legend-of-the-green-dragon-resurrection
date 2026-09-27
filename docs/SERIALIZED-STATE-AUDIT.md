@@ -286,3 +286,16 @@ state closure is not claimed.
 ## PvP consumer schema candidate, 2026-09-27
 
 `PvpState` now allowlists the single-opponent root/options/enemy vocabulary, binds actor/victim/reservation/generation and immutable snapshots, bounds live HP to the recorded maximum, rejects terminal/wrong-family/duplicate/current-target corruption, and checks room-tier metadata. PvP also consumes the existing strict buff/companion validators and validates the historical bodyguard buff. `ScalarState::read()` is unchanged. Invalid/old state is preserved and rejected, requiring explicit repair rather than automatic reset. See [exact scope and HTTP evidence](PVP-COMBAT-AUTHORITY-20260927.md). Supported-matrix acceptance remains pending; unrelated serialized producers are not promoted.
+
+## Graveyard torment consumer candidate, 2026-09-27
+
+`GraveyardCombatState` validates a single catalog-backed Graveyard target,
+server encounter identity, historically scaled HP/attack/defense/level, favor
+reward, starting soul state, live flags and allowed options. It rejects Forest
+reward semantics and terminal continuation. Raw companion/buff roots and existing
+business validators are checked before transition. Soulpoints/favor/gravefights
+retain unsigned database bounds. Corruption is preserved for explicit repair,
+never silently cleared or rewarded. `ScalarState::read()` is unchanged.
+[Full boundary and deterministic proof](GRAVEYARD-COMBAT-AUTHORITY-20260927.md).
+Acceptance awaits exact supported-matrix CI; broader serialized consumers remain
+BLOCKED.

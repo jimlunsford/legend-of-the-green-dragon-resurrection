@@ -1052,7 +1052,7 @@ function module_events($eventtype, $basechance, $baseLink = false, $defer = fals
                 if ($defer) {
                     global $session;
                     $session['user']['specialinc']='module:'.$event['modulename'];
-                    addnav('Continue encounter','forest.php');
+                    addnav('Continue encounter',strtok($baseLink,'?'));
                     httpset('op',$op);
                     return 1;
                 }

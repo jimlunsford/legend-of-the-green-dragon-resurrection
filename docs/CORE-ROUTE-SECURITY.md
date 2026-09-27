@@ -439,3 +439,15 @@ OPEN/DRAFT/NOT READY/NOT MERGED. Phase 3 INCOMPLETE; merge NO; public hosting NO
 ## Broader PvP candidate, 2026-09-27
 
 The broader core PvP candidate is documented in [PvP authority evidence](PVP-COMBAT-AUTHORITY-20260927.md). The bounded local matrix covers owned entry and reservation, normal/stale rounds, exact victory/defeat settlement, all historical bodyguard tiers, replay, rollback, malformed-state preservation, ordered participant locks and stale victim changes. GET combat mutations are closed within this family. The historical bodyguard is a buff, not a separate opponent. Core PvP remains **BLOCKED pending exact-candidate supported-matrix CI**. General mail, inn economy, graveyard and other combat callers remain outside this verdict.
+
+## Graveyard torment authority candidate, 2026-09-27
+
+[Focused route, behavior and proof inventory](GRAVEYARD-COMBAT-AUTHORITY-20260927.md).
+Search, fight and run GETs now only render. Mutations require dead-player
+eligibility, CSRF, a one-use state/encounter-bound intent and the locked player
+transaction. Buff stripping and the gameplay Graveyard header hook occur within
+that transaction. Event selection is deferred to its existing owner without
+consuming a gravefight or creating a normal enemy. Victory, defeat and flee
+settlement are authoritative and replay/rollback protected. Exact supported CI
+is still required for acceptance; noncombat Graveyard and other families are
+excluded. Phase 3 incomplete, merge NO, public hosting NO.

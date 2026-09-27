@@ -42,7 +42,7 @@ class WebApplicationTests(unittest.TestCase):
             cls.port = sock.getsockname()[1]
         # Outside the application tree; only the loopback fixture server loads this.
         cls.seed_file = tempfile.NamedTemporaryFile(mode='w', suffix='.php')
-        cls.seed_file.write("<?php if (in_array($_SERVER['HTTP_X_RESURRECTION_FIXTURE'] ?? '', ['skeleton-death','specialty-accounting'], true)) mt_srand(12345); if (($_SERVER['HTTP_X_RESURRECTION_FIXTURE'] ?? '') === 'ordinary-flee-failure') mt_srand(3);\n")
+        cls.seed_file.write("<?php if (in_array($_SERVER['HTTP_X_RESURRECTION_FIXTURE'] ?? '', ['skeleton-death','specialty-accounting'], true)) mt_srand(12345); if (($_SERVER['HTTP_X_RESURRECTION_FIXTURE'] ?? '') === 'ordinary-flee-failure') mt_srand(3); if (($_SERVER['HTTP_X_RESURRECTION_FIXTURE'] ?? '') === 'graveyard-round') mt_srand(1);\n")
         cls.seed_file.flush()
         cls.server_log = tempfile.TemporaryFile(mode='w+t')
         cls.server = subprocess.Popen([shutil.which('php'), '-d', 'display_errors=1', '-d', 'error_reporting=-1',
@@ -1201,6 +1201,182 @@ function resurrectionrandomfixture_dohook($hook,$args) { mt_srand((int)getsettin
         url='forest.php?op=fight'
         status,body=request(url); self.assertEqual(200,status,body[:2000])
         return request(url,self._security_fields(body,url))
+
+    @contextmanager
+    def _graveyard_fixture(self):
+        with self._specialty_accounting_fixture() as f:
+            settings=self.query("SELECT * FROM settings WHERE setting IN ('gravechance','autofight','autofightfull')")
+            creatures=self.query('SELECT * FROM creatures WHERE graveyard=1')
+            self.query('UPDATE creatures SET graveyard=0 WHERE graveyard=1')
+            enemy=dict(f['enemy']);enemy.pop('creatureid',None)
+            for key in ['playerstarthp','diddamage']: enemy.pop(key,None)
+            enemy.update(creaturename='Torment Fixture',graveyard=1)
+            self.query('INSERT INTO creatures ('+','.join(enemy)+') VALUES ('+','.join('?' for _ in enemy)+')',list(enemy.values()))
+            enemyid=self.query("SELECT creatureid FROM creatures WHERE creaturename='Torment Fixture'")[0]['creatureid']
+            for key in ['gravechance','autofight','autofightfull']:
+                self.query('INSERT INTO settings(setting,value) VALUES (?,0) ON DUPLICATE KEY UPDATE value=0',[key])
+            call=self._security_client()
+            def request(path='graveyard.php?op=fight',data=None,seed=None):
+                self._security_allow(f['player'],path); return call(path,data,fixture=seed or ('graveyard-round' if path=='graveyard.php?op=fight' else 'specialty-accounting'))
+            def patch(**values): self.query('UPDATE accounts SET '+','.join(k+'=?' for k in values)+' WHERE acctid=?',[*values.values(),f['player']])
+            def prepare(**changes):
+                f['prepare']('',alive=0,hitpoints=0,badguy='',soulpoints=100,gravefights=5,deathpower=100)
+                patch(**changes) if changes else None
+            def snapshot():
+                return self.query('SELECT alive,hitpoints,soulpoints,gravefights,deathpower,attack,defense,level,gold,gems,experience,badguy,companions,bufflist,specialinc,specialmisc FROM accounts WHERE acctid=?',[f['player']])[0]
+            def form(op='fight'):
+                url='graveyard.php?op='+op;code,body=request(url);self.assertEqual(200,code,body[:3000]);return self._security_fields(body,url)
+            def reject(data,op='fight',status=409):
+                before=snapshot();news=self.query('SELECT * FROM news'); code,body=request('graveyard.php?op='+op,data)
+                self.assertEqual(status,code,body[:3000]);self.assertEqual(before,snapshot());self.assertEqual(news,self.query('SELECT * FROM news'))
+                self.assertNotIn('Stack trace',body);self.assertNotIn('SQLSTATE',body)
+            def enter():
+                data=form('search'); code,body=request('graveyard.php?op=search',data);self.assertEqual(200,code,body[:3000]);return data,body
+            try: yield f|dict(request=request,patch=patch,gprepare=prepare,gsnapshot=snapshot,gform=form,greject=reject,enter=enter,enemyid=enemyid)
+            finally:
+                self.query('DELETE FROM creatures WHERE creatureid=?',[enemyid])
+                for row in creatures: self.query('UPDATE creatures SET graveyard=1 WHERE creatureid=?',[row['creatureid']])
+                self.query("DELETE FROM settings WHERE setting IN ('gravechance','autofight','autofightfull')")
+                for row in settings: self.query('INSERT INTO settings(setting,value) VALUES (?,?)',[row['setting'],row['value']])
+
+    def test_graveyard_search_round_authority_and_replay(self):
+        with self._graveyard_fixture() as f:
+            buff={'proof':dict(name='Preserve on GET',schema='fixture',rounds=5,atkmod=2)}
+            f['gprepare'](bufflist=f['encode'](buff)); before=f['gsnapshot']()
+            for op in ['','search','fight','run']:
+                code,body=f['request']('graveyard.php'+('?op='+op if op else ''));self.assertEqual(200,code,body[:2000]);self.assertEqual(before,f['gsnapshot']())
+            data=f['gform']('search'); f['greject'](data|dict(csrf_token='bad'),'search',403)
+            for field in ['creatureid','creatureattack','creatureexp','victory','alive','soulpoints','deathpower','type','auto','newtarget']:
+                f['greject'](f['gform']('search')|{field:'999'},'search',400)
+            data,body=f['enter']();after=f['gsnapshot']();state=f['decode'](after['badguy']);enemy=state['enemies'][0]
+            self.assertEqual('4',after['gravefights']);self.assertEqual([],f['decode'](after['bufflist']));self.assertEqual('100',after['deathpower'])
+            self.assertEqual(f['enemyid'],enemy['creatureid']);self.assertEqual(22,enemy['creatureattack']);self.assertEqual(22*.7,enemy['creaturedefense']);self.assertEqual(10,enemy['creaturelevel'])
+            self.assertRegex(state['options']['encounter'],r'^[a-f0-9]{32}$');self.assertEqual('0',after['hitpoints']);self.assertEqual(before['attack'],after['attack']);self.assertEqual(before['defense'],after['defense'])
+            f['greject'](data,'search');old=f['gform']();data=f['gform']();code,body=f['request'](data=data);self.assertEqual(200,code,body[:3000]);roundstate=f['gsnapshot']()
+            self.assertEqual('4',roundstate['gravefights']);self.assertEqual('0',roundstate['hitpoints']);self.assertEqual(state['options']['encounter'],f['decode'](roundstate['badguy'])['options']['encounter'])
+            self.assertEqual('95',roundstate['soulpoints']);self.assertEqual(94,f['decode'](roundstate['badguy'])['enemies'][0]['creaturehealth']);self.assertEqual(96,enemy['creaturehealth']);self.assertEqual(13,enemy['creatureexp'])
+            f['greject'](old);f['greject'](data)
+
+    def test_graveyard_search_rollback_and_eligibility(self):
+        with self._graveyard_fixture() as f:
+            for changes in [dict(alive=1,hitpoints=100),dict(alive=1,hitpoints=0),dict(alive=0,hitpoints=1),dict(specialinc='module:goldmine'),dict(badguy='broken')]:
+                f['gprepare'](); data=f['gform']('search');f['patch'](**changes);f['greject'](data,'search')
+            f['gprepare']();data=f['gform']('search');f['patch'](gravefights=0);f['greject'](data,'search');code,body=f['request']('graveyard.php?op=search');self.assertEqual(200,code);self.assertNotIn('action_token',body)
+            f['gprepare']();data=f['gform']('search');self.query("ALTER TABLE accounts ADD CONSTRAINT fixture_grave_search CHECK (login <> 'WebPlayer' OR gravefights=5)")
+            try: f['greject'](data,'search',500)
+            finally: self.query('ALTER TABLE accounts DROP CONSTRAINT fixture_grave_search')
+            f['greject'](data,'search');f['enter']();self.assertEqual('4',f['gsnapshot']()['gravefights'])
+
+    def test_graveyard_victory_defeat_and_late_rollback(self):
+        with self._graveyard_fixture() as f, self._specialty_terminal_capture() as terminal:
+            for outcome,hp in [('victory',2),('victory',1),('defeat',1)]:
+                f['gprepare']();f['enter']();row=f['gsnapshot']();state=f['decode'](row['badguy'])
+                if outcome=='victory': state['enemies'][0]['creaturehealth']=hp;f['patch'](badguy=f['encode'](state))
+                else: f['patch'](soulpoints=hp)
+                before=f['gsnapshot']();news_before=len(self.query('SELECT * FROM news'));self.query('DELETE FROM fixture_specialty_terminal');data=f['gform']();old=f['gform']()
+                check='deathpower=100' if outcome=='victory' else 'gravefights=4'
+                self.query("ALTER TABLE accounts ADD CONSTRAINT fixture_grave_terminal CHECK (login <> 'WebPlayer' OR "+check+")")
+                try: f['greject'](data,status=500);self.assertEqual([],terminal())
+                finally: self.query('ALTER TABLE accounts DROP CONSTRAINT fixture_grave_terminal')
+                f['greject'](data);data=f['gform']();code,body=f['request'](data=data);self.assertEqual(200,code,body[:3000]);after=f['gsnapshot']()
+                self.assertEqual('',after['badguy']);self.assertEqual('0',after['alive']);self.assertEqual('0',after['hitpoints']);self.assertEqual(before['attack'],after['attack']);self.assertEqual(before['defense'],after['defense'])
+                self.assertEqual(1,len(terminal()));self.assertEqual('battle-'+outcome,terminal()[0]['hook']);self.assertEqual(news_before+(outcome=='defeat'),len(self.query('SELECT * FROM news')))
+                self.assertEqual(before['experience'],after['experience']);self.assertEqual(before['gold'],after['gold'])
+                if outcome=='victory':
+                    self.assertEqual(113,int(after['deathpower']));self.assertEqual('4',after['gravefights']);self.assertEqual(hp-2,terminal()[0]['enemy']['creaturehealth'])
+                else: self.assertEqual('100',after['deathpower']);self.assertEqual('0',after['gravefights']);self.assertEqual('0',after['soulpoints'])
+                f['greject'](data);f['greject'](old)
+
+    def test_graveyard_malformed_state_and_explicit_repair(self):
+        with self._graveyard_fixture() as f:
+            f['gprepare']();f['enter']();good=f['gsnapshot']()['badguy'];base=f['decode'](good)
+            cases=['broken','O:8:"stdClass":0:{}','b:0;','a:0:{}',good+'tail']
+            for key,value in dict(creatureid=0,creaturename=[],creaturehealth=0,creatureattack=-1,creaturedefense=99,creaturelevel=11,creatureexp=999,dead=True,istarget=False,playerstarthp=-1,creaturegold=100).items():
+                state=json.loads(json.dumps(base));state['enemies'][0][key]=value;cases.append(f['encode'](state))
+            for key,value in dict(type='forest',encounter='bad',maxattacks=0).items():
+                state=json.loads(json.dumps(base));state['options'][key]=value;cases.append(f['encode'](state))
+            state=json.loads(json.dumps(base));state['enemies'].append(state['enemies'][0]);cases.append(f['encode'](state))
+            for encoded in cases:
+                data=f['gform']();f['patch'](badguy=encoded);f['greject'](data);before=f['gsnapshot']();self.assertEqual(409,f['request']()[0]);self.assertEqual(before,f['gsnapshot']());f['patch'](badguy=good)
+            for field in ['companions','bufflist']:
+                for encoded in ['b:0;','a:1:{s:3:"bad";a:0:{}}']:
+                    data=f['gform']();f['patch'](**{field:encoded});f['greject'](data);f['patch'](**{field:'a:0:{}'})
+            self.assertEqual(200,f['request'](data=f['gform']())[0])
+
+    def test_graveyard_event_handoff_is_atomic_and_does_not_consume_fight(self):
+        with self._graveyard_fixture() as f:
+            module='resurrectiongravefixture';path=ROOT/'modules'/(module+'.php')
+            path.write_text("<?php\nfunction resurrectiongravefixture_getmoduleinfo(){return ['name'=>'Grave fixture','version'=>'1','author'=>'Tests','category'=>'Tests'];}\nfunction resurrectiongravefixture_runevent($type,$link){throw new RuntimeException('Event must be deferred');}\n")
+            self.query('INSERT INTO modules(modulename,active,version) VALUES (?,1,?)',[module,'1'])
+            self.query('INSERT INTO module_event_hooks(event_type,modulename,event_chance) VALUES (?,?,?)',['graveyard',module,'100'])
+            self.query("UPDATE settings SET value=100 WHERE setting='gravechance'")
+            try:
+                f['gprepare']();data=f['gform']('search');self.query("ALTER TABLE accounts ADD CONSTRAINT fixture_grave_event CHECK (login <> 'WebPlayer' OR specialinc='')")
+                try: f['greject'](data,'search',500)
+                finally: self.query('ALTER TABLE accounts DROP CONSTRAINT fixture_grave_event')
+                f['greject'](data,'search');data,body=f['enter']();row=f['gsnapshot']()
+                self.assertEqual('module:'+module,row['specialinc']);self.assertEqual('5',row['gravefights']);self.assertEqual('',row['badguy']);self.assertEqual('100',row['soulpoints']);self.assertEqual('100',row['deathpower'])
+                self.assertIn('graveyard.php',body);self.assertNotIn('forest.php',body);f['greject'](data,'search')
+            finally:
+                self.query('DELETE FROM module_event_hooks WHERE modulename=?',[module]);self.query('DELETE FROM modules WHERE modulename=?',[module]);path.unlink()
+
+    def test_graveyard_companion_suspension_and_skeleton_exclusion(self):
+        with self._graveyard_fixture() as f:
+            skeleton=dict(name='`4Skeleton Warrior',hitpoints=43,maxhitpoints=43,attack=26.5,defense=14.5,dyingtext='`$Your skeleton warrior crumbles to dust.`n',abilities=dict(fight=True),ignorelimit=True)
+            helper=dict(name='Shade Helper',hitpoints=100,maxhitpoints=100,attack=20,defense=10,abilities=dict(fight=True),allowinshades=True,dyingtext='Helper falls',schema='fixture')
+            excluded=helper|dict(name='Excluded Helper',allowinshades=False)
+            f['gprepare'](companions=f['encode'](dict(helper=helper,excluded=excluded,skeleton_warrior=skeleton)))
+            data=f['gform']('search');self.query("ALTER TABLE accounts ADD CONSTRAINT fixture_grave_companion CHECK (login <> 'WebPlayer' OR gravefights=5)")
+            try: f['greject'](data,'search',500)
+            finally: self.query('ALTER TABLE accounts DROP CONSTRAINT fixture_grave_companion')
+            _,body=f['enter']();row=f['gsnapshot']();companions=f['decode'](row['companions'])
+            self.assertEqual(skeleton|dict(suspended=True),companions['skeleton_warrior']);self.assertEqual(excluded|dict(suspended=True),companions['excluded'])
+            self.assertEqual(94,companions['helper']['hitpoints']);self.assertEqual(85,f['decode'](row['badguy'])['enemies'][0]['creaturehealth']);self.assertTrue(companions['helper']['used']);self.assertNotIn('Skeleton Warrior hits',body);self.assertNotIn('Excluded Helper hits',body)
+            text=re.sub(r'\s+',' ',html.unescape(re.sub('<[^>]+>',' ',body)))
+            self.assertLess(text.index('RIPOSTE for 4'),text.index('Shade Helper hits Torment Fixture for 11'));self.assertLess(text.index('Shade Helper hits Torment Fixture for 11'),text.index('hits Shade Helper for 6'))
+            # Suspension is retained at terminal combat because the player is still dead.
+            state=f['decode'](row['badguy']);state['enemies'][0]['creaturehealth']=1;f['patch'](badguy=f['encode'](state));code,body=f['request'](data=f['gform']());self.assertEqual(200,code,body[:3000])
+            self.assertEqual('',f['gsnapshot']()['badguy']);companions=f['decode'](f['gsnapshot']()['companions'])
+            self.assertEqual(skeleton|dict(suspended=True),companions['skeleton_warrior']);self.assertTrue(companions['excluded']['suspended'])
+            f['gprepare'](companions=f['encode'](dict(helper=helper|dict(hitpoints=1))));_,body=f['enter']();row=f['gsnapshot']();self.assertEqual([],f['decode'](row['companions']));self.assertEqual(85,f['decode'](row['badguy'])['enemies'][0]['creaturehealth']);self.assertIn('Helper falls',body)
+
+    def test_graveyard_flee_success_failure_caps_and_rollback(self):
+        with self._graveyard_fixture() as f:
+            for favor,expected in [(100,87),(5,0),(0,0)]:
+                f['gprepare'](deathpower=favor);f['enter']();before=f['gsnapshot']();data=f['gform']('run');old=f['gform']()
+                # Seed 3 belongs only to the loopback fixture prepend, never request authority in production.
+                self.query("ALTER TABLE accounts ADD CONSTRAINT fixture_grave_flee CHECK (login <> 'WebPlayer' OR badguy<>'')")
+                try:
+                    code,body=f['request']('graveyard.php?op=run',data,seed='ordinary-flee-failure');self.assertEqual(500,code,body[:3000]);self.assertEqual(before,f['gsnapshot']())
+                finally: self.query('ALTER TABLE accounts DROP CONSTRAINT fixture_grave_flee')
+                f['greject'](data,'run');data=f['gform']('run');code,body=f['request']('graveyard.php?op=run',data,seed='ordinary-flee-failure');self.assertEqual(200,code,body[:3000]);after=f['gsnapshot']()
+                self.assertEqual(str(expected),after['deathpower']);self.assertEqual('',after['badguy']);self.assertEqual('4',after['gravefights']);self.assertEqual(before['soulpoints'],after['soulpoints']);self.assertEqual('0',after['hitpoints']);f['greject'](data,'run');f['greject'](old)
+            f['gprepare']();f['enter']();data=f['gform']('run');self.query("ALTER TABLE accounts ADD CONSTRAINT fixture_grave_run CHECK (login <> 'WebPlayer' OR soulpoints=100)")
+            try: f['greject'](data,'run',500)
+            finally: self.query('ALTER TABLE accounts DROP CONSTRAINT fixture_grave_run')
+            f['greject'](data,'run');data=f['gform']('run');old=f['gform']();code,body=f['request']('graveyard.php?op=run',data);self.assertEqual(200,code,body[:3000]);row=f['gsnapshot']()
+            self.assertEqual('92',row['soulpoints']);self.assertEqual(96,f['decode'](row['badguy'])['enemies'][0]['creaturehealth']);self.assertEqual('100',row['deathpower']);self.assertEqual('4',row['gravefights']);self.assertIn('summoned back',body);f['greject'](data,'run');f['greject'](old)
+
+    def test_graveyard_unsigned_favor_overflow_and_zero_soul(self):
+        with self._graveyard_fixture() as f:
+            f['gprepare'](deathpower=4294967295);f['enter']();state=f['decode'](f['gsnapshot']()['badguy']);state['enemies'][0]['creaturehealth']=1;f['patch'](badguy=f['encode'](state));f['greject'](f['gform']())
+            f['patch'](deathpower=4294967282);code,body=f['request'](data=f['gform']());self.assertEqual(200,code,body[:3000]);self.assertEqual('4294967295',f['gsnapshot']()['deathpower'])
+            f['gprepare'](soulpoints=0);data,body=f['enter']();row=f['gsnapshot']();self.assertEqual('0',row['gravefights']);self.assertEqual('0',row['soulpoints']);self.assertEqual('100',row['deathpower']);self.assertEqual('',row['badguy']);f['greject'](data,'search')
+
+    def test_graveyard_header_buff_transaction_and_new_encounter_binding(self):
+        with self._graveyard_fixture() as f:
+            self.query("UPDATE modules SET active=1 WHERE modulename='drinks'")
+            self.query("INSERT INTO module_userprefs(modulename,setting,userid,value) VALUES ('drinks','drunkeness',?,'75') ON DUPLICATE KEY UPDATE value='75'",[f['player']])
+            def drunk():return self.query("SELECT value FROM module_userprefs WHERE modulename='drinks' AND setting='drunkeness' AND userid=?",[f['player']])[0]['value']
+            buff={'proof':dict(name='Temporary attack',schema='fixture',rounds=5,**{'tempstat-attack':20})}
+            f['gprepare'](bufflist=f['encode'](buff));before=f['gsnapshot']()
+            code,body=f['request']('graveyard.php');self.assertEqual(200,code,body[:3000]);self.assertEqual(before,f['gsnapshot']());self.assertEqual('75',drunk())
+            data=f['gform']('search');self.query("ALTER TABLE accounts ADD CONSTRAINT fixture_grave_header CHECK (login <> 'WebPlayer' OR gravefights=5)")
+            try: f['greject'](data,'search',500);self.assertEqual('75',drunk())
+            finally: self.query('ALTER TABLE accounts DROP CONSTRAINT fixture_grave_header')
+            f['enter']();self.assertEqual('0',drunk());self.assertEqual('100',f['gsnapshot']()['attack']);self.assertEqual([],f['decode'](f['gsnapshot']()['bufflist']))
+            old=f['gform']();combat=f['decode'](f['gsnapshot']()['badguy']);combat['options']['encounter']='b'*32;f['patch'](badguy=f['encode'](combat));f['greject'](old)
+            f['patch'](gravefights=0);data=f['gform']();code,body=f['request'](data=data);self.assertEqual(200,code,body[:3000]);self.assertEqual('0',f['gsnapshot']()['gravefights'])
 
     @contextmanager
     def _training_fixture(self):

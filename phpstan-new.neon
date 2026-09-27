@@ -8,6 +8,7 @@ parameters:
         - lib/specialty_onboarding.php
         - lib/specialty_combat.php
         - lib/forest_combat.php
+        - lib/graveyard_combat.php
         - lib/training_combat.php
         - lib/pvp_combat.php
         - lib/dragon_combat.php

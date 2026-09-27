@@ -1317,3 +1317,26 @@ not another combat family.
 ## Bounded broader PvP candidate, 2026-09-27
 
 Starting from `cf6a349a0e3b8f7260f5dce1f5f0bb04255af567`, the [PvP evidence record](PVP-COMBAT-AUTHORITY-20260927.md) adds broader eligibility/reservation/round/outcome/inn-bodyguard/replay/rollback/state coverage. This is one PvP-only candidate followed by one bounded CI cycle. Training Modern core `36317455788` was IN_PROGRESS at its one initial inspection; Training Baseline `36317455823` was SUCCESS. Pending prior CI did not block independent development. No separate inherited-candidate acceptance was performed. Core PvP remains BLOCKED pending exact supported-matrix CI, broader combat BLOCKED, Phase 3 INCOMPLETE, PR #1 OPEN/DRAFT/NOT MERGED, merge NO and public hosting NO. Accepted module status remains 23/24; inherited candidate module evidence remains 24/24, not newly accepted. No graveyard, new subsystem, Phase 4, deployment, release or VPS work occurred.
+
+## Bounded Graveyard torment candidate, 2026-09-27
+
+Actual starting head `67f981ecdd7960acc77233814536a7c76d182004`; main remains
+`999cec6f9c655a840320d982d673bb863c68c2b2`. The [Graveyard evidence record](GRAVEYARD-COMBAT-AUTHORITY-20260927.md)
+closes local search/round/flee authority, temporary soul combat statistics,
+favor/fight accounting, participants, terminal outcomes, replay/rollback and
+explicit invalid-state recovery. This is torment combat only. No resurrection,
+restoration, haunting, wider Graveyard certification or next subsystem.
+
+Prior PvP Modern `36319758950` was observed IN_PROGRESS once; Baseline
+`36319758964` SUCCESS. Training `36317455788` and `36317455823` were verified
+SUCCESS once. Accepted training descendant evidence: PHP 8.4.26/MariaDB 11.4.13
+and PHP 8.5.11/MySQL 8.4.11, 93 PHPUnit/2,531 assertions, 82 Python, 331 lint,
+both PHPStan and Composer PASS, zero failures/skips. This includes inherited
+Mystical Powers and ordinary Forest regressions. Registry totals remain 23
+accepted and 24 candidate modules; no retrospective certification rewrite here.
+
+Graveyard torment remains BLOCKED pending its exact-candidate supported matrix.
+Broader combat BLOCKED, Phase 3 INCOMPLETE, PR #1 OPEN/DRAFT/NOT READY/NOT MERGED,
+merge NO, public hosting NO. Publish one coherent candidate, perform the bounded
+CI observation and stop. Next task is exact Graveyard candidate acceptance or
+specific failure correction, not another family.
