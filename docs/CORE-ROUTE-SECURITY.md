@@ -434,3 +434,8 @@ Training/master acceptance is **BLOCKED pending exact candidate CI**. Broader
 combat remains BLOCKED. Last accepted bundled modules remain 23/0/1, candidate
 module evidence 24/0/0; no earlier-slice promotion is performed here. PR #1 remains
 OPEN/DRAFT/NOT READY/NOT MERGED. Phase 3 INCOMPLETE; merge NO; public hosting NO.
+
+
+## Broader PvP candidate, 2026-09-27
+
+The broader core PvP candidate is documented in [PvP authority evidence](PVP-COMBAT-AUTHORITY-20260927.md). The bounded local matrix covers owned entry and reservation, normal/stale rounds, exact victory/defeat settlement, all historical bodyguard tiers, replay, rollback, malformed-state preservation, ordered participant locks and stale victim changes. GET combat mutations are closed within this family. The historical bodyguard is a buff, not a separate opponent. Core PvP remains **BLOCKED pending exact-candidate supported-matrix CI**. General mail, inn economy, graveyard and other combat callers remain outside this verdict.

@@ -8,17 +8,19 @@ final class PvpStateTest extends TestCase
 {
     public function testOwnedSingleTargetAndInvalidBusinessState(): void
     {
-        $state=['enemies'=>[['acctid'=>2,'creaturelevel'=>5,'creaturehealth'=>10,'creatureattack'=>2,'creaturedefense'=>1,
+        $state=['enemies'=>[['acctid'=>2,'creaturelevel'=>5,'creaturehealth'=>10,'pvpmaxhp'=>10,'creatureattack'=>2,'creaturedefense'=>1,
             'creatureexp'=>1000,'creaturegold'=>25,'playerstarthp'=>50,'fightstartdate'=>1780000000,
-            'creaturename'=>"O'Reilly 🐉",'creatureweapon'=>'Fists','location'=>'Degolburg']],
+            'pvpflag'=>'2026-09-13 00:00:00','creaturename'=>"O'Reilly 🐉",'creatureweapon'=>'Fists','location'=>'Degolburg']],
             'options'=>['type'=>'pvp','owner'=>1,'target'=>2,'encounter'=>str_repeat('a',32),'reservation'=>'2026-09-13 00:00:00']];
+        $state['options']['victimhash']=str_repeat('b',64);
+        $state['options']['enemyhash']=PvpState::enemyHash($state['enemies'][0]);
         self::assertSame($state,PvpState::read(serialize($state),1));
         $bad=[];
-        foreach (['owner'=>2,'target'=>1,'type'=>'forest','encounter'=>'bad'] as $k=>$v) {
+        foreach (['owner'=>2,'target'=>1,'type'=>'forest','encounter'=>'bad','victimhash'=>'bad','enemyhash'=>'bad','reservation'=>'bad','maxattacks'=>0,'didsurprise'=>[],'experience'=>[999]] as $k=>$v) {
             $copy=$state; $copy['options'][$k]=$v; $bad[]=$copy;
         }
         foreach (['creaturehealth','creatureattack','creaturedefense','creatureexp','creaturegold','creaturelevel'] as $key) {
-            foreach ([[],new \stdClass(),-1,INF,NAN,'1e999','bad'] as $value) {
+            foreach ([[],new \stdClass(),-1,INF,NAN,'1e999','bad','1e2','-0'] as $value) {
                 $copy=$state; $copy['enemies'][0][$key]=$value; $bad[]=$copy;
             }
         }
@@ -26,6 +28,8 @@ final class PvpStateTest extends TestCase
         $copy=$state; $copy['enemies'][0]['acctid']=3; $bad[]=$copy;
         $copy=$state; $copy['enemies'][0]['creaturename']=str_repeat('x',256); $bad[]=$copy;
         $copy=$state; $copy['enemies']=[]; $bad[]=$copy;
+        foreach (['creaturehealth'=>11,'istarget'=>false,'dead'=>true,'bodyguardlevel'=>6,'creatureaiscript'=>'evil'] as $key=>$value) { $copy=$state; $copy['enemies'][0][$key]=$value; $bad[]=$copy; }
+        $copy=$state; $copy['enemies'][]=$copy['enemies'][0]; $bad[]=$copy;
         foreach ($bad as $invalid) {
             try { PvpState::read(serialize($invalid),1); self::fail('Invalid combat accepted.'); }
             catch (\DomainException) { self::assertTrue(true); }

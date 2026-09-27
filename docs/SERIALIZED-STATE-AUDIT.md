@@ -281,3 +281,8 @@ objects, serialization, identities, levels, HP/stats, targets, effects, repair,
 stale state, settlement and rollback. See [training evidence](TRAINING-MASTER-AUTHORITY-20260927.md).
 Training acceptance remains BLOCKED pending exact candidate CI; broader serialized
 state closure is not claimed.
+
+
+## PvP consumer schema candidate, 2026-09-27
+
+`PvpState` now allowlists the single-opponent root/options/enemy vocabulary, binds actor/victim/reservation/generation and immutable snapshots, bounds live HP to the recorded maximum, rejects terminal/wrong-family/duplicate/current-target corruption, and checks room-tier metadata. PvP also consumes the existing strict buff/companion validators and validates the historical bodyguard buff. `ScalarState::read()` is unchanged. Invalid/old state is preserved and rejected, requiring explicit repair rather than automatic reset. See [exact scope and HTTP evidence](PVP-COMBAT-AUTHORITY-20260927.md). Supported-matrix acceptance remains pending; unrelated serialized producers are not promoted.

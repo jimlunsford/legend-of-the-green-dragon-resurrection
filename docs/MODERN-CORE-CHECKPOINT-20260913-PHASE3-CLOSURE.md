@@ -1312,3 +1312,8 @@ NO. No main/history/workflow/dependency changes, VPS, deployment or release.
 Publish one coherent candidate, observe/dispatch exact-head CI, inspect within the
 bounded rule, and stop. Next task is exact-candidate acceptance or narrow correction,
 not another combat family.
+
+
+## Bounded broader PvP candidate, 2026-09-27
+
+Starting from `cf6a349a0e3b8f7260f5dce1f5f0bb04255af567`, the [PvP evidence record](PVP-COMBAT-AUTHORITY-20260927.md) adds broader eligibility/reservation/round/outcome/inn-bodyguard/replay/rollback/state coverage. This is one PvP-only candidate followed by one bounded CI cycle. Training Modern core `36317455788` was IN_PROGRESS at its one initial inspection; Training Baseline `36317455823` was SUCCESS. Pending prior CI did not block independent development. No separate inherited-candidate acceptance was performed. Core PvP remains BLOCKED pending exact supported-matrix CI, broader combat BLOCKED, Phase 3 INCOMPLETE, PR #1 OPEN/DRAFT/NOT MERGED, merge NO and public hosting NO. Accepted module status remains 23/24; inherited candidate module evidence remains 24/24, not newly accepted. No graveyard, new subsystem, Phase 4, deployment, release or VPS work occurred.

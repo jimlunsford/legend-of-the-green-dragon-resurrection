@@ -157,7 +157,9 @@ if ($op != "run" && $op != "fight" && $op != "newtarget") {
 $needtostopfighting = false;
 if ($op != "newtarget") {
 	// Run through as many rounds as needed.
+    $pvpRounds=0;
 	do {
+        if ($options['type']==='pvp' && ++$pvpRounds>1000) throw new DomainException('PvP automatic combat cannot finish safely.');
 		//we need to restore and calculate here to reflect changes that happen throughout the course of multiple rounds.
 		restore_buff_fields();
 		calculate_buff_fields();

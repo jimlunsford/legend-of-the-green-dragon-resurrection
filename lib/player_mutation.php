@@ -23,9 +23,10 @@ function resurrection_consume_action(string $scope, string $context): void {
  * Enclose trusted DML-only gameplay callbacks and their player writes in one transaction.
  * Lock/recheck the hydrated account before calling gameplay code, preventing stale balances.
  * No DDL, network effects, output flushing, saveuser(), or exit is allowed inside a callback.
+ * @param list<int> $participants Additional PvP account locks, acquired in ascending ID order.
  * Legacy output() may append to the page buffer; that buffer is restored on failure.
  */
-function resurrection_player_mutation(callable $action): mixed {
+function resurrection_player_mutation(callable $action, array $participants = []): mixed {
     global $session, $baseaccount, $dbinfo, $companions;
     if (empty($session['loggedin']) || empty($session['user']['acctid'])) {
         throw new DomainException('Authentication required.');
@@ -39,6 +40,12 @@ function resurrection_player_mutation(callable $action): mixed {
     $beforeBase = $baseaccount;
     $connection->beginTransaction();
     try {
+        $ids = array_unique([(int)$session['user']['acctid'], ...$participants]);
+        sort($ids, SORT_NUMERIC);
+        foreach ($ids as $id) {
+            if ($id < 1) throw new DomainException('Invalid participant.');
+            db_query('SELECT acctid FROM '.db_prefix('accounts').' WHERE acctid=? FOR UPDATE', true, [$id]);
+        }
         $rows = db_query('SELECT * FROM ' . db_prefix('accounts') . ' WHERE acctid=? FOR UPDATE', true,
             [(int)$session['user']['acctid']]);
         if (count($rows) !== 1) { throw new DomainException('Player no longer exists.'); }

@@ -3407,6 +3407,217 @@ function resurrectionspecialtyobserver_dohook($hook,$args) {
         self.query("INSERT INTO accounts_output(acctid,output) VALUES (?,'')",[ident])
         return ident
 
+    @contextmanager
+    def _pvp_fixture(self):
+        with self._specialty_accounting_fixture('pvp') as f:
+            player=f['player']; target=self._security_target('BroaderPvpVictim'); entry=f'pvp.php?act=attack&name={target}'
+            settings={'pvp':'1','pvpattgain':'10','pvpdeflose':'5','pvpdefgain':'10','pvpattlose':'15','maxattacks':'4','autofight':'1','autofightfull':'1'}
+            saved_settings=self.query('SELECT * FROM settings WHERE setting IN ('+','.join('?' for _ in settings)+')',list(settings))
+            for key,value in settings.items(): self.query('INSERT INTO settings(setting,value) VALUES (?,?) ON DUPLICATE KEY UPDATE value=VALUES(value)',[key,value])
+            def patch(who,**values):
+                self.query('UPDATE accounts SET '+','.join('`'+k+'`=?' for k in values)+' WHERE acctid=?',[*values.values(),who])
+            def prepare(inn=0,**values):
+                f['prepare']('TS',badguy='',level=5,gold=1000,gems=10,experience=5000,attack=40,defense=20,hitpoints=500,maxhitpoints=500,playerfights=10,location='Degolburg',age=20,pk=0)
+                if values: patch(player,**values)
+                patch(target,name='PvP Victim',level=5,gold=100,experience=1000,maxhitpoints=10000,hitpoints=250,attack=40,defense=20,alive=1,loggedin=0,locked=0,slaydragon=0,age=20,dragonkills=0,pk=0,pvpflag='2000-01-01 00:00:00',location='The Boar\'s Head Inn' if inn else 'Degolburg',boughtroomtoday=inn,race='Human',badguy='')
+                if inn:
+                    name=self.query("SELECT value FROM settings WHERE setting='innname'")
+                    patch(target,location=name[0]['value'] if name else "The Boar's Head Inn")
+            def snap():
+                rows=self.query('SELECT * FROM accounts WHERE acctid IN (?,?) ORDER BY acctid',[player,target])
+                for row in rows:
+                    for key in ['laston','gentime','gentimecount','gensize','allowednavs','restorepage','lastip','uniqueid','lastmotd','lastnews']: row.pop(key,None)
+                return rows+[self.query('SELECT * FROM bounty WHERE target=? ORDER BY bountyid',[target]),self.query('SELECT * FROM mail WHERE msgto=? ORDER BY messageid',[target]),self.query('SELECT COUNT(*) n FROM news'),self.query('SELECT COUNT(*) n FROM debuglog')]
+            def form(path='pvp.php?op=fight'):
+                status,body=f['request'](path); self.assertEqual(200,status,body[:3000]); return self._security_fields(body)
+            def reject(data,path='pvp.php?op=fight',status=409):
+                before=snap(); code,body=f['request'](path,data); self.assertEqual(status,code,body[:3500]); self.assertEqual(before,snap())
+            def enter(inn=0):
+                path=entry+('&inn=1' if inn else ''); before=snap(); data=form(path); self.assertEqual(before,snap())
+                status,body=f['request'](path,data); self.assertEqual(200,status,body[:3500]); self.assertNotEqual('',snap()[0]['badguy']); return body,data
+            try: yield f|dict(target=target,entry=entry,pvp_prepare=prepare,patch=patch,pvp_snapshot=snap,pvp_form=form,pvp_reject=reject,enter=enter)
+            finally:
+                self.query('DELETE FROM settings WHERE setting IN ('+','.join('?' for _ in settings)+')',list(settings))
+                for row in saved_settings: self.query('INSERT INTO settings(setting,value) VALUES (?,?)',[row['setting'],row['value']])
+                self.query('DELETE FROM bounty WHERE target=?',[target]); self.query('DELETE FROM mail WHERE msgto=?',[target])
+                self.query('DELETE FROM accounts_output WHERE acctid=?',[target]); self.query('DELETE FROM accounts WHERE acctid=?',[target])
+
+    def test_pvp_round_stale_reservation_and_victim_authority(self):
+        with self._pvp_fixture() as f:
+            f['pvp_prepare'](attack=100,defense=50,hitpoints=5000,maxhitpoints=5000); f['patch'](f['target'],attack=1000,defense=80); f['enter'](); before=f['pvp_snapshot'](); stale=f['pvp_form'](); data=f['pvp_form']()
+            code,body=f['request']('pvp.php?op=fight',data|{'victory':1,'payout':99999,'name':99999,'hitpoints':99999}); self.assertEqual(200,code,body[:3000])
+            after=f['pvp_snapshot'](); enemy=f['decode'](after[0]['badguy'])['enemies'][0]
+            self.assertEqual(('5000','10000','4823',9960),(before[0]['hitpoints'],f['decode'](before[0]['badguy'])['enemies'][0]['creaturehealth'],after[0]['hitpoints'],enemy['creaturehealth']))
+            self.assertEqual('9',after[0]['playerfights']); self.assertEqual(before[1],after[1]); self.assertEqual(before[2:],after[2:])
+            self.assertEqual(200,f['request']('pvp.php')[0]); self.assertEqual(after,f['pvp_snapshot']())
+            f['pvp_reject'](stale); f['pvp_reject'](data)
+            for key,value in [('location','Elsewhere'),('pk','1'),('hitpoints','249'),('alive','0'),('locked','1'),('pvpflag','2099-01-01 00:00:00'),('gold','90'),('experience','999'),('boughtroomtoday','1')]:
+                data=f['pvp_form'](); prior=f['pvp_snapshot']()[1][key]; f['patch'](f['target'],**{key:value}); f['pvp_reject'](data)
+                # Even a newly issued form cannot reinterpret the original encounter.
+                fresh=f['pvp_form'](); f['pvp_reject'](fresh)
+                f['patch'](f['target'],**{key:prior})
+            # Explicit repair restores continuation. Request-selected enemy/result cannot bypass it.
+            data=f['pvp_form'](); self.assertEqual(200,f['request']('pvp.php?op=fight',data)[0])
+            for path in ['pvp.php?op=fight&victory=1','pvp.php?op=fight&newtarget=2','pvp.php?op=fight&skill=godmode','pvp.php?op=result']:
+                before=f['pvp_snapshot'](); self.assertEqual(400,f['request'](path)[0]); self.assertEqual(before,f['pvp_snapshot']())
+
+    def test_pvp_eligibility_and_entry_rollback(self):
+        with self._pvp_fixture() as f:
+            for who,changes in [('player',dict(alive=0,hitpoints=0)),('player',dict(playerfights=0)),('player',dict(specialinc='fixture.php')),('player',dict(badguy='a:0:{}')),
+                ('target',dict(alive=0)),('target',dict(locked=1)),('target',dict(slaydragon=1)),('target',dict(age=0)),('target',dict(location='Elsewhere')),('target',dict(level=2)),('target',dict(level=8)),('target',dict(loggedin=1,laston='2099-01-01 00:00:00')),('target',dict(pvpflag='2099-01-01 00:00:00'))]:
+                f['pvp_prepare'](); f['patch'](f[who],**changes); data=f['pvp_form'](f['entry']); f['pvp_reject'](data,f['entry'])
+            # Listing range [-1,+2] and setup range +/-2 differ historically; do not rebalance.
+            for changes in [dict(level=3),dict(level=7),dict(age=0,dragonkills=100),dict(age=0,pk=1),dict(age=0,experience=1501),dict(loggedin=1,laston='2000-01-01 00:00:00')]:
+                f['pvp_prepare'](); f['patch'](f['target'],**changes); f['enter']()
+            f['pvp_prepare'](age=0,experience=0); data=f['pvp_form'](f['entry']); before=f['pvp_snapshot']()
+            self.query("ALTER TABLE accounts ADD CONSTRAINT fixture_pvp_entry CHECK (login <> 'WebPlayer' OR playerfights=10)")
+            try: f['pvp_reject'](data,f['entry'],500)
+            finally: self.query('ALTER TABLE accounts DROP CONSTRAINT fixture_pvp_entry')
+            f['pvp_reject'](data,f['entry']); f['enter'](); self.assertEqual('1',f['pvp_snapshot']()[0]['pk']); self.assertEqual('9',f['pvp_snapshot']()[0]['playerfights'])
+            # Another attack cannot replace the active encounter or steal the reserved victim.
+            f['pvp_reject'](f['pvp_form'](f['entry']),f['entry'])
+
+    def test_pvp_victory_zero_negative_rewards_replay_and_rollback(self):
+        with self._pvp_fixture() as f, self._specialty_terminal_capture() as terminal:
+            for hp in [10,9]:
+                f['pvp_prepare'](attack=0,defense=1000); f['enter']()
+                state=f['decode'](f['pvp_snapshot']()[0]['badguy']); state['enemies'][0]['creaturehealth']=hp
+                buff={'proof':dict(name='Proof',schema='pvp',effectmsg='',effectnodmgmsg='',effectfailmsg='',rounds=3,allowinpvp=1,minioncount=1,minbadguydamage=10,maxbadguydamage=10)}
+                f['patch'](f['player'],badguy=f['encode'](state),bufflist=f['encode'](buff)); self.query('DELETE FROM fixture_specialty_terminal')
+                data=f['pvp_form'](); stale=f['pvp_form'](); before=f['pvp_snapshot']()
+                self.query("ALTER TABLE accounts ADD CONSTRAINT fixture_pvp_end CHECK (login <> 'WebPlayer' OR badguy <> '')")
+                try: f['pvp_reject'](data,status=500); self.assertEqual([],terminal())
+                finally: self.query('ALTER TABLE accounts DROP CONSTRAINT fixture_pvp_end')
+                f['pvp_reject'](data); data=f['pvp_form'](); code,body=f['request']('pvp.php?op=fight',data|{'gold':999999,'experience':999999,'winner':999}); self.assertEqual(200,code,body[:3000])
+                after=f['pvp_snapshot'](); self.assertEqual(hp-10,terminal()[0]['enemy']['creaturehealth']); self.assertEqual('battle-victory',terminal()[0]['hook'])
+                self.assertEqual(['1','500','1230','5100','9','', 'Degolburg'],[after[0][k] for k in ['alive','hitpoints','gold','experience','playerfights','badguy','location']])
+                self.assertEqual(['0','250','0','950',before[1]['pvpflag'],'Degolburg'],[after[1][k] for k in ['alive','hitpoints','gold','experience','pvpflag','location']])
+                self.assertEqual(str(f['target']),after[3][-1]['msgto']); self.assertEqual('0',after[3][-1]['msgfrom']); self.assertEqual(str(f['player']),after[3][-1]['originator']); self.assertIn(before[0]['name'],after[3][-1]['body'])
+                news=self.query('SELECT newstext,arguments,accountid FROM news ORDER BY newsid DESC LIMIT 1')[0]; self.assertEqual([before[0]['name'],before[1]['name']],f['decode'](news['arguments'])[:2]); self.assertEqual(str(f['player']),news['accountid'])
+                self.assertEqual(len(before[3])+1,len(after[3])); self.assertEqual(int(before[4][0]['n'])+1,int(after[4][0]['n'])); self.assertEqual(int(before[5][0]['n'])+2,int(after[5][0]['n']))
+                f['pvp_reject'](data); f['pvp_reject'](stale); f['pvp_reject'](data,f['entry'])
+                self.assertEqual(409,f['request']('pvp.php?op=fight')[0]); self.assertEqual(after,f['pvp_snapshot']())
+
+    def test_pvp_defeat_inn_bodyguard_settlement_and_rollback(self):
+        with self._pvp_fixture() as f, self._specialty_terminal_capture() as terminal:
+            for inn in [0,1,2,3,4,5]:
+                f['pvp_prepare'](inn=inn,attack=0,defense=1000); f['enter'](inn); row=f['pvp_snapshot']()[0]
+                buffs=f['decode'](row['bufflist']) or {}
+                if inn:
+                    self.assertEqual([1.05,1.1,1.2,1.3,1.4][inn-1],buffs['bodyguard']['badguyatkmod']); self.assertEqual([.95,.9,.8,.7,.6][inn-1],buffs['bodyguard']['defmod'])
+                    self.assertEqual(-1,buffs['bodyguard']['rounds']); self.assertEqual(1,len(f['decode'](row['badguy'])['enemies']))
+                # Attacker-side fixed adverse effect reaches actual engine defeat.
+                buffs['adverse']=dict(name='Adverse',schema='pvp',effectmsg='',effectnodmgmsg='',effectfailmsg='',rounds=3,allowinpvp=1,minioncount=1,mingoodguydamage=10,maxgoodguydamage=10)
+                f['patch'](f['player'],hitpoints=10,bufflist=f['encode'](buffs)); self.query('DELETE FROM fixture_specialty_terminal')
+                before=f['pvp_snapshot'](); data=f['pvp_form'](); stale=f['pvp_form']()
+                self.query("ALTER TABLE accounts ADD CONSTRAINT fixture_pvp_loss CHECK (login <> 'WebPlayer' OR alive=1)")
+                try: f['pvp_reject'](data,status=500); self.assertEqual([],terminal())
+                finally: self.query('ALTER TABLE accounts DROP CONSTRAINT fixture_pvp_loss')
+                f['pvp_reject'](data); data=f['pvp_form'](); code,body=f['request']('pvp.php?op=fight',data); self.assertEqual(200,code,body[:3000]); after=f['pvp_snapshot']()
+                self.assertEqual(['0','0','0','4250','9','','Degolburg'],[after[0][k] for k in ['alive','hitpoints','gold','experience','playerfights','badguy','location']])
+                self.assertEqual(['1','250','445','1500',before[1]['pvpflag']],[after[1][k] for k in ['alive','hitpoints','gold','experience','pvpflag']])
+                self.assertNotIn('bodyguard',f['decode'](after[0]['bufflist'])); self.assertEqual('battle-defeat',terminal()[0]['hook']); self.assertIn('You have been slain',body)
+                self.assertEqual(str(f['target']),after[3][-1]['msgto']); self.assertEqual('0',after[3][-1]['msgfrom']); self.assertEqual(str(f['player']),after[3][-1]['originator']); self.assertIn(before[0]['name'],after[3][-1]['body'])
+                news=self.query('SELECT newstext,arguments,accountid FROM news ORDER BY newsid DESC LIMIT 1')[0]; self.assertEqual([before[0]['name'],before[1]['name']],f['decode'](news['arguments'])[:2]); self.assertEqual(str(f['player']),news['accountid'])
+                self.assertEqual(len(before[3])+1,len(after[3])); self.assertEqual(int(before[4][0]['n'])+1,int(after[4][0]['n']))
+                f['pvp_reject'](data); f['pvp_reject'](stale); f['pvp_reject'](data,f['entry'])
+
+            # Actual victim retaliation, with Dag enabled, is independently terminal.
+            self.query("UPDATE modules SET active=1 WHERE modulename='dag'")
+            self.query("INSERT INTO bounty(amount,target,setter,setdate,status) VALUES (250,?,0,'2020-01-01 00:00:00',0)",[f['target']])
+            f['pvp_prepare'](attack=100,defense=50,hitpoints=5000,maxhitpoints=5000); f['patch'](f['target'],attack=1000,defense=80); f['enter'](); f['patch'](f['player'],hitpoints=1)
+            before=f['pvp_snapshot'](); data=f['pvp_form'](); code,body=f['request']('pvp.php?op=fight',data); self.assertEqual(200,code,body[:3000]); after=f['pvp_snapshot']()
+            self.assertEqual(['0','0','0','4250','9',''],[after[0][k] for k in ['alive','hitpoints','gold','experience','playerfights','badguy']]); self.assertEqual(before[2],after[2]); self.assertEqual('445',after[1]['gold']); self.assertIn('177',body); f['pvp_reject'](data)
+
+    def test_pvp_malformed_state_preserved_and_repaired(self):
+        with self._pvp_fixture() as f:
+            f['pvp_prepare'](); f['enter'](); good=f['pvp_snapshot']()[0]['badguy']; base=f['decode'](good)
+            invalid=['broken','O:8:"stdClass":0:{}','s:4:"oops";','a:0:{}']
+            for key,value in [('owner',999),('target',999),('type','forest'),('reservation','bad'),('encounter','bad'),('victimhash','bad'),('maxattacks',0),('didsurprise',[]),('experience',[999])]:
+                state=f['decode'](good); state['options'][key]=value; invalid.append(f['encode'](state))
+            for key,value in [('acctid',999),('creaturehealth',0),('creaturehealth',-1),('creaturehealth','1e3'),('creaturehealth',[]),('creatureattack',-1),('creaturedefense','bad'),('creaturegold',99999),('dead',True),('istarget',False),('diddamage',[]),('bodyguardlevel',5),('creatureaiscript','return true;')]:
+                state=f['decode'](good); state['enemies'][0][key]=value; invalid.append(f['encode'](state))
+            state=f['decode'](good); state['enemies'].append(state['enemies'][0]); invalid.append(f['encode'](state))
+            for encoded in invalid:
+                data=f['pvp_form'](); f['patch'](f['player'],badguy=encoded); f['pvp_reject'](data); f['patch'](f['player'],badguy=good)
+            for column,encoded,status in [('bufflist','s:4:"oops";',409),('bufflist','O:8:"stdClass":0:{}',409),('bufflist',f['encode']({'bad':{'rounds':2,'atkmod':[]}}),409),('companions','s:4:"oops";',409),('companions',f['encode']({'bad':{'hitpoints':1}}),409)]:
+                data=f['pvp_form'](); f['patch'](f['player'],**{column:encoded}); before=f['pvp_snapshot']()
+                code,body=f['request']('pvp.php?op=fight',data); self.assertEqual(status,code,body[:2000]); self.assertEqual(before,f['pvp_snapshot']()); self.assertEqual(409,f['request']('pvp.php?op=fight')[0]); self.assertEqual(before,f['pvp_snapshot']()); f['patch'](f['player'],**{column:'a:0:{}'})
+            self.assertEqual(200,f['request']('pvp.php?op=fight',f['pvp_form']())[0])
+
+    def test_pvp_buffs_companions_run_and_bodyguard_authority(self):
+        with self._pvp_fixture() as f:
+            f['pvp_prepare'](attack=0,defense=1000); f['enter']()
+            skeleton=dict(name='`4Skeleton Warrior',hitpoints=20,maxhitpoints=43,attack=26.5,defense=14.5,dyingtext='`$Your skeleton warrior crumbles to dust.`n',abilities=dict(fight=True),ignorelimit=True)
+            buffs={'suspended':dict(name='Suspended',schema='fixture',rounds=4,atkmod=99), 'allowed':dict(name='Allowed',schema='fixture',rounds=4,allowinpvp=1,minioncount=1,minbadguydamage=10,maxbadguydamage=10,effectmsg='',effectnodmgmsg='',effectfailmsg='')}
+            f['patch'](f['player'],companions=f['encode']({'skeleton_warrior':skeleton}),bufflist=f['encode'](buffs))
+            before=f['pvp_snapshot'](); data=f['pvp_form']('pvp.php?op=run'); code,body=f['request']('pvp.php?op=run',data); self.assertEqual(200,code,body[:3000]); after=f['pvp_snapshot']()[0]
+            self.assertIn('Your pride prevents you from running',body); self.assertEqual('9',after['playerfights']); self.assertEqual(before[1],f['pvp_snapshot']()[1])
+            self.assertEqual(9959,f['decode'](after['badguy'])['enemies'][0]['creaturehealth'])
+            self.assertEqual(skeleton|dict(suspended=True,used=False),f['decode'](after['companions'])['skeleton_warrior']); b=f['decode'](after['bufflist']); self.assertEqual(4,b['suspended']['rounds']); self.assertEqual(3,b['allowed']['rounds']); f['pvp_reject'](data,'pvp.php?op=run')
+            for level in [1,5]:
+                f['pvp_prepare'](inn=level); f['enter'](level); before=f['pvp_snapshot'](); data=f['pvp_form'](); code,body=f['request']('pvp.php?op=fight&inn=0',data); self.assertEqual(400,code); self.assertEqual(before,f['pvp_snapshot']())
+                data=f['pvp_form'](); code,body=f['request']('pvp.php?op=fight',data|dict(bodyguardlevel=0,bodyguardhealth=0,victory=1)); self.assertEqual(200,code,body[:3000]); after=f['pvp_snapshot']()[0]
+                self.assertEqual(('500',9981) if level==1 else ('497',9983),(after['hitpoints'],f['decode'](after['badguy'])['enemies'][0]['creaturehealth']))
+                self.assertEqual(level,int(f['decode'](after['badguy'])['enemies'][0]['bodyguardlevel'])); self.assertIn('bodyguard',f['decode'](after['bufflist']))
+                data=f['pvp_form'](); b=f['decode'](after['bufflist']); b['bodyguard']['badguyatkmod']=999; f['patch'](f['player'],bufflist=f['encode'](b)); f['pvp_reject'](data); f['pvp_reject'](f['pvp_form']())
+
+    def test_pvp_cross_player_reservation_and_tokens(self):
+        with self._pvp_fixture() as f:
+            other=self._security_target('OtherPvpAttacker')
+            try:
+                f['pvp_prepare'](); f['patch'](other,level=5,alive=1,hitpoints=500,attack=40,defense=20,playerfights=10,badguy='',specialinc='',location='Degolburg',bufflist='a:0:{}',companions='a:0:{}')
+                othercall=self._security_client('OtherPvpAttacker','Synthetic administrator password')
+                def request(path,data=None): self._security_allow(other,path); return othercall(path,data,fixture='specialty-accounting')
+                first=f['pvp_form'](f['entry']); _,body=request(f['entry']); second=self._security_fields(body)
+                before=f['pvp_snapshot'](); self.assertEqual(403,request(f['entry'],first)[0]); self.assertEqual(before,f['pvp_snapshot']())
+                f['enter'](); before=f['pvp_snapshot'](); self.assertEqual(409,request(f['entry'],second)[0]); self.assertEqual(before,f['pvp_snapshot']())
+                _,body=request(f['entry']); self.assertEqual(409,request(f['entry'],self._security_fields(body))[0]); self.assertEqual(before,f['pvp_snapshot']())
+                # Copying an encounter to another account fails the persisted owner binding.
+                data=f['pvp_form'](); f['patch'](other,badguy=before[0]['badguy']); self.assertEqual(409,request('pvp.php?op=fight',data)[0]); self.assertEqual(before,f['pvp_snapshot']())
+            finally:
+                self.query('DELETE FROM accounts_output WHERE acctid=?',[other]); self.query('DELETE FROM accounts WHERE acctid=?',[other])
+
+    def test_pvp_reward_rounding_level15_and_inn_victory(self):
+        with self._pvp_fixture() as f, self._specialty_terminal_capture() as terminal:
+            for level,targetlevel,inn,exp,gold,expectedgold,expectedexp,lost in [(5,3,0,1005,1,0,81,50),(5,7,0,1005,100,322,121,50),(15,15,0,1005,100,0,0,50),(5,5,1,1005,100,230,101,50)]:
+                f['pvp_prepare'](inn=inn,level=level,attack=0,defense=1000); f['patch'](f['target'],level=targetlevel,experience=exp,gold=gold); f['enter'](inn)
+                row=f['pvp_snapshot']()[0]; state=f['decode'](row['badguy']); state['enemies'][0]['creaturehealth']=10
+                buffs=f['decode'](row['bufflist']) or {}; buffs['proof']=dict(name='Proof',schema='pvp',effectmsg='',effectnodmgmsg='',effectfailmsg='',rounds=3,allowinpvp=1,minioncount=1,minbadguydamage=10,maxbadguydamage=10)
+                f['patch'](f['player'],badguy=f['encode'](state),bufflist=f['encode'](buffs)); before=f['pvp_snapshot'](); data=f['pvp_form'](); code,body=f['request']('pvp.php?op=fight',data); self.assertEqual(200,code,body[:3000]); after=f['pvp_snapshot']()
+                self.assertEqual(str(1000+expectedgold),after[0]['gold']); self.assertEqual(str(5000+expectedexp),after[0]['experience']); self.assertEqual(str(exp-lost),after[1]['experience']); self.assertEqual('0',after[1]['gold']); self.assertNotIn('bodyguard',f['decode'](after[0]['bufflist'])); f['pvp_reject'](data)
+            # Historical level-15 defender receives zero experience but still gold:
+            # $wonamount typo never zeroed $winamount. Preserve actual shipped behavior.
+            f['pvp_prepare'](level=15,attack=0,defense=1000); f['patch'](f['target'],level=15); f['enter']()
+            buffs={'adverse':dict(name='Adverse',schema='pvp',effectmsg='',effectnodmgmsg='',effectfailmsg='',rounds=3,allowinpvp=1,minioncount=1,mingoodguydamage=10,maxgoodguydamage=10)}
+            f['patch'](f['player'],hitpoints=10,bufflist=f['encode'](buffs)); code,body=f['request']('pvp.php?op=fight',f['pvp_form']()); self.assertEqual(200,code,body[:3000]); self.assertEqual('1136',f['pvp_snapshot']()[1]['gold']); self.assertEqual('1000',f['pvp_snapshot']()[1]['experience'])
+
+    def test_pvp_autorounds_overflow_and_permitted_companion(self):
+        with self._pvp_fixture() as f:
+            proof=dict(name='Proof',schema='pvp',effectmsg='',effectnodmgmsg='',effectfailmsg='',rounds=30,allowinpvp=1,minioncount=1,minbadguydamage=10,maxbadguydamage=10)
+            f['pvp_prepare'](attack=0,defense=0); f['patch'](f['target'],attack=0,defense=0); f['enter'](); f['pvp_reject'](f['pvp_form']())
+            f['pvp_prepare'](attack=1,defense=0,hitpoints=1000000,maxhitpoints=1000000); f['patch'](f['target'],attack=1,defense=0,maxhitpoints=1000000); f['enter'](); f['pvp_reject'](f['pvp_form']('pvp.php?op=fight&auto=full'),'pvp.php?op=fight&auto=full')
+            for rounds,count in [('five',5),('ten',10),('full',1)]:
+                f['pvp_prepare'](attack=0,defense=0,hitpoints=50000,maxhitpoints=50000); f['patch'](f['target'],attack=1000,defense=80); f['enter']()
+                if rounds=='full':
+                    state=f['decode'](f['pvp_snapshot']()[0]['badguy']); state['enemies'][0]['creaturehealth']=10; f['patch'](f['player'],badguy=f['encode'](state))
+                f['patch'](f['player'],bufflist=f['encode']({'proof':proof})); url='pvp.php?op=fight&auto='+rounds; data=f['pvp_form'](url)
+                code,body=f['request'](url,data); self.assertEqual(200,code,body[:3000]); row=f['pvp_snapshot']()[0]
+                self.assertEqual('9',row['playerfights'])
+                if rounds=='full': self.assertEqual('',row['badguy']); self.assertEqual('0',f['pvp_snapshot']()[1]['alive'])
+                else: self.assertEqual(10000-count*10,f['decode'](row['badguy'])['enemies'][0]['creaturehealth']); self.assertEqual(30-count,f['decode'](row['bufflist'])['proof']['rounds'])
+                f['pvp_reject'](data,url)
+            for key in ['gold','experience']:
+                f['pvp_prepare'](attack=0,defense=0,hitpoints=50000,maxhitpoints=50000); f['patch'](f['target'],attack=1000,defense=80); f['enter']()
+                state=f['decode'](f['pvp_snapshot']()[0]['badguy']); state['enemies'][0]['creaturehealth']=10
+                f['patch'](f['player'],badguy=f['encode'](state),bufflist=f['encode']({'proof':proof}),**{key:2147483647})
+                f['pvp_reject'](f['pvp_form']())
+            f['pvp_prepare'](attack=100,defense=50,hitpoints=5000,maxhitpoints=5000); f['patch'](f['target'],attack=120,defense=80); f['enter']()
+            companion=dict(name='PvP Helper',hitpoints=1000,maxhitpoints=1000,attack=100,defense=50,allowinpvp=True,abilities=dict(fight=True),dyingtext='Helper falls',schema='fixture')
+            f['patch'](f['player'],companions=f['encode']({'helper':companion})); before=f['pvp_snapshot'](); code,body=f['request']('pvp.php?op=fight',f['pvp_form']()); self.assertEqual(200,code,body[:3000]); after=f['pvp_snapshot']()[0]
+            self.assertEqual(('5000',9946,923),(after['hitpoints'],f['decode'](after['badguy'])['enemies'][0]['creaturehealth'],f['decode'](after['companions'])['helper']['hitpoints']))
+            text=re.sub('<[^>]+>','',body); self.assertLess(text.index('You hit PvP Victim'),text.index('PvP Helper hits PvP Victim')); self.assertLess(text.index('tries to hit you'),text.index('PvP Helper hits PvP Victim'))
+
     def test_dag_funded_pvp_and_failure_rollback(self):
         player=self.query('SELECT acctid FROM accounts WHERE login=?',['WebPlayer'])[0]['acctid']
         original=self.query('SELECT * FROM accounts WHERE acctid=?',[player])[0]

@@ -32,7 +32,9 @@ function rolldamage(){
 		debug("Adjusted self defense: $adjustedselfdefense");
 		*/
 
+        $pvpAttempts=0;
 		while(!isset($creaturedmg) || !isset($selfdmg) || $creaturedmg==0 && $selfdmg==0){
+            if ($options['type']==='pvp' && ++$pvpAttempts>1024) throw new DomainException('PvP damage cannot progress.');
 			$atk = $session['user']['attack']*$atkmod;
 			if (e_rand(1,20)==1 && $options['type'] != "pvp") $atk*=3;
 			/*

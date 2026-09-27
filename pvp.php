@@ -2,7 +2,9 @@
 // translator ready
 // addnews ready
 // mail ready
-require_once("common.php");
+try { require_once 'common.php'; }
+catch (DomainException) { http_response_code(409); exit('Invalid stored PvP state. Stored state was preserved.'); }
+catch (Throwable) { http_response_code(500); exit('PvP could not be loaded. Stored state was preserved.'); }
 require_once("lib/fightnav.php");
 require_once("lib/pvpwarning.php");
 require_once("lib/pvplist.php");
@@ -17,20 +19,23 @@ $iname = getsetting("innname", LOCATION_INN);
 $battle = false;
 
 page_header("PvP Combat!");
-$op = (string)httpget('op');
-$act = (string)httpget('act');
+$op = '';
+$act = '';
 
 require_once 'lib/player_mutation.php';
-require_once 'src/Security/PvpState.php';
+require_once 'lib/pvp_combat.php';
+try { resurrection_pvp_participants(false); }
+catch (DomainException) { http_response_code(409); exit('Invalid stored PvP participants. Stored state was preserved.'); }
 try {
-    \Resurrection\Http\Input::choice($_GET,'act',['','attack'],'');
-    \Resurrection\Http\Input::choice($_GET,'op',['','fight','run'],'');
+    $act = \Resurrection\Http\Input::choice($_GET,'act',['','attack'],'');
+    $op = \Resurrection\Http\Input::choice($_GET,'op',['','fight','run'],'');
     \Resurrection\Http\Input::choice($_GET,'inn',['','1'],'');
     $automatic = \Resurrection\Http\Input::choice($_GET,'auto',['','five','ten','full'],'');
     if ($automatic !== '' && (!getsetting('autofight',0) || ($automatic === 'full' && !getsetting('autofightfull',0)))) throw new InvalidArgumentException();
     foreach (['skill','l','newtarget','type'] as $key) {
         if (\Resurrection\Http\Input::string($_GET,$key) !== '') throw new InvalidArgumentException();
     }
+    if (array_diff(array_keys($_GET),['act','op','inn','auto','name','c']) !== []) throw new InvalidArgumentException();
     $targetId = $act === 'attack' ? \Resurrection\Http\Input::integer($_GET,'name',0,1) : 0;
     if ($act === 'attack' && ($targetId < 1 || $targetId > 2147483647 || $op !== '')) throw new InvalidArgumentException();
 } catch (InvalidArgumentException $error) { http_response_code(400); exit('Invalid PvP action.'); }
@@ -39,7 +44,7 @@ if ($op === '' && $act === '') {
     if ($session['user']['badguy'] !== '') {
         try { \Resurrection\Security\PvpState::read($session['user']['badguy'],(int)$session['user']['acctid']); }
         catch (DomainException $error) { http_response_code(409); exit('A different or invalid combat is pending.'); }
-        resurrection_pvp_form('pvp.php?op=fight','pvp-round',hash('sha256',$session['user']['badguy']),'Fight');
+        resurrection_pvp_form('pvp.php?op=fight','pvp-round',resurrection_pvp_context(),'Fight');
     } else {
         checkday(); pvpwarning();
         $args = modulehook('pvpstart',['atkmsg'=>'`4You head out to the fields. You have `^%s`4 PvP fights left today.`n','schemas'=>['atkmsg'=>'pvp']]);
@@ -50,7 +55,8 @@ if ($op === '' && $act === '') {
 }
 $url = 'pvp.php?' . http_build_query($_GET);
 $scope = $act === 'attack' ? 'pvp-enter' : 'pvp-round';
-$context = $act === 'attack' ? $targetId.':'.httpget('inn') : hash('sha256',$session['user']['badguy']);
+try { $context = resurrection_pvp_context($targetId); }
+catch (DomainException) { http_response_code(409); exit('Invalid stored PvP state. Stored state was preserved.'); }
 if (($_SERVER['REQUEST_METHOD'] ?? '') === 'GET') {
     if ($act !== 'attack') {
         try { \Resurrection\Security\PvpState::read($session['user']['badguy'],(int)$session['user']['acctid']); }
@@ -62,27 +68,32 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'GET') {
 resurrection_consume_action($scope,$context);
 $GLOBALS['pvp_mail_notifications'] = [];
 try {
-    resurrection_player_mutation(function () use ($act,$targetId,$iname,$op) {
+    resurrection_player_mutation(function () use ($act,$targetId,$iname,$op,$context) {
         global $session,$badguy,$options,$battle,$victory,$defeat,$attackstack;
+        if (resurrection_pvp_context($targetId) !== $context) throw new DomainException('Stale PvP action.');
+        resurrection_pvp_participants();
         if (empty($session['user']['alive']) || $session['user']['hitpoints'] <= 0) throw new DomainException('Invalid PvP actor.');
         if ($act === 'attack') {
             if ($session['user']['badguy'] !== '') throw new DomainException('Combat already pending.');
             $badguy = setup_target($targetId);
             if ($badguy === false) throw new DomainException('Target unavailable.');
+            $badguy['pvpmaxhp']=$badguy['creaturehealth'];
             if ($badguy['location'] === $iname) $badguy['bodyguardlevel'] = $badguy['boughtroomtoday'];
             $options = ['type'=>'pvp','owner'=>(int)$session['user']['acctid'],'target'=>$targetId,
-                'encounter'=>bin2hex(random_bytes(16)),'reservation'=>$badguy['pvpflag']];
+                'encounter'=>bin2hex(random_bytes(16)),'reservation'=>$badguy['pvpflag'],
+                'victimhash'=>resurrection_pvp_account_hash($targetId),
+                'enemyhash'=>\Resurrection\Security\PvpState::enemyHash($badguy)];
             $session['user']['badguy'] = createstring(['enemies'=>[$badguy],'options'=>$options]);
             $session['user']['playerfights']--;
         } else {
             $attackstack = \Resurrection\Security\PvpState::read($session['user']['badguy'],(int)$session['user']['acctid']);
             $options = $attackstack['options'];
-            $rows = db_query('SELECT alive,pvpflag FROM '.db_prefix('accounts').' WHERE acctid=? FOR UPDATE',true,[$options['target']]);
-            if (count($rows) !== 1 || !$rows[0]['alive'] || $rows[0]['pvpflag'] !== $options['reservation']) throw new DomainException('PvP target changed.');
+            if (resurrection_pvp_account_hash($options['target']) !== $options['victimhash']) throw new DomainException('PvP target changed.');
         }
         // Inn/bodyguard behavior comes from the recorded opponent, never a round parameter.
         $recorded = \Resurrection\Security\PvpState::read($session['user']['badguy'],(int)$session['user']['acctid']);
         $_GET['inn'] = $recorded['enemies'][0]['location'] === $iname ? '1' : '';
+        resurrection_pvp_bodyguard($recorded);
         $battle = true;
         if ($op=="run"){
           output("Your pride prevents you from running");
@@ -145,8 +156,10 @@ try {
         		}
             }
             if ($victory || $defeat) $session['user']['badguy'] = '';
+            resurrection_pvp_balances((int)$options['target']);
+            if (!$victory && !$defeat) \Resurrection\Security\PvpState::read($session['user']['badguy'],(int)$session['user']['acctid']);
         }
-    });
+    }, [$act === 'attack' ? $targetId : \Resurrection\Security\PvpState::read($session['user']['badguy'],(int)$session['user']['acctid'])['options']['target']]);
 } catch (DomainException $error) {
     unset($GLOBALS['pvp_mail_notifications']);
     http_response_code(409); exit('PvP action no longer available. Reload before retrying.');
@@ -163,7 +176,7 @@ foreach ($notifications as $notification) {
 }
 if (!$victory && !$defeat) {
     $extra = httpget('inn') === '1' ? '&inn=1' : '';
-    $context = hash('sha256',$session['user']['badguy']);
+    $context = resurrection_pvp_context();
     resurrection_pvp_form('pvp.php?op=fight'.$extra,'pvp-round',$context,'Fight');
     if (getsetting('autofight',0)) {
         foreach (['five'=>'For 5 Rounds','ten'=>'For 10 Rounds'] as $auto=>$label) {
