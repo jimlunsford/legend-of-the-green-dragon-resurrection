@@ -3,6 +3,7 @@ parameters:
     paths:
         - src
         - lib/accounts.php
+        - lib/dragon_points.php
         - lib/player_mutation.php
         - lib/race_onboarding.php
         - lib/specialty_onboarding.php

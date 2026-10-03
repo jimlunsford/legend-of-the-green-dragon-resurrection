@@ -451,3 +451,13 @@ consuming a gravefight or creating a normal enemy. Victory, defeat and flee
 settlement are authoritative and replay/rollback protected. Exact supported CI
 is still required for acceptance; noncombat Graveyard and other families are
 excluded. Phase 3 incomplete, merge NO, public hosting NO.
+
+## New Day Dragon Point allocation candidate, 2026-10-03
+
+[Focused authority and proof](DRAGON-POINT-AUTHORITY-20261003.md). Legacy GET
+`dk`/`pdk` spending is closed. Single and exact-total bulk allocations require
+POST/CSRF/state-bound one-use intent and locked account mutation, with strict
+buyability, permanent-stat bounds, raw duplicate-field rejection, stale/replay
+protection and rollback. Completion hands off to existing race/specialty/New Day
+routes. Allocation acceptance awaits exact-candidate supported CI. Broader New
+Day is not certified; Phase 3 incomplete, merge NO, public hosting NO.

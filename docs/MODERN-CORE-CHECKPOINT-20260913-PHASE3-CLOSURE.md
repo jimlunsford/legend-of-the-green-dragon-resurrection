@@ -1340,3 +1340,20 @@ Broader combat BLOCKED, Phase 3 INCOMPLETE, PR #1 OPEN/DRAFT/NOT READY/NOT MERGE
 merge NO, public hosting NO. Publish one coherent candidate, perform the bounded
 CI observation and stop. Next task is exact Graveyard candidate acceptance or
 specific failure correction, not another family.
+
+## Bounded New Day Dragon Point candidate, 2026-10-03
+
+Starting head `84102268ac4c8ac0178c9a816e1f1bcf617d7398`; main unchanged at
+`999cec6f9c655a840320d982d673bb863c68c2b2`. Prior Graveyard Modern core
+36322077603 was CANCELLED and Baseline 36322077539 SUCCESS at the single initial
+inspection. PvP 36319758950 and 36319758964 were both SUCCESS at published head
+`67f981ecdd7960acc77233814536a7c76d182004`.
+
+[Dragon Point evidence](DRAGON-POINT-AUTHORITY-20261003.md) scopes the protected
+single/bulk allocation boundary, exact permanent effects, persisted-state/input
+validation, late rollback, lock recheck, replay and onboarding handoffs. No
+unrelated daily reset or resurrection work. Acceptance remains BLOCKED pending
+exact supported-matrix CI; full New Day is not PASS. Existing module registry
+and earlier checkpoints are not retrospectively rewritten. PR #1 OPEN/DRAFT/
+NOT READY/NOT MERGED; Phase 3 INCOMPLETE; merge NO; public hosting NO. Publish
+one candidate, inspect its normal CI under the bounded rule, then stop.

@@ -9,6 +9,9 @@ require_once("lib/http.php");
 require_once("lib/sanitize.php");
 require_once("lib/buffs.php");
 
+require_once('lib/dragon_points.php');
+resurrection_dragon_point_boundary();
+
 require_once('lib/race_onboarding.php');
 require_once('lib/specialty_onboarding.php');
 if (isset($_GET['setspecialty'])) { http_response_code(403); exit('Specialty selection requires a form.'); }
@@ -39,82 +42,8 @@ $resline = (httpget('resurrection')=="true") ? "&resurrection=true" : "" ;
 /******************
  ** End Settings **
  ******************/
-$dk = httpget('dk');
-if ((count($session['user']['dragonpoints']) <
-			$session['user']['dragonkills']) && $dk!="") {
-	array_push($session['user']['dragonpoints'],$dk);
-	switch($dk){
-	case "hp":
-		$session['user']['maxhitpoints']+=5;
-		break;
-	case "at":
-		$session['user']['attack']++;
-		break;
-	case "de":
-		$session['user']['defense']++;
-		break;
-	}
-}
-
-$labels = array(
-		"hp"=>"Max Hitpoints + 5",
-		"ff"=>"Forest Fights + 1",
-		"at"=>"Attack + 1",
-		"de"=>"Defense + 1",
-		"unknown"=>"Unknown Spends (contact an admin to investigate!)",
-);
-$canbuy = array(
-		"hp"=>1,
-		"ff"=>1,
-		"at"=>1,
-		"de"=>1,
-		"unknown"=>0,
-);
-$retargs = modulehook("dkpointlabels", array('desc'=>$labels, 'buy'=>$canbuy));
-$labels = $retargs['desc'];
-$canbuy = $retargs['buy'];
-$pdks = array();
-reset($labels);
-foreach($labels as $type=>$label) {
-	$pdks[$type] = (int)httppost($type);
-}
-
-$pdk=httpget("pdk");
-
-$dp = count($session['user']['dragonpoints']);
-$dkills = $session['user']['dragonkills'];
-
-if ($pdk==1){
-	reset($labels);
-	$pdktotal = 0;
-	$pdkneg = false;
-	modulehook("pdkpointrecalc");
-	foreach($labels as $type=>$label) {
-		$pdktotal += (int)$pdks[$type];
-		if((int)$pdks[$type] < 0) $pdkneg = true;
-	}
-	if ($pdktotal == $dkills-$dp && !$pdkneg) {
-		$dp += $pdktotal;
-		$session['user']['maxhitpoints'] += (5 * $pdks["hp"]);
-		$session['user']['attack'] += $pdks["at"];
-		$session['user']['defense'] += $pdks["de"];
-		reset($labels);
-		foreach($labels as $type=>$label) {
-			$count = 0;
-			if (isset($pdks[$type])) $count = (int)$pdks[$type];
-			while($count) {
-				$count--;
-				array_push($session['user']['dragonpoints'],$type);
-			}
-		}
-	}else{
-		output("`\$Error: Please spend the correct total amount of dragon points.`n`n");
-	}
-}
-
-if ($dp < $dkills) {
-	require_once("lib/newday/dragonpointspend.php");
-} elseif (!$session['user']['race'] || $session['user']['race']==RACE_UNKNOWN){
+// Allocation is validated and handled before onboarding and New Day hooks.
+if (!$session['user']['race'] || $session['user']['race']==RACE_UNKNOWN){
 	require_once("lib/newday/setrace.php");
 }elseif ($session['user']['specialty']==""){
 	require_once("lib/newday/setspecialty.php");

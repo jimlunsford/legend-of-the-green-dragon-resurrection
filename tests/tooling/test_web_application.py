@@ -348,6 +348,214 @@ function resurrectionrandomfixture_dohook($hook,$args) { mt_srand((int)getsettin
             self.query('UPDATE accounts SET '+','.join(k+'=?' for k in original if k!='acctid')+' WHERE acctid=?',[*[v for k,v in original.items() if k!='acctid'],player])
             for row in modules: self.query('UPDATE modules SET active=? WHERE modulename=?',[row['active'],row['modulename']])
 
+    @contextmanager
+    def _dragon_point_fixture(self):
+        player=self.query('SELECT acctid FROM accounts WHERE login=?',['WebPlayer'])[0]['acctid']
+        original=self.query('SELECT * FROM accounts WHERE acctid=?',[player])[0]
+        modules=self.query('SELECT modulename,active FROM modules')
+        self.query('UPDATE modules SET active=1')
+        call=self._security_client(); url='newday.php?continue=1'
+        def encode(value):
+            payload=base64.b64encode(json.dumps(value).encode()).decode()
+            return subprocess.check_output([shutil.which('php'),'-r',"echo serialize(json_decode(base64_decode('"+payload+"'),true));"],text=True)
+        def prepare(kills=1,points=None,**extra):
+            values=dict(dragonkills=kills,dragonpoints=encode([] if points is None else points),race='Horrible Gelatinous Blob',
+                specialty='',specialinc='',alive=1,hitpoints=100,maxhitpoints=100,attack=10,defense=20,bufflist='a:0:{}',
+                companions='a:0:{}',badguy='',turns=7,age=1,gold=100,gems=10,superuser=0)
+            values.update(extra)
+            self.query('UPDATE accounts SET '+','.join(k+'=?' for k in values)+' WHERE acctid=?',[*values.values(),player])
+        def state():
+            return self.query('SELECT dragonkills,dragonpoints,maxhitpoints,attack,defense,hitpoints,gold,gems,turns,race,specialty,age,alive,resurrections FROM accounts WHERE acctid=?',[player])[0]
+        def request(path=url,data=None):
+            self._security_allow(player,path); return call(path,data)
+        def forms(path=url):
+            before=state(); status,body=request(path); self.assertEqual(200,status,body[:1500]); self.assertEqual(before,state())
+            found={}
+            for action,part in re.findall(r'<form\b[^>]*action="([^"]+)"[^>]*>(.*?)</form>',body,re.S):
+                mode=re.search(r'name="allocation" value="([^"]+)"',part)
+                if not mode: continue
+                data=self._security_fields(part)|{'allocation':mode[1]}
+                choice=re.search(r'name="type" value="([^"]+)"',part)
+                if choice: data['type']=choice[1]
+                found[choice[1] if choice else 'bulk']=data
+            self.assertTrue(found,body[:2000]);return found,body
+        try: yield dict(player=player,call=call,url=url,prepare=prepare,state=state,request=request,forms=forms,encode=encode)
+        finally:
+            self.query('UPDATE accounts SET '+','.join(k+'=?' for k in original if k!='acctid')+' WHERE acctid=?',[*[v for k,v in original.items() if k!='acctid'],player])
+            for row in modules: self.query('UPDATE modules SET active=? WHERE modulename=?',[row['active'],row['modulename']])
+
+    def test_dragon_points_single_bulk_replay_and_handoffs(self):
+        with self._dragon_point_fixture() as f:
+            for kind,stat,delta in [('hp','maxhitpoints',5),('at','attack',1),('de','defense',1),('ff',None,0)]:
+                with self.subTest(kind=kind):
+                    f['prepare'](); forms,body=f['forms'](); self.assertEqual({'hp','at','de','ff'},set(forms)); self.assertNotIn('newday.php?dk=',body)
+                    before=f['state']()
+                    self.assertIn(self._security_client(None)(f['url'],forms[kind])[0],[302,303,403]);self.assertEqual(before,f['state']())
+                    self.assertEqual(200,f['request'](data=forms[kind])[0]); after=f['state']()
+                    expected=before|{'dragonpoints':f['encode']([kind])}
+                    if stat: expected[stat]=str(int(expected[stat])+delta)
+                    self.assertEqual(expected,after)
+                    self.assertEqual(409,f['request'](data=forms[kind])[0]);self.assertEqual(after,f['state']())
+                    other=next(v for k,v in forms.items() if k!=kind)
+                    self.assertEqual(409,f['request'](data=other)[0]);self.assertEqual(after,f['state']())
+                    status,body=f['request'](); self.assertEqual(200,status); self.assertIn('name="setrace"',body);self.assertEqual(after,f['state']())
+            f['prepare'](5); forms,_=f['forms'](); data=forms['bulk']|dict(hp='2',at='1',de='1',ff='1'); before=f['state']()
+            self.assertEqual(200,f['request'](data=data)[0]); after=f['state']()
+            self.assertEqual(before|dict(maxhitpoints='110',attack='11',defense='21',dragonpoints=f['encode'](['at','de','ff','hp','hp'])),after)
+            self.assertEqual(409,f['request'](data=data)[0]);self.assertEqual(after,f['state']())
+            # Already chosen race hands off to protected specialty forms.
+            f['prepare'](race='Human'); forms,_=f['forms']();self.assertEqual(200,f['request'](data=forms['ff'])[0])
+            status,body=f['request']();self.assertEqual(200,status,body[:1000]);self.assertIn('name="setspecialty"',body)
+            # Fully onboarded handoff exercises only the existing ff downstream consumer.
+            f['prepare'](race='Human',specialty='DA');forms,_=f['forms']();self.assertEqual(200,f['request'](data=forms['ff'])[0])
+            status,body=f['request']();self.assertEqual(200,status,body[:1000]);self.assertIn('It is a New Day!',body)
+            self.assertRegex(body,r'You gain.*?1.*?forest.*?fight.*?from spent dragon points')
+            self.assertEqual('2',f['state']()['age']); self.assertEqual(f['encode'](['ff']),f['state']()['dragonpoints'])
+            # Resurrection is routing context, never allocation authority or immediate revival.
+            f['prepare'](alive=0,hitpoints=0);resurl=f['url']+'&resurrection=true';forms,_=f['forms'](resurl);before=f['state']()
+            self.assertEqual(409,f['request'](data=forms['hp'])[0]);self.assertEqual(before,f['state']())
+            forms,_=f['forms'](resurl);self.assertEqual(200,f['request'](resurl,forms['hp'])[0]);self.assertEqual('0',f['state']()['alive'])
+            status,body=f['request'](resurl);self.assertEqual(200,status);self.assertIn('resurrection=true',body);self.assertIn('name="setrace"',body)
+
+    def test_dragon_points_invalid_requests_stale_and_corruption(self):
+        with self._dragon_point_fixture() as f:
+            for kills in [0,1,5]:
+                for query in ['dk=hp','dk=at','dk=de','dk=ff','dk=unknown','pdk=1','pdk=0']:
+                    f['prepare'](kills);before=f['state']();self.assertEqual(403,f['request']('newday.php?'+query)[0]);self.assertEqual(before,f['state']())
+            for data in [{'dk':'hp'},{'pdk':'1'},{'hp':'1'},{'type':'hp'},{'allocation':'single','type':'hp'}]:
+                f['prepare'](0,race='Human',specialty='DA');before=f['state']()
+                self.assertEqual(403,f['request'](data=data)[0]);self.assertEqual(before,f['state']())
+            for bad in ['', '-1','+1','01','1.0','1e0','1junk','4294967296','9999999999999999999999','0','6']:
+                f['prepare'](5);forms,_=f['forms']();before=f['state']()
+                data=forms['bulk']|dict(hp=bad,at='0',de='0',ff='0')
+                self.assertEqual(400,f['request'](data=data)[0],bad);self.assertEqual(before,f['state']())
+            for patch in [{'unknown':'0'},{'forged':'1'},{'hp[]':'5'},{'hp[0]':'5'},{'dragonkills':'999'},{'unspent':'5'},
+                          {'type':'hp'},{'allocation':'single'}]:
+                f['prepare'](5);forms,_=f['forms']();before=f['state']()
+                self.assertEqual(400,f['request'](data=forms['bulk']|dict(hp='5',at='0',de='0',ff='0')|patch)[0]);self.assertEqual(before,f['state']())
+            f['prepare'](5);forms,_=f['forms']();before=f['state']()
+            duplicate=list((forms['bulk']|dict(hp='5',at='0',de='0',ff='0')).items())+[('hp','5')]
+            self.assertEqual(400,f['request'](data=duplicate)[0]);self.assertEqual(before,f['state']())
+            for kind in ['unknown','forged','', 'hp[]']:
+                f['prepare']();forms,_=f['forms']();before=f['state']()
+                self.assertEqual(400,f['request'](data=forms['hp']|{'type':kind})[0]);self.assertEqual(before,f['state']())
+            for token in ['csrf_token','action_token']:
+                for value in [None,'0'*64]:
+                    f['prepare']();forms,_=f['forms']();data=forms['hp'].copy();before=f['state']()
+                    if value is None: del data[token]
+                    else: data[token]=value
+                    self.assertEqual(403 if token=='csrf_token' else 409,f['request'](data=data)[0]);self.assertEqual(before,f['state']())
+            for key,value in [('dragonkills',2),('dragonpoints','a:1:{i:0;s:2:"ff";}'),('maxhitpoints',101),('attack',11),('defense',21),
+                              ('race','Human'),('specialty','DA'),('age',2),('alive',0)]:
+                f['prepare']();forms,_=f['forms']();self.query('UPDATE accounts SET '+key+'=?'+(',hitpoints=0' if key=='alive' else '')+' WHERE acctid=?',[value,f['player']]);before=f['state']()
+                self.assertEqual(409,f['request'](data=forms['hp'])[0],key);self.assertEqual(before,f['state']())
+            # Two separately rendered tabs each have a valid intent. Exactly one wins.
+            f['prepare']();first,_=f['forms']();second,_=f['forms']();self.assertEqual(200,f['request'](data=first['hp'])[0]);after=f['state']()
+            self.assertEqual(409,f['request'](data=second['at'])[0]);self.assertEqual(after,f['state']())
+            for encoded in ['broken','b:0;',f['encode'](['hp','at']),f['encode']([None]),f['encode']([1]),f['encode']([[]]),f['encode']({'bad':'hp'})]:
+                f['prepare'](dragonpoints=encoded);before=f['state']()
+                status,body=f['request']();self.assertEqual(409,status,body[:1000]);self.assertEqual(before,f['state']())
+                self.assertNotIn('name="setrace"',body)
+            f['prepare'](2,['retired_module']);forms,body=f['forms']();self.assertIn('Unknown Spends',body);self.assertEqual({'hp','at','de','ff'},set(forms))
+
+    def test_dragon_points_late_rollback_and_overflow(self):
+        with self._dragon_point_fixture() as f:
+            f['prepare'](5);forms,_=f['forms']();data=forms['bulk']|dict(hp='2',at='1',de='1',ff='1');before=f['state']()
+            self.query("ALTER TABLE accounts ADD CONSTRAINT fixture_dp_failure CHECK (login <> 'WebPlayer' OR maxhitpoints=100)")
+            try:
+                status,body=f['request'](data=data);self.assertEqual(500,status);self.assertNotIn('SQLSTATE',body)
+            finally: self.query('ALTER TABLE accounts DROP CONSTRAINT fixture_dp_failure')
+            self.assertEqual(before,f['state']());self.assertEqual(409,f['request'](data=data)[0]);self.assertEqual(before,f['state']())
+            forms,_=f['forms']();self.assertEqual(200,f['request'](data=forms['bulk']|dict(hp='2',at='1',de='1',ff='1'))[0])
+            self.assertEqual('110',f['state']()['maxhitpoints'])
+            for stat,kind in [('maxhitpoints','hp'),('attack','at'),('defense','de')]:
+                f['prepare'](**{stat:4294967295});forms,_=f['forms']();before=f['state']()
+                self.assertEqual(409,f['request'](data=forms[kind])[0]);self.assertEqual(before,f['state']())
+
+    def test_dragon_points_hook_schema_and_recalculation(self):
+        with self._dragon_point_fixture() as f:
+            module='resurrectiondpointfixture';path=ROOT/'modules'/(module+'.php')
+            with path.open('x') as file:
+                file.write('''<?php
+function resurrectiondpointfixture_getmoduleinfo() { return ['name'=>'DP fixture','version'=>'1.0','author'=>'Synthetic','category'=>'Tests']; }
+function resurrectiondpointfixture_dohook($hook,$args) {
+    global $pdks,$session;
+    $mode=getsetting('fixture_dp_mode','normal');
+    if ($hook==='dkpointlabels') {
+        if ($mode==='disabled') $args['buy']['hp']=0;
+        if ($mode==='extension') { $args['desc']['extra']='Extra <safe> point'; $args['buy']['extra']=1; }
+        if ($mode==='reverse') { $args['desc']=array_reverse($args['desc'],true); $args['buy']=array_reverse($args['buy'],true); }
+        return $args;
+    }
+    db_query("UPDATE settings SET value=value+1 WHERE setting='fixture_dp_called'");
+    if ($mode==='recalc') { $pdks['ff']+=$pdks['hp'];$pdks['hp']=0; }
+    if ($mode==='forged') $pdks['forged']=1;
+    if ($mode==='overspend') $pdks['hp']++;
+    if ($mode==='negative') $pdks['hp']=-1;
+    if ($mode==='authority') $session['user']['dragonkills']++;
+    if ($mode==='late') throw new RuntimeException('DP-SECRET');
+    return $args;
+}
+''')
+            def setting(name,value): self.query('INSERT INTO settings(setting,value) VALUES (?,?) ON DUPLICATE KEY UPDATE value=VALUES(value)',[name,str(value)])
+            def mode(value): setting('fixture_dp_mode',value)
+            def called(): return self.query("SELECT value FROM settings WHERE setting='fixture_dp_called'")[0]['value']
+            try:
+                self.query('INSERT INTO modules(modulename,active,version) VALUES (?,1,?)',[module,'1.0'])
+                for hook in ['dkpointlabels','pdkpointrecalc']:
+                    self.query('INSERT INTO module_hooks(modulename,location,`function`,whenactive,priority) VALUES (?,?,?,?,?)',[module,hook,module+'_dohook','',100])
+                setting('fixture_dp_called',0)
+                f['prepare']();mode('normal');forms,_=f['forms']();mode('reverse')
+                self.assertEqual(200,f['request'](data=forms['hp'])[0]);self.assertEqual('0',called())
+                f['prepare']();mode('normal');forms,_=f['forms']();mode('disabled');before=f['state']()
+                self.assertEqual(409,f['request'](data=forms['hp'])[0]);self.assertEqual(before,f['state']())
+                forms,_=f['forms']();self.assertNotIn('hp',forms)
+                f['prepare']();mode('normal');forms,_=f['forms']();before=f['state']()
+                self._dragon_point_locked_writer(f,forms['hp'],"UPDATE settings SET value='disabled' WHERE setting='fixture_dp_mode'",[])
+                self.assertEqual(before,f['state']())
+                f['prepare']();mode('extension');forms,body=f['forms']();self.assertIn('extra',forms);self.assertIn('&lt;safe&gt;',body)
+                self.assertEqual(200,f['request'](data=forms['extra'])[0]);self.assertEqual(f['encode'](['extra']),f['state']()['dragonpoints'])
+                f['prepare'](5);mode('recalc');forms,_=f['forms']();data=forms['bulk']|dict(hp='5',at='0',de='0',ff='0')
+                self.assertEqual(200,f['request'](data=data)[0]);self.assertEqual('1',called());self.assertEqual('100',f['state']()['maxhitpoints']);self.assertEqual(f['encode'](['ff']*5),f['state']()['dragonpoints'])
+                for value,status in [('forged',400),('overspend',400),('negative',400),('authority',409),('late',500)]:
+                    f['prepare'](5);mode(value);forms,_=f['forms']();before=f['state']();prior=called()
+                    result,body=f['request'](data=forms['bulk']|dict(hp='5',at='0',de='0',ff='0'))
+                    self.assertEqual(status,result,value);self.assertNotIn('DP-SECRET',body);self.assertEqual(before,f['state']());self.assertEqual(prior,called())
+            finally:
+                path.unlink();self.query('DELETE FROM module_hooks WHERE modulename=?',[module]);self.query('DELETE FROM modules WHERE modulename=?',[module])
+                self.query("DELETE FROM settings WHERE setting LIKE 'fixture_dp_%'")
+
+    def _dragon_point_locked_writer(self, f, data, sql, parameters):
+        from concurrent.futures import ThreadPoolExecutor
+        self._security_allow(f['player'],f['url'])
+        code="""require 'dbconnect.php'; require 'lib/dbwrapper_pdo.php'; db_connect($DB_HOST,$DB_USER,$DB_PASS); db_select_db($DB_NAME);
+$db=$dbinfo['connection'];$db->beginTransaction();db_query('SELECT acctid FROM accounts WHERE acctid=? FOR UPDATE',true,[(int)$argv[1]]);
+echo "locked\\n";fflush(STDOUT);$change=json_decode(fgets(STDIN),true,512,JSON_THROW_ON_ERROR);db_query($change[0],true,$change[1]);$db->commit();"""
+        writer=subprocess.Popen([shutil.which('php'),'-r',code,str(f['player'])],cwd=ROOT,stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True)
+        try:
+            self.assertEqual('locked\n',writer.stdout.readline())
+            with ThreadPoolExecutor(max_workers=1) as pool:
+                future=pool.submit(f['call'],f['url'],data)
+                waiting=False
+                try:
+                    for _ in range(100):
+                        rows=self.query("SELECT INFO FROM information_schema.PROCESSLIST WHERE ID<>CONNECTION_ID() AND INFO LIKE '%FOR UPDATE%' AND COMMAND<>'Sleep'")
+                        if rows: waiting=True;break
+                        if future.done():break
+                        time.sleep(.02)
+                finally: writer.stdin.write(json.dumps([sql,parameters])+'\n');writer.stdin.flush();writer.wait(timeout=5)
+                self.assertTrue(waiting,'HTTP did not reach the locked player recheck')
+                self.assertEqual(409,future.result(timeout=20)[0])
+        finally:
+            if writer.poll() is None: writer.kill();writer.wait(timeout=5)
+            for stream in [writer.stdin,writer.stdout,writer.stderr]:stream.close()
+
+    def test_dragon_points_recheck_after_account_lock(self):
+        with self._dragon_point_fixture() as f:
+            f['prepare']();forms,_=f['forms']()
+            self._dragon_point_locked_writer(f,forms['hp'],'UPDATE accounts SET dragonkills=2 WHERE acctid=?',[f['player']])
+            after=f['state']();self.assertEqual('2',after['dragonkills']);self.assertEqual('100',after['maxhitpoints']);self.assertEqual('a:0:{}',after['dragonpoints'])
+
     def test_race_onboarding_http_authority(self):
         player=self.query('SELECT acctid FROM accounts WHERE login=?',['WebPlayer'])[0]['acctid']
         original=self.query('SELECT * FROM accounts WHERE acctid=?',[player])[0]

@@ -299,3 +299,14 @@ never silently cleared or rewarded. `ScalarState::read()` is unchanged.
 [Full boundary and deterministic proof](GRAVEYARD-COMBAT-AUTHORITY-20260927.md).
 Acceptance awaits exact supported-matrix CI; broader serialized consumers remain
 BLOCKED.
+
+## Dragon Point history consumer candidate, 2026-10-03
+
+`DragonPointState` validates raw persisted history before allocation or onboarding.
+It requires a scalar-safe, zero-indexed identifier list bounded by persisted kills,
+TEXT capacity and the unchanged ScalarState ceiling. Removed-module identifiers
+remain displayable/countable without implicit buyability. Malformed roots,
+entries and over-allocation preserve state for explicit administrator repair.
+The existing `ff` vocabulary and downstream count are retained. See
+[the narrow trust contract and proofs](DRAGON-POINT-AUTHORITY-20261003.md).
+Exact supported CI remains the acceptance gate; broader state closure is not claimed.
