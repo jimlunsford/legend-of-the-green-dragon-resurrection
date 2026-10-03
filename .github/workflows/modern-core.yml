@@ -13,7 +13,7 @@ jobs:
   engineering:
     runs-on: ubuntu-latest
     # Retained matrices plus Dragon authority/outcomes exceed the former 25-minute ceiling.
-    timeout-minutes: 45
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
