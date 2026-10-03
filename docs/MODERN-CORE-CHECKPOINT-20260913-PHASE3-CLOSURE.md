@@ -1357,3 +1357,21 @@ exact supported-matrix CI; full New Day is not PASS. Existing module registry
 and earlier checkpoints are not retrospectively rewritten. PR #1 OPEN/DRAFT/
 NOT READY/NOT MERGED; Phase 3 INCOMPLETE; merge NO; public hosting NO. Publish
 one candidate, inspect its normal CI under the bounded rule, then stop.
+
+## Normal New Day candidate checkpoint, 2026-10-03
+
+Starting public head: `7c3c12765057ff1a4b9eac76629aa18a07460c9e`.
+Prior Dragon Point Modern `37123254762` was IN_PROGRESS at its one inspection;
+Baseline `37123254758` was SUCCESS. Independent normal-day development proceeded.
+
+Normal daily reset is protected by POST, CSRF, state-bound intent and locked
+persisted day authority, with historical daily effects and transactional hook
+rollback. The fresh schema adds `lastnewday`; existing populated installations
+still require a separately verified migration. No web-time ALTER or deployment.
+[Exact behavior, inventory and verification scope](NEWDAY-DAILY-RESET-AUTHORITY-20261003.md).
+
+Acceptance awaits exact candidate CI. Broader New Day remains BLOCKED on explicit
+Ramius resurrection. Phase 3 INCOMPLETE; merge NO; public hosting NO. PR #1 stays
+OPEN/DRAFT/NOT READY/NOT MERGED. No Phase 4, other subsystem, VPS, release or tag.
+The publication checkpoint on PR #1 records local/published SHAs, tree equality,
+verification totals and bounded exact-head workflow observations.

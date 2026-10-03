@@ -1,65 +1,9 @@
 <?php
-require_once __DIR__ . '/src/Security/ScalarState.php';
-require_once __DIR__ . '/src/Compatibility/array_cursor.php';
-// translator ready
-// addnews ready
-// mail ready
-require_once("common.php");
-require_once("lib/http.php");
-require_once("lib/sanitize.php");
-require_once("lib/buffs.php");
-
-require_once('lib/dragon_points.php');
-resurrection_dragon_point_boundary();
-
-require_once('lib/race_onboarding.php');
-require_once('lib/specialty_onboarding.php');
-if (isset($_GET['setspecialty'])) { http_response_code(403); exit('Specialty selection requires a form.'); }
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && !isset($_POST['setrace']) && (isset($_POST['setspecialty']) || ($_POST['onboarding'] ?? null) === 'specialty')) {
-    $resline = httpget('resurrection') === 'true' ? '&resurrection=true' : '';
-    resurrection_specialty_onboarding();
-}
-if (isset($_GET['setrace'])) { http_response_code(403); exit('Race selection requires a form.'); }
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && (isset($_POST['setrace']) || isset($_POST['onboarding']) ||
-    !$session['user']['race'] || $session['user']['race'] === RACE_UNKNOWN)) {
-    $resline = httpget('resurrection') === 'true' ? '&resurrection=true' : '';
-    resurrection_race_onboarding();
-}
-
-// Normal daily reset owns its method boundary after protected prerequisites.
-if (httpget('resurrection') !== 'true' && $session['user']['race'] &&
-    $session['user']['race'] !== RACE_UNKNOWN && $session['user']['specialty'] !== '') {
-    require_once 'lib/newday_daily.php';
-    resurrection_newday_daily();
-}
-
-tlschema("newday");
-//mass_module_prepare(array("newday-intercept", "newday"));
-if (httpget("resurrection") === "true") modulehook("newday-intercept",array());
-
-/***************
- **  SETTINGS **
- ***************/
-$turnsperday = getsetting("turns",10);
-$maxinterest = ((float)getsetting("maxinterest",10)/100) + 1; //1.1;
-$mininterest = ((float)getsetting("mininterest",1)/100) + 1; //1.1;
-$dailypvpfights = getsetting("pvpday",3);
-
-$resline = (httpget('resurrection')=="true") ? "&resurrection=true" : "" ;
-/******************
- ** End Settings **
- ******************/
-// Allocation is validated and handled before onboarding and New Day hooks.
-if (!$session['user']['race'] || $session['user']['race']==RACE_UNKNOWN){
-	require_once("lib/newday/setrace.php");
-}elseif ($session['user']['specialty']==""){
-	require_once("lib/newday/setspecialty.php");
-}else{
-	page_header("It is a new day!");
+// Normal-day historical effects. Included only inside the locked daily mutation.
 	rawoutput("<font size='+1'>");
 	output("`c`b`#It is a New Day!`0`b`c");
 	rawoutput("</font>");
-	$resurrection = httpget('resurrection');
+	$resurrection = '';
 
 	if ($session['user']['alive']!=true){
 		$session['user']['resurrections']++;
@@ -142,21 +86,6 @@ if (!$session['user']['race'] || $session['user']['race']==RACE_UNKNOWN){
 	$r2 = e_rand(-1,1);
 	$spirits = $r1+$r2;
 	$resurrectionturns=$spirits;
-	if ($resurrection=="true"){
-		addnews("`&%s`& has been resurrected by %s`&.",$session['user']['name'],getsetting('deathoverlord','`$Ramius'));
-		$spirits=-6;
-		$resurrectionturns=getsetting('resurrectionturns',-6);
-		if (strstr($resurrectionturns,'%')) {
-			$resurrectionturns=strtok($resurrectionturns,'%');
-			$resurrectionturns=(int)$resurrectionturns;
-			if ($resurrectionturns<-100) $resurrectionturns=-100;
-			$resurrectionturns=round(($turnsperday+$dkff)*($resurrectionturns/100),0);
-		} else {
-			if ($resurrectionturns<-($turnsperday+$dkff)) $resurrectionturns=-($turnsperday+$dkff);
-		}
-		$session['user']['deathpower']-=100;
-		$session['user']['restorepage']="village.php?c=1";
-	}
 
 	$sp = array((-6)=>"Resurrected", (-2)=>"Very Low", (-1)=>"Low",
 			(0)=>"Normal", 1=>"High", 2=>"Very High");
@@ -172,18 +101,10 @@ if (!$session['user']['race'] || $session['user']['race']==RACE_UNKNOWN){
 		output("`2As a result, you `^%s %s forest %s`2 for today!`n",
 				$gain, $sff, translate_inline($sff==1?"fight":"fights"));
 	}
-	$rp = $session['user']['restorepage'];
-	$x = max(strrpos("&",$rp),strrpos("?",$rp));
-	if ($x>0) $rp = substr($rp,0,$x);
-	if (substr($rp,0,10)=="badnav.php"){
-		addnav("Continue","news.php");
-	}else{
-		addnav("Continue", cmd_sanitize($rp));
-	}
 
 	$session['user']['laston'] = date("Y-m-d H:i:s");
 	$bgold = $session['user']['goldinbank'];
-	$session['user']['goldinbank']*=$interestrate;
+	$session['user']['goldinbank'] = \Resurrection\Game\NewDayState::interest($bgold, $interestrate);
 	$nbgold = $session['user']['goldinbank'] - $bgold;
 
 	if ($nbgold != 0) {
@@ -210,7 +131,11 @@ if (!$session['user']['race'] || $session['user']['race']==RACE_UNKNOWN){
 	if ($session['user']['hashorse']){
 		$msg = $playermount['newday'];
 		require_once("lib/substitute.php");
-		$msg = substitute_array("`n`&".$msg."`0`n");
+		// New Day has no combat target, but the legacy substitution helper reads it.
+        $priorTarget = $GLOBALS['badguy'] ?? null;
+        $GLOBALS['badguy'] = (is_array($priorTarget) ? $priorTarget : []) + ['creatureweapon'=>'','creaturename'=>''];
+        try { $msg = substitute_array("`n`&".$msg."`0`n"); }
+        finally { $GLOBALS['badguy'] = $priorTarget; }
 		output($msg);
 		require_once("lib/mountname.php");
 		list($name, $lcname) = getmountname();
@@ -249,7 +174,3 @@ if (!$session['user']['race'] || $session['user']['race']==RACE_UNKNOWN){
 			array("resurrection"=>$resurrection, "turnstoday"=>$turnstoday));
 	$turnstoday = $args['turnstoday'];
 	debuglog("New Day Turns: $turnstoday");
-
-}
-page_footer();
-?>

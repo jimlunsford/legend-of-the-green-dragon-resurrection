@@ -283,7 +283,7 @@ function resurrectionrandomfixture_dohook($hook,$args) { mt_srand((int)getsettin
                     call=self._security_client(); adversarial('inn.php'); self.assertEqual(after,state())
                     # Actual New Day uses the stored skill and historical configured bonus.
                     self.query('UPDATE accounts SET lasthit=? WHERE acctid=?',['2000-01-01 00:00:00',player])
-                    self.assertEqual(200,adversarial('newday.php?continue=1')[0])
+                    self.assertEqual(200,self._advance_normal_day(adversarial,player)[0])
                     bonus=int(self.query('SELECT value FROM settings WHERE setting=?',['specialtybonus'])[0]['value']) if self.query('SELECT value FROM settings WHERE setting=?',['specialtybonus']) else 1
                     self.assertEqual(spec,state()['specialty'])
                     self.assertEqual(str(bonus),self.query('SELECT value FROM module_userprefs WHERE userid=? AND modulename=? AND setting=?',[player,module,'uses'])[0]['value'])
@@ -294,7 +294,7 @@ function resurrectionrandomfixture_dohook($hook,$args) { mt_srand((int)getsettin
                     forms,_=form(); self.assertEqual(200,call(url,forms[spec])[0])
                     self.assertEqual([{'setting':'skill','value':'9'},{'setting':'uses','value':'2'}],self.query('SELECT setting,value FROM module_userprefs WHERE userid=? AND modulename=? ORDER BY setting',[player,module]))
                     self.query('UPDATE accounts SET lasthit=? WHERE acctid=?',['2000-01-01 00:00:00',player])
-                    self.assertEqual(200,adversarial('newday.php?continue=1')[0])
+                    self.assertEqual(200,self._advance_normal_day(adversarial,player)[0])
                     self.assertEqual(str(3+bonus),self.query('SELECT value FROM module_userprefs WHERE userid=? AND modulename=? AND setting=?',[player,module,'uses'])[0]['value'])
                     setup(); forms,_=form(); self.query('UPDATE modules SET active=0 WHERE modulename=?',[module]); before=state()
                     self.assertEqual(409,call(url,forms[spec])[0]); self.assertEqual(before,state())
@@ -407,8 +407,10 @@ function resurrectionrandomfixture_dohook($hook,$args) { mt_srand((int)getsettin
             f['prepare'](race='Human'); forms,_=f['forms']();self.assertEqual(200,f['request'](data=forms['ff'])[0])
             status,body=f['request']();self.assertEqual(200,status,body[:1000]);self.assertIn('name="setspecialty"',body)
             # Fully onboarded handoff exercises only the existing ff downstream consumer.
-            f['prepare'](race='Human',specialty='DA');forms,_=f['forms']();self.assertEqual(200,f['request'](data=forms['ff'])[0])
-            status,body=f['request']();self.assertEqual(200,status,body[:1000]);self.assertIn('It is a New Day!',body)
+            f['prepare'](race='Human',specialty='DA',lastnewday='',lasthit='2000-01-01 00:00:00');forms,_=f['forms']();self.assertEqual(200,f['request'](data=forms['ff'])[0])
+            status,body=f['request']();self.assertEqual(200,status,body[:1000]);self.assertIn('Begin New Day',body)
+            self.assertEqual('1',f['state']()['age'])
+            status,body=f['request'](data=self._security_fields(body)|{'newday':'normal'});self.assertEqual(200,status,body[:1500])
             self.assertRegex(body,r'You gain.*?1.*?forest.*?fight.*?from spent dragon points')
             self.assertEqual('2',f['state']()['age']); self.assertEqual(f['encode'](['ff']),f['state']()['dragonpoints'])
             # Resurrection is routing context, never allocation authority or immediate revival.
@@ -754,7 +756,7 @@ echo "locked\\n";fflush(STDOUT);$change=json_decode(fgets(STDIN),true,512,JSON_T
                 setup(); seed(1); available,_=forms(); old=available[1]
                 self.assertEqual(200,call(url,available[0])[0]); self.assertEqual(409,adversarial(url)[0])
                 self.query('UPDATE accounts SET lasthit=? WHERE acctid=?',['2000-01-01 00:00:00',player])
-                self.assertEqual(200,adversarial('newday.php?continue=1')[0]); self.assertEqual([{'value':'0'}],state()[1])
+                self.assertEqual(200,self._advance_normal_day(adversarial,player)[0]); self.assertEqual([{'value':'0'}],state()[1])
                 self.assertEqual(409,adversarial(url,old)[0])
                 available,_=forms(); self.assertEqual(200,call(url,available[0])[0]); persisted=state()
                 call=self._security_client(); adversarial('inn.php'); self.assertEqual(persisted,state())
@@ -764,7 +766,7 @@ echo "locked\\n";fflush(STDOUT);$change=json_decode(fgets(STDIN),true,512,JSON_T
                         setup(sex,charm,4294967295); seed(rng); available,_=forms()
                         self.assertEqual(200,call(url,available[0])[0])
                         self.query('UPDATE accounts SET dragonkills=0,lasthit=? WHERE acctid=?',['2000-01-01 00:00:00',player])
-                        self.assertEqual(200,adversarial('newday.php?continue=1')[0])
+                        self.assertEqual(200,self._advance_normal_day(adversarial,player)[0])
                         saved=state(); self.assertEqual(after_day,int(saved[0]['charm']))
                         self.assertEqual(married_after,int(saved[0]['marriedto'])); self.assertEqual([{'value':'0'}],saved[1])
                         available,_=forms(); self.assertEqual(200,call(url,available[0])[0])
@@ -924,7 +926,7 @@ echo "locked\\n";fflush(STDOUT);$change=json_decode(fgets(STDIN),true,512,JSON_T
                 pref('usedouthouse','invalid'); before=state(); action('free',409); self.assertEqual(before,state())
                 pref('usedouthouse',1); pref('stage',2)
                 self.query('UPDATE accounts SET lasthit=?,race=?,specialty=? WHERE acctid=?',['2000-01-01 00:00:00','Human','DA',player])
-                self.assertEqual(200,request('newday.php?continue=1')[0])
+                self.assertEqual(200,self._advance_normal_day(request,player)[0])
                 actual={r['setting']:r['value'] for r in self.query('SELECT setting,value FROM module_userprefs WHERE modulename=? AND userid=?',['outhouse',player])}
                 self.assertEqual('0',actual['usedouthouse']); self.assertEqual('0',actual['stage'])
                 action('free')
@@ -995,7 +997,7 @@ echo "locked\\n";fflush(STDOUT);$change=json_decode(fgets(STDIN),true,512,JSON_T
                     setting(key,bad); before=state(); self.assertEqual(409,request(url,form)[0]); self.assertEqual(before,state()); setting(key,old)
                 pref('garbage'); self.assertEqual(409,request(url)[0]); pref(2)
                 self.query('UPDATE accounts SET lasthit=?,race=?,specialty=? WHERE acctid=?',['2000-01-01 00:00:00','Human','DA',player])
-                self.assertEqual(200,request('newday.php?continue=1')[0])
+                self.assertEqual(200,self._advance_normal_day(request,player)[0])
                 self.assertEqual('0',self.query('SELECT value FROM module_userprefs WHERE modulename=? AND setting=? AND userid=?',['sethsong','been',player])[0]['value'])
                 listen()
         finally:
@@ -1188,7 +1190,7 @@ echo "locked\\n";fflush(STDOUT);$change=json_decode(fgets(STDIN),true,512,JSON_T
             status,body=request('newday.php'); self.assertEqual(200,status)
             raceform=self._security_fields(body)|{'onboarding':'race','setrace':'Human'}
             self.assertEqual(200,call('newday.php?continue=1',raceform)[0])
-            self.assertEqual(200,request('newday.php?continue=1')[0]); self.assertEqual(4,buffs()['transmute']['rounds'])
+            self.assertEqual(200,self._advance_normal_day(request,player)[0]); self.assertEqual(4,buffs()['transmute']['rounds'])
             self.assertEqual(200,request('newday.php?continue=1')[0]); self.assertEqual(4,buffs()['transmute']['rounds'])
             # Failure on final account write must undo the preceding real potion debug log.
             before=self.query('SELECT gems,race,bufflist FROM accounts WHERE acctid=?',[player])
@@ -1214,7 +1216,7 @@ echo "locked\\n";fflush(STDOUT);$change=json_decode(fgets(STDIN),true,512,JSON_T
             stored({}); self.assertEqual(200,buy()[2][0]); self.assertEqual(0,buffs()['transmute']['survivenewday'])
             status,body=request('newday.php'); self.assertEqual(200,status)
             raceform=self._security_fields(body)|{'onboarding':'race','setrace':'Human'}
-            self.assertEqual(200,call('newday.php?continue=1',raceform)[0]); self.assertEqual(200,request('newday.php?continue=1')[0]); self.assertNotIn('transmute',buffs())
+            self.assertEqual(200,call('newday.php?continue=1',raceform)[0]); self.assertEqual(200,self._advance_normal_day(request,player)[0]); self.assertNotIn('transmute',buffs())
             for invalid in [None,{},dict(first,rounds=0),dict(first,rounds=-1),dict(first,rounds=2147483648),dict(first,atkmod='<attack>'),dict(first,defmod=[]),dict(first,forged=1)]:
                 stored({'transmute':invalid}); before=self.query('SELECT gems,race,bufflist FROM accounts WHERE acctid=?',[player])
                 self.assertEqual(400,request(base)[0]); self.assertEqual(before,self.query('SELECT gems,race,bufflist FROM accounts WHERE acctid=?',[player]))
@@ -1282,7 +1284,7 @@ echo "locked\\n";fflush(STDOUT);$change=json_decode(fgets(STDIN),true,512,JSON_T
                 prepare(spec); self.assertEqual(200,request(url,form('5'))[0])
                 self.assertEqual('4',self.query('SELECT value FROM module_userprefs WHERE userid=? AND modulename=? AND setting=?',[player,module,'uses'])[0]['value'])
                 self.query("UPDATE accounts SET badguy='' WHERE acctid=?",[player])
-                self.assertEqual(200,request('newday.php?continue=1')[0])
+                self.assertEqual(200,self._advance_normal_day(request,player)[0])
                 bonus=self.query("SELECT value FROM settings WHERE setting='specialtybonus'")
                 expected=5+int(bonus[0]['value'] if bonus else 1)
                 self.assertEqual(str(expected),self.query('SELECT value FROM module_userprefs WHERE userid=? AND modulename=? AND setting=?',[player,module,'uses'])[0]['value'])
@@ -3536,7 +3538,7 @@ function resurrectionspecialtyobserver_dohook($hook,$args) {
             retained=companions()['skeleton_warrior']; self.assertEqual(skeleton['hitpoints'],retained['hitpoints'])
             self.assertEqual(skeleton['attack'],retained['attack']); before=snapshot()
             self.assertEqual(409,request('forest.php?op=specialty',victoryform)[0]); self.assertEqual(before,snapshot())
-            self.assertEqual(200,request('newday.php?continue=1')[0]); self.assertEqual(retained,companions()['skeleton_warrior'])
+            self.assertEqual(200,self._advance_normal_day(request,player)[0]); self.assertEqual(retained,companions()['skeleton_warrior'])
             # A fixed RNG seed drives the real companion damage/removal path.
             lethal={'enemies':[dict(enemy,creaturehealth=100000000,creatureattack=100000,creaturedefense=100000)],'options':{'type':'forest'}}
             wounded=dict(skeleton,hitpoints=1)
@@ -3744,6 +3746,238 @@ function resurrectionspecialtyobserver_dohook($hook,$args) {
             if saved: self.query('UPDATE module_settings SET value=? WHERE modulename=? AND setting=?',[saved[0]['value'],'darkhorse','tavernname'])
             self.query('UPDATE modules SET active=0')
 
+
+    @contextmanager
+    def _normal_day_fixture(self):
+        with self._dragon_point_fixture() as f:
+            player=f['player']; original_prefs=self.query('SELECT * FROM module_userprefs WHERE userid=?',[player])
+            original_settings=self.query('SELECT * FROM settings'); original_module_settings=self.query('SELECT * FROM module_settings')
+            def setting(key,value): self.query('INSERT INTO settings(setting,value) VALUES (?,?) ON DUPLICATE KEY UPDATE value=VALUES(value)',[key,str(value)])
+            def pref(module,key,value): self.query('INSERT INTO module_userprefs(modulename,setting,userid,value) VALUES (?,?,?,?) ON DUPLICATE KEY UPDATE value=VALUES(value)',[module,key,player,str(value)])
+            def prepare(**patch):
+                f['prepare'](3,['ff','hp','ff'],race='Human',specialty='DA',lastnewday='',lasthit='2000-01-01 00:00:00',
+                    resurrections=2,level=6,seenmaster=1,playerfights=0,transferredtoday=2,amountouttoday=100,seendragon=1,
+                    fedmount=1,boughtroomtoday=1,soulpoints=1,gravefights=0,hauntedby='A ghost',goldinbank=1000,
+                    hashorse=0,restorepage='village.php',charm=10,marriedto=0,**patch)
+                self.query('DELETE FROM module_userprefs WHERE userid=?',[player])
+                for module,key in [('dag','bounties'),('drinks','harddrinks'),('lovers','seenlover'),('outhouse','usedouthouse'),
+                    ('outhouse','stage'),('sethsong','been'),('crazyaudrey','played'),('crazyaudrey','paidvisit'),('game_fivesix','playstoday')]: pref(module,key,2)
+                pref('drinks','drunkeness',70)
+                for module in ['specialtydarkarts','specialtymysticpower','specialtythiefskills']:
+                    pref(module,'skill',9);pref(module,'uses',0)
+            def form():
+                status,body=f['request'](); self.assertEqual(200,status,body[:2000])
+                return self._security_fields(body)|{'newday':'normal'}
+            def state():
+                account=self.query('SELECT * FROM accounts WHERE acctid=?',[player])[0]
+                for key in ['laston','gentime','gentimecount','gensize','allowednavs','restorepage','lastip','uniqueid']: account.pop(key,None)
+                return account,self.query('SELECT modulename,setting,value FROM module_userprefs WHERE userid=? ORDER BY modulename,setting',[player]),self.query('SELECT * FROM news WHERE accountid=? ORDER BY newsid',[player])
+            try:
+                for key,value in {'turns':10,'mininterest':10,'maxinterest':10,'fightsforinterest':7,'maxgoldforinterest':100000,'pvpday':4,'gravefightsperday':12,'specialtybonus':2}.items(): setting(key,value)
+                self.query("UPDATE module_settings SET value='1' WHERE modulename='racehuman' AND setting='bonus'")
+                prepare()
+                yield f|dict(prepare=prepare,form=form,state=state,setting=setting,pref=pref)
+            finally:
+                self.query('DELETE FROM module_userprefs WHERE userid=?',[player])
+                for row in original_prefs: pref(row['modulename'],row['setting'],row['value'])
+                self.query('DELETE FROM settings')
+                for row in original_settings: setting(row['setting'],row['value'])
+                self.query('DELETE FROM module_settings')
+                for row in original_module_settings: self.query('INSERT INTO module_settings(modulename,setting,value) VALUES (?,?,?)',[row['modulename'],row['setting'],row['value']])
+
+    def test_normal_newday_get_core_living_dead_and_hook_inventory(self):
+        with self._normal_day_fixture() as f, self._seeded_module_actions('pre-newday') as seed:
+            hooks=self.query("SELECT h.modulename,h.location FROM module_hooks h JOIN modules m USING(modulename) WHERE m.active=1 AND h.location IN ('newday','newday-intercept') ORDER BY h.modulename")
+            expected=['crazyaudrey','dag','drinks','game_fivesix','lovers','outhouse','raceelf','racehuman','racetroll','sethsong','specialtydarkarts','specialtymysticpower','specialtythiefskills']
+            self.assertEqual(expected,[r['modulename'] for r in hooks]);self.assertEqual({'newday'},{r['location'] for r in hooks})
+            for alive in [1,0]:
+                f['prepare']();self.query('UPDATE accounts SET alive=?,hitpoints=? WHERE acctid=?',[alive,8 if alive else 0,f['player']]);seed(1)
+                before=f['state']();form=f['form'](); self.assertEqual(before,f['state']()); f['form']();self.assertEqual(before,f['state']())
+                status,body=f['request'](data=form);self.assertEqual(200,status,body[:2500]); after,prefs,news=f['state']()
+                self.assertEqual(2,int(after['age']));self.assertEqual(2+(not alive),int(after['resurrections']));self.assertEqual('1',after['alive'])
+                self.assertEqual('100',after['hitpoints']);self.assertEqual('0',after['seenmaster']);self.assertEqual('1100',after['goldinbank'])
+                # Fixed 10% interest consumes no RNG; seed 1 gives (0,1), spirits +1.
+                self.assertEqual('1',after['spirits']);self.assertEqual('12',after['turns']) # 10+1+2-1+1-1
+                for key,value in {'playerfights':4,'transferredtoday':0,'amountouttoday':0,'seendragon':0,'fedmount':0,'boughtroomtoday':0,'soulpoints':80,'gravefights':12}.items(): self.assertEqual(value,int(after[key]),key)
+                self.assertEqual('',after['hauntedby']);self.assertEqual('2000-01-01 00:00:00',after['recentcomments']);self.assertNotEqual(before[0]['lasthit'],after['lasthit']);self.assertRegex(after['lastnewday'],r'^\d{4}-\d{2}-\d{2}$')
+                self.assertEqual(before[2],news);self.assertNotIn('Ramius',body)
+                values={(r['modulename'],r['setting']):r['value'] for r in prefs}
+                for module in ['specialtydarkarts','specialtymysticpower','specialtythiefskills']: self.assertEqual('5' if module=='specialtydarkarts' else '3',values[(module,'uses')])
+                for module,key in [('dag','bounties'),('drinks','harddrinks'),('drinks','drunkeness'),('lovers','seenlover'),('outhouse','usedouthouse'),('outhouse','stage'),('sethsong','been'),('crazyaudrey','played'),('crazyaudrey','paidvisit'),('game_fivesix','playstoday')]: self.assertEqual('0',values[(module,key)])
+                settled=f['state'](); self.assertEqual(409,f['request'](data=form)[0]);self.assertEqual(settled,f['state']())
+                self.assertNotIn('name="newday"',f['request']()[1]);self.assertEqual(settled,f['state']())
+                # Changing presentation/legacy day fields cannot undo the durable guard.
+                self.query("UPDATE accounts SET lasthit='2000-01-01 00:00:00' WHERE acctid=?",[f['player']])
+                self.assertNotIn('name="newday"',f['request']()[1])
+                self.assertEqual(200,f['request']('village.php')[0])
+                # The same durable day cannot bypass newly incomplete onboarding.
+                self.query("UPDATE accounts SET specialty='' WHERE acctid=?",[f['player']])
+                self.assertEqual(302,f['request']('village.php')[0])
+                self.assertIn('name="setspecialty"',f['request']()[1])
+
+    def test_normal_newday_interest_spirits_mounts_buffs_companions(self):
+        with self._normal_day_fixture() as f, self._seeded_module_actions('pre-newday') as seed:
+            mount=self.query('SELECT * FROM mounts ORDER BY mountid LIMIT 1')[0]
+            try:
+                for balance,turns,cap,expected in [(101,7,100000,111),(-101,99,100000,-111),(1000,8,100000,1000),(1000,7,1000,1000),(1000,7,0,1100)]:
+                    f['prepare']();f['setting']('maxgoldforinterest',cap);seed(1)
+                    self.query('UPDATE accounts SET goldinbank=?,turns=? WHERE acctid=?',[balance,turns,f['player']])
+                    self.assertEqual(200,f['request'](data=f['form']())[0]);self.assertEqual(expected,int(f['state']()[0]['goldinbank']))
+                for rng,spirits,mff in [(0,0,0),(2,-2,-2),(1,1,3)]:
+                    f['prepare']();seed(rng)
+                    buff={'name':'Daily mount','rounds':5,'atkmod':1.1,'schema':'mounts'}
+                    self.query('UPDATE mounts SET mountbuff=?,mountforestfights=? WHERE mountid=?',[f['encode'](buff),mff,mount['mountid']])
+                    companion={'name':'Fixture companion','hitpoints':10,'maxhitpoints':10,'attack':1,'defense':1,'abilities':{'fight':1},'suspended':True}
+                    effects={'ordinary':{'name':'ordinary','rounds':3,'atkmod':1.2,'schema':'test'},'carried':{'name':'carried','rounds':2,'defmod':1.3,'survivenewday':1,'newdaymessage':'Carried once','schema':'test'}}
+                    self.query('UPDATE accounts SET hashorse=?,bufflist=?,companions=? WHERE acctid=?',[mount['mountid'],f['encode'](effects),f['encode']({'allowed':companion|{'allowinshades':1},'excluded':companion|{'allowinshades':0}}),f['player']])
+                    before=f['state']();form=f['form']();self.assertEqual(before,f['state']())
+                    status,body=f['request'](data=form);self.assertEqual(200,status,body[:2500]);after=f['state']()[0]
+                    self.assertEqual(spirits,int(after['spirits']));self.assertEqual(11+spirits+mff,int(after['turns']))
+                    decoded=self._normal_day_decode(after['bufflist']);self.assertNotIn('ordinary',decoded);self.assertEqual(2,decoded['carried']['rounds']);self.assertEqual(5,decoded['mount']['rounds']);self.assertEqual(1,body.count('Carried once'))
+                    for comp in self._normal_day_decode(after['companions']).values(): self.assertFalse(comp['suspended'])
+            finally:
+                self.query('UPDATE mounts SET '+','.join(k+'=?' for k in mount if k!='mountid')+' WHERE mountid=?',[*[v for k,v in mount.items() if k!='mountid'],mount['mountid']])
+
+    def _normal_day_decode(self, value):
+        return json.loads(subprocess.check_output([shutil.which('php'),'-r','echo json_encode(unserialize(stream_get_contents(STDIN),["allowed_classes"=>false]));'],input=value,text=True))
+
+    def test_normal_newday_stale_replay_transport_and_corruption(self):
+        with self._normal_day_fixture() as f:
+            for patch in [dict(goldinbank=1001),dict(age=4),dict(race='Elf'),dict(specialty='MP'),dict(alive=0),dict(hashorse=200),dict(bufflist='a:0:{}')]:
+                f['prepare']();first=f['form']()
+                if patch==dict(bufflist='a:0:{}'): patch={'bufflist':f['encode']({'changed':{'name':'changed','rounds':2,'atkmod':1.1,'schema':'test'}})}
+                self.query('UPDATE accounts SET '+','.join(k+'=?' for k in patch)+' WHERE acctid=?',[*patch.values(),f['player']]);before=f['state']()
+                self.assertEqual(409,f['request'](data=first)[0]);self.assertEqual(before,f['state']())
+            f['prepare']();form=f['form']();f['setting']('gameoffsetseconds',86400);before=f['state']()
+            self.assertEqual(409,f['request'](data=form)[0]);self.assertEqual(before,f['state']());f['setting']('gameoffsetseconds',0)
+            f['prepare']();first=f['form']();second=f['form']();self.assertEqual(200,f['request'](data=first)[0]);before=f['state']()
+            self.assertEqual(409,f['request'](data=second)[0]);self.assertEqual(before,f['state']())
+            for extra in [{'csrf_token':'0'*64},{'turns':'999'},{'age':'999'},{'newday':'early'},{'current_day':'x'}]:
+                f['prepare']();form=f['form']();before=f['state']();self.assertIn(f['request'](data=form|extra)[0],[400,403]);self.assertEqual(before,f['state']())
+            for patch in [dict(dragonpoints='N;'),dict(bufflist='a:1:{s:3:"bad";a:0:{}}'),dict(companions='N;'),dict(hashorse=200),dict(level=0)]:
+                f['prepare']();self.query('UPDATE accounts SET '+','.join(k+'=?' for k in patch)+' WHERE acctid=?',[*patch.values(),f['player']]);before=f['state']()
+                self.assertEqual(409,f['request']()[0]);self.assertEqual(before,f['state']())
+            for bad in ['NaN','INF','1e999','garbage','-101']:
+                f['prepare']();f['setting']('maxinterest',bad);before=f['state']();self.assertEqual(409,f['request']()[0]);self.assertEqual(before,f['state']())
+            f['setting']('maxinterest',10);f['prepare']();f['setting']('maxgoldforinterest',0)
+            self.query('UPDATE accounts SET goldinbank=2147483647 WHERE acctid=?',[f['player']]);form=f['form']();before=f['state']()
+            self.assertEqual(409,f['request'](data=form)[0]);self.assertEqual(before,f['state']())
+
+    def test_normal_newday_late_account_and_bundled_hook_rollback(self):
+        with self._normal_day_fixture() as f:
+            for hook_failure in [False,True]:
+                f['prepare']()
+                comp={'name':'Returning companion','hitpoints':10,'maxhitpoints':10,'attack':1,'defense':1,'abilities':{'fight':1},'suspended':True,'allowinshades':0}
+                buffs={'ordinary':{'name':'ordinary','schema':'test','rounds':3},'carry':{'name':'carry','schema':'test','rounds':2,'survivenewday':1}}
+                self.query('UPDATE accounts SET bufflist=?,companions=?,alive=0,hitpoints=0,charm=1,marriedto=4294967295 WHERE acctid=?',[f['encode'](buffs),f['encode']({'returning':comp}),f['player']])
+                form=f['form']();before=f['state']()
+                logs=self.query('SELECT * FROM debuglog WHERE actor=?',[f['player']])
+                if hook_failure:
+                    # Actual bundled specialty hook attempts to restore uses after core effects.
+                    self.query("ALTER TABLE module_userprefs ADD CONSTRAINT fixture_daily_failure CHECK (userid <> "+str(f['player'])+" OR modulename <> 'specialtydarkarts' OR setting <> 'uses' OR value='0')")
+                    table='module_userprefs'
+                else:
+                    self.query("ALTER TABLE accounts ADD CONSTRAINT fixture_daily_failure CHECK (login <> 'WebPlayer' OR age=1)")
+                    table='accounts'
+                try: self.assertEqual(500,f['request'](data=form)[0])
+                finally: self.query('ALTER TABLE '+table+' DROP CONSTRAINT fixture_daily_failure')
+                self.assertEqual(before,f['state']());self.assertEqual(logs,self.query('SELECT * FROM debuglog WHERE actor=?',[f['player']]))
+                self.assertEqual(409,f['request'](data=form)[0]);self.assertEqual(before,f['state']())
+                self.assertEqual(200,f['request'](data=f['form']())[0]);self.assertEqual('2',f['state']()[0]['age'])
+
+    def test_normal_newday_locked_revalidation_after_competing_commit(self):
+        import threading
+        with self._normal_day_fixture() as f:
+            form=f['form']();player=f['player']
+            # Independent database connection owns the account lock while the real
+            # HTTP POST hydrates yesterday's state and waits at its own lock.
+            code="""require 'dbconnect.php';require 'lib/dbwrapper_pdo.php';db_connect($DB_HOST,$DB_USER,$DB_PASS);db_select_db($DB_NAME);
+$db=$GLOBALS['dbinfo']['connection'];$db->beginTransaction();db_query('SELECT acctid FROM accounts WHERE acctid=? FOR UPDATE',true,[(int)$argv[1]]);echo "LOCKED\\n";flush();fgets(STDIN);
+db_query('UPDATE accounts SET age=age+1,lastnewday=? WHERE acctid=?',true,[$argv[2],(int)$argv[1]]);$db->commit();"""
+            # Obtain today's actual application identity from a successful reset of
+            # this fixture, then restore yesterday before the competing lock test.
+            self.assertEqual(200,f['request'](data=form)[0]);day=f['state']()[0]['lastnewday'];f['prepare']();form=f['form']()
+            self._security_allow(player,f['url'])
+            process=subprocess.Popen([shutil.which('php'),'-r',code,str(player),day],cwd=ROOT,stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True)
+            results=[];thread=None
+            try:
+                self.assertEqual('LOCKED',process.stdout.readline().strip())
+                thread=threading.Thread(target=lambda: results.append(f['call'](f['url'],form)));thread.start()
+                waiting=False
+                for _ in range(100):
+                    rows=self.query("SELECT INFO FROM information_schema.PROCESSLIST WHERE INFO LIKE '%accounts%FOR UPDATE%'")
+                    if any('WHERE acctid=' in (r['INFO'] or '') and 'SELECT INFO' not in (r['INFO'] or '') for r in rows): waiting=True;break
+                    time.sleep(.02)
+                self.assertTrue(waiting,'HTTP request did not reach the locked authority check')
+                process.stdin.write('commit\n');process.stdin.flush();out,err=process.communicate(timeout=10);self.assertEqual(0,process.returncode,err)
+                thread.join(timeout=20);self.assertFalse(thread.is_alive());self.assertEqual(409,results[0][0]);after=f['state']()[0]
+                self.assertEqual('2',after['age']);self.assertEqual('1000',after['goldinbank']);self.assertEqual('7',after['turns']);self.assertEqual(day,after['lastnewday'])
+            finally:
+                if process.poll() is None: process.terminate();process.wait(timeout=5)
+                if thread: thread.join(timeout=20)
+
+    def test_normal_newday_canonical_context_races_and_specialties(self):
+        with self._normal_day_fixture() as f:
+            for race,spec in [('Human','DA'),('Elf','MP'),('Troll','TS'),('Dwarf','DA')]:
+                f['prepare']();self.query('UPDATE accounts SET race=?,specialty=? WHERE acctid=?',[race,spec,f['player']]);form=f['form']()
+                self.assertEqual(200,f['request'](data=form)[0]);state,prefs,_=f['state']();buffs=self._normal_day_decode(state['bufflist'])
+                if race in ['Elf','Troll']: self.assertEqual(-1,buffs['racialbenefit']['rounds']);self.assertIn('defmod' if race=='Elf' else 'atkmod',buffs['racialbenefit'])
+                elif race=='Dwarf': self.assertNotIn('racialbenefit',buffs)
+                values={(r['modulename'],r['setting']):r['value'] for r in prefs}
+                selected={'DA':'specialtydarkarts','MP':'specialtymysticpower','TS':'specialtythiefskills'}[spec]
+                self.assertEqual('5',values[(selected,'uses')])
+            f['prepare']();buff={'name':'Carry','schema':'test','rounds':2,'survivenewday':1,'defmod':1.1}
+            self.query('UPDATE accounts SET bufflist=? WHERE acctid=?',[f['encode']({'carry':buff}),f['player']]);form=f['form']()
+            self.query('UPDATE accounts SET bufflist=? WHERE acctid=?',[f['encode']({'carry':dict(reversed(list(buff.items())))}),f['player']])
+            self.assertEqual(200,f['request'](data=form)[0])
+            # Missing authoritative mount and malformed raw mount effect both reject.
+            mount=self.query('SELECT * FROM mounts ORDER BY mountid LIMIT 1')[0]
+            try:
+                f['prepare']();self.query('UPDATE accounts SET hashorse=? WHERE acctid=?',[mount['mountid'],f['player']])
+                self.query("UPDATE mounts SET mountbuff='N;' WHERE mountid=?",[mount['mountid']]);before=f['state']()
+                self.assertEqual(409,f['request']()[0]);self.assertEqual(before,f['state']())
+            finally: self.query('UPDATE mounts SET mountbuff=? WHERE mountid=?',[mount['mountbuff'],mount['mountid']])
+
+    def test_normal_newday_extension_hooks_and_stale_sources(self):
+        with self._normal_day_fixture() as f:
+            name='resurrectiondailyfixture';path=ROOT/'modules'/f'{name}.php'
+            path.write_text("""<?php
+function resurrectiondailyfixture_getmoduleinfo(){return ['name'=>'Daily fixture','version'=>'1','author'=>'Tests','category'=>'Tests'];}
+function resurrectiondailyfixture_dohook($hook,$args){
+ db_query("UPDATE settings SET value=value+1 WHERE setting=?",true,['fx_'.$hook]);return $args;
+}
+""")
+            try:
+                self.query('INSERT INTO modules(modulename,active,version) VALUES (?,1,?)',[name,'1'])
+                for hook in ['newday-intercept','pre-newday','newday']:
+                    self.query('INSERT INTO module_hooks(modulename,location,`function`,whenactive,priority) VALUES (?,?,?,?,?)',[name,hook,name+'_dohook','',0]);f['setting']('fx_'+hook,0)
+                form=f['form']();f['form']()
+                def counts(): return [r['value'] for r in self.query("SELECT value FROM settings WHERE setting LIKE 'fx_%newday%' ORDER BY setting")]
+                self.assertEqual(['0','0','0'],counts());self.assertEqual(200,f['request'](data=form)[0]);self.assertEqual(['1','1','1'],counts())
+                self.assertEqual(409,f['request'](data=form)[0]);self.assertEqual(['1','1','1'],counts())
+                for change in [lambda:f['setting']('turns',11),lambda:f['pref']('drinks','drunkeness',0),lambda:self.query('UPDATE module_hooks SET priority=priority+1 WHERE modulename=?',[name])]:
+                    f['prepare']();form=f['form']();change();before=f['state']();self.assertEqual(409,f['request'](data=form)[0]);self.assertEqual(before,f['state']())
+                mount=self.query('SELECT * FROM mounts ORDER BY mountid LIMIT 1')[0]
+                try:
+                    f['prepare']();self.query('UPDATE accounts SET hashorse=? WHERE acctid=?',[mount['mountid'],f['player']]);form=f['form']()
+                    self.query('UPDATE mounts SET mountforestfights=mountforestfights+1 WHERE mountid=?',[mount['mountid']]);before=f['state']()
+                    self.assertEqual(409,f['request'](data=form)[0]);self.assertEqual(before,f['state']())
+                    form=f['form']();self.assertEqual(200,f['request'](data=form)[0])
+                    self.assertEqual('20',self._normal_day_decode(f['state']()[0]['bufflist'])['mount']['rounds'])
+                finally:self.query('UPDATE mounts SET mountforestfights=? WHERE mountid=?',[mount['mountforestfights'],mount['mountid']])
+            finally:
+                self.query('DELETE FROM module_hooks WHERE modulename=?',[name]);self.query('DELETE FROM modules WHERE modulename=?',[name]);path.unlink()
+
+    def _advance_normal_day(self, request, player):
+        # Existing module matrices simulate another day, then use the actual POST.
+        self.query("UPDATE accounts SET lastnewday='',lasthit='2000-01-01 00:00:00' WHERE acctid=?",[player])
+        url='newday.php?continue=1'
+        self._security_allow(player,url)
+        status,body=request(url)
+        self.assertEqual(200,status,body[:2000])
+        result=request(url,self._security_fields(body)|{'newday':'normal'})
+        self.assertEqual(200,result[0],result[1][:3000])
+        return result
 
     def _security_client(self, login='WebPlayer', password="Synthetic web O'Reilly \\ password"):
         class NoRedirect(urllib.request.HTTPRedirectHandler):
@@ -4589,7 +4823,7 @@ function resurrectionspecialtyobserver_dohook($hook,$args) {
             pref('played',1); pref('paidvisit',1)
             self.query('UPDATE accounts SET lasthit=?,race=?,specialty=? WHERE acctid=?',['2000-01-01 00:00:00','Human','DA',player])
             allow('newday.php?continue=1')
-            self.assertEqual(200,request('newday.php?continue=1')[0])
+            self.assertEqual(200,self._advance_normal_day(request,player)[0])
             current=dict((r['setting'],r['value']) for r in state()[1])
             self.assertEqual('0',current['played']); self.assertEqual('0',current['paidvisit'])
             before=state(); allow(url); self.assertEqual(409,request(url,old_day_post)[0]); self.assertEqual(before,state())
@@ -4916,6 +5150,8 @@ function resurrectionspecialtyobserver_dohook($hook,$args) {
             self.assertEqual(200,status)
             status, _, body=request(issued_link(body,'newday.php?continue=1'))
             self.assertEqual(200,status)
+            status, _, body = request('newday.php?continue=1', self._security_fields(body) | {'newday':'normal'})
+            self.assertEqual(200,status,body[:2000])
             status, headers, body = request(issued_link(body, 'village.php'))
         self.assertEqual(200, status, headers.get('Location', 'Unexpected HTTP status'))
         self.assertIn('WebPlayer', body)

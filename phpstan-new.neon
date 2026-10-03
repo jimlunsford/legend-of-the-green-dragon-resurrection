@@ -3,6 +3,7 @@ parameters:
     paths:
         - src
         - lib/accounts.php
+        - lib/newday_daily.php
         - lib/dragon_points.php
         - lib/player_mutation.php
         - lib/race_onboarding.php
@@ -33,6 +34,7 @@ parameters:
         - lib/extended-battle.php
         - lib/battle-skills.php
         - lib/datetime.php
+        - lib/sanitize.php
         - lib/partner.php
         - lib/dragon_outcomes.php
         - lib/training_outcomes.php

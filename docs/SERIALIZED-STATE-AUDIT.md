@@ -310,3 +310,14 @@ entries and over-allocation preserve state for explicit administrator repair.
 The existing `ff` vocabulary and downstream count are retained. See
 [the narrow trust contract and proofs](DRAGON-POINT-AUTHORITY-20261003.md).
 Exact supported CI remains the acceptance gate; broader state closure is not claimed.
+
+## Normal daily-reset consumer candidate, 2026-10-03
+
+The daily reset reads raw persisted Dragon Point history through `DragonPointState`,
+buffs through existing specialty/Transmutation/Forest business validators, and
+companions through existing skeleton/Forest schemas. Owned mount rows and raw
+mount effects are refreshed and validated before use. Malformed state fails closed
+without repair/normalization; GET retains stored buff bytes. Equivalent record
+field order is canonicalized for the one-use context. The low-level `ScalarState`
+reader remains unchanged. [Scope and evidence](NEWDAY-DAILY-RESET-AUTHORITY-20261003.md).
+Broader serialized consumers and explicit early resurrection remain BLOCKED.

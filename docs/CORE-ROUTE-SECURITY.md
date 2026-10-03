@@ -461,3 +461,15 @@ buyability, permanent-stat bounds, raw duplicate-field rejection, stale/replay
 protection and rollback. Completion hands off to existing race/specialty/New Day
 routes. Allocation acceptance awaits exact-candidate supported CI. Broader New
 Day is not certified; Phase 3 incomplete, merge NO, public hosting NO.
+
+## Normal New Day daily-reset candidate, 2026-10-03
+
+Normal New Day GET is presentation only. A CSRF-protected one-use POST intent,
+locked player/source revalidation and persisted `accounts.lastnewday` own daily
+reset execution. Historical living/dead, interest, turns, buffs, mount, companion
+and bundled hook behavior is retained. Failure rolls back account and directly
+related transactional hook writes. Display saving cannot rewrite gameplay state.
+Dragon Point/race/specialty prerequisite handlers remain in front of the reset.
+Explicit `resurrection=true` remains separate and unproven, so broader New Day is
+BLOCKED. Exact supported-matrix CI remains the normal-slice acceptance gate.
+[Full authority, historical rules, tests and limitations](NEWDAY-DAILY-RESET-AUTHORITY-20261003.md).

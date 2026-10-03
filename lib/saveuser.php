@@ -21,6 +21,7 @@ function saveuser(){
         $assignments = [];
         $parameters = [];
         foreach ($session['user'] as $key => $value) {
+            if (defined('RESURRECTION_NEWDAY_PRESENTATION') && !in_array($key, ['allowednavs','restorepage','gentime','gentimecount','gensize'], true)) { continue; }
             if ($key === 'password' || !array_key_exists($key, $baseaccount)) { continue; }
             if (is_array($value)) { $value = serialize($value); }
             if ($baseaccount[$key] != $value) {

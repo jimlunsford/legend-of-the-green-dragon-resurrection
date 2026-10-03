@@ -106,6 +106,7 @@ function resurrection_dragon_complete(bool $flawless): void {
 				   ,"name"=>1
 				   ,"sex"=>1
 				   ,"password"=>1
+                   ,"lastnewday"=>1 // Daily authority survives progression resets.
                    ,"authversion"=>1 // Login generation is security state, not a Dragon reset statistic.
 				   ,"marriedto"=>1
 				   ,"title"=>1
