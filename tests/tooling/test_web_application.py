@@ -1430,7 +1430,9 @@ echo "locked\\n";fflush(STDOUT);$change=json_decode(fgets(STDIN),true,512,JSON_T
                 self._security_allow(f['player'],path); return call(path,data,fixture=seed or ('graveyard-round' if path=='graveyard.php?op=fight' else 'specialty-accounting'))
             def patch(**values): self.query('UPDATE accounts SET '+','.join(k+'=?' for k in values)+' WHERE acctid=?',[*values.values(),f['player']])
             def prepare(**changes):
-                f['prepare']('',alive=0,hitpoints=0,badguy='',soulpoints=100,gravefights=5,deathpower=100)
+                # Keep onboarding complete alongside the real committed New Day marker.
+                # An empty specialty correctly makes is_new_day() reject search before DML.
+                f['prepare']('DA',alive=0,hitpoints=0,badguy='',soulpoints=100,gravefights=5,deathpower=100)
                 patch(**changes) if changes else None
             def snapshot():
                 return self.query('SELECT alive,hitpoints,soulpoints,gravefights,deathpower,attack,defense,level,gold,gems,experience,badguy,companions,bufflist,specialinc,specialmisc FROM accounts WHERE acctid=?',[f['player']])[0]
@@ -1469,7 +1471,8 @@ echo "locked\\n";fflush(STDOUT);$change=json_decode(fgets(STDIN),true,512,JSON_T
 
     def test_graveyard_search_rollback_and_eligibility(self):
         with self._graveyard_fixture() as f:
-            for changes in [dict(alive=1,hitpoints=100),dict(alive=1,hitpoints=0),dict(alive=0,hitpoints=1),dict(specialinc='module:goldmine'),dict(badguy='broken')]:
+            self.assertTrue(self.query('SELECT lastnewday FROM accounts WHERE acctid=?',[f['player']])[0]['lastnewday'])
+            for changes in [dict(alive=1,hitpoints=100),dict(alive=1,hitpoints=0),dict(alive=0,hitpoints=1),dict(specialinc='module:goldmine'),dict(badguy='broken'),dict(specialty='')]:
                 f['gprepare'](); data=f['gform']('search');f['patch'](**changes);f['greject'](data,'search')
             f['gprepare']();data=f['gform']('search');f['patch'](gravefights=0);f['greject'](data,'search');code,body=f['request']('graveyard.php?op=search');self.assertEqual(200,code);self.assertNotIn('action_token',body)
             f['gprepare']();data=f['gform']('search');self.query("ALTER TABLE accounts ADD CONSTRAINT fixture_grave_search CHECK (login <> 'WebPlayer' OR gravefights=5)")
@@ -1535,11 +1538,24 @@ echo "locked\\n";fflush(STDOUT);$change=json_decode(fgets(STDIN),true,512,JSON_T
             skeleton=dict(name='`4Skeleton Warrior',hitpoints=43,maxhitpoints=43,attack=26.5,defense=14.5,dyingtext='`$Your skeleton warrior crumbles to dust.`n',abilities=dict(fight=True),ignorelimit=True)
             helper=dict(name='Shade Helper',hitpoints=100,maxhitpoints=100,attack=20,defense=10,abilities=dict(fight=True),allowinshades=True,dyingtext='Helper falls',schema='fixture')
             excluded=helper|dict(name='Excluded Helper',allowinshades=False)
-            f['gprepare'](companions=f['encode'](dict(helper=helper,excluded=excluded,skeleton_warrior=skeleton)))
+            self.query("UPDATE modules SET active=1 WHERE modulename='drinks'")
+            self.query("INSERT INTO module_userprefs(modulename,setting,userid,value) VALUES ('drinks','drunkeness',?,'75') ON DUPLICATE KEY UPDATE value='75'",[f['player']])
+            def prefs(): return self.query('SELECT * FROM module_userprefs WHERE userid=? ORDER BY modulename,setting',[f['player']])
+            buff={'proof':dict(name='Preserve until commit',schema='fixture',rounds=5,atkmod=2)}
+            f['gprepare'](bufflist=f['encode'](buff),companions=f['encode'](dict(helper=helper,excluded=excluded,skeleton_warrior=skeleton)))
+            before=f['gsnapshot']();before_prefs=prefs()
+            day=self.query('SELECT lastnewday FROM accounts WHERE acctid=?',[f['player']])[0]['lastnewday'];self.assertTrue(day)
             data=f['gform']('search');self.query("ALTER TABLE accounts ADD CONSTRAINT fixture_grave_companion CHECK (login <> 'WebPlayer' OR gravefights=5)")
-            try: f['greject'](data,'search',500)
+            try:
+                self.assertEqual(before,f['gsnapshot']());self.assertEqual(before_prefs,prefs())
+                f['greject'](data,'search',500)
+                self.assertEqual(before,f['gsnapshot']());self.assertEqual(before_prefs,prefs())
             finally: self.query('ALTER TABLE accounts DROP CONSTRAINT fixture_grave_companion')
+            f['greject'](data,'search');self.assertEqual(before_prefs,prefs())
             _,body=f['enter']();row=f['gsnapshot']();companions=f['decode'](row['companions'])
+            self.assertEqual('4',row['gravefights']);self.assertEqual([],f['decode'](row['bufflist']))
+            self.assertEqual('0',next(p['value'] for p in prefs() if p['modulename']=='drinks' and p['setting']=='drunkeness'))
+            self.assertEqual(day,self.query('SELECT lastnewday FROM accounts WHERE acctid=?',[f['player']])[0]['lastnewday'])
             self.assertEqual(skeleton|dict(suspended=True),companions['skeleton_warrior']);self.assertEqual(excluded|dict(suspended=True),companions['excluded'])
             self.assertEqual(94,companions['helper']['hitpoints']);self.assertEqual(85,f['decode'](row['badguy'])['enemies'][0]['creaturehealth']);self.assertTrue(companions['helper']['used']);self.assertNotIn('Skeleton Warrior hits',body);self.assertNotIn('Excluded Helper hits',body)
             text=re.sub(r'\s+',' ',html.unescape(re.sub('<[^>]+>',' ',body)))
