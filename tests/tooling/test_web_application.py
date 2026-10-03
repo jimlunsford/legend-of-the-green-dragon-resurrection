@@ -2010,11 +2010,28 @@ echo "locked\\n";fflush(STDOUT);$change=json_decode(fgets(STDIN),true,512,JSON_T
             try:
                 for key,value in [('forestchance','0'),('autofight','1'),('autofightfull','1')]:
                     self.query('INSERT INTO settings(setting,value) VALUES (?,?) ON DUPLICATE KEY UPDATE value=VALUES(value)',[key,value])
-                f['prepare']('TS',specialty='',badguy='',gold=1000,gems=10,experience=1000,turns=20)
+                # New search requires completed onboarding, even for ordinary combat.
+                f['prepare']('TS',badguy='',gold=1000,gems=10,experience=1000,turns=20)
+                day=self.query('SELECT lastnewday FROM accounts WHERE acctid=?',[f['player']])[0]['lastnewday']
+                self.assertTrue(day)
+                # The same committed day cannot bypass a missing specialty prerequisite.
+                self.query("UPDATE accounts SET specialty='' WHERE acctid=?",[f['player']])
+                def gameplay():
+                    account=self.query('SELECT * FROM accounts WHERE acctid=?',[f['player']])[0]
+                    for key in ['laston','gentime','gentimecount','gensize','allowednavs','restorepage','lastip','uniqueid']: account.pop(key,None)
+                    return account,f['snapshot']()[1:]
+                missing=gameplay()
+                self.assertEqual(['Human','','0','a:0:{}','','20',day],
+                    [missing[0][key] for key in ['race','specialty','dragonkills','dragonpoints','badguy','turns','lastnewday']])
+                denied=f['ordinary_form']('search'); self.assertEqual(missing,gameplay())
+                f['reject'](denied,'search',409); self.assertEqual(missing,gameplay())
+                # Restoring only the selected specialty makes the following search eligible.
+                self.query("UPDATE accounts SET specialty='TS' WHERE acctid=?",[f['player']])
                 before=f['snapshot'](); data=f['ordinary_form']('search'); self.assertEqual(before,f['snapshot']())
                 f['reject']({},'search',403)
                 stale=f['ordinary_form']('search'); code,body=f['action'](data,'search'); self.assertEqual(200,code,body[:3000])
                 after=f['snapshot']()[0]; state=f['decode'](after['badguy']); self.assertEqual('19',after['turns'])
+                self.assertEqual(day,self.query('SELECT lastnewday FROM accounts WHERE acctid=?',[f['player']])[0]['lastnewday'])
                 self.assertRegex(state['options']['encounter'],r'^[a-f0-9]{32}$'); f['reject'](data,'search'); f['reject'](stale,'search')
                 # The form emitted by the mutating response must work immediately after DB hydration.
                 data=self._security_fields(body,'forest.php?op=run'); code,body=f['action'](data,'run'); self.assertEqual(200,code,body[:3000]); f['reject'](data,'run')
@@ -2024,7 +2041,7 @@ echo "locked\\n";fflush(STDOUT);$change=json_decode(fgets(STDIN),true,512,JSON_T
                 after=f['snapshot']()[0]
                 self.assertEqual('',after['badguy']); self.assertEqual(['500','1000','1000','10'],[after[k] for k in ['hitpoints','experience','gold','gems']])
                 # Search failure is late enough to roll back turn, encounter and surprise HP.
-                f['prepare']('TS',specialty='',badguy='',turns=20); data=f['ordinary_form']('search'); before=f['snapshot']()
+                f['prepare']('TS',badguy='',turns=20); data=f['ordinary_form']('search'); before=f['snapshot']()
                 self.query("ALTER TABLE accounts ADD CONSTRAINT fixture_ordinary_search CHECK (login <> 'WebPlayer' OR turns <> 19)")
                 try:
                     code,body=f['action'](data,'search'); self.assertEqual(500,code,body[:2000]); self.assertEqual(before,f['snapshot']()); f['reject'](data,'search')
