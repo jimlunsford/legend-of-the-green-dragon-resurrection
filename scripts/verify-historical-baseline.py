@@ -8,6 +8,7 @@ import subprocess
 import sys
 
 TAG = 'historical-source-1.1.2'
+TAG_OBJECT = '51cab4fbe58a234651a3177a56289b18bc152b4d'
 COMMIT = 'bdc29df9bc344774b41e0ad7cae7f6ed2f7512e2'
 TREE = '4013a0ccc5227e87cd7a22de00b7c322d7aa237c'
 COUNT = 417
@@ -20,6 +21,9 @@ def verify(repo, manifest=None):
     ref = 'refs/tags/' + TAG
     if git(repo, 'cat-file', '-t', ref).strip() != b'tag':
         raise ValueError('Historical reference must be an annotated tag')
+    if git(repo, 'rev-parse', ref).decode().strip() != TAG_OBJECT:
+        raise ValueError('Historical annotated tag object differs from expected object')
+    git(repo, 'merge-base', '--is-ancestor', COMMIT, 'HEAD')
     if git(repo, 'rev-parse', ref + '^{commit}').decode().strip() != COMMIT:
         raise ValueError('Historical tag target differs from expected commit')
     if git(repo, 'rev-parse', COMMIT + '^{tree}').decode().strip() != TREE:
@@ -56,7 +60,7 @@ def verify(repo, manifest=None):
         git(repo, 'cat-file', 'commit', ancestor)
     if git(repo, 'rev-parse', '--is-shallow-repository').strip() != b'false':
         raise ValueError('Full history is required; fetch complete ancestry and tags')
-    return {'status': 'PASS', 'tag': TAG, 'commit': COMMIT, 'tree': TREE,
+    return {'status': 'PASS', 'tag': TAG, 'tag_object': TAG_OBJECT, 'commit': COMMIT, 'tree': TREE,
             'files_verified': len(entries), 'historical_commits': len(ancestors)}
 
 def main():

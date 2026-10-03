@@ -49,6 +49,7 @@ function reltime($date,$short=true){
 }
 
 function relativedate($indate){
+    if ($indate === null || $indate === "") { return translate_inline("Never", "datetime"); }
 	$laston = round((strtotime("now")-strtotime($indate)) / 86400,0) . " days";
 	tlschema("datetime");
 	if (substr($laston,0,2)=="1 ")
@@ -75,7 +76,7 @@ function checkday() {
 			$post = $_POST;
 			unset($post['i_am_a_hack']);
 			if (count($post) > 0){
-				$session['user']['lasthit'] = "0000-00-00 00:00:00";
+				$session['user']['lasthit'] = null;
 				return;
 			} else {
 				$session=$revertsession;
@@ -90,8 +91,15 @@ function checkday() {
 
 function is_new_day($now=0){
 	global $session;
+    // A committed normal-day marker outranks mutable access/presentation timestamps.
+    if (!empty($session['user']['lastnewday'])) {
+        // Progression may reopen protected onboarding without funding a second daily reset.
+        if (in_array($session['user']['race'], ['', '0', RACE_UNKNOWN], true) || $session['user']['specialty'] === '' ||
+            (is_array($session['user']['dragonpoints']) && count($session['user']['dragonpoints']) < (int)$session['user']['dragonkills'])) return true;
+        return $session['user']['lastnewday'] !== gmdate('Y-m-d', gametime());
+    }
 
-	if ($session['user']['lasthit'] == "0000-00-00 00:00:00") {
+	if (empty($session['user']['lasthit']) || $session['user']['lasthit'] == "0000-00-00 00:00:00") {
 		return true;
 	}
 	$t1 = gametime();

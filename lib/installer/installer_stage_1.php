@@ -33,7 +33,7 @@ if (isset($licensemd5s[md5($license)])){
 	rawoutput($license);
 }else{
 	output("`^The license file (LICENSE.txt) has been modified.  Please obtain a new copy of the game's code, this file has been tampered with.");
-	output("Expected MD5 in (".join(array_keys($licensemd5s),",")."), but got ".md5($license));
+	output("Expected MD5 in (".join(",",array_keys($licensemd5s))."), but got ".md5($license));
 	$stage=-1;
 	$session['stagecompleted']=-1;
 }

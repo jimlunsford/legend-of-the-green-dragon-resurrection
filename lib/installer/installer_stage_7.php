@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/../../src/Compatibility/array_cursor.php';
 require("lib/installer/installer_sqlstatements.php");
 if (httppost("type")>""){
 	if (httppost("type")=="install") {
@@ -24,7 +25,7 @@ if (!isset($session['fromversion']) || $session['fromversion']==""){
 	if ($version=="-1") $version="0.9.7";
 	reset($sql_upgrade_statements);
 	rawoutput("<select name='version'>");
-	while(list($key,$val)=each($sql_upgrade_statements)){
+	while(list($key,$val)=resurrection_array_next($sql_upgrade_statements)){
 		if ($key!="-1"){
 			rawoutput("<option value='$key'".($version==$key?" selected":"").">$key</option>");
 		}

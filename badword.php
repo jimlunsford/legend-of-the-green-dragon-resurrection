@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/src/Compatibility/array_cursor.php';
 // translator ready
 // addnews ready
 // mail ready
@@ -157,7 +158,7 @@ page_footer();
 function show_word_list($words){
 	sort($words);
 	$lastletter="";
-	while (list($key,$val)=each($words)){
+	while (list($key,$val)=resurrection_array_next($words)){
 		if (trim($val)==""){
 			unset($words[$key]);
 		}else{

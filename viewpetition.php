@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/src/Compatibility/array_cursor.php';
 // translator ready
 // addnews ready
 // mail ready
@@ -70,7 +71,7 @@ if ($op==""){
 	reset($statuses);
 	$sort = "";
 	$pos = 0;
-	while (list($key,$val)=each($statuses)){
+	while (list($key,$val)=resurrection_array_next($statuses)){
 		$sort.=" WHEN $key THEN $pos";
 		$pos++;
 	}
@@ -248,7 +249,7 @@ if ($op==""){
 
 	addnav("Petition Ops");
 	reset($statuses);
-	while (list($key,$val)=each($statuses)){
+	while (list($key,$val)=resurrection_array_next($statuses)){
 		$plain = full_sanitize($val);
 		addnav(array("%s?Mark %s", substr($plain,0,1), $val),
 				"viewpetition.php?setstat=$key&id=$id");

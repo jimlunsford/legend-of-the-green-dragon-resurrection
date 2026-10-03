@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/../../src/Security/ScalarState.php';
 $subject=httppost('subject');
 $body="";
 $row="";
@@ -33,12 +34,12 @@ if (is_array($row)){
 		if ((int)$row['msgfrom']==0){
 			$row['name']=translate_inline("`i`^System`0`i");
 			// No translation for subject if it's not an array
-			$row_subject = @unserialize($row['subject']);
+			$row_subject = \Resurrection\Security\ScalarState::read($row['subject']);
 			if ($row_subject !== false) {
 				$row['subject'] = call_user_func_array("sprintf_translate", $row_subject);
 			}
 			// No translation for body if it's not an array
-			$row_body = @unserialize($row['body']);
+			$row_body = \Resurrection\Security\ScalarState::read($row['body']);
 			if ($row_body !== false) {
 				$row['body'] = call_user_func_array("sprintf_translate", $row_body);
 			}
@@ -77,7 +78,7 @@ if (isset($row['login']) && $row['login']!=""){
 		$string="%";
 		$to_len = strlen($to);
 		for($x=0; $x < $to_len; ++$x) {
-			$string .= $to{$x}."%";
+			$string .= $to[$x]."%";
 		}
 		$sql = "SELECT login,name,superuser FROM " . db_prefix("accounts") . " WHERE name LIKE '".addslashes($string)."' AND locked=0 ORDER by login='$to' DESC, name='$to' DESC, login";
 		$result = db_query($sql);

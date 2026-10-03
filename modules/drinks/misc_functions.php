@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/../../src/Compatibility/array_cursor.php';
 function drinks_gettexts() {
 	global $session;
 	$iname = getsetting("innname", LOCATION_INN);
@@ -27,8 +28,18 @@ function drinks_gettexts() {
 
 // Support functions
 function drinks_editor(){
-	global $mostrecentmodule;
-	if (!get_module_pref("canedit")) check_su_access(SU_EDIT_USERS);
+    global $mostrecentmodule, $session;
+    require_once 'lib/player_mutation.php';
+    require_once 'src/Http/DrinkInput.php';
+    if (($_GET['subop'] ?? '') !== '') { http_response_code(400); exit('No supported drink object preferences.'); }
+    if (empty($session['loggedin'])) { http_response_code(403); exit('Not authorized.'); }
+    if (!get_module_pref('canedit','drinks')) check_su_access(SU_EDIT_USERS);
+    try {
+        $editorOp=\Resurrection\Http\Input::choice($_GET,'op',['','add','edit','save','del','activate','deactivate'],'');
+        $editorId=\Resurrection\Http\Input::integer($editorOp === 'save' ? $_POST : $_GET,'drinkid',0,0);
+        if ($editorId > 32767 || ($editorOp !== 'save' && in_array($editorOp,['edit','del','activate','deactivate'],true) && $editorId < 1)) throw new InvalidArgumentException();
+    } catch (InvalidArgumentException $error) { http_response_code(400); exit('Invalid drink editor input.'); }
+    if (in_array($editorOp,['save','del','activate','deactivate'],true)) resurrection_consume_action('drinks-editor-'.$editorOp.($editorOp==='save'?'':'-'.$editorId),(string)$editorId);
 
 	page_header("Drink Editor");
 	require_once("lib/superusernav.php");
@@ -36,7 +47,7 @@ function drinks_editor(){
 	addnav("Drink Editor");
 	addnav("Add a drink","runmodule.php?module=drinks&act=editor&op=add&admin=true");
 	$op = httpget('op');
-	$drinkid = httpget('drinkid');
+	$drinkid = $editorId;
 	$header = "";
 	if ($op != "") {
 		addnav("Drink Editor Main","runmodule.php?module=drinks&act=editor&admin=true");
@@ -79,48 +90,34 @@ function drinks_editor(){
 		"buffeffectmsg"=>"Effect message (see below)",
 	);
 	if($op=="del"){
-		$sql = "DELETE FROM " . db_prefix("drinks") . " WHERE drinkid='$drinkid'";
-		module_delete_objprefs('drinks', $drinkid);
-		db_query($sql);
+		resurrection_player_mutation(function () use ($drinkid) {
+            db_query('DELETE FROM ' . db_prefix('module_objprefs') . ' WHERE objtype=? AND objid=?',true,['drinks',$drinkid]);
+            db_query('DELETE FROM ' . db_prefix('drinks') . ' WHERE drinkid=?',true,[$drinkid]);
+        });
 		$op = "";
 		httpset('op', "");
 	}
 	if($op=="save"){
 		$subop = httpget("subop");
 		if ($subop=="") {
-			$drinkid = httppost("drinkid");
-			list($sql, $keys, $vals) = postparse($drinksarray);
-			if ($drinkid > 0) {
-				$sql = "UPDATE " . db_prefix("drinks") . " SET $sql WHERE drinkid='$drinkid'";
-			} else {
-				$sql = "INSERT INTO " . db_prefix("drinks") . " ($keys) VALUES ($vals)";
-			}
-			db_query($sql);
-			if (db_affected_rows()> 0) {
-				output("`^Drink saved!");
-			} else {
-				$str = db_error();
-				if ($str == "") {
-					output("`^Drink not saved: no changes detected.");
-				} else {
-					output("`^Drink not saved: `\$%s`0", $sql);
-				}
-			}
-		} elseif ($subop == "module") {
-			$drinkid = httpget("drinkid");
-			// Save module settings
-			$module = httpget("editmodule");
-			// This should obey the same rules as the configuration editor
-			// So disabling
-			//$sql = "DELETE FROM " . db_prefix("module_objprefs") . " WHERE objtype='drinks' AND objid='$drinkid' AND modulename='$module'";
-			//db_query($sql);
-			$post = httpallpost();
-			reset($post);
-			while(list($key, $val)=each($post)) {
-				set_module_objpref("drinks", $drinkid,$key, $val, $module);
-			}
-			output("`^Saved.");
-		}
+            try { $values=\Resurrection\Http\DrinkInput::parse($_POST); }
+            catch (InvalidArgumentException $error) { http_response_code(400); exit('Invalid drink fields.'); }
+            resurrection_player_mutation(function () use (&$drinkid,$values) {
+                if ($drinkid>0) {
+                    $exists=db_query('SELECT drinkid FROM ' . db_prefix('drinks') . ' WHERE drinkid=? FOR UPDATE',true,[$drinkid]);
+                    if (!$exists) throw new DomainException('Drink no longer exists.');
+                    $sets=array_map(static fn($key)=>db_identifier($key).'=?',array_keys($values));
+                    db_query('UPDATE ' . db_prefix('drinks') . ' SET '.implode(',',$sets).' WHERE drinkid=?',true,[...array_values($values),$drinkid]);
+                } else {
+                    db_query('INSERT INTO ' . db_prefix('drinks') . ' ('.implode(',',array_map('db_identifier',array_keys($values))).') VALUES ('.implode(',',array_fill(0,count($values),'?')).')',true,array_values($values));
+                    $drinkid=db_insert_id();
+                }
+            });
+            output('`^Drink saved!');
+        } else {
+            // No bundled module declares prefs-drinks. Unknown namespaces are not writable.
+            http_response_code(400); exit('No supported drink object preferences.');
+        }
 		if ($drinkid) {
 			$op = "edit";
 			httpset("drinkid", $drinkid, true);
@@ -130,14 +127,12 @@ function drinks_editor(){
 		httpset('op', $op);
 	}
 	if ($op == "activate") {
-		$sql = "UPDATE " . db_prefix("drinks") . " SET active=1 WHERE drinkid='$drinkid'";
-		db_query($sql);
+		db_query('UPDATE ' . db_prefix('drinks') . ' SET active=? WHERE drinkid=?',true,[1,$drinkid]);
 		$op = "";
 		httpset('op', "");
 	}
 	if ($op == "deactivate") {
-		$sql = "UPDATE " . db_prefix("drinks") . " SET active=0 WHERE drinkid='$drinkid'";
-		db_query($sql);
+		db_query('UPDATE ' . db_prefix('drinks') . ' SET active=? WHERE drinkid=?',true,[0,$drinkid]);
 		$op = "";
 		httpset('op', "");
 	}
@@ -165,17 +160,17 @@ function drinks_editor(){
 			rawoutput("<td nowrap>[ <a href='runmodule.php?module=drinks&act=editor&op=edit&drinkid=$id&admin=true'>$edit</a>");
 			addnav("","runmodule.php?module=drinks&act=editor&op=edit&drinkid=$id&admin=true");
 			if ($row['active']) {
-				rawoutput(" | <a href='runmodule.php?module=drinks&act=editor&op=deactivate&drinkid=$id&admin=true'>$deac</a>");
+            drinks_editor_action('deactivate',(int)$id,$deac);
 				addnav("","runmodule.php?module=drinks&act=editor&op=deactivate&drinkid=$id&admin=true");
 			} else {
-				rawoutput(" | <a href='runmodule.php?module=drinks&act=editor&op=activate&drinkid=$id&admin=true'>$act</a>");
+            drinks_editor_action('activate',(int)$id,$act);
 				addnav("","runmodule.php?module=drinks&act=editor&op=activate&drinkid=$id&admin=true");
 			}
 
-			rawoutput(" | <a href='runmodule.php?module=drinks&act=editor&op=del&drinkid=$id&admin=true' onClick='return confirm(\"$conf\");'>$del</a> ]</td>");
+            drinks_editor_action('del',(int)$id,$del); rawoutput(' ]</td>');
 			addnav("","runmodule.php?module=drinks&act=editor&op=del&drinkid=$id&admin=true");
 			output_notl("<td>`^%s</td>`0", $id, true);
-			output_notl("<td>`&%s`0</td>", $row['name'], true);
+			output_notl("<td>`&%s`0</td>", htmlspecialchars($row['name'],ENT_QUOTES,'UTF-8'), true);
 			output_notl("<td>`^%s`0</td>", $row['drunkeness'], true);
 			$hard = translate_inline("`^No");
 			if ($row['harddrink']) $hard = translate_inline("`\$Yes");
@@ -197,18 +192,19 @@ function drinks_editor(){
 			rawoutput("</form>");
 			addnav("", "runmodule.php?module=drinks&act=editor&op=save&subop=module&editmodule=$module&drinkid=$drinkid&admin=true");
 		} elseif ($subop=="") {
-				$sql = "SELECT * FROM " . db_prefix("drinks") . " WHERE drinkid='".httpget('drinkid')."'";
-				$result = db_query($sql);
+				$result = db_query('SELECT * FROM ' . db_prefix('drinks') . ' WHERE drinkid=?',true,[$drinkid]);
 				$row = db_fetch_assoc($result);
+                if (!$row) { http_response_code(404); exit('Drink not found.'); }
 		}
 	}elseif ($op=="add"){
 		/* We're adding a new drink, make an empty row */
-		$row = array();
+		$row = \Resurrection\Http\DrinkInput::parse([]);
 		$row['drinkid'] = 0;
 	}
 
 	if (($op == "edit" || $op == "add") && $subop=="") {
 		rawoutput("<form action='runmodule.php?module=drinks&act=editor&op=save&admin=true' method='POST'>");
+        rawoutput(resurrection_action_fields('drinks-editor-save',(string)$row['drinkid']));
 		addnav("","runmodule.php?module=drinks&act=editor&op=save&admin=true");
 		showform($drinksarray,$row);
 		rawoutput("</form>");
@@ -244,4 +240,8 @@ function drinks_editor(){
 	page_footer();
 }
 
+function drinks_editor_action(string $op,int $id,string $label): void {
+    $url='runmodule.php?module=drinks&act=editor&op='.$op.'&drinkid='.$id.'&admin=true';
+    rawoutput('<form method="POST" action="'.htmlspecialchars($url,ENT_QUOTES,'UTF-8').'">'.resurrection_action_fields('drinks-editor-'.$op.'-'.$id,(string)$id).'<button class="button">'.htmlspecialchars($label,ENT_QUOTES,'UTF-8').'</button></form>');
+}
 ?>

@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/../src/Compatibility/array_cursor.php';
 // translator ready
 // addnews ready
 // mail ready
@@ -10,7 +11,7 @@ function templatereplace($itemname,$vals=false){
 	$out = $template[$itemname];
 	if (!is_array($vals)) return $out;
 	@reset($vals);
-	while (list($key,$val)=@each($vals)){
+	while (list($key,$val)=resurrection_array_next($vals)){
 		if (strpos($out,"{".$key."}")===false){
 			output("`bWarning:`b the `i%s`i piece was not found in the `i%s`i te".
 					"mplate part! (%s)`n", $key, $itemname, $out);
@@ -32,7 +33,7 @@ function prepare_template($force=false){
 	 if (!isset($_COOKIE['template'])) $_COOKIE['template']="";
 	$templatename="";
 	$templatemessage="";
-	if ($_COOKIE['template']!="")
+	if (is_string($_COOKIE['template']) && preg_match('/\\A[A-Za-z0-9_-]+\\.htm\\z/', $_COOKIE['template']))
 		$templatename=$_COOKIE['template'];
 	if ($templatename=="" || !file_exists("templates/$templatename"))
 		$templatename=getsetting("defaultskin", "jade.htm");
@@ -49,14 +50,14 @@ function prepare_template($force=false){
 
 		//tags that must appear in the header
 		$templatetags=array("title","headscript","script");
-		while (list($key,$val)=each($templatetags)){
+		while (list($key,$val)=resurrection_array_next($templatetags)){
 			if (strpos($template['header'],"{".$val."}")===false && $val)
 				$templatemessage .=
 					"You do not have {".$val."} defined in your header\n";
 		}
 		//tags that must appear in the footer
 		$templatetags=array();
-		while (list($key,$val)=each($templatetags)){
+		while (list($key,$val)=resurrection_array_next($templatetags)){
 			if (strpos($template['footer'],"{".$val."}")===false && $val)
 				$templatemessage .=
 					"You do not have {".$val."} defined in your footer\n";
@@ -65,7 +66,7 @@ function prepare_template($force=false){
 		//tags that may appear anywhere but must appear
 		$templatetags=array("nav","stats","petition","motd","mail",
 				"paypal","source","version", "copyright");
-		while (list($key,$val)=each($templatetags)){
+		while (list($key,$val)=resurrection_array_next($templatetags)){
 			if (!$key) array_push($templatetags,$y2^$z2);
 			if (strpos($template['header'],"{".$val."}")===false &&
 					strpos($template['footer'],"{".$val."}")===false && $val)

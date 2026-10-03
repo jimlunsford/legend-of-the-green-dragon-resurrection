@@ -12,31 +12,17 @@ $superusermessage = getsetting("superuseryommessage","Asking an admin for gems, 
 
 $op = httpget('op');
 $id = (int)httpget('id');
-if($op=="del"){
-	$sql = "DELETE FROM " . db_prefix("mail") . " WHERE msgto='".$session['user']['acctid']."' AND messageid='$id'";
-	db_query($sql);
-	invalidatedatacache("mail-{$session['user']['acctid']}");
-	header("Location: mail.php");
-	exit();
-}elseif($op=="process"){
-	$msg = httppost('msg');
-	if (!is_array($msg) || count($msg)<1){
-		$session['message'] = "`\$`bYou cannot delete zero messages!  What does this mean?  You pressed \"Delete Checked\" but there are no messages checked!  What sort of world is this that people press buttons that have no meaning?!?`b`0";
-		header("Location: mail.php");
-		exit();
-	}else{
-		$sql = "DELETE FROM " . db_prefix("mail") . " WHERE msgto='".$session['user']['acctid']."' AND messageid IN ('".join("','",$msg)."')";
-		db_query($sql);
-		invalidatedatacache("mail-{$session['user']['acctid']}");
-		header("Location: mail.php");
-		exit();
-	}
-}elseif ($op=="unread"){
-	$sql = "UPDATE " . db_prefix("mail") . " SET seen=0 WHERE msgto='".$session['user']['acctid']."' AND messageid='$id'";
-	db_query($sql);
-	invalidatedatacache("mail-{$session['user']['acctid']}");
-	header("Location: mail.php");
-	exit();
+if (in_array($op, ['del', 'process', 'unread'], true)) {
+    require_once 'lib/mail_security.php';
+    try {
+        resurrection_mutate_mailbox($session, $_SESSION, $_SERVER['REQUEST_METHOD'] ?? '', $_POST, $op);
+    } catch (DomainException $error) {
+        http_response_code(403); exit('Invalid mailbox submission.');
+    } catch (InvalidArgumentException $error) {
+        http_response_code(400); exit('Invalid message selection.');
+    }
+    header('Location: mail.php', true, 303);
+    exit();
 }
 
 popup_header("Ye Olde Poste Office");

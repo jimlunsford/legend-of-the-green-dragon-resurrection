@@ -1,4 +1,6 @@
 <?php
+require_once __DIR__ . '/src/Security/ScalarState.php';
+require_once __DIR__ . '/src/Compatibility/array_cursor.php';
 // addnews ready
 // mail ready
 // translator ready
@@ -6,6 +8,22 @@ require_once("common.php");
 require_once("lib/http.php");
 require_once("lib/showform.php");
 
+// Shared object preferences are dispatched before all legacy mount-editor branches.
+if (($_GET['subop'] ?? '') === 'module') {
+    require_once 'lib/typed_editor.php';
+    check_su_access(SU_EDIT_MOUNTS);
+    try {
+        $editorOp=\Resurrection\Http\Input::choice($_GET,'op',['edit','save'],'edit');
+        $editorId=\Resurrection\Http\Input::integer($_GET,'id',0,1);
+        $editorModule=\Resurrection\Http\Input::string($_GET,'module');
+        if (isset($_GET['objtype']) || isset($_GET['objid'])) throw new InvalidArgumentException();
+        page_header('Mount Preferences');
+        resurrection_object_editor('mounts',$editorModule,$editorId,$editorOp==='save');
+        page_footer();
+    } catch (InvalidArgumentException|DomainException $error) { http_response_code(400); exit('Invalid or stale object preferences.'); }
+    catch (Throwable $error) { http_response_code(500); exit('Preferences were not saved.'); }
+    exit;
+}
 $op = httpget('op');
 $id = httpget('id');
 
@@ -71,7 +89,7 @@ if ($op=="deactivate"){
 	$sql = "SELECT * FROM ".db_prefix("mounts")." WHERE mountid='$id'";
 	$result = db_query_cached($sql, "mountdata-$id", 3600);
 	$row = db_fetch_assoc($result);
-	$buff = unserialize($row['mountbuff']);
+	$buff = \Resurrection\Security\ScalarState::read($row['mountbuff']);
 	if ($buff['schema'] == "") $buff['schema'] = "mounts";
 	apply_buff("mount",$buff);
 	$op="";
@@ -83,7 +101,7 @@ if ($op=="deactivate"){
 		$mount = httppost('mount');
 		if ($mount) {
 			reset($mount['mountbuff']);
-			while (list($key,$val)=each($mount['mountbuff'])){
+			while (list($key,$val)=resurrection_array_next($mount['mountbuff'])){
 				if ($val>""){
 					$buff[$key]=stripslashes($val);
 				}
@@ -108,14 +126,7 @@ if ($op=="deactivate"){
 			}
 		}
 	} elseif ($subop=="module") {
-		// Save modules settings
-		$module = httpget("module");
-		$post = httpallpost();
-		reset($post);
-		while(list($key, $val) = each($post)) {
-			set_module_objpref("mounts", $id, $key, $val, $module);
-		}
-		output("`^Saved!`0`n");
+        http_response_code(400); exit('Unsupported preference editor.');
 	}
 	if ($id) {
 		$op="edit";
@@ -226,7 +237,7 @@ if ($op==""){
 		}
 		rawoutput("</td><td nowrap>");
 		$file = "mounts.php?op=xml&id=".$row['mountid'];
-		rawoutput("<div id='mountusers$i'><a href='$file' target='_blank' onClick=\"getUserInfo('".$row{'mountid'}."', $i); return false\">");
+		rawoutput("<div id='mountusers$i'><a href='$file' target='_blank' onClick=\"getUserInfo('".$row['mountid']."', $i); return false\">");
  		output_notl("`#%s`0", $mounts[$row['mountid']]);
 		addnav("", $file);
 		rawoutput("</a></div>");
@@ -259,7 +270,7 @@ if ($op==""){
 		} else {
 			output("Mount Editor:`n");
 			$row = db_fetch_assoc($result);
-			$row['mountbuff']=unserialize($row['mountbuff']);
+			$row['mountbuff']=\Resurrection\Security\ScalarState::read($row['mountbuff']);
 			mountform($row);
 		}
 	}

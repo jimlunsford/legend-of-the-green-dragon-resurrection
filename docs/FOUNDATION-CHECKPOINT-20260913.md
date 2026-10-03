@@ -1,5 +1,7 @@
 # Foundation checkpoint, 2026-09-13
 
+Historical record of the earlier foundation task. Its publication blockers were subsequently resolved. Current publication and modernization evidence is recorded in [the modern checkpoint](MODERN-CORE-CHECKPOINT-20260913.md). The original observations below remain intact.
+
 **PARTIAL FOUNDATION. Prepared and verified locally; GitHub publication and historical execution are BLOCKED. This is not a release.**
 
 ## Repository

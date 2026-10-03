@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/src/Compatibility/array_cursor.php';
 // translator ready
 // addnews ready
 // mail ready
@@ -12,7 +13,7 @@ if ($session['user']['loggedin'] && $session['loggedin']){
 	if (strpos($session['output'],"<!--CheckNewDay()-->")){
 		checkday();
 	}
-	while (list($key,$val)=each($session['allowednavs'])){
+	while (list($key,$val)=resurrection_array_next($session['allowednavs'])){
 		//hack-tastic.
 		if (
 			trim($key)=="" ||

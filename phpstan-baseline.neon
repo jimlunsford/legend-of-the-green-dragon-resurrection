@@ -1,0 +1,43 @@
+parameters:
+	ignoreErrors:
+		-
+			message: '#^Array has 2 duplicate keys with value ''oldcreatureexp'' \(''oldcreatureexp'', ''oldcreatureexp''\)\.$#'
+			identifier: array.duplicateKey
+			count: 1
+			path: lib/all_tables.php
+
+		-
+			message: '#^File ends with a trailing whitespace\. This may cause problems when running the code in the web browser\. Remove the closing \?\> mark or remove the whitespace\.$#'
+			identifier: whitespace.fileEnd
+			count: 1
+			path: lib/all_tables.php
+
+		-
+			message: '#^Undefined variable\: \$array$#'
+			identifier: variable.undefined
+			count: 1
+			path: lib/arraytourl.php
+
+		-
+			message: '#^Undefined variable\: \$hookname$#'
+			identifier: variable.undefined
+			count: 1
+			path: lib/events.php
+
+		-
+			message: '#^Undefined variable\: \$row$#'
+			identifier: variable.undefined
+			count: 1
+			path: lib/events.php
+
+		-
+			message: '#^Array has 2 duplicate keys with value ''instantexp'' \("instantexp", "instantexp"\)\.$#'
+			identifier: array.duplicateKey
+			count: 1
+			path: lib/installer/installer_default_settings.php
+
+		-
+			message: '#^Undefined variable\: \$fp$#'
+			identifier: variable.undefined
+			count: 1
+			path: lib/pullurl.php

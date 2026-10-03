@@ -4,6 +4,7 @@
 // mail ready
 require_once("lib/constants.php");
 require_once("lib/http.php");
+require_once "lib/event_security.php";
 
 // This file encapsulates all the special event handling for most locations
 
@@ -12,7 +13,8 @@ function handle_event($location, $baseLink=false, $needHeader=false)
 {
 	if ($baseLink === false){
 		global $PHP_SELF;
-		$baseLink = substr($PHP_SELF,strrpos($PHP_SELF,"/")+1)."?";
+		$script = $_SERVER['SCRIPT_NAME'] ?? '';
+        $baseLink = basename($script) . '?';
 	}else{
 		//debug("Base link was specified as $baseLink");
 		//debug(debug_backtrace());
@@ -24,7 +26,8 @@ function handle_event($location, $baseLink=false, $needHeader=false)
 	$allowinactive = false;
 	$eventhandler = httpget('eventhandler');
 	if (($session['user']['superuser'] & SU_DEVELOPER) && $eventhandler!=""){
-		$allowinactive = true;
+        resurrection_require_post();
+        $allowinactive = true;
 		$array = preg_split("/[:-]/", $eventhandler);
 		if ($array[0] == "module") {
 			$session['user']['specialinc'] = "module:" . $array[1];
@@ -37,6 +40,13 @@ function handle_event($location, $baseLink=false, $needHeader=false)
 
 	if ($session['user']['specialinc']!=""){
 		$specialinc = $session['user']['specialinc'];
+        // A disabled secured encounter must not silently consume its persisted state.
+        if (str_starts_with($specialinc,'module:')) {
+            $pending=substr($specialinc,7);
+            if (resurrection_secured_event($pending) && !is_module_active($pending)) {
+                http_response_code(403); exit('Event unavailable.');
+            }
+        }
 		$session['user']['specialinc'] = "";
 		if ($needHeader !== false) {
 			page_header($needHeader);
@@ -46,7 +56,14 @@ function handle_event($location, $baseLink=false, $needHeader=false)
 		if (strchr($specialinc, ":")) {
 			//$array = split(":", $specialinc);
 			$array = explode(":", $specialinc);
-			$starttime = getmicrotime();
+            if (resurrection_secured_event($array[1])) {
+                $context=$_SESSION['event_action'] ?? [];
+                if (($context['module'] ?? '')!==$array[1] || ($context['type'] ?? '')!==$location) {
+                    // Persisted event recovery issues a fresh intent; POST must first obtain its form.
+                    resurrection_event_context($array[1],$location);
+                }
+            }
+            $starttime = getmicrotime();
 			module_do_event($location, $array[1], $allowinactive,$baseLink);
 			$endtime = getmicrotime();
 			if (($endtime - $starttime >= 1.00 && ($session['user']['superuser'] & SU_DEBUG_OUTPUT))){

@@ -11,8 +11,7 @@ function debuglog($message,$target=false,$user=false,$field=false,$value=false,$
 	$corevalue = $value;
 	$id=0;
 	if ($field !== false && $value !==false && $consolidate){
-		$sql = "SELECT * FROM ".db_prefix("debuglog")." WHERE actor=$user AND field='$field' AND date>'".date("Y-m-d 00:00:00")."'";
-		$result = db_query($sql);
+        $result=db_query('SELECT * FROM ' . db_prefix('debuglog') . ' WHERE actor=? AND field=? AND date>?',true,[(int)$user,$field,date('Y-m-d 00:00:00')]);
 		if (db_num_rows($result)>0){
 			$row = db_fetch_assoc($result);
 			$value = $row['value']+$value;
@@ -23,22 +22,13 @@ function debuglog($message,$target=false,$user=false,$field=false,$value=false,$
 	if ($corevalue!==false) $message.=" ($corevalue)";
 	if ($field===false) $field="";
 	if ($value===false) $value=0;
-	if ($id > 0){
-		$sql = "UPDATE ".db_prefix("debuglog")."
-			SET
-				date='".date("Y-m-d H:i:s")."',
-				actor='$user',
-				target='$target',
-				message='".addslashes($message)."',
-				field='$field',
-				value='$value'
-			WHERE
-				id=$id
-				";
-	}else{
-		$sql = "INSERT INTO " . db_prefix("debuglog") . " (id,date,actor,target,message,field,value) VALUES($id,'".date("Y-m-d H:i:s")."',$user,$target,'".addslashes($message)."','$field','$value')";
-	}
-	db_query($sql);
+    if ($id>0) {
+        db_query('UPDATE ' . db_prefix('debuglog') . ' SET date=?,actor=?,target=?,message=?,field=?,value=? WHERE id=?',true,
+            [date('Y-m-d H:i:s'),(int)$user,(int)$target,$message,$field,$value,(int)$id]);
+    } else {
+        db_query('INSERT INTO ' . db_prefix('debuglog') . ' (date,actor,target,message,field,value) VALUES (?,?,?,?,?,?)',true,
+            [date('Y-m-d H:i:s'),(int)$user,(int)$target,$message,$field,$value]);
+    }
 }
 
 ?>

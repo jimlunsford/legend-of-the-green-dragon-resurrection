@@ -532,30 +532,19 @@ function battle_heal($amount, $target=false) {
  * @param mixed $script If numeric the corresponding script will be loaded from the database, otherwise the script to be executed.
  */
 function execute_ai_script($script) {
-	global $unsetme;
-	if (is_numeric($script)) {
-		$script = load_ai_script($script);
-	}
-	if ($script > "") {
-		eval($script);
-	}
+    global $session, $badguy;
+    require_once 'src/Game/CreatureAi.php';
+    if ($script === '' || $script === null || $script === '0' || $script === 0) return;
+    if (is_int($script) || (is_string($script) && ctype_digit($script))) $script = load_ai_script($script);
+    if (!is_string($script)) throw new DomainException('Unsupported creature behavior.');
+    $stolen = \Resurrection\Game\CreatureAi::apply($script, $session['user'], $badguy, (int)e_rand(0, 7));
+    if ($stolen > 0) {
+        rawoutput("<br /><b><span style='color: white'>The pickpocket takes <span style='color: gold'>$stolen gold</span>!</span></b><br /><br />");
+    }
 }
 
-/**
- * Returns an A.I. Script form the database
- *
- * @param int $spriptid The id for the script
-  * @return string The script itself. An empty string is returned, if script is found.
- */
 function load_ai_script($scriptid) {
-	if ($scriptid == 0) {
-		return "";
-	} else {
-		$sql = "SELECT script FROM ".db_prefix("ai")." WHERE scriptid = $scriptid";
-		$result = db_query($sql);
-		$row = db_fetch_assoc($result);
-		return $row['script'];
-	}
+    if (!is_int($scriptid) && (!is_string($scriptid) || !ctype_digit($scriptid))) throw new InvalidArgumentException('Invalid creature behavior identifier.');
+    $rows = db_query('SELECT script FROM ' . db_prefix('ai') . ' WHERE scriptid=?', true, [(int)$scriptid]);
+    return $rows[0]['script'] ?? '';
 }
-
-?>

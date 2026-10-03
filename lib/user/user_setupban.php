@@ -4,7 +4,7 @@ $result = db_query($sql);
 $row = db_fetch_assoc($result);
 if ($row['name']!="")
 	output("Setting up ban information based on `\$%s`0", $row['name']);
-rawoutput("<form action='user.php?op=saveban' method='POST'>");
+rawoutput("<form action='user.php?op=saveban' method='POST'>" . resurrection_csrf_field());
 output("Set up a new ban by IP or by ID (recommended IP, though if you have several different users behind a NAT, you can try ID which is easily defeated)`n");
 rawoutput("<input type='radio' value='ip' id='ipradio' name='type' checked>");
 output("IP: ");
@@ -37,7 +37,7 @@ if ($row['name']!=""){
 	$sql = "SELECT name, lastip, uniqueid, laston, gentimecount FROM " . db_prefix("accounts") . " WHERE uniqueid='".addslashes($id)."' ORDER BY lastip";
 	$result = db_query($sql);
 	while ($row = db_fetch_assoc($result)){
-		output("`0• (%s) `%%s`0 - %s hits, last: %s`n", $row['lastip'],
+		output("`0Â• (%s) `%%s`0 - %s hits, last: %s`n", $row['lastip'],
 				$row['name'], $row['gentimecount'],
 				reltime(strtotime($row['laston'])));
 	}
@@ -52,14 +52,14 @@ if ($row['name']!=""){
 		//output("$sql`n");
 		$result = db_query($sql);
 		if (db_num_rows($result)>0){
-			output("• IP Filter: %s ", $thisip);
+			output("Â• IP Filter: %s ", $thisip);
 			rawoutput("<a href='#' onClick=\"document.getElementById('ip').value='$thisip'; document.getElementById('ipradio').checked = true; return false\">");
 			output("Use this filter");
 			rawoutput("</a>");
 			output_notl("`n");
 			while ($row=db_fetch_assoc($result)){
 				output("&nbsp;&nbsp;",true);
-				output("• (%s) [%s] `%%s`0 - %s hits, last: %s`n",
+				output("Â• (%s) [%s] `%%s`0 - %s hits, last: %s`n",
 						$row['lastip'], $row['uniqueid'], $row['name'],
 						$row['gentimecount'],
 						reltime(strtotime($row['laston'])));

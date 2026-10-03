@@ -1,0 +1,14 @@
+includes:
+    - phpstan-baseline.neon
+parameters:
+    level: 0
+    paths:
+        - .
+    excludePaths:
+        analyseAndScan:
+            - vendor
+            - tests
+            - lab
+    tmpDir: .phpstan-cache
+    parallel:
+        maximumNumberOfProcesses: 1
