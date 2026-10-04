@@ -4,6 +4,7 @@ parameters:
         - src
         - lib/accounts.php
         - lib/newday_daily.php
+        - lib/ramius_resurrection.php
         - lib/dragon_points.php
         - lib/player_mutation.php
         - lib/race_onboarding.php

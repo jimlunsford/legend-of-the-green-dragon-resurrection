@@ -44,7 +44,7 @@ function page_header(){
 			}
 			$runheaders[$script] = true;
 			// Torment owns its gameplay header hook inside the protected mutation.
-            if ($script!=='graveyard' || !defined('RESURRECTION_GRAVEYARD_COMBAT')) modulehook("header-$script");
+            if ($script!=='graveyard' || (!defined('RESURRECTION_GRAVEYARD_COMBAT') && !defined('RESURRECTION_RAMIUS_PRESENTATION'))) modulehook("header-$script");
 		}
 	}
 

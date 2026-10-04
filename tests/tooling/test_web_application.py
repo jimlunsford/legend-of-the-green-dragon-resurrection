@@ -4012,6 +4012,274 @@ function resurrectiondailyfixture_dohook($hook,$args){
             finally:
                 self.query('DELETE FROM module_hooks WHERE modulename=?',[name]);self.query('DELETE FROM modules WHERE modulename=?',[name]);path.unlink()
 
+    @contextmanager
+    def _ramius_fixture(self):
+        with self._normal_day_fixture() as f:
+            # Derive today's marker through the actual accepted daily transition.
+            self.assertEqual(200,f['request'](data=f['form']())[0])
+            day=f['state']()[0]['lastnewday']; url='newday.php?resurrection=true'
+            def prepare(**patch):
+                f['prepare']()
+                values=dict(alive=0,hitpoints=0,deathpower=113,lastnewday=day,playerfights=2,soulpoints=9,gravefights=3)
+                values.update(patch)
+                self.query('UPDATE accounts SET '+','.join(k+'=?' for k in values)+' WHERE acctid=?',[*values.values(),f['player']])
+            def request(path=url,data=None): return f['request'](path,data)
+            def form(path=url):
+                status,body=request(path);self.assertEqual(200,status,body[:2500])
+                return self._security_fields(body,url)|{'resurrection':'ramius'}
+            prepare()
+            yield f|dict(prepare=prepare,request=request,form=form,url=url,day=day)
+
+    def test_ramius_get_core_favor_hooks_and_daily_separation(self):
+        with self._ramius_fixture() as f:
+            for favor in [0,24,99,100,101,113,10000,4294967295]:
+                f['prepare'](deathpower=favor);before=f['state']()
+                status,body=f['request']('graveyard.php?op=question');self.assertEqual(200,status,body[:1500]);self.assertEqual(before,f['state']())
+                self.assertEqual(favor>=100,'(100 favor)' in body)
+                if favor<100:
+                    for url in ['graveyard.php?op=resurrection',f['url']]:
+                        self.assertEqual(409,f['request'](url)[0]);self.assertEqual(before,f['state']())
+                    continue
+                ritual=f['form']('graveyard.php?op=resurrection');self.assertEqual(before,f['state']())
+                f['form']();self.assertEqual(before,f['state']())
+                status,body=f['request'](data=ritual);self.assertEqual(200,status,body[:2500])
+                after,prefs,news=f['state']()
+                for key,value in dict(deathpower=favor-100,alive=1,hitpoints=100,maxhitpoints=100,resurrections=3,age=2,spirits=-6,
+                    turns=6,playerfights=2,soulpoints=9,gravefights=3,transferredtoday=0,amountouttoday=0,seendragon=0,seenmaster=0,fedmount=0,boughtroomtoday=0).items():
+                    self.assertEqual(value,int(after[key]),key)
+                # 10 base +2 ff -6 resurrection -1 haunted +1 Human. Graveyard sobering precedes New Day.
+                self.assertEqual('',after['hauntedby']);self.assertEqual(f['day'],after['lastnewday'])
+                self.assertEqual(before[0]['lasthit'],after['recentcomments']);self.assertNotEqual(before[0]['lasthit'],after['lasthit'])
+                self.assertEqual('1100',after['goldinbank']);self.assertIn('Resurrected',body)
+                self.assertEqual('village.php?c=1',self.query('SELECT restorepage FROM accounts WHERE acctid=?',[f['player']])[0]['restorepage'])
+                added=news[len(before[2]):];self.assertEqual(1,len(added));self.assertIn('Ramius',added[0]['arguments'])
+                values={(p['modulename'],p['setting']):p['value'] for p in prefs}
+                for module in ['specialtydarkarts','specialtymysticpower','specialtythiefskills']:self.assertEqual('5' if module=='specialtydarkarts' else '3',values[(module,'uses')])
+                for module,key in [('dag','bounties'),('drinks','harddrinks'),('drinks','drunkeness'),('lovers','seenlover'),('outhouse','usedouthouse'),('outhouse','stage'),('sethsong','been'),('crazyaudrey','played'),('crazyaudrey','paidvisit'),('game_fivesix','playstoday')]:self.assertEqual('0',values[(module,key)])
+                settled=f['state']();self.assertEqual(409,f['request'](data=ritual)[0]);self.assertEqual(settled,f['state']())
+                self.assertEqual(409,f['request']()[0]);self.assertEqual(settled,f['state']())
+                status,body=f['request']('newday.php?continue=1');self.assertEqual(200,status);self.assertNotIn('Begin New Day',body);self.assertEqual(settled,f['state']())
+                self.assertEqual(200,f['request']('village.php?c=1')[0])
+            # Due ordinary resurrection takes no favor, uses ordinary daily-only counters.
+            f['prepare'](lastnewday='2000-01-01');before=f['state']()
+            self.assertEqual(409,f['request']()[0]);self.assertEqual(before,f['state']())
+            url='newday.php?continue=1';status,body=f['request'](url);self.assertEqual(200,status)
+            normal=self._security_fields(body)|{'newday':'normal'}
+            self.assertEqual(200,f['request'](url,normal)[0]);after=f['state']()[0]
+            for key,value in dict(deathpower=113,playerfights=4,soulpoints=80,gravefights=12).items():self.assertEqual(value,int(after[key]))
+            self.assertIn(int(after['spirits']),range(-2,3));self.assertEqual(409,f['request'](url,normal)[0])
+            # Next actual day remains eligible after early resurrection.
+            f['prepare']();self.assertEqual(200,f['request'](data=f['form']())[0]);f['setting']('gameoffsetseconds',86400)
+            status,body=f['request'](url);self.assertEqual(200,status);self.assertIn('Begin New Day',body)
+            self.assertEqual(200,f['request'](url,self._security_fields(body)|{'newday':'normal'})[0]);self.assertNotEqual(f['day'],f['state']()[0]['lastnewday'])
+
+    def test_ramius_turns_interest_mount_buffs_and_companions(self):
+        with self._ramius_fixture() as f:
+            for setting,expected in [('-6',7),('0',13),('-3',10),('-12',1),('-13',1),('+4',17),('0%',13),('-50%',7),('-100%',1),('-101%',1),('+50%',19)]:
+                f['prepare'](hauntedby='');f['setting']('resurrectionturns',setting)
+                status,body=f['request'](data=f['form']());self.assertEqual(200,status,body[:2500]);self.assertEqual(expected,int(f['state']()[0]['turns']))
+            f['setting']('resurrectionturns',-6)
+            for balance,turns,cap,expected in [(105,7,100000,116),(-105,99,100000,-116),(1000,8,100000,1000),(1000,7,1000,1000),(1000,7,0,1100)]:
+                f['prepare'](goldinbank=balance,turns=turns);f['setting']('maxgoldforinterest',cap)
+                self.assertEqual(200,f['request'](data=f['form']())[0]);self.assertEqual(expected,int(f['state']()[0]['goldinbank']))
+            mount=self.query('SELECT * FROM mounts ORDER BY mountid LIMIT 1')[0]
+            try:
+                for mff in [-2,0,3]:
+                    f['prepare'](hashorse=mount['mountid'])
+                    self.query('UPDATE mounts SET mountbuff=?,mountforestfights=?,newday=? WHERE mountid=?',[f['encode']({'name':'Ramius mount','rounds':5,'atkmod':1.1,'schema':'mounts'}),mff,'Ramius mount awakens',mount['mountid']])
+                    comp={'name':'Returning companion','hitpoints':10,'maxhitpoints':10,'attack':1,'defense':1,'abilities':{'fight':1},'suspended':True}
+                    skeleton={'name':'`4Skeleton Warrior','hitpoints':20,'maxhitpoints':30,'attack':17.5,'defense':8.5,'dyingtext':'`$Your skeleton warrior crumbles to dust.`n','abilities':{'fight':True},'ignorelimit':True,'suspended':True}
+                    buffs={'ordinary':{'name':'ordinary','rounds':3,'atkmod':1.2,'schema':'test'},'carry':{'name':'carry','rounds':2,'defmod':1.3,'survivenewday':1,'newdaymessage':'Ramius carry once','schema':'test'}}
+                    self.query('UPDATE accounts SET bufflist=?,companions=? WHERE acctid=?',[f['encode'](buffs),f['encode']({'allowed':comp|{'allowinshades':1},'excluded':comp|{'allowinshades':0},'skeleton_warrior':skeleton}),f['player']])
+                    before=f['state']();form=f['form']('graveyard.php?op=resurrection');self.assertEqual(before,f['state']())
+                    status,body=f['request'](data=form);self.assertEqual(200,status,body[:2500]);after=f['state']()[0]
+                    self.assertEqual(6+mff,int(after['turns']));self.assertEqual(1,body.count('Ramius mount awakens'));self.assertEqual(1,body.count('Ramius carry once'))
+                    effects=self._normal_day_decode(after['bufflist']);self.assertNotIn('ordinary',effects);self.assertEqual(2,effects['carry']['rounds']);self.assertEqual(5,effects['mount']['rounds'])
+                    for companion in self._normal_day_decode(after['companions']).values():self.assertFalse(companion['suspended'])
+            finally:self.query('UPDATE mounts SET '+','.join(k+'=?' for k in mount if k!='mountid')+' WHERE mountid=?',[*[v for k,v in mount.items() if k!='mountid'],mount['mountid']])
+
+    def test_ramius_stale_state_settings_and_malformed_authority(self):
+        with self._ramius_fixture() as f:
+            changes=[dict(deathpower=114),dict(deathpower=99),dict(lastnewday='2000-01-01'),dict(alive=1,hitpoints=100),
+                dict(badguy='a:0:{}'),dict(specialinc='deferred-event'),dict(goldinbank=1001),dict(playerfights=3),dict(hauntedby='New ghost'),
+                dict(race='Elf'),dict(specialty='MP'),dict(hashorse=200),dict(companions=f['encode']({'friend':{'name':'Friend','hitpoints':10,'maxhitpoints':10,'attack':1,'defense':1,'abilities':{'fight':1}}})),
+                dict(bufflist=f['encode']({'carry':{'name':'carry','rounds':2,'schema':'test','survivenewday':1}}))]
+            for patch in changes:
+                f['prepare']();form=f['form']();self.query('UPDATE accounts SET '+','.join(k+'=?' for k in patch)+' WHERE acctid=?',[*patch.values(),f['player']]);before=f['state']()
+                self.assertEqual(409,f['request'](data=form)[0],patch);self.assertEqual(before,f['state']())
+            for key,value in [('resurrectionturns','-5'),('turns',11),('deathoverlord','Changed'),('gameoffsetseconds',86400)]:
+                f['prepare']();form=f['form']();saved=self.query('SELECT value FROM settings WHERE setting=?',[key]);f['setting'](key,value);before=f['state']()
+                self.assertEqual(409,f['request'](data=form)[0]);self.assertEqual(before,f['state']())
+                self.query('DELETE FROM settings WHERE setting=?',[key])
+                if saved:f['setting'](key,saved[0]['value'])
+            for patch in [dict(dragonpoints='N;'),dict(bufflist='a:1:{s:3:"bad";a:0:{}}'),dict(companions='N;'),dict(hashorse=200),dict(level=0),
+                dict(alive=1,hitpoints=0),dict(alive=0,hitpoints=-1),dict(age=4294967295),dict(resurrections=4294967295),dict(maxhitpoints=0),dict(maxhitpoints=2147483648)]:
+                f['prepare'](**patch);before=f['state']();self.assertEqual(409,f['request']()[0],patch);self.assertEqual(before,f['state']())
+            for bad in ['NaN','1e2','10%%','-6oops','1.5', '4294967296']:
+                f['prepare']();f['setting']('resurrectionturns',bad);before=f['state']();self.assertEqual(409,f['request']()[0]);self.assertEqual(before,f['state']())
+            f['setting']('resurrectionturns',-6)
+            for patch in [dict(goldinbank=2147483647),dict(goldinbank=-2147483648)]:
+                f['prepare'](**patch);f['setting']('maxgoldforinterest',0);form=f['form']();before=f['state']()
+                self.assertEqual(409,f['request'](data=form)[0]);self.assertEqual(before,f['state']())
+            f['prepare'](age=4294967294,resurrections=4294967294,soulpoints=0,gravefights=0,maxhitpoints=2147483647)
+            f['setting']('mininterest',0);f['setting']('maxinterest',0);f['setting']('turns',4294967293)
+            status,body=f['request'](data=f['form']());self.assertEqual(200,status,body[:2000]);after=f['state']()[0]
+            for key,value in dict(age=4294967295,resurrections=4294967295,hitpoints=2147483647,soulpoints=0,gravefights=0,turns=4294967289).items():self.assertEqual(value,int(after[key]),key)
+            f['setting']('turns',10)
+            # Same-day request context cannot bypass protected incomplete onboarding.
+            for patch in [dict(dragonkills=4),dict(race='Horrible Gelatinous Blob'),dict(specialty='')]:
+                f['prepare'](**patch);before=f['state']();status,body=f['request']();self.assertEqual(200,status,body[:1000]);self.assertNotIn('value="ramius"',body);self.assertEqual(before,f['state']())
+
+    def test_ramius_strict_transport_replay_and_multiple_forms(self):
+        with self._ramius_fixture() as f:
+            for suffix in ['1','True','false','true&resurrection=true','true&resurrection[]=true','true&turns=999','true&current_day=2026-01-01','true&action.token=x']:
+                f['prepare']();before=f['state']();self.assertEqual(400,f['request']('newday.php?resurrection='+suffix)[0]);self.assertEqual(before,f['state']())
+            for extra in [{'deathpower':'999'},{'turns':'999'},{'spirits':'6'},{'alive':'1'},{'hitpoints':'100'},{'resurrections':'0'},{'age':'0'},{'day':f['day']},{'rate':'0'},{'resurrection':'true'},{'csrf_token':'0'*64},{'action_token':'0'*64}]:
+                f['prepare']();form=f['form']();before=f['state']();self.assertIn(f['request'](data=form|extra)[0],[400,403,409]);self.assertEqual(before,f['state']())
+            # urlencode(list-of-pairs) preserves duplicate authority keys on the wire.
+            for extra in [('resurrection','ramius'),('action_token','duplicate'),('action.token','bad'),('action_token[]','bad'),('csrf_token','duplicate')]:
+                f['prepare']();form=f['form']();before=f['state']();self.assertIn(f['request'](data=list(form.items())+[extra])[0],[400,403,409]);self.assertEqual(before,f['state']())
+            f['prepare']();first=f['form']();second=f['form']();self.assertEqual(200,f['request'](data=first)[0]);settled=f['state']()
+            self.assertEqual(409,f['request'](data=second)[0]);self.assertEqual(settled,f['state']());self.assertEqual(409,f['request'](data=first)[0]);self.assertEqual(settled,f['state']())
+
+    def test_ramius_late_account_and_hook_rollback(self):
+        with self._ramius_fixture() as f:
+            for hook_failure in [False,True]:
+                comp={'name':'Returning companion','hitpoints':10,'maxhitpoints':10,'attack':1,'defense':1,'abilities':{'fight':1},'suspended':True,'allowinshades':0}
+                buffs={'ordinary':{'name':'ordinary','schema':'test','rounds':3},'carry':{'name':'carry','schema':'test','rounds':2,'survivenewday':1}}
+                f['prepare'](bufflist=f['encode'](buffs),companions=f['encode']({'friend':comp}),charm=1,marriedto=4294967295)
+                form=f['form']();before=f['state']();logs=self.query('SELECT * FROM debuglog WHERE actor=?',[f['player']])
+                if hook_failure:
+                    self.query("ALTER TABLE module_userprefs ADD CONSTRAINT fixture_ramius_failure CHECK (userid <> "+str(f['player'])+" OR modulename <> 'specialtydarkarts' OR setting <> 'uses' OR value='0')");table='module_userprefs'
+                else:
+                    self.query("ALTER TABLE accounts ADD CONSTRAINT fixture_ramius_failure CHECK (login <> 'WebPlayer' OR age=1)");table='accounts'
+                try:self.assertEqual(500,f['request'](data=form)[0])
+                finally:self.query('ALTER TABLE '+table+' DROP CONSTRAINT fixture_ramius_failure')
+                self.assertEqual(before,f['state']());self.assertEqual(logs,self.query('SELECT * FROM debuglog WHERE actor=?',[f['player']]))
+                self.assertEqual('113',f['state']()[0]['deathpower']);self.assertEqual(f['day'],f['state']()[0]['lastnewday'])
+                self.assertEqual(409,f['request'](data=form)[0]);self.assertEqual(before,f['state']())
+                self.assertEqual(200,f['request'](data=f['form']())[0]);self.assertEqual('13',f['state']()[0]['deathpower'])
+
+    def test_ramius_hooks_canonical_state_and_stale_mount(self):
+        with self._ramius_fixture() as f:
+            name='resurrectionramiusfixture';path=ROOT/'modules'/f'{name}.php'
+            path.write_text("""<?php
+function resurrectionramiusfixture_getmoduleinfo(){return ['name'=>'Ramius fixture','version'=>'1','author'=>'Tests','category'=>'Tests'];}
+function resurrectionramiusfixture_dohook($hook,$args){
+ if ($hook !== 'newday-intercept' && ($args['resurrection'] ?? null) !== 'true') throw new DomainException('Missing resurrection context');
+ db_query('UPDATE settings SET value=value+1 WHERE setting=?',true,['fr_'.$hook]);return $args;
+}
+""")
+            try:
+                self.query('INSERT INTO modules(modulename,active,version) VALUES (?,1,?)',[name,'1'])
+                for hook in ['newday-intercept','pre-newday','newday']:
+                    self.query('INSERT INTO module_hooks(modulename,location,`function`,whenactive,priority) VALUES (?,?,?,?,?)',[name,hook,name+'_dohook','',0]);f['setting']('fr_'+hook,0)
+                def counts():return [r['value'] for r in self.query("SELECT value FROM settings WHERE setting LIKE 'fr_%' ORDER BY setting")]
+                before=f['state']();form=f['form']('graveyard.php?op=resurrection');f['form']();self.assertEqual(before,f['state']());self.assertEqual(['0','0','0'],counts())
+                self.assertEqual(200,f['request'](data=form)[0]);self.assertEqual(['1','1','1'],counts())
+                f['prepare']();form=f['form']();self.query('UPDATE module_hooks SET priority=1 WHERE modulename=?',[name]);before=f['state']()
+                self.assertEqual(409,f['request'](data=form)[0]);self.assertEqual(before,f['state']());self.assertEqual(['1','1','1'],counts())
+                buff={'name':'Carry','schema':'test','rounds':2,'survivenewday':1,'defmod':1.1}
+                f['prepare'](bufflist=f['encode']({'carry':buff}));form=f['form']()
+                self.query('UPDATE accounts SET bufflist=? WHERE acctid=?',[f['encode']({'carry':dict(reversed(list(buff.items())))}),f['player']]);self.assertEqual(200,f['request'](data=form)[0])
+                mount=self.query('SELECT * FROM mounts ORDER BY mountid LIMIT 1')[0]
+                try:
+                    f['prepare'](hashorse=mount['mountid']);form=f['form']();self.query('UPDATE mounts SET mountforestfights=mountforestfights+1 WHERE mountid=?',[mount['mountid']]);before=f['state']()
+                    self.assertEqual(409,f['request'](data=form)[0]);self.assertEqual(before,f['state']())
+                    self.query("UPDATE mounts SET mountbuff='N;' WHERE mountid=?",[mount['mountid']]);before=f['state']();self.assertEqual(409,f['request']()[0]);self.assertEqual(before,f['state']())
+                finally:self.query('UPDATE mounts SET mountforestfights=?,mountbuff=? WHERE mountid=?',[mount['mountforestfights'],mount['mountbuff'],mount['mountid']])
+            finally:self.query('DELETE FROM module_hooks WHERE modulename=?',[name]);self.query('DELETE FROM modules WHERE modulename=?',[name]);path.unlink()
+
+    def test_ramius_locked_revalidation_after_competing_commit(self):
+        import threading
+        with self._ramius_fixture() as f:
+            form=f['form']();player=f['player']
+            code="""require 'dbconnect.php';require 'lib/dbwrapper_pdo.php';db_connect($DB_HOST,$DB_USER,$DB_PASS);db_select_db($DB_NAME);
+$db=$GLOBALS['dbinfo']['connection'];$db->beginTransaction();db_query('SELECT acctid FROM accounts WHERE acctid=? FOR UPDATE',true,[(int)$argv[1]]);echo "LOCKED\\n";flush();fgets(STDIN);
+db_query('UPDATE accounts SET deathpower=114 WHERE acctid=?',true,[(int)$argv[1]]);$db->commit();"""
+            self._security_allow(player,f['url']);process=subprocess.Popen([shutil.which('php'),'-r',code,str(player)],cwd=ROOT,stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True)
+            results=[];thread=None
+            try:
+                self.assertEqual('LOCKED',process.stdout.readline().strip());thread=threading.Thread(target=lambda:results.append(f['call'](f['url'],form)));thread.start()
+                waiting=False
+                for _ in range(100):
+                    rows=self.query("SELECT INFO FROM information_schema.PROCESSLIST WHERE INFO LIKE '%accounts%FOR UPDATE%'")
+                    if any('WHERE acctid=' in (r['INFO'] or '') and 'SELECT INFO' not in (r['INFO'] or '') for r in rows):waiting=True;break
+                    time.sleep(.02)
+                self.assertTrue(waiting,'HTTP did not reach the account lock')
+                process.stdin.write('commit\n');process.stdin.flush();out,err=process.communicate(timeout=10);self.assertEqual(0,process.returncode,err)
+                thread.join(timeout=20);self.assertFalse(thread.is_alive());self.assertEqual(409,results[0][0]);after=f['state']()[0]
+                for key,value in dict(deathpower=114,alive=0,age=1,resurrections=2,goldinbank=1000,turns=7).items():self.assertEqual(value,int(after[key]))
+            finally:
+                if process.poll() is None:process.terminate();process.wait(timeout=5)
+                if thread:thread.join(timeout=20)
+
+    def test_ramius_rejects_live_torment_without_abandoning_it(self):
+        with self._graveyard_fixture() as f:
+            f['gprepare']();f['patch'](deathpower=113)
+            url='newday.php?resurrection=true';status,body=f['request'](url);self.assertEqual(200,status,body[:2000])
+            form=self._security_fields(body,url)|{'resurrection':'ramius'}
+            f['enter']();before=f['gsnapshot']();self.assertTrue(before['badguy'])
+            for path,data in [('graveyard.php?op=question',None),('graveyard.php?op=resurrection',None),(url,None),(url,form)]:
+                self.assertEqual(409,f['request'](path,data)[0]);self.assertEqual(before,f['gsnapshot']())
+
+    def test_ramius_two_concurrent_sessions_settle_exactly_once(self):
+        import threading
+        import copy
+        # Independent HTTP listeners guarantee both POSTs reach the database,
+        # without depending on the development server's accept-queue scheduling.
+        with socket.socket() as sock:sock.bind(('127.0.0.1',0));port=sock.getsockname()[1]
+        log=tempfile.TemporaryFile(mode='w+t')
+        server=subprocess.Popen([shutil.which('php'),'-d','display_errors=1','-d','error_reporting=-1','-S',f'127.0.0.1:{port}','-t',str(ROOT)],cwd=ROOT,stdout=subprocess.DEVNULL,stderr=log)
+        try:
+            for _ in range(100):
+                try:
+                    with socket.create_connection(('127.0.0.1',port),timeout=.1):break
+                except OSError:time.sleep(.02)
+            with self._ramius_fixture() as f:
+                f['prepare']();first_form=f['form']()
+                # A second login deliberately invalidates the first auth version.
+                # Clone only this disposable authenticated fixture session so PHP's
+                # session-file mutex cannot hide a missing database revalidation.
+                second=self._security_client(login=None,port=port);clone_id=os.urandom(16).hex()
+                session_path=Path(subprocess.check_output([shutil.which('php'),'-r','echo session_save_path();'],text=True))
+                original_id=next(c.value for c in f['call'].cookiejar if c.name=='PHPSESSID')
+                clone_path=session_path/('sess_'+clone_id)
+                shutil.copyfile(session_path/('sess_'+original_id),clone_path)
+                for cookie in f['call'].cookiejar:
+                    cookie=copy.copy(cookie)
+                    if cookie.name=='PHPSESSID':cookie.value=clone_id
+                    second.cookiejar.set_cookie(cookie)
+                second_form=dict(first_form)
+                before=f['state']();self._security_allow(f['player'],f['url'])
+                code="""require 'dbconnect.php';require 'lib/dbwrapper_pdo.php';db_connect($DB_HOST,$DB_USER,$DB_PASS);db_select_db($DB_NAME);
+$db=$GLOBALS['dbinfo']['connection'];$db->beginTransaction();db_query('SELECT acctid FROM accounts WHERE acctid=? FOR UPDATE',true,[(int)$argv[1]]);echo "LOCKED\\n";flush();fgets(STDIN);$db->commit();"""
+                process=subprocess.Popen([shutil.which('php'),'-r',code,str(f['player'])],cwd=ROOT,stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True)
+                results=[];threads=[]
+                try:
+                    self.assertEqual('LOCKED',process.stdout.readline().strip())
+                    for client,form in [(f['call'],first_form),(second,second_form)]:
+                        thread=threading.Thread(target=lambda client=client,form=form:results.append(client(f['url'],form)));threads.append(thread);thread.start()
+                    waiting=False
+                    for _ in range(100):
+                        rows=self.query("SELECT INFO FROM information_schema.PROCESSLIST WHERE INFO LIKE '%accounts%FOR UPDATE%'")
+                        if sum('WHERE acctid=' in (r['INFO'] or '') and 'SELECT INFO' not in (r['INFO'] or '') for r in rows)>=2:waiting=True;break
+                        time.sleep(.02)
+                    if not waiting:
+                        log.seek(0)
+                        self.fail('Both HTTP requests must reach the account lock: '+repr([(r[0],r[1][:150]) for r in results])+repr(self.query('SELECT STATE,INFO FROM information_schema.PROCESSLIST'))+log.read()[-3000:])
+                    process.stdin.write('commit\n');process.stdin.flush();out,err=process.communicate(timeout=10);self.assertEqual(0,process.returncode,err)
+                    for thread in threads:thread.join(timeout=20);self.assertFalse(thread.is_alive())
+                    self.assertEqual([200,409],sorted(r[0] for r in results),results)
+                    after=f['state']();self.assertEqual(len(before[2])+1,len(after[2]))
+                    for key,value in dict(deathpower=13,age=2,resurrections=3,alive=1,turns=6,goldinbank=1100).items():self.assertEqual(value,int(after[0][key]),key)
+                finally:
+                    if process.poll() is None:process.terminate();process.wait(timeout=5)
+                    for thread in threads:thread.join(timeout=20)
+                    clone_path.unlink(missing_ok=True)
+        finally:
+            server.terminate();server.wait(timeout=5);log.close()
+
     def _advance_normal_day(self, request, player):
         # Existing module matrices simulate another day, then use the actual POST.
         self.query("UPDATE accounts SET lastnewday='',lasthit='2000-01-01 00:00:00' WHERE acctid=?",[player])
@@ -4023,12 +4291,14 @@ function resurrectiondailyfixture_dohook($hook,$args){
         self.assertEqual(200,result[0],result[1][:3000])
         return result
 
-    def _security_client(self, login='WebPlayer', password="Synthetic web O'Reilly \\ password"):
+    def _security_client(self, login='WebPlayer', password="Synthetic web O'Reilly \\ password", port=None):
         class NoRedirect(urllib.request.HTTPRedirectHandler):
             def redirect_request(self, *args): return None
-        client=urllib.request.build_opener(urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar()),NoRedirect)
+        jar=http.cookiejar.CookieJar()
+        client=urllib.request.build_opener(urllib.request.HTTPCookieProcessor(jar),NoRedirect)
+        client_port=self.port if port is None else port
         def request(url, data=None, fixture=None):
-            req=urllib.request.Request(f'http://127.0.0.1:{self.port}/'+url,
+            req=urllib.request.Request(f'http://127.0.0.1:{client_port}/'+url,
                 data=None if data is None else urllib.parse.urlencode(data).encode(),
                 headers={} if fixture is None else {'X-Resurrection-Fixture':fixture})
             try: response=client.open(req,timeout=20)
@@ -4039,6 +4309,7 @@ function resurrectiondailyfixture_dohook($hook,$args){
                 self.server_log.seek(0)
                 body += '\n'.join(self.server_log.read().splitlines()[-8:])
             return response.status,body
+        request.cookiejar=jar
         if login:
             _,body=request('home.php')
             csrf=re.search(r'name=[\'"]csrf_token[\'"] value=[\'"]([a-f0-9]{64})',body).group(1)

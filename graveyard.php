@@ -14,6 +14,12 @@ require_once("lib/http.php");
 require_once("lib/buffs.php");
 require_once("lib/events.php");
 
+// Favor and ritual GETs must precede event/checkday/header gameplay effects.
+if (in_array($_GET['op'] ?? null, ['question','resurrection'], true)) {
+    require_once 'lib/ramius_resurrection.php';
+    resurrection_ramius_query('graveyard');
+    resurrection_ramius($_GET['op']);
+}
 // Combat is routed before event handling, checkday and legacy presentation mutations.
 $op=$_GET['op'] ?? '';
 if (in_array($op,['search','fight','run'],true) || ($op==='' && $session['user']['specialinc']==='' && !array_key_exists('eventhandler',$_GET))) {
