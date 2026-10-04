@@ -41,8 +41,7 @@ function raceelf_uninstall(){
 	global $session;
 	$vname = getsetting("villagename", LOCATION_FIELDS);
 	$gname = get_module_setting("villagename");
-	$sql = "UPDATE " . db_prefix("accounts") . " SET location='$vname' WHERE location = '$gname'";
-	db_query($sql);
+	db_query('UPDATE ' . db_prefix('accounts') . ' SET location=? WHERE location=?', true, [$vname, $gname]);
 	if ($session['user']['location'] == $gname)
 		$session['user']['location'] = $vname;
 	// Force anyone who was a Elf to rechoose race
@@ -84,23 +83,16 @@ function raceelf_dohook($hookname,$args){
 		if ($args['setting'] == "villagename" && $args['module']=="raceelf") {
 			if ($session['user']['location'] == $args['old'])
 				$session['user']['location'] = $args['new'];
-			$sql = "UPDATE " . db_prefix("accounts") .
-				" SET location='" . addslashes($args['new']) .
-				"' WHERE location='" . addslashes($args['old']) . "'";
-			db_query($sql);
+			db_query('UPDATE ' . db_prefix('accounts') . ' SET location=? WHERE location=?', true, [$args['new'], $args['old']]);
 			if (is_module_active("cities")) {
-				$sql = "UPDATE " . db_prefix("module_userprefs") .
-					" SET value='" . addslashes($args['new']) .
-					"' WHERE modulename='cities' AND setting='homecity'" .
-					"AND value='" . addslashes($args['old']) . "'";
-				db_query($sql);
+				db_query('UPDATE ' . db_prefix('module_userprefs') . ' SET value=? WHERE modulename=? AND setting=? AND value=?', true, [$args['new'], 'cities', 'homecity', $args['old']]);
 			}
 		}
 		break;
 	case "chooserace":
-		output("<a href='newday.php?setrace=$race$resline'>High among the trees</a> of the %s forest, in frail looking elaborate `^Elvish`0 structures that look as though they might collapse under the slightest strain, yet have existed for centuries.`n`n", $city, true);
-		addnav("`^Elf`0","newday.php?setrace=$race$resline");
-		addnav("","newday.php?setrace=$race$resline");
+		output("High among the trees of the %s forest, in frail looking elaborate `^Elvish`0 structures that look as though they might collapse under the slightest strain, yet have existed for centuries.`n`n", $city);
+		require_once('lib/race_onboarding.php');
+		resurrection_race_form($race);
 		break;
 	case "setrace":
 		if ($session['user']['race']==$race){

@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/../../src/Compatibility/array_cursor.php';
 require_once("lib/installer/installer_functions.php");
 if (array_key_exists('modules',$_POST)){
 	$session['moduleoperations'] = $_POST['modules'];
@@ -59,7 +60,7 @@ if (return_bytes($phpram) < 12582912 && $phpram!=-1 && !$session['overridememory
 				"description"=>"",
 				"invalid"=>true,
 			);
-	while (list($key,$modulename) = each($uninstalled)){
+	while (list($key,$modulename) = resurrection_array_next($uninstalled)){
 		$row = array();
 		//test if the file is a valid module or a lib file/whatever that got in, maybe even malcode that does not have module form
 		$modulenamelower = strtolower($modulename);
@@ -103,11 +104,11 @@ if (return_bytes($phpram) < 12582912 && $phpram!=-1 && !$session['overridememory
 	ksort($all_modules);
 	reset($all_modules);
 	$x=0;
-	while (list($categoryName,$categoryItems)=each($all_modules)){
+	while (list($categoryName,$categoryItems)=resurrection_array_next($all_modules)){
 		rawoutput("<tr class='trhead'><td colspan='6'>".tl($categoryName)."</td></tr>");
 		rawoutput("<tr class='trhead'><td>".tl("Uninstalled")."</td><td>".tl("Installed")."</td><td>".tl("Activated")."</td><td>".tl("Recommended")."</td><td>".tl("Module Name")."</td><td>".tl("Author")."</td></tr>");
 		reset($categoryItems);
-		while (list($modulename,$moduleinfo)=each($categoryItems)){
+		while (list($modulename,$moduleinfo)=resurrection_array_next($categoryItems)){
 			$x++;
 			//if we specified things in a previous hit on this page, let's update the modules array here as we go along.
 			$moduleinfo['realactive'] = $moduleinfo['active'];
@@ -115,7 +116,7 @@ if (return_bytes($phpram) < 12582912 && $phpram!=-1 && !$session['overridememory
 			if (array_key_exists('moduleoperations',$session) && is_array($session['moduleoperations']) && array_key_exists($modulename,$session['moduleoperations'])){
 				$ops = explode(",",$session['moduleoperations'][$modulename]);
 				reset($ops);
-				while (list($trash,$op) = each($ops)){
+				while (list($trash,$op) = resurrection_array_next($ops)){
 					switch($op){
 						case "uninstall":
 						$moduleinfo['installed'] = false;
@@ -204,7 +205,7 @@ function chooseRecommendedModules(){
 	var selectedCount = 0;
 ");
 	reset($recommended_modules);
-	while (list($key,$val)=each($recommended_modules)){
+	while (list($key,$val)=resurrection_array_next($recommended_modules)){
 		rawoutput("thisItem = document.getElementById('activate-$val'); ");
 		rawoutput("if (!thisItem.checked) { selectedCount++; thisItem.checked=true; }\n");
 	}

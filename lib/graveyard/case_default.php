@@ -11,7 +11,8 @@ if (!$skipgraveyardtext) {
 }
 modulehook("graveyard");
 	if ($session['user']['gravefights']) {
-	addnav("Look for Something to Torment","graveyard.php?op=search");
+	if (isset($graveyardCombatContext)) resurrection_graveyard_form('search','Look for Something to Torment',$graveyardCombatContext);
+    else addnav("Look for Something to Torment","graveyard.php?op=search");
 }
 addnav("Places");
 addnav("W?List Warriors","list.php");

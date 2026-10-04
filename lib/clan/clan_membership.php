@@ -22,7 +22,8 @@
 		$remove = httpget('remove');
 		if ($remove>""){
 			$sql = "SELECT name,login,clanrank FROM " . db_prefix("accounts") . " WHERE acctid='$remove'";
-			$row = db_fetch_assoc(db_query($sql));
+			$singleRowResult = db_query($sql);
+			$row = db_fetch_assoc($singleRowResult);
 			$args = modulehook("clan-setrank", array("setrank"=>0, "login"=>$row['login'], "name"=>$row['name'], "acctid"=>$remove, "clanid"=>$session['user']['clanid'], "oldrank"=>$row['clanrank']));
 			$sql = "UPDATE " . db_prefix("accounts") . " SET clanrank=".CLAN_APPLICANT.",clanid=0,clanjoindate='0000-00-00 00:00:00' WHERE acctid='$remove' AND clanrank<={$session['user']['clanrank']}";
 			db_query($sql);

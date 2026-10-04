@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/../src/Compatibility/array_cursor.php';
 // translator ready
 // addnews ready
 // mail ready
@@ -16,7 +17,7 @@ function soap($input,$debug=false,$skiphook=false){
 		$search = nasty_word_list();
 		$exceptions = array_flip(good_word_list());
 		$changed_content = false;
-		while (list($key,$word)=each($search)){
+		while (list($key,$word)=resurrection_array_next($search)){
 			do {
 				if ($word > "")
 					$times = preg_match_all($word,$output,$matches);
@@ -87,7 +88,7 @@ function good_word_list(){
 	$sql = "SELECT * FROM " . db_prefix("nastywords") . " WHERE type='good'";
 	$result = db_query_cached($sql,"goodwordlist");
 	$row = db_fetch_assoc($result);
-	return explode(" ",$row['words']);
+	return $row ? explode(" ",$row['words']) : [];
 }
 
 function nasty_word_list(){
@@ -97,7 +98,7 @@ function nasty_word_list(){
 	$sql = "SELECT * FROM " . db_prefix("nastywords") . " WHERE type='nasty'";
 	$result = db_query($sql);
 	$row = db_fetch_assoc($result);
-	$search = " ".$row['words']." ";
+	$search = " ".($row['words'] ?? "")." ";
 	$search = preg_replace('/(?<=.)(?<!\\\\)\'(?=.)/', '\\\'', $search);
 	$search = str_replace("a",'[a4@ªÀÁÂÃÄÅàáâãäå]',$search);
 	$search = str_replace("b",'[bß]',$search);

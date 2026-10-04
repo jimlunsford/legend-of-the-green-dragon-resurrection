@@ -34,11 +34,12 @@ function fairy_uninstall(){
 }
 
 function fairy_dohook($hookname,$args){
+    fairy_validate_state();
 	switch($hookname){
 	case "hprecalc":
-		$args['total'] -= get_module_pref("extrahps");
+		$args['total'] -= fairy_extra_hp();
 		if (!get_module_setting("carrydk")) {
-			$args['extra'] -= get_module_pref("extrahps");
+			$args['extra'] -= fairy_extra_hp();
 			set_module_pref("extrahps", 0);
 		}
 		break;
@@ -55,6 +56,7 @@ function fairy_runevent($type)
 	$session['user']['specialinc'] = "module:fairy";
 
 	$op = httpget('op');
+    fairy_validate_state();
 	if ($op=="" || $op=="search"){
 		output("`%You encounter a fairy in the forest.");
 		output("\"`^Give me a gem!`%\" she demands.");
@@ -96,10 +98,11 @@ function fairy_runevent($type)
 				output("Your maximum hitpoints are `b%s`b increased by %d!",
 						$hptype, $extra);
 
+                if (fairy_extra_hp()>4294967295-$extra) throw new DomainException("Invalid fairy HP state.");
 				$session['user']['maxhitpoints'] += $extra;
 				$session['user']['hitpoints'] += $extra;
 				set_module_pref("extrahps",
-						get_module_pref("extrahps")+$extra);
+						fairy_extra_hp()+$extra);
 				break;
 			case 6:
 			case 7:
@@ -123,6 +126,26 @@ function fairy_runevent($type)
 		}
 		$session['user']['specialinc'] = "";
 	}
+}
+
+/** Validate the shipped settings and accumulated HP before any reward or recalculation. */
+function fairy_validate_state(): void {
+    require_once 'lib/typed_editor.php';
+    $schema=\Resurrection\Http\SettingDescriptor::declare(fairy_getmoduleinfo()['settings']);
+    $values=[];
+    foreach ($schema as $key=>$descriptor) $values[$key]=(string)get_module_setting($key,'fairy');
+    try { resurrection_settings_rules('fairy',$schema,$values); }
+    catch (InvalidArgumentException $error) { throw new DomainException('Invalid fairy settings.'); }
+    fairy_extra_hp();
+}
+
+function fairy_extra_hp(): int {
+    $raw=get_module_pref('extrahps','fairy');
+    if ($raw===null || $raw==='') return 0;
+    if (!is_int($raw) && !is_string($raw)) throw new DomainException('Invalid fairy HP state.');
+    $value=filter_var($raw,FILTER_VALIDATE_INT,['options'=>['min_range'=>0,'max_range'=>4294967295]]);
+    if ($value===false) throw new DomainException('Invalid fairy HP state.');
+    return $value;
 }
 
 function fairy_run(){

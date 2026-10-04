@@ -8,13 +8,18 @@ define("OVERRIDE_FORCED_NAV",true);
 
 require_once("lib/http.php");
 
+require_once 'src/Http/Input.php';
+try {
+    $module = \Resurrection\Http\Input::string($_GET, 'module');
+    if (!preg_match('/\A[A-Za-z][A-Za-z0-9_]*\z/', $module)) { throw new InvalidArgumentException(); }
+} catch (InvalidArgumentException $error) { http_response_code(400); exit('Invalid module.'); }
 require_once("common.php");
 require_once("lib/dump_item.php");
 require_once("lib/modules.php");
 require_once("lib/villagenav.php");
 
-if (injectmodule(httpget('module'), (httpget('admin')?true:false))){
-	$info = get_module_info(httpget('module'));
+if (injectmodule($module, false)){
+	$info = get_module_info($module);
 	if (!isset($info['allowanonymous'])){
 		$allowanonymous=false;
 	}else{

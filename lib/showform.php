@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/../src/Compatibility/array_cursor.php';
 // translator ready
 // addnews ready
 // mail ready
@@ -18,7 +19,7 @@ function showform($layout,$row,$nosave=false,$keypref=false){
 	rawoutput("</td></tr><tr><td>&nbsp;</td></tr><tr><td>");
 	rawoutput("<table cellpadding='2' cellspacing='0'>");
 	$i = 0;
-	while(list($key,$val)=each($layout)){
+	while(list($key,$val)=resurrection_array_next($layout)){
 		$pretrans = 0;
 		if ($keypref !== false) $keyout = sprintf($keypref, $key);
 		else $keyout = $key;
@@ -128,12 +129,12 @@ function showform($layout,$row,$nosave=false,$keypref=false){
 			// FALLTHROUGH
 		case "checklist":
 			reset($info);
-			list($k,$v)=each($info);
-			list($k,$v)=each($info);
+			list($k,$v)=resurrection_array_next($info);
+			list($k,$v)=resurrection_array_next($info);
 			$select="";
-			while (list($k,$v)=each($info)){
+			while (list($k,$v)=resurrection_array_next($info)){
 				$optval = $v;
-				list($k,$v)=each($info);
+				list($k,$v)=resurrection_array_next($info);
 				$optdis = $v;
 				if (!$pretrans) $optdis = translate_inline($optdis);
 				if (is_array($row[$key])){
@@ -156,12 +157,12 @@ function showform($layout,$row,$nosave=false,$keypref=false){
 			// FALLTHROUGH
 		case "radio":
 			reset($info);
-			list($k,$v)=each($info);
-			list($k,$v)=each($info);
+			list($k,$v)=resurrection_array_next($info);
+			list($k,$v)=resurrection_array_next($info);
 			$select="";
-			while (list($k,$v)=each($info)){
+			while (list($k,$v)=resurrection_array_next($info)){
 				$optval = $v;
-				list($k,$v)=each($info);
+				list($k,$v)=resurrection_array_next($info);
 				$optdis = $v;
 				if (!$pretrans) $optdis = translate_inline($optdis);
 				$select.=("<input type='radio' name='$keyout' value='$optval'".($row[$key]==$optval?" checked":"").">&nbsp;".("$optdis")."<br>");
@@ -221,16 +222,16 @@ function showform($layout,$row,$nosave=false,$keypref=false){
 			//1-26-03 added disablemask so this field type can be used
 			// on bitfields other than superuser.
 			reset($info);
-			list($k,$v)=each($info);
-			list($k,$v)=each($info);
-			list($k,$disablemask)=each($info);
+			list($k,$v)=resurrection_array_next($info);
+			list($k,$v)=resurrection_array_next($info);
+			list($k,$disablemask)=resurrection_array_next($info);
 			rawoutput("<input type='hidden' name='$keyout"."[0]' value='1'>", true);
-			while (list($k,$v)=each($info)){
+			while (list($k,$v)=resurrection_array_next($info)){
 				rawoutput("<input type='checkbox' name='$keyout"."[$v]'"
 					.(isset($row[$key]) && (int)$row[$key] & (int)$v?" checked":"")
 					.($disablemask & (int)$v?"":" disabled")
 					." value='1'> ");
-				list($k,$v)=each($info);
+				list($k,$v)=resurrection_array_next($info);
 				if (!$pretrans) $v = translate_inline($v);
 				output_notl("%s`n",$v,true);
 			}
@@ -252,14 +253,14 @@ function showform($layout,$row,$nosave=false,$keypref=false){
 				"1 year"
 			);
 			tlschema("showform");
-			while (list($k,$v)=each($vals)){
+			while (list($k,$v)=resurrection_array_next($vals)){
 				$vals[$k]=translate($v);
 				rawoutput(tlbutton_pop());
 			}
 			tlschema();
 			reset($vals);
 			rawoutput("<select name='$keyout'>");
-			while(list($k,$v)=each($vals)) {
+			while(list($k,$v)=resurrection_array_next($vals)) {
 				rawoutput("<option value=\"".htmlentities($v, ENT_COMPAT, getsetting("charset", "ISO-8859-1"))."\"".($row[$key]==$v?" selected":"").">".htmlentities($v, ENT_COMPAT, getsetting("charset", "ISO-8859-1"))."</option>");
 			}
 			rawoutput("</select>");
@@ -269,13 +270,13 @@ function showform($layout,$row,$nosave=false,$keypref=false){
 		    // FALLTHROUGH
 		case "enum":
 			reset($info);
-			list($k,$v)=each($info);
-			list($k,$v)=each($info);
+			list($k,$v)=resurrection_array_next($info);
+			list($k,$v)=resurrection_array_next($info);
 			$select="";
 			$select.=("<select name='$keyout'>");
-			while (list($k,$v)=each($info)){
+			while (list($k,$v)=resurrection_array_next($info)){
 				$optval = $v;
-				list($k,$v)=each($info);
+				list($k,$v)=resurrection_array_next($info);
 				$optdis = $v;
 				if (!$pretrans) {
 					$optdis = translate_inline($optdis);
@@ -427,7 +428,7 @@ function showform($layout,$row,$nosave=false,$keypref=false){
 		rawoutput("<script language='JavaScript'>");
 		rawoutput("formSections[$showform_id] = new Array();");
 		reset($formSections);
-		while (list($key,$val)=each($formSections)){
+		while (list($key,$val)=resurrection_array_next($formSections)){
 			rawoutput("formSections[$showform_id][$key] = '".addslashes($val)."';");
 		}
 		rawoutput("

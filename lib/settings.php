@@ -8,14 +8,8 @@ function savesetting($settingname,$value){
 		loadsettings();
 	// if (!isset($settings[$settingname]) && $value){
 	if ($settingname == "showFormTabIndex") return true;
-	if (!isset($settings[$settingname])){
-			$sql = "INSERT INTO " . db_prefix("settings") . " (setting,value) VALUES (\"".addslashes($settingname)."\",\"".addslashes($value)."\")";
-	}else if (isset($settings[$settingname])) {
-			$sql = "UPDATE " . db_prefix("settings") . " SET value=\"".addslashes($value)."\" WHERE setting=\"".addslashes($settingname)."\"";
-	} else {
-		return false;
-	}
-	db_query($sql);
+	db_query('INSERT INTO ' . db_prefix('settings') . ' (setting,value) VALUES (?,?) ON DUPLICATE KEY UPDATE value=?', true,
+        [$settingname, (string)$value, (string)$value]);
 	$settings[$settingname]=$value;
 	invalidatedatacache("game-settings");
 	if (db_affected_rows()>0) {

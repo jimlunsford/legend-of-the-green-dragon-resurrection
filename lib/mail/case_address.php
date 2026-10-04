@@ -1,15 +1,12 @@
 <?php
-output_notl("<form action='mail.php?op=write' method='post'>",true);
-output("`b`2Address:`b`n");
-$to = translate_inline("To: ");
-$search = htmlentities(translate_inline("Search"), ENT_COMPAT, getsetting("charset", "ISO-8859-1"));
-output_notl("`2$to <input name='to' id='to' value=\"".htmlentities(stripslashes(httpget('prepop')), ENT_COMPAT, getsetting("charset", "ISO-8859-1"))."\">",true);
-output_notl("<input type='submit' class='button' value=\"$search\">", true);
+$escape = static fn($value) => htmlspecialchars($value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+rawoutput("<form action='mail.php?op=write' method='post'>");
+output('`b`2Address:`b`nTo: ');
+rawoutput('<input name="to" id="to" maxlength="255" value="'.$escape($_GET['prepop'] ?? '').'">');
+rawoutput('<button type="submit">'. $escape(translate_inline('Search')).'</button>');
 if ($session['user']['superuser'] & SU_IS_GAMEMASTER) {
-	$from = translate_inline("From: ");
-	output_notl("`n`2$from <input name='from' id='from'>`n", true);
-	output("`7`iLeave empty to send from your account!`i");
+    output('`nFrom display identity (Game Master): ');
+    rawoutput('<input name="from" maxlength="255">');
+    output('`nLeave empty to send from your account. Display identities cannot receive replies.');
 }
-rawoutput("</form>");
-rawoutput("<script type='text/javascript'>document.getElementById(\"to\").focus();</script>");
-?>
+rawoutput('</form>');

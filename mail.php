@@ -8,35 +8,35 @@ require_once("lib/http.php");
 
 tlschema("mail");
 
-$superusermessage = getsetting("superuseryommessage","Asking an admin for gems, gold, weapons, armor, or anything else which you have not earned will not be honored.  If you are experiencing problems with the game, please use the 'Petition for Help' link instead of contacting an admin directly.");
-
+require_once 'lib/player_mail.php';
+if (empty($session['loggedin']) || empty($session['user']['acctid'])) {
+    http_response_code(403); exit('Mail requires authentication.');
+}
 $op = httpget('op');
 $id = (int)httpget('id');
-if($op=="del"){
-	$sql = "DELETE FROM " . db_prefix("mail") . " WHERE msgto='".$session['user']['acctid']."' AND messageid='$id'";
-	db_query($sql);
-	invalidatedatacache("mail-{$session['user']['acctid']}");
-	header("Location: mail.php");
-	exit();
-}elseif($op=="process"){
-	$msg = httppost('msg');
-	if (!is_array($msg) || count($msg)<1){
-		$session['message'] = "`\$`bYou cannot delete zero messages!  What does this mean?  You pressed \"Delete Checked\" but there are no messages checked!  What sort of world is this that people press buttons that have no meaning?!?`b`0";
-		header("Location: mail.php");
-		exit();
-	}else{
-		$sql = "DELETE FROM " . db_prefix("mail") . " WHERE msgto='".$session['user']['acctid']."' AND messageid IN ('".join("','",$msg)."')";
-		db_query($sql);
-		invalidatedatacache("mail-{$session['user']['acctid']}");
-		header("Location: mail.php");
-		exit();
-	}
-}elseif ($op=="unread"){
-	$sql = "UPDATE " . db_prefix("mail") . " SET seen=0 WHERE msgto='".$session['user']['acctid']."' AND messageid='$id'";
-	db_query($sql);
-	invalidatedatacache("mail-{$session['user']['acctid']}");
-	header("Location: mail.php");
-	exit();
+try {
+    if (in_array($op, ['address','write','send'], true)) resurrection_mail_transport($op);
+    if ($op === 'write') $mailDraft = resurrection_mail_draft();
+    if ($op === 'send') require 'lib/mail/case_send.php';
+} catch (InvalidArgumentException $error) {
+    http_response_code(400); exit('Invalid mail request.');
+} catch (DomainException $error) {
+    http_response_code(409); exit('Mail unavailable or form expired. Please reopen the address form.');
+} catch (Throwable $error) {
+    http_response_code(500); exit('Mail could not be committed. Please open a fresh form.');
+}
+
+if (in_array($op, ['del', 'process', 'unread'], true)) {
+    require_once 'lib/mail_security.php';
+    try {
+        resurrection_mutate_mailbox($session, $_SESSION, $_SERVER['REQUEST_METHOD'] ?? '', $_POST, $op);
+    } catch (DomainException $error) {
+        http_response_code(403); exit('Invalid mailbox submission.');
+    } catch (InvalidArgumentException $error) {
+        http_response_code(400); exit('Invalid message selection.');
+    }
+    header('Location: mail.php', true, 303);
+    exit();
 }
 
 popup_header("Ye Olde Poste Office");
@@ -69,10 +69,8 @@ for($i=0;$i<$count_mailfunctions;++$i) {
 rawoutput("</tr></table>");
 output_notl("`n`n");
 
-if($op=="send"){
-	require("lib/mail/case_send.php");
-}
 
+if (!empty($mailSent)) output('Your message was sent!`n');
 switch ($op) {
 case "read":
 	require("lib/mail/case_read.php");

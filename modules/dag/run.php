@@ -2,6 +2,10 @@
 function dag_run_private(){
 	require_once("modules/dag/misc_functions.php");
 	global $session;
+    require_once 'modules/dag/security.php';
+    if (httpget('op') === 'finalize') {
+        resurrection_consume_action('dag-place', (string)$session['user']['acctid']);
+    }
 	if (httpget('manage')!="true"){
 		page_header("Dag Durnick's Table");
 		output("<span style='color: #9900FF'>",true);
@@ -24,8 +28,7 @@ function dag_run_private(){
 		// By Andrew Senger
 		// Added for new Bounty Code
 		output("`c`bThe Bounty List`b`c`n");
-		$sql = "SELECT bountyid,amount,target,setter,setdate FROM " . db_prefix("bounty") . " WHERE status=0 AND setdate<='".date("Y-m-d H:i:s")."' ORDER BY bountyid ASC";
-		$result = db_query($sql);
+		$result = db_query('SELECT bountyid,amount,target,setter,setdate FROM ' . db_prefix('bounty') . ' WHERE status=0 AND setdate<=? ORDER BY bountyid ASC',true,[date('Y-m-d H:i:s')]);
 		rawoutput("<table border=0 cellpadding=2 cellspacing=1 bgcolor='#999999'>");
 		$amount = translate_inline("Amount");
 		$level = translate_inline("Level");
@@ -40,12 +43,10 @@ function dag_run_private(){
 		for($i=0;$i<db_num_rows($result);$i++){
 			$row = db_fetch_assoc($result);
 			$amount = (int)$row['amount'];
-			$sql = "SELECT name,alive,sex,level,laston,loggedin,lastip,location FROM " . db_prefix("accounts") . " WHERE acctid={$row['target']}";
-			$result2 = db_query($sql);
+			$result2 = db_query('SELECT name,alive,sex,level,laston,loggedin,lastip,location FROM ' . db_prefix('accounts') . ' WHERE acctid=?',true,[(int)$row['target']]);
 			if (db_num_rows($result2) == 0) {
 				/* this person has been deleted, clear bounties */
-				$sql = "UPDATE " . db_prefix("bounty") . " SET status=1 WHERE target={$row['target']}";
-				db_query($sql);
+
 				continue;
 			}
 			$row2 = db_fetch_assoc($result2);
@@ -99,13 +100,14 @@ function dag_run_private(){
 			$fee = get_module_setting("bountyfee");
 			if ($fee < 0 || $fee > 100) {
 				$fee = 10;
-				set_module_setting("bountyfee",$fee);
+				// Invalid configuration uses the historical fallback without a GET write.
 			}
 			$min = get_module_setting("bountymin");
 			$max = get_module_setting("bountymax");
 			output("Dag Durnick glances up at you and adjusts the pipe in his mouth with his teeth.`n");
 			output("`7\"So, who ye be wantin' to place a hit on? Just so ye be knowing, they got to be legal to be killin', they got to be at least level %s, and they can't be having too much outstandin' bounty nor be getting hit too frequent like, so if they ain't be listed, they can't be contracted on!  We don't run no slaughterhouse here, we run a.....business.  Also, there be a %s%% listin' fee fer any hit ye be placin'.\"`n`n", get_module_setting("bountylevel"), get_module_setting("bountyfee"));
 			rawoutput("<form action='runmodule.php?module=dag&op=finalize' method='POST'>");
+            rawoutput(resurrection_action_fields('dag-place', (string)$session['user']['acctid']));
 			output("`2Target: ");
 			rawoutput("<input name='contractname'>");
 			output_notl("`n");
@@ -118,17 +120,17 @@ function dag_run_private(){
 			addnav("","runmodule.php?module=dag&op=finalize");
 		}
 	}elseif ($op=="finalize") {
-		if (httpget('subfinal')==1){
-			$sql = "SELECT acctid,name,login,level,locked,age,dragonkills,pk,experience FROM " . db_prefix("accounts") . " WHERE name='".addslashes(rawurldecode(stripslashes(httppost('contractname'))))."' AND locked=0";
-		}else{
-			$contractname = stripslashes(rawurldecode(httppost('contractname')));
-			$name="%";
-			for ($x=0;$x<strlen($contractname);$x++){
-				$name.=substr($contractname,$x,1)."%";
-			}
-			$sql = "SELECT acctid,name,login,level,locked,age,dragonkills,pk,experience FROM " . db_prefix("accounts") . " WHERE name LIKE '".addslashes($name)."' AND locked=0";
-		}
-		$result = db_query($sql);
+        try {
+            $contractname = \Resurrection\Http\Input::string($_POST,'contractname');
+            $amount = \Resurrection\Http\Input::integer($_POST,'amount',0,1);
+            if ($amount < 1 || $amount > 2147483647 || strlen($contractname) > 100 || !mb_check_encoding($contractname,'UTF-8')) throw new InvalidArgumentException();
+        } catch (InvalidArgumentException $error) { http_response_code(400); exit('Invalid bounty input.'); }
+        if (httpget('subfinal') === '1') {
+            $result = db_query('SELECT acctid,name,login,level,locked,age,dragonkills,pk,experience FROM ' . db_prefix('accounts') . ' WHERE name=? AND locked=0',true,[$contractname]);
+        } else {
+            $name = dag_name_pattern($contractname);
+            $result = db_query('SELECT acctid,name,login,level,locked,age,dragonkills,pk,experience FROM ' . db_prefix('accounts') . " WHERE name LIKE ? ESCAPE '!' AND locked=0 LIMIT 101",true,[$name]);
+        }
 		if (db_num_rows($result) == 0) {
 			output("Dag Durnick sneers at you, `7\"There not be anyone I be knowin' of by that name.  Maybe ye should come back when ye got a real target in mind?\"");
 		} elseif(db_num_rows($result) > 100) {
@@ -136,15 +138,16 @@ function dag_run_private(){
 		} elseif(db_num_rows($result) > 1) {
 			output("Dag Durnick searches through his list for a moment, `7\"There be a couple of 'em that ye could be talkin' about.  Which one ye be meaning?\"`n");
 			rawoutput("<form action='runmodule.php?module=dag&op=finalize&subfinal=1' method='POST'>");
+            rawoutput(resurrection_action_fields('dag-place', (string)$session['user']['acctid']));
 			output("`2Target: ");
 			rawoutput("<select name='contractname'>");
 			for ($i=0;$i<db_num_rows($result);$i++){
 				$row = db_fetch_assoc($result);
-				rawoutput("<option value=\"".rawurlencode($row['name'])."\">".full_sanitize($row['name'])."</option>");
+				rawoutput("<option value=\"".htmlspecialchars($row['name'],ENT_QUOTES,'UTF-8')."\">".full_sanitize($row['name'])."</option>");
 			}
 			rawoutput("</select>");
 			output_notl("`n`n");
-			$amount = httppost('amount');
+			// Amount was strictly typed before the name search.
 			output("`2Amount to Place: ");
 			rawoutput("<input name='amount' id='amount' width='5' value='$amount'>");
 			output_notl("`n`n");
@@ -166,14 +169,13 @@ function dag_run_private(){
 				output("Dag Durnick stares at you angrily, `7\"I told ye that I not be an assassin.  That ain't a target worthy of a bounty.  Now get outta me sight!\"");
 			} else {
 				// All good!
-				$amt = abs((int)httppost('amount'));
+				$amt = $amount;
 				$min = get_module_setting("bountymin") * $row['level'];
 				$max = get_module_setting("bountymax") * $row['level'];
 				$fee = get_module_setting("bountyfee");
 				$cost = round($amt*((100+$fee)/100), 0);
 				$curbounty = 0;
-				$sql = "SELECT sum(amount) AS total FROM " . db_prefix("bounty") . " WHERE status=0 AND target={$row['acctid']}";
-				$result = db_query($sql);
+				$result = db_query('SELECT SUM(amount) AS total FROM ' . db_prefix('bounty') . ' WHERE status=0 AND target=?',true,[(int)$row['acctid']]);
 				if (db_num_rows($result) > 0) {
 					$nrow = db_fetch_assoc($result);
 					$curbounty = $nrow['total'];
@@ -193,17 +195,8 @@ function dag_run_private(){
 				} else {
 					output("You slide the coins towards Dag Durnick, who deftly palms them from the table.");
 					output("`7\"I'll just be takin' me %s%% listin' fee offa the top.  The word be put out that ye be wantin' `^%s`7 taken care of. Be patient, and keep yer eyes on the news.\"`n`n", $fee, $row['name']);
-					set_module_pref("bounties",get_module_pref("bounties")+1);
-					$session['user']['gold']-=$cost;
-					// ***ADDED***
-					// By Andrew Senger
-					// Adding for new Bounty Code
-					$setdate = time();
-					// random set date up to 4 hours in the future.
-					$setdate += e_rand(0,14400);
-					$sql = "INSERT INTO ". db_prefix("bounty") . " (amount, target, setter, setdate) VALUES ($amt, ".$row['acctid'].", ".(int)$session['user']['acctid'].", '".date("Y-m-d H:i:s",$setdate)."')";
-					db_query($sql);
-					// ***END ADD***
+                    try { $cost = dag_place_bounty((int)$row['acctid'],$amt); }
+                    catch (DomainException $error) { http_response_code(400); exit('Bounty cannot be placed.'); }
 					debuglog("spent $cost to place a $amt bounty on {$row['name']}");
 				}
 			}
@@ -215,8 +208,7 @@ function dag_run_private(){
 		// ***ADDED***
 		// By Andrew Senger
 		// Adding for new Bounty Code
-		$sql = "SELECT sum(amount) as total FROM " . db_prefix("bounty") . " WHERE status=0 AND setdate<='".date("Y-m-d H:i:s")."' AND target=".$session['user']['acctid'];
-		$result = db_query($sql);
+		$result = db_query('SELECT SUM(amount) AS total FROM ' . db_prefix('bounty') . ' WHERE status=0 AND setdate<=? AND target=?',true,[date('Y-m-d H:i:s'),(int)$session['user']['acctid']]);
 		$curbounty = 0;
 		if (db_num_rows($result) != 0) {
 			$row = db_fetch_assoc($result);
