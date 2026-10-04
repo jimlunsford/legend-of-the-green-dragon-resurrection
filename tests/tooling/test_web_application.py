@@ -1614,7 +1614,7 @@ echo "locked\\n";fflush(STDOUT);$change=json_decode(fgets(STDIN),true,512,JSON_T
             for k,v in dict(automaster=0,multimaster=1,companionslevelup=1,displaymasternews=1,referminlevel=4,refereraward=25,autofight=1,autofightfull=1).items(): setting(k,v)
             def prepare(**changes):
                 values=dict(level=10,experience=15143,hitpoints=500,maxhitpoints=100,attack=100,defense=50,
-                    seenmaster=0,badguy='',specialty='',soulpoints=50,turns=20,gold=1000,gems=10,referer=0,refererawarded=0)
+                    seenmaster=0,badguy='',specialty='TS',soulpoints=50,turns=20,gold=1000,gems=10,referer=0,refererawarded=0)
                 values.update(changes); f['prepare']('TS',**values)
             def master(hp=100000,attack=120,defense=80):
                 self.query('UPDATE masters SET creaturehealth=?,creatureattack=?,creaturedefense=? WHERE creaturelevel=10',[hp,attack,defense])
@@ -1642,8 +1642,16 @@ echo "locked\\n";fflush(STDOUT);$change=json_decode(fgets(STDIN),true,512,JSON_T
 
     def test_training_entry_authority_and_stale_round(self):
         with self._training_fixture() as f:
-            f['training_master'](attack=1000); f['prepare_training'](hitpoints=5000)
+            f['training_master'](attack=1000); f['prepare_training'](hitpoints=5000,specialty='')
             snap=f['training_snapshot']; form=f['training_form']; action=f['training_action']; reject=f['training_reject']
+            # A committed day cannot bypass incomplete specialty onboarding. GET is presentation-only.
+            missing=snap(); day=missing[0]['lastnewday']; self.assertTrue(day)
+            self.assertEqual(['1','5000','15143','Human','','0','a:0:{}','','0',''],
+                [missing[0][key] for key in ['alive','hitpoints','experience','race','specialty','dragonkills','dragonpoints','badguy','seenmaster','specialinc']])
+            data=form('challenge'); self.assertEqual(missing,snap())
+            reject(data,'challenge'); self.assertEqual(missing,snap())
+            # Restore only specialty and obtain fresh forms below, proving the same day is eligible.
+            self.query("UPDATE accounts SET specialty='TS' WHERE acctid=?",[f['player']])
             before=snap()
             for path in ['train.php','train.php?op=question','train.php?op=challenge','train.php?op=autochallenge','train.php?op=fight','train.php?op=run']:
                 self.assertEqual(200,f['request'](path)[0]); self.assertEqual(before,snap())
@@ -1657,6 +1665,7 @@ echo "locked\\n";fflush(STDOUT);$change=json_decode(fgets(STDIN),true,512,JSON_T
             self.assertEqual(before,snap())
             stale=form('challenge'); code,body=action(data,'challenge'); self.assertEqual(200,code,body[:3000]); reject(data,'challenge'); reject(stale,'challenge')
             state=f['decode'](snap()[0]['badguy']); self.assertEqual('10',str(state['enemies'][0]['creatureid'])); self.assertEqual(10,state['options']['traininglevel']); self.assertEqual('1',snap()[0]['seenmaster'])
+            self.assertEqual(day,snap()[0]['lastnewday'])
             before=snap(); stale=form(); data=form(); self.assertEqual(before,snap()); code,body=action(data); self.assertEqual(200,code,body[:3000])
             after=snap(); enemy=f['decode'](after[0]['badguy'])['enemies'][0]
             self.assertEqual(('5000',100000),(before[0]['hitpoints'],f['decode'](before[0]['badguy'])['enemies'][0]['creaturehealth'])); self.assertEqual(('4823',99960),(after[0]['hitpoints'],enemy['creaturehealth']))
@@ -1682,9 +1691,10 @@ echo "locked\\n";fflush(STDOUT);$change=json_decode(fgets(STDIN),true,512,JSON_T
             for patch in [dict(level=0),dict(level=15),dict(level=65535),dict(hitpoints=0,alive=0),dict(alive=0),dict(specialinc='event')]:
                 prepare(**patch); before=snap(); code,_=f['request']('train.php?op=challenge'); self.assertIn(code,[409,200]); self.assertEqual(before,snap())
                 self.assertIn(action({},'challenge')[0],[409,403]); self.assertEqual(before,snap())
-            prepare(level=1,experience=100,dragonkills=4,maxhitpoints=10,hitpoints=10)
+            # Complete onboarding with fight allocations that do not affect the training budget.
+            prepare(level=1,experience=100,dragonkills=4,dragonpoints=f['encode'](['ff']*4),maxhitpoints=10,hitpoints=10)
             self.assertEqual(200,action(form('challenge'),'challenge')[0]); self.assertEqual('',snap()[0]['badguy']) # DK requirement is 200.
-            f['training_master'](); prepare(dragonkills=4,dragonpoints=f['encode'](['at','de','hp']),experience=16143,maxhitpoints=110)
+            f['training_master'](); prepare(dragonkills=4,dragonpoints=f['encode'](['at','de','hp','ff']),experience=16143,maxhitpoints=110)
             self.assertEqual(200,action(form('challenge'),'challenge')[0]); enemy=f['decode'](snap()[0]['badguy'])['enemies'][0]
             self.assertEqual(100005,enemy['trainingmaxhp']); self.assertEqual(120,enemy['creatureattack']); self.assertEqual(80,enemy['creaturedefense'])
             # Missing nearest master cannot create combat; fixture removal is explicitly restored.
@@ -1810,6 +1820,7 @@ echo "locked\\n";fflush(STDOUT);$change=json_decode(fgets(STDIN),true,512,JSON_T
             f['prepare_training'](experience=19122,hitpoints=50)
             before=f['training_snapshot'](); data=f['training_form']('autochallenge'); self.assertEqual(before,f['training_snapshot']())
             self.assertEqual(200,f['training_action'](data,'autochallenge')[0]); self.assertEqual('100',f['training_snapshot']()[0]['hitpoints']); f['training_reject'](data,'autochallenge')
+            self.assertEqual('1',f['training_snapshot']()[0]['seenmaster'])
             # Level 14 is last training master. Level 15 cannot recreate combat or bypass Dragon progression.
             for multi in [0,1]:
                 f['setting']('automaster',0); f['setting']('multimaster',multi)
