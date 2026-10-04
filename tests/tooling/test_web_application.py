@@ -4029,23 +4029,64 @@ function resurrectiondailyfixture_dohook($hook,$args){
             finally:
                 self.query('DELETE FROM module_hooks WHERE modulename=?',[name]);self.query('DELETE FROM modules WHERE modulename=?',[name]);path.unlink()
 
+    @staticmethod
+    def _current_game_day():
+        # A new PHP process reads current settings and calls the application clock.
+        # Never substitute UTC's calendar date or duplicate convertgametime in Python.
+        code = """require 'dbconnect.php';require 'lib/dbwrapper_pdo.php';
+require 'lib/datacache.php';require 'lib/settings.php';require 'lib/datetime.php';
+db_connect($DB_HOST,$DB_USER,$DB_PASS);db_select_db($DB_NAME);
+echo json_encode(gmdate('Y-m-d',gametime()),JSON_THROW_ON_ERROR);"""
+        result = subprocess.run([shutil.which('php'), '-r', code], cwd=ROOT,
+                                capture_output=True, text=True, timeout=20, check=True)
+        return json.loads(result.stdout)
+
     @contextmanager
     def _ramius_fixture(self):
         with self._normal_day_fixture() as f:
-            # Derive today's marker through the actual accepted daily transition.
+            # Retain the accepted daily transition, but do not cache its day across cases.
             self.assertEqual(200,f['request'](data=f['form']())[0])
-            day=f['state']()[0]['lastnewday']; url='newday.php?resurrection=true'
+            url='newday.php?resurrection=true'
+            fixture = dict(f)
             def prepare(**patch):
                 f['prepare']()
+                day = self._current_game_day()
                 values=dict(alive=0,hitpoints=0,deathpower=113,lastnewday=day,playerfights=2,soulpoints=9,gravefights=3)
                 values.update(patch)
                 self.query('UPDATE accounts SET '+','.join(k+'=?' for k in values)+' WHERE acctid=?',[*values.values(),f['player']])
+                fixture['day'] = day
             def request(path=url,data=None): return f['request'](path,data)
             def form(path=url):
                 status,body=request(path);self.assertEqual(200,status,body[:2500])
                 return self._security_fields(body,url)|{'resurrection':'ramius'}
             prepare()
-            yield f|dict(prepare=prepare,request=request,form=form,url=url,day=day)
+            fixture.update(prepare=prepare,request=request,form=form,url=url)
+            yield fixture
+
+    def test_ramius_fixture_refreshes_after_game_day_rollover(self):
+        # Login may update online counters before the parent snapshots settings.
+        # Assert exact restoration of the clock configuration this case exercises.
+        clock_settings = "SELECT * FROM settings WHERE setting IN ('game_epoch','daysperday','gameoffsetseconds') ORDER BY setting"
+        settings = self.query(clock_settings)
+        try:
+            with self._ramius_fixture() as f:
+                old_day = f['day']; form = f['form'](); before = f['state']()
+                offset = self.query("SELECT value FROM settings WHERE setting='gameoffsetseconds'")
+                f['setting']('gameoffsetseconds', int(offset[0]['value']) - 86400)
+                new_day = self._current_game_day()
+                self.assertNotEqual(old_day, new_day)
+                # The old marker and form really are stale; production must reject both.
+                self.assertEqual(old_day, f['state']()[0]['lastnewday'])
+                self.assertEqual(409, f['request']()[0])
+                self.assertEqual(409, f['request'](data=form)[0])
+                self.assertEqual(before, f['state']())
+                f['prepare']()
+                self.assertEqual(new_day, f['day'])
+                self.assertEqual(new_day, f['state']()[0]['lastnewday'])
+                self.assertEqual(200, f['request'](data=f['form']())[0])
+                self.assertEqual(new_day, f['state']()[0]['lastnewday'])
+        finally:
+            self.assertEqual(settings, self.query(clock_settings))
 
     def test_ramius_get_core_favor_hooks_and_daily_separation(self):
         with self._ramius_fixture() as f:
@@ -4233,7 +4274,7 @@ db_query('UPDATE accounts SET deathpower=114 WHERE acctid=?',true,[(int)$argv[1]
 
     def test_ramius_rejects_live_torment_without_abandoning_it(self):
         with self._graveyard_fixture() as f:
-            f['gprepare']();f['patch'](deathpower=113)
+            f['gprepare']();f['patch'](deathpower=113,lastnewday=self._current_game_day())
             url='newday.php?resurrection=true';status,body=f['request'](url);self.assertEqual(200,status,body[:2000])
             form=self._security_fields(body,url)|{'resurrection':'ramius'}
             f['enter']();before=f['gsnapshot']();self.assertTrue(before['badguy'])
