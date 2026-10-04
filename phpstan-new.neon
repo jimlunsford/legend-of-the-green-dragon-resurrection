@@ -21,6 +21,7 @@ parameters:
         - lib/event_security.php
         - modules/dag/security.php
         - modules/drinks/security.php
+        - lib/player_mail.php
         - lib/mail_security.php
         - lib/web_security.php
         - lib/commentary_security.php

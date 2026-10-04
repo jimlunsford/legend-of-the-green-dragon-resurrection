@@ -11,6 +11,7 @@ import re
 import shutil
 import socket
 import subprocess
+import sys
 import time
 import tempfile
 import unittest
@@ -44,9 +45,24 @@ class WebApplicationTests(unittest.TestCase):
         cls.seed_file = tempfile.NamedTemporaryFile(mode='w', suffix='.php')
         cls.seed_file.write("<?php if (in_array($_SERVER['HTTP_X_RESURRECTION_FIXTURE'] ?? '', ['skeleton-death','specialty-accounting'], true)) mt_srand(12345); if (($_SERVER['HTTP_X_RESURRECTION_FIXTURE'] ?? '') === 'ordinary-flee-failure') mt_srand(3); if (($_SERVER['HTTP_X_RESURRECTION_FIXTURE'] ?? '') === 'graveyard-round') mt_srand(1);\n")
         cls.seed_file.flush()
+        # PHP's actual external-mail transport is replaced ONLY on this fixture server.
+        # The subprocess independently observes committed rows before reporting delivery failure.
+        cls.mail_transport = tempfile.TemporaryDirectory(prefix='resurrection-mail-')
+        cls.mail_capture = Path(cls.mail_transport.name) / 'capture.jsonl'
+        cls.mail_program = Path(cls.mail_transport.name) / 'sendmail'
+        cls.mail_program.write_text('#!' + sys.executable + '\n' + """import sys,json,subprocess,os
+from pathlib import Path
+payload=sys.stdin.read()
+code="require 'dbconnect.php';require 'lib/dbwrapper_pdo.php';db_connect($DB_HOST,$DB_USER,$DB_PASS);db_select_db($DB_NAME);echo json_encode(db_query('SELECT messageid,subject,body FROM mail ORDER BY messageid'));"
+result=subprocess.run([os.environ['MAIL_FIXTURE_PHP'],'-r',code],capture_output=True,text=True)
+with Path(__file__).with_name('capture.jsonl').open('a') as f:f.write(json.dumps({'payload':payload,'rows':json.loads(result.stdout)})+'\\n')
+sys.exit(1)
+""")
+        cls.mail_program.chmod(0o700)
+        os.environ['MAIL_FIXTURE_PHP'] = shutil.which('php')
         cls.server_log = tempfile.TemporaryFile(mode='w+t')
         cls.server = subprocess.Popen([shutil.which('php'), '-d', 'display_errors=1', '-d', 'error_reporting=-1',
-                                       '-d', 'zend.exception_ignore_args=1', '-d', 'auto_prepend_file='+cls.seed_file.name, '-S', f'127.0.0.1:{cls.port}', '-t', str(ROOT)],
+                                       '-d', 'zend.exception_ignore_args=1', '-d', 'sendmail_path='+str(cls.mail_program), '-d', 'auto_prepend_file='+cls.seed_file.name, '-S', f'127.0.0.1:{cls.port}', '-t', str(ROOT)],
                                       stdout=subprocess.DEVNULL, stderr=cls.server_log, cwd=ROOT)
         for _ in range(100):
             try:
@@ -67,6 +83,7 @@ class WebApplicationTests(unittest.TestCase):
         cls.server.wait(timeout=5)
         cls.server_log.close()
         cls.seed_file.close()
+        cls.mail_transport.cleanup()
         cls.config.unlink()
 
     @staticmethod
@@ -4290,6 +4307,281 @@ $db=$GLOBALS['dbinfo']['connection'];$db->beginTransaction();db_query('SELECT ac
         result=request(url,self._security_fields(body)|{'newday':'normal'})
         self.assertEqual(200,result[0],result[1][:3000])
         return result
+
+    @contextmanager
+    def _mail_fixture(self):
+        actor=int(self.query('SELECT acctid FROM accounts WHERE login=?',['WebPlayer'])[0]['acctid'])
+        saved=self.query('SELECT superuser,locked,prefs,emailaddress FROM accounts WHERE acctid=?',[actor])[0]
+        keys=['mailsizelimit','inboxlimit','onlyunreadmails','superuseryommessage']
+        prior=self.query('SELECT setting,value FROM settings WHERE setting IN (?,?,?,?)',keys)
+        targets=[int(self._security_target('MailAlpha')),int(self._security_target('MailAlpine')),int(self._security_target('MailOther'))]
+        for ident,name in zip(targets,['Mail Alpha','Mail Alpine','Unrelated']):
+            self.query('UPDATE accounts SET name=?,locked=0,prefs=? WHERE acctid=?',[name,'a:1:{s:10:"dirtyemail";b:1;}',ident])
+        self.query('UPDATE accounts SET superuser=0,locked=0 WHERE acctid=?',[actor])
+        def setting(key,value):
+            self.query('INSERT INTO settings (setting,value) VALUES (?,?) ON DUPLICATE KEY UPDATE value=VALUES(value)',[key,str(value)])
+        for k,v in [('mailsizelimit',1024),('inboxlimit',50),('onlyunreadmails',1),('superuseryommessage','Synthetic admin notice')]:setting(k,v)
+        client=self._security_client()
+        def form(url='mail.php?op=write&to=MailAlpha',data=None):
+            status,body=client(url,data);self.assertEqual(200,status,body[:2000])
+            result=self._security_fields(body,'mail.php?op=send')
+            result.update(to='MailAlpha',subject='Subject',body='Body')
+            return result,body
+        def mails():return self.query('SELECT * FROM mail WHERE msgto IN (?,?,?) ORDER BY messageid',targets)
+        try:yield dict(actor=actor,targets=targets,client=client,form=form,setting=setting,mails=mails)
+        finally:
+            for ident in targets:
+                self.query('DELETE FROM mail WHERE msgto=? OR msgfrom=?',[ident,str(ident)])
+                self.query('DELETE FROM accounts_output WHERE acctid=?',[ident]);self.query('DELETE FROM accounts WHERE acctid=?',[ident])
+            self.query('UPDATE accounts SET '+','.join(k+'=?' for k in saved)+' WHERE acctid=?',list(saved.values())+[actor])
+            self.query('DELETE FROM settings WHERE setting IN (?,?,?,?)',keys)
+            for row in prior:setting(row['setting'],row['value'])
+
+    def test_player_mail_send_transport_search_and_bounds(self):
+        with self._mail_fixture() as f:
+            c=f['client'];send='mail.php?op=send'
+            anon=self._security_client(login=None)
+            for url in [send,'mail.php?op=write&to=MailAlpha','mail.php?op=write&replyto=1','mail.php?op=address']:
+                self.assertNotEqual(200,anon(url)[0]);self.assertEqual([],f['mails']())
+            self.assertEqual(403,c(send)[0])
+            for data in [{},{'to':'MailAlpha','subject':'x','body':'x'}]:self.assertEqual(403,c(send,data)[0])
+            for data in [{'to[]':'x'},{'to.x':'x'},{'to':'MailAlpha','msgfrom':'0'}, [('to','MailAlpha'),('to','MailOther')]]:
+                self.assertEqual(400,c('mail.php?op=write',data)[0]);self.assertEqual([],f['mails']())
+            for term in ["' OR 1=1 --",'%', '_', 'NothingLikeThis']:
+                status,body=c('mail.php?op=write',{'to':term});self.assertEqual(200,status);self.assertNotIn('action_token',body)
+            form,body=f['form']('mail.php?op=write',{'to':'Mail Al'})
+            self.assertIn('<select',body);self.assertIn('MailAlpine',body);self.assertNotIn('value="MailOther"',body)
+            self.assertEqual(409,c(send,form|{'to':'MailOther'})[0]);self.assertEqual([],f['mails']())
+            form,_=f['form']('mail.php?op=write',{'to':'Mail Al'})
+            self.assertEqual(200,c(send,form|{'to':'MailAlpine'})[0]);self.assertEqual(str(f['targets'][1]),f['mails']()[-1]['msgto'])
+            for extra in [{'from':'0'},{'from':'System'},{'msgfrom':str(f['targets'][0])},{'msgto':'1'},{'count':'0'},{'returnto':'1'},{'replyto':'1'},{'body[]':'x'},{'csrf.token':'x'}]:
+                form,_=f['form']();before=f['mails']();self.assertEqual(400,c(send,form|extra)[0]);self.assertEqual(before,f['mails']())
+            form,_=f['form']();before=f['mails']()
+            self.assertEqual(400,c(send,list(form.items())+[('subject','duplicate')])[0]);self.assertEqual(before,f['mails']())
+            self.assertEqual(403,c(send,form|{'csrf_token':'0'*64})[0]);self.assertEqual(before,f['mails']())
+            form,_=f['form']();second,_=f['form']();self.assertEqual(form,second)
+            self.assertEqual(200,c(send,form)[0]);after=f['mails']();self.assertEqual(str(f['actor']),after[-1]['msgfrom']);self.assertEqual(str(f['actor']),after[-1]['originator'])
+            self.assertEqual(409,c(send,form)[0]);self.assertEqual(409,c(send,second)[0]);self.assertEqual(after,f['mails']())
+            f['setting']('mailsizelimit',5)
+            for subject,body,expected in [('', '', ''),('normal','1234','1234'),('雪'*255,'12345','12345'),('controls`n\r\n\t','123456','12345'),('literal','雪雪','雪'),('line','a\r\nb\rc','a\nb\nc'),('line','a\nb`nc','a\nb\nc')]:
+                form,_=f['form']();self.assertEqual(200,c(send,form|{'subject':subject,'body':body})[0]);row=f['mails']()[-1]
+                self.assertEqual(expected,row['body']);self.assertEqual(subject.replace('`n','').replace('\r','').replace('\n','').replace('\t',''),row['subject'])
+            form,_=f['form']();before=f['mails']();self.assertEqual(409,c(send,form|{'subject':'雪'*256})[0]);self.assertEqual(before,f['mails']())
+            f['setting']('mailsizelimit',1024)
+            plain='a:1:{i:0;s:5:"hello";}'
+            form,_=f['form']();self.assertEqual(200,c(send,form|{'subject':plain,'body':plain})[0]);self.assertEqual(plain,f['mails']()[-1]['body'])
+
+    def test_player_mail_reply_ownership_staleness_and_rendering(self):
+        with self._mail_fixture() as f:
+            c=f['client'];actor=f['actor'];target=f['targets'][0];send='mail.php?op=send'
+            def message(sender,owner,subject='Original',body='Original body'):
+                self.query('INSERT INTO mail(msgfrom,msgto,subject,body,sent) VALUES (?,?,?,?,NOW())',[str(sender),owner,subject,body])
+                return int(self.query('SELECT MAX(messageid) AS id FROM mail')[0]['id'])
+            owned=message(target,actor,'<img src=x>','</textarea><script>bad()</script>')
+            foreign=message(target,f['targets'][1],'PRIVATE FOREIGN','SECRET FOREIGN')
+            system=message(0,actor)
+            try:
+                for ident in [foreign,4294967295,system]:
+                    status,body=c('mail.php?op=write&replyto='+str(ident));self.assertEqual(409,status);self.assertNotIn('action_token',body);self.assertNotIn('SECRET FOREIGN',body)
+                status,body=c('mail.php?op=read&id='+str(foreign));self.assertEqual(200,status);self.assertNotIn('SECRET FOREIGN',body)
+                url='mail.php?op=write&replyto='+str(owned)
+                form,body=f['form'](url);self.assertIn('RE: &lt;img src=x&gt;',body);self.assertIn('&lt;/textarea&gt;',body);self.assertNotIn('<script>bad()',body);self.assertIn('Original Message from Mail Alpha',body)
+                self.assertEqual(400,c(url+'&to=MailOther')[0]);self.assertEqual(409,c(send,form|{'to':'MailOther'})[0]);self.assertEqual(1,len(f['mails']()))
+                form,_=f['form'](url);original=self.query('SELECT * FROM mail WHERE messageid=?',[owned]);self.assertEqual(200,c(send,form)[0]);self.assertEqual(str(target),f['mails']()[-1]['msgto'])
+                # Successful return is an owned read, with the historical mark-seen behavior.
+                original[0]['seen']='1';self.assertEqual(original,self.query('SELECT * FROM mail WHERE messageid=?',[owned]))
+                for field,value in [('login','RenamedRecipient'),('name','Renamed display'),('locked',1)]:
+                    prior=self.query('SELECT '+field+' FROM accounts WHERE acctid=?',[target])[0][field]
+                    form,_=f['form'](url);before=f['mails']();self.query('UPDATE accounts SET '+field+'=? WHERE acctid=?',[value,target])
+                    self.assertEqual(409,c(send,form)[0]);self.assertEqual(before,f['mails']());self.query('UPDATE accounts SET '+field+'=? WHERE acctid=?',[prior,target])
+                form,_=f['form'](url);before=f['mails']();self.query('UPDATE mail SET body=? WHERE messageid=?',['changed',owned]);self.assertEqual(409,c(send,form)[0]);self.assertEqual(before,f['mails']())
+                form,_=f['form'](url);self.query('DELETE FROM mail WHERE messageid=?',[owned]);self.assertEqual(409,c(send,form)[0]);self.assertEqual(before,f['mails']())
+                # A removed original sender is unavailable even if its orphan source remains.
+                deleted=message(f['targets'][2],actor);form,_=f['form']('mail.php?op=write&replyto='+str(deleted))
+                self.query('DELETE FROM accounts WHERE acctid=?',[f['targets'][2]]);self.assertEqual(409,c(send,form|{'to':'MailOther'})[0])
+                self.assertEqual(409,c('mail.php?op=write&replyto='+str(deleted))[0])
+                self.query('DELETE FROM mail WHERE messageid=?',[deleted])
+            finally:self.query('DELETE FROM mail WHERE messageid IN (?,?,?)',[owned,foreign,system])
+
+    def test_player_mail_gamemaster_settings_locked_and_capacity(self):
+        with self._mail_fixture() as f:
+            c=f['client'];send='mail.php?op=send';actor=f['actor'];target=f['targets'][0]
+            self.assertEqual(409,c('mail.php?op=write',{'to':'MailAlpha','from':'Ramius'})[0])
+            gm=int(subprocess.check_output([shutil.which('php'),'-r',"require 'lib/constants.php';echo SU_IS_GAMEMASTER;"],cwd=ROOT,text=True))
+            self.query('UPDATE accounts SET superuser=? WHERE acctid=?',[gm,actor])
+            for label in ['System','`^System','0','1','99999999999999999999','1notSystem']:
+                self.assertEqual(409,c('mail.php?op=write',{'to':'MailAlpha','from':label})[0])
+            form,_=f['form']('mail.php?op=write',{'to':'MailAlpha','from':"`^Ramius O'Reilly"})
+            self.assertNotIn('from',form);self.assertEqual(200,c(send,form)[0]);self.assertEqual("`^Ramius O'Reilly",f['mails']()[-1]['msgfrom'])
+            form,_=f['form']('mail.php?op=write',{'to':'MailAlpha','from':'Ramius'})
+            self.query('UPDATE accounts SET superuser=0 WHERE acctid=?',[actor]);before=f['mails']();self.assertEqual(403,c(send,form)[0]);self.assertEqual(before,f['mails']())
+            for field,value in [('locked',1),('name','New name'),('prefs','a:0:{}')]:
+                prior=self.query('SELECT '+field+' FROM accounts WHERE acctid=?',[target])[0][field];form,_=f['form']()
+                self.query('UPDATE accounts SET '+field+'=? WHERE acctid=?',[value,target]);self.assertEqual(409,c(send,form)[0]);self.assertEqual(before,f['mails']())
+                if field=='locked':
+                    self.assertNotIn('action_token',c('mail.php?op=write',{'to':'MailAlpha'})[1]);self.assertNotIn('action_token',c('mail.php?op=write&to=MailAlpha')[1])
+                self.query('UPDATE accounts SET '+field+'=? WHERE acctid=?',[prior,target])
+            for key,value in [('mailsizelimit',100),('inboxlimit',2),('onlyunreadmails',0),('superuseryommessage','Changed warning')]:
+                prior=self.query('SELECT value FROM settings WHERE setting=?',[key])[0]['value'];form,_=f['form']();f['setting'](key,value)
+                self.assertEqual(409,c(send,form)[0]);self.assertEqual(before,f['mails']());f['setting'](key,prior)
+            for key,bad in [('mailsizelimit','-1'),('mailsizelimit','0'),('mailsizelimit','65536'),('inboxlimit','10001'),('onlyunreadmails','yes')]:
+                prior=self.query('SELECT value FROM settings WHERE setting=?',[key])[0]['value'];f['setting'](key,bad)
+                self.assertEqual(409,c('mail.php?op=write&to=MailAlpha')[0]);f['setting'](key,prior)
+            f['setting']('inboxlimit',1);form,_=f['form']();self.assertEqual(409,c(send,form)[0])
+            self.query('UPDATE mail SET seen=1 WHERE msgto=?',[target]);form,_=f['form']();self.assertEqual(200,c(send,form)[0])
+            f['setting']('onlyunreadmails',0);form,_=f['form']();self.assertEqual(409,c(send,form)[0])
+            # Form issued with capacity, filled before submit.
+            self.query('DELETE FROM mail WHERE msgto=?',[target]);form,_=f['form']()
+            self.query('INSERT INTO mail(msgfrom,msgto,subject,body,sent) VALUES (0,?,?,?,NOW())',[target,'fill','body'])
+            before=f['mails']();self.assertEqual(409,c(send,form)[0]);self.assertEqual(before,f['mails']())
+
+    def test_player_mail_late_failure_consumption_and_fresh_retry(self):
+        with self._mail_fixture() as f:
+            c=f['client'];send='mail.php?op=send';target=f['targets'][0];actor=f['actor']
+            self.query('INSERT INTO mail(msgfrom,msgto,subject,body,sent) VALUES (?,?,?,?,NOW())',[str(target),actor,'Source','Unchanged original'])
+            source=int(self.query('SELECT MAX(messageid) AS id FROM mail')[0]['id'])
+            gm=int(subprocess.check_output([shutil.which('php'),'-r',"require 'lib/constants.php';echo SU_IS_GAMEMASTER;"],cwd=ROOT,text=True))
+            try:
+                for mode in ['normal','reply','gm']:
+                    self.query('UPDATE accounts SET superuser=? WHERE acctid=?',[gm if mode=='gm' else 0,actor])
+                    def getform():return f['form']('mail.php?op=write&replyto='+str(source) if mode=='reply' else 'mail.php?op=write',None if mode=='reply' else ({'to':'MailAlpha','from':'Ramius'} if mode=='gm' else {'to':'MailAlpha'}))[0]
+                    form=getform();before=f['mails']();original=self.query('SELECT * FROM mail WHERE messageid=?',[source])
+                    # Real INSERT failure, after authority and capacity locks. No early rejection.
+                    self.query("ALTER TABLE mail ADD CONSTRAINT fixture_mail_failure CHECK (body <> 'LATE FAIL')")
+                    try:self.assertEqual(500,c(send,form|{'body':'LATE FAIL'})[0])
+                    finally:self.query('ALTER TABLE mail DROP CONSTRAINT fixture_mail_failure')
+                    self.assertEqual(before,f['mails']());self.assertEqual(original,self.query('SELECT * FROM mail WHERE messageid=?',[source]))
+                    self.assertEqual(409,c(send,form)[0]);fresh=getform();self.assertEqual(200,c(send,fresh)[0]);self.assertEqual(len(before)+1,len(f['mails']()))
+                    self.assertEqual('Ramius' if mode=='gm' else str(actor),f['mails']()[-1]['msgfrom'])
+            finally:self.query('DELETE FROM mail WHERE messageid=?',[source])
+
+    def test_player_mail_capacity_two_independent_senders(self):
+        import threading
+        with socket.socket() as sock:sock.bind(('127.0.0.1',0));port=sock.getsockname()[1]
+        log=tempfile.TemporaryFile(mode='w+t')
+        server=subprocess.Popen([shutil.which('php'),'-d','display_errors=1','-d','error_reporting=-1','-S',f'127.0.0.1:{port}','-t',str(ROOT)],cwd=ROOT,stdout=subprocess.DEVNULL,stderr=log)
+        try:
+            for _ in range(100):
+                try:
+                    with socket.create_connection(('127.0.0.1',port),timeout=.1):break
+                except OSError:time.sleep(.02)
+            with self._mail_fixture() as f:
+                target=f['targets'][0];second_id=f['targets'][2];f['setting']('inboxlimit',1)
+                password=self.query('SELECT password FROM accounts WHERE acctid=?',[f['actor']])[0]['password']
+                self.query('UPDATE accounts SET password=? WHERE acctid=?',[password,second_id])
+                second=self._security_client('MailOther',port=port)
+                first_form,_=f['form']();status,body=second('mail.php?op=write&to=MailAlpha');self.assertEqual(200,status)
+                second_form=self._security_fields(body,'mail.php?op=send')|{'to':'MailAlpha','subject':'Concurrent second','body':'Body'}
+                code="""require 'dbconnect.php';require 'lib/dbwrapper_pdo.php';db_connect($DB_HOST,$DB_USER,$DB_PASS);db_select_db($DB_NAME);
+$db=$GLOBALS['dbinfo']['connection'];$db->beginTransaction();db_query('SELECT acctid FROM accounts WHERE acctid=? FOR UPDATE',true,[(int)$argv[1]]);echo "LOCKED\n";flush();fgets(STDIN);$db->commit();"""
+                barrier=subprocess.Popen([shutil.which('php'),'-r',code,str(target)],cwd=ROOT,stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True)
+                results=[];threads=[]
+                try:
+                    self.assertEqual('LOCKED',barrier.stdout.readline().strip())
+                    for client,form in [(f['client'],first_form),(second,second_form)]:
+                        thread=threading.Thread(target=lambda client=client,form=form:results.append(client('mail.php?op=send',form)));threads.append(thread);thread.start()
+                    waiting=False
+                    for _ in range(100):
+                        rows=self.query("SELECT INFO FROM information_schema.PROCESSLIST WHERE INFO LIKE '%accounts%FOR UPDATE%'")
+                        if sum('WHERE acctid=' in (r['INFO'] or '') and 'SELECT INFO' not in (r['INFO'] or '') for r in rows)>=2:waiting=True;break
+                        time.sleep(.02)
+                    self.assertTrue(waiting,'Both independent senders must reach the SQL recipient lock')
+                    barrier.stdin.write('commit\n');barrier.stdin.flush();_,err=barrier.communicate(timeout=10);self.assertEqual(0,barrier.returncode,err)
+                    for thread in threads:thread.join(timeout=20);self.assertFalse(thread.is_alive())
+                    self.server_log.seek(0); log.seek(0)
+                    self.assertEqual([200,409],sorted(r[0] for r in results),repr(results)+self.server_log.read()[-2000:]+log.read()[-2000:]);self.assertEqual(1,len(f['mails']()))
+                    for client,form in [(f['client'],first_form),(second,second_form)]:self.assertEqual(409,client('mail.php?op=send',form)[0])
+                    self.assertEqual(1,len(f['mails']()))
+                finally:
+                    if barrier.poll() is None:barrier.terminate();barrier.wait(timeout=5)
+                    for thread in threads:thread.join(timeout=20)
+        finally:server.terminate();server.wait(timeout=5);log.close()
+
+    def test_player_mail_notifications_commit_failure_preferences_and_display(self):
+        with self._mail_fixture() as f:
+            c=f['client'];target=f['targets'][0];send='mail.php?op=send'
+            def captures():return [json.loads(x) for x in self.mail_capture.read_text().splitlines()] if self.mail_capture.exists() else []
+            def prefs(email,system,emailaddress='recipient@example.invalid'):
+                encoded='a:3:{s:11:"emailonmail";b:'+str(int(email))+';s:10:"systemmail";b:'+str(int(system))+';s:10:"dirtyemail";b:1;}'
+                self.query('UPDATE accounts SET prefs=?,emailaddress=? WHERE acctid=?',[encoded,emailaddress,target])
+            prefs(True,True)
+            form,_=f['form']();before=captures()
+            self.query("ALTER TABLE mail ADD CONSTRAINT fixture_mail_failure CHECK (body <> 'LATE FAIL')")
+            try:self.assertEqual(500,c(send,form|{'body':'LATE FAIL'})[0])
+            finally:self.query('ALTER TABLE mail DROP CONSTRAINT fixture_mail_failure')
+            self.assertEqual([],f['mails']());self.assertEqual(before,captures());self.assertEqual(409,c(send,form)[0])
+            form,_=f['form']();self.assertEqual(200,c(send,form|{'subject':'Commit probe','body':'Unique committed body'})[0])
+            after=captures();self.assertEqual(len(before)+1,len(after));self.assertTrue(any(r['body']=='Unique committed body' for r in after[-1]['rows']))
+            self.assertIn('Unique committed body',after[-1]['payload']);self.assertNotIn('PHPSESSID',after[-1]['payload'])
+            self.assertEqual(409,c(send,form)[0]);self.assertEqual(1,len(f['mails']()));self.assertEqual(after,captures())
+            for email,system,address in [(False,True,'recipient@example.invalid'),(True,False,'invalid-address')]:
+                prefs(email,system,address);form,_=f['form']();self.assertEqual(200,c(send,form)[0]);self.assertEqual(after,captures())
+            # Literal serialized-looking player content survives inbox/read without translation.
+            literal='a:1:{i:0;s:5:"hello";}'
+            self.query('INSERT INTO mail(msgfrom,msgto,subject,body,sent) VALUES (?,?,?,?,NOW())',[str(target),f['actor'],literal,literal])
+            mid=int(self.query('SELECT MAX(messageid) AS id FROM mail')[0]['id'])
+            try:
+                self.assertIn('a:1:',c('mail.php')[1]);self.assertIn('a:1:',c('mail.php?op=read&id='+str(mid))[1])
+                self.query('UPDATE mail SET msgfrom=?,subject=?,body=? WHERE messageid=?',['Ramius',literal,literal,mid])
+                rendered=c('mail.php?op=read&id='+str(mid))[1];self.assertIn('a:1:',rendered);self.assertNotIn('op=write&amp;replyto',rendered)
+                self.assertEqual(409,c('mail.php?op=write&replyto='+str(mid))[0])
+                self.query('UPDATE mail SET msgfrom=?,subject=?,body=? WHERE messageid=?',['0','a:1:{i:0;s:14:"Trusted notice";}','a:2:{i:0;s:8:"Hello %s";i:1;s:3:"Jim";}',mid])
+                rendered=c('mail.php?op=read&id='+str(mid))[1];self.assertIn('Trusted notice',rendered);self.assertIn('Hello Jim',rendered);self.assertNotIn('a:2:',rendered)
+                self.assertEqual(409,c('mail.php?op=write&replyto='+str(mid))[0])
+                # Retained unread/delete ownership and CSRF operations.
+                csrf=self._security_fields(f['form']()[1])['csrf_token']
+                self.assertEqual(303,c('mail.php?op=unread',{'csrf_token':csrf,'id':str(mid)})[0]);self.assertEqual('0',self.query('SELECT seen FROM mail WHERE messageid=?',[mid])[0]['seen'])
+                foreign=int(f['mails']()[0]['messageid']);self.assertEqual(303,c('mail.php?op=unread',{'csrf_token':csrf,'id':str(foreign)})[0]);self.assertEqual(3,len(f['mails']()))
+                self.assertEqual(303,c('mail.php?op=process',[('csrf_token',csrf),('msg[]',str(foreign))])[0]);self.assertEqual(3,len(f['mails']()))
+                self.assertEqual(403,c('mail.php?op=del',{'id':str(mid)})[0]);self.assertEqual(303,c('mail.php?op=del',{'csrf_token':csrf,'id':str(mid)})[0])
+            finally:self.query('DELETE FROM mail WHERE messageid=?',[mid])
+
+    def test_player_mail_privilege_rechecked_after_waiting_for_account_lock(self):
+        import threading
+        with self._mail_fixture() as f:
+            actor=f['actor'];c=f['client']
+            gm=int(subprocess.check_output([shutil.which('php'),'-r',"require 'lib/constants.php';echo SU_IS_GAMEMASTER;"],cwd=ROOT,text=True))
+            self.query('UPDATE accounts SET superuser=? WHERE acctid=?',[gm,actor])
+            form,_=f['form']('mail.php?op=write',{'to':'MailAlpha','from':'Ramius'})
+            code="""require 'dbconnect.php';require 'lib/dbwrapper_pdo.php';db_connect($DB_HOST,$DB_USER,$DB_PASS);db_select_db($DB_NAME);
+$db=$GLOBALS['dbinfo']['connection'];$db->beginTransaction();db_query('SELECT acctid FROM accounts WHERE acctid=? FOR UPDATE',true,[(int)$argv[1]]);echo "LOCKED\n";flush();fgets(STDIN);db_query('UPDATE accounts SET superuser=0 WHERE acctid=?',true,[(int)$argv[1]]);$db->commit();"""
+            barrier=subprocess.Popen([shutil.which('php'),'-r',code,str(actor)],cwd=ROOT,stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True)
+            results=[];thread=threading.Thread(target=lambda:results.append(c('mail.php?op=send',form)))
+            try:
+                self.assertEqual('LOCKED',barrier.stdout.readline().strip());thread.start();waiting=False
+                for _ in range(100):
+                    rows=self.query("SELECT INFO FROM information_schema.PROCESSLIST WHERE INFO LIKE '%accounts%FOR UPDATE%'")
+                    if any('WHERE acctid=' in (r['INFO'] or '') and 'SELECT INFO' not in (r['INFO'] or '') for r in rows):waiting=True;break
+                    time.sleep(.02)
+                self.assertTrue(waiting,'Send must pass initial authentication/CSRF and reach the account lock before privilege revocation')
+                barrier.stdin.write('revoke\n');barrier.stdin.flush();_,err=barrier.communicate(timeout=10);self.assertEqual(0,barrier.returncode,err)
+                thread.join(timeout=20);self.assertFalse(thread.is_alive());self.assertEqual(409,results[0][0]);self.assertEqual([],f['mails']())
+                # Existing authentication rotates CSRF on the following request; a fresh normal form works.
+                fresh,_=f['form']();self.assertEqual(409,c('mail.php?op=send',form|{'csrf_token':fresh['csrf_token']})[0]);self.assertEqual(200,c('mail.php?op=send',fresh)[0])
+                self.assertEqual(str(actor),f['mails']()[-1]['msgfrom'])
+            finally:
+                if barrier.poll() is None:barrier.terminate();barrier.wait(timeout=5)
+                if thread.ident is not None:thread.join(timeout=20)
+
+    def test_player_mail_system_helper_notifications_and_missing_recipients(self):
+        with self._mail_fixture() as f:
+            target=f['targets'][0]
+            def captures():return [json.loads(x) for x in self.mail_capture.read_text().splitlines()] if self.mail_capture.exists() else []
+            code="""require 'dbconnect.php';require 'lib/dbwrapper_pdo.php';db_connect($DB_HOST,$DB_USER,$DB_PASS);db_select_db($DB_NAME);
+require 'lib/constants.php';require 'lib/datacache.php';require 'lib/settings.php';require 'lib/output.php';require 'lib/translator.php';require 'lib/systemmail.php';
+$session=['user'=>['acctid'=>1,'superuser'=>0,'prefs'=>[]]];$output='';$translation_is_enabled=false;translator_setup();
+$REQUEST_URI='mail.php';$_SERVER['HTTP_HOST']='localhost';$_SERVER['SCRIPT_NAME']='/mail.php';$to=(int)$argv[1];$noemail=$argv[2]==='1';
+echo json_encode(systemmail($to,['Trusted %s','notice'],['Hello %s','Jim'],0,$noemail));"""
+            def helper(noemail=False,to=target):
+                result=subprocess.run([shutil.which('php'),'-d','sendmail_path='+str(self.mail_program),'-r',code,str(to),'1' if noemail else '0'],cwd=ROOT,capture_output=True,text=True,timeout=15)
+                self.assertEqual(0,result.returncode,result.stderr);self.assertNotRegex(result.stdout+result.stderr,r'(?i)(warning:|notice:|fatal error|deprecated:)')
+                return json.loads(result.stdout)
+            for email,system,noemail,expected in [(False,True,False,0),(True,False,False,0),(True,True,True,0),(True,True,False,1)]:
+                prefs='a:2:{s:11:"emailonmail";b:'+str(int(email))+';s:10:"systemmail";b:'+str(int(system))+';}'
+                self.query('UPDATE accounts SET prefs=?,emailaddress=? WHERE acctid=?',[prefs,'recipient@example.invalid',target])
+                before=captures();self.assertTrue(helper(noemail));after=captures();self.assertEqual(len(before)+expected,len(after))
+            self.assertIn('Hello Jim',after[-1]['payload']);self.assertNotIn('a:2:',after[-1]['payload']);self.assertTrue(any('Hello %s' in r['body'] for r in after[-1]['rows']))
+            count=len(f['mails']());before=captures();self.assertFalse(helper(to=4294967295));self.assertEqual(count,len(f['mails']()));self.assertEqual(before,captures())
 
     def _security_client(self, login='WebPlayer', password="Synthetic web O'Reilly \\ password", port=None):
         class NoRedirect(urllib.request.HTTPRedirectHandler):

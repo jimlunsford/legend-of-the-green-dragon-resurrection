@@ -132,7 +132,7 @@ function translate_mail($in,$to=0){
 		$languageResult = db_query("SELECT prefs FROM ".db_prefix("accounts")." WHERE acctid=$to");
 		$language = db_fetch_assoc($languageResult);
 		$language['prefs'] = \Resurrection\Security\ScalarState::read($language['prefs']);
-		$session['tlanguage'] = $language['prefs']['language']?$language['prefs']['language']:getsetting("defaultlanguage","en");
+		$session['tlanguage'] = !empty($language['prefs']['language']) ? $language['prefs']['language'] : getsetting("defaultlanguage","en");
 	}
 	reset($in);
 	// translation offered within translation tool here is in language

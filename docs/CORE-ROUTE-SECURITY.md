@@ -473,3 +473,22 @@ Dragon Point/race/specialty prerequisite handlers remain in front of the reset.
 Explicit `resurrection=true` remains separate and unproven, so broader New Day is
 BLOCKED. Exact supported-matrix CI remains the normal-slice acceptance gate.
 [Full authority, historical rules, tests and limitations](NEWDAY-DAILY-RESET-AUTHORITY-20261003.md).
+
+## Player mail authority candidate, 2026-10-04
+
+The exact predecessor `de9f12ec05934b21c3c249bb250d10ac70643125` is accepted:
+Modern core 37210214161 and Baseline integrity 37210214168 SUCCESS on both
+supported targets. Explicit Ramius early resurrection and broader New Day are
+PASS; earlier pending statements are historical.
+
+[Player mail authority evidence](MAIL-AUTHORITY-20261004.md) documents the bounded
+address/write/reply/send implementation. Send uses authenticated POST, strict raw
+transport, CSRF, one-use server-held authority, ordered account locks, current
+mailbox capacity, owned reply source and post-commit email. Ordinary sender is
+the actor; historically intentional GM display identities require an explicit
+role-authorized descriptor and cannot become System. Locked recipients are
+consistently unavailable. Inbox/read/delete/unread ownership is retained.
+
+Player mail and its helper scope await exact supported-matrix CI. All systemmail
+callers remain PARTIAL/BLOCKED; the linked inventory names the uncertified
+administrative/clan/bank/haunt/legacy paths. No broader subsystem is promoted.

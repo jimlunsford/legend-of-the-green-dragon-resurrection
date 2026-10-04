@@ -66,7 +66,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'GET') {
     page_footer();
 }
 resurrection_consume_action($scope,$context);
-$GLOBALS['pvp_mail_notifications'] = [];
+$GLOBALS['mail_notifications'] = [];
 try {
     resurrection_player_mutation(function () use ($act,$targetId,$iname,$op,$context) {
         global $session,$badguy,$options,$battle,$victory,$defeat,$attackstack;
@@ -161,15 +161,15 @@ try {
         }
     }, [$act === 'attack' ? $targetId : \Resurrection\Security\PvpState::read($session['user']['badguy'],(int)$session['user']['acctid'])['options']['target']]);
 } catch (DomainException $error) {
-    unset($GLOBALS['pvp_mail_notifications']);
+    unset($GLOBALS['mail_notifications']);
     http_response_code(409); exit('PvP action no longer available. Reload before retrying.');
 } catch (Throwable $error) {
     error_log('PvP transaction failed: '.get_class($error).' at '.basename($error->getFile()).':'.$error->getLine());
-    unset($GLOBALS['pvp_mail_notifications']);
+    unset($GLOBALS['mail_notifications']);
     http_response_code(500); exit('PvP action failed. No result was committed. Reload before retrying.');
 }
-$notifications = $GLOBALS['pvp_mail_notifications'];
-unset($GLOBALS['pvp_mail_notifications']);
+$notifications = $GLOBALS['mail_notifications'];
+unset($GLOBALS['mail_notifications']);
 foreach ($notifications as $notification) {
     try { resurrection_systemmail_notification(...$notification); }
     catch (Throwable $error) { error_log('PvP notification delivery failed after commit.'); }

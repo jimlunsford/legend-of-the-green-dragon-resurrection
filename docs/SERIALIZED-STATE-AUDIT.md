@@ -321,3 +321,28 @@ without repair/normalization; GET retains stored buff bytes. Equivalent record
 field order is canonicalized for the one-use context. The low-level `ScalarState`
 reader remains unchanged. [Scope and evidence](NEWDAY-DAILY-RESET-AUTHORITY-20261003.md).
 Broader serialized consumers and explicit early resurrection remain BLOCKED.
+
+## Mail translation business schema candidate, 2026-10-04
+
+`MailContent` validates the translated system-mail business envelope in addition
+to unchanged ScalarState parser protections: nonempty list, string format, at
+most 32 scalar arguments, no nested/associative/object/null payloads, bounded
+format conversions/counts and encoded/expanded sizes, valid UTF-8 and actual
+VARCHAR(255)/TEXT capacity. LoGD color-percent behavior is retained. Only exact
+system sender `'0'` permits this interpretation in the active inbox/read UI;
+player and GM display mail remain literal, including serialization-looking text.
+Replies are owned plain-player sources and cannot originate from system mail.
+Invalid stored envelopes remain literal, never `sprintf` argument arrays.
+
+Recomputed token inventory over tracked shipped PHP (excluding tests, lab and
+scripts): predecessor **114 sites / 55 files / 41 serialize writers-checks /
+72 ScalarState reads / one centralized unserialize**; candidate **112 sites /
+53 files / 42 writers-checks / 69 ScalarState reads / one centralized unserialize**.
+Five direct active mail display/reply reads were replaced/removed; two reads and
+one serialization check live in MailContent. This is a current recount, not a
+rewrite of earlier dated totals. No parser limits or historical sources changed.
+
+[Mail contract, caller inventory and tests](MAIL-AUTHORITY-20261004.md).
+The helper/player scope awaits exact CI; caller-specific clan, bank, admin,
+haunt and legacy trust work remains open. Accepted predecessor Ramius and broader
+New Day are PASS at Modern 37210214161 / Baseline 37210214168 SUCCESS.

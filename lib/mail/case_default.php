@@ -1,5 +1,5 @@
 <?php
-require_once __DIR__ . '/../../src/Security/ScalarState.php';
+require_once __DIR__ . '/../../src/Security/MailContent.php';
 output("`b`iMail Box`i`b");
 if (isset($session['message'])) {
 	output($session['message']);
@@ -20,20 +20,16 @@ if ($db_num_rows>0){
 		rawoutput("<td nowrap><input type='checkbox' name='msg[]' value='{$row['messageid']}'>");
 		rawoutput("<img src='images/".($row['seen']?"old":"new")."scroll.GIF' width='16px' height='16px' alt='".($row['seen']?"Old":"New")."'></td>");
 		rawoutput("<td>");
-		if ($row['msgfrom']==0 || !is_numeric($row['msgfrom'])){
-			if ($row['msgfrom'] == 0 && is_numeric($row['msgfrom'])) {
-				$row['name']=translate_inline("`i`^System`0`i");
-			} else {
-				$row['name']=$row['msgfrom'];
-			}
-			// Only translate the subject if it's an array, ie, it came from the game.
-			$row_subject = \Resurrection\Security\ScalarState::read($row['subject']);
-			if ($row_subject !== false) {
-				$row['subject'] = call_user_func_array("sprintf_translate", $row_subject);
-			} else {
-         			$row['subject'] = translate_inline($row['subject']);
-        		}
+		if ((string)$row['msgfrom'] === '0') {
+		    $row['name'] = translate_inline('`i`^System`0`i');
+		    foreach (['subject'] as $field) {
+		        $payload = \Resurrection\Security\MailContent::stored($row[$field]);
+		        if ($payload !== null) $row[$field] = call_user_func_array('sprintf_translate', $payload);
+		    }
+		} elseif (!ctype_digit((string)$row['msgfrom'])) {
+		    $row['name'] = $row['msgfrom'];
 		}
+
 		// In one line so the Translator doesn't screw the Html up
 		rawoutput("<a href='mail.php?op=read&id={$row['messageid']}'>");
         output_notl('%s', trim($row['subject']) ? $row['subject'] : $no_subject);

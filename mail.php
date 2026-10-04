@@ -8,10 +8,24 @@ require_once("lib/http.php");
 
 tlschema("mail");
 
-$superusermessage = getsetting("superuseryommessage","Asking an admin for gems, gold, weapons, armor, or anything else which you have not earned will not be honored.  If you are experiencing problems with the game, please use the 'Petition for Help' link instead of contacting an admin directly.");
-
+require_once 'lib/player_mail.php';
+if (empty($session['loggedin']) || empty($session['user']['acctid'])) {
+    http_response_code(403); exit('Mail requires authentication.');
+}
 $op = httpget('op');
 $id = (int)httpget('id');
+try {
+    if (in_array($op, ['address','write','send'], true)) resurrection_mail_transport($op);
+    if ($op === 'write') $mailDraft = resurrection_mail_draft();
+    if ($op === 'send') require 'lib/mail/case_send.php';
+} catch (InvalidArgumentException $error) {
+    http_response_code(400); exit('Invalid mail request.');
+} catch (DomainException $error) {
+    http_response_code(409); exit('Mail unavailable or form expired. Please reopen the address form.');
+} catch (Throwable $error) {
+    http_response_code(500); exit('Mail could not be committed. Please open a fresh form.');
+}
+
 if (in_array($op, ['del', 'process', 'unread'], true)) {
     require_once 'lib/mail_security.php';
     try {
@@ -55,10 +69,8 @@ for($i=0;$i<$count_mailfunctions;++$i) {
 rawoutput("</tr></table>");
 output_notl("`n`n");
 
-if($op=="send"){
-	require("lib/mail/case_send.php");
-}
 
+if (!empty($mailSent)) output('Your message was sent!`n');
 switch ($op) {
 case "read":
 	require("lib/mail/case_read.php");

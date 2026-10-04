@@ -102,7 +102,7 @@ function resurrection_training(): never {
             $rounds=\Resurrection\Http\Input::choice($_POST,'rounds',['','five','ten','full'],'');
             if ($rounds!=='' && (!in_array($op,['fight','run'],true) || !getsetting('autofight',0) ||
                 ($rounds==='full' && !getsetting('autofightfull',0)))) throw new InvalidArgumentException();
-            $GLOBALS['pvp_mail_notifications']=[];
+            $GLOBALS['mail_notifications']=[];
             try {
                 resurrection_player_mutation(function () use ($op,$context,$rounds) {
                     global $session,$companions,$badguy;
@@ -155,8 +155,8 @@ function resurrection_training(): never {
                         }
                     } finally { restore_buff_fields(); }
                 });
-                $notifications=$GLOBALS['pvp_mail_notifications'];
-            } finally { unset($GLOBALS['pvp_mail_notifications']); }
+                $notifications=$GLOBALS['mail_notifications'];
+            } finally { unset($GLOBALS['mail_notifications']); }
             foreach ($notifications as $notification) {
                 try { resurrection_systemmail_notification(...$notification); } catch (Throwable) { /* Committed game state is authoritative. */ }
             }

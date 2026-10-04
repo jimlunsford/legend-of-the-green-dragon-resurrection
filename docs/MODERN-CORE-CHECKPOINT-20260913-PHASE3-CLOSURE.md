@@ -1375,3 +1375,26 @@ Ramius resurrection. Phase 3 INCOMPLETE; merge NO; public hosting NO. PR #1 stay
 OPEN/DRAFT/NOT READY/NOT MERGED. No Phase 4, other subsystem, VPS, release or tag.
 The publication checkpoint on PR #1 records local/published SHAs, tree equality,
 verification totals and bounded exact-head workflow observations.
+
+## Accepted Ramius predecessor and player-mail candidate, 2026-10-04
+
+Starting branch/PR head `de9f12ec05934b21c3c249bb250d10ac70643125`; exact
+Modern core 37210214161 and Baseline integrity 37210214168 verified SUCCESS.
+Both supported targets: 108 PHPUnit / 2,785 assertions, 121 Python tests,
+346 lint files, both PHPStan gates, Composer and integrity/project checks PASS.
+**Explicit Ramius early resurrection PASS; broader New Day PASS.** This current
+record supersedes older pending continuation statements without rewriting history.
+
+The [bounded player-mail candidate](MAIL-AUTHORITY-20261004.md) closes request
+sender/recipient/reply trust through POST, CSRF, one-use state-bound authority,
+locked revalidation/capacity, explicit GM display identity, strict content/schema
+limits and rollback. Email follows commit. Shared helper changes preserve the
+PvP/Training queue ownership; legacy systemmail callers remain separately blocked.
+
+Candidate player/helper acceptance awaits exact supported CI, with unchanged
+60-minute timeout and bounded observation. PR #1 remains OPEN/DRAFT/NOT READY/
+NOT MERGED; main remains `999cec6f9c655a840320d982d673bb863c68c2b2`; Phase 3
+INCOMPLETE; merge NO; public hosting NO. No unrelated subsystem, VPS, deployment,
+release, tag, branch, PR or Phase 4 work. The PR checkpoint records exact local/
+published heads, complete tree equality if connector publication is needed,
+verification totals, local limits and final bounded CI observation.

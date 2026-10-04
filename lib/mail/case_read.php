@@ -1,28 +1,21 @@
 <?php
-require_once __DIR__ . '/../../src/Security/ScalarState.php';
+require_once __DIR__ . '/../../src/Security/MailContent.php';
 $mail = db_prefix('mail');
 $accounts = db_prefix('accounts');
-$sql = "SELECT $mail.*, $accounts.name FROM $mail LEFT JOIN $accounts ON $accounts.acctid=$mail.msgfrom WHERE msgto=\"".$session['user']['acctid']."\" AND messageid=\"".$id."\"";
-$result = db_query($sql);
+$sql = "SELECT $mail.*, $accounts.name FROM $mail LEFT JOIN $accounts ON $accounts.acctid=$mail.msgfrom WHERE msgto=? AND messageid=?";
+$result = db_query($sql,true,[$session['user']['acctid'],$id]);
 if (db_num_rows($result)>0){
 	$row = db_fetch_assoc($result);
-	if ($row['msgfrom']==0  || !is_numeric($row['msgfrom'])){
-		if ($row['msgfrom'] == 0 && is_numeric($row['msgfrom'])) {
-			$row['name']=translate_inline("`i`^System`0`i");
-		} else {
-			$row['name']=$row['msgfrom'];
-		}
-		// No translation for subject if it's not an array
-		$row_subject = \Resurrection\Security\ScalarState::read($row['subject']);
-		if ($row_subject !== false) {
-			$row['subject'] = call_user_func_array("sprintf_translate", $row_subject);
-		}
-		// No translation for body if it's not an array
-		$row_body = \Resurrection\Security\ScalarState::read($row['body']);
-		if ($row_body !== false) {
-			$row['body'] = call_user_func_array("sprintf_translate", $row_body);
-		}
+	if ((string)$row['msgfrom'] === '0') {
+	    $row['name'] = translate_inline('`i`^System`0`i');
+	    foreach (['subject','body'] as $field) {
+	        $payload = \Resurrection\Security\MailContent::stored($row[$field]);
+	        if ($payload !== null) $row[$field] = call_user_func_array('sprintf_translate', $payload);
+	    }
+	} elseif (!ctype_digit((string)$row['msgfrom'])) {
+	    $row['name'] = $row['msgfrom'];
 	}
+
 	if (!$row['seen']) {
 		output("`b`#NEW`b`n");
 	}else{
@@ -34,8 +27,8 @@ if (db_num_rows($result)>0){
 	output_notl("<img src='images/uscroll.GIF' width='182px' height='11px' alt='' align='center'>`n",true);
 	output_notl(str_replace("\n","`n",$row['body']));
 	output_notl("`n<img src='images/lscroll.GIF' width='182px' height='11px' alt='' align='center'>`n",true);
-	$sql = "UPDATE " . db_prefix("mail") . " SET seen=1 WHERE  msgto=\"".$session['user']['acctid']."\" AND messageid=\"".$id."\"";
-	db_query($sql);
+	$sql = "UPDATE " . db_prefix("mail") . " SET seen=1 WHERE msgto=? AND messageid=?";
+	db_query($sql,true,[$session['user']['acctid'],$id]);
 	invalidatedatacache("mail-{$session['user']['acctid']}");
 	$reply = translate_inline("Reply");
 	$del = translate_inline("Delete");
@@ -56,7 +49,7 @@ if (db_num_rows($result)>0){
     }
 
 	// Don't allow reporting of system messages as abuse.
-	if ((int)$row['msgfrom']!=0) {
+	if ((string)$row['msgfrom'] !== '0') {
 		rawoutput("<td><a href=\"petition.php?problem=".rawurlencode($problem)."&abuse=yes\" class='motd'>$report</a></td>");
 	} else {
 		rawoutput("<td>&nbsp;</td>");
