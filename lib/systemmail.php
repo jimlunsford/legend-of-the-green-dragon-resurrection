@@ -132,7 +132,7 @@ function resurrection_systemmail_deliver($to,$subject,$body,$from,$noemail,$row,
 			$body,
 			$_SERVER['HTTP_HOST'].dirname($_SERVER['SCRIPT_NAME'])
 		),$to);
-		$delivered = mail($row['emailaddress'],$mailsubj,str_replace("`n","\n",$mailbody),"From: ".getsetting("gameadminemail","postmaster@localhost"));
+		$delivered = @mail($row['emailaddress'],$mailsubj,str_replace("`n","\n",$mailbody),"From: ".getsetting("gameadminemail","postmaster@localhost"));
         if (!$delivered) error_log('Mail notification failed after game mail commit.');
         return $delivered;
 	}
