@@ -492,3 +492,9 @@ consistently unavailable. Inbox/read/delete/unread ownership is retained.
 Player mail and its helper scope await exact supported-matrix CI. All systemmail
 callers remain PARTIAL/BLOCKED; the linked inventory names the uncertified
 administrative/clan/bank/haunt/legacy paths. No broader subsystem is promoted.
+
+2026-10-14 systemmail caller review: all 14 shipped calls in 10 files satisfy the
+accepted helper contract after the clan reminder NULL-description correction;
+`lib/mail.php` is inert duplicate code, not an HTTP route. Haunting, clan, bank,
+bio moderation and donation parent routes remain BLOCKED. See the
+[caller-contract review](MAIL-AUTHORITY-20261004.md#systemmail-caller-contract-review-2026-10-14).

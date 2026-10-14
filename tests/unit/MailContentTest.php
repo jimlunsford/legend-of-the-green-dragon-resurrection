@@ -39,6 +39,32 @@ final class MailContentTest extends TestCase
         self::assertSame($literal,MailContent::subject($literal));
         self::assertSame($literal,MailContent::body($literal,1024));
     }
+    /** Remaining legacy System callers: fixed formats, scalar arguments, worst-case persisted values. */
+    public function testLegacySystemCallerEnvelopesFitStorage(): void
+    {
+        require_once __DIR__.'/../../lib/nltoappon.php';
+        $name=str_repeat("\u{1F409}",60); // accounts.name VARCHAR(60), four-byte characters
+        $reminder="`&Did you remember to read the description of the clan of your choice before applying?  Note that some clans may have requirements that you have to fulfill before you can become a member.  If you are not accepted into the clan of your choice anytime soon, it may be because you have not fulfilled these requirements.  For your convenience, the description of the clan you are applying to is reproduced below.`n`n`c`#%s`@ <`^%s`@>`0`c`n%s";
+        $subjects=[['`)You have been haunted'],['`@Clan App: `&%s`0',$name],['Clan Application Reminder'],['`$Clan Withdraw: `&%s`0',$name],
+            ['`^You have received a money transfer!`0'],['Your bio has been blocked'],['Your bio has been unblocked'],['Donation Point Added'],['Donation Points Added']];
+        $bodies=[['`)You have been haunted by `&%s`).',$name],
+            ['`^You have a new clan applicant!  `&%s`^ has completed a membership application for your clan!',$name],
+            // clan_motd.php stores at most 4096 description bytes; newline expansion doubles them.
+            [$reminder,str_repeat("\u{1F409}",255),str_repeat("\u{1F409}",5),nltoappon(str_repeat("\n",4096))],
+            ['`^One of your clan members has resigned their membership.  `&%s`^ has surrendered their position within your clan!',$name],
+            ['`&%s`6 has transferred `^%s`6 gold to your bank account!',$name,PHP_INT_MAX],
+            ['The system administrators have decided that your bio entry is inappropriate, so it has been blocked.`n`nIf you wish to appeal this decision, you may do so with the petition link.'],
+            ['The system administrators have decided to unblock your bio.  You can once again enter a bio entry.'],
+            ['`2You have received a donation point for %s.',str_repeat('雪',21000)],
+            ['`2You have received %d donation points for %s.','2147483647',str_repeat('雪',21000)]];
+        foreach ($subjects as $subject) self::assertLessThanOrEqual(255,mb_strlen(serialize(MailContent::translated($subject)),'UTF-8'));
+        foreach ($bodies as $body) self::assertLessThanOrEqual(65535,strlen(serialize(MailContent::translated($body))));
+        self::assertSame('',nltoappon((string)null)); // New clans have a NULL description and receive no reminder.
+        foreach ([[$reminder,'Clan','PRB',null],['`2You have received a donation point for %s.',['reason']]] as $bad) {
+            try { MailContent::translated($bad); self::fail('Unsupported legacy argument accepted'); }
+            catch (\DomainException $e) { self::assertNotEmpty($e->getMessage()); }
+        }
+    }
     public function testStrictTransportAndSenderClasses(): void
     {
         MailContent::transport('to=A&body=O%27Reilly', ['to'=>'A','body'=>"O'Reilly"], ['to','body']);

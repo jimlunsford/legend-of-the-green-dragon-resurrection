@@ -187,3 +187,92 @@ accept only this player/helper scope, then prioritize remaining systemmail calle
 trust from this inventory. If CI remains active after bounded observation, stop
 with PLAYER MAIL CANDIDATE PUBLISHED, CI PENDING. If it times out, report the
 runtime leg/last completed test and stop without raising the timeout.
+
+## Systemmail caller-contract review (2026-10-14)
+
+Accepted predecessor: head `7e57ed5cba5384d1b4cb707b920f7b2c647beb86`, Modern core
+37226146119 SUCCESS, Baseline integrity 37226145947 SUCCESS (PHP 8.4 / MariaDB 11.4
+and PHP 8.5 / MySQL 8.4). Player mail, the shared player-facing/systemmail helper,
+Ramius and broader New Day: **PASS**. The helper was not changed by this review.
+
+Recomputed current inventory (tracked shipped PHP, excluding the definition, tests,
+lab, scripts and historical copies): **14 invocations in 10 files**, unchanged:
+`lib/player_mail.php` 1, `lib/pvpsupport.php` 2, `lib/training_outcomes.php` 1,
+`lib/graveyard/case_haunt3.php` 1, `lib/clan/applicant_apply.php` 2,
+`lib/clan/clan_withdraw.php` 1, `bank.php` 1, `bios.php` 2, `donators.php` 2,
+`lib/mail.php` 1. No shipped module calls the helper. `login.php` and
+`lib/su_access.php` contain no call.
+
+Caller contract versus parent route (the two are recorded separately):
+
+| Call | Recipient | Sender / content | Transaction | Caller contract | Parent route |
+| --- | --- | --- | --- | --- | --- |
+| `player_mail.php:127` | Locked offered account | Actor or GM descriptor; plain | Owned + queue | PASS | PASS (accepted) |
+| `pvpsupport.php:126,177` | PvP victim row | System; fixed formats, scalar args | PvP-owned + queue | PASS | PvP accepted |
+| `training_outcomes.php:36` | Session referer ID | System; fixed format, scalar args | Training-owned + queue | PASS | Training accepted |
+| `case_haunt3.php:22` | Account row by login | System; fixed subject/body, player name arg | None; standalone helper commit | PASS | BLOCKED |
+| `applicant_apply.php:18` | Officer rows of target clan | System; fixed `$apply_short`, applicant name arg | None; standalone | PASS | BLOCKED |
+| `applicant_apply.php:34` | Session actor | System; fixed text, clan name/short/description args | None; standalone | PASS after correction | BLOCKED |
+| `clan_withdraw.php:47` | Officer rows | System; fixed subject/body, player name arg | None; standalone | PASS | BLOCKED |
+| `bank.php:137` | Resolved account row | System; fixed text, player name + int amount | None; standalone | PASS | BLOCKED |
+| `bios.php:18,25` | Moderator-selected `userid` (helper-validated) | System; fixed, no args | None; standalone | PASS | BLOCKED |
+| `donators.php:101,103` | Administrator-selected `id` (helper-validated) | System; fixed formats, points/reason args | None; standalone | PASS | BLOCKED |
+| `lib/mail.php:104` | Not reachable | Not reachable | n/a | Inert legacy duplicate | Not a route |
+
+Every legacy System call uses the default sender 0 historically, never derives a
+sender from request input (no request value reaches the fifth/fourth parameter),
+and supplies application-controlled format text as element 0. Player, clan and
+administrator values appear only as scalar arguments. Request-derived recipients
+(`bios.php`, `donators.php`) pass through `MailContent::id`; malformed values
+reject before the parent UPDATE in `bios.php`, nonexistent IDs return false.
+Ignoring `false` is acceptable: every legacy notice is advisory and none of the
+routes claims delivery. None of the reviewed callers runs inside a database
+transaction (`resurrection_player_mutation`, module daily hooks and the mail/PvP/
+Training owners are not on these paths), so the helper's standalone transaction
+is the valid mode and no `mail_notifications` queue is required. No reviewed
+caller sends a second PHP `mail()`; external email remains post-commit best effort.
+Clan `DELETE ... subject='serialize(...)'` dedupe matches the helper's stored
+`serialize(MailContent::translated(...))` form for valid list envelopes.
+
+Storage (worst case, `MailContentTest::testLegacySystemCallerEnvelopesFitStorage`):
+60 four-byte-character player names, 255-character clan names, 5-character short
+names, the 4,096-byte `clan_motd.php` description cap with full newline expansion
+(about 9.7 KB serialized), `PHP_INT_MAX` bank amounts and 63,000-byte donation
+reasons all fit VARCHAR(255) subjects (largest 114 characters) and TEXT bodies.
+No generic limit changed.
+
+**Correction.** Clans founded by `applicant_new.php` store NULL `clandesc`.
+`nltoappon(NULL)` raises a PHP 8 deprecation that the application error handler
+converts to an exception, so applying to any clan without a description failed
+after the officer notices had committed and before the application was saved.
+The reminder argument is now `nltoappon((string)$row['clandesc'])`, computed once
+and passed as the scalar argument; NULL/empty means no reminder, as historically
+intended. `test_systemmail_clan_application_null_description_reminder` proves the
+NULL path (application saved, one officer notice, no reminder) and the described
+path (exact System subject and description argument); it fails without the fix.
+
+**`lib/mail.php`.** No tracked file includes or requires it; every `mail.php`
+reference resolves to the root entrypoint. On the disposable loopback fixture,
+anonymous GET, authenticated GET, a benign authenticated POST and authenticated/
+anonymous `op=send` POSTs all stopped at `require_once("common.php")` (web SAPIs
+run with the script directory as working directory), with zero mail rows. With the
+application root deliberately added to `include_path`, the same requests stopped
+in common.php's not-installed branch (CWD-relative `dbconnect.php` check) before
+any database, session-authority or mail code, again with zero rows. It is obsolete
+duplicate code, not an independent route; no source change was made to it.
+
+Parent-route blockers retained (not changed here): haunting is GET `op=haunt3`
+with request-interpolated login SQL and a non-`_once` helper include; clan apply/
+withdraw interpolate serialized player names into DELETE SQL (an apostrophe in a
+name aborts the route), commit officer notices before session clan state is saved,
+accept any positive target clan ID, and clan detail/MoTD views still pass NULL
+descriptions to `nltoappon`; bank keeps `abs((int)httppost('amount'))`, login-
+interpolated lookup and a non-atomic debit/credit/notice sequence; bios block/
+unblock are GET mutations without CSRF that notify before the UPDATE; donation
+adjustment is GET-driven with interpolated SQL and commits points before a
+helper rejection of malformed (array/invalid UTF-8) reasons.
+
+All shipped systemmail caller contracts: **PASS**. Parent routes: Haunting, Clan
+application/withdrawal, Bank, Bio moderation and Donation administration remain
+**BLOCKED**. Serialized-state inventory unchanged: 112 sites / 53 files / 42
+serialize writers-checks / 69 ScalarState reads / one centralized unserialize.

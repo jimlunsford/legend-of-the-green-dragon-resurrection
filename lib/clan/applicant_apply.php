@@ -24,12 +24,14 @@
 			$res = db_query_cached($sql, "clandata-$to", 3600);
 			$row = db_fetch_assoc($res);
 
-			if ( nltoappon($row['clandesc']) != "" ) {
+			// New clans store a NULL description; that means no reminder, not a fatal error.
+			$clandesc = nltoappon((string)$row['clandesc']);
+			if ( $clandesc != "" ) {
 
 				$subject = "Clan Application Reminder";
 				$mail = "`&Did you remember to read the description of the clan of your choice before applying?  Note that some clans may have requirements that you have to fulfill before you can become a member.  If you are not accepted into the clan of your choice anytime soon, it may be because you have not fulfilled these requirements.  For your convenience, the description of the clan you are applying to is reproduced below.`n`n`c`#%s`@ <`^%s`@>`0`c`n%s";
 
-				systemmail($session['user']['acctid'],array($subject),array($mail, $row['clanname'], $row['clanshort'], nltoappon($row['clandesc'])));
+				systemmail($session['user']['acctid'],array($subject),array($mail, $row['clanname'], $row['clanshort'], $clandesc));
 			}
 		}else{
 			$sql = "SELECT MAX(" . db_prefix("clans") . ".clanid) AS clanid,MAX(clanname) AS clanname,count(" . db_prefix("accounts") . ".acctid) AS c FROM " . db_prefix("clans") . " INNER JOIN " . db_prefix("accounts") . " ON " . db_prefix("clans") . ".clanid=" . db_prefix("accounts") . ".clanid WHERE " . db_prefix("accounts") . ".clanrank > ".CLAN_APPLICANT." GROUP BY " . db_prefix("clans") . ".clanid ORDER BY c DESC";

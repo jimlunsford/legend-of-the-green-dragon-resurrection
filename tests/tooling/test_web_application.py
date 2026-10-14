@@ -4624,6 +4624,33 @@ echo json_encode(systemmail($to,['Trusted %s','notice'],['Hello %s','Jim'],0,$no
             self.assertIn('Hello Jim',after[-1]['payload']);self.assertNotIn('a:2:',after[-1]['payload']);self.assertTrue(any('Hello %s' in r['body'] for r in after[-1]['rows']))
             count=len(f['mails']());before=captures();self.assertFalse(helper(to=4294967295));self.assertEqual(count,len(f['mails']()));self.assertEqual(before,captures())
 
+    def test_systemmail_clan_application_null_description_reminder(self):
+        # New clans store NULL clandesc: the applicant is recorded and receives no reminder.
+        q=self.query;actor=int(q('SELECT acctid FROM accounts WHERE login=?',['WebPlayer'])[0]['acctid'])
+        saved=q('SELECT name,clanid,clanrank,clanjoindate,allowednavs FROM accounts WHERE acctid=?',[actor])[0]
+        officer=int(self._security_target('ClanMailOfficer'))
+        ser=lambda items:'a:%d:{%s}'%(len(items),''.join('i:%d;s:%d:"%s";'%(i,len(v.encode()),v) for i,v in enumerate(items)))
+        try:
+            for desc,reminder in [(None,None),('Line one\nLine two %s','Line one`nLine two %s')]:
+                q('DELETE FROM clans WHERE clanshort=?',['CMT']);q('INSERT INTO clans (clanname,clanshort,clandesc) VALUES (?,?,?)',['Clan Mail',"CMT",desc])
+                clan=int(q('SELECT clanid FROM clans WHERE clanshort=?',['CMT'])[0]['clanid'])
+                q('UPDATE accounts SET clanid=?,clanrank=20 WHERE acctid=?',[clan,officer]);q('UPDATE accounts SET name=?,clanid=0,clanrank=0 WHERE acctid=?',['Clan Applicant',actor])
+                q('DELETE FROM mail WHERE msgto IN (?,?)',[actor,officer])
+                url=f'clan.php?op=apply&to={clan}';client=self._security_client();self._security_allow(actor,url)
+                self.assertEqual(200,client(url)[0])
+                self.assertEqual(str(clan),q('SELECT clanid FROM accounts WHERE acctid=?',[actor])[0]['clanid'])
+                rows=q('SELECT msgto,msgfrom,subject,body FROM mail WHERE msgto IN (?,?) ORDER BY messageid',[actor,officer])
+                self.assertEqual([(str(officer),'0',ser(['`@Clan App: `&%s`0','Clan Applicant']))],[(r['msgto'],r['msgfrom'],r['subject']) for r in rows[:1]])
+                mine=[r for r in rows if r['msgto']==str(actor)]
+                if reminder is None:self.assertEqual([],mine)
+                else:
+                    self.assertEqual(1,len(mine));self.assertEqual(('0',ser(['Clan Application Reminder'])),(mine[0]['msgfrom'],mine[0]['subject']))
+                    self.assertTrue(mine[0]['body'].startswith('a:4:{i:0;s:'));self.assertTrue(mine[0]['body'].endswith(ser(['','Clan Mail','CMT',reminder]).split('";',1)[1]))
+        finally:
+            q('DELETE FROM mail WHERE msgto IN (?,?)',[actor,officer]);q('DELETE FROM clans WHERE clanshort=?',['CMT'])
+            q('UPDATE accounts SET name=?,clanid=?,clanrank=?,clanjoindate=?,allowednavs=? WHERE acctid=?',list(saved.values())+[actor])
+            q('DELETE FROM accounts_output WHERE acctid=?',[officer]);q('DELETE FROM accounts WHERE acctid=?',[officer])
+
     def _security_client(self, login='WebPlayer', password="Synthetic web O'Reilly \\ password", port=None):
         class NoRedirect(urllib.request.HTTPRedirectHandler):
             def redirect_request(self, *args): return None
