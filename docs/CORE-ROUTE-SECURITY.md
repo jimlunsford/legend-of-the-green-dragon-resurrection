@@ -513,3 +513,12 @@ bound, atomic with its `pet-<id>` commentary, idempotent, honestly reported). Se
 38722109813, Baseline integrity 38722109661); it supersedes the BLOCKED
 `viewpetition.php` row. Petition intake now invalidates the `petition_counts` key
 the counter reader uses.
+
+2026-10-15 inn economy (`inn.php`, `lib/inn/*`): candidate pending CI. Room
+rental, bartender bribe, bartender specialty switch and Dragon flee are POST +
+CSRF + one-use intent inside the locked player transaction; GET only displays.
+Bribes accept only the offered tiers; a successful bribe is server state that the
+upstairs list and specialty switch require; the switch offers only active bundled
+specialties and keeps the historical skill/uses carry-over; each room path checks
+its own balance; flee is limited to the displayed Dragon encounter, once. See
+[inn economy authority](INN-ECONOMY-AUTHORITY-20261015.md).

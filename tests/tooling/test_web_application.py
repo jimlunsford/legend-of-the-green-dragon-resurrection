@@ -43,7 +43,7 @@ class WebApplicationTests(unittest.TestCase):
             cls.port = sock.getsockname()[1]
         # Outside the application tree; only the loopback fixture server loads this.
         cls.seed_file = tempfile.NamedTemporaryFile(mode='w', suffix='.php')
-        cls.seed_file.write("<?php if (in_array($_SERVER['HTTP_X_RESURRECTION_FIXTURE'] ?? '', ['skeleton-death','specialty-accounting'], true)) mt_srand(12345); if (($_SERVER['HTTP_X_RESURRECTION_FIXTURE'] ?? '') === 'ordinary-flee-failure') mt_srand(3); if (($_SERVER['HTTP_X_RESURRECTION_FIXTURE'] ?? '') === 'graveyard-round') mt_srand(1);\n")
+        cls.seed_file.write("<?php if (in_array($_SERVER['HTTP_X_RESURRECTION_FIXTURE'] ?? '', ['skeleton-death','specialty-accounting'], true)) mt_srand(12345); if (($_SERVER['HTTP_X_RESURRECTION_FIXTURE'] ?? '') === 'ordinary-flee-failure') mt_srand(3); if (($_SERVER['HTTP_X_RESURRECTION_FIXTURE'] ?? '') === 'graveyard-round') mt_srand(1); if (($_SERVER['HTTP_X_RESURRECTION_FIXTURE'] ?? '') === 'inn-bribe') mt_srand(4);\n")
         cls.seed_file.flush()
         # PHP's actual external-mail transport is replaced ONLY on this fixture server.
         # The subprocess independently observes committed rows before reporting delivery failure.
@@ -4784,6 +4784,165 @@ echo json_encode(systemmail($to,['Trusted %s','notice'],['Hello %s','Jim'],0,$no
             for pid in created: q('DELETE FROM commentary WHERE section=?',[f'pet-{pid}']);q('DELETE FROM petitions WHERE petitionid=?',[pid])
             q('UPDATE accounts SET superuser=? WHERE acctid=?',[original,player])
             q('DELETE FROM accounts_output WHERE acctid=?',[author]);q('DELETE FROM accounts WHERE acctid=?',[author])
+
+    @contextmanager
+    def _inn_fixture(self):
+        q=self.query;player=int(q('SELECT acctid FROM accounts WHERE login=?',['WebPlayer'])[0]['acctid'])
+        original=q('SELECT * FROM accounts WHERE acctid=?',[player])[0]
+        prefs=q('SELECT * FROM module_userprefs WHERE userid=?',[player])
+        modules=q('SELECT modulename,active FROM modules')
+        names=['innfee','innname','villagename','allowspecialswitch','pvp']
+        settings=q('SELECT setting,value FROM settings WHERE setting IN ('+','.join('?' for _ in names)+')',names)
+        q("UPDATE modules SET active=1 WHERE modulename IN ('specialtydarkarts','specialtymysticpower','specialtythiefskills')")
+        for key,value in [('innfee','5%'),('allowspecialswitch','1'),('pvp','1')]:
+            q('INSERT INTO settings(setting,value) VALUES (?,?) ON DUPLICATE KEY UPDATE value=VALUES(value)',[key,value])
+        village=q("SELECT value FROM settings WHERE setting='villagename'");village=village[0]['value'] if village else 'Degolburg'
+        inn=q("SELECT value FROM settings WHERE setting='innname'");inn=inn[0]['value'] if inn else 'The Boar\'s Head Inn'
+        f={'player':player,'village':village,'inn':inn,'call':None}
+        def login(): f['call']=self._security_client()
+        def request(url,data=None,fixture=None):
+            self._security_allow(player,url);return f['call'](url,data,fixture)
+        def setup(**changes):
+            values=dict(alive=1,hitpoints=100,maxhitpoints=100,specialinc='',specialmisc='',badguy='',level=5,gold=1000,goldinbank=0,gems=10,
+                boughtroomtoday=0,charm=3,seendragon=0,location=village,race='Human',specialty='DA',dragonkills=0,dragonpoints='a:0:{}',
+                bufflist='a:0:{}',companions='a:0:{}',restorepage='village.php');values.update(changes)
+            q('UPDATE accounts SET '+','.join(k+'=?' for k in values)+',lasthit=NOW() WHERE acctid=?',[*values.values(),player])
+        def state(*fields):
+            return q('SELECT '+','.join(fields or ['gold','goldinbank','gems','boughtroomtoday','location','loggedin','charm','specialty','seendragon'])+' FROM accounts WHERE acctid=?',[player])[0]
+        f.update(login=login,request=request,setup=setup,state=state)
+        try: yield f
+        finally:
+            q('UPDATE accounts SET '+','.join(k+'=?' for k in original if k!='acctid')+' WHERE acctid=?',[*[v for k,v in original.items() if k!='acctid'],player])
+            q('DELETE FROM module_userprefs WHERE userid=?',[player])
+            for row in prefs: q('INSERT INTO module_userprefs(modulename,setting,userid,value) VALUES (?,?,?,?)',[row['modulename'],row['setting'],row['userid'],row['value']])
+            for row in modules: q('UPDATE modules SET active=? WHERE modulename=?',[row['active'],row['modulename']])
+            q('DELETE FROM settings WHERE setting IN ('+','.join('?' for _ in names)+')',names)
+            for row in settings: q('INSERT INTO settings(setting,value) VALUES (?,?)',[row['setting'],row['value']])
+
+    def test_inn_room_and_dragon_flee_authority_http(self):
+        q=self.query
+        with self._inn_fixture() as f:
+            request,state,player=f['request'],f['state'],f['player']
+            anonymous=self._security_client(login=None)
+            for url,data in [('inn.php?op=room',None),('inn.php?op=room&pay=1',{'x':'1'}),('inn.php?op=fleedragon',None)]: self.assertIn(anonymous(url,data)[0],[302,303,403])
+            f['login']();f['setup']();before=state()
+            # Level 5: expense round(5*(10+ln 5))=58; the 5% bank fee makes 61.
+            status,body=request('inn.php?op=room');self.assertEqual(200,status);self.assertIn('58',body);self.assertNotIn('pay=2',html.unescape(body))
+            # GET only displays; a forced bank payment with an empty bank is refused, never driven negative.
+            status,body=request('inn.php?op=room&pay=2');self.assertEqual(200,status);self.assertIn("so that's how it is",html.unescape(body));self.assertNotIn('action_token',body)
+            self.assertEqual(400,request('inn.php?op=room&pay=3')[0]);self.assertEqual(before,state())
+            q('UPDATE accounts SET goldinbank=1000 WHERE acctid=?',[player]);bank=self._security_fields(request('inn.php?op=room&pay=2')[1],'inn.php?op=room&pay=2')
+            q('UPDATE accounts SET goldinbank=0 WHERE acctid=?',[player])
+            self.assertEqual(409,request('inn.php?op=room&pay=2',bank)[0]);self.assertEqual(before,state())
+            form=self._security_fields(request('inn.php?op=room&pay=1')[1],'inn.php?op=room&pay=1');self.assertEqual(before,state())
+            self.assertEqual(403,request('inn.php?op=room&pay=1',{'action_token':form['action_token']})[0])
+            self.assertEqual(403,request('inn.php?op=room&pay=1',{**form,'csrf_token':'0'*64})[0])
+            self.assertEqual(400,request('inn.php?op=room&pay=1',{**form,'gold':'0'})[0]);self.assertEqual(before,state())
+            q('UPDATE accounts SET gold=999 WHERE acctid=?',[player]);self.assertEqual(409,request('inn.php?op=room&pay=1',form)[0])
+            q('UPDATE accounts SET gold=1000 WHERE acctid=?',[player]);self.assertEqual(before,state())
+            # A failing account write after the debug log rolls back both; the spent intent cannot retry.
+            logs=lambda:q("SELECT COUNT(*) AS n FROM debuglog WHERE actor=? AND message LIKE 'spent % gold on an inn room'",[player])[0]['n']
+            logged=logs();form=self._security_fields(request('inn.php?op=room&pay=1')[1],'inn.php?op=room&pay=1')
+            q("ALTER TABLE accounts ADD CONSTRAINT fixture_inn_room CHECK (login <> 'WebPlayer' OR boughtroomtoday = 0)")
+            try:
+                self.assertEqual(500,request('inn.php?op=room&pay=1',form)[0]);self.assertEqual(before,state());self.assertEqual(logged,logs())
+                self.assertEqual(409,request('inn.php?op=room&pay=1',form)[0])
+            finally: q('ALTER TABLE accounts DROP CONSTRAINT fixture_inn_room')
+            form=self._security_fields(request('inn.php?op=room&pay=1')[1],'inn.php?op=room&pay=1')
+            self.assertEqual(303,request('inn.php?op=room&pay=1',form)[0])
+            rented=state();self.assertEqual(('942','0','1',f['inn'],'0'),(rented['gold'],rented['goldinbank'],rented['boughtroomtoday'],rented['location'],rented['loggedin']))
+            self.assertEqual('inn.php?op=strolldown',state('restorepage')['restorepage'])
+            self.assertEqual(int(logged)+1,int(logs()))
+            # The rental logged the player out; the old session can neither play nor replay.
+            self.assertIn(request('inn.php')[0],[302,303]);self.assertNotEqual(200,request('inn.php?op=room&pay=1',form)[0]);self.assertEqual(rented,state())
+            # Already paid today: the room is free to re-enter, from either path.
+            f['login']();status,body=request('inn.php?op=room');self.assertEqual(200,status);self.assertIn('already paid',body)
+            form=self._security_fields(request('inn.php?op=room&pay=1')[1],'inn.php?op=room&pay=1');self.assertEqual(303,request('inn.php?op=room&pay=1',form)[0])
+            self.assertEqual(('942','0','1'),tuple(state()[k] for k in ['gold','goldinbank','boughtroomtoday']))
+            # The bank path pays the fee from the bank only.
+            f['login']();f['setup'](gold=0,goldinbank=1000);status,body=request('inn.php?op=room');self.assertIn('pay=2',html.unescape(body))
+            form=self._security_fields(request('inn.php?op=room&pay=2')[1],'inn.php?op=room&pay=2');self.assertEqual(303,request('inn.php?op=room&pay=2',form)[0])
+            self.assertEqual(('0','939','1'),tuple(state()[k] for k in ['gold','goldinbank','boughtroomtoday']))
+            # Dragon flee: never without the Forest encounter, once with it, charm floor 0.
+            f['login']();f['setup'](level=15);before=state()
+            self.assertEqual(409,request('inn.php?op=fleedragon')[0]);self.assertEqual(409,request('inn.php?op=fleedragon',{'x':'1'})[0]);self.assertEqual(before,state())
+            def encounter():
+                seek=self._security_fields(request('forest.php?op=dragon')[1],'forest.php?op=dragon')
+                status,body=request('forest.php?op=dragon',seek);self.assertEqual(200,status,body[:1500]);self.assertIn('inn.php?op=fleedragon',html.unescape(body))
+            encounter();seen=state();self.assertEqual('1',seen['seendragon'])
+            status,body=request('inn.php?op=fleedragon');self.assertEqual(200,status);self.assertEqual(seen,state())
+            flee=self._security_fields(body,'inn.php?op=fleedragon')
+            self.assertEqual(403,request('inn.php?op=fleedragon',{'action_token':flee['action_token']})[0]);self.assertEqual(seen,state())
+            q('UPDATE accounts SET charm=4 WHERE acctid=?',[player]);self.assertEqual(409,request('inn.php?op=fleedragon',flee)[0])
+            q('UPDATE accounts SET charm=3 WHERE acctid=?',[player])
+            status,body=request('inn.php?op=fleedragon',flee);self.assertEqual(200,status);self.assertIn('as if the Devil himself',body)
+            fled=state();self.assertEqual(('2',f['village']),(fled['charm'],fled['location']))
+            self.assertEqual(409,request('inn.php?op=fleedragon',flee)[0]);self.assertEqual(409,request('inn.php?op=fleedragon')[0]);self.assertEqual(fled,state())
+            f['setup'](level=15,charm=0);encounter()
+            flee=self._security_fields(request('inn.php?op=fleedragon')[1],'inn.php?op=fleedragon')
+            self.assertEqual(200,request('inn.php?op=fleedragon',flee)[0]);self.assertEqual('0',state()['charm'])
+
+    def test_inn_bartender_bribe_and_specialty_authority_http(self):
+        q=self.query
+        with self._inn_fixture() as f:
+            request,state,player=f['request'],f['state'],f['player']
+            bribe='inn.php?op=bartender&act=bribe';switch='inn.php?op=bartender&act=specialty';upstairs='inn.php?op=bartender&act=listupstairs'
+            logs=lambda:q("SELECT COUNT(*) AS n FROM debuglog WHERE actor=? AND message LIKE 'spent %'",[player])[0]['n']
+            anonymous=self._security_client(login=None)
+            for url in [bribe,bribe+'&type=gem&amt=1',switch,upstairs]: self.assertIn(anonymous(url)[0],[302,303,403])
+            f['login']();f['setup']();before=state();logged=logs()
+            status,body=request(bribe);self.assertEqual(200,status);self.assertIn('type=gold&amt=500',html.unescape(body));self.assertEqual(before,state())
+            # Only the six offered tiers for level 5 exist; negative, off-tier and unknown requests are refused before any effect.
+            for query in ['type=gem&amt=-1','type=gem&amt=4','type=gem&amt=0','type=gold&amt=49','type=gold&amt=1000000','type=gold&amt=-500','type=diamond&amt=1','type=gem&amt=abc','type=gem','type[]=gem&amt=1']:
+                self.assertEqual(400,request(bribe+'&'+query)[0],query);self.assertEqual(400,request(bribe+'&'+query,{'csrf_token':'0'*64})[0],query)
+            self.assertEqual(400,request('inn.php?op=bartender&act=steal')[0])
+            # GET only displays the offer; the POST needs CSRF and its one-use intent.
+            status,body=request(bribe+'&type=gem&amt=1');self.assertEqual(200,status);form=self._security_fields(body,bribe+'&type=gem&amt=1')
+            self.assertEqual(403,request(bribe+'&type=gem&amt=1',{'action_token':form['action_token']})[0])
+            self.assertEqual(403,request(bribe+'&type=gem&amt=1',{**form,'csrf_token':'0'*64})[0]);self.assertEqual(before,state());self.assertEqual(logged,logs())
+            # Without a successful bribe, the services it unlocks are closed.
+            for url in [switch,upstairs]: self.assertEqual(403,request(url)[0]);self.assertEqual(403,request(url,{'specialty':'MP'})[0])
+            # A short purse costs nothing and keeps 1.1.2's words.
+            f['setup'](gems=0);form=self._security_fields(request(bribe+'&type=gem&amt=1')[1],bribe+'&type=gem&amt=1')
+            status,body=request(bribe+'&type=gem&amt=1',form);self.assertEqual(200,status);self.assertIn("You don't have 1 gems!",html.unescape(body))
+            self.assertIn('stands there staring at you blankly',body);self.assertEqual('0',state()['gems']);self.assertEqual(logged,logs())
+            # Seeded outcomes: chance 90 (3 gems) answers, chance 30 (1 gem) does not; both are paid exactly once.
+            f['setup'](gems=10)
+            def offer(amount):
+                url=f'{bribe}&type=gem&amt={amount}';form=self._security_fields(request(url)[1],url)
+                status,body=request(url,form,fixture='inn-bribe');self.assertEqual(200,status,body[:1500]);return url,form,body
+            url,form,body=offer(1);self.assertIn('your gem is gone',body);self.assertEqual('9',state()['gems'])
+            self.assertEqual(409,request(url,form,fixture='inn-bribe')[0]);self.assertEqual('9',state()['gems'])
+            for target in [switch,upstairs]: self.assertEqual(403,request(target)[0])
+            def unlock():
+                url,form,body=offer(3);self.assertIn('What can I do for you, kid?',body);return url,form
+            paid_url,paid_form=unlock();self.assertEqual('6',state()['gems']);self.assertEqual(int(logged)+2,int(logs()))
+            status,body=request(upstairs);self.assertEqual(200,status)
+            q("UPDATE settings SET value='0' WHERE setting='pvp'");self.assertEqual(403,request(upstairs)[0]);q("UPDATE settings SET value='1' WHERE setting='pvp'")
+            q("UPDATE settings SET value='0' WHERE setting='allowspecialswitch'");self.assertEqual(403,request(switch)[0]);q("UPDATE settings SET value='1' WHERE setting='allowspecialswitch'")
+            # Only installed, active bundled specialties; stale and replayed switches change nothing.
+            q('INSERT INTO module_userprefs(modulename,setting,userid,value) VALUES (?,?,?,?),(?,?,?,?) ON DUPLICATE KEY UPDATE value=VALUES(value)',
+                ['specialtydarkarts','skill',player,'7','specialtydarkarts','uses',player,'3']);prefs=q('SELECT modulename,setting,value FROM module_userprefs WHERE userid=? ORDER BY modulename,setting',[player])
+            status,body=request(switch+'&specialty=XX');self.assertEqual(200,status);self.assertEqual('DA',state()['specialty'])
+            form=self._security_fields(body,switch)
+            for bad in [{'specialty':'XX'},{'specialty':''},{},{'specialty[]':'MP'},{'specialty':'MP','skill':'99'}]: self.assertEqual(400,request(switch,{**form,**bad})[0],bad)
+            q("UPDATE modules SET active=0 WHERE modulename='specialtymysticpower'");self.assertEqual(400,request(switch,{**form,'specialty':'MP'})[0])
+            q("UPDATE modules SET active=1 WHERE modulename='specialtymysticpower'");q("UPDATE accounts SET specialty='TS' WHERE acctid=?",[player])
+            self.assertEqual(409,request(switch,{**form,'specialty':'MP'})[0]);self.assertEqual('TS',state()['specialty'])
+            q("UPDATE accounts SET specialty='DA' WHERE acctid=?",[player])
+            form=self._security_fields(request(switch)[1],switch)
+            status,body=request(switch,{**form,'specialty':'MP'});self.assertEqual(200,status);self.assertIn("You're all set",html.unescape(body))
+            # Only the selection changes; every specialty keeps its stored skill and uses.
+            self.assertEqual('MP',state()['specialty']);self.assertEqual(prefs,q('SELECT modulename,setting,value FROM module_userprefs WHERE userid=? ORDER BY modulename,setting',[player]))
+            for target in [switch,upstairs]: self.assertEqual(403,request(target)[0])
+            self.assertEqual(403,request(switch,{**form,'specialty':'TS'})[0]);self.assertEqual('MP',state()['specialty'])
+            # The answered bribe cannot be paid or answered again.
+            self.assertEqual(409,request(paid_url,paid_form,fixture='inn-bribe')[0]);self.assertEqual('6',state()['gems']);self.assertEqual(403,request(switch)[0])
+            # Leaving the bartender forfeits an unused answer.
+            unlock();self.assertEqual(200,request('inn.php')[0]);self.assertEqual(403,request(switch)[0])
+            # The practice form escapes the request URI it posts back to.
+            colors='inn.php?op=bartender&act=colors&x="><b>q</b>'
+            status,body=request(colors,{'testtext':'<i>t</i>'});self.assertEqual(200,status);self.assertNotIn('"><b>q</b>',body);self.assertNotIn('<i>t</i>',body)
 
     def _security_client(self, login='WebPlayer', password="Synthetic web O'Reilly \\ password", port=None):
         class NoRedirect(urllib.request.HTTPRedirectHandler):

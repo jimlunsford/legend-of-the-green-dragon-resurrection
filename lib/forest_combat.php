@@ -1,6 +1,7 @@
 <?php
 require_once __DIR__ . '/specialty_combat.php';
 require_once __DIR__ . '/forest_encounter.php';
+require_once __DIR__ . '/inn_economy.php';
 require_once __DIR__ . '/battle-skills.php';
 require_once __DIR__ . '/../src/Game/ForestCompanionState.php';
 require_once __DIR__ . '/../src/Game/ForestCombatState.php';
@@ -107,6 +108,8 @@ function resurrection_forest_combat(): never {
             if ($op==='dragon') {
                 if ($session['user']['level']<15 || $session['user']['seendragon']) throw new DomainException();
                 $session['user']['seendragon']=1;
+                // This encounter, and only it, may flee to the inn once.
+                resurrection_inn_flee_offer();
 	require_once("lib/partner.php");
 	addnav("Enter the cave","dragon.php");
 	addnav("Run away like a baby","inn.php?op=fleedragon");
