@@ -104,3 +104,10 @@ Historical repositories remain untouched.
 
 Next task: inspect the exact Mystical Powers candidate CI results and accept or
 report its precise failure. General combat requires a separate execution.
+
+Acceptance, 2026-10-15: this exact candidate (`0944188`) was not accepted; its
+Modern core 36313854531 was cancelled when `bc94205` superseded it. The six tests
+above are byte-identical at the first accepted descendant `cf6a349` (Modern core
+36317455788 and Baseline integrity 36317455823 SUCCESS) and at later accepted
+heads, so specialtymysticpower PASS is accepted at that descendant. See
+[the certification reconciliation](BUNDLED-MODULE-CERTIFICATION.md#mystical-powers-acceptance-reconciliation-2026-10-15).

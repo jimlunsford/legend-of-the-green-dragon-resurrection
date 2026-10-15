@@ -1,6 +1,6 @@
 # Bundled module certification
 
-**Candidate counts: 24 PASS, 0 PASS WITH DOCUMENTED LIMITATION, 0 BLOCKED. Exact-candidate CI acceptance PENDING; last accepted counts 23/0/1. Lifecycle/metadata: 24 PASS. Modern-core merge: NOT READY. Public hosting: NO.**
+**Accepted counts: 24 PASS, 0 PASS WITH DOCUMENTED LIMITATION, 0 BLOCKED (Mystical Powers accepted at descendant `cf6a349`, Modern core 36317455788; see the 2026-10-15 reconciliation below). Lifecycle/metadata: 24 PASS. Modern-core merge: NOT READY. Public hosting: NO.**
 
 This 2026-09-14 continuation updates the original all-BLOCKED checkpoint using new mutation evidence. The earlier Phase 3 history remains in [the original checkpoint](MODERN-CORE-CHECKPOINT-20260913-PHASE3.md). Only the 24 shipped entrypoints are in scope. No archive module was imported. No module is promoted merely because a route renders.
 
@@ -202,6 +202,7 @@ expiration; late-write rollback and fresh retry. See the independent
 [Mystical Powers evidence](MYSTICAL-POWERS-20260927.md).
 
 - Final supported bundled candidate result: PASS. Exact-head CI acceptance PENDING.
+- 2026-10-15: accepted at descendant `cf6a349` (Modern core 36317455788, Baseline integrity 36317455823), not at the exact candidate. See the reconciliation below.
 - The 24/24 candidate milestone does not complete Phase 3 or permit merge/hosting.
 - Exact metadata and retained lifecycle evidence remain in the JSON record.
 
@@ -394,3 +395,26 @@ ordering, then independently reassess its bundled certification.
 Exact-candidate CI acceptance is pending, so last accepted counts remain 23/0/1.
 The [new evidence](MYSTICAL-POWERS-20260927.md) supersedes earlier MP blockers
 without rewriting their history. Phase 3 INCOMPLETE; merge NO; hosting NO.
+
+## Mystical Powers acceptance reconciliation, 2026-10-15
+
+The candidate milestone above was never accepted at its own head. Candidate
+`0944188301c588ff7d0ff447983b63e6b7f58049` (parent `816e709`) ran Modern core
+36313854531, which ended **cancelled** on both engineering jobs during the Python
+step when `bc94205` superseded it; its Baseline integrity 36313854438 succeeded.
+`bc94205` was cancelled the same way (36315549242).
+
+The first accepted descendant is `cf6a349a0e3b8f7260f5dce1f5f0bb04255af567`: Modern
+core **36317455788 SUCCESS** on PHP 8.4 / MariaDB 11.4 and PHP 8.5 / MySQL 8.4, and
+Baseline integrity **36317455823 SUCCESS**. The six Mystical Powers HTTP tests are
+present and byte-identical at `0944188`, `cf6a349`, `4478c06` and `ef97952`, and
+`modules/specialtymysticpower.php` is unchanged from the candidate through
+`ef97952`. Shared combat code did change between the candidate and `cf6a349`, so
+**acceptance is recorded at the descendant `cf6a349`, not at the original
+candidate.** Later accepted heads `4478c06` (Modern core 38712609964) and `ef97952`
+(38722109813) run the same tests.
+
+**specialtymysticpower: PASS. Accepted counts: 24 PASS / 0 limitations / 0
+BLOCKED; all 24 lifecycle PASS.** Totals are not restated here because CI job logs
+were not readable; conclusions come from the GitHub Actions run and job API. Phase
+3 INCOMPLETE; merge NO; hosting NO.

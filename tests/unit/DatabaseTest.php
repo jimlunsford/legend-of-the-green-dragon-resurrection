@@ -37,16 +37,23 @@ final class DatabaseTest extends TestCase
         db_identifier('fixture.accounts');
     }
 
-    public function testShippedSqlHasNoLeadingDotTableReference(): void
+    /** @return list<string> Shipped PHP: root entrypoints, lib, modules and src. */
+    private static function shippedPhp(string $root): array
     {
-        // MySQL 8 rejects the legacy `.tbl_name` form ("DELETE FROM . mail") that MariaDB accepts.
-        $root = dirname(__DIR__, 2);
         $files = glob($root . '/*.php');
         foreach (['lib', 'modules', 'src'] as $directory) {
             foreach (new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($root . '/' . $directory, \FilesystemIterator::SKIP_DOTS)) as $file) {
                 if ($file->getExtension() === 'php') $files[] = $file->getPathname();
             }
         }
+        return $files;
+    }
+
+    public function testShippedSqlHasNoLeadingDotTableReference(): void
+    {
+        // MySQL 8 rejects the legacy `.tbl_name` form ("DELETE FROM . mail") that MariaDB accepts.
+        $root = dirname(__DIR__, 2);
+        $files = self::shippedPhp($root);
         $hits = [];
         foreach ($files as $path) {
             foreach (file($path) as $index => $line) {
@@ -55,6 +62,24 @@ final class DatabaseTest extends TestCase
         }
         self::assertGreaterThan(200, count($files));
         self::assertSame([], $hits);
+    }
+
+    public function testPetitionCounterInvalidationsUseTheReaderKey(): void
+    {
+        // An invalidation under a key no reader caches leaves the petition count stale.
+        $root = dirname(__DIR__, 2);
+        $readers = $invalidations = [];
+        foreach (self::shippedPhp($root) as $path) {
+            $source = (string)file_get_contents($path);
+            preg_match_all('/db_query_cached\s*\([^;]*?,\s*["\']([^"\'$]+)["\']/', $source, $read);
+            $readers = array_merge($readers, $read[1]);
+            preg_match_all('/^[^\/\n]*invalidatedatacache\s*\(\s*["\']([^"\'$]*petition[^"\'$]*)["\']/mi', $source, $written);
+            foreach ($written[1] as $key) $invalidations[] = substr($path, strlen($root) + 1) . ': ' . $key;
+        }
+        self::assertContains('petition_counts', $readers);
+        self::assertGreaterThanOrEqual(3, count($invalidations));
+        self::assertSame([], array_values(array_filter($invalidations,
+            static fn($site) => !in_array(explode(': ', $site, 2)[1], $readers, true))));
     }
 
     public function testMissingConnectionHasNoSqlDiagnostic(): void

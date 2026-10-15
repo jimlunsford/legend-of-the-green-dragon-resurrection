@@ -33,7 +33,7 @@ if ($op === 'submit' || count($post)>0){
             db_query('INSERT INTO ' . db_prefix('petitions') . ' (author,date,body,pageinfo,ip,id) VALUES (?,?,?,?,?,?)', true,
                 [(int)$session['user']['acctid'], $date, output_array($post), 'Session diagnostics intentionally omitted.', $address, '']);
 			// Fix the counter
-			invalidatedatacache("petitioncounts");
+			invalidatedatacache("petition_counts");
 			// If the admin wants it, email the petitions to them.
 			if (getsetting("emailpetitions", 0)) {
 				// Yeah, the format of this is ugly.

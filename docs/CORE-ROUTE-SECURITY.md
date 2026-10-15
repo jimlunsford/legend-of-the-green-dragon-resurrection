@@ -508,3 +508,8 @@ invalidation; GET only displays. The 7-day closed-petition retention stays on th
 list view as a deliberate time-driven exception (no request input, authorized,
 bound, atomic with its `pet-<id>` commentary, idempotent, honestly reported). See
 [petition administration authority](PETITION-ADMIN-AUTHORITY-20261015.md).
+
+2026-10-15: petition administration accepted at `ef97952` (Modern core
+38722109813, Baseline integrity 38722109661); it supersedes the BLOCKED
+`viewpetition.php` row. Petition intake now invalidates the `petition_counts` key
+the counter reader uses.

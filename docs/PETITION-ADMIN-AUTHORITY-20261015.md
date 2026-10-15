@@ -109,3 +109,34 @@ pass. Acceptance comes only from CI on both supported legs.
   unreviewed or BLOCKED in their own families.
 - Each petition form shown adds one intent entry to the session (bounded by the
   petitions an administrator has displayed).
+
+## Acceptance, 2026-10-15
+
+`ef97952d4444816d22bb6fc231d69e7d3ba0bc70` is accepted. Modern core
+**38722109813 SUCCESS**: both `result` jobs and every `checks` and `http` shard job
+succeeded on PHP 8.4 / MariaDB 11.4 and PHP 8.5 / MySQL 8.4. The longest job was
+the MySQL `http (3)` shard at 18m08s. Baseline integrity **38722109661 SUCCESS**.
+Conclusions come from the GitHub Actions run and job API; job logs were not
+readable, so totals are not restated. Petition administration is Done in
+`ROADMAP.md`.
+
+## Petition counter cache key, 2026-10-15
+
+Readers and invalidators of the petition counter in shipped PHP:
+
+| Site | Role | Key |
+|---|---|---|
+| `lib/pageparts.php` (superuser nav count) | Reader (`db_query_cached`) | `petition_counts` |
+| `lib/petition_admin.php` status change | Invalidator | `petition_counts` |
+| `lib/petition_admin.php` 7-day cleanup | Invalidator | `petition_counts` |
+| `lib/petition/petition_default.php` intake | Invalidator | `petitioncounts` before, `petition_counts` now |
+
+`viewpetition.php` keeps 1.1.2's commented-out manual-delete invalidation, which
+is not executed. In 1.1.2 the same split exists: `lib/pageparts.php` reads
+`petition_counts` and `viewpetition.php` invalidates `petition_counts`, but intake
+invalidates `petitioncounts`. With the data cache enabled, the superuser petition
+count therefore stayed stale after a new petition until another invalidation or
+cache expiry. Intake now invalidates the key the reader uses; nothing else in
+intake or caching changed. `DatabaseTest::testPetitionCounterInvalidationsUseTheReaderKey`
+fails if any petition counter invalidation uses a key no `db_query_cached` reader
+uses; before the fix it named `lib/petition/petition_default.php: petitioncounts`.

@@ -28,7 +28,7 @@ Each family is DONE only when its acceptance evidence passes on both supported C
 
 ### Done
 
-- [x] Bundled modules: 23 accepted PASS, all 24 lifecycle PASS (`BUNDLED-MODULE-CERTIFICATION.md`)
+- [x] Bundled modules: 24 PASS, all 24 lifecycle PASS (`BUNDLED-MODULE-CERTIFICATION.md`). Mystical Powers accepted at descendant `cf6a349`, Modern core 36317455788; its own candidate `0944188` run was cancelled.
 - [x] Race onboarding: Human, Elf, Dwarf, Troll
 - [x] Specialty onboarding, plus Dark Arts and Thieving Skills combat
 - [x] Ordinary Forest combat authority (`ORDINARY-FOREST-COMBAT-20260927.md`)
@@ -47,17 +47,16 @@ Each family is DONE only when its acceptance evidence passes on both supported C
 - [x] Direct `battle.php` include bypass blocked
 - [x] All 14 `systemmail()` caller contracts, plus the clan NULL-description fix and the MySQL 8 table-reference fix (`MAIL-AUTHORITY-20261004.md`). Accepted at `4478c06`, Modern core 38712609964.
 - [x] CI runtime: Modern core split into a checks job and four HTTP shards per leg (`ENGINEERING-VALIDATION.md`). Longest job about 16 minutes. Accepted at `4478c06`.
+- [x] Petition administration (`viewpetition.php`) (`PETITION-ADMIN-AUTHORITY-20261015.md`). Accepted at `ef97952`, Modern core 38722109813.
 
 ### Current
 
-- [ ] Petition administration (`viewpetition.php`). Next bounded task.
+- [ ] None in progress. Choose the next bounded task from Remaining.
 
 ### Remaining
 
 Infrastructure and records:
 
-- [ ] Reconcile Mystical Powers certification. The record still says the 24/0/0 candidate is pending CI from 2026-09-27. Confirm acceptance and update the record to 24/0/0, or name the remaining gap.
-- [ ] Confirm whether the inn economy outside PvP is real remaining work or already covered elsewhere.
 - [ ] Replace the PR #1 body with a short current summary that links here.
 
 Route families:
@@ -69,6 +68,7 @@ Route families:
 - [ ] Haunting (`lib/graveyard/case_haunt*.php`)
 - [ ] Bio moderation (`bios.php`)
 - [ ] Donation administration (`donators.php`)
+- [ ] Inn economy (`inn.php`, `lib/inn/*`): room rental (`op=room&pay=1` gold, `pay=2` bank with fee, `boughtroomtoday`, logout), bartender bribes (`act=bribe`, gem/gold `amt` from GET), bartender specialty switch (`act=specialty`, unvalidated GET value) and Dragon flee (`op=fleedragon`: location and charm loss). All GET mutations with no recorded evidence.
 
 Administration:
 
