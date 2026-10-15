@@ -276,3 +276,17 @@ All shipped systemmail caller contracts: **PASS**. Parent routes: Haunting, Clan
 application/withdrawal, Bank, Bio moderation and Donation administration remain
 **BLOCKED**. Serialized-state inventory unchanged: 112 sites / 53 files / 42
 serialize writers-checks / 69 ScalarState reads / one centralized unserialize.
+
+## MySQL 8 leading-dot table reference (2026-10-15)
+
+Modern core run 38633714168 (`a808579`) failed on PHP 8.5 / MySQL 8.4 in
+`test_systemmail_clan_application_null_description_reminder`: the clan apply
+request died at `lib/clan/applicant_apply.php:15` with "Database operation
+failed". Line 14 built `DELETE FROM . mail WHERE ...`; MySQL 8.4 rejects the
+legacy `.tbl_name` form (ERROR 1064) while MariaDB 11.4 accepts it. The line is
+unchanged from `historical-source-1.1.2`, where `.mail` names the table in the
+default database, so removing the stray dot preserves the historical statement.
+That was the only hit in shipped PHP (root, `lib/`, `modules/`, `src/`); the fix
+is syntax only and leaves the clan route's recorded blockers above in place.
+`DatabaseTest::testShippedSqlHasNoLeadingDotTableReference` fails on the
+pattern `. " . db_prefix(` returning (it named exactly this line before the fix).

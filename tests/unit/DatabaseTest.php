@@ -37,6 +37,26 @@ final class DatabaseTest extends TestCase
         db_identifier('fixture.accounts');
     }
 
+    public function testShippedSqlHasNoLeadingDotTableReference(): void
+    {
+        // MySQL 8 rejects the legacy `.tbl_name` form ("DELETE FROM . mail") that MariaDB accepts.
+        $root = dirname(__DIR__, 2);
+        $files = glob($root . '/*.php');
+        foreach (['lib', 'modules', 'src'] as $directory) {
+            foreach (new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($root . '/' . $directory, \FilesystemIterator::SKIP_DOTS)) as $file) {
+                if ($file->getExtension() === 'php') $files[] = $file->getPathname();
+            }
+        }
+        $hits = [];
+        foreach ($files as $path) {
+            foreach (file($path) as $index => $line) {
+                if (preg_match('/\.\s*["\']\s*\.\s*db_prefix\s*\(/', $line)) $hits[] = substr($path, strlen($root) + 1) . ':' . ($index + 1);
+            }
+        }
+        self::assertGreaterThan(200, count($files));
+        self::assertSame([], $hits);
+    }
+
     public function testMissingConnectionHasNoSqlDiagnostic(): void
     {
         self::assertFalse(db_query('SELECT FAKE_SECRET_TEXT', false));
