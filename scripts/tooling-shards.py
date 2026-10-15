@@ -44,16 +44,16 @@ def weights(ids):
 def assign(ids, shards, cost=None):
     """Every id in exactly one shard, each shard in discovery order.
 
-    The web tests up to and including account setup keep their order in shard 1; every other
-    shard replays account setup as a prerequisite. The rest are placed heaviest first on the
-    least-loaded shard (ties go to the lower shard) so the split is reproducible.
+    Account setup is assigned to shard 1; every other shard with web tests replays it as a
+    prerequisite, and run_order() runs it before every other web test. The rest are placed
+    heaviest first on the least-loaded shard (ties go to the lower shard) so the split is
+    reproducible.
     """
     if shards < 1:
         raise ValueError('At least one shard is required')
     cost = cost or weights(ids)
     order = {test: index for index, test in enumerate(ids)}
-    web = [test for test in ids if test.startswith(WEB_MODULE + '.')]
-    pinned = web[:web.index(ACCOUNT_SETUP) + 1] if ACCOUNT_SETUP in web else []
+    pinned = [ACCOUNT_SETUP] if ACCOUNT_SETUP in ids else []
     plan = [[] for _ in range(shards)]
     load = [0] * shards
     plan[0] += pinned
@@ -78,6 +78,19 @@ def validate(plan, ids):
     if problems:
         raise ValueError('Invalid shard assignment: ' + '; '.join(problems))
 
+def run_order(shard, ids):
+    """The exact order a shard runs: its tests plus prerequisites.
+
+    Discovery sorts by name, so web tests that log in as WebPlayer can sort before the test that
+    creates it. Non-web tests run first, then account setup, then every other web test, each in
+    discovery order.
+    """
+    order = {test: index for index, test in enumerate(ids)}
+    def rank(test):
+        if not test.startswith(WEB_MODULE + '.'): return 0
+        return 1 if test == ACCOUNT_SETUP else 2
+    return sorted(prerequisites(shard) + shard, key=lambda test: (rank(test), order[test]))
+
 def prerequisites(shard):
     """Account setup for a shard that runs web tests after it but does not own it."""
     needs = any(test.startswith(WEB_MODULE + '.') and test != ACCOUNT_SETUP for test in shard)
@@ -96,17 +109,16 @@ def main():
     if args.shard is None:
         for index, shard in enumerate(plan, 1):
             print(f'Shard {index}/{args.shards}: {len(shard)} tests, weight {sum(cost[t] for t in shard):.1f}s, prerequisites {prerequisites(shard)}')
-            for test in shard:
-                print('  ' + test)
+            for test in run_order(shard, ids):
+                print('  ' + test + ('' if test in shard else '  (prerequisite)'))
         print(f'Total: {sum(map(len, plan))} assigned of {len(ids)} discovered')
         return 0
     if not 1 <= args.shard <= args.shards:
         raise SystemExit(f'--shard must be between 1 and {args.shards}')
     shard = plan[args.shard - 1]
     setup = prerequisites(shard)
-    order = {test: index for index, test in enumerate(ids)}
     by_id = {test.id(): test for test in tests}
-    suite = unittest.TestSuite(by_id[test] for test in sorted(setup + shard, key=order.__getitem__))
+    suite = unittest.TestSuite(by_id[test] for test in run_order(shard, ids))
     print(f'Shard {args.shard}/{args.shards}: {len(shard)} assigned tests, prerequisites {setup}', flush=True)
     started = time.monotonic()
     runner = unittest.TextTestRunner(verbosity=2, failfast=True, **({'durations': 0} if sys.version_info >= (3, 12) else {}))

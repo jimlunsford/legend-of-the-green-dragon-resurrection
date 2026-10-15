@@ -93,6 +93,7 @@ Modern core runs per leg: one `checks` job, four `http` shard jobs, and one `res
 
 - Do not change the 60-minute timeout unless the task prompt says to. Never raise it to fit more tests. If a shard nears 30 minutes, refresh `tests/tooling/shard-durations.json` or add a shard.
 - New tests are assigned automatically. Do not hand-edit shard lists.
+- Plain `unittest discover` runs tests in name order, so a web test that needs WebPlayer must not rely on running after `test_create_login_rotate_render_logout` unless the shard runner orders it. Run local serial checks through `scripts/tooling-shards.py`.
 - Do not rerun old workflows. Do not dispatch duplicates.
 - After publishing, inspect each workflow once. Optionally once more later.
 - If Modern core is still running, STOP and report CI PENDING. Do not wait for the full suite.

@@ -36,6 +36,17 @@ class ToolingShardTests(unittest.TestCase):
         # Timing weights only balance; any weights still partition the suite.
         shards.validate(shards.assign(self.ids, 4, {test: 1 for test in self.ids}), self.ids)
 
+    def test_account_setup_runs_before_every_other_web_test(self):
+        # unittest discovery runs by name; web tests that log in as WebPlayer may sort before its creation.
+        web = shards.WEB_MODULE + '.WebApplicationTests.'
+        for count in range(1, 7):
+            for index, shard in enumerate(shards.assign(self.ids, count), 1):
+                order = shards.run_order(shard, self.ids)
+                others = [test for test in order if test.startswith(web) and test != shards.ACCOUNT_SETUP]
+                if others:
+                    self.assertEqual(1, order.count(shards.ACCOUNT_SETUP), (count, index))
+                    self.assertLess(order.index(shards.ACCOUNT_SETUP), min(order.index(test) for test in others), (count, index, order[:6]))
+
     def test_dropped_or_duplicated_tests_are_rejected(self):
         plan = shards.assign(self.ids, 4)
         dropped = [shard[:] for shard in plan]
