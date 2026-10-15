@@ -102,3 +102,11 @@ Both fail against `2eff167`. On the unfixed code, the MoTD test stops where a me
 - No bundled module hooks `clanranks`. Module-added ranks are supported through the
   same rank set but not exercised.
 - Clan moderation writes no audit or debug log, as in 1.1.2.
+
+## Acceptance, 2026-10-15
+
+`cbc0cf49875a59fd963b80cd7187bccc732141a0` is accepted. Modern core
+**38779187332 SUCCESS**: both `result` jobs and every `checks` and `http` shard job
+succeeded on PHP 8.4 / MariaDB 11.4 and PHP 8.5 / MySQL 8.4. Baseline integrity
+**38779187265 SUCCESS**. Conclusions come from the GitHub Actions run and job API.
+Clan text and moderation is Done in `ROADMAP.md`.

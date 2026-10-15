@@ -5235,6 +5235,153 @@ echo json_encode(systemmail($to,['Trusted %s','notice'],['Hello %s','Jim'],0,$no
             q('UPDATE clans SET clandesc=? WHERE clanid=?',["<img src=x onerror=alert(2)> O'Hara \\ 雪\nline two",a])
             status,body=request(url);self.assertEqual(200,status);self.assertNotIn('<img src=x',body);self.assertIn("O'Hara \\ 雪",html.unescape(body))
 
+    @contextmanager
+    def _bank_fixture(self):
+        q=self.query;player=int(q('SELECT acctid FROM accounts WHERE login=?',['WebPlayer'])[0]['acctid'])
+        original=q('SELECT * FROM accounts WHERE acctid=?',[player])[0]
+        names=['borrowperlevel','transferperlevel','maxtransferout','transferreceive','mintransferlev','allowgoldtransfer']
+        settings=q('SELECT setting,value FROM settings WHERE setting IN ('+','.join('?' for _ in names)+')',names)
+        mail=int(q('SELECT COALESCE(MAX(messageid),0) AS m FROM mail')[0]['m']);targets=[]
+        f={'player':player,'call':None,'targets':targets}
+        def setting(key,value): q('INSERT INTO settings(setting,value) VALUES (?,?) ON DUPLICATE KEY UPDATE value=VALUES(value)',[key,value])
+        for key,value in zip(names,['20','25','25','3','3','1']): setting(key,value)
+        def login(): f['call']=self._security_client()
+        def request(url,data=None):
+            self._security_allow(player,url);return f['call'](url,data)
+        def setup(**changes):
+            values=dict(alive=1,level=5,dragonkills=0,gold=500,goldinbank=200,amountouttoday=0,transferredtoday=0,specialinc='',restorepage='village.php');values.update(changes)
+            q('UPDATE accounts SET '+','.join(k+'=?' for k in values)+',lasthit=NOW() WHERE acctid=?',[*values.values(),player])
+        def state(acct=None):
+            return tuple(q('SELECT gold,goldinbank,amountouttoday,transferredtoday FROM accounts WHERE acctid=?',[acct or player])[0].values())
+        def target(login,**changes):
+            acct=int(self._security_target(login));targets.append(acct)
+            if changes: q('UPDATE accounts SET '+','.join(k+'=?' for k in changes)+' WHERE acctid=?',[*changes.values(),acct])
+            return acct
+        f.update(login=login,request=request,setup=setup,state=state,setting=setting,target=target)
+        q("UPDATE accounts SET name=? WHERE acctid=?",["Bank O'Reilly 雪",player])
+        try: yield f
+        finally:
+            q('UPDATE accounts SET '+','.join(k+'=?' for k in original if k!='acctid')+' WHERE acctid=?',[*[v for k,v in original.items() if k!='acctid'],player])
+            for acct in targets: q('DELETE FROM accounts_output WHERE acctid=?',[acct]);q('DELETE FROM accounts WHERE acctid=?',[acct])
+            q('DELETE FROM mail WHERE messageid>?',[mail])
+            q('DELETE FROM settings WHERE setting IN ('+','.join('?' for _ in names)+')',names)
+            for row in settings: q('INSERT INTO settings(setting,value) VALUES (?,?)',[row['setting'],row['value']])
+
+    def test_bank_deposit_withdraw_and_borrow_authority_http(self):
+        with self._bank_fixture() as f:
+            request,state,setup=f['request'],f['state'],f['setup']
+            anonymous=self._security_client(login=None)
+            for url in ['bank.php?op=depositfinish','bank.php?op=withdrawfinish']:
+                for data in [None,{'amount':'1'}]: self.assertIn(anonymous(url,data)[0],[302,303,403])
+            setup();f['login']();before=state();self.assertEqual(('500','200','0','0'),before)
+            deposit='bank.php?op=depositfinish';withdraw='bank.php?op=withdrawfinish'
+            # GET only displays: 1.1.2 treated the missing amount as "all" and deposited or withdrew everything.
+            for url in [deposit,withdraw,'bank.php?op=transfer3']:
+                self.assertEqual(200,request(url)[0],url);self.assertEqual(before,state(),url)
+            form=lambda op,action:self._security_fields(request('bank.php?op='+op)[1],action)
+            fields=form('deposit',deposit)
+            self.assertEqual(403,request(deposit,{'action_token':fields['action_token'],'amount':'10'})[0])
+            self.assertEqual(403,request(deposit,{**fields,'csrf_token':'0'*64,'amount':'10'})[0])
+            # Amounts are canonical non-negative integers; 1.1.2's abs((int)) coercion turned typos into "all" or flipped signs.
+            for bad in [{'amount':'-50'},{'amount':'1.5'},{'amount':'abc'},{'amount':'12abc'},{'amount':'99999999999999999999999'},{'amount[]':'1'},{'amount':'10','goldinbank':'9'}]:
+                self.assertEqual(400,request(deposit,{**fields,**bad})[0],bad)
+            self.assertEqual(before,state())
+            status,body=request(deposit,{**fields,'amount':'999999999'});self.assertEqual(200,status);self.assertIn('Not enough gold in hand to deposit',body);self.assertEqual(before,state())
+            fields=form('deposit',deposit);status,body=request(deposit,{**fields,'amount':'100'});self.assertEqual(200,status)
+            self.assertIn('records your deposit of',html.unescape(body));self.assertEqual(('400','300','0','0'),state())
+            self.assertEqual(409,request(deposit,{**fields,'amount':'100'})[0]);self.assertEqual(('400','300','0','0'),state())
+            fields=form('deposit',deposit);self.query('UPDATE accounts SET gold=450 WHERE acctid=?',[f['player']])
+            self.assertEqual(409,request(deposit,{**fields,'amount':'10'})[0]);self.assertEqual(('450','300','0','0'),state())
+            # Deposit all (empty or 0), withdraw, the bank refusal, withdraw all.
+            self.assertEqual(200,request(deposit,{**form('deposit',deposit),'amount':''})[0]);self.assertEqual(('0','750','0','0'),state())
+            self.assertEqual(200,request(withdraw,{**form('withdraw',withdraw),'amount':'50'})[0]);self.assertEqual(('50','700','0','0'),state())
+            status,body=request(withdraw,{**form('withdraw',withdraw),'amount':'701'});self.assertIn('Not enough gold in the bank to withdraw',body);self.assertEqual(('50','700','0','0'),state())
+            self.assertEqual(200,request(withdraw,{**form('withdraw',withdraw),'amount':'0'})[0]);self.assertEqual(('750','0','0','0'),state())
+            # Borrowing: level 5 x 20 = 100 in total, existing debt included; the balance is withdrawn first.
+            setup(gold=0,goldinbank=30);status,body=request(withdraw,{**form('borrow',withdraw),'amount':'130','borrow':'x'})
+            self.assertEqual(200,status);self.assertIn('You withdraw your remaining',body);self.assertIn('Additionally, you borrow',body);self.assertEqual(('130','-100','0','0'),state())
+            # Borrow more while in debt: past the limit is refused, within it is granted; deposits pay the debt down.
+            status,body=request('bank.php?op=borrow');self.assertEqual(200,status)
+            status,body=request(withdraw,{**self._security_fields(body,withdraw),'amount':'1','borrow':'x'})
+            self.assertIn('you may only borrow up to a total of',html.unescape(body));self.assertEqual(('130','-100','0','0'),state())
+            setup(gold=0,goldinbank=-40);status,body=request(withdraw,{**form('borrow',withdraw),'amount':'60','borrow':'x'})
+            self.assertIn('You borrow',body);self.assertEqual(('60','-100','0','0'),state())
+            setup(gold=70,goldinbank=-100);status,body=request(deposit,{**form('deposit',deposit),'amount':'70'})
+            self.assertIn('debt of',html.unescape(body));self.assertEqual(('0','-30','0','0'),state())
+            # The withdraw form cannot borrow, and a borrow form's intent cannot withdraw.
+            setup(gold=0,goldinbank=10);fields=form('withdraw',withdraw)
+            self.assertEqual(409,request(withdraw,{**fields,'amount':'50','borrow':'x'})[0]);self.assertEqual(('0','10','0','0'),state())
+
+    def test_bank_transfer_authority_http(self):
+        q=self.query
+        with self._bank_fixture() as f:
+            request,state,setup,player=f['request'],f['state'],f['setup'],f['player']
+            recipient=f['target']('BankRecipient',level=4,goldinbank=0,transferredtoday=0)
+            f['target']('BankLockedRecipient',level=4,locked=1);decoy=f['target']('BankDecoy',level=4)
+            q('UPDATE accounts SET name=? WHERE acctid=?',["`2O'Reilly \\ 雪 ab! <img src=x>",decoy])
+            anonymous=self._security_client(login=None)
+            for data in [None,{'to':'BankRecipient','amount':'50'}]: self.assertIn(anonymous('bank.php?op=transfer3',data)[0],[302,303,403])
+            setup(gold=30,goldinbank=100);f['login']();before=state();other=state(recipient)
+            search='bank.php?op=transfer2';complete='bank.php?op=transfer3'
+            def offer(to,amount):
+                status,body=request(search,{'to':to,'amount':amount});self.assertEqual(200,status,body[:1500]);return body
+            # The search matches display names, as in 1.1.2; this one names only BankRecipient.
+            def fields(amount='50'): return self._security_fields(offer("O'Reilly \\ 雪 %_!",amount),complete)
+            subject='`^You have received a money transfer!`0';subject='a:1:{i:0;s:%d:"%s";}'%(len(subject.encode()),subject)
+            mails=lambda:int(q('SELECT COUNT(*) AS n FROM mail WHERE msgto=? AND msgfrom=0 AND subject=?',[recipient,subject])[0]['n'])
+            # Transfers disabled, or below the minimum level without a dragon kill: refused on every step, not just hidden.
+            for key,value,changes in [('allowgoldtransfer','0',{}),('mintransferlev','3',{'level':2})]:
+                f['setting'](key,value);setup(gold=30,goldinbank=100,**changes)
+                for url,data in [('bank.php?op=transfer',None),(search,{'to':'BankRecipient','amount':'50'}),(complete,{'to':'BankRecipient','amount':'50'})]:
+                    self.assertEqual(403,request(url,data)[0],(key,url))
+                f['setting'](key,'1' if key=='allowgoldtransfer' else '3')
+            setup(gold=30,goldinbank=100);self.assertEqual(before,state())
+            # Search binds a literal pattern: apostrophes, backslashes, UTF-8, % and _ match only themselves; locked accounts never appear.
+            body=offer("O'Reilly \\ 雪 %_!",'50');self.assertNotIn('<img src=x',body)
+            self.assertEqual(['BankRecipient'],[html.unescape(v) for v in re.findall(r'name=[\'"]to[\'"] value=[\'"]([^\'"]*)',body)])
+            body=offer("O'Reilly",'50');self.assertNotIn('<img src=x',body);options=[html.unescape(v) for v in re.findall(r'<option value=[\'"]([^\'"]*)',body)]
+            self.assertIn('BankRecipient',options);self.assertIn('BankDecoy',options);self.assertNotIn('BankLockedRecipient',options)
+            for bad in ['-50','5.5','abc','99999999999999999999999']: self.assertEqual(400,request(search,{'to':'BankRecipient','amount':bad})[0],bad)
+            # The completing POST needs CSRF and the intent issued for this amount; GET only displays.
+            form=fields()
+            self.assertEqual(403,request(complete,{'action_token':form['action_token'],'to':'BankRecipient','amount':'50'})[0])
+            self.assertEqual(409,request(complete,{**form,'to':'BankRecipient','amount':'100'})[0]);self.assertEqual(before,state())
+            for bad in [{'to':'BankRecipient','amount':'-50'},{'to[]':'BankRecipient','amount':'50'},{'to':'BankRecipient','amount':'50','goldinbank':'1'}]:
+                self.assertEqual(400,request(complete,{**fields(),**bad})[0],bad)
+            # Every historical limit, on the locked rows; nothing moves. The intent binds the amount; the recipient is checked at completion.
+            cases=[('NoSuchLogin','50',{},'run into an accounting error'),('BankLockedRecipient','50',{},'run into an accounting error'),
+                   ('WebPlayer','50',{},'You may not transfer money to yourself'),('BankRecipient','150',{},'How can you transfer'),
+                   ('BankRecipient','50',{'amountouttoday':100},'not allowed to transfer more than'),('BankRecipient','101',{'gold':500},'may only receive up to'),
+                   ('BankRecipient','4',{},'at least as much as your level')]
+            for to,amount,changes,message in cases:
+                setup(**{'gold':30,'goldinbank':100,**changes});mine=state();form=fields(amount)
+                status,body=request(complete,{**form,'to':to,'amount':amount});self.assertEqual(200,status,to);self.assertIn(message,html.unescape(body),to)
+                self.assertEqual(mine,state(),to);self.assertEqual(other,state(recipient),to);self.assertEqual(0,mails())
+            setup(gold=30,goldinbank=100);q('UPDATE accounts SET transferredtoday=3 WHERE acctid=?',[recipient])
+            status,body=request(complete,{**fields(),'to':'BankRecipient','amount':'50'});self.assertIn('has received too many transfers today',html.unescape(body))
+            q('UPDATE accounts SET transferredtoday=0 WHERE acctid=?',[recipient])
+            # A debtor is refused at search and at completion.
+            setup(gold=500,goldinbank=-10)
+            for url,data in [('bank.php?op=transfer',None),(search,{'to':'BankRecipient','amount':'50'})]:
+                status,body=request(url,data);self.assertIn('refuses to transfer money for someone who is in debt',body);self.assertNotIn('op=transfer3',body)
+            # Success: hand gold first, then the bank; the recipient's credit, counters and notice commit together.
+            setup(gold=30,goldinbank=100);form=fields()
+            status,body=request(complete,{**form,'to':'BankRecipient','amount':'50'});self.assertEqual(200,status);self.assertIn('The transfer has been completed!',body)
+            self.assertEqual(('0','80','50','0'),state());self.assertEqual(('50','1'),(state(recipient)[1],state(recipient)[3]));self.assertEqual(1,mails())
+            self.assertEqual(409,request(complete,{**form,'to':'BankRecipient','amount':'50'})[0]);self.assertEqual(('0','80','50','0'),state());self.assertEqual(1,mails())
+            # A late failure on the sender's own write rolls back the credit, counters and notice; a fresh intent succeeds.
+            setup(gold=0,goldinbank=80,amountouttoday=50);form=fields();mine=state();theirs=state(recipient)
+            q("ALTER TABLE accounts ADD CONSTRAINT fixture_bank_sender CHECK (login <> 'WebPlayer' OR amountouttoday <> 100)")
+            try:
+                self.assertEqual(500,request(complete,{**form,'to':'BankRecipient','amount':'50'})[0])
+                self.assertEqual(mine,state());self.assertEqual(theirs,state(recipient));self.assertEqual(1,mails())
+                self.assertEqual(409,request(complete,{**form,'to':'BankRecipient','amount':'50'})[0])
+            finally: q('ALTER TABLE accounts DROP CONSTRAINT fixture_bank_sender')
+            # The notice names the sender (apostrophe and UTF-8) and its amount.
+            self.assertEqual(200,request(complete,{**fields(),'to':'BankRecipient','amount':'50'})[0])
+            self.assertEqual(('0','30','100','0'),state());self.assertEqual('100',state(recipient)[1]);self.assertEqual(2,mails())
+            body=q('SELECT body FROM mail WHERE msgto=? ORDER BY messageid DESC LIMIT 1',[recipient])[0]['body'];self.assertIn("Bank O'Reilly 雪",body)
+
     def _security_client(self, login='WebPlayer', password="Synthetic web O'Reilly \\ password", port=None):
         class NoRedirect(urllib.request.HTTPRedirectHandler):
             def redirect_request(self, *args): return None

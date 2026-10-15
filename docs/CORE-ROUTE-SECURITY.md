@@ -552,3 +552,19 @@ blocked description stays blocked until a moderator unblocks it. The custom say
 line is now escaped in the clan hall talk form (proven raw in 1.1.2). NULL text and
 missing authors render on PHP 8. See
 [clan text and moderation authority](CLAN-TEXT-MODERATION-AUTHORITY-20261015.md).
+
+2026-10-15: clan text and moderation accepted at `cbc0cf4` (Modern core
+38779187332, Baseline integrity 38779187265).
+
+2026-10-15 bank (`bank.php`): candidate pending CI. Deposit, withdraw, borrow and
+transfer are POST + CSRF + one-use intent bound to the operation, the transfer
+amount and the actor's purse, balance and daily counters, inside the locked player
+transaction; GET of a finishing step only shows its form (1.1.2 deposited or withdrew
+everything on any GET). A transfer locks sender and recipient in account order and
+commits debit, credit, counters, debug log and the queued notice together; external
+mail follows commit. Every 1.1.2 limit is enforced on the locked rows; locked
+recipients, debtors, disabled transfers and the minimum level are now refused by the
+server, not just by navigation. The recipient search is bound, per UTF-8 character,
+with literal `%`/`_`, and its output is escaped. Amounts must be empty ("all") or
+canonical non-negative integers; 1.1.2's `abs((int))` coercion is retired. See
+[bank authority](BANK-AUTHORITY-20261015.md).

@@ -50,6 +50,7 @@ Each family is DONE only when its acceptance evidence passes on both supported C
 - [x] Petition administration (`viewpetition.php`) (`PETITION-ADMIN-AUTHORITY-20261015.md`). Accepted at `ef97952`, Modern core 38722109813.
 - [x] Inn economy: room rental, bartender bribe and specialty switch, Dragon flee (`INN-ECONOMY-AUTHORITY-20261015.md`). Accepted at `3b6d780`, Modern core 38736206216.
 - [x] Clan membership: creation, application, approval, ranks, removal, withdrawal, leader succession, empty-clan cleanup (`CLAN-MEMBERSHIP-AUTHORITY-20261015.md`). Accepted at `2eff167` (candidate `9c2f458` plus the shard-order fix), Modern core 38767451569. Run 38758814063 failed on shard order and stays on record.
+- [x] Clan text and moderation: MOTD, description, custom say, superuser rename and description block/unblock, NULL-description display (`CLAN-TEXT-MODERATION-AUTHORITY-20261015.md`). Accepted at `cbc0cf4`, Modern core 38779187332.
 
 ### Current
 
@@ -63,8 +64,7 @@ Infrastructure and records:
 
 Route families:
 
-- [ ] Clan text and moderation: MOTD, description, custom say, superuser name edit and description block/unblock (`lib/clan/clan_motd.php`, `lib/clan/detail.php`), NULL-description display (candidate in `CLAN-TEXT-MODERATION-AUTHORITY-20261015.md`)
-- [ ] Bank: deposit, withdraw, transfer, loan (`bank.php`)
+- [ ] Bank: deposit, withdraw, transfer, loan (`bank.php`; candidate in `BANK-AUTHORITY-20261015.md`)
 - [ ] Weapons and armor purchase and trade-in (`weapons.php`, `armor.php`)
 - [ ] Stables and mount purchase, sale, replacement (`stables.php`)
 - [ ] Haunting (`lib/graveyard/case_haunt*.php`)
