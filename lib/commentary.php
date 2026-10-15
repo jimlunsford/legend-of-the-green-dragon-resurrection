@@ -598,7 +598,8 @@ function talkform($section,$talkline,$limit=10,$schema=false){
     rawoutput(resurrection_csrf_field());
     $_SESSION['commentary_sections'][$section] = ['talkline' => $talkline, 'schema' => $schema];
 	previewfield("insertcommentary", $session['user']['name'], $talkline, true, array("size"=>"40", "maxlength"=>200-$tll));
-	rawoutput("<input type='hidden' name='talkline' value='$talkline'>");
+	// A clan's custom say line is player text; the hidden field is informational (the session holds the talk line).
+	rawoutput("<input type='hidden' name='talkline' value='".htmlspecialchars((string)$talkline, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8')."'>");
 	rawoutput("<input type='hidden' name='schema' value='$schema'>");
 	rawoutput("<input type='hidden' name='counter' value='{$session['counter']}'>");
 	$session['commentcounter'] = $session['counter'];

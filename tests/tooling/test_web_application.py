@@ -5100,6 +5100,141 @@ echo json_encode(systemmail($to,['Trusted %s','notice'],['Hello %s','Jim'],0,$no
             self.assertEqual([],q('SELECT clanid FROM clans WHERE clanid=?',[empty]));self.assertEqual(1,len(q('SELECT clanid FROM clans WHERE clanid=?',[a])))
             self.assertEqual(str(empty),member(waiting)[0])
 
+    def _clan_page_tools(self, request):
+        has=lambda body,name:re.search(r'name=[\'"]'+re.escape(name)+r'[\'"]',body) is not None
+        csrf=lambda body:re.search(r'name=[\'"]csrf_token[\'"] value=[\'"]([a-f0-9]{64})',body).group(1)
+        def comment_form(body):
+            class Forms(HTMLParser):
+                def __init__(self): super().__init__();self.forms=[];self.current=None
+                def handle_starttag(self,tag,attrs):
+                    attributes=dict(attrs)
+                    if tag=='form': self.current=[html.unescape(attributes.get('action','')),{}]
+                    elif tag=='input' and self.current is not None and 'name' in attributes: self.current[1][attributes['name']]=attributes.get('value','')
+                def handle_endtag(self,tag):
+                    if tag=='form' and self.current is not None: self.forms.append(self.current);self.current=None
+            forms=Forms();forms.feed(body)
+            return next(form for form in forms.forms if 'insertcommentary' in form[1])
+        return has,csrf,comment_form
+
+    def test_clan_motd_description_and_say_authority_http(self):
+        q=self.query
+        with self._clan_fixture() as f:
+            request,place,player=f['request'],f['place'],f['player']
+            has,csrf,comment_form=self._clan_page_tools(request)
+            a=f['clan']('Alpha Hall','ALPHA');b=f['clan']('Beta Hall','BETA');f['target']('ClanLeaderA',a,30,9);f['target']('ClanLeaderB',b,30,8)
+            text=lambda clan:tuple(q('SELECT clanmotd,clandesc,motdauthor,descauthor,customsay FROM clans WHERE clanid=?',[clan])[0].values())
+            url='clan.php?op=motd';fresh=text(a);other=text(b);self.assertEqual((None,None,'0','0'),fresh[:4])
+            form=lambda:self._security_fields(request(url)[1],url)
+            motd="MoTD O'Reilly \\ 雪 <b>bold</b> `^gold";desc="Desc O'Hara \\\\ 雪 <img src=x onerror=alert(1)>\nline two";say="O'R \\ 雪<q>x"
+            # Anonymous visitors, players in no clan and plain members change nothing.
+            anonymous=self._security_client(login=None)
+            for data in [None,{'clanmotd':'x'}]: self.assertIn(anonymous(url,data)[0],[302,303,403])
+            place(player,0,0);f['login']();status,body=request(url);self.assertEqual(200,status);self.assertFalse(has(body,'clanmotd'))
+            self.assertIn(request(url,{'clanmotd':'x'})[0],[200,403]);self.assertEqual(fresh,text(a))
+            place(player,a,10);f['login']();status,body=request(url);self.assertEqual(200,status)
+            self.assertIn("You do not have authority to change your clan's motd or description.",html.unescape(body));self.assertFalse(has(body,'clanmotd'))
+            self.assertEqual(403,request(url,{'csrf_token':csrf(request('clan.php')[1]),'action_token':'0'*64,'clanmotd':'x'})[0]);self.assertEqual(fresh,text(a))
+            # Officers edit the MoTD and description of their own clan (a new clan's NULL text renders); GET only displays.
+            place(player,a,20);f['login']();status,body=request(url);self.assertEqual(200,status,body[:1500])
+            self.assertTrue(has(body,'clanmotd'));self.assertTrue(has(body,'clandesc'));self.assertFalse(has(body,'customsay'))
+            self.assertEqual(200,request(url+'&clanmotd=x&clandesc=y&customsay=z')[0]);self.assertEqual(fresh,text(a))
+            fields=form()
+            self.assertEqual(403,request(url,{'action_token':fields['action_token'],'clanmotd':motd})[0])
+            self.assertEqual(403,request(url,{**fields,'csrf_token':'0'*64,'clanmotd':motd})[0])
+            for bad in [{'customsay':'Officer say'},{'clanmotd[]':motd},{'clanmotd':motd,'motdauthor':'1'},{'clanmotd':b'\xff\xfe'}]:
+                self.assertEqual(400,request(url,{**fields,**bad})[0],bad)
+            self.assertEqual(fresh,text(a))
+            status,body=request(url,{**fields,'clanmotd':motd,'clandesc':desc});self.assertEqual(200,status)
+            self.assertIn('Updating MoTD',body);self.assertIn('Updating description',body)
+            self.assertEqual((motd,desc,str(player),str(player),fresh[4]),text(a));self.assertEqual(other,text(b))
+            # Replayed and stale forms write nothing.
+            self.assertEqual(409,request(url,{**fields,'clanmotd':'Replayed'})[0]);self.assertEqual(motd,text(a)[0])
+            fields=form();q('UPDATE clans SET clanmotd=? WHERE clanid=?',['Changed elsewhere',a])
+            self.assertEqual(409,request(url,{**fields,'clanmotd':'Stale'})[0]);self.assertEqual('Changed elsewhere',text(a)[0])
+            q('UPDATE clans SET clanmotd=? WHERE clanid=?',[motd,a])
+            # The text is shown escaped wherever it appears, with its author.
+            for page in ['clan.php',url]:
+                status,body=request(page);self.assertEqual(200,status)
+                for raw in ['<img src=x','<b>bold']: self.assertNotIn(raw,body,page)
+                self.assertIn("O'Hara \\\\ 雪",html.unescape(body),page);self.assertIn("by Clan O'Reilly 雪",html.unescape(body),page)
+            # The historical 4096-character limits hold on the server, by characters.
+            self.assertEqual(200,request(url,{**form(),'clanmotd':'é'*5000,'clandesc':'雪'*4097})[0]);self.assertEqual(('é'*4096,'雪'*4096),text(a)[:2])
+            # Another clan's officer: a form from clan A cannot write once the player is in clan B, and B's form writes only B.
+            fields=form();place(player,b,20)
+            self.assertEqual(409,request(url,{**fields,'clanmotd':'Cross clan'})[0]);self.assertEqual('é'*4096,text(a)[0]);self.assertEqual(other,text(b))
+            f['login']();self.assertEqual(200,request(url,{**form(),'clanmotd':'Beta news'})[0]);self.assertEqual('Beta news',text(b)[0]);self.assertEqual('é'*4096,text(a)[0])
+            # Leaders also set the custom say line: one line, 15 characters, escaped in the form and in commentary.
+            place(player,a,30);f['login']();q('UPDATE clans SET customsay=? WHERE clanid=?',['"x\'><q>',a])
+            status,body=request(url);self.assertTrue(has(body,'customsay'));self.assertNotIn('<q>',body);self.assertIn('"x\'><q>',html.unescape(body))
+            fields=form()
+            for bad in [{'customsay':'a\nb'},{'customsay':'a\x00b'}]: self.assertEqual(400,request(url,{**fields,**bad})[0],bad)
+            status,body=request(url,{**fields,'customsay':say});self.assertEqual(200,status);self.assertIn('Updating custom say line',body);self.assertEqual(say,text(a)[4])
+            self.assertEqual(200,request(url,{**form(),'customsay':'é'*20})[0]);self.assertEqual('é'*15,text(a)[4])
+            self.assertEqual(200,request(url,{**form(),'customsay':say})[0]);self.assertEqual(say,text(a)[4])
+            status,body=request('clan.php');self.assertEqual(200,status);self.assertNotIn('<q>',body)
+            action,fields=comment_form(body);self.assertEqual(200,request(action,{**fields,'insertcommentary':'Hello <q>there'})[0])
+            self.assertEqual(f':`3{say}, "`#Hello <q>there`3"',q('SELECT comment FROM commentary WHERE section=? ORDER BY commentid DESC LIMIT 1',[f'clan-{a}'])[0]['comment'])
+            status,body=request('clan.php');self.assertNotIn('<q>',body);self.assertIn(f'{say}, "',html.unescape(body))
+            # A late write failure rolls back every change; the spent form cannot retry and a fresh one succeeds.
+            before=text(a);late={'clanmotd':'Rolled MoTD','clandesc':'Rolled desc','customsay':'Rollback say'};fields=form()
+            q("ALTER TABLE clans ADD CONSTRAINT fixture_clan_say CHECK (customsay <> 'Rollback say')")
+            try:
+                self.assertEqual(500,request(url,{**fields,**late})[0]);self.assertEqual(before,text(a))
+                self.assertEqual(409,request(url,{**fields,**late})[0]);self.assertEqual(before,text(a))
+            finally: q('ALTER TABLE clans DROP CONSTRAINT fixture_clan_say')
+            self.assertEqual(200,request(url,{**form(),**late})[0]);self.assertEqual(('Rolled MoTD','Rolled desc',str(player),str(player),'Rollback say'),text(a))
+            q('DELETE FROM commentary WHERE section IN (?,?)',[f'clan-{a}',f'clan-{b}'])
+
+    def test_clan_detail_rename_and_block_authority_http(self):
+        q=self.query
+        with self._clan_fixture() as f:
+            request,place,player=f['request'],f['place'],f['player']
+            has,csrf,_=self._clan_page_tools(request)
+            a=f['clan']('Alpha Hall','ALPHA');b=f['clan']('Beta Hall','BETA');f['target']('ClanLeaderA',a,30,9);f['target']('ClanLeaderB',b,30,8)
+            row=lambda:tuple(q('SELECT clanname,clanshort,clandesc,descauthor FROM clans WHERE clanid=?',[a])[0].values())
+            url=f'clan.php?detail={a}';fresh=row();self.assertEqual(('Alpha Hall','ALPHA',None,'0'),fresh)
+            def role(bits): q('UPDATE accounts SET superuser=? WHERE acctid=?',[bits,player]);f['login']()
+            form=lambda:self._security_fields(request(url)[1],url)
+            # The public view of a new clan (NULL description) renders without moderator controls; detail must be a clan id.
+            place(player,b,10);role(0)
+            status,body=request(url);self.assertEqual(200,status,body[:1500]);self.assertIn('current clan membership of Alpha Hall < ALPHA >',html.unescape(body))
+            self.assertFalse(has(body,'clanname'))
+            for bad,code in [(urllib.parse.quote(f'{a} OR 1=1'),400),('999999',404)]: self.assertEqual(code,request('clan.php?detail='+bad)[0],bad)
+            # Only SU_EDIT_COMMENTS moderates.
+            forged={'clanname':'Hacked Hall','clanshort':'HACK','block':'Block'}
+            self.assertEqual(403,request(url,{**forged,'csrf_token':csrf(request('clan.php')[1])})[0]);self.assertEqual(fresh,row())
+            role(64);status,body=request(url);self.assertEqual(200,status);self.assertFalse(has(body,'clanname'))
+            self.assertEqual(403,request(url,{**forged,'csrf_token':csrf(request('clan.php')[1])})[0]);self.assertEqual(fresh,row())
+            role(16);status,body=request(url);self.assertEqual(200,status);self.assertTrue(has(body,'clanname'));self.assertTrue(has(body,'block'))
+            self.assertEqual(200,request(url+'&clanname=Gamma+Hall&clanshort=GAMMA&block=1')[0]);self.assertEqual(fresh,row())
+            fields=form()
+            self.assertEqual(403,request(url,{'action_token':fields['action_token'],'clanname':'Gamma Hall','clanshort':'GAMMA'})[0])
+            for bad in [{'clanname[]':'x','clanshort':'GAMMA'},{'clanname':'Gamma Hall','clanshort':'GAMMA','descauthor':'0'},{'clanname':'Gamma Hall','clanshort':'GAMMA','block':'1','unblock':'1'}]:
+                self.assertEqual(400,request(url,{**fields,**bad})[0],bad)
+            self.assertEqual(fresh,row())
+            # Renames follow the clan-creation rules: letters, spaces, apostrophes and dashes, the lengths, and unique names.
+            for name,short,message in [('Bad Hall 9','BAD','consist only of letters'),('<b>Evil</b> Hall','EVIL','consist only of letters'),('Snow 雪 Hall','SNOW','consist only of letters'),
+                                       ('`^Gold Hall','GOLD','consist only of letters'),('Ab','AB','at least 5'),('Fine Hall','A','at least 2'),('Beta Hall','GAMMA','is already taken'),('Gamma Hall','BETA','is already taken')]:
+                status,body=request(url,{**form(),'clanname':name,'clanshort':short});self.assertEqual(200,status,name);self.assertIn(message,html.unescape(body),name);self.assertEqual(fresh,row(),name)
+            fields=form();status,body=request(url,{**fields,'clanname':"O'Brien-Hall",'clanshort':'OBH'});self.assertEqual(200,status)
+            self.assertIn('Updating clan names',body);self.assertEqual(("O'Brien-Hall",'OBH',None,'0'),row());self.assertEqual(('Beta Hall','BETA'),tuple(q('SELECT clanname,clanshort FROM clans WHERE clanid=?',[b])[0].values()))
+            self.assertEqual(409,request(url,{**fields,'clanname':'Replay Hall','clanshort':'RPL'})[0]);self.assertEqual("O'Brien-Hall",row()[0])
+            fields=form();q("UPDATE clans SET clandesc='Edited meanwhile' WHERE clanid=?",[a])
+            self.assertEqual(409,request(url,{**fields,'clanname':"O'Brien-Hall",'clanshort':'OBH','block':'x'})[0]);self.assertEqual('0',row()[3])
+            # Block replaces the description with the historical text; the clan's officers cannot edit it until a moderator unblocks.
+            status,body=request(url,{**form(),'clanname':"O'Brien-Hall",'clanshort':'OBH','block':'Save & Block public description'});self.assertEqual(200,status)
+            self.assertIn('Blocking public description',body);blocked=("O'Brien-Hall",'OBH','Description blocked for inappropriate usage.','4294967295');self.assertEqual(blocked,row())
+            self.assertTrue(has(request(url)[1],'unblock'))
+            place(player,a,20);role(0);motd='clan.php?op=motd'
+            status,body=request(motd);self.assertEqual(200,status,body[:1500]);self.assertIn('Your clan has been blocked from posting a description.',body);self.assertFalse(has(body,'clandesc'))
+            self.assertEqual(400,request(motd,{**self._security_fields(body,motd),'clanmotd':'News','clandesc':'Sneaky'})[0]);self.assertEqual(blocked,row())
+            self.assertEqual(200,request(motd,{**self._security_fields(request(motd)[1],motd),'clanmotd':'News'})[0]);self.assertEqual(blocked,row())
+            role(16);status,body=request(url,{**form(),'clanname':"O'Brien-Hall",'clanshort':'OBH','unblock':'Save & UNblock public description'});self.assertEqual(200,status)
+            self.assertIn('UNblocking public description',body);self.assertEqual(("O'Brien-Hall",'OBH','','0'),row())
+            # The public description stays escaped.
+            q('UPDATE clans SET clandesc=? WHERE clanid=?',["<img src=x onerror=alert(2)> O'Hara \\ 雪\nline two",a])
+            status,body=request(url);self.assertEqual(200,status);self.assertNotIn('<img src=x',body);self.assertIn("O'Hara \\ 雪",html.unescape(body))
+
     def _security_client(self, login='WebPlayer', password="Synthetic web O'Reilly \\ password", port=None):
         class NoRedirect(urllib.request.HTTPRedirectHandler):
             def redirect_request(self, *args): return None

@@ -118,3 +118,17 @@ All three new tests fail against the previous clan code and pass with the change
   writes a malformed zero join date; it belongs to the account-deletion item.
 - No bundled module hooks `clanranks`; module-added ranks are supported through the
   same rank set but not exercised by a bundled module.
+
+## Acceptance, 2026-10-15
+
+`2eff16799f16d6e5047cd89b871de2f28e87f209` is accepted. It contains the clan
+membership candidate `9c2f458` and the shard-order fix. Modern core
+**38767451569 SUCCESS**: both `result` jobs and every `checks` and `http` shard job
+succeeded on PHP 8.4 / MariaDB 11.4 and PHP 8.5 / MySQL 8.4. Baseline integrity
+**38767451036 SUCCESS**. Conclusions come from the GitHub Actions run and job API.
+
+Modern core **38758814063 FAILURE** at `9c2f458` stays on record: the new clan web
+tests sort before `test_create_login_rotate_render_logout` by name, so a shard ran
+them before the WebPlayer account existed. The runner now orders account setup
+before every other web test (`2eff167`); no test or guard was changed for it.
+Clan membership is Done in `ROADMAP.md`.

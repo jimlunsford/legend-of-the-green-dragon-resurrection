@@ -533,3 +533,22 @@ notice cleanup is bound. Leader auto-promotion and empty-clan deletion stay on v
 as locked, idempotent housekeeping. 1.1.2 has no clan treasury. Text and moderation
 remain BLOCKED for Part 2. See
 [clan membership authority](CLAN-MEMBERSHIP-AUTHORITY-20261015.md).
+
+2026-10-15: clan membership accepted at `2eff167` (Modern core 38767451569,
+Baseline integrity 38767451036). Run 38758814063 failed on shard order, not on the
+clan change, and stays on record.
+
+2026-10-15 clan text and moderation (`lib/clan/clan_motd.php`,
+`lib/clan/detail.php`): candidate pending CI. MoTD, description and custom say, and
+the moderator rename and description block/unblock, are POST + CSRF + one-use
+intent bound to the clan's stored names, text and block state, inside the locked
+player transaction with the clan row locked; GET only displays. Authority is the
+actor's own clan and rank (officer: MoTD and description; leader: custom say) or
+SU_EDIT_COMMENTS, rechecked under lock. All SQL is bound and text is stored as
+entered (no `addslashes`/`stripslashes`), cut to the historical 4096/4096/15
+characters. The 1.1.2 `detail` SQL injection is proven and closed (integer clan id,
+404 for a missing clan). Renames follow the clan-creation rules and uniqueness. A
+blocked description stays blocked until a moderator unblocks it. The custom say
+line is now escaped in the clan hall talk form (proven raw in 1.1.2). NULL text and
+missing authors render on PHP 8. See
+[clan text and moderation authority](CLAN-TEXT-MODERATION-AUTHORITY-20261015.md).

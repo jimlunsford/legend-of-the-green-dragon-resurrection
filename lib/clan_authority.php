@@ -129,3 +129,60 @@ function resurrection_clan_new_context(): string {
     foreach (['acctid','clanid','clanrank','gold','gems'] as $key) $state[] = (int)$session['user'][$key];
     return hash('sha256', json_encode($state, JSON_THROW_ON_ERROR));
 }
+
+/** The 1.1.2 description-block marker: the largest unsigned author id. */
+const RESURRECTION_CLAN_DESC_BLOCKED = 4294967295;
+
+/**
+ * A clan's names and text read from the database (locked when asked), never from the data cache.
+ * @return array<string, mixed>|null
+ */
+function resurrection_clan_text_row(int $clanid, bool $lock = false): ?array {
+    if ($clanid < 1) return null;
+    $rows = db_query('SELECT clanid,clanname,clanshort,clanmotd,clandesc,motdauthor,descauthor,customsay FROM ' . db_prefix('clans') .
+        ' WHERE clanid=?' . ($lock ? ' FOR UPDATE' : ''), true, [$clanid]);
+    return count($rows) === 1 ? $rows[0] : null;
+}
+
+/**
+ * A text or moderation form is bound to the clan's stored names, text, authors and block state, and to the
+ * actor's standing that authorized it.
+ * @param array<string, mixed> $clan
+ * @param array<string, mixed> $actor
+ */
+function resurrection_clan_text_context(array $clan, array $actor): string {
+    $state = [(int)$clan['clanid'], (string)$clan['clanname'], (string)$clan['clanshort'], $clan['clanmotd'], $clan['clandesc'],
+        (int)$clan['motdauthor'], (int)$clan['descauthor'], (string)$clan['customsay']];
+    foreach (['acctid','clanid','clanrank','superuser'] as $key) $state[] = (int)($actor[$key] ?? 0);
+    return hash('sha256', serialize($state));
+}
+
+/** Clan text as entered: valid UTF-8, cut to its historical limit in characters; a talk line is one line. */
+function resurrection_clan_text(string $value, int $limit, bool $line = false): string {
+    if (!mb_check_encoding($value, 'UTF-8') || ($line && preg_match('/[\x00-\x1F\x7F]/', $value))) {
+        throw new InvalidArgumentException('Invalid clan text.');
+    }
+    return mb_substr($value, 0, $limit, 'UTF-8');
+}
+
+/**
+ * The clan-creation name rules (lib/clan/applicant_new.php): the index of the failed rule (0 characters,
+ * 1 name length, 2 short-name length), or null when both names are acceptable.
+ */
+function resurrection_clan_name_rule(string $name, string $short): ?int {
+    if (preg_replace("'[^[:alpha:] \\'-]'", '', full_sanitize($name)) !== $name ||
+        preg_replace("'[^[:alpha:]]'", '', full_sanitize($short)) !== $short) return 0;
+    if (strlen($name) < 5 || strlen($name) > 50) return 1;
+    if (strlen($short) < 2 || strlen($short) > 5) return 2;
+    return null;
+}
+
+/** An author's display name; empty for no author, a deleted one or the block marker. */
+function resurrection_clan_author(mixed $acctid): string {
+    $rows = db_query('SELECT name FROM ' . db_prefix('accounts') . ' WHERE acctid=?', true, [(int)$acctid]);
+    return (string)($rows[0]['name'] ?? '');
+}
+
+function resurrection_clan_attribute(mixed $text): string {
+    return htmlspecialchars((string)$text, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+}
