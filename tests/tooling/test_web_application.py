@@ -5382,6 +5382,69 @@ echo json_encode(systemmail($to,['Trusted %s','notice'],['Hello %s','Jim'],0,$no
             self.assertEqual(('0','30','100','0'),state());self.assertEqual('100',state(recipient)[1]);self.assertEqual(2,mails())
             body=q('SELECT body FROM mail WHERE msgto=? ORDER BY messageid DESC LIMIT 1',[recipient])[0]['body'];self.assertIn("Bank O'Reilly 雪",body)
 
+    def test_weapon_and_armor_purchase_authority_http(self):
+        q=self.query;player=int(q('SELECT acctid FROM accounts WHERE login=?',['WebPlayer'])[0]['acctid'])
+        original=q('SELECT * FROM accounts WHERE acctid=?',[player])[0]
+        shops=[('weapons.php','weapons','weaponid','weaponname','damage','weapon','weapondmg','weaponvalue','attack'),
+               ('armor.php','armor','armorid','armorname','defense','armor','armordef','armorvalue','defense')]
+        try:
+            client=self._security_client()
+            def request(url,data=None):
+                # Recompute the authoritative game day for every request (the day rolls over at 18:00 UTC).
+                q('UPDATE accounts SET lastnewday=? WHERE acctid=?',[self._current_game_day(),player])
+                self._security_allow(player,url);return client(url,data)
+            for page,table,idc,namec,statc,item,itemstat,itemvalue,total in shops:
+                items={}
+                for key,name,value,stat,level in [('tier',"Tier O'Reilly \\ 雪 <b>Blade</b>",130,7,2),('costly','Tier Costly',131,8,2),('higher','Higher Gear',10,99,3),('lower','Lower Gear',10,1,1)]:
+                    q(f'INSERT INTO {table} ({namec},value,{statc},level) VALUES (?,?,?,?)',[name,value,stat,level])
+                    items[key]=int(q(f'SELECT MAX({idc}) AS id FROM {table}')[0]['id'])
+                state=lambda:tuple(q(f'SELECT gold,{item},{itemstat},{itemvalue},{total} FROM accounts WHERE acctid=?',[player])[0].values())
+                # Dragon kills 2 with two dragon points: the shop offers tier 2 (seeded items plus ours).
+                q(f"UPDATE accounts SET dragonkills=2,dragonpoints=?,race='Human',specialty='DA',alive=1,gold=100,{item}='Old Stick',{itemstat}=3,{itemvalue}=40,{total}=10,lasthit=NOW() WHERE acctid=?",
+                  ['a:2:{i:0;s:2:"ff";i:1;s:2:"ff";}',player])
+                buy=lambda key:f'{page}?op=buy&id={items[key]}';before=state()
+                anonymous=self._security_client(login=None)
+                for data in [None,{'x':'1'}]: self.assertIn(anonymous(buy('tier'),data)[0],[302,303,403],page)
+                # The listing offers one form per affordable item of the tier (trade-in counted: 100 + 30 = 130), escaped.
+                status,body=request(page);self.assertEqual(200,status,body[:1500]);self.assertNotIn('<b>Blade',body)
+                actions=[html.unescape(a) for a in re.findall(r'<form\b[^>]*action=[\'"]([^\'"]+)',body)]
+                self.assertIn(buy('tier'),actions);self.assertNotIn(buy('costly'),actions);self.assertNotIn(buy('higher'),actions);self.assertNotIn(buy('lower'),actions)
+                form=lambda key:self._security_fields(request(page)[1],buy(key))
+                # GET only displays: 1.1.2 bought on GET, and replayed it from a restored page or New Day's "Continue".
+                self.assertEqual(200,request(buy('tier'))[0]);self.assertEqual(before,state(),page)
+                fields=form('tier')
+                self.assertEqual(403,request(buy('tier'),{'action_token':fields['action_token']})[0])
+                self.assertEqual(403,request(buy('tier'),{**fields,'csrf_token':'0'*64})[0])
+                for url in [f'{page}?op=buy&id=abc',f'{page}?op=buy&id=0',f'{page}?op=buy']: self.assertEqual(400,request(url,fields)[0],url)
+                self.assertEqual(400,request(buy('tier'),{**fields,'gold':'9'})[0])
+                # Unknown items and items of another tier have no form; a forged POST changes nothing.
+                for url in [f'{page}?op=buy&id=99999999',buy('higher'),buy('lower')]: self.assertEqual(409,request(url,fields)[0],url)
+                self.assertEqual(before,state(),page)
+                fields=form('tier');q('UPDATE accounts SET gold=101 WHERE acctid=?',[player]);self.assertEqual(409,request(buy('tier'),fields)[0])
+                q('UPDATE accounts SET gold=100 WHERE acctid=?',[player]);self.assertEqual(before,state(),page)
+                # A late failure on the account write rolls back gold, item and stats; the spent intent cannot retry.
+                fields=form('tier');q(f"ALTER TABLE accounts ADD CONSTRAINT fixture_equipment CHECK (login <> 'WebPlayer' OR {itemstat} <> 7)")
+                try:
+                    self.assertEqual(500,request(buy('tier'),fields)[0]);self.assertEqual(before,state(),page)
+                    self.assertEqual(409,request(buy('tier'),fields)[0])
+                finally: q('ALTER TABLE accounts DROP CONSTRAINT fixture_equipment')
+                # Exact 1.1.2 results: gold 100 - 130 + round(40 x .75) = 0; total 10 - 3 + 7 = 14.
+                fields=form('tier');status,body=request(buy('tier'),fields);self.assertEqual(200,status);self.assertIn('takes your',body);self.assertIn('Old Stick',body)
+                self.assertEqual(('0',"Tier O'Reilly \\ 雪 <b>Blade</b>",'7','130','14'),state(),page)
+                self.assertEqual(409,request(buy('tier'),fields)[0]);self.assertEqual('0',state()[0])
+                # Funds count the trade-in under lock (round(130 x .75) = 98): a price raised after the form shows the theft text and changes nothing.
+                q('UPDATE accounts SET gold=33 WHERE acctid=?',[player]);fields=form('costly');q(f'UPDATE {table} SET value=132 WHERE {idc}=?',[items['costly']]);mine=state()
+                status,body=request(buy('costly'),fields);self.assertEqual(200,status);self.assertIn('Secure in your theft',body);self.assertEqual(mine,state(),page)
+                q(f'UPDATE {table} SET value=131 WHERE {idc}=?',[items['costly']])
+                self.assertEqual(200,request(buy('costly'),form('costly'))[0]);self.assertEqual(('0','Tier Costly','8','131','15'),state(),page)
+                # The item must still be in the offered tier when the purchase runs.
+                q(f'UPDATE {table} SET level=2 WHERE {idc}=?',[items['lower']]);fields=form('lower');q(f'UPDATE {table} SET level=1 WHERE {idc}=?',[items['lower']]);mine=state()
+                status,body=request(buy('lower'),fields);self.assertEqual(200,status);self.assertIn('one too many bonks',body);self.assertEqual(mine,state(),page)
+                q(f'DELETE FROM {table} WHERE {idc} IN (?,?,?,?)',list(items.values()))
+        finally:
+            for page,table,idc,namec,*_ in shops: q(f"DELETE FROM {table} WHERE {namec} IN (?,?,?,?)",["Tier O'Reilly \\ 雪 <b>Blade</b>",'Tier Costly','Higher Gear','Lower Gear'])
+            q('UPDATE accounts SET '+','.join(k+'=?' for k in original if k!='acctid')+' WHERE acctid=?',[*[v for k,v in original.items() if k!='acctid'],player])
+
     def _security_client(self, login='WebPlayer', password="Synthetic web O'Reilly \\ password", port=None):
         class NoRedirect(urllib.request.HTTPRedirectHandler):
             def redirect_request(self, *args): return None

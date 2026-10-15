@@ -65,7 +65,7 @@ Infrastructure and records:
 Route families:
 
 - [ ] Bank: deposit, withdraw, transfer, loan (`bank.php`; candidate in `BANK-AUTHORITY-20261015.md`)
-- [ ] Weapons and armor purchase and trade-in (`weapons.php`, `armor.php`)
+- [ ] Weapons and armor purchase and trade-in (`weapons.php`, `armor.php`; candidate in `EQUIPMENT-PURCHASE-AUTHORITY-20261015.md`)
 - [ ] Stables and mount purchase, sale, replacement (`stables.php`)
 - [ ] Haunting (`lib/graveyard/case_haunt*.php`)
 - [ ] Bio moderation (`bios.php`)

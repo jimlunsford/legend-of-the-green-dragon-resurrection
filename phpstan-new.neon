@@ -29,6 +29,7 @@ parameters:
         - lib/inn_economy.php
         - lib/clan_authority.php
         - lib/bank_authority.php
+        - lib/equipment_authority.php
         - lib/installer/fresh_install.php
         - lib/installer/bundled_modules.php
         - scripts/install.php

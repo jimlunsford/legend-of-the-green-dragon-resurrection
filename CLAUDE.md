@@ -80,6 +80,8 @@ Local verification, proportionate to the change:
 - Historical verifier and project validator
 - Repository hygiene and whitespace
 
+Local shard runs: run locally only the shards that contain new or changed tests, through `scripts/tooling-shards.py`. Run all four only when a shared helper changes (intent, CSRF, player mutation, systemmail, combat, the shard runner itself). CI runs the full suite on both legs, and CI is the acceptance.
+
 ## CI
 
 Supported matrix:
@@ -124,6 +126,7 @@ Recompute only if serialized-state source changes. Never change counts by assump
 - Local MariaDB 10.11 works as a disposable test database. Supporting evidence only.
 - PHPUnit expects an empty database, as in CI. Recreate the disposable DB before a full PHPUnit run.
 - Move temporary fixture/config leftovers out of the repo before lint and commit.
+- Remove each local MySQL container's data volume with the container (`docker rm -f -v`). Leftover volumes filled the session disk and stopped MySQL from starting.
 
 ## Report format
 

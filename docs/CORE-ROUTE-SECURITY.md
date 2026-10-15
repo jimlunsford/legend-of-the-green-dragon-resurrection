@@ -568,3 +568,15 @@ server, not just by navigation. The recipient search is bound, per UTF-8 charact
 with literal `%`/`_`, and its output is escaped. Amounts must be empty ("all") or
 canonical non-negative integers; 1.1.2's `abs((int))` coercion is retired. See
 [bank authority](BANK-AUTHORITY-20261015.md).
+
+2026-10-15 weapons and armor (`weapons.php`, `armor.php`): candidate pending CI. The
+purchase is a POST + CSRF + one-use intent per listed item, bound to the item, the
+offered tier and the player's gold, current item and stats; it runs in the locked
+player transaction (trade-in, gold, item, item stat, item value and the attack or
+defense total together). GET of the old buy link only shows the shop; 1.1.2 bought on
+GET and the New Day "Continue" link (restore page) could replay it. The server now
+checks the item exists, is in the offered tier and is not skipped or withheld by the
+item hook. A typed cross-tier URL was already refused by forced navigation (badnav);
+the handler itself had no tier check. Prices, the 75% trade-in, the tier rule, stat
+formulas and messages are unchanged. See
+[equipment purchase authority](EQUIPMENT-PURCHASE-AUTHORITY-20261015.md).
