@@ -48,6 +48,7 @@ Each family is DONE only when its acceptance evidence passes on both supported C
 - [x] All 14 `systemmail()` caller contracts, plus the clan NULL-description fix and the MySQL 8 table-reference fix (`MAIL-AUTHORITY-20261004.md`). Accepted at `4478c06`, Modern core 38712609964.
 - [x] CI runtime: Modern core split into a checks job and four HTTP shards per leg (`ENGINEERING-VALIDATION.md`). Longest job about 16 minutes. Accepted at `4478c06`.
 - [x] Petition administration (`viewpetition.php`) (`PETITION-ADMIN-AUTHORITY-20261015.md`). Accepted at `ef97952`, Modern core 38722109813.
+- [x] Inn economy: room rental, bartender bribe and specialty switch, Dragon flee (`INN-ECONOMY-AUTHORITY-20261015.md`). Accepted at `3b6d780`, Modern core 38736206216.
 
 ### Current
 
@@ -61,14 +62,14 @@ Infrastructure and records:
 
 Route families:
 
-- [ ] Clans: application, withdrawal, membership, ranks, removal, MOTD, text, treasury (`clan.php`, `lib/clan/*`)
+- [ ] Clan membership: creation, application, approval, ranks, removal, withdrawal, leader succession, empty-clan cleanup (`clan.php`, `lib/clan/*`; candidate in `CLAN-MEMBERSHIP-AUTHORITY-20261015.md`)
+- [ ] Clan text and moderation: MOTD, description, custom say, superuser name edit and description block/unblock (`lib/clan/clan_motd.php`, `lib/clan/detail.php`), NULL-description display
 - [ ] Bank: deposit, withdraw, transfer, loan (`bank.php`)
 - [ ] Weapons and armor purchase and trade-in (`weapons.php`, `armor.php`)
 - [ ] Stables and mount purchase, sale, replacement (`stables.php`)
 - [ ] Haunting (`lib/graveyard/case_haunt*.php`)
 - [ ] Bio moderation (`bios.php`)
 - [ ] Donation administration (`donators.php`)
-- [ ] Inn economy (`inn.php`, `lib/inn/*`): room rental (`op=room&pay=1` gold, `pay=2` bank with fee, `boughtroomtoday`, logout), bartender bribes (`act=bribe`, gem/gold `amt` from GET), bartender specialty switch (`act=specialty`, unvalidated GET value) and Dragon flee (`op=fleedragon`: location and charm loss). All GET mutations with no recorded evidence.
 
 Administration:
 

@@ -1,37 +1,52 @@
 <?php
-		$to = (int)httpget('to');
+		require_once("lib/clan_authority.php");
+		try { $to = \Resurrection\Http\Input::integer($_GET, 'to', 0, 0); }
+		catch (InvalidArgumentException $error) { http_response_code(400); exit('Invalid clan request.'); }
 		if ($to>0){
-			output("`%%s`7 accepts your application, files it in her out box, and folds her hands on the desk, staring at you.",$registrar);
-			output("You stand there staring blankly back at her for a few minutes before she suggests that perhaps you'd like to take a seat in the waiting area.");
+			// Only a clan the application list offers, to a player in no clan; GET only asks.
+			if (!resurrection_clan_offered($to) || (int)$session['user']['clanid'] !== 0) { http_response_code(409); exit('That clan is not accepting your application.'); }
+			$applyurl = "clan.php?op=apply&to=$to";
+			$actor = resurrection_clan_account((int)$session['user']['acctid']);
+			if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
+				$clan = db_query("SELECT clanname FROM " . db_prefix("clans") . " WHERE clanid=?", true, [$to])[0];
+				output("`7You ask %s`7 for a membership application to %s`7.`n`n", $registrar, $clan['clanname']);
+				resurrection_clan_form($applyurl, 'clan-apply', resurrection_clan_context($ranks, $actor ?? [], ['clanid'=>$to]), resurrection_clan_button(translate_inline("Apply for Membership")));
+				addnav("Return to the Lobby","clan.php");
+			} else {
+				try {
+					resurrection_clan_fields();
+					resurrection_consume_action('clan-apply', resurrection_clan_context($ranks, $actor ?? [], ['clanid'=>$to]));
+					resurrection_clan_mutation(function () use ($to, $apply_subj) {
+						global $session;
+						db_query("SELECT clanid FROM " . db_prefix("clans") . " WHERE clanid=? FOR UPDATE", true, [$to]);
+						if ((int)$session['user']['clanid'] !== 0 || (int)$session['user']['clanrank'] !== CLAN_APPLICANT || !resurrection_clan_offered($to)) throw new DomainException('Application unavailable.');
+						$session['user']['clanid']=$to;
+						$session['user']['clanrank']=CLAN_APPLICANT;
+						$session['user']['clanjoindate']=date("Y-m-d H:i:s");
+						resurrection_clan_delete_notices($apply_subj);
+						$msg = array("`^You have a new clan applicant!  `&%s`^ has completed a membership application for your clan!",$session['user']['name']);
+						resurrection_clan_notify_officers($to, (int)$session['user']['acctid'], $apply_subj, $msg);
 
-			addnav("Return to the Lobby","clan.php");
-			addnav("Waiting Area","clan.php?op=waiting");
-			$session['user']['clanid']=$to;
-			$session['user']['clanrank']=CLAN_APPLICANT;
-			$session['user']['clanjoindate']=date("Y-m-d H:i:s");
-			$sql = "SELECT acctid FROM " . db_prefix("accounts") . " WHERE clanid='{$session['user']['clanid']}' AND clanrank>=".CLAN_OFFICER;
-			$result = db_query($sql);
-			$sql = "DELETE FROM ".  db_prefix("mail") . " WHERE msgfrom=0 AND seen=0 AND subject='".serialize($apply_subj)."'";
-			db_query($sql);
-			while ($row = db_fetch_assoc($result)){
-				$msg = array("`^You have a new clan applicant!  `&%s`^ has completed a membership application for your clan!",$session['user']['name']);
-				systemmail($row['acctid'],$apply_subj,$msg);
-			}
+						// send reminder mail if clan of choice has a description
 
-			// send reminder mail if clan of choice has a description
+						$row = db_query("SELECT * FROM " . db_prefix("clans") . " WHERE clanid=?", true, [$to])[0];
 
-			$sql = "SELECT * FROM " . db_prefix("clans") . " WHERE clanid='$to'";
-			$res = db_query_cached($sql, "clandata-$to", 3600);
-			$row = db_fetch_assoc($res);
+						// New clans store a NULL description; that means no reminder, not a fatal error.
+						$clandesc = nltoappon((string)$row['clandesc']);
+						if ( $clandesc != "" ) {
 
-			// New clans store a NULL description; that means no reminder, not a fatal error.
-			$clandesc = nltoappon((string)$row['clandesc']);
-			if ( $clandesc != "" ) {
+							$subject = "Clan Application Reminder";
+							$mail = "`&Did you remember to read the description of the clan of your choice before applying?  Note that some clans may have requirements that you have to fulfill before you can become a member.  If you are not accepted into the clan of your choice anytime soon, it may be because you have not fulfilled these requirements.  For your convenience, the description of the clan you are applying to is reproduced below.`n`n`c`#%s`@ <`^%s`@>`0`c`n%s";
 
-				$subject = "Clan Application Reminder";
-				$mail = "`&Did you remember to read the description of the clan of your choice before applying?  Note that some clans may have requirements that you have to fulfill before you can become a member.  If you are not accepted into the clan of your choice anytime soon, it may be because you have not fulfilled these requirements.  For your convenience, the description of the clan you are applying to is reproduced below.`n`n`c`#%s`@ <`^%s`@>`0`c`n%s";
+							systemmail($session['user']['acctid'],array($subject),array($mail, $row['clanname'], $row['clanshort'], $clandesc));
+						}
+					});
+				} catch (Throwable $error) { resurrection_clan_failure($error); }
+				output("`%%s`7 accepts your application, files it in her out box, and folds her hands on the desk, staring at you.",$registrar);
+				output("You stand there staring blankly back at her for a few minutes before she suggests that perhaps you'd like to take a seat in the waiting area.");
 
-				systemmail($session['user']['acctid'],array($subject),array($mail, $row['clanname'], $row['clanshort'], $clandesc));
+				addnav("Return to the Lobby","clan.php");
+				addnav("Waiting Area","clan.php?op=waiting");
 			}
 		}else{
 			$sql = "SELECT MAX(" . db_prefix("clans") . ".clanid) AS clanid,MAX(clanname) AS clanname,count(" . db_prefix("accounts") . ".acctid) AS c FROM " . db_prefix("clans") . " INNER JOIN " . db_prefix("accounts") . " ON " . db_prefix("clans") . ".clanid=" . db_prefix("accounts") . ".clanid WHERE " . db_prefix("accounts") . ".clanrank > ".CLAN_APPLICANT." GROUP BY " . db_prefix("clans") . ".clanid ORDER BY c DESC";
@@ -43,9 +58,10 @@
 				output("Noticing your attempt to write on the form with your %s, %s`7 claims the form back from you, writes %s`7 on the first line, and asks you the name of the clan that you'd like to join:`n`n",$session['user']['weapon'],$registrar,$session['user']['name']);
 				for ($i=0;$i<db_num_rows($result);$i++){
 					$row = db_fetch_assoc($result);
+					// The INNER JOIN above only returns clans with a member above applicant, so 1.1.2's
+					// empty-clan delete here could never run; the clan list view owns that cleanup.
 					if ($row['c']==0){
-						$sql = "DELETE FROM " . db_prefix("clans") . " WHERE clanid={$row['clanid']}";
-						db_query($sql);
+						continue;
 					}else{
 /*//*/					$row = modulehook("clan-applymember", $row);
 /*//*/					if (isset($row['handled']) && $row['handled']) continue;

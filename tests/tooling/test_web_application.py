@@ -4637,7 +4637,9 @@ echo json_encode(systemmail($to,['Trusted %s','notice'],['Hello %s','Jim'],0,$no
                 q('UPDATE accounts SET clanid=?,clanrank=20 WHERE acctid=?',[clan,officer]);q('UPDATE accounts SET name=?,clanid=0,clanrank=0 WHERE acctid=?',['Clan Applicant',actor])
                 q('DELETE FROM mail WHERE msgto IN (?,?)',[actor,officer])
                 url=f'clan.php?op=apply&to={clan}';client=self._security_client();self._security_allow(actor,url)
-                self.assertEqual(200,client(url)[0])
+                # Applying is a protected POST from the registrar's form; the GET only asks.
+                status,body=client(url);self.assertEqual(200,status);self.assertEqual('0',q('SELECT clanid FROM accounts WHERE acctid=?',[actor])[0]['clanid'])
+                self._security_allow(actor,url);self.assertEqual(200,client(url,self._security_fields(body,url))[0])
                 self.assertEqual(str(clan),q('SELECT clanid FROM accounts WHERE acctid=?',[actor])[0]['clanid'])
                 rows=q('SELECT msgto,msgfrom,subject,body FROM mail WHERE msgto IN (?,?) ORDER BY messageid',[actor,officer])
                 self.assertEqual([(str(officer),'0',ser(['`@Clan App: `&%s`0','Clan Applicant']))],[(r['msgto'],r['msgfrom'],r['subject']) for r in rows[:1]])
@@ -4943,6 +4945,160 @@ echo json_encode(systemmail($to,['Trusted %s','notice'],['Hello %s','Jim'],0,$no
             # The practice form escapes the request URI it posts back to.
             colors='inn.php?op=bartender&act=colors&x="><b>q</b>'
             status,body=request(colors,{'testtext':'<i>t</i>'});self.assertEqual(200,status);self.assertNotIn('"><b>q</b>',body);self.assertNotIn('<i>t</i>',body)
+
+    @contextmanager
+    def _clan_fixture(self):
+        q=self.query;player=int(q('SELECT acctid FROM accounts WHERE login=?',['WebPlayer'])[0]['acctid'])
+        original=q('SELECT * FROM accounts WHERE acctid=?',[player])[0]
+        names=['goldtostartclan','gemstostartclan'];settings=q('SELECT setting,value FROM settings WHERE setting IN (?,?)',names)
+        mail=int(q('SELECT COALESCE(MAX(messageid),0) AS m FROM mail')[0]['m']);clans=int(q('SELECT COALESCE(MAX(clanid),0) AS m FROM clans')[0]['m'])
+        targets=[]
+        def clan(name,short):
+            q('INSERT INTO clans (clanname,clanshort) VALUES (?,?)',[name,short]);return int(q('SELECT clanid FROM clans WHERE clanshort=?',[short])[0]['clanid'])
+        def target(login,clanid,rank,days):
+            acct=int(self._security_target(login));targets.append(acct)
+            q('UPDATE accounts SET clanid=?,clanrank=?,clanjoindate=NOW() - INTERVAL ? DAY WHERE acctid=?',[clanid,rank,days,acct]);return acct
+        def place(acct,clanid,rank,days=1):
+            q('UPDATE accounts SET clanid=?,clanrank=?,clanjoindate='+('NULL' if clanid==0 else 'NOW() - INTERVAL ? DAY')+' WHERE acctid=?',[clanid,rank,*([] if clanid==0 else [days]),acct])
+        def member(acct):
+            row=q('SELECT clanid,clanrank,clanjoindate FROM accounts WHERE acctid=?',[acct])[0];return (row['clanid'],row['clanrank'],row['clanjoindate'] is None)
+        f={'player':player,'call':None,'clan':clan,'target':target,'place':place,'member':member}
+        def login(): f['call']=self._security_client()
+        def request(url,data=None):
+            self._security_allow(player,url);return f['call'](url,data)
+        def notices(to,subject):
+            ser='a:%d:{%s}'%(len(subject),''.join('i:%d;s:%d:"%s";'%(i,len(v.encode()),v) for i,v in enumerate(subject)))
+            return int(q('SELECT COUNT(*) AS n FROM mail WHERE msgto=? AND msgfrom=0 AND seen=0 AND subject=?',[to,ser])[0]['n'])
+        f.update(login=login,request=request,notices=notices)
+        q("UPDATE accounts SET name=?,alive=1,hitpoints=100,specialinc='',badguy='',gold=1000,gems=10,lasthit=NOW() WHERE acctid=?",["Clan O'Reilly 雪",player])
+        for key,value in [('goldtostartclan','100'),('gemstostartclan','2')]:
+            q('INSERT INTO settings(setting,value) VALUES (?,?) ON DUPLICATE KEY UPDATE value=VALUES(value)',[key,value])
+        try: yield f
+        finally:
+            q('UPDATE accounts SET '+','.join(k+'=?' for k in original if k!='acctid')+' WHERE acctid=?',[*[v for k,v in original.items() if k!='acctid'],player])
+            for acct in targets: q('DELETE FROM accounts_output WHERE acctid=?',[acct]);q('DELETE FROM accounts WHERE acctid=?',[acct])
+            q('DELETE FROM mail WHERE messageid>?',[mail]);q('DELETE FROM clans WHERE clanid>?',[clans])
+            q('DELETE FROM settings WHERE setting IN (?,?)',names)
+            for row in settings: q('INSERT INTO settings(setting,value) VALUES (?,?)',[row['setting'],row['value']])
+
+    def test_clan_rank_and_removal_authority_http(self):
+        q=self.query
+        with self._clan_fixture() as f:
+            request,member,place,player=f['request'],f['member'],f['place'],f['player']
+            a=f['clan']('Alpha Hall','ALPHA');b=f['clan']('Beta Hall','BETA')
+            app=f['target']('ClanApplicantA',a,0,9);mem=f['target']('ClanMemberA',a,10,8);off=f['target']('ClanOfficerA',a,20,7)
+            other=f['target']('ClanMemberB',b,10,6);f['target']('ClanLeaderB',b,30,5)
+            name=q('SELECT name FROM accounts WHERE acctid=?',[mem])[0]['name'];self.assertIn("'",name);self.assertIn('雪',name)
+            anonymous=self._security_client(login=None)
+            for data in [None,{'clanaction':'remove'}]: self.assertIn(anonymous(f'clan.php?op=membership&member={mem}',data)[0],[302,303,403])
+            place(player,a,20,3);f['login']();rows=lambda:[member(x) for x in [app,mem,off,other]];before=rows()
+            # The 1.1.2 GET links only display now, including cross-clan targets in another clan.
+            for url in [f'clan.php?op=membership&setrank=31&whoacctid={other}',f'clan.php?op=membership&remove={other}',
+                        f'clan.php?op=membership&setrank=30&whoacctid={mem}',f'clan.php?op=membership&remove={mem}']:
+                self.assertEqual(200,request(url)[0],url);self.assertEqual(before,rows(),url)
+            status,body=request('clan.php?op=membership');self.assertEqual(200,status);self.assertNotIn(f'member={other}',html.unescape(body))
+            form=lambda target:self._security_fields(request('clan.php?op=membership')[1],f'clan.php?op=membership&member={target}')
+            url=lambda target:f'clan.php?op=membership&member={target}'
+            # Cross-clan: no form exists for a member of another clan; a forged one changes nothing.
+            fields=form(mem);self.assertEqual(409,request(url(other),{**fields,'clanaction':'remove'})[0]);self.assertEqual(before,rows())
+            for bad in [{'clanaction':'jump'},{'clanaction':''},{'clanaction[]':'remove'},{'clanaction':'remove','clanrank':'31'}]:
+                self.assertEqual(400,request(url(mem),{**fields,**bad})[0],bad)
+            self.assertEqual(403,request(url(mem),{'action_token':fields['action_token'],'clanaction':'promote'})[0])
+            self.assertEqual(403,request(url(mem),{**fields,'csrf_token':'0'*64,'clanaction':'promote'})[0]);self.assertEqual(before,rows())
+            # An officer cannot promote a fellow officer (1.1.2 offered no such link).
+            self.assertEqual(409,request(url(off),{**form(off),'clanaction':'promote'})[0]);self.assertEqual(before,rows())
+            # Approval: the officer promotes the applicant to member; the form is single-use.
+            fields=form(app);self.assertEqual(200,request(url(app),{**fields,'clanaction':'promote'})[0]);self.assertEqual(a,int(member(app)[0]));self.assertEqual('10',member(app)[1])
+            self.assertEqual(409,request(url(app),{**fields,'clanaction':'promote'})[0]);self.assertEqual('10',member(app)[1])
+            # Promotion is capped at the actor's own rank; demotion and stale forms.
+            self.assertEqual(200,request(url(mem),{**form(mem),'clanaction':'promote'})[0]);self.assertEqual('20',member(mem)[1])
+            self.assertEqual(200,request(url(off),{**form(off),'clanaction':'demote'})[0]);self.assertEqual('10',member(off)[1])
+            fields=form(off);q('UPDATE accounts SET clanrank=20 WHERE acctid=?',[off]);self.assertEqual(409,request(url(off),{**fields,'clanaction':'remove'})[0]);self.assertEqual('20',member(off)[1])
+            # Removal clears membership and the target's unread application notices, whatever the name contains.
+            apply_short='`@Clan App: `&%s`0';self.assertEqual(0,f['notices'](off,[apply_short,name]))
+            q('INSERT INTO mail (msgfrom,msgto,subject,body,sent,seen) VALUES (0,?,?,?,NOW(),0)',[off,'a:2:{i:0;s:%d:"%s";i:1;s:%d:"%s";}'%(len(apply_short.encode()),apply_short,len(name.encode()),name),'x'])
+            self.assertEqual(1,f['notices'](off,[apply_short,name]))
+            self.assertEqual(200,request(url(mem),{**form(mem),'clanaction':'remove'})[0]);self.assertEqual(('0','0',True),member(mem));self.assertEqual(0,f['notices'](off,[apply_short,name]))
+            # Members see no operations; the target of another clan never changed.
+            place(player,a,10,3);f['login']();status,body=request('clan.php?op=membership');self.assertEqual(200,status);self.assertNotIn('clanaction',body)
+            self.assertEqual(before[3],member(other))
+            # Leaders may raise an officer to leader; the founder may step down to leader.
+            place(player,a,30,3);f['login']();self.assertEqual(200,request(url(off),{**form(off),'clanaction':'promote'})[0]);self.assertEqual('30',member(off)[1])
+            place(player,a,31,3);f['login']();self.assertEqual(200,request(url(player),{**form(player),'clanaction':'stepdown'})[0]);self.assertEqual('30',member(player)[1])
+
+    def test_clan_creation_application_and_withdrawal_http(self):
+        q=self.query
+        with self._clan_fixture() as f:
+            request,member,place,player=f['request'],f['member'],f['place'],f['player']
+            a=f['clan']('Alpha Hall','ALPHA');off=f['target']('ClanOfficerA',a,20,7);empty=f['clan']('Empty Hall','EMPTY');f['target']('ClanOnlyApplicant',empty,0,4)
+            place(player,0,0);f['login']()
+            purse=lambda:tuple(q('SELECT gold,gems FROM accounts WHERE acctid=?',[player])[0].values())
+            clan_named=lambda name:q('SELECT clanid FROM clans WHERE clanname=?',[name])
+            new='clan.php?op=new&apply=1'
+            def new_form(): return self._security_fields(request('clan.php?op=new')[1],new)
+            # Invalid, duplicate and unfunded applications create nothing and take nothing.
+            for clanname,clanshort,text in [('Bad Hall 9','BAD','consist only of letters'),('Ab','AB','at least 5'),('Fine Hall','A','at least 2'),('Alpha Hall','ALPHB','is already taken'),('Other Hall','ALPHA','is already taken')]:
+                status,body=request(new,{**new_form(),'clanname':clanname,'clanshort':clanshort});self.assertEqual(200,status);self.assertIn(text,html.unescape(body),clanname)
+            self.assertEqual(403,request(new,{'clanname':'Gamma Hall','clanshort':'GAMMA'})[0]);self.assertEqual(400,request(new,{**new_form(),'clanname[]':'x','clanshort':'GAMMA'})[0])
+            # Without the fee the registrar offers no form (1.1.2), and a form from a richer moment is stale.
+            fields=new_form();q('UPDATE accounts SET gold=50 WHERE acctid=?',[player])
+            status,body=request('clan.php?op=new');self.assertIn('do not have enough gold',html.unescape(body));self.assertNotIn('action_token',body)
+            self.assertEqual(409,request(new,{**fields,'clanname':'Gamma Hall','clanshort':'GAMMA'})[0])
+            self.assertEqual(('50','10'),purse());self.assertEqual([],clan_named('Gamma Hall'));q('UPDATE accounts SET gold=1000 WHERE acctid=?',[player])
+            # A failing founder write after the clan INSERT rolls both back; the spent form cannot retry.
+            fields=new_form()
+            q("ALTER TABLE accounts ADD CONSTRAINT fixture_clan_founder CHECK (login <> 'WebPlayer' OR clanrank <> 31)")
+            try:
+                self.assertEqual(500,request(new,{**fields,'clanname':"O'Brien Hall",'clanshort':'OBH'})[0]);self.assertEqual([],clan_named("O'Brien Hall"));self.assertEqual(('1000','10'),purse())
+                self.assertEqual(409,request(new,{**fields,'clanname':"O'Brien Hall",'clanshort':'OBH'})[0])
+            finally: q('ALTER TABLE accounts DROP CONSTRAINT fixture_clan_founder')
+            fields=new_form();status,body=request(new,{**fields,'clanname':"O'Brien Hall",'clanshort':'OBH'});self.assertEqual(200,status);self.assertIn("created a new clan named O'Brien Hall",html.unescape(body))
+            mine=int(clan_named("O'Brien Hall")[0]['clanid']);self.assertEqual((str(mine),'31',False),member(player));self.assertEqual(('900','8'),purse())
+            self.assertNotEqual(500,request(new,{**fields,'clanname':'Delta Hall','clanshort':'DELTA'})[0]);self.assertEqual([],clan_named('Delta Hall'));self.assertEqual(('900','8'),purse())
+            # The last member leaving deletes the clan and resets its applicants, in one protected step.
+            hopeful=f['target']('ClanHopeful',mine,0,2)
+            self.assertEqual(200,request('clan.php?op=withdraw')[0]);self.assertEqual((str(mine),'31',False),member(player))
+            fields=self._security_fields(request('clan.php?op=withdrawconfirm')[1],'clan.php?op=withdraw')
+            status,body=request('clan.php?op=withdraw',fields);self.assertEqual(200,status);self.assertIn('it has been deleted',body)
+            self.assertEqual([],clan_named("O'Brien Hall"));self.assertEqual(('0','0',True),member(player));self.assertEqual(('0','0',True),member(hopeful))
+            self.assertNotEqual(500,request('clan.php?op=withdraw',fields)[0]);self.assertEqual(('0','0',True),member(player));self.assertEqual([],clan_named("O'Brien Hall"))
+            # Applications: only to a listed clan, by a player in no clan; GET only asks.
+            status,body=request('clan.php?op=apply');self.assertIn(f'op=apply&to={a}',html.unescape(body));self.assertNotIn(f'op=apply&to={empty}',html.unescape(body))
+            for target in [empty,999999]: self.assertEqual(409,request(f'clan.php?op=apply&to={target}')[0])
+            self.assertEqual(400,request('clan.php?op=apply&to=x')[0]);self.assertEqual(('0','0',True),member(player))
+            subject=['`@Clan App: `&%s`0',"Clan O'Reilly 雪"]
+            def apply():
+                fields=self._security_fields(request(f'clan.php?op=apply&to={a}')[1],f'clan.php?op=apply&to={a}')
+                self.assertEqual(200,request(f'clan.php?op=apply&to={a}',fields)[0]);return fields
+            fields=apply();self.assertEqual((str(a),'0',False),member(player));self.assertEqual(1,f['notices'](off,subject))
+            self.assertEqual(409,request(f'clan.php?op=apply&to={a}',fields)[0])
+            # Withdrawing the application, then applying again, leaves exactly one unread notice.
+            self.assertEqual(200,request('clan.php?op=withdraw')[0]);self.assertEqual(str(a),member(player)[0])
+            fields=self._security_fields(request('clan.php?op=withdraw')[1],'clan.php?op=withdraw')
+            self.assertEqual(200,request('clan.php?op=withdraw',fields)[0]);self.assertEqual(('0','0',True),member(player));self.assertEqual(0,f['notices'](off,subject))
+            apply();self.assertEqual(1,f['notices'](off,subject))
+            # Sole-leader withdrawal promotes the highest-ranking, then oldest, member and notifies officers.
+            senior=f['target']('ClanSenior',a,10,30);f['target']('ClanJunior',a,10,1)
+            place(player,a,30,40);place(off,a,0,7);f['login']()
+            fields=self._security_fields(request('clan.php?op=withdrawconfirm')[1],'clan.php?op=withdraw')
+            status,body=request('clan.php?op=withdraw',fields);self.assertEqual(200,status);self.assertIn('Promoting',body)
+            self.assertEqual('30',member(senior)[1]);self.assertEqual(('0','0',True),member(player))
+            self.assertEqual(1,f['notices'](senior,['`$Clan Withdraw: `&%s`0',"Clan O'Reilly 雪"]))
+
+    def test_clan_housekeeping_on_view_http(self):
+        q=self.query
+        with self._clan_fixture() as f:
+            request,member,place,player=f['request'],f['member'],f['place'],f['player']
+            a=f['clan']('Alpha Hall','ALPHA');off=f['target']('ClanOfficerA',a,20,9);f['target']('ClanMemberA',a,10,3)
+            empty=f['clan']('Empty Hall','EMPTY');waiting=f['target']('ClanOnlyApplicant',empty,0,4)
+            # A clan without a leader promotes its highest-ranking, oldest member once, under lock.
+            place(player,a,10,1);f['login']();status,body=request('clan.php');self.assertEqual(200,status,body[:1500])
+            self.assertIn('There is currently no leader',body);self.assertEqual('30',member(off)[1]);self.assertEqual('10',member(player)[1])
+            status,body=request('clan.php');self.assertNotIn('There is currently no leader',body)
+            # The clan list removes a clan with no member above applicant, and only that clan.
+            status,body=request('clan.php?op=list');self.assertEqual(200,status)
+            self.assertEqual([],q('SELECT clanid FROM clans WHERE clanid=?',[empty]));self.assertEqual(1,len(q('SELECT clanid FROM clans WHERE clanid=?',[a])))
+            self.assertEqual(str(empty),member(waiting)[0])
 
     def _security_client(self, login='WebPlayer', password="Synthetic web O'Reilly \\ password", port=None):
         class NoRedirect(urllib.request.HTTPRedirectHandler):

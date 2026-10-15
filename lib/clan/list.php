@@ -12,8 +12,21 @@
 		rawoutput('<table cellspacing="0" cellpadding="2" align="left">');
 		while ($row = db_fetch_assoc($result)){
 			if ($row['c']==0){
-				$sql = "DELETE FROM " . db_prefix("clans") . " WHERE clanid={$row['clanid']}";
-				db_query($sql);
+				// Historical housekeeping on view: a clan with no member above applicant is removed. It takes
+				// no request input; the recheck under lock keeps it from racing a new member.
+				$clanid = (int)$row['clanid'];
+				$db = $GLOBALS['dbinfo']['connection'];
+				$db->beginTransaction();
+				try {
+					db_query("SELECT clanid FROM " . db_prefix("clans") . " WHERE clanid=? FOR UPDATE", true, [$clanid]);
+					$members = db_query("SELECT count(*) AS c FROM " . db_prefix("accounts") . " WHERE clanid=? AND clanrank>? FOR UPDATE", true, [$clanid, CLAN_APPLICANT]);
+					if ((int)$members[0]['c'] === 0) db_query("DELETE FROM " . db_prefix("clans") . " WHERE clanid=?", true, [$clanid]);
+					$db->commit();
+				} catch (Throwable $error) {
+					if ($db->inTransaction()) $db->rollBack();
+					throw $error;
+				}
+				invalidatedatacache("clandata-$clanid");
 			}else{
 				rawoutput('<tr class="' . ($v%2?"trlight":"trdark").'"><td>', true);
 				if ($row['c'] == 1) {

@@ -522,3 +522,14 @@ upstairs list and specialty switch require; the switch offers only active bundle
 specialties and keeps the historical skill/uses carry-over; each room path checks
 its own balance; flee is limited to the displayed Dragon encounter, once. See
 [inn economy authority](INN-ECONOMY-AUTHORITY-20261015.md).
+
+2026-10-15 clan membership (`clan.php`, `lib/clan/*` except MOTD/detail): candidate
+pending CI. Creation, application, approval, rank changes, removal, member and
+applicant withdrawal are POST + CSRF + one-use intent inside the locked player
+transaction; GET only displays. The target must be in the actor's clan (the 1.1.2
+cross-clan rank change is proven fixed); ranks come from the `clanranks` set with
+the historical cap; succession, deletion and member reset are one transaction;
+notice cleanup is bound. Leader auto-promotion and empty-clan deletion stay on view
+as locked, idempotent housekeeping. 1.1.2 has no clan treasury. Text and moderation
+remain BLOCKED for Part 2. See
+[clan membership authority](CLAN-MEMBERSHIP-AUTHORITY-20261015.md).

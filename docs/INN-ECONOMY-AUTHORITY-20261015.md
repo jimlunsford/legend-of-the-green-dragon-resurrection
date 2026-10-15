@@ -82,3 +82,12 @@ only from CI on both supported legs.
   have written a fraction to an integer column.
 - Inn events (`module_events("inn")`): no bundled module registers one, so none
   is certified here.
+
+## Acceptance, 2026-10-15
+
+`3b6d7800e294f811229605bc0b06032ba2003b02` is accepted. Modern core
+**38736206216 SUCCESS**: both `result` jobs and every `checks` and `http` shard job
+succeeded on PHP 8.4 / MariaDB 11.4 and PHP 8.5 / MySQL 8.4. The longest job was
+the MySQL `http (4)` shard at 17m08s. Baseline integrity **38736206145 SUCCESS**.
+Conclusions come from the GitHub Actions run and job API; job logs were not
+readable, so totals are not restated. The inn economy is Done in `ROADMAP.md`.

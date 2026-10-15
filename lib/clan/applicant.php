@@ -16,15 +16,32 @@
 		output("In the center of the lobby sits a highly polished desk, behind which sits `%%s`7, the clan registrar.",$registrar);
 		output("She can take your filing for a new clan, or accept your application to an existing clan.`n`n");
 /*//*/	modulehook("clan-enter");
-		if ($op=="withdraw"){
-			$session['user']['clanid']=0;
-			$session['user']['clanrank']=CLAN_APPLICANT;
-			$session['user']['clanjoindate']='0000-00-00 00:00:00';
+		if ($op=="withdraw" && isset($claninfo['clanid']) && $claninfo['clanid']>0 && ($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST'){
+			// GET only asks; the protected POST tears up the application.
+			require_once("lib/clan_authority.php");
+			output("`7Withdraw your application to %s?`n`n", $claninfo['clanname']);
+			$actor = resurrection_clan_account((int)$session['user']['acctid']);
+			if ($actor !== null) resurrection_clan_form("clan.php?op=withdraw", 'clan-unapply', resurrection_clan_context($ranks, $actor), resurrection_clan_button(translate_inline("Withdraw Application")));
+			addnav("Waiting Area","clan.php?op=waiting");
+		}elseif ($op=="withdraw" && isset($claninfo['clanid']) && $claninfo['clanid']>0){
+			require_once("lib/clan_authority.php");
+			try {
+				resurrection_clan_fields();
+				$actor = resurrection_clan_account((int)$session['user']['acctid']);
+				if ($actor === null) throw new DomainException('Applicant unavailable.');
+				resurrection_consume_action('clan-unapply', resurrection_clan_context($ranks, $actor));
+				resurrection_clan_mutation(function () use ($apply_subj) {
+					global $session;
+					if ((int)$session['user']['clanid'] < 1 || (int)$session['user']['clanrank'] !== CLAN_APPLICANT) throw new DomainException('No application.');
+					$session['user']['clanid']=0;
+					$session['user']['clanrank']=CLAN_APPLICANT;
+					$session['user']['clanjoindate']=null;
+					resurrection_clan_delete_notices($apply_subj);
+				});
+			} catch (Throwable $error) { resurrection_clan_failure($error); }
 			output("`7You tell `%%s`7 that you're no longer interested in joining %s.",$registrar, $claninfo['clanname']);
 			output("She reaches into her desk, withdraws your application, and tears it up.  \"`5You wouldn't have been happy there anyhow, I don't think,`7\" as she tosses the shreds in her trash can.");
 			$claninfo = array();
-			$sql = "DELETE FROM " . db_prefix("mail") . " WHERE msgfrom=0 AND seen=0 AND subject='".serialize($apply_subj)."'";
-			db_query($sql);
 			output("You are not a member of any clan.");
 			addnav("Apply for Membership to a Clan","clan.php?op=apply");
 			addnav("Apply for a New Clan","clan.php?op=new");

@@ -27,6 +27,7 @@ parameters:
         - lib/commentary_security.php
         - lib/petition_admin.php
         - lib/inn_economy.php
+        - lib/clan_authority.php
         - lib/installer/fresh_install.php
         - lib/installer/bundled_modules.php
         - scripts/install.php
@@ -39,6 +40,7 @@ parameters:
         - lib/battle-skills.php
         - lib/datetime.php
         - lib/sanitize.php
+        - lib/clan/func.php
         - lib/partner.php
         - lib/dragon_outcomes.php
         - lib/training_outcomes.php
