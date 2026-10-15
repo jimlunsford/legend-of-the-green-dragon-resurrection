@@ -498,3 +498,13 @@ accepted helper contract after the clan reminder NULL-description correction;
 `lib/mail.php` is inert duplicate code, not an HTTP route. Haunting, clan, bank,
 bio moderation and donation parent routes remain BLOCKED. See the
 [caller-contract review](MAIL-AUTHORITY-20261004.md#systemmail-caller-contract-review-2026-10-14).
+
+2026-10-15 petition administration (`viewpetition.php`): candidate supersedes the
+BLOCKED row above once CI accepts it. SU_EDIT_PETITIONS is proven for anonymous,
+ordinary, insufficient-superuser and petition-admin roles; input is typed; every
+petition query is bound. Status change is POST + CSRF + a one-use intent bound to
+the petition and its current status, transactional with post-commit counter
+invalidation; GET only displays. The 7-day closed-petition retention stays on the
+list view as a deliberate time-driven exception (no request input, authorized,
+bound, atomic with its `pet-<id>` commentary, idempotent, honestly reported). See
+[petition administration authority](PETITION-ADMIN-AUTHORITY-20261015.md).

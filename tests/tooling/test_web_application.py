@@ -4651,6 +4651,140 @@ echo json_encode(systemmail($to,['Trusted %s','notice'],['Hello %s','Jim'],0,$no
             q('UPDATE accounts SET name=?,clanid=?,clanrank=?,clanjoindate=?,allowednavs=? WHERE acctid=?',list(saved.values())+[actor])
             q('DELETE FROM accounts_output WHERE acctid=?',[officer]);q('DELETE FROM accounts WHERE acctid=?',[officer])
 
+    def _petition_fixture(self, status=0, body='Petition fixture', pageinfo='', closed_days=None):
+        closed=', NOW() - INTERVAL ? DAY' if closed_days is not None else ''
+        values=[status,body,pageinfo]+([closed_days] if closed_days is not None else [])
+        self.query('INSERT INTO petitions (author,date,status,body,pageinfo,ip,id'+(',closedate' if closed else '')+') VALUES ((SELECT acctid FROM accounts WHERE login=?),NOW(),?,?,?,\'127.0.0.1\',\'\''+closed+')',['PetitionAuthor']+values)
+        return int(self.query('SELECT MAX(petitionid) AS m FROM petitions')[0]['m'])
+
+    def test_petition_admin_status_authority_http(self):
+        q=self.query;player=int(q('SELECT acctid FROM accounts WHERE login=?',['WebPlayer'])[0]['acctid'])
+        original=q('SELECT superuser FROM accounts WHERE acctid=?',[player])[0]['superuser']
+        author=int(self._security_target('PetitionAuthor'));created=[]
+        state=lambda pid:q('SELECT status,closeuserid,closedate FROM petitions WHERE petitionid=?',[pid])
+        call=None
+        def request(url,fields=None):
+            self._security_allow(player,url);return call(url,fields)
+        def login(role):
+            nonlocal call;q('UPDATE accounts SET superuser=? WHERE acctid=?',[role,player]);call=self._security_client()
+        try:
+            p1=self._petition_fixture(body="[description] = <script>alert(7)</script> back\\slash O'Reilly",pageinfo='<b>page</b> \\ info');p2=self._petition_fixture()
+            created+=[p1,p2];missing=p2+1000
+            view=f'viewpetition.php?op=view&id={p1}';setp=f'viewpetition.php?op=setstat&id={p1}'
+            form=lambda pid:self._security_fields(request(f'viewpetition.php?op=view&id={pid}')[1],f'viewpetition.php?op=setstat&id={pid}')
+            before=state(p1)
+            anonymous=self._security_client(login=None)
+            for url,fields in [('viewpetition.php',None),(view,None),(setp,{'setstat':'2'})]: self.assertIn(anonymous(url,fields)[0],[302,303,403])
+            # Every bit except SU_EDIT_PETITIONS is insufficient.
+            for role in [0,16|64|128]:
+                login(role)
+                for url,fields in [('viewpetition.php',None),(view,None),(setp,{'setstat':'2'})]: self.assertEqual(403,request(url,fields)[0])
+            self.assertEqual(before,state(p1))
+            login(8)
+            # GET only displays: the historical setstat link and a GET to the form target change nothing.
+            status,body=request(f'viewpetition.php?setstat=2&id={p1}');self.assertEqual(200,status);self.assertNotRegex(body,r'\?setstat=')
+            self.assertEqual(405,request(setp)[0]);self.assertEqual(before,state(p1))
+            self.assertNotIn("<img src=x>",body)
+            status,body=request(view+'&viewpageinfo=1');self.assertEqual(200,status)
+            self.assertNotIn('<script>alert(7)</script>',body);self.assertIn("&lt;script&gt;alert(7)&lt;/script&gt; back\\slash O'Reilly",body)
+            self.assertNotIn('<b>page</b>',body);self.assertIn('&lt;b&gt;page&lt;/b&gt; \\ info',body);self.assertNotIn('<img src=x>',body)
+            self.assertIn('ide Details',body);self.assertNotIn(f'id={p1}}}',body)
+            self.assertRegex(html.unescape(body),rf"href=['\"]viewpetition\.php\?op=view&id={p1}(?:&c=[^'\"]*)?['\"]")
+            for url in [f'viewpetition.php?op=view&id={bad}' for bad in ['abc','0','-1','4294967296','1e3']]+[f'viewpetition.php?op=del&id={p1}','viewpetition.php?page=x',f'viewpetition.php?op=view&id={p1}&viewpageinfo=2']:
+                self.assertEqual(400,request(url)[0],url)
+            self.assertEqual(404,request(f'viewpetition.php?op=view&id={missing}')[0])
+            fields=form(p1)
+            for bad in [{},{'setstat':'8'},{'setstat':'-1'},{'setstat':'x'},{'setstat[]':'1'}]: self.assertEqual(400,request(setp,{**fields,**bad})[0],bad)
+            self.assertEqual(404,request(f'viewpetition.php?op=setstat&id={missing}',{**fields,'setstat':'1'})[0])
+            self.assertEqual(403,request(setp,{'action_token':fields['action_token'],'setstat':'1'})[0])
+            self.assertEqual(403,request(setp,{**fields,'csrf_token':'0'*64,'setstat':'1'})[0])
+            self.assertEqual(before,state(p1))
+            # The rejected submissions did not spend the intent; it changes the status once.
+            self.assertEqual(200,request(setp,{**fields,'setstat':'1'})[0])
+            after=state(p1)[0];self.assertEqual(('1',str(player)),(after['status'],after['closeuserid']));self.assertNotEqual(before[0]['closedate'],after['closedate'])
+            self.assertEqual(409,request(setp,{**fields,'setstat':'4'})[0]);self.assertEqual([after],state(p1))
+            # A list form is stale once another admin changes the petition.
+            listed=self._security_fields(request('viewpetition.php')[1],setp)
+            q('UPDATE petitions SET status=4 WHERE petitionid=?',[p1])
+            self.assertEqual(409,request(setp,{**listed,'setstat':'2'})[0]);self.assertEqual('4',state(p1)[0]['status'])
+            # Setting the current status is the historical no-op, and the form is still single-use.
+            q("UPDATE petitions SET closeuserid=0,closedate='2020-01-02 03:04:05' WHERE petitionid=?",[p1]);quiet=state(p1)
+            fields=form(p1);self.assertEqual(200,request(setp,{**fields,'setstat':'4'})[0]);self.assertEqual(quiet,state(p1))
+            self.assertEqual(409,request(setp,{**fields,'setstat':'4'})[0])
+            # A failing status write rolls back; the spent intent cannot retry, a fresh one can.
+            # MySQL rejects CHECK on the auto-increment ID, so mark this petition through a column the update does not touch.
+            q('UPDATE petitions SET ip=? WHERE petitionid=?',['198.51.100.7',p1])
+            q("ALTER TABLE petitions ADD CONSTRAINT fixture_petition_status CHECK (ip <> '198.51.100.7' OR status <> 7)")
+            try:
+                fields=form(p1);self.assertEqual(500,request(setp,{**fields,'setstat':'7'})[0]);self.assertEqual(quiet,state(p1))
+                self.assertEqual(409,request(setp,{**fields,'setstat':'7'})[0]);self.assertEqual(quiet,state(p1))
+            finally: q('ALTER TABLE petitions DROP CONSTRAINT fixture_petition_status')
+            fields=form(p1);self.assertEqual(200,request(setp,{**fields,'setstat':'7'})[0]);self.assertEqual(('7',str(player)),tuple(state(p1)[0][k] for k in ['status','closeuserid']))
+        finally:
+            for pid in created: q('DELETE FROM commentary WHERE section=?',[f'pet-{pid}']);q('DELETE FROM petitions WHERE petitionid=?',[pid])
+            q('UPDATE accounts SET superuser=? WHERE acctid=?',[original,player])
+            q('DELETE FROM accounts_output WHERE acctid=?',[author]);q('DELETE FROM accounts WHERE acctid=?',[author])
+
+    def test_petition_admin_cleanup_and_commentary_http(self):
+        q=self.query;player=int(q('SELECT acctid FROM accounts WHERE login=?',['WebPlayer'])[0]['acctid'])
+        original=q('SELECT superuser FROM accounts WHERE acctid=?',[player])[0]['superuser']
+        author=int(self._security_target('PetitionAuthor'));created=[]
+        call=None
+        def request(url,fields=None):
+            self._security_allow(player,url);return call(url,fields)
+        def login(role):
+            nonlocal call;q('UPDATE accounts SET superuser=? WHERE acctid=?',[role,player]);call=self._security_client()
+        def present(pid):
+            return (len(q('SELECT petitionid FROM petitions WHERE petitionid=?',[pid])),len(q('SELECT commentid FROM commentary WHERE section=?',[f'pet-{pid}'])))
+        def comment_form(body):
+            class Forms(HTMLParser):
+                def __init__(self): super().__init__();self.forms=[];self.current=None
+                def handle_starttag(self,tag,attrs):
+                    attributes=dict(attrs)
+                    if tag=='form': self.current=[html.unescape(attributes.get('action','')),{}]
+                    elif tag=='input' and self.current is not None and 'name' in attributes: self.current[1][attributes['name']]=attributes.get('value','')
+                def handle_endtag(self,tag):
+                    if tag=='form' and self.current is not None: self.forms.append(self.current);self.current=None
+            forms=Forms();forms.feed(body)
+            return next(form for form in forms.forms if 'insertcommentary' in form[1])
+        try:
+            expired=self._petition_fixture(status=2,closed_days=8);recent=self._petition_fixture(status=2,closed_days=1);old_open=self._petition_fixture(status=0,closed_days=8)
+            created+=[expired,recent,old_open]
+            for pid in created: q('INSERT INTO commentary (postdate,section,author,comment) VALUES (NOW(),?,?,?)',[f'pet-{pid}',player,'Fixture note'])
+            # Authorization precedes retention: refused viewers delete nothing.
+            for role in [0,16|64|128]:
+                login(role);self.assertEqual(403,request('viewpetition.php')[0])
+            self.assertIn(self._security_client(login=None)('viewpetition.php')[0],[302,303,403]);self.assertEqual((1,1),present(expired))
+            login(8)
+            # Retention is all or nothing: a late petition delete failure restores the commentary deleted before it.
+            q('CREATE TABLE fixture_petition_hold (pid INT(11) UNSIGNED NOT NULL, FOREIGN KEY (pid) REFERENCES petitions(petitionid)) ENGINE=InnoDB')
+            try:
+                q('INSERT INTO fixture_petition_hold (pid) VALUES (?)',[expired])
+                status,body=request('viewpetition.php');self.assertEqual(200,status);self.assertIn('could not be removed',body)
+                self.assertEqual((1,1),present(expired))
+            finally: q('DROP TABLE fixture_petition_hold')
+            status,body=request('viewpetition.php');self.assertEqual(200,status);self.assertRegex(body,r'[1-9][0-9]* expired closed petition\(s\) and their commentary were removed')
+            self.assertEqual((0,0),present(expired));self.assertEqual((1,1),present(recent));self.assertEqual((1,1),present(old_open))
+            status,body=request('viewpetition.php');self.assertEqual(200,status);self.assertNotIn('were removed',body);self.assertNotIn('could not be removed',body)
+            self.assertEqual((1,1),present(recent))
+            # A protected comment stamps its own existing petition, bound; a mismatched section stamps nothing.
+            stamp=lambda pid:q('SELECT closeuserid,closedate FROM petitions WHERE petitionid=?',[pid])
+            q("UPDATE petitions SET closeuserid=0,closedate='2020-01-02 03:04:05' WHERE petitionid IN (?,?)",[recent,old_open])
+            quiet={pid:stamp(pid) for pid in [recent,old_open]}
+            action,fields=comment_form(request(f'viewpetition.php?op=view&id={recent}')[1])
+            self.assertEqual(f'pet-{recent}',fields['section'])
+            self.assertEqual(200,request(action,{**fields,'insertcommentary':'Admin follow-up'})[0])
+            self.assertEqual(2,present(recent)[1]);self.assertEqual(str(player),stamp(recent)[0]['closeuserid']);self.assertNotEqual(quiet[recent],stamp(recent))
+            self.assertEqual(quiet[old_open],stamp(old_open))
+            stamped=stamp(recent)
+            action,fields=comment_form(request(f'viewpetition.php?op=view&id={old_open}')[1])
+            self.assertIn(request(f'viewpetition.php?op=view&id={recent}',{**fields,'insertcommentary':'Misdirected note'})[0],[200,400])
+            self.assertEqual(stamped,stamp(recent));self.assertEqual(quiet[old_open],stamp(old_open))
+        finally:
+            for pid in created: q('DELETE FROM commentary WHERE section=?',[f'pet-{pid}']);q('DELETE FROM petitions WHERE petitionid=?',[pid])
+            q('UPDATE accounts SET superuser=? WHERE acctid=?',[original,player])
+            q('DELETE FROM accounts_output WHERE acctid=?',[author]);q('DELETE FROM accounts WHERE acctid=?',[author])
+
     def _security_client(self, login='WebPlayer', password="Synthetic web O'Reilly \\ password", port=None):
         class NoRedirect(urllib.request.HTTPRedirectHandler):
             def redirect_request(self, *args): return None
