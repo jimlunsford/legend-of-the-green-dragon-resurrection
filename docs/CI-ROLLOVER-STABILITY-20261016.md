@@ -157,3 +157,10 @@ Local, PHP 8.5.11 / MySQL 8.4 (supporting evidence only; CI is the acceptance):
   job timeout (60 minutes) prevents that in CI.
 - Running `unittest discover` in a single process (not the shard runner) also pins once,
   in `setUpClass`, so the same bound applies.
+
+## Candidate CI, 2026-10-16
+
+`aeb19b93fce01a0829cdb4697bfde565524f5448` was inspected once at the start of the bans
+task (15:35Z). Baseline integrity 38923797782 SUCCESS. Modern core 38923797893 was still
+running: both `checks` jobs SUCCESS, all eight `http` shards in progress, no `result` job
+yet. The ROADMAP item stays open.

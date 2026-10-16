@@ -172,3 +172,11 @@ is accepted. Their tests (`test_graveyard_restore_authority_http` and
 `test_create_login_rotate_render_logout`) are byte-identical between `6a9a12b` and
 `fa30beb`. Of the code they reach, only `lib/showform.php` changed, in its `viewonly`
 branch (escaping); the boolean field the `prefs.php` fix covers is a separate branch.
+
+## Acceptance, 2026-10-16
+
+Accepted at `fa30beba8bf6225fc638c83d6f7c0bbb4930e295` on its own run. Confirmed through
+the jobs API (15:25Z) and the runs API (15:35Z): Modern core 38907797754 SUCCESS, all 12 jobs,
+with both `result` jobs SUCCESS (PHP 8.4 / MariaDB 11.4 at 13:41:32Z, PHP 8.5 / MySQL 8.4
+at 13:42:52Z). Baseline integrity 38907797223 SUCCESS. The run started at 13:26:02Z and
+crossed no game day boundary.

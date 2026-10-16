@@ -674,3 +674,33 @@ deletion.
 - The edit page was fatal on `6a9a12b` for an account with a NULL clan join date.
 
 See [user editor authority](USER-EDITOR-AUTHORITY-20261016.md).
+
+2026-10-16: user editor part 1 accepted at `fa30beb` (Modern core 38907797754, Baseline
+integrity 38907797223). Soul restoration and the `prefs.php` fix are accepted through that
+descendant after their own run, 38896842544, failed at the 12:00Z game day rollover.
+
+2026-10-16 `user.php` user editor part 2 (bans: `setupban`, `saveban`, `removeban` with
+`subop=xml`, `delban`): candidate pending CI. This entry adds to the `user.php` row above.
+
+- Access: `SU_EDIT_USERS` (or megauser) on every ban op; anonymous, player and superusers
+  without it are covered.
+- "Add a ban" without an account was a fatal page; it shows the empty form again.
+- saveban: POST + CSRF + a one-use intent from the form; validation before the intent;
+  a replay is 409 and writes nothing. Negative and non-integer durations, values longer
+  than their columns and an empty ID are 400. 1.1.2's self-ban rules and texts, its saved
+  text and its debug log line are restored; the row and the log line commit together.
+- All ban SQL bound. The similar-IP list matches a stored `%` or `_` literally, keeping
+  1.1.2's prefix walk.
+- Output escaped for its context: the reflected `reason` (attribute), the filter link
+  (JS string in an attribute), and the ban list's link (URL in an attribute). The list
+  was stored XSS through a player's `lgi` cookie, which becomes the `uniqueid` a comment
+  ban stores.
+- The list accepts only its listed durations and shows permanent bans as Never. Expired
+  bans are left out (1.1.2 deleted them on view); the New Day purge deletes them.
+- "Click to show users" used a synchronous XML load that current browsers removed; it
+  makes one request for the link's registered URL instead. The XML is escaped.
+- delban confirmed: POST, CSRF, bound, the shown pair only.
+- `lib/checkban.php` enforces each ban type that saveban and `moderate.php` store. Its
+  ban message page is a 500 (finding, its own ROADMAP item).
+
+See [ban administration](BAN-ADMIN-AUTHORITY-20261016.md).

@@ -18,6 +18,7 @@ import unittest
 import urllib.error
 import urllib.parse
 import urllib.request
+from xml.etree import ElementTree
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -6182,6 +6183,130 @@ function MODULE_dohook($hook,$args) {
             opener=urllib.request.build_opener(urllib.request.HTTPCookieProcessor(f['jar']()))
             response=opener.open(f'http://127.0.0.1:{self.port}/'+url,timeout=20)
             self.assertEqual('sandbox',response.headers['Content-Security-Policy']);self.assertIn('<script>alert(1)</script>',response.read().decode())
+
+    def test_user_editor_ban_authority_http(self):
+        with self._user_editor_fixture() as f:
+            q,player,target,request,login,row=(f[k] for k in ['q','player','target','request','login','row'])
+            saved=q('SELECT * FROM bans');bans=lambda:q('SELECT ipfilter,uniqueid,banexpire,banreason,banner FROM bans ORDER BY ipfilter,uniqueid,banexpire,banreason')
+            put=lambda rows:[q('INSERT INTO bans ('+','.join(r)+') VALUES ('+','.join('?' for _ in r)+')',list(r.values())) for r in rows]
+            try:
+                q('DELETE FROM bans')
+                save,delban='user.php?op=saveban','user.php?op=delban'
+                urls=[('user.php?op=setupban',None),(f'user.php?op=setupban&userid={target}',None),(save,{'type':'ip','ip':'10.9','duration':'1','reason':'x'}),
+                      ('user.php?op=removeban',None),('user.php?op=removeban&subop=xml&ip=10.&id=',None),(delban,{'ipfilter':'','uniqueid':''})]
+                anonymous=self._security_client(login=None)
+                for url,data in urls: self.assertIn(anonymous(url,data)[0],[302,303,403],url)
+                for role in [0,0xFFFFFFFF&~(64|1)]:
+                    login(role)
+                    for url,data in urls: self.assertEqual(403,request(url,data)[0],(role,url))
+                for role in [1,64]:
+                    login(role)
+                    for url,data in urls: self.assertEqual(200 if data is None else 403,request(url,data)[0],(role,url))
+                self.assertEqual([],bans())
+                # A player's lgi cookie of 32 characters becomes their stored ID, the value a comment ban (moderate.php) stores.
+                uid="AAAAAAAAA'><svg/onload=alert(1)>";self.assertEqual(32,len(uid))
+                victim=self._security_client(login='EditorTarget',password='Synthetic administrator password')
+                for cookie in list(victim.cookiejar):
+                    if cookie.name=='lgi': cookie.value=urllib.parse.quote(uid,safe='')
+                q('UPDATE accounts SET lastnewday=? WHERE acctid=?',[self._current_game_day(),target]);self._security_allow(target,'list.php')
+                self.assertEqual(200,victim('list.php')[0]);self.assertEqual(uid,row()['uniqueid'])
+                decoy,sibling=self._security_target('BanDecoy'),self._security_target('BanSibling');f['targets'].extend([decoy,sibling])
+                q('UPDATE accounts SET lastip=? WHERE acctid=?',["10.%_'.5.6",target])
+                q("UPDATE accounts SET name='BanDecoyName',lastip=?,uniqueid='decoy-id' WHERE acctid=?",["10.99'.5.6",decoy])
+                q("UPDATE accounts SET name='BanSiblingName',lastip=?,uniqueid=? WHERE acctid=?",["10.%_'.5.7",uid,sibling])
+                login(64)
+                # setupban: the reason round-trips as text; the stored IP's % and _ match only themselves; its quote stays inside the script string.
+                reason='"><script>reason</script>'
+                status,body=request(f'user.php?op=setupban&userid={target}&reason='+urllib.parse.quote(reason,safe=''));self.assertEqual(200,status,body[:2000])
+                self.assertIn(('reason',reason),self._user_editor_form(body,save));self.assertNotIn('<script>reason</script>',body)
+                self.assertIn('BanSiblingName',body);self.assertNotIn('BanDecoyName',body);self.assertNotIn('<svg/onload=alert(1)>',body)
+                self.assertNotIn("value='10.%_'",html.unescape(body));self.assertIn('value="10.%_\\u0027.5.',html.unescape(body))
+                # saveban: POST, CSRF, a one-use intent; validation before any write; 1.1.2's texts and debug log.
+                def ban_form():
+                    status,body=request('user.php?op=setupban');self.assertEqual(200,status,body[:2000])
+                    # The IP radio is the checked one; a browser posts only it.
+                    self.assertIn("value='ip' id='ipradio' name='type' checked",body);return {**dict(self._user_editor_form(body,save)),'type':'ip'}
+                post=lambda fields,**values:request(save,list({**fields,**values}.items()))
+                fields=ban_form();self.assertEqual(['action_token','csrf_token','duration','id','ip','reason','type'],sorted(fields))
+                self.assertEqual(('ip','14',"Don't mess with me."),(fields['type'],fields['duration'],fields['reason']))
+                self.assertEqual(403,post(fields,csrf_token='0'*64,ip='10.%_')[0])
+                self.assertEqual(409,request(save,[(k,v) for k,v in {**fields,'ip':'10.%_'}.items() if k!='action_token'])[0])
+                for bad in [{'duration':'-1'},{'duration':'abc'},{'duration':'36501'},{'duration':'99999999999'},{'ip':'1'*16},
+                            {'type':'id','id':'x'*33},{'type':'id','id':''},{'reason':'r'*256},{'type':'other'}]:
+                    self.assertEqual(400,post(fields,**{'ip':'10.%_',**bad})[0],bad)
+                self.assertEqual(400,request(save,[(k,v) for k,v in fields.items() if k!='ip']+[('ip[]','10.')])[0]);self.assertEqual([],bans())
+                day=lambda days:time.strftime('%Y-%m-%d',time.gmtime(time.time()+days*86400))
+                expected={day(14)};status,body=post(fields,ip='10.%_',duration='14',reason='Ban <b>reason</b>');expected.add(day(14))
+                self.assertEqual(200,status,body[:2000]);self.assertIn('1 ban rows entered.',body)
+                name=row(player)['name'];rows=bans();self.assertEqual(1,len(rows))
+                self.assertEqual(('10.%_','','Ban <b>reason</b>',name),(rows[0]['ipfilter'],rows[0]['uniqueid'],rows[0]['banreason'],rows[0]['banner']))
+                self.assertIn(rows[0]['banexpire'],{d+' 00:00:00' for d in expected})
+                log=q("SELECT message FROM debuglog WHERE actor=? AND message LIKE 'entered a ban:%' ORDER BY id",[player])
+                self.assertEqual(['entered a ban: IP: 10.%_ Ends after: '+rows[0]['banexpire'][:10]+'  Reason: "Ban <b>reason</b>"'],[r['message'] for r in log])
+                self.assertEqual(409,post(fields,ip='10.%_',duration='14',reason='Ban <b>reason</b>')[0]);self.assertEqual(rows,bans())
+                # Self-ban: 1.1.2's checks against the request IP and the lgi cookie, and its texts.
+                status,body=post(ban_form(),ip='127.0');self.assertEqual(200,status,body[:2000])
+                self.assertIn("You don't really want to ban yourself now do you??",body);self.assertIn("That's your own IP address!",body)
+                lgi=urllib.parse.unquote([c.value for c in f['jar']() if c.name=='lgi'][0])
+                status,body=post(ban_form(),type='id',id=lgi);self.assertEqual(200,status,body[:2000]);self.assertIn("That's your own ID!",body);self.assertEqual(rows,bans())
+                # A permanent ban on the planted ID stores NULL.
+                status,body=post(ban_form(),type='id',id=uid,duration='0',reason='Permanent');self.assertEqual(200,status,body[:2000])
+                permanent=[r for r in bans() if r['uniqueid']==uid];self.assertEqual(1,len(permanent));self.assertIsNone(permanent[0]['banexpire'])
+                timed=dict(uniqueid=uid,banexpire=time.strftime('%Y-%m-%d %H:%M:%S',time.gmtime(time.time()+3*86400)),banreason='Banned for comments you posted.',banner='Moderator')
+                expired=dict(ipfilter='10.%_',banexpire=day(-1)+' 00:00:00',banreason='Expired reason',banner='Moderator')
+                put([timed,expired]);stored=bans()
+                # removeban: the planted ID is inert in every context; permanent shows Never; expired bans are not listed (1.1.2 purged them).
+                status,body=request('user.php?op=removeban&duration=forever');self.assertEqual(200,status,body[:2000])
+                for raw in ['<svg/onload=alert(1)>','<b>reason</b>',"'><svg"]: self.assertNotIn(raw,body)
+                text=html.unescape(body);self.assertIn('Never',body);self.assertNotRegex(body,r'\d{5,} days');self.assertNotIn('Expired reason',body)
+                self.assertNotIn(f"'{uid}'",text);self.assertIn('&id='+urllib.parse.quote(uid,safe=''),text)
+                links=[html.unescape(link) for link in re.findall(r"href='(user\.php\?op=removeban&(?:amp;)?subop=xml[^']*)'",body)];self.assertEqual(3,len(links))
+                # The list's own links pass the navigation check, repeatedly, and return XML.
+                opener=urllib.request.build_opener(urllib.request.HTTPCookieProcessor(f['jar']()))
+                for link in links+links[:1]:
+                    with opener.open(f'http://127.0.0.1:{self.port}/'+link,timeout=20) as response:
+                        self.assertEqual(f'http://127.0.0.1:{self.port}/'+link,response.geturl());self.assertTrue(response.headers['Content-Type'].startswith('text/xml'))
+                        ElementTree.fromstring(response.read())
+                status,body=request('user.php?op=removeban');self.assertEqual(200,status);self.assertIn('Showing bans that will expire within 2 weeks.',body)
+                self.assertIn('Banned for comments',body);self.assertIn('Ban &lt;b&gt;reason',body);self.assertNotIn('Permanent',body)
+                status,body=request('user.php?op=removeban&duration=1+week');self.assertIn('within 1 week.',body);self.assertIn('Banned for comments',body);self.assertNotIn('Ban &lt;b&gt;reason',body)
+                for bad in ['-1000+years','%3Cb%3Ex','1+week+ago','now']:
+                    status,body=request('user.php?op=removeban&duration='+bad);self.assertEqual(200,status);self.assertIn('within 2 weeks.',body,bad);self.assertNotIn('<b>x',body)
+                # subop=xml: bound lookups, the 1.1.2 matching (a literal IP prefix or the same ID), well-formed XML.
+                def names(ip,uniqueid):
+                    status,body=request('user.php?op=removeban&subop=xml&ip='+urllib.parse.quote(ip,safe='')+'&id='+urllib.parse.quote(uniqueid,safe=''))
+                    self.assertEqual(200,status,body[:2000]);return ' '.join(urllib.parse.unquote_plus(n.get('name')) for n in ElementTree.fromstring(body))
+                self.assertIn('BanSiblingName',names('',uid));self.assertIn('BanSiblingName',names('10.%_',''));self.assertNotIn('BanDecoyName',names('10.%_',''))
+                self.assertEqual('NONE',names("' OR ''='",''));self.assertEqual(400,request('user.php?op=removeban&subop=xml&ip[]=1&id=')[0])
+                # delban: POST, CSRF; it removes exactly the pair shown.
+                status,body=request('user.php?op=removeban&duration=forever')
+                forms=[[(k,html.unescape(v)) for k,v in re.findall(r'name="([a-z_]+)" value="([^"]*)"',part)] for part in re.findall(r'<form action="user\.php\?op=delban" method="POST">(.*?)</form>',body,re.S)]
+                # The permanent and the comment ban share the pair; lifting one lifts both, as 1.1.2's DELETE did.
+                lift=[form for form in forms if ('uniqueid',uid) in form];self.assertEqual(2,len(lift))
+                self.assertEqual(403,request(delban,[(k,v) for k,v in lift[0] if k!='csrf_token'])[0])
+                self.assertEqual(400,request(delban,[(k,v) for k,v in lift[0] if k!='uniqueid']+[('uniqueid[]',uid)])[0]);self.assertEqual(stored,bans())
+                self.assertIn(request(delban,lift[0])[0],[302,303]);self.assertEqual([r for r in stored if (r['ipfilter'],r['uniqueid'])!=('',uid)],bans())
+                # Enforcement through a real login: the IP-prefix, comment and permanent bans refuse it; the expired one does not.
+                # checkban's ban message page currently fails on its own translation call (a recorded finding), so only
+                # the refusal is asserted here: no 303 to the village, and the client is not logged in afterwards.
+                class NoRedirect(urllib.request.HTTPRedirectHandler):
+                    def redirect_request(self, *args): return None
+                def attempt():
+                    client=urllib.request.build_opener(urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar()),NoRedirect)
+                    def call(url,data=None):
+                        try: response=client.open(urllib.request.Request(f'http://127.0.0.1:{self.port}/'+url,data=None if data is None else urllib.parse.urlencode(data).encode()),timeout=20)
+                        except urllib.error.HTTPError as error: response=error
+                        return response.status,response.headers.get('Location'),response.read().decode('utf-8',errors='replace')
+                    csrf=re.search(r'name=[\'"]csrf_token[\'"] value=[\'"]([a-f0-9]{64})',call('home.php')[2]).group(1)
+                    login=call('login.php',{'csrf_token':csrf,'name':'EditorTarget','password':'Synthetic administrator password'})
+                    return login[:2],call('village.php')[:2]
+                for ban in [rows[0],timed,permanent[0]]:
+                    q('DELETE FROM bans');put([{k:v for k,v in ban.items() if v is not None}])
+                    (status,location),village=attempt();self.assertNotEqual((303,'village.php'),(status,location),ban);self.assertIn(village[0],[302,303],ban)
+                    self.assertTrue((village[1] or '').startswith('index.php'),(ban,village))
+                q('DELETE FROM bans');put([expired]);(status,location),village=attempt();self.assertEqual((303,'village.php'),(status,location));self.assertFalse((village[1] or '').startswith('index.php'),village)
+            finally:
+                q('DELETE FROM bans');put(saved);q("DELETE FROM debuglog WHERE actor=? AND message LIKE 'entered a ban:%'",[player])
 
     def _security_client(self, login='WebPlayer', password="Synthetic web O'Reilly \\ password", port=None):
         class NoRedirect(urllib.request.HTTPRedirectHandler):

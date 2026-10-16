@@ -35,6 +35,7 @@ parameters:
         - lib/admin_authority.php
         - lib/restore_authority.php
         - lib/user_editor.php
+        - lib/ban_admin.php
         - lib/installer/fresh_install.php
         - lib/installer/bundled_modules.php
         - scripts/install.php

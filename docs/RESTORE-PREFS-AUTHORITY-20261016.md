@@ -155,3 +155,19 @@ Inferred, not proven: with the default `daysperday` of 4 the game day rolls over
 six hours, including 12:00Z, and a fixture's game day went stale mid-run. Locally, shard 1
 passed 47/47 at `6a9a12b` away from a rollover. The run stays on record and is not
 acceptance. Soul restoration and the `prefs.php` fix stay in Remaining.
+
+## Acceptance through a descendant, 2026-10-16
+
+Soul restoration and the `prefs.php` fix are accepted through their first accepted
+descendant, `fa30beba8bf6225fc638c83d6f7c0bbb4930e295` (Modern core 38907797754, all 12
+jobs SUCCESS; Baseline integrity 38907797223 SUCCESS). They were not accepted on their
+own commit: Modern core 38896842544 on `6a9a12b` failed at the 12:00Z game day rollover
+(see [CI rollover stability](CI-ROLLOVER-STABILITY-20261016.md)), and that run stays on
+record as a failure.
+
+The tests are unchanged between `6a9a12b` and `fa30beb`: `test_graveyard_restore_authority_http`
+and `test_create_login_rotate_render_logout` are byte-identical (compared function by
+function). The only test-file changes in that range are the user editor part 1 tests
+(`tests/tooling/test_web_application.py` +263 lines, new `tests/unit/UserEditorTest.php`).
+Of the production code those two tests reach, only `lib/showform.php` changed, in its
+`viewonly` branch; the boolean field the `prefs.php` fix covers is a separate branch.
