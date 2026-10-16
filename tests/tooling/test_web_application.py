@@ -6360,6 +6360,236 @@ function MODULE_dohook($hook,$args) {
                 q('DELETE FROM bans');put(saved);q("DELETE FROM debuglog WHERE actor=? AND message LIKE 'entered a ban:%'",[player])
                 q("DELETE FROM settings WHERE setting='newestplayer'");[q("INSERT INTO settings (setting,value) VALUES ('newestplayer',?)",[r['value']]) for r in newest]
 
+    @contextmanager
+    def _content_editor_fixture(self):
+        q=self.query;player=int(q('SELECT acctid FROM accounts WHERE login=?',['WebPlayer'])[0]['acctid'])
+        original=q('SELECT * FROM accounts WHERE acctid=?',[player])[0];state={}
+        def request(url,data=None):
+            q('UPDATE accounts SET lastnewday=? WHERE acctid=?',[self._current_game_day(),player]);self._security_allow(player,url)
+            return state['call'](url,data)
+        def login(role):
+            q('UPDATE accounts SET superuser=? WHERE acctid=?',[role,player]);state['call']=self._security_client()
+        def form(url,action):
+            status,body=request(url);self.assertEqual(200,status,body[:2000]);return dict(self._user_editor_form(body,action))
+        def matrix(gate,urls):
+            # Anonymous, a player and a superuser without the gate flag are refused every page and form; the gate flag opens the pages.
+            anonymous=self._security_client(login=None)
+            for url,data in urls: self.assertIn(anonymous(url,data)[0],[302,303,403],url)
+            for role in [0,0xFFFFFFFF&~(gate|1)]:
+                login(role)
+                for url,data in urls: self.assertEqual(403,request(url,data)[0],(role,url))
+            login(gate)
+            for url,data in urls:
+                if data is None: self.assertEqual(200,request(url)[0],url)
+        def restore(table,key,rows):
+            # Put a content table back as it was, row by row, whatever the editor (or a pre-fix GET link) did to it.
+            saved={r[key]:r for r in rows};now={r[key]:r for r in q(f'SELECT * FROM {table}')}
+            for ident in now.keys()-saved.keys(): q(f'DELETE FROM {table} WHERE {key}=?',[ident])
+            for ident,row in saved.items():
+                if now.get(ident)!=row: q(f'REPLACE INTO {table} ('+','.join(row)+') VALUES ('+','.join('?' for _ in row)+')',list(row.values()))
+        try: yield dict(q=q,player=player,request=request,login=login,form=form,matrix=matrix,restore=restore)
+        finally: q('UPDATE accounts SET '+','.join('`'+k+'`=?' for k in original if k!='acctid')+' WHERE acctid=?',[*[v for k,v in original.items() if k!='acctid'],player])
+
+    def test_weapon_and_armor_editor_authority_http(self):
+        # 1.1.2's price table, indexed by damage or defense.
+        prices=[None,48,225,585,990,1575,2250,2790,3420,4230,5040,5850,6840,8010,9000,10350];level=90
+        editors=[('weaponeditor.php','weapons','weaponid','weaponname','damage','weapons.php','weapon','weapondmg','weaponvalue','attack'),
+                 ('armoreditor.php','armor','armorid','armorname','defense','armor.php','armor','armordef','armorvalue','defense')]
+        with self._content_editor_fixture() as f:
+            q,player,request,form=(f[k] for k in ['q','player','request','form'])
+            saved={table:q(f'SELECT * FROM {table}') for _,table,*_ in editors}
+            try:
+                for page,table,idc,namec,statc,shop,item,itemstat,itemvalue,total in editors:
+                    rows=lambda:q(f'SELECT {idc},{namec},{statc},value,level FROM {table} WHERE level=? ORDER BY {idc}',[level])
+                    everything=lambda:q(f'SELECT * FROM {table} ORDER BY {idc}')
+                    seeded=q(f'SELECT {idc} AS id FROM {table} WHERE level=1 ORDER BY {idc} LIMIT 1')[0]['id']
+                    home,add,save=f'{page}?level={level}',f'{page}?op=add&level={level}',f'{page}?op=save&level={level}'
+                    f['matrix'](512,[(page,None),(add,None),(f'{page}?op=edit&id={seeded}&level=1',None),(save,{'x':'1'}),(f'{page}?op=del&id={seeded}&level=1',{'x':'1'})])
+                    before=everything()
+                    # GET only displays: 1.1.2 deleted on the list's GET link. Malformed and unknown IDs and levels are refused.
+                    for url in [f'{page}?op=del&id={seeded}&level=1',save]: self.assertEqual(405,request(url)[0],url)
+                    for url in [f'{page}?level=abc',f'{page}?level=-1',f'{page}?level=2147483648',f'{page}?op=edit&id=abc',f'{page}?op=edit&id=0',f'{page}?op=edit',f'{page}?op=other']:
+                        self.assertEqual(400,request(url)[0],url)
+                    self.assertEqual(404,request(f'{page}?op=edit&id=4294967295&level=1')[0]);self.assertEqual(before,everything())
+                    # Add: POST, CSRF and a one-use intent; every field validated before any write; the price from the table.
+                    fields=form(add,save);self.assertEqual(sorted(['action_token','csrf_token',namec,statc]),sorted(fields))
+                    post=lambda fields,url=save,**values:request(url,list({**fields,**values}.items()))
+                    name="Edit O'Reilly \" \\ 雪 <b>x</b>"
+                    self.assertEqual(403,post(fields,**{namec:name,statc:'7','csrf_token':'0'*64})[0])
+                    self.assertEqual(409,request(save,[(k,v) for k,v in {**fields,namec:name,statc:'7'}.items() if k!='action_token'])[0])
+                    for bad in [{statc:'16'},{statc:'0'},{statc:'-1'},{statc:'abc'},{statc:'7.5'},{statc:''},{namec:'雪'*51},{namec:b'\xff'},
+                                {statc+'[]':'7'},{'value':'1'},{'level':'1'},{idc:'-1'},{idc:'x'}]:
+                        self.assertEqual(400,post(fields,**{namec:name,statc:'7',**bad})[0],bad)
+                    self.assertEqual(404,post(fields,**{namec:name,statc:'7',idc:'4294967295'})[0]);self.assertEqual([],rows())
+                    status,body=post(fields,**{namec:name,statc:'7'});self.assertEqual(200,status,body[:2000])
+                    self.assertEqual([(name,'7','2790',str(level))],[(r[namec],r[statc],r['value'],r['level']) for r in rows()])
+                    self.assertEqual(409,post(fields,**{namec:name,statc:'7'})[0]);self.assertEqual(1,len(rows()))
+                    ident=rows()[0][idc];edit=f'{page}?op=edit&id={ident}&level={level}'
+                    status,body=request(home);self.assertEqual(200,status);self.assertNotIn('<b>x</b>',body);self.assertIn('雪',body)
+                    # Edit: the form shows the stored row; a row changed underneath refuses the save; a second copy of the form is spent.
+                    fields=form(edit,save);self.assertEqual((str(ident),name,'7'),(fields[idc],fields[namec],fields[statc]))
+                    q(f'UPDATE {table} SET {namec}=? WHERE {idc}=?',['Changed underneath',ident])
+                    self.assertEqual(409,post(fields,**{namec:'Stale',statc:'9'})[0]);self.assertEqual('Changed underneath',rows()[0][namec])
+                    fields,second=form(edit,save),form(edit,save);self.assertEqual(fields['action_token'],second['action_token'])
+                    status,body=post(fields,**{namec:'雪'*50,statc:'15'});self.assertEqual(200,status,body[:2000])
+                    self.assertEqual([('雪'*50,'15','10350')],[(r[namec],r[statc],r['value']) for r in rows()])
+                    self.assertEqual(409,post(second,**{namec:'Second',statc:'1'})[0]);self.assertEqual('雪'*50,rows()[0][namec])
+                    self.assertEqual(before,[r for r in everything() if r[idc]!=ident])
+                    # The accepted shop offers the saved item at its tier and price, and the purchase copies it whole.
+                    q(f"UPDATE accounts SET dragonkills=?,dragonpoints=?,race='Human',specialty='DA',alive=1,gold=20000,{item}='Old Stick',{itemstat}=3,{itemvalue}=40,{total}=10,lasthit=NOW() WHERE acctid=?",
+                      [level,'a:%d:{%s}'%(level,''.join('i:%d;s:2:"ff";'%i for i in range(level))),player])
+                    buy=f'{shop}?op=buy&id={ident}';status,body=request(shop);self.assertEqual(200,status,body[:2000]);self.assertIn('10350',body)
+                    status,body=request(buy,self._security_fields(body,buy));self.assertEqual(200,status,body[:2000])
+                    self.assertEqual(('9680','雪'*50,'15','10350','22'),tuple(q(f'SELECT gold,{item},{itemstat},{itemvalue},{total} FROM accounts WHERE acctid=?',[player])[0].values()))
+                    # Delete: the list's protected form, bound to the row it showed.
+                    remove=f'{page}?op=del&id={ident}&level={level}'
+                    fields=self._security_fields(request(home)[1],remove);self.assertEqual(405,request(remove)[0])
+                    self.assertEqual(403,request(remove,{'action_token':fields['action_token']})[0]);self.assertEqual(400,post(fields,remove,extra='1')[0])
+                    q(f'UPDATE {table} SET value=1 WHERE {idc}=?',[ident]);self.assertEqual(409,request(remove,fields)[0]);self.assertEqual(1,len(rows()))
+                    fields=self._security_fields(request(home)[1],remove)
+                    for url,status in [(f'{page}?op=del&id=abc&level={level}',400),(f'{page}?op=del&id=4294967295&level={level}',404)]: self.assertEqual(status,request(url,fields)[0],url)
+                    self.assertEqual(200,request(remove,fields)[0]);self.assertEqual([],rows());self.assertEqual(404,request(remove,fields)[0])
+                    self.assertEqual(before,everything())
+            finally:
+                for _,table,idc,*_ in editors: f['restore'](table,idc,saved[table])
+
+    def test_taunt_and_title_editor_authority_http(self):
+        with self._content_editor_fixture() as f:
+            q,player,request,login,form=(f[k] for k in ['q','player','request','login','form'])
+            saved={table:q(f'SELECT * FROM {table}') for table in ['taunts','titles']}
+            accounts=q('SELECT acctid,name,title,ctitle FROM accounts');created=[]
+            post=lambda url,fields,**values:request(url,list({**fields,**values}.items()))
+            try:
+                # Taunts (SU_EDIT_CREATURES).
+                taunts=lambda:q('SELECT * FROM taunts ORDER BY tauntid');seeded=saved['taunts'][0]['tauntid'];before=taunts()
+                f['matrix'](4,[('taunt.php',None),('taunt.php?op=edit',None),(f'taunt.php?op=edit&tauntid={seeded}',None),('taunt.php?op=save&tauntid=',{'x':'1'}),(f'taunt.php?op=del&tauntid={seeded}',{'x':'1'})])
+                for url in [f'taunt.php?op=del&tauntid={seeded}','taunt.php?op=save&tauntid=']: self.assertEqual(405,request(url)[0],url)
+                for url in ['taunt.php?op=edit&tauntid=abc','taunt.php?op=edit&tauntid=-1','taunt.php?op=del','taunt.php?op=other']: self.assertEqual(400,request(url)[0],url)
+                self.assertEqual(404,request('taunt.php?op=edit&tauntid=4294967295')[0]);self.assertEqual(before,taunts())
+                save='taunt.php?op=save&tauntid=';fields=form('taunt.php?op=edit',save);self.assertEqual(['action_token','csrf_token','taunt'],sorted(fields))
+                text='`5"`6Quote" O\'Reilly \\ 雪 <b>x</b>, %w`6! 100%% sure, `%purple`5," %W says.'
+                self.assertEqual(403,post(save,fields,taunt=text,csrf_token='0'*64)[0])
+                self.assertEqual(409,request(save,[('csrf_token',fields['csrf_token']),('taunt',text)])[0])
+                # A % that is not one of the listed codes must be doubled: PHP 8's sprintf throws where 1.1.2's skipped it.
+                for bad in ['100% sure %w','50%!','end 100%','%d of %w','t'*65536,b'\xff']: self.assertEqual(400,post(save,fields,taunt=bad)[0],bad)
+                self.assertEqual(400,post(save,fields,taunt=text,editor='x')[0]);self.assertEqual(400,request(save,[(k,v) for k,v in fields.items() if k!='taunt']+[('taunt[]',text)])[0])
+                self.assertEqual(before,taunts())
+                status,body=post(save,fields,taunt=text);self.assertEqual(200,status,body[:2000]);self.assertNotIn('<b>x</b>',body)
+                added=[r for r in taunts() if r not in before];self.assertEqual([(text,'WebPlayer')],[(r['taunt'],r['editor']) for r in added])
+                self.assertEqual(409,post(save,fields,taunt=text)[0]);self.assertEqual(len(before)+1,len(taunts()))
+                ident=added[0]['tauntid'];edit=f'taunt.php?op=edit&tauntid={ident}';save=f'taunt.php?op=save&tauntid={ident}'
+                status,body=request(edit);self.assertEqual(200,status,body[:2000]);self.assertIn('Baron Munchausen',body);self.assertNotIn('<b>x</b>',body)
+                # A stored taunt with a stray % (a database from before) is shown for repair instead of failing the editor.
+                q("INSERT INTO taunts (taunt,editor) VALUES ('Legacy 100% sure, %w','legacy')");legacy=q("SELECT tauntid FROM taunts WHERE editor='legacy'")[0]['tauntid']
+                status,body=request(f'taunt.php?op=edit&tauntid={legacy}');self.assertEqual(200,status,body[:2000]);self.assertIn('cannot be previewed',body)
+                fields=form(edit,save);self.assertEqual(text,fields['taunt'])
+                q('UPDATE taunts SET taunt=? WHERE tauntid=?',['Changed underneath',ident]);self.assertEqual(409,post(save,fields,taunt='Stale')[0])
+                self.assertEqual('Changed underneath',q('SELECT taunt FROM taunts WHERE tauntid=?',[ident])[0]['taunt'])
+                q("UPDATE taunts SET editor='someone' WHERE tauntid=?",[ident]);fields=form(edit,save)
+                self.assertEqual(200,post(save,fields,taunt='`%%x attacks %w with %X.')[0])
+                self.assertEqual(('`%%x attacks %w with %X.','WebPlayer'),tuple(q('SELECT taunt,editor FROM taunts WHERE tauntid=?',[ident])[0].values()))
+                remove=f'taunt.php?op=del&tauntid={ident}';fields=self._security_fields(request('taunt.php')[1],remove)
+                self.assertEqual(405,request(remove)[0]);self.assertEqual(403,request(remove,{'action_token':fields['action_token']})[0])
+                q("UPDATE taunts SET editor='late' WHERE tauntid=?",[ident]);self.assertEqual(409,request(remove,fields)[0])
+                fields=self._security_fields(request('taunt.php')[1],remove);self.assertEqual(200,request(remove,fields)[0])
+                self.assertEqual([],q('SELECT * FROM taunts WHERE tauntid=?',[ident]));self.assertEqual(404,request(remove,fields)[0])
+                # Titles (SU_EDIT_USERS).
+                titles=lambda:q('SELECT * FROM titles ORDER BY titleid');seeded=saved['titles'][0]['titleid']
+                snapshot=lambda:q('SELECT acctid,name,title,ctitle FROM accounts ORDER BY acctid')
+                f['matrix'](64,[('titleedit.php',None),('titleedit.php?op=add',None),(f'titleedit.php?op=edit&id={seeded}',None),('titleedit.php?op=reset',None),
+                                ('titleedit.php?op=save&id=0',{'x':'1'}),(f'titleedit.php?op=delete&id={seeded}',{'x':'1'}),('titleedit.php?op=reset',{'x':'1'})])
+                before,people=titles(),snapshot()
+                for url in [f'titleedit.php?op=delete&id={seeded}','titleedit.php?op=save&id=0']: self.assertEqual(405,request(url)[0],url)
+                for url in ['titleedit.php?op=edit&id=abc','titleedit.php?op=edit','titleedit.php?op=delete','titleedit.php?op=save&id=x','titleedit.php?op=other']: self.assertEqual(400,request(url)[0],url)
+                self.assertEqual(404,request('titleedit.php?op=edit&id=4294967295')[0]);self.assertEqual((before,people),(titles(),snapshot()))
+                save='titleedit.php?op=save&id=0';fields=form('titleedit.php?op=add',save)
+                self.assertEqual(['action_token','csrf_token','dk','female','male'],sorted(fields));self.assertEqual('0',fields['dk'])
+                good=dict(dk='77',male='Sir Probe',female='Dame "Q" <i>雪</i>')
+                self.assertEqual(403,post(save,fields,**good,csrf_token='0'*64)[0])
+                for bad in [{'dk':'abc'},{'dk':'1.5'},{'dk':'2147483648'},{'dk':''},{'male':'m'*26},{'female':b'\xff'},{'ref':'x'},{'titleid':'5'}]:
+                    self.assertEqual(400,post(save,fields,**{**good,**bad})[0],bad)
+                self.assertEqual(before,titles())
+                status,body=post(save,fields,**good);self.assertEqual(200,status,body[:2000]);self.assertIn('New title added.',body);self.assertNotIn('<i>雪',body)
+                added=[r for r in titles() if r not in before];self.assertEqual([('77','','Sir Probe','Dame "Q" <i>雪</i>')],[(r['dk'],r['ref'],r['male'],r['female']) for r in added])
+                self.assertEqual(409,post(save,fields,**good)[0]);self.assertEqual(len(before)+1,len(titles()))
+                ident=added[0]['titleid'];edit,save=f'titleedit.php?op=edit&id={ident}',f'titleedit.php?op=save&id={ident}'
+                # 1.1.2 reported the affected rows, so an unchanged save says it could not modify the title.
+                fields=form(edit,save);self.assertEqual(('77','Sir Probe'),(fields['dk'],fields['male']))
+                status,body=post(save,fields);self.assertEqual(200,status);self.assertIn('Unable to modify title.',body)
+                fields=form(edit,save);q("UPDATE titles SET female='Underneath' WHERE titleid=?",[ident]);self.assertEqual(409,post(save,fields,male='Stale')[0])
+                fields=form(edit,save);status,body=post(save,fields,male="Sir O'Reilly 雪",female='Dame 雪');self.assertIn('Title modified.',body)
+                self.assertEqual(('77',"Sir O'Reilly 雪",'Dame 雪'),tuple(q('SELECT dk,male,female FROM titles WHERE titleid=?',[ident])[0].values()))
+                q("INSERT INTO titles (dk,ref,male,female) VALUES (78,'','Doomed','Doomed')");doomed=q("SELECT titleid FROM titles WHERE male='Doomed'")[0]['titleid']
+                remove=f'titleedit.php?op=delete&id={doomed}';fields=self._security_fields(request('titleedit.php')[1],remove)
+                self.assertEqual(403,request(remove,{'action_token':fields['action_token']})[0])
+                q("UPDATE titles SET female='Changed' WHERE titleid=?",[doomed]);self.assertEqual(409,request(remove,fields)[0])
+                fields=self._security_fields(request('titleedit.php')[1],remove);status,body=request(remove,fields);self.assertIn('Title deleted.',body)
+                self.assertEqual([],q('SELECT * FROM titles WHERE titleid=?',[doomed]));self.assertEqual(404,request(remove,fields)[0])
+                # The title rebuild. The acting superuser and an online player (rank 0: Farmboy), a custom title, a name that would not fit,
+                # bulk accounts and one whose write fails late (rank 77: the title saved above).
+                q("UPDATE accounts SET dragonkills=0,sex=0,title='Bogus',ctitle='',name='Bogus WebPlayer`0' WHERE acctid=?",[player])
+                def make(login,name,title='Farmboy',ctitle='',dk=77):
+                    ident=int(self._security_target(login));created.append(ident)
+                    q("UPDATE accounts SET name=?,title=?,ctitle=?,dragonkills=?,sex=0,race='Human',specialty='DA',dragonpoints='a:0:{}' WHERE acctid=?",[name,title,ctitle,dk,ident]);return ident
+                online=make('TitleOnline','Bogus TitleOnline`0','Bogus',dk=0);custom=make('TitleCustom','Lord TitleCustom`0',ctitle='Lord')
+                toolong=make('TitleLong','Farmboy '+'L'*50+'`0')
+                columns=[r['COLUMN_NAME'] for r in q("SELECT COLUMN_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='accounts' AND COLUMN_NAME<>'acctid' ORDER BY ORDINAL_POSITION")]
+                values={'login':"CONCAT('TitleBulk',d.n*10+u.n)",'name':"CONCAT('Farmboy TitleBulk',d.n*10+u.n,'`0')"}
+                digits=lambda top:'('+' UNION ALL '.join(f'SELECT {i} AS n' for i in range(top))+')'
+                q('INSERT INTO accounts ('+','.join('`'+c+'`' for c in columns)+') SELECT '+','.join(values.get(c,'a.`'+c+'`') for c in columns)+
+                  f' FROM accounts a CROSS JOIN {digits(6)} d CROSS JOIN {digits(10)} u WHERE a.acctid=? ORDER BY d.n,u.n',[custom])
+                q("UPDATE accounts SET ctitle='',title='Farmboy' WHERE login LIKE 'TitleBulk%'");created.extend(int(r['acctid']) for r in q("SELECT acctid FROM accounts WHERE login LIKE 'TitleBulk%'"))
+                late=make('TitleLate','Farmboy TitleLate`0')
+                peer=self._security_client(login='TitleOnline',password='Synthetic administrator password')
+                def visit():
+                    q('UPDATE accounts SET lastnewday=? WHERE acctid=?',[self._current_game_day(),online]);self._security_allow(online,'list.php');return peer('list.php')
+                self.assertEqual(200,visit()[0])
+                renamed={'Bogus WebPlayer`0':('Farmboy WebPlayer`0','Farmboy'),'Bogus TitleOnline`0':('Farmboy TitleOnline`0','Farmboy'),'Lord TitleCustom`0':('Lord TitleCustom`0',"Sir O'Reilly 雪")}
+                ours=lambda r:int(r['acctid']) in created+[player] and int(r['acctid'])!=toolong
+                def rebuilt(r):
+                    name,title=renamed.get(r['name']) or (r['name'].replace('Farmboy ',"Sir O'Reilly 雪 ",1),"Sir O'Reilly 雪")
+                    return {**r,'name':name,'title':title}
+                start=snapshot()
+                # GET shows the form and changes nothing; a form issued before the titles changed is refused.
+                reset='titleedit.php?op=reset';fields=self._security_fields(request(reset)[1],reset);self.assertEqual(start,snapshot())
+                q("INSERT INTO titles (dk,ref,male,female) VALUES (9999,'','Later','Later')");self.assertEqual(409,request(reset,fields)[0]);q("DELETE FROM titles WHERE dk=9999")
+                self.assertEqual(start,snapshot())
+                # A late failure in the second batch of 50: the first batch commits whole, the failed batch and everything after it are
+                # untouched, and the page says so. The name that would not fit is listed and left alone.
+                q("ALTER TABLE accounts ADD CONSTRAINT fixture_title_rebuild CHECK (login <> 'TitleLate' OR title = 'Farmboy')")
+                try:
+                    fields=self._security_fields(request(reset)[1],reset);status,body=request(reset,fields);self.assertEqual(200,status,body[:2000])
+                    boundary=[r['acctid'] for r in start].index(str(late))//50*50;self.assertGreaterEqual(boundary,50)
+                    after={r['acctid']:r for r in snapshot()}
+                    for index,row in enumerate(start):
+                        if index>=boundary: self.assertEqual(row,after[row['acctid']])
+                        elif ours(row): self.assertEqual(rebuilt(row),after[row['acctid']])
+                    self.assertEqual(start[[r['acctid'] for r in start].index(str(toolong))],after[str(toolong)])
+                    changed=sum(1 for r in start if after[r['acctid']]!=r);self.assertGreaterEqual(changed,40)
+                    text=re.sub(r'\s+',' ',html.unescape(re.sub(r'<[^>]+>','',body)))
+                    self.assertIn(f'The rebuild stopped on a failure. {boundary} of {len(start)} accounts were checked and {changed} changed; the rest were not changed.',text)
+                    self.assertIn('Not changing Farmboy '+'L'*50,text);self.assertNotIn('Done.',text)
+                    retry=self._security_fields(body,reset)
+                finally: q('ALTER TABLE accounts DROP CONSTRAINT fixture_title_rebuild')
+                # The spent form stays spent; the fresh one finishes the rest.
+                self.assertEqual(409,request(reset,fields)[0])
+                status,body=request(reset,retry);self.assertEqual(200,status,body[:2000]);self.assertIn('Done.',body);self.assertEqual(409,request(reset,retry)[0])
+                final={r['acctid']:r for r in snapshot()}
+                for row in start:
+                    if ours(row): self.assertEqual(rebuilt(row),final[row['acctid']])
+                self.assertEqual(start[[r['acctid'] for r in start].index(str(toolong))],final[str(toolong)])
+                # The online player sees the new name on their next page, and their own save does not write the old one back.
+                status,body=visit();self.assertEqual(200,status);self.assertIn('Farmboy TitleOnline',html.unescape(body))
+                self.assertEqual(('Farmboy TitleOnline`0','Farmboy'),tuple(q('SELECT name,title FROM accounts WHERE acctid=?',[online])[0].values()))
+                self.assertEqual(200,request('titleedit.php')[0])
+                self.assertEqual(('Farmboy WebPlayer`0','Farmboy'),tuple(q('SELECT name,title FROM accounts WHERE acctid=?',[player])[0].values()))
+            finally:
+                if q("SELECT CONSTRAINT_NAME FROM information_schema.TABLE_CONSTRAINTS WHERE CONSTRAINT_SCHEMA=DATABASE() AND TABLE_NAME='accounts' AND CONSTRAINT_NAME='fixture_title_rebuild'"):
+                    q('ALTER TABLE accounts DROP CONSTRAINT fixture_title_rebuild')
+                for who in created: q('DELETE FROM accounts_output WHERE acctid=?',[who]);q('DELETE FROM accounts WHERE acctid=?',[who])
+                for row in accounts: q('UPDATE accounts SET name=?,title=?,ctitle=? WHERE acctid=?',[row['name'],row['title'],row['ctitle'],row['acctid']])
+                for table,key in [('taunts','tauntid'),('titles','titleid')]: f['restore'](table,key,saved[table])
+
     def _security_client(self, login='WebPlayer', password="Synthetic web O'Reilly \\ password", port=None):
         class NoRedirect(urllib.request.HTTPRedirectHandler):
             def redirect_request(self, *args): return None

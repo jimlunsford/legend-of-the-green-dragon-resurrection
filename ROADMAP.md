@@ -60,6 +60,8 @@ Each family is DONE only when its acceptance evidence passes on both supported C
 - [x] User editor part 1: account edit, special actions, module preferences, last hit, debug log (`user.php`) (`USER-EDITOR-AUTHORITY-20261016.md`). Accepted at `fa30beb`, Modern core 38907797754, Baseline integrity 38907797223.
 - [x] CI game-day rollover stability: the web test harness pins the game clock so a shard never crosses a game day boundary (`CI-ROLLOVER-STABILITY-20261016.md`). Accepted at `aeb19b9`, Modern core 38923797893, Baseline integrity 38923797782.
 - [x] User editor part 2: bans (`user.php` `setupban`, `saveban`, `delban`, `removeban`) (`BAN-ADMIN-AUTHORITY-20261016.md`). Accepted at `eec24a6`, Modern core 38931835620, Baseline integrity 38931835612.
+- [x] Ban message page fatal: a matching ban at login or account creation was a 500 instead of 1.1.2's message, found during bans (`lib/checkban.php`, `lib/translator.php`) (`BAN-MESSAGE-AND-ID-COOKIE-20261016.md`). Accepted at `55ec6c2`, Modern core 38942722221, Baseline integrity 38942722236.
+- [x] Player ID cookie: only the generated 32-hex `lgi` format becomes the stored `uniqueid`, found during bans (`common.php`, `lib/web_security.php`) (`BAN-MESSAGE-AND-ID-COOKIE-20261016.md`). Accepted at `55ec6c2`, Modern core 38942722221, Baseline integrity 38942722236.
 
 ### Current
 
@@ -73,12 +75,13 @@ Infrastructure and records:
 
 Route families:
 
-- [ ] Ban message page fatal: a matching ban at login or account creation is a 500 instead of 1.1.2's message, found during bans (`lib/checkban.php`, `lib/translator.php`; candidate in `BAN-MESSAGE-AND-ID-COOKIE-20261016.md`)
-- [ ] Player ID cookie: any `lgi` cookie of 32 or more bytes becomes the stored `uniqueid`, found during bans (`common.php`; candidate in `BAN-MESSAGE-AND-ID-COOKIE-20261016.md`)
+- [ ] News formatting fatal: a stored taunt with a stray `%` (from a database older than the taunt editor's check) makes `news.php` and `bio.php` fail on PHP 8 in `sprintf_translate()` (`lib/translator.php`), found during content editors part 1 (`CONTENT-EDITORS-PART1-AUTHORITY-20261016.md`)
 
 Administration:
 
-- [ ] Content editors: creatures, weapons, armor, mounts, titles, taunts
+- [ ] Content editors part 1: weapons, armor, taunts, titles, including the title rebuild (`weaponeditor.php`, `armoreditor.php`, `taunt.php`, `titleedit.php`; candidate in `CONTENT-EDITORS-PART1-AUTHORITY-20261016.md`)
+- [ ] Content editors part 2: creatures, masters (`creatures.php`, `masters.php`)
+- [ ] Content editors part 3: mounts and companions: object add, edit, save, delete, give, take, activate, deactivate, and the owner refunds on mount delete (`mounts.php`, `companions.php`). The `mounts.php` module preference editor is already closed (shared typed settings editor and mount object preferences, above).
 - [ ] Module manager and remaining preference editors (`modules.php`)
 
 State and maintenance:

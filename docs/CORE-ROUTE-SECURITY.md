@@ -725,3 +725,31 @@ Baseline integrity 38931835612).
   HttpOnly, SameSite=Lax and Secure on HTTPS; no script reads it.
 
 See [ban message and player ID cookie](BAN-MESSAGE-AND-ID-COOKIE-20261016.md).
+
+2026-10-16: ban message page and `lgi` player ID cookie accepted at `55ec6c2` (Modern core
+38942722221, Baseline integrity 38942722236).
+
+2026-10-16 content editors part 1 (`weaponeditor.php`, `armoreditor.php`, `taunt.php`,
+`titleedit.php`; shared helpers in `lib/content_editor.php`): candidate pending CI.
+
+- Every write (save, delete, the title rebuild) is a POST with CSRF and a one-use intent
+  bound to the row, or the title table, as shown. GET on a write op is 405; the lists'
+  "Del" links are POST forms with 1.1.2's confirmation. A replay, a second copy of a form
+  or a row changed since the form was shown is 409 and writes nothing.
+- `op`, IDs and levels are validated (400); an unknown ID is 404 before any write. Each
+  field is checked against its form field and column before the intent is spent: damage
+  or defense 1-15 (the price table's keys), equipment names up to 50 characters (the
+  account column the shop copies them into), titles up to 25, taunts up to the TEXT
+  column, `dk` within `int(11)`.
+- All SQL bound; each write locks and rechecks its row in `resurrection_player_mutation()`.
+- A taunt with a `%` that is not one of the listed codes is refused: it is a fatal
+  `ValueError` or `ArgumentCountError` in PHP 8's `sprintf`, which defeat news uses to
+  format taunts. A stored one is shown in the editor for repair instead of its preview.
+- The title rebuild keeps 1.1.2's rule, texts and custom titles. It runs in transactions
+  of 50 accounts in ID order, so each account is fully rewritten or untouched, and the
+  page reports how far it got. A name that would exceed `accounts.name` is listed and
+  left unchanged. The acting superuser's own account is written through the session in
+  the same transaction.
+- Price table, field lists, texts and defaults unchanged.
+
+See [content editors part 1](CONTENT-EDITORS-PART1-AUTHORITY-20261016.md).

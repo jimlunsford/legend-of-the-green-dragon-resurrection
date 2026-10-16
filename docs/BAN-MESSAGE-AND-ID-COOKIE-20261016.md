@@ -192,3 +192,13 @@ Local, PHP 8.5.11 / MySQL 8.4 (supporting evidence only; CI is the acceptance):
   the same effect.
 - `moderate.php` inserts a comment ban without 1.1.2's check for a longer existing ban
   (recorded during bans).
+
+## Acceptance
+
+Recorded 2026-10-16 in the content editors part 1 commit, inspected through the API:
+
+- Modern core 38942722221 on `55ec6c2`: all 12 jobs SUCCESS. The `result` jobs finished at
+  18:06:01Z (8.4 / MariaDB 11.4) and 18:09:11Z (8.5 / MySQL 8.4).
+- Baseline integrity 38942722236 on `55ec6c2`: SUCCESS.
+
+Both ROADMAP items (the ban message page fatal and the player ID cookie) are Done.

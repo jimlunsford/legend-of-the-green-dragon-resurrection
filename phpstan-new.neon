@@ -36,6 +36,7 @@ parameters:
         - lib/restore_authority.php
         - lib/user_editor.php
         - lib/ban_admin.php
+        - lib/content_editor.php
         - lib/installer/fresh_install.php
         - lib/installer/bundled_modules.php
         - scripts/install.php
@@ -77,6 +78,7 @@ parameters:
         - lib/all_tables.php
         - lib/tabledescriptor.php
         - lib/names.php
+        - lib/titles.php
         - lib/censor.php
         - user.php
     tmpDir: .phpstan-cache/new
