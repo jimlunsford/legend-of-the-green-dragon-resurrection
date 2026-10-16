@@ -86,8 +86,18 @@ if ($playermount) {
 }
 $confirm = 0;
 
+require_once("lib/stables_authority.php");
 $op = httpget('op');
-$id = httpget('id');
+// Only the protected POST of a confirming step acts. GET (a link, a restored page, New Day's "Continue") asks.
+$posted = ($_SERVER['REQUEST_METHOD'] ?? '') === 'POST';
+if (!$posted && $op=='confirmbuy') $op = 'buymount';
+if (!$posted && $op=='confirmsell') $op = 'sellmount';
+$id = 0;
+if (in_array($op, array('examine','buymount','confirmbuy'), true)) {
+	try {
+		$id = resurrection_stables_id();
+	} catch (InvalidArgumentException $error) { resurrection_stables_failure($error); }
+}
 
 global $playermount;
 
@@ -104,9 +114,9 @@ if ($op==""){
 	tlschema();
 	modulehook("stables-desc");
 }elseif($op=="examine"){
-	$sql = "SELECT * FROM " . db_prefix("mounts") . " WHERE mountid='$id'";
-	$result = db_query_cached($sql, "mountdata-$id", 3600);
-	if (db_num_rows($result)<=0){
+	// Bound; only a mount the listing offers this player is shown (1.1.2 examined any id the URL named).
+	$mount = resurrection_stables_mount($id);
+	if ($mount === null || !resurrection_stables_offered($mount)){
 		tlschema($schemas['nosuchbeast']);
 		output($texts['nosuchbeast']);
 		tlschema();
@@ -116,7 +126,6 @@ if ($op==""){
 		tlschema($schemas['finebeast']);
 		output($texts['finebeast'][$t]);
 		tlschema();
-		$mount = db_fetch_assoc($result);
 		output("`7Creature: `&%s`0`n", $mount['mountname']);
 		output("`7Description: `&%s`0`n", $mount['mountdesc']);
 		output("`7Cost: `^%s`& gold, `%%s`& gems`n`n", $mount['mountcostgold'], $mount['mountcostgems']);
@@ -124,44 +133,46 @@ if ($op==""){
 		addnav("Buy this creature","stables.php?op=buymount&id={$mount['mountid']}");
 	}
 }elseif($op=='buymount'){
-	if ($session['user']['hashorse']) {
+	$mount = resurrection_stables_mount($id);
+	if ($mount === null || !resurrection_stables_offered($mount)){
+		tlschema($schemas['nosuchbeast']);
+		output($texts['nosuchbeast']);
+		tlschema();
+	}elseif ($session['user']['hashorse']) {
 		tlschema($schemas['confirmsale']);
 		output($texts['confirmsale'],
 				($session['user']['sex']?$texts["lass"]:$texts["lad"]));
 		tlschema();
 		addnav("Confirm trade");
-		addnav("Yes", "stables.php?op=confirmbuy&id=$id");
+		resurrection_stables_form('confirmbuy', $id, translate_inline("Yes"));
 		addnav("No","stables.php");
 		$confirm = 1;
 	} else {
-		$op="confirmbuy";
-		httpset("op",$op);
+		// 1.1.2 bought on this GET; the purchase is now this form's protected POST.
+		output("`7Creature: `&%s`0`n", $mount['mountname']);
+		output("`7Cost: `^%s`& gold, `%%s`& gems`n`n", $mount['mountcostgold'], $mount['mountcostgems']);
+		resurrection_stables_form('confirmbuy', $id, translate_inline("Buy this creature"));
 	}
-}
-if ($op == 'confirmbuy') {
-	$sql = "SELECT * FROM " . db_prefix("mounts") . " WHERE mountid='$id'";
-	$result = db_query_cached($sql, "mountdata-$id", 3600);
-	if (db_num_rows($result)<=0){
-		tlschema($schemas['nosuchbeast']);
-		output($texts['nosuchbeast']);
-		tlschema();
-	}else{
-		$mount = db_fetch_assoc($result);
-		if (($session['user']['gold']+$repaygold) < $mount['mountcostgold'] ||
-			($session['user']['gems']+$repaygems) < $mount['mountcostgems']){
-			tlschema($schemas['toolittle']);
-			output($texts['toolittle'], $mount['mountname'], $mount['mountcostgold'], $mount['mountcostgems']);
-			tlschema();
-		}else{
-			if ($session['user']['hashorse']>0){
-				tlschema($schemas['replacemount']);
-				output($texts['replacemount'], $lcname, $mount['mountname']);
-				tlschema();
-			}else{
-				tlschema($schemas['newmount']);
-				output($texts['newmount'], $mount['mountname']);
-				tlschema();
+}elseif($op == 'confirmbuy') {
+	try {
+		resurrection_stables_fields();
+	} catch (InvalidArgumentException $error) { resurrection_stables_failure($error); }
+	resurrection_consume_action('stables-confirmbuy', resurrection_stables_context('confirmbuy', $id));
+	$oldlcname = $lcname;
+	try {
+		// The offer, funds (counting the 2/3 trade-in), mount, purse, buff and hooks change together, under lock.
+		$bought = resurrection_player_mutation(function () use ($id) {
+			global $session, $playermount;
+			$mount = resurrection_stables_mount($id);
+			if ($mount === null || !resurrection_stables_offered($mount)) return array('outcome'=>'missing');
+			$repaygold = $playermount ? round($playermount['mountcostgold']*2/3,0) : 0;
+			$repaygems = $playermount ? round($playermount['mountcostgems']*2/3,0) : 0;
+			if (($session['user']['gold']+$repaygold) < $mount['mountcostgold'] ||
+				($session['user']['gems']+$repaygems) < $mount['mountcostgems']){
+				return array('outcome'=>'short', 'mount'=>$mount);
 			}
+			$buff = resurrection_stables_buff($mount);
+			$replaced = $session['user']['hashorse']>0;
 			$debugmount1=isset($playermount['mountname'])?$playermount['mountname']:false;
 			if ($debugmount1) $debugmount1="a ".$debugmount1;
 			$session['user']['hashorse']=$mount['mountid'];
@@ -171,20 +182,40 @@ if ($op == 'confirmbuy') {
 			$gemcost = $repaygems-$mount['mountcostgems'];
 			$session['user']['gems']+=$gemcost;
 			debuglog(($goldcost <= 0?"spent ":"gained ") . abs($goldcost) . " gold and " . ($gemcost <= 0?"spent ":"gained ") . abs($gemcost) . " gems trading $debugmount1 for a new mount, a $debugmount2");
-			$buff = \Resurrection\Security\ScalarState::read($mount['mountbuff']);
-			if ($buff['schema'] == "") $buff['schema'] = "mounts";
-			apply_buff('mount',\Resurrection\Security\ScalarState::read($mount['mountbuff']));
+			apply_buff('mount',$buff);
 			// Recalculate so the selling stuff works right
 			$playermount = getmount($mount['mountid']);
-			$repaygold = round($playermount['mountcostgold']*2/3,0);
-			$repaygems = round($playermount['mountcostgems']*2/3,0);
 			// Recalculate the special name as well.
 			modulehook("stable-mount", array());
 			modulehook("boughtmount");
-			require_once("lib/mountname.php");
-			list($name, $lcname) = getmountname();
-			$grubprice = round($session['user']['level']*$playermount['mountfeedcost'], 0);
+			return array('outcome'=>'bought', 'replaced'=>$replaced, 'mount'=>$mount);
+		});
+	} catch (Throwable $error) { resurrection_stables_failure($error); }
+	if ($bought['outcome']=='missing'){
+		tlschema($schemas['nosuchbeast']);
+		output($texts['nosuchbeast']);
+		tlschema();
+	}elseif ($bought['outcome']=='short'){
+		$mount = $bought['mount'];
+		tlschema($schemas['toolittle']);
+		output($texts['toolittle'], $mount['mountname'], $mount['mountcostgold'], $mount['mountcostgems']);
+		tlschema();
+	}else{
+		$mount = $bought['mount'];
+		if ($bought['replaced']){
+			tlschema($schemas['replacemount']);
+			output($texts['replacemount'], $oldlcname, $mount['mountname']);
+			tlschema();
+		}else{
+			tlschema($schemas['newmount']);
+			output($texts['newmount'], $mount['mountname']);
+			tlschema();
 		}
+		$repaygold = round($playermount['mountcostgold']*2/3,0);
+		$repaygems = round($playermount['mountcostgems']*2/3,0);
+		require_once("lib/mountname.php");
+		list($name, $lcname) = getmountname();
+		$grubprice = round($session['user']['level']*$playermount['mountfeedcost'], 0);
 	}
 }elseif($op=='feed'){
 	if (getsetting("allowfeed", 0) == 0) {
@@ -192,40 +223,67 @@ if ($op == 'confirmbuy') {
 		output($texts['nofeed'],
 				($session['user']['sex']?$texts["lass"]:$texts["lad"]));
 		tlschema();
-	} elseif($session['user']['gold']>=$grubprice) {
-		$buff = \Resurrection\Security\ScalarState::read($playermount['mountbuff']);
-		if (!isset($buff['schema']) || $buff['schema'] == "") $buff['schema'] = "mounts";
-		if (isset($session['bufflist']['mount']) && $session['bufflist']['mount']['rounds'] == $buff['rounds']) {
+	} elseif (!$posted) {
+		// 1.1.2 fed on this GET; the feeding is now this form's protected POST.
+		if ($session['user']['hashorse']>0 && $session['user']['fedmount']==0) {
+			resurrection_stables_form('feed', 0, sprintf_translate("Feed %s`0 (`^%s`0 gold)", $lcname, $grubprice));
+		}
+	} else {
+		try {
+			resurrection_stables_fields();
+		} catch (InvalidArgumentException $error) { resurrection_stables_failure($error); }
+		resurrection_consume_action('stables-feed', resurrection_stables_context('feed'));
+		try {
+			$fed = resurrection_player_mutation(function () {
+				global $session, $playermount;
+				if (getsetting("allowfeed", 0) == 0) return array('outcome'=>'nofeed');
+				// The player must own a mount; 1.1.2 limited feeding to once a day only by hiding the link.
+				if ($session['user']['hashorse']<1 || !$playermount) throw new DomainException('No mount.');
+				if ($session['user']['fedmount']!=0) throw new DomainException('Already fed today.');
+				$grubprice = round($session['user']['level']*$playermount['mountfeedcost'], 0);
+				if ($session['user']['gold']<$grubprice) return array('outcome'=>'nofeedgold');
+				$buff = resurrection_stables_buff($playermount);
+				if (!isset($buff['schema']) || $buff['schema'] == "") $buff['schema'] = "mounts";
+				if (isset($session['bufflist']['mount']) && $session['bufflist']['mount']['rounds'] == $buff['rounds']) {
+					return array('outcome'=>'nothungry');
+				}
+				$outcome = 'hungry';
+				if (isset($session['bufflist']['mount']) && $session['bufflist']['mount']['rounds'] > $buff['rounds']*.5) {
+					$grubprice=round($grubprice/2,0);
+					$outcome = 'halfhungry';
+				}
+				$session['user']['gold']-=$grubprice;
+				debuglog("spent $grubprice feeding their mount");
+				apply_buff('mount',$buff);
+				$session['user']['fedmount'] = 1;
+				return array('outcome'=>$outcome, 'price'=>$grubprice);
+			});
+		} catch (Throwable $error) { resurrection_stables_failure($error); }
+		if ($fed['outcome']=='nofeed') {
+			tlschema($schemas['nofeed']);
+			output($texts['nofeed'],
+					($session['user']['sex']?$texts["lass"]:$texts["lad"]));
+			tlschema();
+		} elseif ($fed['outcome']=='nofeedgold') {
+			tlschema($schemas['nofeedgold']);
+			output($texts['nofeedgold'], $lcname);
+			tlschema();
+		} elseif ($fed['outcome']=='nothungry') {
 			tlschema($schemas['nothungry']);
 			output($texts['nothungry'],$name);
 			tlschema();
 		} else {
-			if (isset($session['bufflist']['mount']) && $session['bufflist']['mount']['rounds'] > $buff['rounds']*.5) {
-				$grubprice=round($grubprice/2,0);
-				tlschema($schemas['halfhungry']);
-				output($texts['halfhungry'], $name, $name, $grubprice);
-				tlschema();
-				$session['user']['gold']-=$grubprice;
-			}else{
-				$session['user']['gold']-=$grubprice;
-				tlschema($schemas['hungry']);
-				output($texts['hungry'], $name, $name, $grubprice);
-				tlschema();
-			}
-			debuglog("spent $grubprice feeding their mount");
-			apply_buff('mount',$buff);
-			$session['user']['fedmount'] = 1;
+			tlschema($schemas[$fed['outcome']]);
+			output($texts[$fed['outcome']], $name, $name, $fed['price']);
+			tlschema();
 			tlschema($schemas['mountfull']);
+			// No bundled module sets 'basename'; PHP 8 made the missing key fatal after the feeding was logged.
 			output($texts['mountfull'],
 				($session['user']['sex']?$texts["lass"]:$texts["lad"]),
-				($playermount['basename']?
+				(($playermount['basename'] ?? '')?
 				 $playermount['basename']:$playermount['mountname']));
 			tlschema();
 		}
-	} else {
-		tlschema($schemas['nofeedgold']);
-		output($texts['nofeedgold'], $lcname);
-		tlschema();
 	}
 }elseif($op=='sellmount'){
 	tlschema($schemas['confirmsale']);
@@ -233,17 +291,32 @@ if ($op == 'confirmbuy') {
 			($session['user']['sex']?$texts["lass"]:$texts["lad"]));
 	tlschema();
 	addnav("Confirm sale");
-	addnav("Yes", "stables.php?op=confirmsell");
+	if ($session['user']['hashorse']>0) resurrection_stables_form('confirmsell', 0, translate_inline("Yes"));
 	addnav("No","stables.php");
 	$confirm = 1;
 }elseif($op=='confirmsell'){
-	$session['user']['gold']+=$repaygold;
-	$session['user']['gems']+=$repaygems;
-	$debugmount=$playermount['mountname'];
-	debuglog("gained $repaygold gold and $repaygems gems selling their mount, a $debugmount");
-	strip_buff('mount');
-	$session['user']['hashorse']=0;
-	modulehook("soldmount");
+	try {
+		resurrection_stables_fields();
+	} catch (InvalidArgumentException $error) { resurrection_stables_failure($error); }
+	resurrection_consume_action('stables-confirmsell', resurrection_stables_context('confirmsell'));
+	try {
+		$sold = resurrection_player_mutation(function () {
+			global $session, $playermount;
+			// 1.1.2 "sold" without a mount; the player must own one.
+			if ($session['user']['hashorse']<1 || !$playermount) throw new DomainException('No mount.');
+			$repaygold = round($playermount['mountcostgold']*2/3,0);
+			$repaygems = round($playermount['mountcostgems']*2/3,0);
+			$session['user']['gold']+=$repaygold;
+			$session['user']['gems']+=$repaygems;
+			$debugmount=$playermount['mountname'];
+			debuglog("gained $repaygold gold and $repaygems gems selling their mount, a $debugmount");
+			strip_buff('mount');
+			$session['user']['hashorse']=0;
+			modulehook("soldmount");
+			return array($repaygold, $repaygems);
+		});
+	} catch (Throwable $error) { resurrection_stables_failure($error); }
+	list($repaygold, $repaygems) = $sold;
 
 	$amtstr = "";
 	if ($repaygold > 0) {
@@ -262,8 +335,9 @@ if ($op == 'confirmbuy') {
 	}
 
 	tlschema($schemas['mountsold']);
+	// No bundled module sets 'newname'; PHP 8 made the missing key fatal after the sale was logged.
 	output($texts['mountsold'],
-			($playermount['newname']?
+			(($playermount['newname'] ?? '')?
 			   $playermount['newname']:$playermount['mountname']),
 			$amtstr);
 	tlschema();
@@ -282,8 +356,7 @@ if ($confirm == 0) {
 		}
 	}
 
-	$sql = "SELECT mountname,mountid,mountcategory,mountdkcost FROM " . db_prefix("mounts") .  " WHERE mountactive=1 AND mountlocation IN ('all','{$session['user']['location']}') ORDER BY mountcategory,mountcostgems,mountcostgold";
-	$result = db_query($sql);
+	$result = db_query("SELECT mountname,mountid,mountcategory,mountdkcost FROM " . db_prefix("mounts") .  " WHERE mountactive=1 AND mountlocation IN ('all',?) ORDER BY mountcategory,mountcostgems,mountcostgold", true, [(string)$session['user']['location']]);
 	$category="";
 	$number=db_num_rows($result);
 	for ($i=0;$i<$number;$i++){

@@ -346,3 +346,31 @@ rewrite of earlier dated totals. No parser limits or historical sources changed.
 The helper/player scope awaits exact CI; caller-specific clan, bank, admin,
 haunt and legacy trust work remains open. Accepted predecessor Ramius and broader
 New Day are PASS at Modern 37210214161 / Baseline 37210214168 SUCCESS.
+
+## Inventory recount and stables candidate, 2026-10-16
+
+Recounted with the same token method (PHP tokenizer over tracked shipped PHP,
+excluding `tests/`, `scripts/` and `lab/`; comments ignored; `serialize(`,
+`ScalarState::read(` and `unserialize(` calls). The method reproduces the recorded
+**112 / 53 / 42 / 69 / 1** exactly at `4478c06`. Two later accepted commits changed it
+without a recorded recount:
+
+- `9c2f458` (clan membership): the notice-subject `serialize()` calls in
+  `lib/clan/applicant.php`, `applicant_apply.php`, `clan_membership.php` and
+  `clan_withdraw.php` moved into one bound helper in `lib/clan_authority.php`:
+  **109 / 50 / 39 / 69 / 1**.
+- `cbc0cf4` (clan text): `resurrection_clan_text_context()` serializes its state
+  array as hash input for the one-use intent (never stored or read back):
+  **110 / 50 / 40 / 69 / 1**.
+
+Accepted at `639b8c5`: **110 sites / 50 files / 40 serialize writers-checks / 69
+ScalarState reads / one centralized unserialize**. This is a recount, not a rewrite
+of earlier dated totals.
+
+Stables candidate: `stables.php` read `mounts.mountbuff` three times through
+ScalarState and used the result unchecked (a malformed buff was fatal after the
+purchase was logged). It now reads it once in `resurrection_stables_buff()`
+(`lib/stables_authority.php`), which requires an array and fails before any change.
+Candidate inventory: **108 / 50 / 40 / 67 / 1**. ScalarState limits are unchanged;
+the mount buff business schema beyond "is an array" stays on the roadmap. See
+[stables authority](STABLES-AUTHORITY-20261016.md).

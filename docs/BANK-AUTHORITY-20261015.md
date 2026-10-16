@@ -127,3 +127,12 @@ comes from CI on both supported legs.
   received is per day.
 - On the borrow form while in debt, entering `0` asks to borrow the size of the
   existing debt (1.1.2 arithmetic, kept and bounded by the borrow limit).
+
+## Acceptance, 2026-10-16
+
+`52bfc4f2e29521dc909e6194221c9ae0efa785ad` is accepted on its own run. Modern core
+**38802851227 SUCCESS** (2026-10-15 20:33–20:50 UTC): both `result` jobs and every
+`checks` and `http` shard job succeeded on PHP 8.4 / MariaDB 11.4 and PHP 8.5 / MySQL
+8.4. Baseline integrity **38802851288 SUCCESS**. The run finished before `639b8c5` was
+pushed, so `cancel-in-progress` did not apply. Conclusions come from the GitHub Actions
+run and job API. The bank is Done in `ROADMAP.md`.

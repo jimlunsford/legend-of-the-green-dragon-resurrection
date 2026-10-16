@@ -80,3 +80,11 @@ CI on both supported legs.
   the new price when affordable, as before.
 - Equipment purchase does not touch buffs or other stats. Any module that adjusts
   attack or defense outside these columns is unaffected, as in 1.1.2.
+
+## Acceptance, 2026-10-16
+
+`639b8c50f52ae3f8874ab76a810d28b4c4e58257` is accepted. Modern core
+**38810195085 SUCCESS**: both `result` jobs and every `checks` and `http` shard job
+succeeded on PHP 8.4 / MariaDB 11.4 and PHP 8.5 / MySQL 8.4. Baseline integrity
+**38810195222 SUCCESS**. Conclusions come from the GitHub Actions run and job API.
+Weapons and armor are Done in `ROADMAP.md`.

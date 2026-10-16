@@ -5445,6 +5445,110 @@ echo json_encode(systemmail($to,['Trusted %s','notice'],['Hello %s','Jim'],0,$no
             for page,table,idc,namec,*_ in shops: q(f"DELETE FROM {table} WHERE {namec} IN (?,?,?,?)",["Tier O'Reilly \\ 雪 <b>Blade</b>",'Tier Costly','Higher Gear','Lower Gear'])
             q('UPDATE accounts SET '+','.join(k+'=?' for k in original if k!='acctid')+' WHERE acctid=?',[*[v for k,v in original.items() if k!='acctid'],player])
 
+    def test_stables_buy_feed_and_sell_authority_http(self):
+        q=self.query;player=int(q('SELECT acctid FROM accounts WHERE login=?',['WebPlayer'])[0]['acctid'])
+        original=q('SELECT * FROM accounts WHERE acctid=?',[player])[0]
+        saved=q("SELECT setting,value FROM settings WHERE setting='allowfeed'")
+        village=q("SELECT value FROM settings WHERE setting='villagename'");village=village[0]['value'] if village else 'Degolburg'
+        buff=lambda rounds:'a:4:{s:4:"name";s:4:"Pony";s:6:"rounds";i:%d;s:6:"atkmod";d:1.1;s:6:"schema";s:6:"mounts";}'%rounds
+        ids={}
+        try:
+            for key,name,gold,gems,active,where,dk,stored in [('pony',"Pony O'Reilly \\ 雪 <b>",100,2,1,'all',0,buff(20)),('horse','Fixture Horse',300,2,1,'all',0,buff(20)),
+                    ('inactive','Fixture Inactive',10,0,0,'all',0,buff(20)),('elsewhere','Fixture Elsewhere',10,0,1,'Elsewhere',0,buff(20)),
+                    ('costly','Fixture Dragon Mount',10,0,1,'all',5,buff(20)),('broken','Fixture Broken',10,0,1,'all',0,'not serialized')]:
+                q("INSERT INTO mounts (mountname,mountdesc,mountcategory,mountbuff,mountcostgems,mountcostgold,mountactive,mountforestfights,newday,recharge,partrecharge,mountfeedcost,mountlocation,mountdkcost) VALUES (?,'Fixture','Fixture',?,?,?,?,0,'','','',5,?,?)",
+                  [name,stored,gems,gold,active,where,dk])
+                ids[key]=int(q('SELECT MAX(mountid) AS id FROM mounts')[0]['id'])
+            q("UPDATE accounts SET dragonkills=2,dragonpoints=?,race='Human',specialty='DA',alive=1,gold=1000,gems=10,hashorse=0,fedmount=0,level=5,location=?,bufflist='a:0:{}',lasthit=NOW() WHERE acctid=?",
+              ['a:2:{i:0;s:2:"ff";i:1;s:2:"ff";}',village,player])
+            q("INSERT INTO settings(setting,value) VALUES ('allowfeed','0') ON DUPLICATE KEY UPDATE value='0'")
+            state=lambda:tuple(q('SELECT gold,gems,hashorse,fedmount FROM accounts WHERE acctid=?',[player])[0].values())
+            rounds=lambda:(re.search(r's:6:"rounds";i:(\d+)',q('SELECT bufflist FROM accounts WHERE acctid=?',[player])[0]['bufflist']) or [None,None])[1]
+            logs=lambda:int(q('SELECT COUNT(*) AS n FROM debuglog WHERE actor=?',[player])[0]['n'])
+            anonymous=self._security_client(login=None)
+            for data in [None,{'x':'1'}]: self.assertIn(anonymous(f"stables.php?op=confirmbuy&id={ids['pony']}",data)[0],[302,303,403])
+            client=self._security_client()
+            def request(url,data=None):
+                # Recompute the authoritative game day for every request (the day rolls over at 18:00 UTC).
+                q('UPDATE accounts SET lastnewday=? WHERE acctid=?',[self._current_game_day(),player])
+                self._security_allow(player,url);return client(url,data)
+            buy=lambda key:f"stables.php?op=confirmbuy&id={ids[key]}"
+            def form(page,action):
+                status,body=request(page);self.assertEqual(200,status,body[:1500]);return self._security_fields(body,action)
+            # The listing offers only active mounts stabled here within the dragon-kill cost; examining others shows nothing.
+            status,body=request('stables.php');self.assertEqual(200,status,body[:1500])
+            offered={int(i) for i in re.findall(r'op=examine&(?:amp;)?id=(\d+)',body)}&set(ids.values())
+            self.assertEqual({ids['pony'],ids['horse'],ids['broken']},offered)
+            for key in ['inactive','elsewhere','costly']:
+                status,body=request(f"stables.php?op=examine&id={ids[key]}");self.assertIn('dinnae be any such beestie',body,key);self.assertNotIn('op=buymount',body)
+            status,body=request(f"stables.php?op=examine&id={ids['pony']}");self.assertIn(f"op=buymount&amp;id={ids['pony']}",body);self.assertNotIn('<b>',body.split('Creature:')[1][:200])
+            # GET only asks: 1.1.2 bought on GET buymount (no mount) and confirmbuy, fed on GET feed and sold on GET confirmsell.
+            before=state()
+            for url in [f"stables.php?op=buymount&id={ids['pony']}",buy('pony'),'stables.php?op=feed','stables.php?op=confirmsell']:
+                self.assertEqual(200,request(url)[0],url);self.assertEqual(before,state(),url)
+            fields=form(f"stables.php?op=buymount&id={ids['pony']}",buy('pony'))
+            self.assertEqual(403,request(buy('pony'),{'action_token':fields['action_token']})[0])
+            self.assertEqual(403,request(buy('pony'),{**fields,'csrf_token':'0'*64})[0])
+            for url in ['stables.php?op=confirmbuy&id=abc','stables.php?op=confirmbuy&id=0','stables.php?op=confirmbuy']: self.assertEqual(400,request(url,fields)[0],url)
+            self.assertEqual(400,request(buy('pony'),{**fields,'hashorse':'1'})[0])
+            # Unknown, inactive, elsewhere and too-costly mounts: no form, and a forged POST changes nothing.
+            for key in ['inactive','elsewhere','costly']:
+                status,body=request(f"stables.php?op=buymount&id={ids[key]}");self.assertNotIn('op=confirmbuy',body,key)
+                self.assertEqual(409,request(buy(key),fields)[0],key)
+            self.assertEqual(409,request('stables.php?op=confirmbuy&id=99999999',fields)[0]);self.assertEqual(before,state())
+            # The offer is rechecked under lock: a mount withdrawn after its form was issued is not sold.
+            fields=form(f"stables.php?op=buymount&id={ids['pony']}",buy('pony'));q('UPDATE mounts SET mountactive=0 WHERE mountid=?',[ids['pony']])
+            status,body=request(buy('pony'),fields);self.assertIn('dinnae be any such beestie',body);self.assertEqual(before,state())
+            q('UPDATE mounts SET mountactive=1 WHERE mountid=?',[ids['pony']])
+            # Too little gold: the 1.1.2 refusal, nothing charged. A stale form (purse changed) is refused.
+            q('UPDATE accounts SET gold=99 WHERE acctid=?',[player]);fields=form(f"stables.php?op=buymount&id={ids['pony']}",buy('pony'))
+            status,body=request(buy('pony'),fields);self.assertIn('Cannae ye see that',body);self.assertEqual(('99','10','0','0'),state())
+            fields=form(f"stables.php?op=buymount&id={ids['pony']}",buy('pony'));q('UPDATE accounts SET gold=1000 WHERE acctid=?',[player])
+            self.assertEqual(409,request(buy('pony'),fields)[0]);self.assertEqual(before,state())
+            # A malformed stored buff stops the purchase before anything is charged or logged.
+            n=logs();fields=form(f"stables.php?op=buymount&id={ids['broken']}",buy('broken'))
+            self.assertEqual(500,request(buy('broken'),fields)[0]);self.assertEqual(before,state());self.assertEqual(n,logs())
+            # A late failure on the account write rolls back purse, mount, buff and log; the spent intent cannot retry.
+            fields=form(f"stables.php?op=buymount&id={ids['pony']}",buy('pony'))
+            q(f"ALTER TABLE accounts ADD CONSTRAINT fixture_stables CHECK (login <> 'WebPlayer' OR hashorse <> {ids['pony']})")
+            try:
+                self.assertEqual(500,request(buy('pony'),fields)[0]);self.assertEqual(before,state());self.assertEqual(n,logs());self.assertIsNone(rounds())
+                self.assertEqual(409,request(buy('pony'),fields)[0])
+            finally: q('ALTER TABLE accounts DROP CONSTRAINT fixture_stables')
+            fields=form(f"stables.php?op=buymount&id={ids['pony']}",buy('pony'));status,body=request(buy('pony'),fields)
+            self.assertEqual(200,status);self.assertIn('leads out a fine',body);self.assertEqual(('900','8',str(ids['pony']),'0'),state());self.assertEqual('20',rounds());self.assertEqual(n+1,logs())
+            self.assertEqual(409,request(buy('pony'),fields)[0]);self.assertEqual(('900','8',str(ids['pony']),'0'),state())
+            # Trading in: 2/3 of the old mount counts toward gold and gems (round(100x2/3)=67, round(2x2/3)=1).
+            q('UPDATE accounts SET gems=0 WHERE acctid=?',[player]);fields=form(f"stables.php?op=buymount&id={ids['horse']}",buy('horse'))
+            status,body=request(buy('horse'),fields);self.assertIn('Cannae ye see that',body);self.assertEqual(('900','0',str(ids['pony']),'0'),state())
+            q('UPDATE accounts SET gems=8 WHERE acctid=?',[player]);fields=form(f"stables.php?op=buymount&id={ids['horse']}",buy('horse'))
+            status,body=request(buy('horse'),fields);self.assertIn('You hand over the reins',body);self.assertEqual(('667','7',str(ids['horse']),'0'),state())
+            # Feeding: disabled, not hungry, half price, once a day, full price and too little gold. Grub is round(5 x 5) = 25.
+            status,body=request('stables.php?op=feed');self.assertIn('cannae feed yer critter',body);self.assertNotIn('action_token',body)
+            q("UPDATE settings SET value='1' WHERE setting='allowfeed'")
+            fields=form('stables.php?op=feed','stables.php?op=feed');status,body=request('stables.php?op=feed',fields);self.assertIn("isn't hungry",body);self.assertEqual(('667','7',str(ids['horse']),'0'),state())
+            q('UPDATE accounts SET bufflist=? WHERE acctid=?',['a:1:{s:5:"mount";%s}'%buff(15),player])
+            fields=form('stables.php?op=feed','stables.php?op=feed');status,body=request('stables.php?op=feed',fields);self.assertIn('50% discount',body)
+            self.assertEqual(('654','7',str(ids['horse']),'1'),state());self.assertEqual('20',rounds())
+            self.assertEqual(409,request('stables.php?op=feed',fields)[0]);status,body=request('stables.php?op=feed');self.assertNotIn('action_token',body)
+            q('UPDATE accounts SET fedmount=0,bufflist=? WHERE acctid=?',['a:1:{s:5:"mount";%s}'%buff(3),player])
+            fields=form('stables.php?op=feed','stables.php?op=feed');status,body=request('stables.php?op=feed',fields);self.assertIn('eats all the food greedily',body)
+            self.assertEqual(('629','7',str(ids['horse']),'1'),state())
+            q('UPDATE accounts SET fedmount=0,gold=10,bufflist=? WHERE acctid=?',['a:1:{s:5:"mount";%s}'%buff(3),player])
+            fields=form('stables.php?op=feed','stables.php?op=feed');status,body=request('stables.php?op=feed',fields);self.assertIn("don't have enough gold",body);self.assertEqual(('10','7',str(ids['horse']),'0'),state())
+            # Selling: round(300 x 2/3) = 200 gold and round(2 x 2/3) = 1 gem; the buff goes; replay and selling with no mount change nothing.
+            q('UPDATE accounts SET gold=629 WHERE acctid=?',[player]);fields=form('stables.php?op=sellmount','stables.php?op=confirmsell')
+            status,body=request('stables.php?op=confirmsell',fields);self.assertEqual(200,status);self.assertIn('lone tear',body);self.assertEqual(('829','8','0','0'),state());self.assertIsNone(rounds())
+            self.assertEqual(409,request('stables.php?op=confirmsell',fields)[0]);self.assertEqual(('829','8','0','0'),state())
+            status,body=request('stables.php?op=sellmount');self.assertNotIn('op=confirmsell',body)
+            status,body=request('stables.php?op=feed');self.assertNotIn('action_token',body);self.assertEqual(409,request('stables.php?op=feed',fields)[0])
+            self.assertEqual(('829','8','0','0'),state())
+        finally:
+            for mount in ids.values(): q('DELETE FROM mounts WHERE mountid=?',[mount])
+            q("DELETE FROM settings WHERE setting='allowfeed'")
+            for row in saved: q('INSERT INTO settings(setting,value) VALUES (?,?)',[row['setting'],row['value']])
+            q('UPDATE accounts SET '+','.join(k+'=?' for k in original if k!='acctid')+' WHERE acctid=?',[*[v for k,v in original.items() if k!='acctid'],player])
+
     def _security_client(self, login='WebPlayer', password="Synthetic web O'Reilly \\ password", port=None):
         class NoRedirect(urllib.request.HTTPRedirectHandler):
             def redirect_request(self, *args): return None

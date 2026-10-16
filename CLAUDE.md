@@ -98,6 +98,7 @@ Modern core runs per leg: one `checks` job, four `http` shard jobs, and one `res
 - Plain `unittest discover` runs tests in name order, so a web test that needs WebPlayer must not rely on running after `test_create_login_rotate_render_logout` unless the shard runner orders it. Run local serial checks through `scripts/tooling-shards.py`.
 - Do not rerun old workflows. Do not dispatch duplicates.
 - After publishing, inspect each workflow once. Optionally once more later.
+- Pushing while the previous Modern core run is still going cancels that run (`cancel-in-progress`). When that happens, the previous candidate is accepted through the first accepted descendant, recorded as such.
 - If Modern core is still running, STOP and report CI PENDING. Do not wait for the full suite.
 - Acceptance requires both matrix legs and Baseline at SUCCESS, with actual totals. Never substitute predecessor totals.
 - If a job fails, record the failing test, assertion, expected vs actual, and duration from the logs.
@@ -109,7 +110,7 @@ Modern core runs per leg: one `checks` job, four `http` shard jobs, and one `res
 
 ## Serialized state
 
-Accepted inventory: 112 sites, 53 files, 42 serialize writers/checks, 69 ScalarState reads, 1 centralized unserialize.
+Accepted inventory (recounted at `639b8c5`, see `docs/SERIALIZED-STATE-AUDIT.md`): 110 sites, 50 files, 40 serialize writers/checks, 69 ScalarState reads, 1 centralized unserialize.
 
 Recompute only if serialized-state source changes. Never change counts by assumption.
 

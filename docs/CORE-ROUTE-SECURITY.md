@@ -580,3 +580,20 @@ item hook. A typed cross-tier URL was already refused by forced navigation (badn
 the handler itself had no tier check. Prices, the 75% trade-in, the tier rule, stat
 formulas and messages are unchanged. See
 [equipment purchase authority](EQUIPMENT-PURCHASE-AUTHORITY-20261015.md).
+
+2026-10-16: bank accepted at `52bfc4f` on its own run (Modern core 38802851227,
+Baseline integrity 38802851288); weapons and armor accepted at `639b8c5` (Modern core
+38810195085, Baseline integrity 38810195222).
+
+2026-10-16 stables (`stables.php`): candidate pending CI. Buy or trade, feed and sell
+are POST + CSRF + one-use intent bound to the action, the mount and the player's
+mount, gold, gems, location, dragon kills, level, `fedmount` and mount buff rounds,
+inside the locked player transaction. GET of a confirming step only asks (1.1.2
+bought on GET `buymount` without a mount and on `confirmbuy`, fed on GET `feed` and
+sold on GET `confirmsell`). The server rechecks that the mount exists, is active,
+stabled here and within the dragon-kill cost (only the listing applied that), that
+the player owns a mount before feeding or selling, and the once-a-day feeding that
+1.1.2 enforced only by hiding the link. A malformed stored buff stops the action
+before anything is charged or logged. Feeding and selling, fatal on PHP 8 at the
+undefined `basename`/`newname` keys, work again. See
+[stables authority](STABLES-AUTHORITY-20261016.md).
