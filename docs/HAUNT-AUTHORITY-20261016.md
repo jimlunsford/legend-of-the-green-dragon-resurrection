@@ -79,3 +79,44 @@ from CI on both supported legs.
   They only display.
 - `op=restore` (restoring the soul for favor) is still a GET mutation. It is not
   part of this family.
+
+## First candidate CI, 2026-10-16
+
+`595f0c399d8a9d5eeead8b0d728452f1352b7b4d` passed. Modern core **38837315295 SUCCESS**
+(01:50–02:08 UTC): both `result` jobs and every `checks` and `http` shard job on PHP
+8.4 / MariaDB 11.4 and PHP 8.5 / MySQL 8.4. Baseline integrity **38837315234 SUCCESS**.
+It is not recorded as the family's acceptance: Jim's haunting brief asks for more
+(below), so haunting stays in Remaining until the follow-up candidate passes.
+
+## Follow-up candidate: the haunting brief, 2026-10-16
+
+Starting head `595f0c3`. These rows replace the matching rows above; the rest stand.
+
+| Behavior | 1.1.2 | `595f0c3` | Now | Reason |
+|---|---|---|---|---|
+| Haunting yourself | Allowed (the search lists you) | Allowed | Refused: the search omits you, the GET shows "lost their concentration" with no form, and the haunt refuses under lock | Brief: the target is not the actor |
+| Living actor | graveyard.php sends the living to the village unless an event holds the page | Same | Same, and the haunt also refuses a living actor under lock | Event pages bypass the redirect |
+| Intent | — | Target, player favor, level, life, name | Also the target's `hauntedby`: a form issued before someone else's haunt is stale (409) instead of reaching the under-lock "already haunted" message | Brief: bound to the target's haunted state |
+| Search | `%` between bytes, `addslashes`; typed `%` and `_` were wildcards | Bound, split by UTF-8 character; `%` and `_` still wildcards | The bank's accepted recipient search (`resurrection_bank_search_pattern`, `ESCAPE '|'`): UTF-8 characters, `%` and `_` match only themselves | Brief; reuse |
+| `hauntedby` | `addslashes` was SQL escaping only; the stored value is the name | Bound, first 50 characters | Unchanged from `595f0c3`; the test now stores a name with an apostrophe, a backslash and `雪` | Brief: name as is |
+
+The favor charge, the rolls (`e_rand(0, target level)` against `e_rand(0, actor level)`),
+a failed attempt's single 25-favor charge, the six failure messages, the news lines and
+the notice text are unchanged. The `hauntedby` readers (New Day and Ramius resurrection:
+one fewer forest fight, then cleared) are untouched and stay covered by their accepted
+tests. `lib/graveyard/case_haunt3.php` loads the mail helper through `require_once`
+(`lib/haunt_authority.php`) since `595f0c3`.
+
+Negative favor, proved on `8257aed` (table above): the 1.1.2 code subtracts 25 from
+whatever is left, but `deathpower` is unsigned, so under strict SQL the session save
+fails at the end of the page instead of storing a negative value. Everything written
+before it stays: each replay added a news row, and a haunt at 5 favor marked and mailed
+the target for free. Favor never went negative in the database.
+
+Test changes (`test_graveyard_haunt_authority_http`): rolls are seeded through the
+fixture server (`graveyard-haunt`, `mt_srand(7)`), so success is deterministic as
+well as failure; the self target, a living actor (GET and POST both redirect, nothing
+changes), literal `%_` and `_x_` searches, a third unlocked target, the search omitting
+the haunter, one of the six historical failure messages and the news line, and a stale
+form after another haunt (409). It fails against `595f0c3` at the `%_` search (every
+account matched the wildcards).

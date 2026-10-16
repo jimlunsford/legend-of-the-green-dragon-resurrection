@@ -610,3 +610,9 @@ The server now requires the 25 favor (1.1.2 never checked it), applies the searc
 bound, the 50-character `hauntedby` mark is truncated explicitly, and an array search
 is refused instead of fatal. `op=restore` remains a GET favor spend, now on the
 roadmap. See [haunting authority](HAUNT-AUTHORITY-20261016.md).
+
+2026-10-16 haunting follow-up: `595f0c3` passed (Modern core 38837315295, Baseline
+integrity 38837315234) but is not the family's acceptance. The follow-up refuses
+haunting yourself, refuses a living actor under lock, binds the intent to the target's
+haunted state, and reuses the bank's recipient search so typed `%` and `_` match only
+themselves. See [haunting authority](HAUNT-AUTHORITY-20261016.md).

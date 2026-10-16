@@ -43,7 +43,7 @@ class WebApplicationTests(unittest.TestCase):
             cls.port = sock.getsockname()[1]
         # Outside the application tree; only the loopback fixture server loads this.
         cls.seed_file = tempfile.NamedTemporaryFile(mode='w', suffix='.php')
-        cls.seed_file.write("<?php if (in_array($_SERVER['HTTP_X_RESURRECTION_FIXTURE'] ?? '', ['skeleton-death','specialty-accounting'], true)) mt_srand(12345); if (($_SERVER['HTTP_X_RESURRECTION_FIXTURE'] ?? '') === 'ordinary-flee-failure') mt_srand(3); if (($_SERVER['HTTP_X_RESURRECTION_FIXTURE'] ?? '') === 'graveyard-round') mt_srand(1); if (($_SERVER['HTTP_X_RESURRECTION_FIXTURE'] ?? '') === 'inn-bribe') mt_srand(4);\n")
+        cls.seed_file.write("<?php if (in_array($_SERVER['HTTP_X_RESURRECTION_FIXTURE'] ?? '', ['skeleton-death','specialty-accounting'], true)) mt_srand(12345); if (($_SERVER['HTTP_X_RESURRECTION_FIXTURE'] ?? '') === 'ordinary-flee-failure') mt_srand(3); if (($_SERVER['HTTP_X_RESURRECTION_FIXTURE'] ?? '') === 'graveyard-round') mt_srand(1); if (($_SERVER['HTTP_X_RESURRECTION_FIXTURE'] ?? '') === 'inn-bribe') mt_srand(4); if (($_SERVER['HTTP_X_RESURRECTION_FIXTURE'] ?? '') === 'graveyard-haunt') mt_srand(7);\n")
         cls.seed_file.flush()
         # PHP's actual external-mail transport is replaced ONLY on this fixture server.
         # The subprocess independently observes committed rows before reporting delivery failure.
@@ -5554,26 +5554,34 @@ echo json_encode(systemmail($to,['Trusted %s','notice'],['Hello %s','Jim'],0,$no
         original=q('SELECT * FROM accounts WHERE acctid=?',[player])[0];targets=[]
         try:
             victim=self._security_target('HauntVictim');targets.append(victim);hidden=self._security_target('HauntLocked');targets.append(hidden)
+            plain=self._security_target('HauntPlain');targets.append(plain)
             q("UPDATE accounts SET level=0,hauntedby='',locked=0 WHERE acctid=?",[victim]);q("UPDATE accounts SET level=0,hauntedby='',locked=1 WHERE acctid=?",[hidden])
-            # 58 characters: hauntedby is varchar(50), names varchar(60).
-            ghost='`7Ghost '+'x'*51
+            q("UPDATE accounts SET name='Plain Haunt Name',level=0,hauntedby='',locked=0 WHERE acctid=?",[plain])
+            # 58 characters with an apostrophe, a backslash and UTF-8: hauntedby is varchar(50), names varchar(60).
+            ghost="`7Ghost O'Reilly \\ 雪 "+'x'*37
+            self.assertEqual(58,len(ghost))
             q("UPDATE accounts SET alive=0,hitpoints=0,deathpower=100,level=0,specialinc='',specialmisc='',name=? WHERE acctid=?",[ghost,player])
             state=lambda:(q('SELECT deathpower FROM accounts WHERE acctid=?',[player])[0]['deathpower'],q('SELECT hauntedby FROM accounts WHERE acctid=?',[victim])[0]['hauntedby'],
                 int(q('SELECT COUNT(*) AS n FROM news')[0]['n']),int(q('SELECT COUNT(*) AS n FROM mail WHERE msgto=?',[victim])[0]['n']))
             haunt=lambda login='HauntVictim':'graveyard.php?op=haunt3&name='+login
+            failures=['they sneezed','completely unaware of your presence','trip over your ghostly tail','eating sausage','"Neat!"','panic at the sight of a ghost']
             anonymous=self._security_client(login=None)
             for data in [None,{'x':'1'}]: self.assertIn(anonymous(haunt(),data)[0],[302,303,403])
             client=self._security_client()
             def request(url,data=None):
                 # Recompute the authoritative game day for every request (the day rolls over at 18:00 UTC).
                 q('UPDATE accounts SET lastnewday=? WHERE acctid=?',[self._current_game_day(),player])
-                self._security_allow(player,url);return client(url,data)
+                # Seeded rolls; level 0 always rolls 0, and level 100000 against level 0 succeeds under this seed.
+                self._security_allow(player,url);return client(url,data,fixture='graveyard-haunt')
             def form(login='HauntVictim'):
                 status,body=request(haunt(login));self.assertEqual(200,status,body[:1500]);return self._security_fields(body,haunt(login))
-            # The search binds the typed name (apostrophe included) and lists only unlocked accounts.
-            status,body=request('graveyard.php?op=haunt2',{'name':"O'Reilly"});self.assertEqual(200,status,body[:1500])
-            self.assertIn("op=haunt3&name=HauntVictim'",body);self.assertNotIn('HauntLocked',body);self.assertNotIn('<img src=x>',body)
-            status,body=request('graveyard.php?op=haunt2',{'name':'雪'});self.assertEqual(200,status,body[:1500]);self.assertIn("op=haunt3&name=HauntVictim'",body)
+            def search(name):
+                status,body=request('graveyard.php?op=haunt2',{'name':name});self.assertEqual(200,status,body[:1500])
+                return set(re.findall(r"op=haunt3&name=([A-Za-z]+)'",body)),body
+            # The search binds the typed name, matches UTF-8 characters, treats % and _ literally, lists only other unlocked accounts and escapes names.
+            found,body=search("O'Reilly");self.assertEqual({'HauntVictim'},found);self.assertNotIn('<img src=x>',body)
+            self.assertEqual({'HauntVictim'},search('雪')[0]);self.assertEqual({'HauntVictim'},search('%_')[0]);self.assertEqual(set(),search('_x_')[0])
+            self.assertNotIn('WebPlayer',search('Ghost')[0])
             for data in [{'name[]':'x'},{'name':b'\xe9'}]: self.assertEqual(400,request('graveyard.php?op=haunt2',data)[0],data)
             # GET only asks: 1.1.2 charged favor and haunted on GET op=haunt3, replayably.
             before=state();status,body=request(haunt());self.assertEqual(200,status,body[:1500]);self.assertEqual(before,state());self.assertNotIn('<img src=x>',body)
@@ -5581,8 +5589,8 @@ echo json_encode(systemmail($to,['Trusted %s','notice'],['Hello %s','Jim'],0,$no
             self.assertEqual(403,request(haunt(),{'action_token':fields['action_token']})[0]);self.assertEqual(403,request(haunt(),{**fields,'csrf_token':'0'*64})[0])
             self.assertEqual(400,request(haunt(),{**fields,'deathpower':'1000'})[0])
             for url in ['graveyard.php?op=haunt3','graveyard.php?op=haunt3&name=','graveyard.php?op=haunt3&name[]=HauntVictim']: self.assertEqual(400,request(url,fields)[0],url)
-            # A locked or unknown account offers no form, and a forged POST changes nothing.
-            for login in ['HauntLocked','NoSuchHauntTarget']:
+            # Locked, unknown and the haunter's own account offer no form, and a forged POST changes nothing.
+            for login in ['HauntLocked','NoSuchHauntTarget','WebPlayer']:
                 status,body=request(haunt(login));self.assertIn('lost their concentration',body,login);self.assertNotIn('action_token',body)
                 self.assertEqual(409,request(haunt(login),fields)[0],login)
             self.assertEqual(before,state())
@@ -5590,25 +5598,32 @@ echo json_encode(systemmail($to,['Trusted %s','notice'],['Hello %s','Jim'],0,$no
             q('UPDATE accounts SET deathpower=24 WHERE acctid=?',[player]);status,body=request(haunt());self.assertIn('not yet impressed',body);self.assertNotIn('action_token',body)
             self.assertEqual(409,request(haunt(),fields)[0]);self.assertEqual(('24',*before[1:]),state())
             q('UPDATE accounts SET deathpower=100 WHERE acctid=?',[player])
-            # A failed haunt (level 0 rolls 0, never more than the target's roll) costs 25 favor and makes news; no notice. Replay is refused.
+            # The living are sent to the village (graveyard.php) and cannot use a form issued while dead.
+            fields=form();q('UPDATE accounts SET alive=1,hitpoints=10 WHERE acctid=?',[player])
+            for data in [None,fields]:
+                status,body=request(haunt(),data);self.assertIn(status,[302,303]);self.assertEqual(before,state())
+            q('UPDATE accounts SET alive=0,hitpoints=0 WHERE acctid=?',[player])
+            # A failed haunt (level 0 always rolls 0, never more than the target's roll) costs 25 favor once and makes news; no notice. Replay is refused.
             fields=form();status,body=request(haunt(),fields);self.assertEqual(200,status,body[:1500]);self.assertNotIn('You have successfully haunted',body)
-            self.assertEqual(('75','',before[2]+1,before[3]),state());self.assertEqual(409,request(haunt(),fields)[0]);self.assertEqual(('75','',before[2]+1,before[3]),state())
+            self.assertEqual(1,sum(text in body for text in failures),body[-3000:])
+            self.assertEqual(('75','',before[2]+1,before[3]),state());self.assertIn('unsuccessfully haunted',q('SELECT newstext FROM news ORDER BY newsid DESC LIMIT 1')[0]['newstext'])
+            self.assertEqual(409,request(haunt(),fields)[0]);self.assertEqual(('75','',before[2]+1,before[3]),state())
             # A late failure on the player's write rolls back favor, target, news and notice; the spent intent cannot retry.
             q('UPDATE accounts SET level=100000 WHERE acctid=?',[player]);before=state();fields=form()
             q("ALTER TABLE accounts ADD CONSTRAINT fixture_haunt CHECK (login <> 'WebPlayer' OR deathpower <> 50)")
             try:
                 self.assertEqual(500,request(haunt(),fields)[0]);self.assertEqual(before,state());self.assertEqual(409,request(haunt(),fields)[0])
             finally: q('ALTER TABLE accounts DROP CONSTRAINT fixture_haunt')
-            # Success (level 100000 against 0: fails once in 100001): favor, the target's mark (truncated as 1.1.2's MySQL did), news and one notice together.
+            # A fresh form succeeds: favor, the target's mark (the name as is, truncated to 50 as 1.1.2's MySQL did), news and one notice together.
             fields=form();status,body=request(haunt(),fields);self.assertEqual(200,status,body[:1500]);self.assertIn('You have successfully haunted',body)
             self.assertEqual(('50',ghost[:50],before[2]+1,before[3]+1),state())
             mail=q('SELECT msgfrom,subject,body FROM mail WHERE msgto=?',[victim]);self.assertEqual(1,len(mail));self.assertEqual('0',mail[0]['msgfrom'])
             self.assertIn('You have been haunted',mail[0]['subject']);self.assertIn(ghost,mail[0]['body'])
             self.assertEqual(409,request(haunt(),fields)[0]);self.assertEqual(('50',ghost[:50],before[2]+1,before[3]+1),state())
-            # Already haunted: no form; a form issued before someone else's haunt changes nothing.
+            # Already haunted: no form; a form issued before someone else's haunt is stale and charges nothing.
             status,body=request(haunt());self.assertIn('already been haunted',body);self.assertNotIn('action_token',body)
             q("UPDATE accounts SET hauntedby='' WHERE acctid=?",[victim]);fields=form();q("UPDATE accounts SET hauntedby='Another Ghost' WHERE acctid=?",[victim])
-            status,body=request(haunt(),fields);self.assertIn('already been haunted',body);self.assertEqual(('50','Another Ghost',before[2]+1,before[3]+1),state())
+            self.assertEqual(409,request(haunt(),fields)[0]);self.assertEqual(('50','Another Ghost',before[2]+1,before[3]+1),state())
         finally:
             for target in targets:
                 q('DELETE FROM mail WHERE msgto=?',[target]);q('DELETE FROM accounts_output WHERE acctid=?',[target]);q('DELETE FROM accounts WHERE acctid=?',[target])

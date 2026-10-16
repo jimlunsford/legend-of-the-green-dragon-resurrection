@@ -12,19 +12,25 @@ function resurrection_haunt_login(): string {
     return $login;
 }
 
-/** @return array<string, mixed>|null An unlocked account offered for haunting, bound by login (the 1.1.2 listing's `locked=0` rule). */
+/**
+ * Another player's unlocked account offered for haunting, bound by login: the 1.1.2 search's `locked=0`
+ * rule, and never the haunter.
+ * @return array<string, mixed>|null
+ */
 function resurrection_haunt_target(string $login): ?array {
-    $rows = db_query('SELECT acctid,login,name,level,hauntedby FROM ' . db_prefix('accounts') . ' WHERE login=? AND locked=0', true, [$login]);
+    global $session;
+    $rows = db_query('SELECT acctid,login,name,level,hauntedby FROM ' . db_prefix('accounts') . ' WHERE login=? AND locked=0 AND acctid<>?', true,
+        [$login, (int)$session['user']['acctid']]);
     return count($rows) === 1 ? $rows[0] : null;
 }
 
 /**
- * A haunt form is bound to the target and the haunting player's favor, level and life.
+ * A haunt form is bound to the target and whether it is haunted, and the haunting player's favor, level and life.
  * @param array<string, mixed> $target
  */
 function resurrection_haunt_context(array $target): string {
     global $session;
-    $state = ['haunt3', (string)$target['acctid'], (string)$target['login']];
+    $state = ['haunt3', (string)$target['acctid'], (string)$target['login'], (string)$target['hauntedby']];
     foreach (['acctid','deathpower','level','alive','name'] as $key) $state[] = (string)$session['user'][$key];
     return hash('sha256', json_encode($state, JSON_THROW_ON_ERROR | JSON_INVALID_UTF8_SUBSTITUTE));
 }

@@ -15,7 +15,10 @@ if ($posted){
 		$haunt = resurrection_haunt_mutation(function () use ($row) {
 			global $session;
 			$locked = db_query('SELECT acctid,login,name,level,hauntedby,locked FROM ' . db_prefix('accounts') . ' WHERE acctid=? FOR UPDATE', true, [(int)$row['acctid']]);
-			if (count($locked) !== 1 || (string)$locked[0]['login'] !== (string)$row['login'] || (int)$locked[0]['locked'] !== 0) return array('outcome'=>'missing');
+			if (count($locked) !== 1 || (string)$locked[0]['login'] !== (string)$row['login'] || (int)$locked[0]['locked'] !== 0 ||
+				(int)$locked[0]['acctid'] === (int)$session['user']['acctid']) return array('outcome'=>'missing');
+			// Only the dead haunt; graveyard.php sends the living to the village unless an event holds the page.
+			if ($session['user']['alive']) throw new DomainException('The living cannot haunt.');
 			$row = $locked[0];
 			if ($row['hauntedby']!="") return array('outcome'=>'haunted');
 			// 1.1.2 charged whatever favor remained; the 25 it costs is now required.
