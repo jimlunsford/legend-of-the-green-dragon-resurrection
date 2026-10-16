@@ -4,6 +4,7 @@ require_once __DIR__ . '/equipment_authority.php';
 require_once __DIR__ . '/substitute.php';
 require_once __DIR__ . '/titles.php';
 require_once __DIR__ . '/names.php';
+require_once __DIR__ . '/../src/Game/CreatureAi.php';
 
 /** The editors' unsigned int(11) IDs. */
 const RESURRECTION_CONTENT_MAX_ID = 4294967295;
@@ -17,6 +18,12 @@ const RESURRECTION_TITLE_LENGTH = 25;
 const RESURRECTION_TAUNT_BYTES = 65535;
 /** Accounts checked per title rebuild transaction. */
 const RESURRECTION_TITLE_REBUILD_BATCH = 50;
+/** The creature editor's text fields and their columns' lengths (creatures and masters share them). */
+const RESURRECTION_CREATURE_TEXT = ['creaturename' => 50, 'creatureweapon' => 50, 'creaturewin' => 120, 'creaturelose' => 120];
+/** The creature editor's level range: 1.1.2's form offers 1-18 (18: graveyard only). */
+const RESURRECTION_CREATURE_MAX_LEVEL = 18;
+/** A new master's health is level * 11 (int(11)), so its level is at most intdiv(2147483647, 11). */
+const RESURRECTION_MASTER_MAX_LEVEL = 195225786;
 
 /**
  * A form's intent is bound to the operation and the row (or an add form's fixed state) it was shown with.
@@ -171,13 +178,18 @@ function resurrection_taunt_formats(string $taunt): bool {
     return resurrection_taunt_sample($taunt) !== null;
 }
 
-/** The taunt formatted against the editor's preview monster, or null when it does not format. */
-function resurrection_taunt_sample(string $taunt): ?string {
+/**
+ * The taunt formatted against the editor's preview monster, or null when it does not format. A master's speech is
+ * formatted only when it holds one of the listed codes ($always false): training's output() passes a speech without
+ * arguments through unformatted.
+ */
+function resurrection_taunt_sample(string $taunt, bool $always = true): ?string {
     global $badguy;
     $saved = $badguy ?? null;
     $badguy = ['creaturename' => 'Baron Munchausen', 'creatureweapon' => 'Bad Puns'];
     try {
         $parts = substitute_array($taunt);
+        if (!$always && count($parts) === 1) return $taunt;
         $format = str_replace('`%', '`%%', (string)array_shift($parts));
         return vsprintf($format, $parts);
     } catch (ValueError | ArgumentCountError) {
@@ -317,4 +329,100 @@ function resurrection_title_rebuild(): array {
         array_push($result['skipped'], ...$batch['skipped']);
         $last = $batch['last'];
     }
+}
+
+/**
+ * The creature editor's save. 1.1.2 wrote every posted key that started with "creature" (creatureid included) into
+ * the UPDATE or INSERT; only the form's declared fields are written now. The health, attack, defense, experience and
+ * gold come from 1.1.2's table for levels 1-17 ($stats, creature_stats()); at level 18, which that table does not
+ * cover, 1.1.2 wrote no stats, so an edit keeps the stored ones and a new creature has none. The A.I. script field is
+ * the form's only for SU_MEGAUSER or SU_RAW_SQL, and only the behavior the game implements (CreatureAi) is accepted.
+ * @param array<int, array<string, int|float>> $stats
+ * @return array{int, int} the creature's ID and the affected rows 1.1.2 reported on
+ */
+function resurrection_creature_save(array $stats): array {
+    global $session;
+    $page = 'the creature editor';
+    resurrection_content_require_form($page);
+    $script = (bool)((int)$session['user']['superuser'] & (SU_MEGAUSER | SU_RAW_SQL));
+    try {
+        resurrection_content_fields(['creatureid', ...array_keys(RESURRECTION_CREATURE_TEXT), 'creaturelevel', 'forest', 'graveyard', ...($script ? ['creatureaiscript'] : [])]);
+        $id = resurrection_content_id($_POST, 'creatureid', true);
+        $values = [];
+        foreach (RESURRECTION_CREATURE_TEXT as $key => $limit) $values[$key] = resurrection_content_text($key, $limit);
+        // Forest combat refuses a creature without a name.
+        if ($values['creaturename'] === '') throw new InvalidArgumentException('A creature needs a name.');
+        $values['creaturelevel'] = resurrection_content_integer('creaturelevel', 1, RESURRECTION_CREATURE_MAX_LEVEL);
+        $values['forest'] = resurrection_content_integer('forest', 0, 1);
+        $values['graveyard'] = resurrection_content_integer('graveyard', 0, 1);
+        if ($script && isset($_POST['creatureaiscript'])) {
+            $values['creatureaiscript'] = resurrection_content_text('creatureaiscript', RESURRECTION_TAUNT_BYTES, true);
+            if ($values['creatureaiscript'] !== '' && !\Resurrection\Game\CreatureAi::supported($values['creatureaiscript'])) throw new InvalidArgumentException('Unsupported creature behavior.');
+        }
+        $row = $id > 0 ? resurrection_content_row('creatures', 'creatureid', $id) : null;
+        if ($id > 0 && $row === null) throw new OutOfBoundsException('Creature not found.');
+    } catch (Throwable $error) { resurrection_content_failure($error, $page); }
+    resurrection_consume_action('creature-edit-' . $id, $row === null ? resurrection_content_context('add', []) : resurrection_content_context('edit', $row));
+    foreach ($stats[$values['creaturelevel']] ?? [] as $key => $value) {
+        if ($key !== 'creaturelevel') $values[$key] = $value;
+    }
+    try {
+        return resurrection_player_mutation(function () use ($id, $row, $values) {
+            global $session;
+            $table = db_prefix('creatures');
+            if ($row === null) {
+                $values['createdby'] = $session['user']['login'];
+                db_query("INSERT INTO $table (" . implode(',', array_keys($values)) . ') VALUES (' . implode(',', array_fill(0, count($values), '?')) . ')', true, array_values($values));
+                $affected = db_affected_rows();
+                return [(int)db_insert_id(), $affected];
+            }
+            $locked = resurrection_content_row('creatures', 'creatureid', $id, true);
+            if ($locked === null || resurrection_content_context('edit', $locked) !== resurrection_content_context('edit', $row)) throw new DomainException('Creature changed.');
+            db_query("UPDATE $table SET " . implode(',', array_map(static fn (string $key) => "$key=?", array_keys($values))) . ' WHERE creatureid=?', true, [...array_values($values), $id]);
+            return [$id, db_affected_rows()];
+        });
+    } catch (Throwable $error) { resurrection_content_failure($error, $page); }
+}
+
+/**
+ * The masters editor's save. As in 1.1.2, ID 0 adds a master with the stats of its level's fixed formulas (attack
+ * and defense level * 2, health level * 11, 12 at level 1); an edit changes the level, name, weapon and speeches and
+ * keeps the stats. A speech with one of the listed codes is formatted when training shows it, so a % that is not a
+ * code must be doubled, as for taunts.
+ * @return string the master's name, for 1.1.2's added/updated note
+ */
+function resurrection_master_save(int $id): string {
+    $page = 'the masters editor';
+    resurrection_content_require_form($page);
+    try {
+        resurrection_content_fields(['level', 'name', 'weapon', 'win', 'lose']);
+        $level = resurrection_content_integer('level', 1, RESURRECTION_MASTER_MAX_LEVEL);
+        $values = [];
+        foreach (['name' => 'creaturename', 'weapon' => 'creatureweapon', 'win' => 'creaturewin', 'lose' => 'creaturelose'] as $field => $column) {
+            $values[$column] = resurrection_content_text($field, RESURRECTION_CREATURE_TEXT[$column]);
+        }
+        foreach (['creaturewin', 'creaturelose'] as $column) {
+            if (resurrection_taunt_sample($values[$column], false) === null) throw new InvalidArgumentException('Speech does not format.');
+        }
+        $row = $id > 0 ? resurrection_content_row('masters', 'creatureid', $id) : null;
+        if ($id > 0 && $row === null) throw new OutOfBoundsException('Master not found.');
+    } catch (Throwable $error) { resurrection_content_failure($error, $page); }
+    resurrection_consume_action('master-edit-' . $id, $row === null ? resurrection_content_context('add', []) : resurrection_content_context('edit', $row));
+    try {
+        resurrection_player_mutation(function () use ($id, $row, $level, $values) {
+            $table = db_prefix('masters');
+            if ($row === null) {
+                $hp = $level * 11;
+                if ($hp == 11) $hp++;
+                db_query("INSERT INTO $table (creaturelevel,creaturename,creatureweapon,creaturewin,creaturelose,creaturehealth,creatureattack,creaturedefense) VALUES (?,?,?,?,?,?,?,?)", true,
+                    [$level, $values['creaturename'], $values['creatureweapon'], $values['creaturewin'], $values['creaturelose'], $hp, $level * 2, $level * 2]);
+                return;
+            }
+            $locked = resurrection_content_row('masters', 'creatureid', $id, true);
+            if ($locked === null || resurrection_content_context('edit', $locked) !== resurrection_content_context('edit', $row)) throw new DomainException('Master changed.');
+            db_query("UPDATE $table SET creaturelevel=?,creaturename=?,creatureweapon=?,creaturewin=?,creaturelose=? WHERE creatureid=?", true,
+                [$level, $values['creaturename'], $values['creatureweapon'], $values['creaturewin'], $values['creaturelose'], $id]);
+        });
+    } catch (Throwable $error) { resurrection_content_failure($error, $page); }
+    return $values['creaturename'];
 }

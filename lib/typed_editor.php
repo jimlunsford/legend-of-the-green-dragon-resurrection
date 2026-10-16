@@ -133,17 +133,28 @@ function resurrection_editor_form(string $url,string $scope,string $context,arra
 }
 
 /**
+ * The object types whose module preferences have an editor: the table's ID column, the editor's access flag and page.
+ * @return array<string,array{id:string,access:int,url:string}> */
+function resurrection_object_types(): array {
+    return [
+        'mounts'=>['id'=>'mountid','access'=>SU_EDIT_MOUNTS,'url'=>'mounts.php?op=save&subop=module&id='],
+        'creatures'=>['id'=>'creatureid','access'=>SU_EDIT_CREATURES,'url'=>'creatures.php?op=save&subop=module&creatureid='],
+    ];
+}
+
+/**
  * @return array{schema:array<string,array<string,mixed>>,object:array<string,mixed>,values:array<string,string>} */
 function resurrection_object_editor_state(string $type,string $module,int $id,bool $lock=false): array {
     global $session;
-    if ($type!=='mounts' || $id<1 || $id>2147483647) throw new DomainException('Unsupported object.');
     // Drinks object editing remains disabled until its separate caller matrix is closed.
-    check_su_access(SU_EDIT_MOUNTS);
+    $object=resurrection_object_types()[$type] ?? null;
+    if ($object===null || $id<1 || $id>2147483647) throw new DomainException('Unsupported object.');
+    check_su_access($object['access']);
     if ($lock && !db_query('SELECT modulename FROM '.db_prefix('modules').' WHERE modulename=? FOR UPDATE',true,[$module])) throw new DomainException('Module removed.');
     $info=resurrection_editor_module($module);
     $schema=\Resurrection\Http\SettingDescriptor::declare($info['prefs-'.$type] ?? []);
     if (!$schema) throw new DomainException('Undeclared object preferences.');
-    $rows=db_query('SELECT * FROM '.db_prefix('mounts').' WHERE mountid=?'.($lock?' FOR UPDATE':''),true,[$id]);
+    $rows=db_query('SELECT * FROM '.db_prefix($type).' WHERE '.$object['id'].'=?'.($lock?' FOR UPDATE':''),true,[$id]);
     if (count($rows)!==1) throw new DomainException('Object no longer exists.');
     $values=[];
     foreach (db_query('SELECT setting,value FROM '.db_prefix('module_objprefs').' WHERE objtype=? AND objid=? AND modulename=? ORDER BY setting'.($lock?' FOR UPDATE':''),true,[$type,$id,$module]) as $row) $values[$row['setting']]=$row['value'];
@@ -173,7 +184,7 @@ function resurrection_object_editor(string $type,string $module,int $id,bool $sa
         output('Preferences saved.');
         $state=resurrection_object_editor_state($type,$module,$id);
     }
-    $url='mounts.php?op=save&subop=module&id='.$id.'&module='.rawurlencode($module);
+    $url=resurrection_object_types()[$type]['url'].$id.'&module='.rawurlencode($module);
     addnav('',$url);
     resurrection_editor_form($url,$scope,resurrection_object_context($state),$state['schema'],$state['values']);
 }

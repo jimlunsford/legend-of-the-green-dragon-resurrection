@@ -1,6 +1,7 @@
 <?php
 require_once __DIR__ . '/../src/Security/ScalarState.php';
 require_once __DIR__ . '/../src/Compatibility/array_cursor.php';
+require_once __DIR__ . '/../src/Compatibility/LegacySprintf.php';
 // translator ready
 // addnews ready
 // mail ready
@@ -106,7 +107,9 @@ function sprintf_translate(){
 		}
 	}
 	ob_start();
-	$return = call_user_func_array("sprintf",$args);
+	// PHP 8 throws where PHP 5 warned and returned false (a stray % in stored text): keep PHP 5's result.
+	$format = array_shift($args);
+	$return = \Resurrection\Compatibility\LegacySprintf::format($format, $args);
 	$err = ob_get_contents();
 	ob_end_clean();
 	if ($err > ""){

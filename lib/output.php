@@ -1,6 +1,7 @@
 <?php
 require_once __DIR__ . '/../src/Security/ScalarState.php';
 require_once __DIR__ . '/../src/Compatibility/array_cursor.php';
+require_once __DIR__ . '/../src/Compatibility/LegacySprintf.php';
 /**
  * Library Functions for page output.
  *		translator ready
@@ -66,7 +67,9 @@ function output_notl($indata){
 	if (count($args)>1){
 		//special case since we use `% as a color code so often.
 		$out = str_replace("`%","`%%",$out);
-		$out = call_user_func_array("sprintf",$args);
+		// PHP 8 throws where PHP 5 warned and returned false (a stray % in stored text): keep PHP 5's result.
+		$format = array_shift($args);
+		$out = \Resurrection\Compatibility\LegacySprintf::format($format, $args);
 	}
 	//holiday text
 	if ($priv==false) $out = holidayize($out,'output');

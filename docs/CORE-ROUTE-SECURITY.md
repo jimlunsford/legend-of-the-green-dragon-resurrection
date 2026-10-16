@@ -753,3 +753,29 @@ See [ban message and player ID cookie](BAN-MESSAGE-AND-ID-COOKIE-20261016.md).
 - Price table, field lists, texts and defaults unchanged.
 
 See [content editors part 1](CONTENT-EDITORS-PART1-AUTHORITY-20261016.md).
+
+2026-10-16 content editors part 2 (`creatures.php`, `masters.php`) and the news formatting
+fatal (`lib/translator.php`, `lib/output.php`): candidate pending CI. Content editors
+part 1 (`6820b80`) was still running CI when this started (Modern core 38958259938 in
+progress, Baseline integrity 38958259926 success) and stays a candidate.
+
+- Every write (creature and master save and delete, creature object preferences) is a
+  POST with CSRF and a one-use intent bound to the row as shown; GET is 405; replay, a
+  second copy of a form or a row changed since it was shown is 409 and writes nothing.
+  Unknown IDs are 404 before any write.
+- The creature save writes only the form's declared fields. 1.1.2 pasted every POST key
+  starting `creature` into the SQL as a column, which let any `SU_EDIT_CREATURES` user set
+  `creatureaiscript` (evaluated as PHP in 1.1.2). The A.I. field stays limited to
+  `SU_MEGAUSER` or `SU_RAW_SQL` and accepts only the supported bundled behaviour.
+- Creature stats come from `creature_stats()` exactly as before (levels 1-17); level 18
+  keeps the stored stats, as in 1.1.2. Master formulas (`level*11`, 12 at level 1;
+  `level*2`) are unchanged and an edit keeps the stats.
+- The creature object preference editor is the shared typed editor: installed module,
+  declared `prefs-creatures`, typed values.
+- All SQL bound; no SQL or driver text printed; output escaped.
+- `sprintf_translate()` and `output_notl()` return PHP 5's `sprintf()` result where PHP 8
+  throws (a stray `%` in stored text), and PHP 8's result everywhere else. Stored defeat
+  news with such a taunt no longer breaks `news.php` and `bio.php`, and the forest's pack
+  line (`%i`) no longer breaks pack encounters.
+
+See [content editors part 2](CONTENT-EDITORS-PART2-AUTHORITY-20261016.md).

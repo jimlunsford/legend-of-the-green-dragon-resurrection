@@ -4,54 +4,38 @@
 
 require_once("common.php");
 require_once("lib/http.php");
+require_once("lib/content_editor.php");
 
 check_su_access(SU_EDIT_CREATURES);
 
 tlschema("masters");
 
-$op = httpget('op');
-$id = (int)httpget('id');
-$act = httpget('act');
+try {
+	$op = \Resurrection\Http\Input::choice($_GET, 'op', ['', 'edit', 'save', 'del'], '');
+	// id 0 is a new master, as in 1.1.2; deleting needs one.
+	$id = in_array($op, ['edit', 'save', 'del'], true) ? resurrection_content_id($_GET, 'id', $op != 'del') : 0;
+} catch (InvalidArgumentException $error) { resurrection_content_failure($error, 'the masters editor'); }
 
 page_header("Masters Editor");
 require_once("lib/superusernav.php");
 superusernav();
 
 if ($op == "del") {
-	$sql = "DELETE FROM " . db_prefix("masters") . " WHERE creatureid=$id";
-	db_query($sql);
+	resurrection_content_delete("masters", "creatureid", "id", "master", "the masters editor");
 	output("`^Master deleted.`0");
 	$op = "";
-	httpset("op", "");
 } elseif ($op == "save") {
-	$name = addslashes(httppost('name'));
-	$weapon = addslashes(httppost('weapon'));
-	$win = addslashes(httppost('win'));
-	$lose = addslashes(httppost('lose'));
-	$lev = (int)httppost('level');
-	if ($id != 0) {
-		$sql = "UPDATE " . db_prefix("masters") . " SET creaturelevel=$lev, creaturename='$name', creatureweapon='$weapon',  creaturewin='$win', creaturelose='$lose' WHERE creatureid=$id";
-	} else {
-		$atk = $lev * 2;
-		$def = $lev * 2;
-		$hp = $lev*11;
-		if ($hp == 11) $hp++;
-		$sql = "INSERT INTO " . db_prefix("masters") . " (creatureid,creaturelevel,creaturename,creatureweapon,creaturewin,creaturelose,creaturehealth,creatureattack,creaturedefense) VALUES ($id,$lev,'$name', '$weapon', '$win', '$lose', '$hp', '$atk', '$def')";
-	}
-	db_query($sql);
+	$name = resurrection_master_save($id);
 	if ($id == 0) {
-		output("`^Master %s`^ added.", stripslashes($name));
+		output("`^Master %s`^ added.", $name);
 	} else {
-		output("`^Master %s`^ updated.", stripslashes($name));
+		output("`^Master %s`^ updated.", $name);
 	}
 	$op = "";
-	httpset("op", "");
 } elseif ($op == "edit") {
 	addnav("Functions");
 	addnav("Return to Masters Editor", "masters.php");
-	$sql = "SELECT * FROM ".db_prefix("masters")." WHERE creatureid=$id";
-	$res = db_query($sql);
-	if (db_num_rows($res) == 0) {
+	if ($id == 0) {
 		$row = array(
 			'creaturelevel'=>1,
 			'creaturename'=>'',
@@ -59,19 +43,23 @@ if ($op == "del") {
 			'creaturewin'=>'',
 			'creaturelose'=>''
 		);
+		$context = resurrection_content_context('add', []);
 	} else {
-		$row = db_fetch_assoc($res);
+		// 1.1.2 drew an empty form for an unknown ID, whose save then updated nothing and said "updated".
+		$row = resurrection_content_row("masters", "creatureid", $id);
+		if ($row === null) resurrection_content_failure(new OutOfBoundsException('Master not found.'), 'the masters editor');
+		$context = resurrection_content_context('edit', $row);
+		foreach (['creaturelevel', 'creaturename', 'creatureweapon', 'creaturewin', 'creaturelose'] as $key) $row[$key] = (string)$row[$key];
 	}
-	addnav("","masters.php?op=save&id=$id");
-	rawoutput("<form action='masters.php?op=save&id=$id' method='POST'>");
+	rawoutput(resurrection_content_form("masters.php?op=save&id=$id", "master-edit-$id", $context));
 	output("`^Master's level:`n");
-	rawoutput("<input id='input' name='level' value='".htmlentities($row['creaturelevel'], ENT_COMPAT, getsetting("charset", "ISO-8859-1"))."' SIZE=5>");
+	rawoutput("<input id='input' name='level' value='".htmlentities($row['creaturelevel'], ENT_QUOTES, getsetting("charset", "ISO-8859-1"))."' SIZE=5>");
 	output_notl("`n");
 	output("`^Master's name:`n");
-	rawoutput("<input id='input' name='name' value='".htmlentities($row['creaturename'], ENT_COMPAT, getsetting("charset", "ISO-8859-1"))."'>");
+	rawoutput("<input id='input' name='name' value='".htmlentities($row['creaturename'], ENT_QUOTES, getsetting("charset", "ISO-8859-1"))."'>");
 	output_notl("`n");
 	output("`^Master's weapon:`n");
-	rawoutput("<input id='input' name='weapon' value='".htmlentities($row['creatureweapon'], ENT_COMPAT, getsetting("charset", "ISO-8859-1"))."'>");
+	rawoutput("<input id='input' name='weapon' value='".htmlentities($row['creatureweapon'], ENT_QUOTES, getsetting("charset", "ISO-8859-1"))."'>");
 	output_notl("`n");
 	output("`^Master's speech when player wins:`n");
 	rawoutput("<textarea name='lose' rows='5' cols='30' class='input'>".htmlentities($row['creaturelose'], ENT_COMPAT, getsetting("charset", "ISO-8859-1"))."</textarea>");
@@ -98,9 +86,7 @@ if ($op == "") {
 	addnav("Functions");
 	addnav("Refresh list", "masters.php");
 	addnav("Add master", "masters.php?op=edit&id=0");
-	$sql = "SELECT * FROM ".db_prefix("masters")." ORDER BY creaturelevel";
-	$res = db_query($sql);
-	$count = db_num_rows($res);
+	$res = db_query("SELECT * FROM ".db_prefix("masters")." ORDER BY creaturelevel", true);
 	$ops = translate_inline("Ops");
 	$edit = translate_inline("edit");
 	$del = translate_inline("del");
@@ -112,17 +98,13 @@ if ($op == "") {
 	$weapon = translate_inline("Weapon");
 	rawoutput("<table border='0' cellpadding='2' cellspacing='1' align='center' bgcolor='#999999'>");
 	rawoutput("<tr class='trhead'><td>$ops</td><td>$level</td><td>$name</td><td>$weapon</td><td>$win</td><td>$lose</tr>");
-	$i = 0;
-	while ($row = db_fetch_assoc($res)) {
-		$id = $row['creatureid'];
+	foreach ($res as $i=>$row) {
+		$id = (int)$row['creatureid'];
 		rawoutput("<tr class='".($i%2?"trdark":"trlight")."'><td nowrap>");
 		rawoutput("[ <a href='masters.php?op=edit&id=$id'>");
 		output_notl($edit);
-		rawoutput("</a> | <a href='masters.php?op=del&id=$id' onClick='return confirm(\"$delconfirm\");'>");
-		output_notl($del);
-		rawoutput("] </a>");
+		rawoutput("</a> | " . resurrection_content_delete_form("masters.php?op=del&id=$id", "master-del-$id", resurrection_content_context('del', $row), $del, $delconfirm) . " ]");
 		addnav("","masters.php?op=edit&id=$id");
-		addnav("","masters.php?op=del&id=$id");
 		rawoutput("</td><td>");
 		output_notl("`%%s`0",$row['creaturelevel']);
 		rawoutput("</td><td>");
@@ -134,7 +116,6 @@ if ($op == "") {
 		rawoutput("</td><td>");
 		output_notl("`^%s`0",stripslashes($row['creaturewin']));
 		rawoutput("</td></tr>");
-		$i++;
 	}
 	rawoutput("</table>");
 	output("`n`#You can change the names, weapons and messages of all of the Training Masters.");

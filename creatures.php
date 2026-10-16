@@ -1,12 +1,29 @@
 <?php
-require_once __DIR__ . '/src/Compatibility/array_cursor.php';
 // translator ready
 // addnews ready
 // mail ready
 require_once("common.php");
 require_once("lib/http.php");
+require_once("lib/content_editor.php");
 
 check_su_access(SU_EDIT_CREATURES);
+
+// Creature object preferences are dispatched before the editor, as for mounts: an installed module, its declared
+// preferences and typed values (lib/typed_editor.php). 1.1.2 wrote every posted key into the requested module.
+if (($_GET['subop'] ?? '') === 'module') {
+    require_once 'lib/typed_editor.php';
+    try {
+        $editorOp=\Resurrection\Http\Input::choice($_GET,'op',['edit','save'],'edit');
+        $editorId=\Resurrection\Http\Input::integer($_GET,'creatureid',0,1);
+        $editorModule=\Resurrection\Http\Input::string($_GET,'module');
+        if (isset($_GET['objtype']) || isset($_GET['objid'])) throw new InvalidArgumentException();
+        page_header('Creature Preferences');
+        resurrection_object_editor('creatures',$editorModule,$editorId,$editorOp==='save');
+        page_footer();
+    } catch (InvalidArgumentException|DomainException $error) { http_response_code(400); exit('Invalid or stale object preferences.'); }
+    catch (Throwable $error) { http_response_code(500); exit('Preferences were not saved.'); }
+    exit;
+}
 
 tlschema("creatures");
 
@@ -17,108 +34,42 @@ for ($i=1;$i<18;$i++){
 	$creaturestats[$i] = creature_stats($i);
 }
 
+try {
+	$op = \Resurrection\Http\Input::choice($_GET, 'op', ['', 'search', 'add', 'edit', 'save', 'del'], '');
+	// 1.1.2's "Creature properties" link on an add form has an empty creatureid: it shows the add form again.
+	$id = in_array($op, ['edit', 'del'], true) ? resurrection_content_id($_GET, 'creatureid', $op == 'edit') : 0;
+	$level = resurrection_content_level();
+	if (!$level) $level = 1;
+	$q = $op == 'search' && ($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' ? resurrection_content_text('q', RESURRECTION_TAUNT_BYTES, true) : '';
+} catch (InvalidArgumentException $error) { resurrection_content_failure($error, 'the creature editor'); }
+
 page_header("Creature Editor");
 
 require_once("lib/superusernav.php");
 superusernav();
 
-$op = httpget("op");
-$subop = httpget("subop");
 if ($op == "save"){
-	$forest = (int)(httppost('forest'));
-	$grave = (int)(httppost('graveyard'));
-	$id = httppost('creatureid');
-	if (!$id) $id = httpget("creatureid");
-	if ($subop == "") {
-		$post = httpallpost();
-		$lev = (int)httppost('creaturelevel');
-		if ($id){
-			$sql = "";
-			reset($post);
-			while (list($key,$val)=resurrection_array_next($post)){
-				if (substr($key,0,8)=="creature") $sql.="$key = '$val', ";
-			}
-			reset($creaturestats[$lev]);
-			while (list($key,$val)=resurrection_array_next($creaturestats[$lev])){
-				if ( $key!="creaturelevel" && substr($key,0,8)=="creature"){
-					$sql.="$key = \"".addslashes($val)."\", ";
-				}
-			}
-			$sql.=" forest='$forest', ";
-			$sql.=" graveyard='$grave' ";
-			$sql="UPDATE " . db_prefix("creatures") . " SET " . $sql . " WHERE creatureid='$id'";
-			db_query($sql) or output("`\$".db_error(LINK)."`0`n`#$sql`0`n");
-		}else{
-			$cols = array();
-			$vals = array();
-
-			reset($post);
-			while (list($key,$val)=resurrection_array_next($post)){
-				if (substr($key,0,8)=="creature") {
-					array_push($cols,$key);
-					array_push($vals,$val);
-				}
-			}
-			array_push($cols, "forest");
-			array_push($vals, $forest);
-			array_push($cols, "graveyard");
-			array_push($vals, $grave);
-			reset($creaturestats[$lev]);
-			while (list($key,$val)=resurrection_array_next($creaturestats[$lev])){
-				if ($key!="creaturelevel"&& substr($key,0,8)=="creature"){
-					array_push($cols,$key);
-					array_push($vals,$val);
-				}
-			}
-			$sql="INSERT INTO " . db_prefix("creatures") . " (".join(",",$cols).",createdby) VALUES (\"".join("\",\"",$vals)."\",\"".addslashes($session['user']['login'])."\")";
-			db_query($sql);
-			$id = db_insert_id();
-		}
-		if (db_affected_rows()) {
-			output("`^Creature saved!`0`n");
-		} else {
-			output("`^Creature `\$not`^ saved!`0`n");
-		}
-	} elseif ($subop == "module") {
-		// Save module settings
-		$module = httpget("module");
-		$post = httpallpost();
-		reset($post);
-		while(list($key, $val) = resurrection_array_next($post)) {
-			set_module_objpref("creatures", $id, $key, $val, $module);
-		}
-		output("`^Saved!`0`n");
+	[$id, $affected] = resurrection_creature_save($creaturestats);
+	if ($affected) {
+		output("`^Creature saved!`0`n");
+	} else {
+		output("`^Creature `\$not`^ saved!`0`n");
 	}
-	// Set the httpget id so that we can do the editor once we save
-	httpset("creatureid", $id, true);
-	// Set the httpget op so we drop back into the editor
-	httpset("op", "edit");
-}
-
-$op = httpget('op');
-$id = httpget('creatureid');
-if ($op=="del"){
-	$sql = "DELETE FROM " . db_prefix("creatures") . " WHERE creatureid = '$id'";
-	db_query($sql);
-	if (db_affected_rows()>0){
-		output("Creature deleted`n`n");
-	}else{
-		output("Creature not deleted: %s", db_error(LINK));
-	}
+	// Drop back into the editor for the saved creature.
+	$op = "edit";
+}elseif ($op=="del"){
+	resurrection_content_delete("creatures", "creatureid", "creatureid", "creature", "the creature editor");
+	output("Creature deleted`n`n");
 	$op="";
-	httpset('op', "");
 }
 if ($op=="" || $op=="search"){
-	$level = httpget("level");
-	if (!$level) $level = 1;
-	$q = httppost("q");
-	if ($q) {
-		$where = "creaturename LIKE '%$q%' OR creatureweapon LIKE '%$q%' OR creaturelose LIKE '%$q%' OR createdby LIKE '%$q%'";
+	if ($q > "") {
+		// As in 1.1.2, % and _ in the search text match anything.
+		$like = "%$q%";
+		$rows = db_query("SELECT * FROM " . db_prefix("creatures") . " WHERE creaturename LIKE ? OR creatureweapon LIKE ? OR creaturelose LIKE ? OR createdby LIKE ? ORDER BY creaturelevel,creaturename", true, [$like, $like, $like, $like]);
 	} else {
-		$where = "creaturelevel='$level'";
+		$rows = db_query("SELECT * FROM " . db_prefix("creatures") . " WHERE creaturelevel=? ORDER BY creaturelevel,creaturename", true, [$level]);
 	}
-	$sql = "SELECT * FROM " . db_prefix("creatures") . " WHERE $where ORDER BY creaturelevel,creaturename";
-	$result = db_query($sql);
 	// Search form
 	$search = translate_inline("Search");
 	rawoutput("<form action='creatures.php?op=search' method='POST'>");
@@ -158,17 +109,14 @@ if ($op=="" || $op=="search"){
 	rawoutput("<tr class='trhead'>");
 	rawoutput("<td>$opshead</td><td>$idhead</td><td>$name</td><td>$lev</td><td>$weapon</td><td>$winmsg</td><td>$diemsg</td><td>$author</td></tr>");
 	addnav("","creatures.php");
-	$number=db_num_rows($result);
-	for ($i=0;$i<$number;$i++){
-		$row = db_fetch_assoc($result);
+	foreach ($rows as $i=>$row){
+		$cid = (int)$row['creatureid'];
+		$clevel = (int)$row['creaturelevel'];
 		rawoutput("<tr class='".($i%2==0?"trdark":"trlight")."'>", true);
-		rawoutput("<td>[ <a href='creatures.php?op=edit&creatureid={$row['creatureid']}'>");
+		rawoutput("<td>[ <a href='creatures.php?op=edit&creatureid=$cid'>");
 		output_notl("%s", $edit);
-		rawoutput("</a> | <a href='creatures.php?op=del&creatureid={$row['creatureid']}&level={$row['creaturelevel']}' onClick='return confirm(\"$confirm\");'>");
-		output_notl("%s", $del);
-		rawoutput("</a> ]</td><td>");
-		addnav("","creatures.php?op=edit&creatureid={$row['creatureid']}");
-		addnav("","creatures.php?op=del&creatureid={$row['creatureid']}&level={$row['creaturelevel']}");
+		rawoutput("</a> | " . resurrection_content_delete_form("creatures.php?op=del&creatureid=$cid&level=$clevel", "creature-del-$cid", resurrection_content_context('del', $row), $del, $confirm) . " ]</td><td>");
+		addnav("","creatures.php?op=edit&creatureid=$cid");
 		output_notl("%s", $row['creatureid']);
 		rawoutput("</td><td>");
 		output_notl("%s", $row['creaturename']);
@@ -186,62 +134,43 @@ if ($op=="" || $op=="search"){
 	}
 	rawoutput("</table>");
 }else{
-	$level = httpget('level');
-	if (!$level) $level = 1;
-	if ($op=="edit" || $op=="add"){
-		require_once("lib/showform.php");
-		addnav("Edit");
-		addnav("Creature properties", "creatures.php?op=edit&creatureid=$id");
-		addnav("Add");
-		addnav("Add Another Creature", "creatures.php?op=add&level=$level");
-		module_editor_navs("prefs-creatures", "creatures.php?op=edit&subop=module&creatureid=$id&module=");
-		if ($subop == "module") {
-			$module = httpget("module");
-			rawoutput("<form action='creatures.php?op=save&subop=module&creatureid=$id&module=$module' method='POST'>");
-			module_objpref_edit("creatures", $module, $id);
-			rawoutput("</form>");
-			addnav("", "creatures.php?op=save&subop=module&creatureid=$id&module=$module");
-		} else {
-			if ($op=="edit" && $id!=""){
-				$sql = "SELECT * FROM " . db_prefix("creatures") . " WHERE creatureid=$id";
-				$result = db_query($sql);
-				if (db_num_rows($result)<>1){
-					output("`4Error`0, that creature was not found!");
-				}else{
-					$row = db_fetch_assoc($result);
-				}
-				$level = $row['creaturelevel'];
-			} else {
-				$row = array("creatureid"=>0,"creaturelevel"=>$level);
-			}
-			$form = array(
-				"Creature Properties,title",
-				"creatureid"=>"Creature id,hidden",
-				"creaturename"=>"Creature Name",
-				"creatureweapon"=>"Weapon",
-				"creaturewin"=>"Win Message (Displayed when the creature kills the player)",
-				"creaturelose"=>"Death Message (Displayed when the creature is killed by the player)",
-				// 18 to make a non-forest available monster
-				// (ie, graveyard only)_
-				"creaturelevel"=>"Level,range,1,18,1",
-				"forest"=>"Creature is in forest?,bool",
-				"graveyard"=>"Creature is in graveyard?,bool",
-			);
-			if ($session['user']['superuser'] & SU_MEGAUSER || $session['user']['superuser'] & SU_RAW_SQL) {
-				$form["creatureaiscript"] = "Creature's A.I.,textarearesizeable";
-			}
-			rawoutput("<form action='creatures.php?op=save' method='POST'>");
-			showform($form, $row);
-			rawoutput("</form>");
-			addnav("","creatures.php?op=save");
-		}
-	}else{
-		$module = httpget("module");
-		rawoutput("<form action='mounts.php?op=save&subop=module&creatureid=$id&module=$module' method='POST'>");
-		module_objpref_edit("creatures", $module, $id);
-		rawoutput("</form>");
-		addnav("", "creatures.php?op=save&subop=module&creatureid=$id&module=$module");
+	require_once("lib/showform.php");
+	if ($op=="edit" && $id){
+		$row = resurrection_content_row("creatures", "creatureid", $id);
+		if ($row === null) resurrection_content_failure(new OutOfBoundsException('Creature not found.'), 'the creature editor');
+		$level = (int)$row['creaturelevel'];
+		$context = resurrection_content_context('edit', $row);
+		// showform() reads its text fields as strings; the columns are nullable.
+		foreach (array_keys(RESURRECTION_CREATURE_TEXT) as $key) $row[$key] = (string)$row[$key];
+	} else {
+		$id = 0;
+		$row = array("creatureid"=>0,"creaturelevel"=>$level);
+		$context = resurrection_content_context('add', []);
 	}
+	addnav("Edit");
+	addnav("Creature properties", "creatures.php?op=edit&creatureid=".($id ?: ""));
+	addnav("Add");
+	addnav("Add Another Creature", "creatures.php?op=add&level=$level");
+	module_editor_navs("prefs-creatures", "creatures.php?op=edit&subop=module&creatureid=$id&module=");
+	$form = array(
+		"Creature Properties,title",
+		"creatureid"=>"Creature id,hidden",
+		"creaturename"=>"Creature Name",
+		"creatureweapon"=>"Weapon",
+		"creaturewin"=>"Win Message (Displayed when the creature kills the player)",
+		"creaturelose"=>"Death Message (Displayed when the creature is killed by the player)",
+		// 18 to make a non-forest available monster
+		// (ie, graveyard only)_
+		"creaturelevel"=>"Level,range,1,18,1",
+		"forest"=>"Creature is in forest?,bool",
+		"graveyard"=>"Creature is in graveyard?,bool",
+	);
+	if ($session['user']['superuser'] & SU_MEGAUSER || $session['user']['superuser'] & SU_RAW_SQL) {
+		$form["creatureaiscript"] = "Creature's A.I.,textarearesizeable";
+	}
+	rawoutput(resurrection_content_form("creatures.php?op=save", "creature-edit-$id", $context));
+	showform($form, $row);
+	rawoutput("</form>");
 	addnav("Navigation");
 	addnav("Return to the creature editor","creatures.php?level=$level");
 }

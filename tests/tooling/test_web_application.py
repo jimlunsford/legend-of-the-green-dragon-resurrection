@@ -6590,6 +6590,175 @@ function MODULE_dohook($hook,$args) {
                 for row in accounts: q('UPDATE accounts SET name=?,title=?,ctitle=? WHERE acctid=?',[row['name'],row['title'],row['ctitle'],row['acctid']])
                 for table,key in [('taunts','tauntid'),('titles','titleid')]: f['restore'](table,key,saved[table])
 
+    def test_creature_and_master_editor_authority_http(self):
+        saved={table:self.query(f'SELECT * FROM {table}') for table in ['creatures','masters']}
+        stats=lambda level:json.loads(subprocess.run([shutil.which('php'),'-r',f"require 'lib/creatures.php'; echo json_encode(creature_stats({level}));"],text=True,capture_output=True,cwd=ROOT,check=True).stdout)
+        text=lambda body:re.sub(r'\s+',' ',html.unescape(re.sub(r'<[^>]+>','',body)))
+        try:
+            with self._content_editor_fixture() as f:
+                q,player,request,login,form=(f[k] for k in ['q','player','request','login','form'])
+                prefs=lambda:q("SELECT * FROM module_objprefs WHERE objtype='creatures' ORDER BY objid,modulename,setting")
+                post=lambda url,fields,**values:request(url,list({**fields,**values}.items()))
+                creatures=lambda:q('SELECT * FROM creatures ORDER BY creatureid');masters=lambda:q('SELECT * FROM masters ORDER BY creatureid')
+                seeded=saved['creatures'][0]['creatureid'];master=q('SELECT creatureid FROM masters WHERE creaturelevel=10')[0]['creatureid'];before=(creatures(),masters(),prefs())
+                module=f'creatures.php?op=save&subop=module&creatureid={seeded}&module=specialtydarkarts'
+                f['matrix'](4,[('creatures.php',None),('creatures.php?op=add&level=3',None),(f'creatures.php?op=edit&creatureid={seeded}',None),('creatures.php?op=search',{'q':'a'}),
+                               ('creatures.php?op=save',{'x':'1'}),(f'creatures.php?op=del&creatureid={seeded}&level=1',{'x':'1'}),(module,{'x':'1'}),
+                               ('masters.php',None),('masters.php?op=edit&id=0',None),(f'masters.php?op=edit&id={master}',None),('masters.php?op=save&id=0',{'x':'1'}),(f'masters.php?op=del&id={master}',{'x':'1'})])
+                # GET only displays; malformed requests and unknown IDs are refused before anything is read or written.
+                for url in [f'creatures.php?op=del&creatureid={seeded}&level=1','creatures.php?op=save',f'masters.php?op=del&id={master}','masters.php?op=save&id=0']: self.assertEqual(405,request(url)[0],url)
+                for url in ['creatures.php?op=other','creatures.php?level=abc','creatures.php?level=-1','creatures.php?op=edit&creatureid=abc','creatures.php?op=del',
+                            'masters.php?op=other','masters.php?op=edit&id=abc','masters.php?op=edit&id=-1','masters.php?op=del']: self.assertEqual(400,request(url)[0],url)
+                for url in ['creatures.php?op=edit&creatureid=4294967295','masters.php?op=edit&id=4294967295']: self.assertEqual(404,request(url)[0],url)
+                # Creature object preferences: only an installed module's declared preferences (none of the shipped modules declares any).
+                for url,data in [(module,{'evil':'1'}),(module.replace('specialtydarkarts','nosuchmodule'),{'evil':'1'}),(module.replace('specialtydarkarts','..%2Fx'),{'evil':'1'}),
+                                 (module.replace('op=save','op=edit'),None),(module+'&objtype=mounts',{'evil':'1'})]:
+                    self.assertEqual(400,request(url,data)[0],url)
+                self.assertEqual(before,(creatures(),masters(),prefs()))
+                # Add a creature: only the form's declared fields; the stats from 1.1.2's level table.
+                save='creatures.php?op=save';fields=form('creatures.php?op=add&level=3',save)
+                self.assertEqual(sorted(['action_token','csrf_token','creatureid','creaturename','creatureweapon','creaturewin','creaturelose','creaturelevel','forest','graveyard']),sorted(fields))
+                good=dict(creaturename="Probe O'Reilly \" \\ 雪 <b>x</b>",creatureweapon='Pun <i>雪</i>',creaturewin='Beaten 100% "flat"',creaturelose="It's 雪 <b>over</b>",creaturelevel='3',forest='1',graveyard='0')
+                self.assertEqual(('0','3'),(fields['creatureid'],fields['creaturelevel']))
+                self.assertEqual(403,post(save,fields,**good,csrf_token='0'*64)[0]);self.assertEqual(409,request(save,[(k,v) for k,v in {**fields,**good}.items() if k!='action_token'])[0])
+                # 1.1.2 wrote every posted key starting "creature": a forged ID or stat is refused, never written.
+                self.assertEqual(409,post(save,fields,**good,creatureid=str(seeded))[0])
+                for bad in [{'creaturehealth':'1'},{'creatureexp':'99999'},{'creatureaiscript':'bundled:gypsy-bandit'},{'createdby':'x'},{'creaturelevel':'0'},{'creaturelevel':'19'},
+                            {'creaturelevel':'-1'},{'creaturelevel':'abc'},{'forest':'2'},{'graveyard':''},{'creaturename':''},{'creaturename':'n'*51},{'creaturewin':'w'*121},
+                            {'creaturelose':b'\xff'},{'creatureid':'x'},{'creatureid':'-1'}]:
+                    self.assertEqual(400,post(save,fields,**{**good,**bad})[0],bad)
+                self.assertEqual(404,post(save,fields,**good,creatureid='4294967295')[0]);self.assertEqual(before,(creatures(),masters(),prefs()))
+                status,body=post(save,fields,**good);self.assertEqual(200,status,body[:2000]);self.assertIn('Creature saved!',body);self.assertNotIn('<b>x</b>',body)
+                added=[r for r in creatures() if r not in before[0]];self.assertEqual(1,len(added));ident=added[0]['creatureid'];level3=stats(3)
+                self.assertEqual({**{k:v for k,v in good.items()},'createdby':'WebPlayer','creatureaiscript':None,**{k:str(v) for k,v in level3.items()}},{k:added[0][k] for k in [*good,'createdby','creatureaiscript',*level3]})
+                self.assertEqual(409,post(save,fields,**good)[0]);self.assertEqual(len(before[0])+1,len(creatures()))
+                row=lambda:q('SELECT * FROM creatures WHERE creatureid=?',[ident])[0]
+                # Edit: the stored row in the form; a level change takes that level's stats; level 18 (not in 1.1.2's table) keeps them.
+                edit=f'creatures.php?op=edit&creatureid={ident}';fields,second=form(edit,save),form(edit,save)
+                self.assertEqual((str(ident),good['creaturename'],good['creaturewin']),(fields['creatureid'],fields['creaturename'],fields['creaturewin']));self.assertEqual(fields['action_token'],second['action_token'])
+                status,body=post(save,fields,**{**good,'creaturelevel':'17'});self.assertEqual(200,status,body[:2000])
+                self.assertEqual({k:str(v) for k,v in stats(17).items()},{k:row()[k] for k in stats(17)});self.assertEqual(409,post(save,second,**good)[0])
+                q('UPDATE creatures SET creaturehealth=7 WHERE creatureid=?',[ident])
+                fields=form(edit,save);status,body=post(save,fields,**{**good,'creaturelevel':'18','forest':'0','graveyard':'1'});self.assertEqual(200,status,body[:2000])
+                self.assertEqual({**{k:str(v) for k,v in stats(17).items()},'creaturehealth':'7','creaturelevel':'18','forest':'0','graveyard':'1'},{k:row()[k] for k in [*stats(17),'forest','graveyard']})
+                # An unchanged save reports "not saved", as 1.1.2 did from the affected rows; a row changed underneath refuses the save.
+                fields=form(edit,save);status,body=post(save,fields,**{**good,'creaturelevel':'18','forest':'0','graveyard':'1'});self.assertIn('Creature not saved!',text(body))
+                fields=form(edit,save);q("UPDATE creatures SET creatureweapon='Underneath' WHERE creatureid=?",[ident]);self.assertEqual(409,post(save,fields,**good)[0]);self.assertEqual('Underneath',row()['creatureweapon'])
+                # A late write failure rolls the save back; the spent form stays spent and a fresh one saves.
+                fields=form(edit,save);q("ALTER TABLE creatures ADD CONSTRAINT fixture_creature_save CHECK (creaturename <> 'Late failure')")
+                try:
+                    unchanged=row();self.assertEqual(500,post(save,fields,**{**good,'creaturename':'Late failure'})[0]);self.assertEqual(unchanged,row())
+                finally: q('ALTER TABLE creatures DROP CONSTRAINT fixture_creature_save')
+                self.assertEqual(409,post(save,fields,**{**good,'creaturename':'Late failure'})[0])
+                fields=form(edit,save);self.assertEqual(200,post(save,fields,**good)[0]);self.assertEqual((good['creaturename'],'3',str(level3['creaturehealth'])),(row()['creaturename'],row()['creaturelevel'],row()['creaturehealth']))
+                # The A.I. script field is the form's only for SU_MEGAUSER or SU_RAW_SQL, and only the implemented behavior is accepted.
+                login(4|524288);fields=form(edit,save);self.assertIn('creatureaiscript',fields)
+                for script in ['arbitrary php','<?php echo 1; ?>']: self.assertEqual(400,post(save,fields,**good,creatureaiscript=script)[0],script)
+                self.assertEqual(200,post(save,fields,**good,creatureaiscript='bundled:gypsy-bandit')[0]);self.assertEqual('bundled:gypsy-bandit',row()['creatureaiscript'])
+                login(4);fields=form(edit,save);self.assertNotIn('creatureaiscript',fields);self.assertEqual(200,post(save,fields,**{**good,'creatureweapon':'Pun'})[0])
+                self.assertEqual(('bundled:gypsy-bandit','Pun'),(row()['creatureaiscript'],row()['creatureweapon']))
+                fields=form(edit,save);login(4|524288);fields=form(edit,save);self.assertEqual(200,post(save,fields,**good,creatureaiscript='')[0]);self.assertEqual('',row()['creatureaiscript']);login(4)
+                # Search and list: bound, and escaped.
+                for probe in ["O'Reilly","雪 <b>","%' OR 1=1 -- "]:
+                    status,body=request('creatures.php?op=search',{'q':probe});self.assertEqual(200,status,body[:2000]);self.assertNotIn('<b>x</b>',body)
+                    self.assertEqual(probe!="%' OR 1=1 -- ",f'creatures.php?op=edit&amp;creatureid={ident}' in body or f"creatures.php?op=edit&creatureid={ident}" in body,probe)
+                status,body=request('creatures.php?level=3');self.assertIn('Probe O\'Reilly',text(body));self.assertNotIn('<b>over</b>',body)
+                # Delete: the list's protected form, bound to the row it showed.
+                remove=f'creatures.php?op=del&creatureid={ident}&level=3';fields=self._security_fields(request('creatures.php?level=3')[1],remove)
+                self.assertEqual(403,request(remove,{'action_token':fields['action_token']})[0]);q("UPDATE creatures SET creaturegold=1 WHERE creatureid=?",[ident]);self.assertEqual(409,request(remove,fields)[0])
+                fields=self._security_fields(request('creatures.php?level=3')[1],remove);status,body=request(remove,fields);self.assertEqual(200,status);self.assertIn('Creature deleted',body)
+                self.assertEqual([],q('SELECT * FROM creatures WHERE creatureid=?',[ident]));self.assertEqual(404,request(remove,fields)[0])
+                # Masters: id 0 adds with 1.1.2's formulas; an edit keeps the stats, whatever the level.
+                save='masters.php?op=save&id=0';fields=form('masters.php?op=edit&id=0',save);self.assertEqual(sorted(['action_token','csrf_token','level','name','weapon','win','lose']),sorted(fields))
+                good=dict(level='1',name="Sensei O'Reilly 雪 <b>x</b>",weapon='Stick "of" 雪',win='%W wins, %w`^. 100%% sure.',lose="You beat me, %w`&, with your %x!")
+                self.assertEqual(403,post(save,fields,**good,csrf_token='0'*64)[0])
+                for bad in [{'level':'0'},{'level':'-1'},{'level':'195225787'},{'level':'x'},{'name':'n'*51},{'win':'w'*121},{'lose':b'\xff'},
+                            {'win':'100% sure, %w'},{'lose':'%d of %w'},{'creaturehealth':'1'},{'creatureid':'5'}]:
+                    self.assertEqual(400,post(save,fields,**{**good,**bad})[0],bad)
+                self.assertEqual(before[1],masters())
+                status,body=post(save,fields,**good);self.assertEqual(200,status,body[:2000]);self.assertIn('Master Sensei O\'Reilly 雪 <b>x</b> added.',text(body));self.assertNotIn('<b>x</b>',body)
+                added=[r for r in masters() if r not in before[1]];self.assertEqual([('1',good['name'],good['weapon'],good['win'],good['lose'],'12','2','2',None,None)],
+                    [tuple(r[k] for k in ['creaturelevel','creaturename','creatureweapon','creaturewin','creaturelose','creaturehealth','creatureattack','creaturedefense','creaturegold','creatureexp']) for r in added])
+                self.assertEqual(409,post(save,fields,**good)[0]);mid=added[0]['creatureid']
+                # A speech without a code is not formatted by training, so a lone % stays as 1.1.2 showed it.
+                fields=form('masters.php?op=edit&id=0',save);self.assertEqual(200,post(save,fields,**{**good,'level':'7','win':'Gave 100% and lost.'})[0])
+                seven=[r for r in masters() if r['creaturelevel']=='7' and r['creaturewin']=='Gave 100% and lost.'];self.assertEqual([('77','14','14')],[(r['creaturehealth'],r['creatureattack'],r['creaturedefense']) for r in seven])
+                edit,save=f'masters.php?op=edit&id={mid}',f'masters.php?op=save&id={mid}';fields,second=form(edit,save),form(edit,save)
+                self.assertEqual(('1',good['name'],good['lose']),(fields['level'],fields['name'],fields['lose']))
+                status,body=post(save,fields,**{**good,'level':'9'});self.assertIn('updated.',body);self.assertEqual(409,post(save,second,**good)[0])
+                self.assertEqual(('9','12','2','2'),tuple(q('SELECT creaturelevel,creaturehealth,creatureattack,creaturedefense FROM masters WHERE creatureid=?',[mid])[0].values()))
+                fields=form(edit,save);q("UPDATE masters SET creatureweapon='Underneath' WHERE creatureid=?",[mid]);self.assertEqual(409,post(save,fields,**good)[0])
+                for url,code in [('masters.php?op=save&id=4294967295',404),('masters.php?op=save&id=abc',400)]: self.assertEqual(code,post(url,fields,**good)[0],url)
+                remove=f'masters.php?op=del&id={mid}';fields=self._security_fields(request('masters.php')[1],remove)
+                q("UPDATE masters SET creaturegold=1 WHERE creatureid=?",[mid]);self.assertEqual(409,request(remove,fields)[0])
+                fields=self._security_fields(request('masters.php')[1],remove);status,body=request(remove,fields);self.assertIn('Master deleted.',body);self.assertEqual([],q('SELECT * FROM masters WHERE creatureid=?',[mid]))
+                # The level 10 master as the training fight reads it.
+                edit,save=f'masters.php?op=edit&id={master}',f'masters.php?op=save&id={master}';fields=form(edit,save)
+                speech=dict(level='10',name="Sensei O'Reilly 雪",weapon='Stick "of" 雪',win='%W wins. 100%% sure.',lose="You beat me, %w`&, with your %x! 雪 <b>y</b>")
+                self.assertEqual(200,post(save,fields,**speech)[0])
+                f['restore']('masters','creatureid',[r for r in saved['masters'] if r['creatureid']!=master]+q('SELECT * FROM masters WHERE creatureid=?',[master]))
+                # A saved creature as the forest search reads it: the only forest creature at the player's level.
+                fields=form('creatures.php?op=add&level=3','creatures.php?op=save')
+                self.assertEqual(200,post('creatures.php?op=save',fields,creaturename="Forest O'Reilly 雪",creatureweapon='Pun "雪"',creaturewin='Beaten 100% flat',
+                                          creaturelose="It's <b>over</b> 雪",creaturelevel='3',forest='1',graveyard='0')[0])
+                forest=q("SELECT * FROM creatures WHERE creaturename=?",["Forest O'Reilly 雪"])[0];q('UPDATE creatures SET forest=0 WHERE creatureid<>?',[forest['creatureid']])
+                with self._ordinary_forest_fixture() as g:
+                    g['prepare']('TS',badguy='',level=3,maxhitpoints=30,hitpoints=5000,attack=1000,defense=1000,turns=20,gold=0)
+                    code,body=g['action'](g['ordinary_form']('search'),'search');self.assertEqual(200,code,body[:3000])
+                    enemy=g['decode'](g['snapshot']()[0]['badguy'])['enemies'][0]
+                    self.assertEqual((str(forest['creatureid']),"Forest O'Reilly 雪",'Pun "雪"',32,5,4,148),
+                                     (str(enemy['creatureid']),enemy['creaturename'],enemy['creatureweapon'],*(int(enemy[k]) for k in ['creaturehealth','creatureattack','creaturedefense','creaturegold'])))
+                    for _ in range(20):
+                        code,body=g['action'](g['ordinary_form']());self.assertEqual(200,code,body[:3000])
+                        if g['snapshot']()[0]['badguy']=='': break
+                    self.assertEqual('',g['snapshot']()[0]['badguy'])
+                    self.assertIn("It's <b>over</b> 雪",text(body));self.assertNotIn('<b>over</b>',body)
+                # The saved master as the training fight reads and shows it (a guaranteed hit, as in the training tests).
+                with self._training_fixture() as g:
+                    g['training_master'](hp=10000,attack=0,defense=0);g['enter'](attack=0,defense=1000,specialty='TS')
+                    state=g['decode'](g['training_snapshot']()[0]['badguy']);self.assertEqual(("Sensei O'Reilly 雪",'Stick "of" 雪'),(state['enemies'][0]['creaturename'],state['enemies'][0]['creatureweapon']))
+                    state['enemies'][0]['creaturehealth']=5
+                    buff={'proof':{'name':'Fixture','schema':'train','effectmsg':'','effectnodmgmsg':'','effectfailmsg':'','rounds':3,'allowintrain':1,'minioncount':1,'minbadguydamage':10,'maxbadguydamage':10}}
+                    q('UPDATE accounts SET badguy=?,bufflist=?,weapon=? WHERE acctid=?',[g['encode'](state),g['encode'](buff),'Fists',g['player']])
+                    code,body=g['training_action'](g['training_form']());self.assertEqual(200,code,body[:3000]);self.assertEqual('11',g['training_snapshot']()[0]['level'])
+                    page=text(body);self.assertRegex(page,r'You beat me, .+, with your Fists! 雪 <b>y</b>');self.assertNotIn('<b>y</b>',body)
+        finally:
+            for table in ['creatures','masters']:
+                now={r['creatureid']:r for r in self.query(f'SELECT * FROM {table}')};old={r['creatureid']:r for r in saved[table]}
+                for ident in now.keys()-old.keys(): self.query(f'DELETE FROM {table} WHERE creatureid=?',[ident])
+                for ident,row in old.items():
+                    if now.get(ident)!=row: self.query(f'REPLACE INTO {table} ('+','.join(row)+') VALUES ('+','.join('?' for _ in row)+')',list(row.values()))
+            self.query("DELETE FROM module_objprefs WHERE objtype='creatures'")
+
+    def test_news_and_bio_format_stored_stray_percent_http(self):
+        # A defeat news row stores its taunt as a sub-format. One stored before the taunt editor refused a stray %, or with
+        # a % PHP 5 skipped, made news.php and bio.php fatal on PHP 8; they now get PHP 5's sprintf result.
+        q=self.query;player=int(q('SELECT acctid FROM accounts WHERE login=?',['WebPlayer'])[0]['acctid']);created=[]
+        serialize=lambda value:subprocess.run([shutil.which('php'),'-r','echo serialize(json_decode(stream_get_contents(STDIN),true));'],input=json.dumps(value),text=True,capture_output=True,cwd=ROOT,check=True).stdout
+        today=subprocess.run([shutil.which('php'),'-r',"echo date('Y-m-d');"],text=True,capture_output=True,check=True).stdout
+        try:
+            # bio.php needs a mount for now: without one it fails earlier, on PHP 8's false-to-array deprecation (a separate ROADMAP item).
+            target=int(self._security_target('NewsTarget'));created.append(target)
+            q('UPDATE accounts SET hashorse=(SELECT MIN(mountid) FROM mounts) WHERE acctid=?',[target])
+            rows=[('Stray',[True,'taunts','"100% sure, %s", sneers the Rat.','`^Bob`^']),('Unknown',[True,'taunts','"a %y b %s", says the Rat.','`^Bob`^','Al']),
+                  ('Clean',[True,'taunts','"%s again", says the Rat.','`^Bob`^'])]
+            for who,taunt in rows:
+                q("INSERT INTO news (newstext,newsdate,accountid,arguments,tlschema) VALUES (?,?,?,?,'news')",
+                  ['`%%s`5 has been slain %s by %s.`n%s',today,target,serialize([f'NewsVictim{who}','in the forest',f'Rat{who}',taunt])])
+            call=self._security_client()
+            def text(url):
+                q('UPDATE accounts SET lastnewday=? WHERE acctid=?',[self._current_game_day(),player]);self._security_allow(player,url)
+                status,body=call(url);self.assertEqual(200,status,body[:2000]);return re.sub(r'\s+',' ',html.unescape(re.sub(r'<[^>]+>','',body)))
+            for url in ['news.php',f'bio.php?char={target}']:
+                page=text(url)
+                # PHP 5 returned false for the stray % (the taunt is empty), dropped the unknown %y, and formats the clean one as before.
+                self.assertIn('NewsVictimStray has been slain in the forest by RatStray.',page,url)
+                self.assertRegex(page,r'NewsVictimStray has been slain in the forest by RatStray\. (?!")',url)
+                self.assertIn('NewsVictimUnknown has been slain in the forest by RatUnknown. "a b Al", says the Rat.',page,url)
+                self.assertIn('NewsVictimClean has been slain in the forest by RatClean. "Bob again", says the Rat.',page,url)
+        finally:
+            for who in created: q('DELETE FROM news WHERE accountid=?',[who]);q('DELETE FROM accounts_output WHERE acctid=?',[who]);q('DELETE FROM accounts WHERE acctid=?',[who])
+
     def _security_client(self, login='WebPlayer', password="Synthetic web O'Reilly \\ password", port=None):
         class NoRedirect(urllib.request.HTTPRedirectHandler):
             def redirect_request(self, *args): return None
