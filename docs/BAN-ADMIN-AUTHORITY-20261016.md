@@ -199,3 +199,12 @@ Local, PHP 8.5.11 / MySQL 8.4 (supporting evidence only; CI is the acceptance):
   Only confirmed here.
 - The setupban form's intent is per editor session: with two ban forms open, the second
   save gets 409 and the form must be reloaded.
+
+## Acceptance, 2026-10-16
+
+Inspected once at the start of the ban message task. Modern core 38931835620 on `eec24a6`:
+all 12 jobs SUCCESS, both `checks` jobs, all eight `http` shards (longest: PHP 8.5 /
+MySQL 8.4 shard 4, 16:26:19Z to 16:42:36Z), and both `result` jobs (PHP 8.4 / MariaDB 11.4
+at 16:41:15Z, PHP 8.5 / MySQL 8.4 at 16:42:42Z). Baseline integrity 38931835612 SUCCESS.
+The ROADMAP item is closed. The ban message page finding and the `lgi` cookie gap are
+addressed in [ban message and player ID cookie](BAN-MESSAGE-AND-ID-COOKIE-20261016.md).

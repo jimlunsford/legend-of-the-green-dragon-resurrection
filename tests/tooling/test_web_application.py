@@ -6189,6 +6189,7 @@ function MODULE_dohook($hook,$args) {
             q,player,target,request,login,row=(f[k] for k in ['q','player','target','request','login','row'])
             saved=q('SELECT * FROM bans');bans=lambda:q('SELECT ipfilter,uniqueid,banexpire,banreason,banner FROM bans ORDER BY ipfilter,uniqueid,banexpire,banreason')
             put=lambda rows:[q('INSERT INTO bans ('+','.join(r)+') VALUES ('+','.join('?' for _ in r)+')',list(r.values())) for r in rows]
+            newest=q("SELECT value FROM settings WHERE setting='newestplayer'")
             try:
                 q('DELETE FROM bans')
                 save,delban='user.php?op=saveban','user.php?op=delban'
@@ -6203,13 +6204,25 @@ function MODULE_dohook($hook,$args) {
                     login(role)
                     for url,data in urls: self.assertEqual(200 if data is None else 403,request(url,data)[0],(role,url))
                 self.assertEqual([],bans())
-                # A player's lgi cookie of 32 characters becomes their stored ID, the value a comment ban (moderate.php) stores.
-                uid="AAAAAAAAA'><svg/onload=alert(1)>";self.assertEqual(32,len(uid))
+                # The lgi cookie is the player's stored ID (the value a comment ban, moderate.php, stores) only in the generated
+                # format, 32 hex characters. Anything else is no cookie: the stored ID stays and is sent back, HttpOnly and SameSite=Lax.
                 victim=self._security_client(login='EditorTarget',password='Synthetic administrator password')
-                for cookie in list(victim.cookiejar):
-                    if cookie.name=='lgi': cookie.value=urllib.parse.quote(uid,safe='')
-                q('UPDATE accounts SET lastnewday=? WHERE acctid=?',[self._current_game_day(),target]);self._security_allow(target,'list.php')
-                self.assertEqual(200,victim('list.php')[0]);self.assertEqual(uid,row()['uniqueid'])
+                def visit(value):
+                    for cookie in list(victim.cookiejar):
+                        if cookie.name=='lgi': cookie.value=urllib.parse.quote(value,safe='')
+                    q('UPDATE accounts SET lastnewday=? WHERE acctid=?',[self._current_game_day(),target]);self._security_allow(target,'list.php')
+                    self.assertEqual(200,victim('list.php')[0]);return row()['uniqueid'],[c for c in victim.cookiejar if c.name=='lgi']
+                uid="AAAAAAAAA'><svg/onload=alert(1)>";self.assertEqual(32,len(uid))
+                valid=[c.value for c in victim.cookiejar if c.name=='lgi'][0];self.assertRegex(valid,r'\A[0-9a-f]{32}\Z');self.assertEqual(valid,visit(valid)[0])
+                for bad in [uid,'f'*33,'g'*32,'a'*31,'<b>'+'a'*61]:
+                    stored,cookies=visit(bad);self.assertEqual(valid,stored,bad);self.assertEqual([valid],[c.value for c in cookies],bad)
+                    self.assertTrue(cookies[0].has_nonstandard_attr('HttpOnly'),bad);self.assertEqual('Lax',cookies[0].get_nonstandard_attr('SameSite'),bad)
+                # A stored ID outside the format is replaced on the next request without a valid cookie; a valid cookie replaces any.
+                q('UPDATE accounts SET uniqueid=? WHERE acctid=?',[uid,target]);stored,cookies=visit('g'*32)
+                self.assertRegex(stored,r'\A[0-9a-f]{32}\Z');self.assertNotEqual(valid,stored);self.assertEqual([stored],[c.value for c in cookies])
+                other='0123456789abcdef'*2;self.assertEqual(other,visit(other)[0])
+                # A value stored before this change stays until then, and still matches the bans placed on it.
+                q('UPDATE accounts SET uniqueid=? WHERE acctid=?',[uid,target])
                 decoy,sibling=self._security_target('BanDecoy'),self._security_target('BanSibling');f['targets'].extend([decoy,sibling])
                 q('UPDATE accounts SET lastip=? WHERE acctid=?',["10.%_'.5.6",target])
                 q("UPDATE accounts SET name='BanDecoyName',lastip=?,uniqueid='decoy-id' WHERE acctid=?",["10.99'.5.6",decoy])
@@ -6286,27 +6299,66 @@ function MODULE_dohook($hook,$args) {
                 self.assertEqual(403,request(delban,[(k,v) for k,v in lift[0] if k!='csrf_token'])[0])
                 self.assertEqual(400,request(delban,[(k,v) for k,v in lift[0] if k!='uniqueid']+[('uniqueid[]',uid)])[0]);self.assertEqual(stored,bans())
                 self.assertIn(request(delban,lift[0])[0],[302,303]);self.assertEqual([r for r in stored if (r['ipfilter'],r['uniqueid'])!=('',uid)],bans())
-                # Enforcement through a real login: the IP-prefix, comment and permanent bans refuse it; the expired one does not.
-                # checkban's ban message page currently fails on its own translation call (a recorded finding), so only
-                # the refusal is asserted here: no 303 to the village, and the client is not logged in afterwards.
+                # Enforcement, as 1.1.2: a banned login or account creation is refused and sent to the ban message, which lists every
+                # matching ban with its permanent or expiry text and the petition line; each matching ban's lasthit is set.
                 class NoRedirect(urllib.request.HTTPRedirectHandler):
                     def redirect_request(self, *args): return None
-                def attempt():
-                    client=urllib.request.build_opener(urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar()),NoRedirect)
+                def visitor(lgi=None):
+                    jar=http.cookiejar.CookieJar();client=urllib.request.build_opener(urllib.request.HTTPCookieProcessor(jar),NoRedirect)
                     def call(url,data=None):
                         try: response=client.open(urllib.request.Request(f'http://127.0.0.1:{self.port}/'+url,data=None if data is None else urllib.parse.urlencode(data).encode()),timeout=20)
                         except urllib.error.HTTPError as error: response=error
-                        return response.status,response.headers.get('Location'),response.read().decode('utf-8',errors='replace')
+                        body=response.read().decode('utf-8',errors='replace')
+                        if response.status==500: self.server_log.seek(0);body+='\n'.join(self.server_log.read().splitlines()[-8:])
+                        return response.status,response.headers.get('Location'),body
                     csrf=re.search(r'name=[\'"]csrf_token[\'"] value=[\'"]([a-f0-9]{64})',call('home.php')[2]).group(1)
-                    login=call('login.php',{'csrf_token':csrf,'name':'EditorTarget','password':'Synthetic administrator password'})
-                    return login[:2],call('village.php')[:2]
-                for ban in [rows[0],timed,permanent[0]]:
-                    q('DELETE FROM bans');put([{k:v for k,v in ban.items() if v is not None}])
-                    (status,location),village=attempt();self.assertNotEqual((303,'village.php'),(status,location),ban);self.assertIn(village[0],[302,303],ban)
-                    self.assertTrue((village[1] or '').startswith('index.php'),(ban,village))
-                q('DELETE FROM bans');put([expired]);(status,location),village=attempt();self.assertEqual((303,'village.php'),(status,location));self.assertFalse((village[1] or '').startswith('index.php'),village)
+                    for cookie in jar:
+                        if cookie.name=='lgi' and lgi: cookie.value=lgi
+                    return call,csrf
+                def place(*placed):
+                    q('DELETE FROM bans');put([{k:v for k,v in ban.items() if v is not None} for ban in placed]);q("UPDATE bans SET lasthit='2001-01-01 00:00:00'")
+                def shown(call,status,location,matching,other=()):
+                    self.assertEqual((302,'index.php'),(status,location));self.assertEqual((302,'home.php?'),call('index.php')[:2])
+                    status,_,body=call('home.php?');self.assertEqual(200,status,body[:2000]);self.assertNotRegex(body,r'(?i)(fatal error|warning:|deprecated:|notice:)')
+                    text=re.sub(r'\s+',' ',html.unescape(re.sub(r'<[^>]+>','',body)))
+                    self.assertIn('You fall under a ban currently in place on this website:',text);self.assertIn('If you wish, you may appeal your ban with the petition link.',text)
+                    for ban in matching:
+                        self.assertIn(ban['banreason'],text)
+                        if ban.get('banexpire') is not None: self.assertIn('This ban will be removed after '+time.strftime('%b %d, %Y',time.strptime(ban['banexpire'][:10],'%Y-%m-%d'))+'.',text)
+                    self.assertEqual(sum(ban.get('banexpire') is None for ban in matching),text.count('This ban is permanent!'))
+                    self.assertEqual(len(matching)-text.count('This ban is permanent!'),text.count('This ban will be removed after'))
+                    for ban in other: self.assertNotIn(ban['banreason'],text)
+                    hits={r['banreason']:r['lasthit'] for r in q('SELECT banreason,lasthit FROM bans')}
+                    self.assertEqual({b['banreason'] for b in matching},{k for k,v in hits.items() if v>'2020'});self.assertTrue(all(hits[b['banreason']]=='2001-01-01 00:00:00' for b in other))
+                    self.assertTrue((call('village.php')[1] or '').startswith('index.php'))
+                def attempt(uniqueid,superuser=0,banoverride=None):
+                    q('UPDATE accounts SET uniqueid=?,superuser=?,banoverride=? WHERE acctid=?',[uniqueid,superuser,banoverride,target])
+                    call,csrf=visitor();return call,call('login.php',{'csrf_token':csrf,'name':'EditorTarget','password':'Synthetic administrator password'})[:2]
+                prefix,forever={**rows[0],'banreason':'IP prefix reason'},{**permanent[0],'banreason':'Permanent ID reason'}
+                decoys=[dict(ipfilter='10.99',banreason='Decoy IP reason',banner='Moderator'),dict(uniqueid='decoy-id',banreason='Decoy ID reason',banner='Moderator')]
+                place(prefix,forever,*decoys);call,(status,location)=attempt(uid);shown(call,status,location,[prefix,forever],decoys)
+                # The comment ban on a valid stored ID.
+                comment={**timed,'uniqueid':other};place(comment,*decoys);call,(status,location)=attempt(other);shown(call,status,location,[comment],decoys)
+                # 1.1.2's exemptions: banoverride, or any superuser flag outside SU_DOESNT_GIVE_GROTTO.
+                for superuser,banoverride in [(64,None),(0,1)]:
+                    place(prefix,forever);self.assertEqual((303,'village.php'),attempt(uid,superuser,banoverride)[1],(superuser,banoverride))
+                # SU_DEBUG_OUTPUT (8192) alone is inside SU_DOESNT_GIVE_GROTTO, so it is no exemption.
+                place(prefix,forever);call,(status,location)=attempt(uid,8192);shown(call,status,location,[prefix,forever])
+                place(expired);self.assertEqual((303,'village.php'),attempt(uid)[1])
+                q('UPDATE accounts SET superuser=0,banoverride=NULL,uniqueid=? WHERE acctid=?',[uid,target])
+                # Account creation from a banned IP prefix, or a banned ID placed before this change (1.1.2's md5 format), creates nothing.
+                fields=lambda csrf:{'csrf_token':csrf,'name':'BanCreateProbe','pass1':'Synthetic create password','pass2':'Synthetic create password','email':'','sex':'0'}
+                created=lambda:q("SELECT acctid FROM accounts WHERE login='BanCreateProbe'")
+                legacy='5d41402abc4b2a76b9719d911017c592'
+                for ban,lgi in [(dict(ipfilter='127.',banexpire=day(2)+' 00:00:00',banreason='Create IP reason',banner='Moderator'),None),
+                                (dict(uniqueid=legacy,banreason='Create ID reason',banner='Moderator'),legacy)]:
+                    place(ban,*decoys);call,csrf=visitor(lgi);status,location,_=call('create.php');self.assertEqual((302,'index.php'),(status,location))
+                    call,csrf=visitor(lgi);status,location,_=call('create.php?op=create',fields(csrf));shown(call,status,location,[ban],decoys);self.assertEqual([],created())
+                q('DELETE FROM bans');call,csrf=visitor(legacy);status,_,body=call('create.php?op=create',fields(csrf))
+                f['targets'].extend(r['acctid'] for r in created());self.assertEqual(200,status,body[:2000]);self.assertIn('Your account was created.',body);self.assertEqual(1,len(created()))
             finally:
                 q('DELETE FROM bans');put(saved);q("DELETE FROM debuglog WHERE actor=? AND message LIKE 'entered a ban:%'",[player])
+                q("DELETE FROM settings WHERE setting='newestplayer'");[q("INSERT INTO settings (setting,value) VALUES ('newestplayer',?)",[r['value']]) for r in newest]
 
     def _security_client(self, login='WebPlayer', password="Synthetic web O'Reilly \\ password", port=None):
         class NoRedirect(urllib.request.HTTPRedirectHandler):

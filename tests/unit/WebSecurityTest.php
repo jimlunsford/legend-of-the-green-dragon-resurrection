@@ -54,4 +54,25 @@ final class WebSecurityTest extends TestCase
         $this->expectException(\DomainException::class);
         Csrf::requirePost($state, 'POST', str_repeat('0', 64));
     }
+    public function testPlayerIdCookieKeepsOnlyTheGeneratedFormat(): void
+    {
+        require_once 'lib/web_security.php';
+        $valid = md5('1.1.2 generated this from microtime()');
+        $stored = bin2hex(random_bytes(16));
+        // A valid cookie is the player's ID and is not resent.
+        self::assertSame([$valid, false], resurrection_player_id($valid, $stored));
+        self::assertSame([strtoupper($valid), false], resurrection_player_id(strtoupper($valid), ''));
+        $invalid = ['', str_repeat('a', 31), str_repeat('a', 33), str_repeat('f', 64), str_repeat('g', 32), "AAAAAAAAA'><svg/onload=alert(1)>",
+            ' ' . substr($valid, 1), substr($valid, 1) . "\n", null, [$valid], 12345678901234567890123456789012];
+        foreach ($invalid as $cookie) {
+            // Anything else is no cookie: the stored ID when it is valid, else a new one; either is resent.
+            self::assertSame([$stored, true], resurrection_player_id($cookie, $stored));
+            foreach ([null, '', '"><img src=y>', str_repeat('b', 40), $cookie] as $bad) {
+                [$id, $send] = resurrection_player_id($cookie, $bad);
+                self::assertMatchesRegularExpression('/\A[0-9a-f]{32}\z/', $id);
+                self::assertTrue($send);
+            }
+        }
+        self::assertNotSame(resurrection_player_id(null, null)[0], resurrection_player_id(null, null)[0]);
+    }
 }

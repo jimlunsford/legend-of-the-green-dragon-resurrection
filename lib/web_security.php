@@ -32,6 +32,18 @@ function resurrection_rotate_session(): void {
     \Resurrection\Security\Csrf::token($_SESSION);
 }
 
+/**
+ * The player ID (the lgi cookie, matched by ID bans) for this request: the cookie when it has the generated format,
+ * 32 hex characters (1.1.2's md5(microtime()), this branch's random bytes); otherwise the stored ID when it has, else
+ * a new one. Either of those is sent back as the cookie.
+ * @return array{0: string, 1: bool} the ID, and whether to send the cookie
+ */
+function resurrection_player_id(mixed $cookie, mixed $stored): array {
+    $valid = static fn(mixed $id): bool => is_string($id) && strlen($id) === 32 && ctype_xdigit($id);
+    if ($valid($cookie)) { return [$cookie, false]; }
+    return [$valid($stored) ? $stored : bin2hex(random_bytes(16)), true];
+}
+
 function resurrection_end_session(): void {
     $_SESSION = [];
     $cookie = session_get_cookie_params();

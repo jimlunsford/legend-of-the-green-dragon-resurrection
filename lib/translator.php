@@ -186,7 +186,8 @@ function tlbutton_push($indata,$hot=false,$namespace=FALSE){
 	global $translation_is_enabled,$seentlbuttons,$session;
 	if (!$translation_is_enabled) return;
 	if (!$namespace) $namespace="unknown";
-	if ($session['user']['superuser'] & SU_IS_TRANSLATOR){
+	// checkban empties the session before it translates the ban message: no user is no translator, as in PHP 5.
+	if (($session['user']['superuser'] ?? 0) & SU_IS_TRANSLATOR){
 		if (preg_replace("/[ 	\n\r]|`./",'',$indata)>""){
 			if (isset($seentlbuttons[$namespace][$indata])){
 				$link = "";
@@ -212,7 +213,7 @@ function tlbutton_push($indata,$hot=false,$namespace=FALSE){
 
 function tlbutton_pop(){
 	global $translatorbuttons,$session;
-	if ($session['user']['superuser'] & SU_IS_TRANSLATOR){
+	if (($session['user']['superuser'] ?? 0) & SU_IS_TRANSLATOR){
 		return array_pop($translatorbuttons);
 	}else{
 		return "";
@@ -221,7 +222,7 @@ function tlbutton_pop(){
 
 function tlbutton_clear(){
 	global $translatorbuttons,$session;
-	if ($session['user']['superuser'] & SU_IS_TRANSLATOR){
+	if (($session['user']['superuser'] ?? 0) & SU_IS_TRANSLATOR){
 		$return = tlbutton_pop().join("",$translatorbuttons);
 		$translatorbuttons = array();
 		return $return;

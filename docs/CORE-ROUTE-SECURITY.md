@@ -704,3 +704,24 @@ descendant after their own run, 38896842544, failed at the 12:00Z game day rollo
   ban message page is a 500 (finding, its own ROADMAP item).
 
 See [ban administration](BAN-ADMIN-AUTHORITY-20261016.md).
+
+2026-10-16: user editor part 2 (bans) accepted at `eec24a6` (Modern core 38931835620,
+Baseline integrity 38931835612).
+
+2026-10-16 ban message page and `lgi` player ID cookie (`lib/translator.php`, `common.php`,
+`lib/web_security.php`; reached through `login.php` and `create.php`): candidate pending CI.
+
+- A matching ban at login or account creation was a fatal page: `checkban()` empties the
+  session, then the translator's button helpers read `$session['user']['superuser']`
+  unguarded. They now treat a missing user as no translator, as PHP 5 did. 1.1.2's
+  message (every matching reason, permanent or expiry text, petition line) is shown on
+  the login page, each matching ban's `lasthit` is set, the login is refused and no
+  account is created. `banoverride` and the superuser exemption are unchanged.
+- `badnav.php`'s not-logged-in branch has the same root cause and is covered; it is
+  unreachable. The `resurrection_end_session()` callers do not translate after the reset.
+- The `lgi` cookie is the player's `uniqueid` only when it is 32 hex characters, the
+  format both generators produce. Otherwise the stored ID is used when valid, else a new
+  one; a stored value outside the format is replaced on the next request. The cookie is
+  HttpOnly, SameSite=Lax and Secure on HTTPS; no script reads it.
+
+See [ban message and player ID cookie](BAN-MESSAGE-AND-ID-COOKIE-20261016.md).

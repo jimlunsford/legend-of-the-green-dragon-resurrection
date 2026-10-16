@@ -264,18 +264,11 @@ if (array_key_exists('transmute',$session['bufflist'])) {
 }
 
 $session['user']['lastip']=$REMOTE_ADDR;
-if (strlen(is_string($_COOKIE['lgi'] ?? null) ? $_COOKIE['lgi'] : '')<32){
-	if (strlen($session['user']['uniqueid'])<32){
-		$u=bin2hex(random_bytes(16));
-		setcookie("lgi",$u,strtotime("+365 days"));
-		$_COOKIE['lgi']=$u;
-		$session['user']['uniqueid']=$u;
-	}else{
-		setcookie("lgi",$session['user']['uniqueid'],strtotime("+365 days"));
-	}
-}else{
-	$session['user']['uniqueid']=$_COOKIE['lgi'];
+[$session['user']['uniqueid'], $sendid] = resurrection_player_id($_COOKIE['lgi'] ?? null, $session['user']['uniqueid']);
+if ($sendid) {
+	setcookie('lgi', $session['user']['uniqueid'], ['expires' => strtotime('+365 days'), 'secure' => session_get_cookie_params()['secure'], 'httponly' => true, 'samesite' => 'Lax']);
 }
+$_COOKIE['lgi'] = $session['user']['uniqueid'];
 $url = "http://".$_SERVER['SERVER_NAME'].dirname($_SERVER['REQUEST_URI']);
 $url = substr($url,0,strlen($url)-1);
 $urlport = "http://".$_SERVER['SERVER_NAME'].":".$_SERVER['SERVER_PORT'].dirname($_SERVER['REQUEST_URI']);

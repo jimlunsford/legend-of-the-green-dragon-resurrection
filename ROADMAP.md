@@ -58,6 +58,8 @@ Each family is DONE only when its acceptance evidence passes on both supported C
 - [x] Bio moderation (`bios.php`) and donation administration (`donators.php`) (`BIO-DONATION-ADMIN-AUTHORITY-20261016.md`). Accepted at `c166e2e`, Modern core 38892084451, Baseline integrity 38892084290.
 - [x] Soul restoration, a GET favor spend found during haunting (`lib/graveyard/case_restore.php`), and the preferences fatal for new accounts (`prefs.php`, `lib/showform.php`) (`RESTORE-PREFS-AUTHORITY-20261016.md`). Candidate `6a9a12b`; its own run, Modern core 38896842544, failed at the 12:00Z game day rollover and stays on record. Accepted through the first accepted descendant `fa30beb`, Modern core 38907797754, Baseline integrity 38907797223; the tests are unchanged between the two.
 - [x] User editor part 1: account edit, special actions, module preferences, last hit, debug log (`user.php`) (`USER-EDITOR-AUTHORITY-20261016.md`). Accepted at `fa30beb`, Modern core 38907797754, Baseline integrity 38907797223.
+- [x] CI game-day rollover stability: the web test harness pins the game clock so a shard never crosses a game day boundary (`CI-ROLLOVER-STABILITY-20261016.md`). Accepted at `aeb19b9`, Modern core 38923797893, Baseline integrity 38923797782.
+- [x] User editor part 2: bans (`user.php` `setupban`, `saveban`, `delban`, `removeban`) (`BAN-ADMIN-AUTHORITY-20261016.md`). Accepted at `eec24a6`, Modern core 38931835620, Baseline integrity 38931835612.
 
 ### Current
 
@@ -68,16 +70,14 @@ Each family is DONE only when its acceptance evidence passes on both supported C
 Infrastructure and records:
 
 - [ ] Replace the PR #1 body with a short current summary that links here.
-- [ ] CI game-day rollover stability: the web test harness pins the game clock so a shard never crosses a game day boundary (candidate `aeb19b9` in `CI-ROLLOVER-STABILITY-20261016.md`; Baseline integrity 38923797782 passed, Modern core 38923797893 still running when inspected)
 
 Route families:
 
-- [ ] Ban message page fatal: a matching ban at login or account creation is a 500 instead of 1.1.2's message, found during bans (`lib/checkban.php`, `lib/translator.php`; `BAN-ADMIN-AUTHORITY-20261016.md`)
-- [ ] Player ID cookie: any `lgi` cookie of 32 or more bytes becomes the stored `uniqueid`, found during bans (`common.php`; `BAN-ADMIN-AUTHORITY-20261016.md`)
+- [ ] Ban message page fatal: a matching ban at login or account creation is a 500 instead of 1.1.2's message, found during bans (`lib/checkban.php`, `lib/translator.php`; candidate in `BAN-MESSAGE-AND-ID-COOKIE-20261016.md`)
+- [ ] Player ID cookie: any `lgi` cookie of 32 or more bytes becomes the stored `uniqueid`, found during bans (`common.php`; candidate in `BAN-MESSAGE-AND-ID-COOKIE-20261016.md`)
 
 Administration:
 
-- [ ] User editor part 2: bans (`user.php` `setupban`, `saveban`, `delban`, `removeban`; candidate in `BAN-ADMIN-AUTHORITY-20261016.md`)
 - [ ] Content editors: creatures, weapons, armor, mounts, titles, taunts
 - [ ] Module manager and remaining preference editors (`modules.php`)
 

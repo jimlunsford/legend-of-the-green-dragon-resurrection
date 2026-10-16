@@ -164,3 +164,10 @@ Local, PHP 8.5.11 / MySQL 8.4 (supporting evidence only; CI is the acceptance):
 task (15:35Z). Baseline integrity 38923797782 SUCCESS. Modern core 38923797893 was still
 running: both `checks` jobs SUCCESS, all eight `http` shards in progress, no `result` job
 yet. The ROADMAP item stays open.
+
+## Acceptance, 2026-10-16
+
+Recorded at the start of the ban message task (16:30Z). Modern core 38923797893 on
+`aeb19b9` (started 15:25:20Z): all 12 jobs SUCCESS, both `checks` jobs, all eight `http`
+shards, and both `result` jobs (PHP 8.4 / MariaDB 11.4 at 15:40:33Z, PHP 8.5 / MySQL 8.4
+at 15:41:56Z). Baseline integrity 38923797782 SUCCESS. The ROADMAP item is closed.
