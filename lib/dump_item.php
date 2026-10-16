@@ -4,18 +4,20 @@ require_once __DIR__ . '/../src/Compatibility/array_cursor.php';
 // addnews ready
 // translator ready
 // mail ready
-function dump_item($item){
+/** With $escape, keys and values are HTML-escaped for display (showform's viewonly fields). */
+function dump_item($item, $escape=false){
 	$out = "";
+	$text = static fn($value) => $escape ? htmlspecialchars((string)$value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') : $value;
 	if (is_array($item)) $temp = $item;
 	else $temp = \Resurrection\Security\ScalarState::read($item);
 	if (is_array($temp)) {
 		$out .= "array(" . count($temp) . ") {<div style='padding-left: 20pt;'>";
 		while(list($key, $val) = resurrection_array_next($temp)) {
-			$out .= "'$key' = '" . dump_item($val) . "'`n";
+			$out .= "'" . $text($key) . "' = '" . dump_item($val, $escape) . "'`n";
 		}
 		$out .= "</div>}";
 	} else {
-		$out .= $item;
+		$out .= $text($item);
 	}
 	return $out;
 }

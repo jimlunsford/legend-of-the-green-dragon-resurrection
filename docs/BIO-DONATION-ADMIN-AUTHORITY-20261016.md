@@ -179,3 +179,13 @@ restoration task. Modern core 38892084451 was still running: both `checks` jobs 
 SUCCESS and all eight `http` shards were in progress. The task brief reports Baseline
 integrity 38892084290 SUCCESS; it was not re-inspected here. Bio moderation and
 donation administration stay in Remaining until Modern core is accepted.
+
+## Acceptance, 2026-10-16
+
+Bio moderation and donation administration are accepted at `c166e2e`. Both workflows
+passed and were inspected once at the start of the user editor task:
+
+| Workflow | Run | Result |
+|---|---|---|
+| Modern core | 38892084451 (11:11–11:28 UTC) | All 12 jobs SUCCESS. `engineering (8.4, mariadb:11.4) / result` SUCCESS at 11:26:41Z; `engineering (8.5, mysql:8.4) / result` SUCCESS at 11:28:27Z |
+| Baseline integrity | 38892084290 | SUCCESS |

@@ -134,3 +134,24 @@ supported legs.
 - The other `showform()` field types listed above read missing keys unguarded.
 - Restoring stays reachable while a special event holds the graveyard page, as accepted
   for haunting. The locked recheck still refuses a living actor.
+
+## Candidate CI, 2026-10-16
+
+`6a9a12b56424ba7a6dd0dfbee2004b91ea4b074b` was inspected once at the start of the user
+editor task. Baseline integrity 38896842463 SUCCESS. Modern core 38896842544 FAILURE:
+
+- Both `checks` jobs SUCCESS.
+- All eight `http` shards FAILURE, and both `result` jobs FAILURE (12:07:46Z and
+  12:09:23Z).
+- The shards failed on different tests. Shard 1:
+  `test_lovers_alternative_choices_daily_authority_http`, `inn.php` 302 instead of 200
+  (`tests/tooling/test_web_application.py:677`). Shard 2:
+  `test_graveyard_flee_success_failure_caps_and_rollback`, "Graveyard combat
+  unavailable" 409 (`:1463`). Shard 3: a training test, "Training unavailable".
+- The run started at 11:54Z. Both shard 1 jobs ended at 12:00:04Z and 12:00:05Z, and
+  every failure read happened at or after 12:00:00Z.
+
+Inferred, not proven: with the default `daysperday` of 4 the game day rolls over every
+six hours, including 12:00Z, and a fixture's game day went stale mid-run. Locally, shard 1
+passed 47/47 at `6a9a12b` away from a rollover. The run stays on record and is not
+acceptance. Soul restoration and the `prefs.php` fix stay in Remaining.

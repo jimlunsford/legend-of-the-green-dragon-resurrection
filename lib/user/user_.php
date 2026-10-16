@@ -2,7 +2,8 @@
 if ($display == 1){
 	$q = "";
 	if ($query) {
-		$q = "&q=$query";
+		// The search text is carried in the sort links URL-encoded, never as markup.
+		$q = "&q=".rawurlencode($query);
 	}
 	$ops=translate_inline("Ops");
 	$acid =translate_inline("AcctID");
@@ -41,8 +42,9 @@ if ($display == 1){
 		if ($loggedin)
 			$laston=translate_inline("`#Online`0");
 		$row['laston']=$laston;
-		if ($row[$order]!=$oorder) $rn++;
-		$oorder = $row[$order];
+		$ordercolumn = explode(' ', $order)[0];
+		if ($row[$ordercolumn]!=$oorder) $rn++;
+		$oorder = $row[$ordercolumn];
 		rawoutput("<tr class='".($rn%2?"trlight":"trdark")."'>");
 		rawoutput("<td nowrap>");
 		rawoutput("[ <a href='user.php?op=edit&userid={$row['acctid']}$m'>$ed</a> | <a href='user.php?op=del&userid={$row['acctid']}' onClick=\"return confirm('$conf');\">$del</a> | <a href='user.php?op=setupban&userid={$row['acctid']}'>$ban</a> | <a href='user.php?op=debuglog&userid={$row['acctid']}'>$log</a> ]");

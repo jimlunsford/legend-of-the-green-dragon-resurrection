@@ -643,3 +643,34 @@ maximum. The same candidate fixes a fatal for new accounts on `prefs.php`: the s
 form's boolean field read a missing preference without a guard, which PHP 8's warning
 and the error handler made fatal. It now reads it as 1.1.2 did, as "No". See
 [restore and preferences](RESTORE-PREFS-AUTHORITY-20261016.md).
+
+2026-10-16: bio moderation and donation administration accepted at `c166e2e` (Modern
+core 38892084451, Baseline integrity 38892084290). Soul restoration and the `prefs.php`
+fix at `6a9a12b` are not accepted: Modern core 38896842544 failed on all eight HTTP
+shards.
+
+2026-10-16 `user.php` user editor part 1 (account edit, special actions, module
+preferences, last hit, debug log, `returnpetition`): candidate pending CI. This entry adds
+to the `user.php` row above; the bans are part 2 and delete is tracked under account
+deletion.
+
+- Access: `SU_EDIT_USERS` (or megauser) on every op; anonymous, player and superusers
+  without it are covered.
+- Save, special and module preference save are POST + CSRF + one-use intent, each in the
+  locked transaction that also locks the target, with its debug log rows and the
+  editor's own session effects.
+- Save binds its intent to a server-side snapshot of the form. It writes only the fields
+  the admin changed and refuses the whole save (409) if one of them changed underneath.
+  1.1.2 compared with a client-posted `oldvalues`; `6a9a12b` compared with the live row
+  and reverted the player's later changes.
+- Every posted field is checked against its `$userinfo` descriptor and its column before
+  any write; `viewonly` and unknown fields are 400. The superuser rules are the 1.1.2
+  formula unchanged.
+- Module preferences: installed modules and declared, typed preferences only;
+  `validateprefs` kept.
+- All SQL bound. `viewonly` values, search links and the debug log are escaped; the last
+  page hit is served under `Content-Security-Policy: sandbox`. `returnpetition` is a
+  positive integer or dropped.
+- The edit page was fatal on `6a9a12b` for an account with a NULL clan join date.
+
+See [user editor authority](USER-EDITOR-AUTHORITY-20261016.md).

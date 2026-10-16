@@ -383,3 +383,19 @@ The haunting candidate adds no `serialize()`, `ScalarState::read()` or `unserial
 call: recounted with the same token method (which again reproduces 112 / 53 / 42 /
 69 / 1 at `4478c06`), it stays **108 / 50 / 40 / 67 / 1**. See
 [haunting authority](HAUNT-AUTHORITY-20261016.md).
+
+## User editor candidate, 2026-10-16
+
+Bio moderation and donation administration (`c166e2e`) and soul restoration (`6a9a12b`)
+added no call: recounted with the same token method (which again reproduces 112 / 53 /
+42 / 69 / 1 at `4478c06` and 108 / 50 / 40 / 67 / 1 at `8257aed`), `6a9a12b` is
+**108 / 50 / 40 / 67 / 1**.
+
+The user editor candidate removes one writer: `lib/user/user_edit.php` no longer
+serializes the form into the `oldvalues` hidden field (the inventory row above,
+`lib/user/user_edit.php:55`). The save compares with a server-side snapshot in the
+editor's session instead and refuses a posted `oldvalues`. Its intent context is a
+SHA-256 of a JSON encoding, not a PHP serialization. Candidate inventory: **107 sites /
+49 files / 39 serialize writers-checks / 67 ScalarState reads / one centralized
+unserialize**. ScalarState limits are unchanged. See
+[user editor authority](USER-EDITOR-AUTHORITY-20261016.md).

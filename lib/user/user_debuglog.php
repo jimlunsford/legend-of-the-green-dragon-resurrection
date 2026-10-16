@@ -13,36 +13,37 @@ $accounts = db_prefix('accounts');
 // It may seem strange, but in this case two single queries are better!
 // $sql = "SELECT count(id) AS c FROM $debuglog WHERE actor=$userid OR target=$userid";
 
-$sql = "SELECT COUNT(id) AS c FROM $debuglog WHERE target=$userid";
-$result = db_query($sql);
+$sql = "SELECT COUNT(id) AS c FROM $debuglog WHERE target=?";
+$result = db_query($sql, true, [$userid]);
 $row = db_fetch_assoc($result);
 $max = $row['c'];
 
-$sql = "SELECT COUNT(id) AS c FROM $debuglog WHERE actor=$userid";
-$result = db_query($sql);
+$sql = "SELECT COUNT(id) AS c FROM $debuglog WHERE actor=?";
+$result = db_query($sql, true, [$userid]);
 $row = db_fetch_assoc($result);
 $max += $row['c'];
 
-$start = (int)httpget('start');
+try { $start = \Resurrection\Http\Input::integer($_GET, 'start'); }
+catch (InvalidArgumentException $error) { http_response_code(400); exit('Invalid page.'); }
 
 $sql = "(
 			SELECT $debuglog. * , a1.name AS actorname, a2.name AS targetname
 				FROM $debuglog
 				LEFT JOIN $accounts AS a1 ON a1.acctid = $debuglog.actor
 				LEFT JOIN $accounts AS a2 ON a2.acctid = $debuglog.target
-				WHERE $debuglog.actor = $userid
+				WHERE $debuglog.actor = ?
 		) UNION (
 			SELECT $debuglog. * , a2.name AS targetname, a1.name AS actorname
 				FROM $debuglog
 				LEFT JOIN $accounts AS a1 ON a1.acctid = $debuglog.actor
 				LEFT JOIN $accounts AS a2 ON a2.acctid = $debuglog.target
-				WHERE $debuglog.target = $userid
+				WHERE $debuglog.target = ?
 		)
 		ORDER BY date DESC
-		LIMIT $start,500";
+		LIMIT ?,500";
 
 $next = $start+500;
-$prev = $start-500;
+$prev = max(0, $start-500);
 addnav("Operations");
 addnav("Edit user info","user.php?op=edit&userid=$userid$returnpetition");
 addnav("Refresh", "user.php?op=debuglog&userid=$userid&start=$start$returnpetition");
@@ -54,7 +55,7 @@ if ($start > 0) {
 	addnav("Previous page",
 			"user.php?op=debuglog&userid=$userid&start=$prev$returnpetition");
 }
-$result = db_query($sql);
+$result = db_query($sql, true, [$userid, $userid, $start]);
 $odate = "";
 while ($row = db_fetch_assoc($result)) {
 	$dom = date("D, M d",strtotime($row['date']));

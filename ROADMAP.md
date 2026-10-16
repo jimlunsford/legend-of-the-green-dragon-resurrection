@@ -55,6 +55,7 @@ Each family is DONE only when its acceptance evidence passes on both supported C
 - [x] Weapons and armor purchase and trade-in (`EQUIPMENT-PURCHASE-AUTHORITY-20261015.md`). Accepted at `639b8c5`, Modern core 38810195085.
 - [x] Stables: buy, trade, feed, sell (`STABLES-AUTHORITY-20261016.md`). Accepted at `8257aed`, Modern core 38831947335.
 - [x] Haunting: search and haunt (`HAUNT-AUTHORITY-20261016.md`). Accepted at `595f0c3` (Modern core 38837315295) and follow-up `2a48f35` (Modern core 38884592810, Baseline integrity 38884592513).
+- [x] Bio moderation (`bios.php`) and donation administration (`donators.php`) (`BIO-DONATION-ADMIN-AUTHORITY-20261016.md`). Accepted at `c166e2e`, Modern core 38892084451, Baseline integrity 38892084290.
 
 ### Current
 
@@ -68,14 +69,13 @@ Infrastructure and records:
 
 Route families:
 
-- [ ] Soul restoration, a GET favor spend found during haunting (`lib/graveyard/case_restore.php`; candidate in `RESTORE-PREFS-AUTHORITY-20261016.md`)
-- [ ] Bio moderation (`bios.php`; candidate in `BIO-DONATION-ADMIN-AUTHORITY-20261016.md`)
-- [ ] Donation administration (`donators.php`; candidate in `BIO-DONATION-ADMIN-AUTHORITY-20261016.md`)
-- [ ] Preferences fatal for new accounts, a missing boolean preference found during bio moderation (`prefs.php`, `lib/showform.php`; candidate in `RESTORE-PREFS-AUTHORITY-20261016.md`)
+- [ ] Soul restoration, a GET favor spend found during haunting (`lib/graveyard/case_restore.php`; candidate `6a9a12b` in `RESTORE-PREFS-AUTHORITY-20261016.md`; Modern core 38896842544 failed)
+- [ ] Preferences fatal for new accounts, a missing boolean preference found during bio moderation (`prefs.php`, `lib/showform.php`; candidate `6a9a12b` in `RESTORE-PREFS-AUTHORITY-20261016.md`; Modern core 38896842544 failed)
 
 Administration:
 
-- [ ] User editor (`user.php`)
+- [ ] User editor part 1: account edit, special actions, module preferences, last hit, debug log (`user.php`; candidate in `USER-EDITOR-AUTHORITY-20261016.md`)
+- [ ] User editor part 2: bans (`user.php` `setupban`, `saveban`, `delban`, `removeban`)
 - [ ] Content editors: creatures, weapons, armor, mounts, titles, taunts
 - [ ] Module manager and remaining preference editors (`modules.php`)
 
@@ -83,7 +83,7 @@ State and maintenance:
 
 - [ ] Remaining serialized business schemas: general combat, mounts, companions, buffs, translation arrays, preferences, editor old values, navigation (`SERIALIZED-STATE-AUDIT.md`)
 - [ ] Expiration cleanup: `last_char_expire` must not advance before cleanup succeeds (`lib/expire_chars.php`)
-- [ ] Account deletion failure and retry semantics (`lib/charcleanup.php`)
+- [ ] Account deletion failure and retry semantics (`lib/charcleanup.php`), including the user editor's delete (`user.php?op=del`, `lib/user/user_del.php`)
 - [ ] Truthful completion reporting for external email and `OPTIMIZE TABLE`
 
 ### Merge gate

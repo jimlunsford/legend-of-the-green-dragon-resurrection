@@ -314,7 +314,7 @@ function showform($layout,$row,$nosave=false,$keypref=false){
 		case "viewonly":
 			unset($returnvalues[$key]);
 			if (isset($row[$key]))
-				output_notl(dump_item($row[$key]),true);
+				output_notl(dump_item($row[$key], true),true);
 			break;
 		case "textarearesizeable":
 			$resize=true;

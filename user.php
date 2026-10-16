@@ -26,7 +26,9 @@ if ($op == "lasthit") {
 page_header("User Editor");
 
 $sort = httpget('sort');
-$petition=httpget("returnpetition");
+// Only a petition ID is carried into the editor's links; anything else is dropped.
+require_once("lib/user_editor.php");
+$petition=resurrection_user_editor_petition(httpget("returnpetition"));
 $returnpetition="";
 if ($petition != "") $returnpetition = "&returnpetition=$petition";
 
@@ -34,6 +36,7 @@ $gentime = 0;
 $gentimecount = 0;
 
 $order = "acctid";
+if ($sort !== false && !is_string($sort)) { http_response_code(400); exit('Invalid account ordering.'); }
 if ($sort!="") $order = "$sort";
 $display = 0;
 $query = httppost('q');
@@ -41,7 +44,8 @@ if ($query === false) $query = httpget('q');
 
 if ($op=="search" || $op== ""){
 	require_once("lib/lookup_user.php");
-	list($searchresult, $err) = lookup_user($query, $order);
+	try { list($searchresult, $err) = lookup_user($query, $order); }
+	catch (InvalidArgumentException $error) { http_response_code(400); exit('Invalid account search.'); }
 	$op = "";
 	if ($err) {
 		output($err);
@@ -52,6 +56,7 @@ if ($op=="search" || $op== ""){
 
 
 $m = httpget("module");
+if ($m !== false && $m !== '' && (!is_string($m) || !preg_match('/\A[A-Za-z][A-Za-z0-9_]*\z/', $m))) { http_response_code(400); exit('Invalid module.'); }
 if ($m) $m = "&module=$m&subop=module";
 rawoutput("<form action='user.php?op=search$m' method='POST'>");
 output("Search by any field below: ");

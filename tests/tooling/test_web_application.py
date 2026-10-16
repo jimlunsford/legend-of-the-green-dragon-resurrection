@@ -5863,6 +5863,269 @@ function MODULE_dohook($hook,$args) { if ($hook==='donation_adjustments') { $arg
             for who in targets: q('DELETE FROM mail WHERE msgto=?',[who]);q('DELETE FROM accounts_output WHERE acctid=?',[who]);q('DELETE FROM accounts WHERE acctid=?',[who])
             q('UPDATE accounts SET '+','.join(k+'=?' for k in original if k!='acctid')+' WHERE acctid=?',[*[v for k,v in original.items() if k!='acctid'],player])
 
+    def _user_editor_form(self, body, action):
+        # The fields a browser submits for one form: checked, enabled boxes; each select's chosen option.
+        class Forms(HTMLParser):
+            def __init__(self): super().__init__();self.forms=[];self.current=None;self.select=None;self.textarea=None
+            def handle_starttag(self,tag,attrs):
+                a=dict(attrs)
+                if tag=='form': self.current=[html.unescape(a.get('action','')),[]];return
+                if self.current is None or 'disabled' in a: return
+                if tag=='input' and 'name' in a and a.get('type','text').lower() not in ('submit','button'):
+                    if a.get('type','').lower()=='checkbox' and 'checked' not in a: return
+                    self.current[1].append((a['name'],a.get('value') or ''))
+                elif tag=='select': self.select=[a['name'],None,None]
+                elif tag=='option' and self.select is not None:
+                    if self.select[1] is None: self.select[1]=a.get('value','')
+                    if 'selected' in a: self.select[2]=a.get('value','')
+                elif tag=='textarea': self.textarea=[a['name'],'']
+            def handle_data(self,data):
+                if self.textarea is not None: self.textarea[1]+=data
+            def handle_endtag(self,tag):
+                if tag=='select' and self.select is not None and self.current is not None:
+                    self.current[1].append((self.select[0],self.select[2] if self.select[2] is not None else self.select[1]));self.select=None
+                elif tag=='textarea' and self.textarea is not None and self.current is not None: self.current[1].append(tuple(self.textarea));self.textarea=None
+                elif tag=='form' and self.current is not None: self.forms.append(self.current);self.current=None
+        forms=Forms();forms.feed(body)
+        matches=[fields for url,fields in forms.forms if url==action]
+        self.assertEqual(1,len(matches),action+' '+body[:2000])
+        return matches[0]
+
+    @contextmanager
+    def _user_editor_fixture(self):
+        q=self.query;player=int(q('SELECT acctid FROM accounts WHERE login=?',['WebPlayer'])[0]['acctid'])
+        original=q('SELECT * FROM accounts WHERE acctid=?',[player])[0];targets=[];state={}
+        module='resurrectionusereditor'+os.urandom(4).hex();path=ROOT/'modules'/f'{module}.php'
+        signals=ROOT/'tests'/'fixtures'
+        path.write_text("""<?php
+function MODULE_getmoduleinfo() { return ['name'=>'User editor fixture','version'=>'1.0','author'=>'Tests','category'=>'Tests',
+    'prefs'=>['User editor fixture,title','level'=>'Level,int|0','flag'=>'Flag,bool|0','mood'=>'Mood,range,0,10,1|5','note'=>'Note,viewonly|x']]; }
+function MODULE_dohook($hook,$args) {
+    global $session;
+    if ($hook==='validateprefs' && ($args['level'] ?? '')==='13') $args['validation_error']='Unlucky level';
+    $pause='tests/fixtures/MODULE-pause';
+    if ($hook==='everyfooter' && is_file($pause) && trim(file_get_contents($pause))===(string)$session['user']['acctid']) {
+        unlink($pause); file_put_contents('tests/fixtures/MODULE-started','1');
+        for ($i=0; $i<400 && !is_file('tests/fixtures/MODULE-release'); $i++) usleep(25000);
+        $session['user']['turns']++;
+    }
+    return $args;
+}
+""".replace('MODULE',module))
+        q("INSERT INTO modules(modulename,active,version,infokeys) VALUES (?,1,'1.0','|name|version|author|category|prefs|')",[module])
+        for location in ['validateprefs','everyfooter']:
+            q('INSERT INTO module_hooks(modulename,location,`function`,whenactive,priority) VALUES (?,?,?,?,?)',[module,location,module+'_dohook','',100])
+        try:
+            target=int(self._security_target('EditorTarget'));targets.append(target)
+            # A race, a specialty and no unspent dragon points: the player's own pages do not reopen onboarding.
+            q("UPDATE accounts SET title='Farmboy',ctitle='',name=?,gold=100,turns=10,hitpoints=20,emailaddress=?,lastip=?,uniqueid=?,clanjoindate=NULL,banoverride=NULL,race='Human',specialty='DA',dragonkills=0,dragonpoints='a:0:{}' WHERE acctid=?",
+              ["Farmboy O'Reilly \\ 雪 <img src=x>`0",'<b>mail</b>@example.test','<svg onload=1>','"><img src=y>',target])
+            warning="<span class='colLtRed'>Warning:</span>"
+            def request(url,data=None):
+                # The editor shows the game's own "Warning:" text while the target is online; PHP diagnostics still fail.
+                class NoRedirect(urllib.request.HTTPRedirectHandler):
+                    def redirect_request(self, *args): return None
+                q('UPDATE accounts SET lastnewday=? WHERE acctid=?',[self._current_game_day(),player]);self._security_allow(player,url)
+                opener=urllib.request.build_opener(urllib.request.HTTPCookieProcessor(state['call'].cookiejar),NoRedirect)
+                try: response=opener.open(urllib.request.Request(f'http://127.0.0.1:{self.port}/'+url,data=None if data is None else urllib.parse.urlencode(data).encode()),timeout=20)
+                except urllib.error.HTTPError as error: response=error
+                body=response.read().decode('utf-8',errors='replace')
+                self.assertNotRegex(body.replace(warning,''),r'(?i)(fatal error|warning:|deprecated:|notice:)',body[:2000])
+                if response.status==500:
+                    self.server_log.seek(0);body+='\n'.join(self.server_log.read().splitlines()[-8:])
+                return response.status,body
+            def login(role):
+                q('UPDATE accounts SET superuser=? WHERE acctid=?',[role,player]);state['call']=self._security_client()
+            def row(who=target):
+                return q('SELECT * FROM accounts WHERE acctid=?',[who])[0]
+            edit=lambda who=target,extra='':f'user.php?op=edit&userid={who}{extra}'
+            def form(op='save',who=target,extra=''):
+                status,body=request(edit(who,extra));self.assertEqual(200,status,body[:2000])
+                return self._user_editor_form(body,f'user.php?op={op}&userid={who}{extra}')
+            def change(fields,**values):
+                text=lambda v:v if isinstance(v,bytes) else str(v)
+                result=[(k,text(values.pop(k)) if k in values else v) for k,v in fields]
+                return result+[(k,text(v)) for k,v in values.items()]
+            logs=lambda who=target:int(q('SELECT COUNT(*) AS n FROM debuglog WHERE target=?',[who])[0]['n'])
+            yield dict(q=q,player=player,target=target,module=module,signals=signals,request=request,login=login,row=row,edit=edit,form=form,change=change,logs=logs,targets=targets,jar=lambda:state['call'].cookiejar)
+        finally:
+            path.unlink(missing_ok=True)
+            for name in ['pause','started','release']: (signals/f'{module}-{name}').unlink(missing_ok=True)
+            q('DELETE FROM module_hooks WHERE modulename=?',[module]);q('DELETE FROM modules WHERE modulename=?',[module])
+            q('DELETE FROM module_userprefs WHERE modulename=?',[module])
+            if q("SELECT CONSTRAINT_NAME FROM information_schema.TABLE_CONSTRAINTS WHERE CONSTRAINT_SCHEMA=DATABASE() AND TABLE_NAME='accounts' AND CONSTRAINT_NAME='fixture_user_editor'"):
+                q('ALTER TABLE accounts DROP CONSTRAINT fixture_user_editor')
+            for who in targets: q('DELETE FROM debuglog WHERE target=? OR actor=?',[who,who]);q('DELETE FROM accounts_output WHERE acctid=?',[who]);q('DELETE FROM accounts WHERE acctid=?',[who])
+            q('DELETE FROM debuglog WHERE target=?',[player])
+            q('UPDATE accounts SET '+','.join('`'+k+'`=?' for k in original if k!='acctid')+' WHERE acctid=?',[*[v for k,v in original.items() if k!='acctid'],player])
+
+    def test_user_editor_account_save_authority_http(self):
+        with self._user_editor_fixture() as f:
+            q,target,player,request,login,row,form,change,logs=(f[k] for k in ['q','target','player','request','login','row','form','change','logs'])
+            save=f'user.php?op=save&userid={target}'
+            anonymous=self._security_client(login=None)
+            urls=[('user.php',None),(f['edit'](),None),(save,{'gold':'1'}),(f'user.php?op=special&userid={target}',{'newday':'1'}),
+                  (f'user.php?op=savemodule&module={f["module"]}&userid={target}',{'level':'1'}),(f'user.php?op=lasthit&userid={target}',None),(f'user.php?op=debuglog&userid={target}',None)]
+            before=row()
+            for url,data in urls: self.assertIn(anonymous(url,data)[0],[302,303,403],url)
+            # A player, and a superuser holding every flag except Edit Users and megauser, are refused on every op.
+            for role in [0,0xFFFFFFFF&~(64|1)]:
+                login(role)
+                for url,data in urls: self.assertEqual(403,request(url,data)[0],(role,url))
+            self.assertEqual(before,row())
+            # Edit Users and megauser can open the editor; GET changes nothing.
+            for role in [1,64]:
+                login(role)
+                for url,data in urls:
+                    if data is None: self.assertEqual(200,request(url)[0],(role,url))
+                self.assertEqual(403,request(save)[0]);self.assertEqual(before,row())
+            login(64)
+            # Output: names, contact fields and viewonly values are escaped; search text never becomes markup.
+            status,body=request(f['edit']());self.assertEqual(200,status)
+            for raw in ['<img src=x>','<b>mail</b>','<svg onload=1>','"><img src=y>']: self.assertNotIn(raw,body)
+            # The name matches the search text, so the result row and the sort links carrying the text are shown.
+            status,body=request('user.php?op=search',{'q':'<img src=x>'});self.assertEqual(200,status);self.assertNotIn('<img src=x>',body)
+            self.assertIn(f'user.php?op=edit&userid={target}',html.unescape(body));self.assertIn('q=%3Cimg%20src%3Dx%3E',body)
+            for url in ['user.php?sort=login;DROP','user.php?op=search&sort[]=x',f'user.php?op=edit&userid={target}&module=<b>']: self.assertEqual(400,request(url)[0],url)
+            # An unchanged form writes nothing: 1.1.2 rewrote the titled name on every save.
+            fields=form();self.assertIn(('name',"O'Reilly \\ 雪 <img src=x>"),fields)
+            status,body=request(save,fields);self.assertEqual(200,status,body[:2000]);self.assertIn("No fields were changed",body)
+            self.assertEqual(before,row());self.assertEqual(0,logs())
+            # Stale form: the player's later changes survive a save of an older form; only the edited field is written.
+            fields=form();q('UPDATE accounts SET gold=150,hitpoints=7 WHERE acctid=?',[target])
+            status,body=request(save,change(fields,turns=12));self.assertEqual(200,status,body[:2000]);self.assertIn('turns has changed to 12',body)
+            after=row();self.assertEqual(('150','7','12'),(after['gold'],after['hitpoints'],after['turns']));self.assertEqual(1,logs())
+            self.assertEqual(409,request(save,change(fields,turns=12))[0])
+            # A field the admin changed that changed underneath refuses the whole save.
+            fields=form();q('UPDATE accounts SET gold=200 WHERE acctid=?',[target]);before=row()
+            self.assertEqual(409,request(save,change(fields,gold=999,turns=13))[0]);self.assertEqual(before,row());self.assertEqual(1,logs())
+            # Types: every posted field is checked against its descriptor and column before any write; the form stays usable.
+            fields=form();before=row()
+            for values in [{'gold':'ten'},{'gold':'4294967296'},{'gold':'-1'},{'hitpoints':'2147483648'},{'locked':'2'},{'sex':'5'},{'clanjoindate':'tomorrow'},
+                           {'login':'x'*51},{'newpassword':'short'},{'superuser':'64'},{'superuser[3]':'1'},{'acctid':'9'},{'lastip':'1.2.3.4'},{'prefs':'a:0:{}'},
+                           {'referer':'5'},{'marriedto':'5'},{'unknown':'1'},{'oldvalues':'a:0:{}'},{'gold':b'\xe9'}]:
+                self.assertEqual(400,request(save,change(fields,**values))[0],values);self.assertEqual(before,row())
+            self.assertEqual(403,request(save,change(fields,csrf_token='0'*64,gold=5))[0])
+            self.assertEqual(409,request(save,[(k,v) for k,v in change(fields,gold=5) if k!='action_token'])[0]);self.assertEqual(before,row())
+            self.assertEqual(404,request(f'user.php?op=save&userid={target+1000}',fields)[0])
+            # The form is still the open one: the date clears to NULL, the boolean writes, the name keeps its title.
+            fields=form()
+            status,body=request(save,change(fields,clanjoindate='2026-10-16 12:00:00',banoverride=1,name='Renamed',gold=4294967295));self.assertEqual(200,status,body[:2000])
+            after=row();self.assertEqual(('2026-10-16 12:00:00','1','Farmboy Renamed`0','4294967295'),(after['clanjoindate'],after['banoverride'],after['name'],after['gold']))
+            fields=form();self.assertEqual(200,request(save,change(fields,clanjoindate=''))[0]);self.assertIsNone(row()['clanjoindate'])
+            # Superuser rules: Edit Users cannot grant Edit Config (its box is disabled; a forged box is stripped) and cannot remove it.
+            q('UPDATE accounts SET superuser=128 WHERE acctid=?',[target]);fields=form()
+            self.assertNotIn(('superuser[128]','1'),fields);self.assertIn(('superuser[0]','1'),fields)
+            status,body=request(save,fields+[('superuser[64]','1'),('superuser[2048]','1')]);self.assertEqual(200,status,body[:2000])
+            self.assertEqual('192',row()['superuser']);self.assertIn('changed superuser to',q('SELECT message FROM debuglog WHERE target=? ORDER BY id DESC LIMIT 1',[target])[0]['message'])
+            fields=form();self.assertEqual(200,request(save,[(k,v) for k,v in fields if k!='superuser[64]'])[0]);self.assertEqual('128',row()['superuser'])
+            q('UPDATE accounts SET superuser=0 WHERE acctid=?',[target])
+            # Password: hashed, authversion bumped, the player's sessions end, nothing else changes, and the password is not logged.
+            target_client=self._security_client(login='EditorTarget',password='Synthetic administrator password')
+            q('UPDATE accounts SET lastnewday=? WHERE acctid=?',[self._current_game_day(),target]);self._security_allow(target,'list.php')
+            self.assertEqual(200,target_client('list.php')[0])
+            fields=form();self.assertIn("This user is probably logged in",request(f['edit']())[1]);before=row();count=logs()
+            status,body=request(save,change(fields,newpassword='Replacement editor password'));self.assertEqual(200,status,body[:2000])
+            after=row();self.assertEqual(int(before['authversion'])+1,int(after['authversion']));self.assertNotEqual(before['password'],after['password'])
+            self.assertTrue(after['password'].startswith('$2y$'))
+            for key in before:
+                if key not in ['password','authversion']: self.assertEqual(before[key],after[key],key)
+            self.assertEqual(['Administrator changed account password'],[r['message'] for r in q('SELECT message FROM debuglog WHERE target=? ORDER BY id',[target])[count:]])
+            self._security_allow(target,'list.php');status,_=target_client('list.php');self.assertIn(status,[302,303])
+            self._security_client(login='EditorTarget',password='Replacement editor password')
+            # A late failure rolls back the account, its log rows and the editor's session; the spent intent is refused, a fresh one saves.
+            fields=form();before=row();count=logs()
+            # A CHECK cannot name the auto-increment key; no fixture account holds 7777 turns.
+            q('ALTER TABLE accounts ADD CONSTRAINT fixture_user_editor CHECK (turns <> 7777)')
+            try:
+                self.assertEqual(500,request(save,change(fields,gold=300,turns=7777))[0]);self.assertEqual(before,row());self.assertEqual(count,logs())
+                self.assertEqual(409,request(save,change(fields,gold=300,turns=7777))[0])
+            finally: q('ALTER TABLE accounts DROP CONSTRAINT fixture_user_editor')
+            fields=form();self.assertEqual(200,request(save,change(fields,gold=300,turns=7777))[0]);self.assertEqual(('300','7777'),(row()['gold'],row()['turns']))
+            # Online target: a page the player loaded before the save writes only what it changed at its end.
+            online=self._security_client(login='EditorTarget',password='Replacement editor password')
+            with socket.socket() as sock:sock.bind(('127.0.0.1',0));port=sock.getsockname()[1]
+            log=tempfile.TemporaryFile(mode='w+t');import threading
+            server=subprocess.Popen([shutil.which('php'),'-d','display_errors=1','-d','error_reporting=-1','-S',f'127.0.0.1:{port}','-t',str(ROOT)],cwd=ROOT,stdout=subprocess.DEVNULL,stderr=log)
+            started=f['signals']/f'{f["module"]}-started';release=f['signals']/f'{f["module"]}-release';results=[]
+            try:
+                for _ in range(100):
+                    try:
+                        with socket.create_connection(('127.0.0.1',port),timeout=.1):break
+                    except OSError:time.sleep(.02)
+                second=self._security_client(login=None,port=port)
+                for cookie in online.cookiejar: second.cookiejar.set_cookie(cookie)
+                fields=form();q('UPDATE accounts SET lastnewday=? WHERE acctid=?',[self._current_game_day(),target]);self._security_allow(target,'list.php')
+                (f['signals']/f'{f["module"]}-pause').write_text(str(target))
+                thread=threading.Thread(target=lambda:results.append(second('list.php')));thread.start()
+                for _ in range(200):
+                    if started.exists():break
+                    time.sleep(.025)
+                self.assertTrue(started.exists(),'The player page did not reach its footer')
+                status,body=request(save,change(fields,gold=500));self.assertEqual(200,status,body[:2000]);self.assertEqual('500',row()['gold'])
+                release.write_text('1');thread.join(timeout=20);self.assertFalse(thread.is_alive());self.assertEqual(200,results[0][0],results[0][1][:1500])
+                after=row();self.assertEqual(('500','7778'),(after['gold'],after['turns']))
+            finally:
+                release.write_text('1');server.terminate();server.wait(timeout=5);log.close()
+            # Self-edit: the session and the database agree after later pages.
+            fields=form(who=player);status,body=request(f'user.php?op=save&userid={player}',change(fields,gold=4321));self.assertEqual(200,status,body[:2000])
+            self.assertEqual(200,request(f['edit'](player))[0]);self.assertEqual('4321',row(player)['gold'])
+
+    def test_user_editor_special_module_and_log_authority_http(self):
+        with self._user_editor_fixture() as f:
+            q,target,request,login,row,form,change,logs,module=(f[k] for k in ['q','target','request','login','row','form','change','logs','module'])
+            special=f'user.php?op=special&userid={target}';login(64)
+            q("UPDATE accounts SET lasthit='2026-10-16 01:02:03',allowednavs=?,restorepage='forest.php',specialinc='module:x',emailvalidation='abc' WHERE acctid=?",['a:1:{s:10:"forest.php";b:1;}',target])
+            q("UPDATE accounts_output SET output='<script>alert(1)</script><iframe src=x></iframe>' WHERE acctid=?",[target])
+            # Special: one-use, bound to the account, exactly one action, the 1.1.2 writes.
+            before=row();self.assertEqual(403,request(special)[0])
+            fields=form('special');self.assertEqual(before,row())
+            for extra in [[],[('newday','1'),('fixnavs','1')],[('newday','')],[('newday','1'),('x','1')]]: self.assertEqual(400,request(special,fields+extra)[0],extra)
+            self.assertEqual(409,request(special,[(k,v) for k,v in fields if k!='action_token']+[('newday','1')])[0]);self.assertEqual(before,row())
+            status,body=request(special,fields+[('newday','Grant New Day')]);self.assertEqual(200,status,body[:2000]);self.assertIsNone(row()['lasthit'])
+            self.assertEqual(409,request(special,fields+[('newday','Grant New Day')])[0])
+            fields=form('special');q("UPDATE accounts SET lasthit='2026-10-16 02:00:00' WHERE acctid=?",[target])
+            self.assertEqual(409,request(special,fields+[('fixnavs','1')])[0]);self.assertEqual('a:1:{s:10:"forest.php";b:1;}',row()['allowednavs'])
+            fields=form('special');before=row()
+            self.assertEqual(200,request(special,fields+[('fixnavs','Fix Broken Navs')])[0]);after=row()
+            self.assertEqual(('','',''),(after['allowednavs'],after['restorepage'],after['specialinc']));self.assertEqual([],q('SELECT * FROM accounts_output WHERE acctid=?',[target]))
+            for key in before:
+                if key not in ['allowednavs','restorepage','specialinc']: self.assertEqual(before[key],after[key],key)
+            fields=form('special');self.assertEqual(200,request(special,fields+[('clearvalidation','Mark Email As Valid')])[0]);self.assertEqual('',row()['emailvalidation'])
+            # Module preferences: installed modules, declared preferences, typed values; validateprefs can still refuse.
+            pref=lambda key:[r['value'] for r in q('SELECT value FROM module_userprefs WHERE modulename=? AND userid=? AND setting=?',[module,target,key])]
+            save=f'user.php?op=savemodule&module={module}&userid={target}';extra=f'&subop=module&module={module}'
+            status,body=request(f['edit'](extra=extra));self.assertEqual(200,status,body[:2000])
+            fields=self._user_editor_form(body,save);self.assertEqual(['action_token','csrf_token','flag','level','mood'],sorted(k for k,_ in fields))
+            for data in [change(fields,arbitrary=1),change(fields,note='y'),change(fields,level='x'),change(fields,level='1.5'),change(fields,flag=2),
+                         change(fields,mood=11),[(k,v) for k,v in fields if k!='level']+[('level[]','1')]]:
+                self.assertEqual(400,request(save,data)[0],data);self.assertEqual([],pref('arbitrary')+pref('note')+pref('level'))
+            for url in [f'user.php?op=savemodule&module=nosuchmodule&userid={target}',f'user.php?op=savemodule&module=&userid={target}']:
+                self.assertIn(request(url,change(fields))[0],[400,409],url)
+            self.assertEqual(400,request(f'user.php?op=savemodule&module=<b>&userid={target}',change(fields))[0])
+            status,body=request(save,change(fields,level=13));self.assertEqual(200,status);self.assertIn('Unlucky level',body);self.assertEqual([],pref('level'))
+            status,body=request(f['edit'](extra=extra));fields=self._user_editor_form(body,save)
+            status,body=request(save,change(fields,level=7,flag=1,mood=10)+[('showFormTabIndex','1')]);self.assertEqual(200,status,body[:2000])
+            self.assertEqual((['7'],['1'],['10']),(pref('level'),pref('flag'),pref('mood')));self.assertEqual(409,request(save,change(fields,level=8))[0])
+            status,body=request(f['edit'](extra=extra));fields=self._user_editor_form(body,save);q("UPDATE module_userprefs SET value='9' WHERE modulename=? AND userid=? AND setting='level'",[module,target])
+            self.assertEqual(409,request(save,change(fields,flag=0))[0]);self.assertEqual((['9'],['1']),(pref('level'),pref('flag')))
+            # returnpetition: only a positive petition ID reaches the links.
+            status,body=request(f['edit'](extra='&returnpetition=5'));self.assertEqual(200,status)
+            self.assertIn('viewpetition.php?op=view&id=5',html.unescape(body));self._user_editor_form(body,f'user.php?op=save&userid={target}&returnpetition=5')
+            for bad in ["5'><script>x</script>",'0','-1','5&op=del','abc']:
+                status,body=request(f['edit'](extra='&returnpetition='+urllib.parse.quote(bad,safe='')));self.assertEqual(200,status)
+                self.assertNotIn('&returnpetition',html.unescape(body));self.assertNotIn('<script>x</script>',body);self.assertNotIn('viewpetition.php',body)
+            # Debug log and last hit: bound, escaped, and the stored page runs no script in the editor's origin.
+            q("INSERT INTO debuglog(date,actor,target,message,field,value) VALUES (NOW(),?,?,?,?,0)",[target,target,'<img src=z> logged','<b>f</b>'])
+            status,body=request(f'user.php?op=debuglog&userid={target}');self.assertEqual(200,status);self.assertIn('logged',body)
+            for raw in ['<img src=z>','<b>f</b>','<img src=x>']: self.assertNotIn(raw,body)
+            for start in ['-1','abc','1.5']: self.assertEqual(400,request(f'user.php?op=debuglog&userid={target}&start={start}')[0])
+            q("UPDATE accounts_output SET output='<script>alert(1)</script>' WHERE acctid=?",[target]) if q('SELECT acctid FROM accounts_output WHERE acctid=?',[target]) else q("INSERT INTO accounts_output(acctid,output) VALUES (?,'<script>alert(1)</script>')",[target])
+            url=f'user.php?op=lasthit&userid={target}';q('UPDATE accounts SET lastnewday=? WHERE acctid=?',[self._current_game_day(),f['player']]);self._security_allow(f['player'],url)
+            opener=urllib.request.build_opener(urllib.request.HTTPCookieProcessor(f['jar']()))
+            response=opener.open(f'http://127.0.0.1:{self.port}/'+url,timeout=20)
+            self.assertEqual('sandbox',response.headers['Content-Security-Policy']);self.assertIn('<script>alert(1)</script>',response.read().decode())
+
     def _security_client(self, login='WebPlayer', password="Synthetic web O'Reilly \\ password", port=None):
         class NoRedirect(urllib.request.HTTPRedirectHandler):
             def redirect_request(self, *args): return None
