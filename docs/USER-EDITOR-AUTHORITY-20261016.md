@@ -160,3 +160,15 @@ Local runs are supporting evidence only; acceptance comes from CI on both suppor
 - The 1.1.2 `modifyuserview` hook can still add display fields. A field it adds that is
   not `viewonly` and not in `$userinfo` now makes the save 400; 1.1.2 ignored it. No
   bundled module uses the hook.
+
+## Candidate CI, 2026-10-16
+
+`fa30beba8bf6225fc638c83d6f7c0bbb4930e295` was inspected once at the start of the CI
+rollover task (13:38Z). Baseline integrity 38907797223 SUCCESS. Modern core 38907797754
+was still running: both `checks` jobs SUCCESS, five `http` shards SUCCESS, three still
+in progress, and no `result` job yet. User editor part 1 stays in Remaining. Soul
+restoration and the `prefs.php` fix cannot be accepted through `fa30beb` until that run
+is accepted. Their tests (`test_graveyard_restore_authority_http` and
+`test_create_login_rotate_render_logout`) are byte-identical between `6a9a12b` and
+`fa30beb`. Of the code they reach, only `lib/showform.php` changed, in its `viewonly`
+branch (escaping); the boolean field the `prefs.php` fix covers is a separate branch.

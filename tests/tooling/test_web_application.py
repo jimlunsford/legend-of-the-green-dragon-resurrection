@@ -38,6 +38,11 @@ class WebApplicationTests(unittest.TestCase):
         with cls.config.open('x') as file:
             file.write("<?php extract(json_decode(base64_decode('" + encoded + "'),true), EXTR_SKIP);\n")
         cls.config.chmod(0o600)
+        try:
+            cls.game_clock = cls._pin_game_clock()
+        except BaseException:
+            cls.config.unlink()
+            raise
         with socket.socket() as sock:
             sock.bind(('127.0.0.1', 0))
             cls.port = sock.getsockname()[1]
@@ -4040,6 +4045,58 @@ echo json_encode(gmdate('Y-m-d',gametime()),JSON_THROW_ON_ERROR);"""
         result = subprocess.run([shutil.which('php'), '-r', code], cwd=ROOT,
                                 capture_output=True, text=True, timeout=20, check=True)
         return json.loads(result.stdout)
+
+    # A shard must finish inside one game day. The CI job timeout bounds a shard's run.
+    GAME_CLOCK_MINIMUM_HEADROOM = 3600
+
+    @staticmethod
+    def _game_clock(pin=False):
+        # The application's own clock (gametime()) reports the day and the real seconds left in it.
+        # With pin, the run starts a minute after a game day boundary: the epoch moves to that
+        # boundary minus 30 days (the installer's shape), and the day offset is cleared.
+        code = """require 'dbconnect.php';require 'lib/dbwrapper_pdo.php';
+require 'lib/datacache.php';require 'lib/settings.php';require 'lib/datetime.php';
+db_connect($DB_HOST,$DB_USER,$DB_PASS);db_select_db($DB_NAME);
+$days=(int)getsetting('daysperday',4);
+if ($argv[1]==='pin') {
+    savesetting('game_epoch',gmdate('Y-m-d H:i:s O',time()-60-30*86400));
+    savesetting('gameoffsetseconds',0);
+}
+$now=gametime();
+echo json_encode(['day'=>gmdate('Y-m-d',$now),'headroom'=>intdiv(86400-$now%86400,$days),'length'=>intdiv(86400,$days)],JSON_THROW_ON_ERROR);"""
+        result = subprocess.run([shutil.which('php'), '-r', code, 'pin' if pin else 'read'], cwd=ROOT,
+                                capture_output=True, text=True, timeout=20, check=True)
+        return json.loads(result.stdout)
+
+    @classmethod
+    def _pin_game_clock(cls):
+        # The game day rolls over every 24/daysperday hours (00:00, 06:00, 12:00 and 18:00 UTC by
+        # default). A shard that crossed one saw every fixture's day go stale at once.
+        clock = cls._game_clock(pin=True)
+        if clock['headroom'] < max(cls.GAME_CLOCK_MINIMUM_HEADROOM, clock['length'] - 300):
+            raise RuntimeError('Game clock was not pinned: %r' % clock)
+        return clock
+
+    def test_game_clock_pinned_away_from_rollover(self):
+        # The run starts with a full game day of headroom; without the pin a run could start
+        # seconds before a boundary. Restore the exact pinned settings so later tests keep one day.
+        clock_settings = "SELECT setting,value FROM settings WHERE setting IN ('game_epoch','gameoffsetseconds') ORDER BY setting"
+        pinned = self.query(clock_settings)
+        current = self._game_clock()
+        self.assertEqual(self.game_clock['day'], current['day'])
+        self.assertGreaterEqual(current['headroom'], self.GAME_CLOCK_MINIMUM_HEADROOM)
+        try:
+            near = time.strftime('%Y-%m-%d %H:%M:%S +0000', time.gmtime(int(time.time()) + 30 - 30 * 86400))
+            self.query("UPDATE settings SET value=? WHERE setting='game_epoch'", [near])
+            self.assertLessEqual(self._game_clock()['headroom'], 30)
+            repinned = self._pin_game_clock()
+            self.assertGreaterEqual(repinned['headroom'], repinned['length'] - 120)
+            self.assertEqual(repinned['day'], self._game_clock()['day'])
+        finally:
+            for row in pinned:
+                self.query('UPDATE settings SET value=? WHERE setting=?', [row['value'], row['setting']])
+        self.assertEqual(pinned, self.query(clock_settings))
+        self.assertEqual(self.game_clock['day'], self._current_game_day())
 
     @contextmanager
     def _ramius_fixture(self):

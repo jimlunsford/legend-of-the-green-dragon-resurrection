@@ -66,6 +66,7 @@ Each family is DONE only when its acceptance evidence passes on both supported C
 Infrastructure and records:
 
 - [ ] Replace the PR #1 body with a short current summary that links here.
+- [ ] CI game-day rollover stability: the web test harness pins the game clock so a shard never crosses a game day boundary (candidate in `CI-ROLLOVER-STABILITY-20261016.md`)
 
 Route families:
 
@@ -74,7 +75,7 @@ Route families:
 
 Administration:
 
-- [ ] User editor part 1: account edit, special actions, module preferences, last hit, debug log (`user.php`; candidate in `USER-EDITOR-AUTHORITY-20261016.md`)
+- [ ] User editor part 1: account edit, special actions, module preferences, last hit, debug log (`user.php`; candidate `fa30beb` in `USER-EDITOR-AUTHORITY-20261016.md`; Modern core 38907797754 still running when inspected)
 - [ ] User editor part 2: bans (`user.php` `setupban`, `saveban`, `delban`, `removeban`)
 - [ ] Content editors: creatures, weapons, armor, mounts, titles, taunts
 - [ ] Module manager and remaining preference editors (`modules.php`)

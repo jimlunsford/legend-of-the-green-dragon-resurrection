@@ -68,7 +68,7 @@ Do not start a subsystem the task prompt does not name.
 - A new test should fail without the fix and pass with it. Show both.
 - Do not claim a result you did not run. Local results are supporting evidence only. Supported acceptance comes from CI.
 - Never weaken a correct production guard to make a test pass. When a test hits a real 409 or rejection, check the fixture first. Past failures came from fixtures in invalid states, not from bad guards.
-- The LoGD game day rolls over at 18:00 UTC. Long-running tests must recompute the authoritative day, not cache it.
+- The LoGD game day rolls over every 24/`daysperday` hours: with the default 4 and the installer's midnight epoch, at 00:00, 06:00, 12:00 and 18:00 UTC. The web test harness pins the clock (`game_epoch`) when each shard starts, so a shard has a full game day of headroom. Tests that exercise New Day or rollover move the clock explicitly and restore it. Long-running tests must read the authoritative day from the application, not cache it.
 - Keep failed CI runs on record. Never present a superseded run as acceptance.
 
 Local verification, proportionate to the change:
