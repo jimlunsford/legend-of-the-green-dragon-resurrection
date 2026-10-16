@@ -597,3 +597,16 @@ the player owns a mount before feeding or selling, and the once-a-day feeding th
 before anything is charged or logged. Feeding and selling, fatal on PHP 8 at the
 undefined `basename`/`newname` keys, work again. See
 [stables authority](STABLES-AUTHORITY-20261016.md).
+
+2026-10-16: stables accepted at `8257aed` (Modern core 38831947335, Baseline integrity
+38831947372).
+
+2026-10-16 haunting (`graveyard.php?op=haunt3`): candidate pending CI. The haunt is
+POST + CSRF + one-use intent bound to the target and the player's favor, level, life
+and name, inside the locked player transaction, which also locks the target; the
+notice's email runs after commit. GET only asks (1.1.2 haunted on GET, replayably).
+The server now requires the 25 favor (1.1.2 never checked it), applies the search's
+`locked=0` rule to the haunt, and rechecks "already haunted" under lock. Login SQL is
+bound, the 50-character `hauntedby` mark is truncated explicitly, and an array search
+is refused instead of fatal. `op=restore` remains a GET favor spend, now on the
+roadmap. See [haunting authority](HAUNT-AUTHORITY-20261016.md).

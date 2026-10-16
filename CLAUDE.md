@@ -110,7 +110,7 @@ Modern core runs per leg: one `checks` job, four `http` shard jobs, and one `res
 
 ## Serialized state
 
-Accepted inventory (recounted at `639b8c5`, see `docs/SERIALIZED-STATE-AUDIT.md`): 110 sites, 50 files, 40 serialize writers/checks, 69 ScalarState reads, 1 centralized unserialize.
+Accepted inventory (recounted at `8257aed`, see `docs/SERIALIZED-STATE-AUDIT.md`): 108 sites, 50 files, 40 serialize writers/checks, 67 ScalarState reads, 1 centralized unserialize.
 
 Recompute only if serialized-state source changes. Never change counts by assumption.
 

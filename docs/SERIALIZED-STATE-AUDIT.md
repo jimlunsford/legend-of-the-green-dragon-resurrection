@@ -374,3 +374,12 @@ purchase was logged). It now reads it once in `resurrection_stables_buff()`
 Candidate inventory: **108 / 50 / 40 / 67 / 1**. ScalarState limits are unchanged;
 the mount buff business schema beyond "is an array" stays on the roadmap. See
 [stables authority](STABLES-AUTHORITY-20261016.md).
+
+## Stables acceptance and haunting candidate, 2026-10-16
+
+Stables `8257aed` is accepted (Modern core 38831947335, Baseline integrity
+38831947372), so the accepted inventory is **108 / 50 / 40 / 67 / 1** at `8257aed`.
+The haunting candidate adds no `serialize()`, `ScalarState::read()` or `unserialize()`
+call: recounted with the same token method (which again reproduces 112 / 53 / 42 /
+69 / 1 at `4478c06`), it stays **108 / 50 / 40 / 67 / 1**. See
+[haunting authority](HAUNT-AUTHORITY-20261016.md).

@@ -53,6 +53,7 @@ Each family is DONE only when its acceptance evidence passes on both supported C
 - [x] Clan text and moderation: MOTD, description, custom say, superuser rename and description block/unblock, NULL-description display (`CLAN-TEXT-MODERATION-AUTHORITY-20261015.md`). Accepted at `cbc0cf4`, Modern core 38779187332.
 - [x] Bank: deposit, withdraw, borrow, transfer (`BANK-AUTHORITY-20261015.md`). Accepted at `52bfc4f`, Modern core 38802851227.
 - [x] Weapons and armor purchase and trade-in (`EQUIPMENT-PURCHASE-AUTHORITY-20261015.md`). Accepted at `639b8c5`, Modern core 38810195085.
+- [x] Stables: buy, trade, feed, sell (`STABLES-AUTHORITY-20261016.md`). Accepted at `8257aed`, Modern core 38831947335.
 
 ### Current
 
@@ -66,8 +67,8 @@ Infrastructure and records:
 
 Route families:
 
-- [ ] Stables and mount purchase, sale, replacement (`stables.php`; candidate in `STABLES-AUTHORITY-20261016.md`)
-- [ ] Haunting (`lib/graveyard/case_haunt*.php`)
+- [ ] Haunting (`lib/graveyard/case_haunt*.php`; candidate in `HAUNT-AUTHORITY-20261016.md`)
+- [ ] Soul restoration, a GET favor spend found during haunting (`lib/graveyard/case_restore.php`)
 - [ ] Bio moderation (`bios.php`)
 - [ ] Donation administration (`donators.php`)
 

@@ -1,11 +1,15 @@
 <?php
 $string="%";
-$name = httppost('name');
-for ($x=0;$x<strlen($name);$x++){
-	$string .= substr($name,$x,1)."%";
+try {
+	$name = \Resurrection\Http\Input::string($_POST, 'name');
+	if (!mb_check_encoding($name, 'UTF-8')) throw new InvalidArgumentException('Invalid haunt search.');
+} catch (InvalidArgumentException $error) { http_response_code(400); exit('Invalid haunt search.'); }
+// 1.1.2 split by byte (one byte per character then); a UTF-8 name splits by character.
+foreach (mb_str_split($name, 1, 'UTF-8') as $letter){
+	$string .= $letter."%";
 }
-$sql = "SELECT login,name,level FROM " . db_prefix("accounts") . " WHERE name LIKE '".addslashes($string)."' AND locked=0 ORDER BY level,login";
-$result = db_query($sql);
+// Bound; the typed letters keep 1.1.2's pattern, wildcards included.
+$result = db_query("SELECT login,name,level FROM " . db_prefix("accounts") . " WHERE name LIKE ? AND locked=0 ORDER BY level,login", true, [$string]);
 if (db_num_rows($result)<=0){
 	output("`\$%s`) could find no one who matched the name you gave him.",$deathoverlord);
 }elseif(db_num_rows($result)>100){

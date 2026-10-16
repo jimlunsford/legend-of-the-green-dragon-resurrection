@@ -104,3 +104,11 @@ supporting evidence only; acceptance comes from CI on both supported legs.
 - The 1.1.2 purchase applies the stored buff without the "mounts" schema default it
   computes (`apply_buff` then uses the current translation namespace). This is kept
   as historical behavior.
+
+## Acceptance, 2026-10-16
+
+`8257aed3dc48f669a9361c202bac397488d3ad67` is accepted. Modern core
+**38831947335 SUCCESS** (2026-10-16 00:52–01:09 UTC): both `result` jobs and every
+`checks` and `http` shard job succeeded on PHP 8.4 / MariaDB 11.4 and PHP 8.5 / MySQL
+8.4. Baseline integrity **38831947372 SUCCESS**. Conclusions come from the GitHub Actions
+run and job API. The stables are Done in `ROADMAP.md`.
