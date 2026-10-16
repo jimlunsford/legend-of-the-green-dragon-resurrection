@@ -4,7 +4,7 @@
 // mail ready
 require_once("common.php");
 require_once("lib/http.php");
-require_once("lib/systemmail.php");
+require_once("lib/admin_authority.php");
 
 check_su_access(SU_EDIT_DONATIONS);
 
@@ -15,9 +15,22 @@ require_once("lib/superusernav.php");
 superusernav();
 
 
-$ret=httpget('ret');
-$return = cmd_sanitize($ret);
-$return = substr($return,strrpos($return,"/")+1);
+try {
+	$op = \Resurrection\Http\Input::choice($_GET, 'op', ['', 'add1', 'add2'], '');
+	$ret = \Resurrection\Http\Input::string($_GET, 'ret');
+	$id = \Resurrection\Http\Input::integer($_GET, 'id', 0, 1);
+	if ($id > RESURRECTION_ADMIN_MAX_ID || ($op === 'add2' && $id === 0)) throw new InvalidArgumentException('Invalid account.');
+	// The form values: POSTed by the search form and the confirmation forms, or prefilled by a GET link
+	// (the user editor, the petition viewer and the payment log).
+	$values = array();
+	foreach (['name', 'amt', 'reason', 'txnid'] as $key) {
+		$value = \Resurrection\Http\Input::string($_POST, $key);
+		if ($value == "" && $op !== 'add2') $value = \Resurrection\Http\Input::string($_GET, $key);
+		if (!mb_check_encoding($value, 'UTF-8')) throw new InvalidArgumentException('Invalid text.');
+		$values[$key] = $value;
+	}
+} catch (InvalidArgumentException $error) { http_response_code(400); exit('Invalid donation request.'); }
+$return = resurrection_donation_return($ret);
 tlschema("nav");
 addnav("Return whence you came",$return);
 tlschema();
@@ -25,14 +38,10 @@ tlschema();
 $add = translate_inline("Add Donation");
 rawoutput("<form action='donators.php?op=add1&ret=".rawurlencode($ret)."' method='POST'>");
 addnav("","donators.php?op=add1&ret=".rawurlencode($ret)."");
-$name = httppost("name");
-if ($name=="") $name = httpget("name");
-$amt = httppost("amt");
-if ($amt=="") $amt = httpget("amt");
-$reason = httppost("reason");
-if ($reason=="") $reason = httpget("reason");
-$txnid = httppost("txnid");
-if ($txnid=="") $txnid = httpget("txnid");
+$name = $values['name'];
+$amt = $values['amt'];
+$reason = $values['reason'];
+$txnid = $values['txnid'];
 if ($reason == "") $reason = translate_inline("manual donation entry");
 
 
@@ -54,53 +63,36 @@ if (($session['user']['superuser'] & SU_EDIT_PAYLOG) &&
 		file_exists("paylog.php")){
 	addnav("Payment Log","paylog.php");
 }
-$op = httpget('op');
 if ($op=="add2"){
-	$id = httpget('id');
-	$amt = httpget('amt');
-	$reason = httpget('reason');
-
-	$sql="SELECT name FROM ".db_prefix("accounts")." WHERE acctid=$id;";
-	$result=db_query($sql);
-	$row=db_fetch_assoc($result);
-	output("%s donation points added to %s`0, reason: `^%s`0",$amt,$row['name'],$reason);
-
-	$txnid = httpget("txnid");
-	$ret = httpget('ret');
-	if ($id==$session['user']['acctid']){
-		$session['user']['donation']+=$amt;
-	}
-	if ($txnid > ""){
-		$result = modulehook("donation_adjustments",array("points"=>$amt,"amount"=>$amt/100,"acctid"=>$id,"messages"=>array()));
-		$points = $result['points'];
-		if (!is_array($result['messages'])){
-			$result['messages'] = array($result['messages']);
+	// 1.1.2 credited on this GET link, with the account ID, points and transaction pasted into SQL.
+	// Only the protected POST form from the search below credits, once.
+	if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') { http_response_code(405); exit('Use the donation form.'); }
+	$amt = $values['amt'];
+	$reason = $values['reason'];
+	$txnid = $values['txnid'];
+	try {
+		resurrection_admin_fields(['amt', 'reason', 'txnid']);
+		$points = resurrection_donation_amount($amt);
+		if ($points === null) throw new InvalidArgumentException('Invalid points.');
+		$row = resurrection_admin_account($id, 'acctid,name,donation,donationspent');
+		if ($row === null) throw new OutOfBoundsException('Account not found.');
+		// A transaction credit settles exactly one unprocessed payment log row.
+		$payment = $txnid > "" ? resurrection_donation_payment($txnid) : null;
+		if ($txnid > "" && $payment === null) {
+			$known = db_query('SELECT payid FROM ' . db_prefix('paylog') . ' WHERE txnid=?', true, [$txnid]);
+			if ($known === []) throw new OutOfBoundsException('Transaction not found.');
+			throw new DomainException('Transaction already processed.');
 		}
-		foreach($result['messages'] as $messageid=>$message){
-			debuglog($message,false,$id,"donation",0,false);
-		}
-	}else{
-		$points = $amt;
-	}
-	// ok to execute when this is the current user, they'll overwrite the
-	// value at the end of their page hit, and this will allow the display
-	// table to update in real time.
-	$sql = "UPDATE " . db_prefix("accounts") . " SET donation=donation+'$points' WHERE acctid='$id'";
-	db_query($sql);
-	modulehook("donation", array("id"=>$id, "amt"=>$points, "manual"=>($txnid>""?false:true)));
-
+		// Removing more points than the account holds, or adding past the column's limit, writes nothing.
+		if ($txnid == "" && !resurrection_donation_balance_fits($row, $points)) throw new InvalidArgumentException('Points out of range.');
+	} catch (Throwable $error) { resurrection_admin_failure($error, 'the donator page'); }
+	resurrection_consume_action('donation-add-' . $id, resurrection_donation_context($row, $points, $reason, $txnid, $payment));
+	try {
+		$credit = resurrection_donation_credit($row, $points, $reason, $txnid, $payment);
+	} catch (Throwable $error) { resurrection_admin_failure($error, 'the donator page'); }
+	output("%s donation points added to %s`0, reason: `^%s`0",$amt,$credit['name'],$reason);
 	if ($txnid>""){
-		$sql = "UPDATE ".db_prefix("paylog")." SET acctid='$id', processed=1 WHERE txnid='$txnid'";
-		db_query($sql);
-		debuglog("Received donator points for donating -- Credited manually [$reason]",false,$id,"donation",$points,false);
 		redirect("paylog.php");
-	}else{
-		debuglog("Received donator points -- Manually assigned, not based on a known dollar donation [$reason]",false,$id,"donation",$amt,false);
-	}
-	if ($points == 1) {
-		systemmail($id,array("Donation Point Added"),array("`2You have received a donation point for %s.",$reason));
-	}else {
-		systemmail($id,array("Donation Points Added"),array("`2You have received %d donation points for %s.",$points,$reason));
 	}
 	httpset('op', "");
 	$op = "";
@@ -131,41 +123,26 @@ if ($op==""){
 	}
 	rawoutput("</table>",true);
 }else if ($op=="add1"){
-	$search="%";
-	$name = httppost('name');
-	if ($name=='') $name = httpget('name');
-	for ($i=0;$i<strlen($name);$i++){
-		$z = substr($name, $i, 1);
-		if ($z == "'") $z = "\\'";
-		$search.=$z."%";
-	}
-	$sql = "SELECT name,acctid,donation,donationspent FROM " . db_prefix("accounts") . " WHERE login LIKE '$search' or name LIKE '$search' LIMIT 100";
-	$result = db_query($sql);
-	$ret = httpget('ret');
-	$amt = httppost('amt');
-	if ($amt=='') $amt = httpget("amt");
-	$reason = httppost("reason");
-	if ($reason=="") $reason = httpget("reason");
-	$txnid = httppost('txnid');
-	if ($txnid=='') $txnid = httpget("txnid");
+	try {
+		$rows = resurrection_donation_search($name);
+	} catch (InvalidArgumentException $error) { http_response_code(400); exit('Invalid donation request.'); }
+	$points = resurrection_donation_amount($amt);
+	// With a return page, 1.1.2's confirmation links left the transaction out.
+	if ($ret != "") $txnid = "";
+	$payment = $txnid > "" ? resurrection_donation_payment($txnid) : null;
 	output("Confirm the addition of %s points to:`n",$amt);
 	if ($reason) output("(Reason: `^`b`i%s`i`b`0)`n`n",$reason);
-	$number=db_num_rows($result);
-	for ($i=0;$i<$number;$i++){
-		$row = db_fetch_assoc($result);
-		if ($ret!=""){
-			rawoutput("<a href='donators.php?op=add2&id={$row['acctid']}&amt=$amt&ret=".rawurlencode($ret)."&reason=".rawurlencode($reason)."'>");
+	if ($points === null) output("`\$Points must be a whole number other than 0, from -9,999,999 to 9,999,999.`0`n");
+	if ($txnid > "" && $payment === null) output("`\$That transaction is unknown or has already been processed.`0`n");
+	$short = translate_inline("(not enough points to remove)");
+	foreach ($rows as $row) {
+		if ($points !== null && ($txnid == "" || $payment !== null) && resurrection_donation_balance_fits($row, $txnid > "" ? 0 : $points)) {
+			resurrection_donation_form($row, $points, $reason, $txnid, $payment, $ret);
 		}else{
-			rawoutput("<a href='donators.php?op=add2&id={$row['acctid']}&amt=$amt&reason=".rawurlencode($reason)."&txnid=$txnid'>");
+			output_notl("%s (%s/%s)", $row['name'], $row['donation'], $row['donationspent']);
+			if ($points !== null && $txnid == "" && !resurrection_donation_balance_fits($row, $points)) output_notl(" `\$%s`0", $short);
 		}
-		output_notl("%s (%s/%s)", $row['name'], $row['donation'], $row['donationspent']);
-		rawoutput("</a>");
 		output_notl("`n");
-		if ($ret!=""){
-			addnav("","donators.php?op=add2&id={$row['acctid']}&amt=$amt&ret=".rawurlencode($ret)."&reason=".rawurlencode($reason));
-		}else{
-			addnav("","donators.php?op=add2&id={$row['acctid']}&amt=$amt&reason=".rawurlencode($reason)."&txnid=$txnid");
-		}
 	}
 }
 page_footer();

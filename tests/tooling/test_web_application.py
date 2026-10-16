@@ -5629,6 +5629,187 @@ echo json_encode(systemmail($to,['Trusted %s','notice'],['Hello %s','Jim'],0,$no
                 q('DELETE FROM mail WHERE msgto=?',[target]);q('DELETE FROM accounts_output WHERE acctid=?',[target]);q('DELETE FROM accounts WHERE acctid=?',[target])
             q('UPDATE accounts SET '+','.join(k+'=?' for k in original if k!='acctid')+' WHERE acctid=?',[*[v for k,v in original.items() if k!='acctid'],player])
 
+    def test_bio_moderation_authority_http(self):
+        q=self.query;player=int(q('SELECT acctid FROM accounts WHERE login=?',['WebPlayer'])[0]['acctid'])
+        original=q('SELECT * FROM accounts WHERE acctid=?',[player])[0];targets=[];call=None
+        blocked=('`iBlocked for inappropriate usage`i','9999-12-31 23:59:59')
+        try:
+            target=int(self._security_target('BioTarget'));targets.append(target);missing=target+1000
+            q("UPDATE accounts SET bio=?,biotime='2026-01-02 03:04:05' WHERE acctid=?",["O'Reilly \\ 雪 <b>bio</b>",target])
+            state=lambda who=target:(*(lambda r:(r['bio'],r['biotime']))(q('SELECT bio,biotime FROM accounts WHERE acctid=?',[who])[0]),
+                int(q('SELECT COUNT(*) AS n FROM mail WHERE msgto=?',[who])[0]['n']))
+            def request(url,data=None):
+                q('UPDATE accounts SET lastnewday=? WHERE acctid=?',[self._current_game_day(),player]);self._security_allow(player,url);return call(url,data)
+            def login(role):
+                nonlocal call;q('UPDATE accounts SET superuser=? WHERE acctid=?',[role,player]);call=self._security_client()
+            act=lambda op,who=target:f'bios.php?op={op}&userid={who}'
+            def form(op,who=target):
+                status,body=request('bios.php');self.assertEqual(200,status,body[:1500]);return self._security_fields(body,act(op,who))
+            anonymous=self._security_client(login=None)
+            for url,data in [('bios.php',None),(act('block'),{'x':'1'})]: self.assertIn(anonymous(url,data)[0],[302,303,403])
+            # Every bit except SU_EDIT_COMMENTS is insufficient.
+            for role in [0,32|8|1024]:
+                login(role)
+                for url,data in [('bios.php',None),(act('block'),None),(act('block'),{'x':'1'})]: self.assertEqual(403,request(url,data)[0],(role,url))
+            login(16);before=state()
+            # GET only displays: the 1.1.2 block link changes nothing and mails no one.
+            status,body=request('bios.php');self.assertEqual(200,status);self.assertNotIn('<img src=x>',body);self.assertNotIn('<b>bio</b>',body)
+            self.assertNotRegex(body,r"href=['\"]bios\.php\?op=");self.assertEqual(before,state())
+            for op in ['block','unblock']: self.assertEqual(405,request(act(op))[0]);self.assertEqual(before,state())
+            for url in ['bios.php?op=x&userid=1','bios.php?op=block','bios.php?op=block&userid=abc','bios.php?op=block&userid=0','bios.php?op=block&userid=4294967296','bios.php?op=block&userid[]=1']:
+                self.assertEqual(400,request(url,{'x':'1'})[0],url)
+            fields=form('block');self.assertEqual(before,state())
+            self.assertEqual(403,request(act('block'),{'action_token':fields['action_token']})[0]);self.assertEqual(403,request(act('block'),{**fields,'csrf_token':'0'*64})[0])
+            self.assertEqual(400,request(act('block'),{**fields,'bio':'x'})[0]);self.assertEqual(404,request(act('block',missing),fields)[0])
+            self.assertEqual(before,state())
+            # Block: the 1.1.2 marker, sentinel and notice together. A replay neither rewrites nor mails again.
+            status,body=request(act('block'),fields);self.assertEqual(200,status,body[:1500]);self.assertEqual((*blocked,1),state())
+            mail=q('SELECT msgfrom,subject,body FROM mail WHERE msgto=?',[target]);self.assertEqual('0',mail[0]['msgfrom'])
+            self.assertIn('Your bio has been blocked',mail[0]['subject']);self.assertIn('you may do so with the petition link.',mail[0]['body'])
+            self.assertEqual(409,request(act('block'),fields)[0]);self.assertEqual((*blocked,1),state())
+            # A blocked bio is offered only Unblock; the block form is spent, and an unblock form issued before a change is stale.
+            status,body=request('bios.php');self._security_fields(body,act('unblock'));self.assertNotIn(html.escape(act('block'))+"'",body)
+            fields=form('unblock');q("UPDATE accounts SET biotime='9999-12-31 23:59:58' WHERE acctid=?",[target])
+            self.assertEqual(409,request(act('unblock'),fields)[0]);self.assertEqual(('`iBlocked for inappropriate usage`i','9999-12-31 23:59:58',1),state())
+            q('UPDATE accounts SET biotime=? WHERE acctid=?',[blocked[1],target])
+            # Unblock: 1.1.2 wrote the zero date, which strict SQL refuses on MySQL 8.4 and MariaDB 11.4; NULL now.
+            fields=form('unblock');self.assertEqual(409,request(act('block'),fields)[0]);fields=form('unblock')
+            status,body=request(act('unblock'),fields);self.assertEqual(200,status,body[:1500]);self.assertEqual(('',None,2),state())
+            self.assertIn('Your bio has been unblocked',q('SELECT subject FROM mail WHERE msgto=? ORDER BY messageid DESC LIMIT 1',[target])[0]['subject'])
+            self.assertEqual(409,request(act('unblock'),fields)[0]);self.assertEqual(('',None,2),state())
+            # A moderator's own bio: prefs.php honors the block, and after unblock (NULL biotime) the bio can be set again.
+            # prefs.php renders every boolean preference it shows; give the fixture player all of them.
+            settings={'ihavenocheer':0,'timestamp':0,'timeoffset':0,'emailonmail':0,'systemmail':0,'dirtyemail':0,'nojump':0,'tabconfig':1}
+            q("UPDATE accounts SET bio='Moderator bio',biotime='2026-01-02 03:04:05',prefs=? WHERE acctid=?",
+                ['a:%d:{%s}'%(len(settings),''.join(f's:{len(k)}:"{k}";i:{v};' for k,v in settings.items())),player]);m=state(player)[2]
+            csrf=form('block',player)['csrf_token']
+            def prefs(bio):
+                return request('prefs.php',{'csrf_token':csrf,'bio':bio,'email':q('SELECT emailaddress FROM accounts WHERE acctid=?',[player])[0]['emailaddress']})
+            fields=form('block',player);self.assertEqual(200,request(act('block',player),fields)[0]);self.assertEqual((*blocked,m+1),state(player))
+            status,body=prefs('Changed');self.assertEqual(200,status);self.assertIn('You cannot modify your bio',body);self.assertEqual((*blocked,m+1),state(player))
+            fields=form('unblock',player);self.assertEqual(200,request(act('unblock',player),fields)[0]);self.assertEqual(('',None,m+2),state(player))
+            status,body=prefs('Fresh bio');self.assertEqual(200,status);after=state(player);self.assertEqual(('Fresh bio',m+2),(after[0],after[2]));self.assertIsNotNone(after[1])
+        finally:
+            q('DELETE FROM mail WHERE msgto=?',[player])
+            for who in targets: q('DELETE FROM mail WHERE msgto=?',[who]);q('DELETE FROM accounts_output WHERE acctid=?',[who]);q('DELETE FROM accounts WHERE acctid=?',[who])
+            q('UPDATE accounts SET '+','.join(k+'=?' for k in original if k!='acctid')+' WHERE acctid=?',[*[v for k,v in original.items() if k!='acctid'],player])
+
+    def test_donation_admin_authority_http(self):
+        q=self.query;player=int(q('SELECT acctid FROM accounts WHERE login=?',['WebPlayer'])[0]['acctid'])
+        original=q('SELECT * FROM accounts WHERE acctid=?',[player])[0];targets=[];call=None
+        module='resurrectiondonation'+os.urandom(4).hex();path=ROOT/'modules'/f'{module}.php'
+        try:
+            donor=int(self._security_target('DonorTarget'));targets.append(donor);other=int(self._security_target('DonorOther'));targets.append(other);missing=other+1000
+            q("UPDATE accounts SET name='Plain Donor Name',donation=0 WHERE acctid=?",[other]);q('UPDATE accounts SET donation=100,donationspent=7 WHERE acctid=?',[donor])
+            q('UPDATE accounts SET donation=10 WHERE acctid=?',[player])
+            state=lambda who=donor:(int(q('SELECT donation FROM accounts WHERE acctid=?',[who])[0]['donation']),int(q('SELECT COUNT(*) AS n FROM mail WHERE msgto=?',[who])[0]['n']),
+                int(q("SELECT COUNT(*) AS n FROM debuglog WHERE actor=? AND field='donation'",[who])[0]['n']))
+            def request(url,data=None):
+                q('UPDATE accounts SET lastnewday=? WHERE acctid=?',[self._current_game_day(),player]);self._security_allow(player,url);return call(url,data)
+            def login(role):
+                nonlocal call;q('UPDATE accounts SET superuser=? WHERE acctid=?',[role,player]);call=self._security_client()
+            add=lambda who=donor:f'donators.php?op=add2&id={who}'
+            reason="Thanks O'Reilly \\ 雪 <b>"
+            def search(name,amt='50',txnid='',why=reason,url='donators.php?op=add1'):
+                status,body=request(url,{'name':name,'amt':amt,'reason':why,'txnid':txnid});self.assertEqual(200,status,body[:1500])
+                return {int(x) for x in re.findall(r"donators\.php\?op=add2&(?:amp;)?id=(\d+)",body)},body
+            def form(amt='50',who=donor,txnid='',name='DonorTarget',why=reason):
+                return self._security_fields(search(name,amt,txnid,why)[1],add(who))
+            def post(fields,amt='50',who=donor,txnid='',why=reason,extra=None):
+                return request(add(who),{**fields,'amt':amt,'reason':why,'txnid':txnid,**(extra or {})})
+            anonymous=self._security_client(login=None)
+            for url,data in [('donators.php',None),(add(),{'amt':'5'})]: self.assertIn(anonymous(url,data)[0],[302,303,403])
+            # Every bit except SU_EDIT_DONATIONS is insufficient.
+            for role in [0,16|8|1024]:
+                login(role)
+                for url,data in [('donators.php',None),('donators.php?op=add1',{'name':'x'}),(add(),{'amt':'5'})]: self.assertEqual(403,request(url,data)[0],(role,url))
+            login(32);before=state();_,pm,pl=state(player)
+            # GET only displays: the 1.1.2 credit link changes nothing.
+            status,body=request('donators.php');self.assertEqual(200,status);self.assertNotIn('<img src=x>',body)
+            self.assertEqual(405,request(add()+'&amt=50&reason=x')[0]);self.assertEqual(before,state())
+            for url in ['donators.php?op=x','donators.php?op=add2&id=abc','donators.php?op=add2&id=0','donators.php?op=add2&id=4294967296','donators.php?op=add1&amt[]=1','donators.php?ret[]=x']:
+                self.assertEqual(400,request(url,{'x':'1'} if 'add2' in url else None)[0],url)
+            # Search: bound, UTF-8 characters, literal % and _, escaped names and values.
+            found,body=search("O'Reilly");self.assertEqual({donor},found);self.assertNotIn('<img src=x>',body);self.assertNotIn('雪 <b>',body)
+            self.assertEqual({donor},search('雪')[0]);self.assertEqual({donor},search('%_')[0]);self.assertEqual(set(),search('_x_')[0])
+            self.assertEqual({donor,other},search('Donor')[0])
+            for data in [{'name[]':'x'},{'name':b'\xe9'},{'reason':b'\xe9'}]: self.assertEqual(400,request('donators.php?op=add1',data)[0],data)
+            # Return whence you came: only the user editor and the petition viewer, never script, quotes or an action URL.
+            for ret,link in [('/user.php?op=edit&userid=5&c=12-345','user.php?op=edit&userid=5'),('/game/viewpetition.php?op=view&id=3','viewpetition.php?op=view&id=3')]:
+                status,body=request('donators.php?op=add1&name=DonorTarget&ret='+urllib.parse.quote(ret,safe=''));self.assertEqual(200,status)
+                self.assertRegex(html.unescape(body),r"href=['\"]"+re.escape(link)+r"[?&]c=")
+            for ret in ["javascript:alert(1)","/x';alert(1);'","/bios.php?op=block&userid=5","/donators.php?op=add2&id=5&amt=9","/user.php?op=edit&userid=5&op=del"]:
+                status,body=request('donators.php?op=add1&name=DonorTarget&ret='+urllib.parse.quote(ret,safe=''));self.assertEqual(200,status)
+                self.assertNotIn('alert(1)',body);self.assertNotIn('bios.php?op=block',body);self.assertNotIn('id=5&amt=9',html.unescape(body))
+                self.assertNotIn('userid=5&op=del',html.unescape(body))
+            # Invalid amounts offer no form and refuse before any write: zero, fractions, text, empty, beyond what the debug log holds.
+            for amt in ['0','-0','1.5','abc','','+5','007','10000000','-10000000','99999999999']:
+                found,body=search('DonorTarget',amt);self.assertEqual(set(),found,amt);self.assertIn('Points must be a whole number',body)
+            self.assertEqual(before,state());fields=form('50')
+            for amt in ['0','1.5','','10000000','-99999999999']: self.assertEqual(400,post(fields,amt)[0],amt)
+            self.assertEqual(400,post(fields,extra={'name':'x'})[0]);self.assertEqual(404,post(fields,who=missing)[0])
+            self.assertEqual(403,request(add(),{'action_token':fields['action_token'],'amt':'50','reason':reason,'txnid':''})[0])
+            self.assertEqual(403,post({**fields,'csrf_token':'0'*64})[0]);self.assertEqual(before,state())
+            # A credit: points, debug log and notice together; the replay is refused.
+            status,body=post(fields);self.assertEqual(200,status,body[:1500]);self.assertEqual((150,1,1),state())
+            mail=q('SELECT subject,body FROM mail WHERE msgto=?',[donor])[0];self.assertIn('Donation Points Added',mail['subject'])
+            self.assertIn('You have received %d donation points for %s.',mail['body']);self.assertIn(reason,mail['body'])
+            log=q("SELECT message,value FROM debuglog WHERE actor=? AND field='donation'",[donor])[0]
+            self.assertEqual(f'Received donator points -- Manually assigned, not based on a known dollar donation [{reason}] (50)',log['message']);self.assertEqual(50.0,float(log['value']))
+            self.assertEqual(409,post(fields)[0]);self.assertEqual((150,1,1),state())
+            # A tampered amount is stale; one point uses the singular notice.
+            fields=form('5');self.assertEqual(409,post(fields,'6')[0]);self.assertEqual((150,1,1),state())
+            fields=form('1');self.assertEqual(200,post(fields,'1')[0]);self.assertEqual((151,2,2),state())
+            self.assertIn('Donation Point Added',q('SELECT subject FROM mail WHERE msgto=? ORDER BY messageid DESC LIMIT 1',[donor])[0]['subject'])
+            # Negative amounts remove points (1.1.2's payment log offered them for reversals), never below zero.
+            fields=form('-51');self.assertEqual(200,post(fields,'-51')[0]);self.assertEqual((100,3,3),state())
+            found,body=search('DonorTarget','-101');self.assertEqual(set(),found);self.assertIn('not enough points to remove',body)
+            fields=form('-100');q('UPDATE accounts SET donation=99 WHERE acctid=?',[donor]);self.assertEqual(400,post(fields,'-100')[0])
+            q('UPDATE accounts SET donation=100 WHERE acctid=?',[donor]);fields=form('-50');q('UPDATE accounts SET donation=60 WHERE acctid=?',[donor])
+            self.assertEqual(409,post(fields,'-50')[0]);self.assertEqual((60,3,3),state())
+            # The balance column holds at most 4294967295.
+            q('UPDATE accounts SET donation=4294967290 WHERE acctid=?',[donor]);self.assertEqual({donor},search('DonorTarget','5')[0]);self.assertEqual(set(),search('DonorTarget','6')[0])
+            q('UPDATE accounts SET donation=100 WHERE acctid=?',[donor])
+            # A late failure on the notice rolls back points and log; the spent intent cannot retry, a fresh one can.
+            fields=form('20',why='Rollback reason');q(f"ALTER TABLE mail ADD CONSTRAINT fixture_donation CHECK (msgto <> {donor} OR body NOT LIKE '%Rollback reason%')")
+            try:
+                self.assertEqual(500,post(fields,'20',why='Rollback reason')[0]);self.assertEqual((100,3,3),state())
+                self.assertEqual(409,post(fields,'20',why='Rollback reason')[0]);self.assertEqual((100,3,3),state())
+            finally: q('ALTER TABLE mail DROP CONSTRAINT fixture_donation')
+            fields=form('20',why='Rollback reason');self.assertEqual(200,post(fields,'20',why='Rollback reason')[0]);self.assertEqual((120,4,4),state())
+            # Self-credit: 1.1.2 added the amount to the session; the session and the database now both hold the credit after later pages.
+            fields=form('25',player,name='WebPlayer');self.assertEqual(200,post(fields,'25',player)[0]);self.assertEqual((35,pm+1,pl+1),state(player))
+            self.assertEqual(200,request('donators.php')[0]);self.assertEqual((35,pm+1,pl+1),state(player))
+            # A transaction credit: the adjustment hook (doubling) and its message, the payment log row, no notice, then the payment log.
+            path.write_text("""<?php
+function MODULE_getmoduleinfo() { return ['name'=>'Donation adjustment fixture','version'=>'1.0','author'=>'Tests','category'=>'Tests']; }
+function MODULE_dohook($hook,$args) { if ($hook==='donation_adjustments') { $args['points']*=2; $args['messages'][]='Fixture adjustment'; } return $args; }
+""".replace('MODULE',module))
+            q('INSERT INTO modules(modulename,active,version) VALUES (?,1,?)',[module,'1.0'])
+            q('INSERT INTO module_hooks(modulename,location,`function`,whenactive,priority) VALUES (?,?,?,?,?)',[module,'donation_adjustments',module+'_dohook','',100])
+            for txn in ['TXN-FIXTURE-1','TXN-FIXTURE-2']: q("INSERT INTO paylog(info,response,txnid,amount,name,acctid,processed,filed,txfee) VALUES ('','',?,0.40,'',0,0,0,0)",[txn])
+            payment=lambda txn='TXN-FIXTURE-1':tuple(q('SELECT acctid,processed FROM paylog WHERE txnid=?',[txn])[0].values())
+            found,body=search('WebPlayer','40','NO-SUCH-TXN');self.assertEqual(set(),found);self.assertIn('unknown or has already been processed',body)
+            self.assertEqual(404,post(form('40',player,name='WebPlayer'),'40',player,'NO-SUCH-TXN')[0]);self.assertEqual((35,pm+1,pl+1),state(player))
+            status,body=request('donators.php?op=add1&name=WebPlayer&amt=40&txnid=TXN-FIXTURE-1');self.assertIn('For transaction: TXN-FIXTURE-1',body)
+            fields=self._security_fields(body,add(player));self.assertEqual(409,post(fields,'40',player,'TXN-FIXTURE-2')[0])
+            fields=form('40',player,'TXN-FIXTURE-1','WebPlayer');status,body=post(fields,'40',player,'TXN-FIXTURE-1')
+            self.assertIn(status,[302,303]);self.assertEqual((115,pm+1,pl+3),state(player));self.assertEqual((str(player),'1'),tuple(map(str,payment())))
+            logs=[r['message'] for r in q("SELECT message FROM debuglog WHERE actor=? AND field='donation' ORDER BY id",[player])]
+            self.assertEqual(['Fixture adjustment (0)',f'Received donator points for donating -- Credited manually [{reason}] (80)'],logs[-2:])
+            self.assertEqual(200,request('donators.php')[0]);self.assertEqual((115,pm+1,pl+3),state(player))
+            # The settled transaction cannot be credited again, by replay or by a fresh form.
+            self.assertEqual(409,post(fields,'40',player,'TXN-FIXTURE-1')[0]);self.assertEqual((115,pm+1,pl+3),state(player))
+            found,body=search('WebPlayer','40','TXN-FIXTURE-1');self.assertEqual(set(),found);self.assertIn('unknown or has already been processed',body)
+        finally:
+            if path.exists(): path.unlink()
+            q('DELETE FROM module_hooks WHERE modulename=?',[module]);q('DELETE FROM modules WHERE modulename=?',[module])
+            q("DELETE FROM paylog WHERE txnid LIKE 'TXN-FIXTURE-%'")
+            for who in [player,*targets]: q("DELETE FROM debuglog WHERE actor=? AND field='donation'",[who])
+            q('DELETE FROM mail WHERE msgto=?',[player])
+            for who in targets: q('DELETE FROM mail WHERE msgto=?',[who]);q('DELETE FROM accounts_output WHERE acctid=?',[who]);q('DELETE FROM accounts WHERE acctid=?',[who])
+            q('UPDATE accounts SET '+','.join(k+'=?' for k in original if k!='acctid')+' WHERE acctid=?',[*[v for k,v in original.items() if k!='acctid'],player])
+
     def _security_client(self, login='WebPlayer', password="Synthetic web O'Reilly \\ password", port=None):
         class NoRedirect(urllib.request.HTTPRedirectHandler):
             def redirect_request(self, *args): return None

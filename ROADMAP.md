@@ -69,8 +69,8 @@ Route families:
 
 - [ ] Haunting (`lib/graveyard/case_haunt*.php`; follow-up candidate in `HAUNT-AUTHORITY-20261016.md`)
 - [ ] Soul restoration, a GET favor spend found during haunting (`lib/graveyard/case_restore.php`)
-- [ ] Bio moderation (`bios.php`)
-- [ ] Donation administration (`donators.php`)
+- [ ] Bio moderation (`bios.php`; candidate in `BIO-DONATION-ADMIN-AUTHORITY-20261016.md`)
+- [ ] Donation administration (`donators.php`; candidate in `BIO-DONATION-ADMIN-AUTHORITY-20261016.md`)
 
 Administration:
 

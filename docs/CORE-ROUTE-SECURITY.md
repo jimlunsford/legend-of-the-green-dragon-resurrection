@@ -616,3 +616,16 @@ integrity 38837315234) but is not the family's acceptance. The follow-up refuses
 haunting yourself, refuses a living actor under lock, binds the intent to the target's
 haunted state, and reuses the bank's recipient search so typed `%` and `_` match only
 themselves. See [haunting authority](HAUNT-AUTHORITY-20261016.md).
+
+2026-10-16 bio moderation (`bios.php`) and donation administration (`donators.php`):
+candidate pending CI. Block, unblock and adding points are POST + CSRF + one-use intent
+per account, bound to the bio state, or to the balance, points, reason, transaction and
+its payment log row. Each runs in the locked player transaction, which also locks the
+target. The notice is written with it and its email runs after commit. GET only displays:
+1.1.2 blocked, unblocked and credited on GET links, replayably. Unblock writes `NULL`
+instead of the zero date that strict SQL refuses on both supported databases. Amounts
+are whole numbers other than 0 that the debug log and the balance column can hold;
+negative amounts still remove points. A transaction credit settles exactly one
+unprocessed payment log row. The search reuses the bank's recipient pattern, and "Return
+whence you came" accepts only the user editor and petition viewer. See
+[bio and donation admin authority](BIO-DONATION-ADMIN-AUTHORITY-20261016.md).
