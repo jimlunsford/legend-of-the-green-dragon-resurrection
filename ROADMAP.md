@@ -54,6 +54,7 @@ Each family is DONE only when its acceptance evidence passes on both supported C
 - [x] Bank: deposit, withdraw, borrow, transfer (`BANK-AUTHORITY-20261015.md`). Accepted at `52bfc4f`, Modern core 38802851227.
 - [x] Weapons and armor purchase and trade-in (`EQUIPMENT-PURCHASE-AUTHORITY-20261015.md`). Accepted at `639b8c5`, Modern core 38810195085.
 - [x] Stables: buy, trade, feed, sell (`STABLES-AUTHORITY-20261016.md`). Accepted at `8257aed`, Modern core 38831947335.
+- [x] Haunting: search and haunt (`HAUNT-AUTHORITY-20261016.md`). Accepted at `595f0c3` (Modern core 38837315295) and follow-up `2a48f35` (Modern core 38884592810, Baseline integrity 38884592513).
 
 ### Current
 
@@ -67,10 +68,10 @@ Infrastructure and records:
 
 Route families:
 
-- [ ] Haunting (`lib/graveyard/case_haunt*.php`; follow-up candidate in `HAUNT-AUTHORITY-20261016.md`)
-- [ ] Soul restoration, a GET favor spend found during haunting (`lib/graveyard/case_restore.php`)
+- [ ] Soul restoration, a GET favor spend found during haunting (`lib/graveyard/case_restore.php`; candidate in `RESTORE-PREFS-AUTHORITY-20261016.md`)
 - [ ] Bio moderation (`bios.php`; candidate in `BIO-DONATION-ADMIN-AUTHORITY-20261016.md`)
 - [ ] Donation administration (`donators.php`; candidate in `BIO-DONATION-ADMIN-AUTHORITY-20261016.md`)
+- [ ] Preferences fatal for new accounts, a missing boolean preference found during bio moderation (`prefs.php`, `lib/showform.php`; candidate in `RESTORE-PREFS-AUTHORITY-20261016.md`)
 
 Administration:
 

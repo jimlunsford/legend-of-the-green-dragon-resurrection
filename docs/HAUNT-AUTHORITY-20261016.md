@@ -120,3 +120,17 @@ changes), literal `%_` and `_x_` searches, a third unlocked target, the search o
 the haunter, one of the six historical failure messages and the news line, and a stale
 form after another haunt (409). It fails against `595f0c3` at the `%_` search (every
 account matched the wildcards).
+
+## Acceptance, 2026-10-16
+
+Haunting is accepted. Both candidates passed on both supported legs:
+
+| Candidate | Commit | Modern core | Baseline integrity |
+|---|---|---|---|
+| First | `595f0c3` | 38837315295 SUCCESS | 38837315234 SUCCESS |
+| Follow-up | `2a48f35` | 38884592810 SUCCESS | 38884592513 SUCCESS |
+
+38884592810 (10:02–10:20 UTC): all 12 jobs SUCCESS, including both `result` jobs.
+PHP 8.4 / MariaDB 11.4 finished at 10:17:07 and PHP 8.5 / MySQL 8.4 at 10:20:34.
+Each leg ran its `checks` job and four `http` shards. Recorded with the restoration
+candidate; see [restore and preferences](RESTORE-PREFS-AUTHORITY-20261016.md).

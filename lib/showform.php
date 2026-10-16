@@ -300,9 +300,12 @@ function showform($layout,$row,$nosave=false,$keypref=false){
 			$yes = translate_inline("Yes");
 			$no = translate_inline("No");
 			tlschema();
+			// A missing value (a new account's preferences) read as null in 1.1.2, under its notice-free
+			// error level: "No" is selected. PHP 8 warns, and the error handler makes warnings fatal.
+			$current = $row[$key] ?? null;
 			rawoutput("<select name='$keyout'>");
-			rawoutput("<option value='0'".($row[$key]==0?" selected":"").">$no</option>");
-			rawoutput("<option value='1'".($row[$key]==1?" selected":"").">$yes</option>");
+			rawoutput("<option value='0'".($current==0?" selected":"").">$no</option>");
+			rawoutput("<option value='1'".($current==1?" selected":"").">$yes</option>");
 			rawoutput("</select>", true);
 			break;
 		case "hidden":

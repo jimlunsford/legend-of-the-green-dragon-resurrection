@@ -171,3 +171,11 @@ supporting evidence only; acceptance comes from CI on both supported legs.
 - `bio.php`'s own `ret` return link is not opened.
 - `paylog.php` still runs its unbound `processdate` UPDATE on GET. That page's actions
   are outside this scope.
+
+## Candidate CI, 2026-10-16
+
+`c166e2eb91f421b706e051ffd45d8c86c7e61014` was inspected once at the start of the
+restoration task. Modern core 38892084451 was still running: both `checks` jobs were
+SUCCESS and all eight `http` shards were in progress. The task brief reports Baseline
+integrity 38892084290 SUCCESS; it was not re-inspected here. Bio moderation and
+donation administration stay in Remaining until Modern core is accepted.

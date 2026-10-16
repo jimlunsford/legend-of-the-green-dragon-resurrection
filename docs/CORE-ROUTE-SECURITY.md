@@ -629,3 +629,17 @@ negative amounts still remove points. A transaction credit settles exactly one
 unprocessed payment log row. The search reuses the bank's recipient pattern, and "Return
 whence you came" accepts only the user editor and petition viewer. See
 [bio and donation admin authority](BIO-DONATION-ADMIN-AUTHORITY-20261016.md).
+
+2026-10-16: haunting accepted at `595f0c3` and `2a48f35` (Modern core 38884592810,
+Baseline integrity 38884592513).
+
+2026-10-16 soul restoration (`graveyard.php?op=restore`): candidate pending CI.
+Restoring is POST + CSRF + one-use intent bound to the player's favor, soulpoints,
+level and life. It runs inside the locked player transaction, which rechecks life,
+fullness and favor; 1.1.2 charged and restored on GET, replayably. GET shows a "Restore
+Your Soul" form when favor allows, and otherwise the historical curse or sigh. The 1.1.2
+cost formula is kept, including its free restore for a deficit under a twentieth of the
+maximum. The same candidate fixes a fatal for new accounts on `prefs.php`: the shared
+form's boolean field read a missing preference without a guard, which PHP 8's warning
+and the error handler made fatal. It now reads it as 1.1.2 did, as "No". See
+[restore and preferences](RESTORE-PREFS-AUTHORITY-20261016.md).

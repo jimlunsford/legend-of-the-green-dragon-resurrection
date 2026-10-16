@@ -5629,6 +5629,59 @@ echo json_encode(systemmail($to,['Trusted %s','notice'],['Hello %s','Jim'],0,$no
                 q('DELETE FROM mail WHERE msgto=?',[target]);q('DELETE FROM accounts_output WHERE acctid=?',[target]);q('DELETE FROM accounts WHERE acctid=?',[target])
             q('UPDATE accounts SET '+','.join(k+'=?' for k in original if k!='acctid')+' WHERE acctid=?',[*[v for k,v in original.items() if k!='acctid'],player])
 
+    def test_graveyard_restore_authority_http(self):
+        q=self.query;player=int(q('SELECT acctid FROM accounts WHERE login=?',['WebPlayer'])[0]['acctid'])
+        original=q('SELECT * FROM accounts WHERE acctid=?',[player])[0];url='graveyard.php?op=restore'
+        state=lambda:tuple(q('SELECT deathpower,soulpoints FROM accounts WHERE acctid=?',[player])[0].values())
+        def prepare(favor,soul,level=10,**extra):
+            values=dict(alive=0,hitpoints=0,deathpower=favor,soulpoints=soul,level=level,specialinc='',specialmisc='',**extra)
+            q('UPDATE accounts SET '+','.join(k+'=?' for k in values)+' WHERE acctid=?',[*values.values(),player])
+        try:
+            prepare(10,40)
+            anonymous=self._security_client(login=None)
+            for data in [None,{'x':'1'}]: self.assertIn(anonymous(url,data)[0],[302,303,403])
+            client=self._security_client()
+            def request(data=None,allowed=url):
+                # Recompute the authoritative game day for every request (the day rolls over at 18:00 UTC).
+                q('UPDATE accounts SET lastnewday=? WHERE acctid=?',[self._current_game_day(),player]);self._security_allow(player,allowed);return client(url,data)
+            def form():
+                status,body=request();self.assertEqual(200,status,body[:1500]);return self._security_fields(body,url)
+            # GET only asks. Level 10: max 100; 40 soulpoints cost round(10 x 60 / 100) = 6 favor.
+            before=state();status,body=request();self.assertEqual(200,status,body[:1500]);self.assertIn('Restore Your Soul (6 favor)',body)
+            self.assertNotIn('calls you weak',body);self.assertEqual(('10','40'),before);fields=form();self.assertEqual(before,state())
+            self.assertEqual(403,request({'action_token':fields['action_token']})[0]);self.assertEqual(403,request({**fields,'csrf_token':'0'*64})[0])
+            self.assertEqual(400,request({**fields,'soulpoints':'100'})[0]);self.assertEqual(before,state())
+            # A request this page did not issue (out of the Mausoleum) is not served.
+            self.assertIn(request(fields,allowed='shades.php')[0],[302,303]);self.assertEqual(before,state())
+            # A form issued at other favor or soul is stale.
+            q('UPDATE accounts SET deathpower=11 WHERE acctid=?',[player]);self.assertEqual(409,request(fields)[0]);self.assertEqual(('11','40'),state())
+            prepare(10,40)
+            # The living are sent to the village (graveyard.php) and cannot use a form issued while dead.
+            fields=form();q('UPDATE accounts SET alive=1,hitpoints=10 WHERE acctid=?',[player])
+            for data in [None,fields]:
+                status,_=request(data);self.assertIn(status,[302,303]);self.assertEqual(before,state())
+            prepare(10,40)
+            # A late failure on the player's write rolls back favor and soul; the spent intent cannot retry.
+            fields=form();q("ALTER TABLE accounts ADD CONSTRAINT fixture_restore CHECK (login <> 'WebPlayer' OR soulpoints <> 100)")
+            try:
+                self.assertEqual(500,request(fields)[0]);self.assertEqual(before,state());self.assertEqual(409,request(fields)[0])
+            finally: q('ALTER TABLE accounts DROP CONSTRAINT fixture_restore')
+            # A fresh form restores: favor and soul together, the 1.1.2 text; replay is refused.
+            fields=form();status,body=request(fields);self.assertEqual(200,status,body[:1500]);self.assertIn('calls you weak for needing restoration',body)
+            self.assertIn('6',body);self.assertEqual(('4','100'),state());self.assertEqual(409,request(fields)[0]);self.assertEqual(('4','100'),state())
+            # Already full: the 1.1.2 sigh, no form, nothing charged.
+            status,body=request();self.assertIn('restoration before you ask for it',body);self.assertIn("just 'cause they're dead",html.unescape(body))
+            self.assertNotIn('action_token',body);self.assertEqual(('4','100'),state())
+            # Too little favor: the 1.1.2 curse, no form; a form issued with more favor is stale.
+            prepare(10,40);fields=form();q('UPDATE accounts SET deathpower=5 WHERE acctid=?',[player])
+            status,body=request();self.assertIn('curses you and throws you from the Mausoleum',body);self.assertNotIn('action_token',body)
+            self.assertEqual(409,request(fields)[0]);self.assertEqual(('5','40'),state())
+            # 1.1.2's formula rounds a small deficit to no cost: level 1 (max 55) at 53 restores for 0 favor.
+            prepare(0,53,level=1);status,body=request();self.assertIn('Restore Your Soul (0 favor)',body)
+            fields=form();status,body=request(fields);self.assertEqual(200,status);self.assertIn('calls you weak',body);self.assertEqual(('0','55'),state())
+        finally:
+            q('UPDATE accounts SET '+','.join(k+'=?' for k in original if k!='acctid')+' WHERE acctid=?',[*[v for k,v in original.items() if k!='acctid'],player])
+
     def test_bio_moderation_authority_http(self):
         q=self.query;player=int(q('SELECT acctid FROM accounts WHERE login=?',['WebPlayer'])[0]['acctid'])
         original=q('SELECT * FROM accounts WHERE acctid=?',[player])[0];targets=[];call=None
@@ -6989,6 +7042,33 @@ function MODULE_dohook($hook,$args) { if ($hook==='donation_adjustments') { $arg
             status, headers, body = request(issued_link(body, 'village.php'))
         self.assertEqual(200, status, headers.get('Location', 'Unexpected HTTP status'))
         self.assertIn('WebPlayer', body)
+        # A new account has no stored preferences. prefs.php renders a missing boolean as 1.1.2 did
+        # (an undefined key compared equal to 0, so "No" is selected) and saves what the browser posts.
+        self.assertNotIn('emailonmail', self.query('SELECT prefs FROM accounts WHERE login=?', ['WebPlayer'])[0]['prefs'])
+        def browser_form(page, action):
+            part = re.search(r"<form action='" + re.escape(action) + r"' method='POST'>(.*?)</form>", page, re.S).group(1)
+            values = {}
+            for tag in re.findall(r'<input\b[^>]*>', part):
+                name = re.search(r'name=[\'"]([^\'"]+)', tag)
+                if not name or re.search(r'type=[\'"](?:submit|button)', tag): continue
+                value = re.search(r'value=([\'"])(.*?)\1', tag, re.S)
+                values[name.group(1)] = html.unescape(value.group(2)) if value else ''
+            for name, options in re.findall(r"<select name='([^']+)'>(.*?)</select>", part, re.S):
+                chosen = re.search(r"<option value='([^']*)' selected", options) or re.search(r"<option value='([^']*)'", options)
+                values[name] = html.unescape(chosen.group(1))
+            return values
+        status, _, prefs_body = request(issued_link(body, 'prefs.php'))
+        self.assertEqual(200, status)
+        for key in ['emailonmail', 'systemmail', 'dirtyemail', 'nojump']:
+            self.assertRegex(prefs_body, r"<select name='" + key + r"'>\s*<option value='0' selected>", prefs_body[prefs_body.find("name='" + key + "'"):][:300])
+        status, _, prefs_body = request('prefs.php?op=save', browser_form(prefs_body, 'prefs.php?op=save'))
+        self.assertEqual(200, status)
+        self.assertIn('Settings Saved', prefs_body)
+        saved = self.query('SELECT prefs FROM accounts WHERE login=?', ['WebPlayer'])[0]['prefs']
+        for key in ['emailonmail', 'systemmail', 'dirtyemail', 'nojump']:
+            self.assertIn('s:%d:"%s";s:1:"0";' % (len(key), key), saved)
+        status, headers, body = request(issued_link(prefs_body, 'village.php'))
+        self.assertEqual(200, status, headers.get('Location', 'Unexpected HTTP status'))
         action, fields = comment_form(body)
         comment = "O'Reilly \\ <script>alert(8675309)</script>"
         fields['insertcommentary'] = comment
