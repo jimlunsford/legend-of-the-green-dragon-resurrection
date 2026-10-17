@@ -41,6 +41,7 @@ PASS applies only to the named operation and evidence. PARTIAL means protections
 | Remaining user preferences / modules.php lifecycle editor | Preference/lifecycle edits | Existing login gate | Representative administrative role matrix incomplete | Shared configuration and mount object editor separated below; remaining callers OPEN | Whole family incomplete | Not fully certified | Not fully certified | Not fully certified | Remaining caller-specific contexts OPEN | BLOCKED | Lifecycle APIs pass; no blanket HTTP editor certification |
 | configuration.php core and declared module settings | Typed patch | Logged-in player | SU_EDIT_CONFIG; declared installed namespace | Existing descriptors; bounded numeric/text/boolean/enum/amount values; declared keys and paired ranges | Bound transactional settings, associated DML and audit | Yes | Yes | One-use context includes namespace, schema and displayed state; locked recheck | Escaped form labels/values/options | PASS exercised shared boundary | Actual authorized/ordinary/anonymous/insufficient role; forged namespace/key; malformed/bounds/enum; CSRF; replay; stale; rollback/fresh retry; configured behavior |
 | mounts.php shared module preferences | Declared object preference patch | Logged-in player | SU_EDIT_MOUNTS; installed declaring module and existing mount | Fixed mounts type; bounded ID; declared key/type/range/text | Bound; actor/module/mount/preference locks; associated audit | Yes | Yes | Object and preference snapshot context; cross-object/module and stale/deleted rejection | Escaped values and labels | PASS enabled mounts boundary | Dark Horse/Goldmine real HTTP role/CSRF/replay/types/bounds/cross-object/module/deletion/rollback; Drinks object editing stays disabled |
+| modules.php lifecycle editor (2026-10-17; supersedes the modules.php part of the "Remaining user preferences" row) | Install / activate / deactivate / reinstall / uninstall, single and mass | Logged-in superuser | SU_MANAGE_MODULES; bundled registry only (an installed non-bundled module can only be deactivated); install state checked | Typed op; module name pattern; exact query parameters and form fields; mass: one list button, distinct entries the list showed | Bound; uninstall's entry, hook, settings and preference deletes in one transaction | Yes; GET confirms only; mass GET 405 | Yes | One-use intent bound to op, module and state (mass: the list and every state), checked under a named lock; repeated and stale forms 409 | Escaped names, descriptions, authors, categories; encoded URLs; non-bundled files never loaded | CANDIDATE, CI pending | test_module_manager_authority_http; MODULE-MANAGER-AUTHORITY-20261017.md |
 
 The `prefs.php` player namespace path now rejects ambiguous triple-underscore suffixes, internal preference names, undeclared keys and inactive/missing modules before any write. None of the 24 bundled modules declares an editable `user_`/`check_` preference; future descriptors remain fail-closed until a typed parser is implemented. HTTP attempts to forge Drinks `canedit` and specialty `skill` values leave all module preference rows unchanged. This closes that specific privilege/value-injection path, not the full core preferences or administrator editor family.
 
@@ -804,3 +805,28 @@ See [content editors part 2](CONTENT-EDITORS-PART2-AUTHORITY-20261016.md).
 - All SQL bound; no SQL or driver text printed; output escaped.
 
 See [content editors part 3](CONTENT-EDITORS-PART3-AUTHORITY-20261017.md).
+
+2026-10-17 module manager (`modules.php`), the remaining preference editors and the
+stables mount lock: candidate pending CI. Content editors part 3, the bio items and the
+mount owner lookup (`19cbb4e`, Modern core 38991243831, Baseline integrity 38991243814)
+are accepted.
+
+- Every module operation is a POST with CSRF and a one-use intent bound to the
+  operation, the module and its install state (the mass form: the list and every
+  module's state), checked and run under a named database lock; GET only shows the
+  confirmation; repeated and stale forms are 409.
+- Only bundled modules install, activate, reinstall or uninstall; other files in
+  `modules/` are listed as not installable and never loaded (1.1.2 loaded every file to
+  list it).
+- A mass request is refused whole (400) if any entry is unknown, repeated, not in the
+  list shown or not allowed for the operation.
+- Uninstall deactivates the module, runs its script, then deletes its entry, hooks,
+  settings and preferences in one bound transaction; a failure reports exactly what was
+  and was not removed (500) and leaves the module installed and inactive.
+- The list escapes every stored field; links are encoded.
+- Preference-editor inventory: no request path writes module settings or preferences
+  outside the typed editors and the accepted module actions.
+- The stables purchase reads the mount `FOR UPDATE` inside its transaction, so a mount
+  deactivated or deleted meanwhile is not sold.
+
+See [module manager](MODULE-MANAGER-AUTHORITY-20261017.md).

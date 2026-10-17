@@ -5558,6 +5558,31 @@ echo json_encode(systemmail($to,['Trusted %s','notice'],['Hello %s','Jim'],0,$no
             fields=form(f"stables.php?op=buymount&id={ids['pony']}",buy('pony'));q('UPDATE mounts SET mountactive=0 WHERE mountid=?',[ids['pony']])
             status,body=request(buy('pony'),fields);self.assertIn('dinnae be any such beestie',body);self.assertEqual(before,state())
             q('UPDATE mounts SET mountactive=1 WHERE mountid=?',[ids['pony']])
+            # The mount is read under lock inside the purchase: an editor's deactivation or delete that is still uncommitted when
+            # the purchase starts is waited for and then seen, so the purchase is refused rather than sold from an older snapshot.
+            import threading
+            q("INSERT INTO mounts (mountname,mountdesc,mountcategory,mountbuff,mountcostgems,mountcostgold,mountactive,mountforestfights,newday,recharge,partrecharge,mountfeedcost,mountlocation,mountdkcost) VALUES ('Fixture Doomed','Fixture','Fixture',?,0,10,1,0,'','','',5,'all',0)",[buff(20)])
+            ids['doomed']=int(q('SELECT MAX(mountid) AS id FROM mounts')[0]['id'])
+            holder="""require 'dbconnect.php';require 'lib/dbwrapper_pdo.php';db_connect($DB_HOST,$DB_USER,$DB_PASS);db_select_db($DB_NAME);
+$db=$GLOBALS['dbinfo']['connection'];$db->beginTransaction();db_query($argv[1],true,[(int)$argv[2]]);echo "HELD\\n";flush();fgets(STDIN);$db->commit();"""
+            for key,change in [('pony','UPDATE mounts SET mountactive=0 WHERE mountid=?'),('doomed','DELETE FROM mounts WHERE mountid=?')]:
+                fields=form(f"stables.php?op=buymount&id={ids[key]}",buy(key));results=[];thread=None
+                process=subprocess.Popen([shutil.which('php'),'-r',holder,change,str(ids[key])],cwd=ROOT,stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True)
+                try:
+                    self.assertEqual('HELD',process.stdout.readline().strip())
+                    self._security_allow(player,buy(key));q('UPDATE accounts SET lastnewday=? WHERE acctid=?',[self._current_game_day(),player])
+                    thread=threading.Thread(target=lambda key=key,fields=fields:results.append(client(buy(key),fields)));thread.start()
+                    for _ in range(150):
+                        rows=q("SELECT INFO FROM information_schema.PROCESSLIST WHERE INFO LIKE '%mounts%FOR UPDATE%'")
+                        if not thread.is_alive() or any('SELECT INFO' not in (r['INFO'] or '') for r in rows):break
+                        time.sleep(.02)
+                    process.stdin.write('commit\n');process.stdin.flush();out,err=process.communicate(timeout=10);self.assertEqual(0,process.returncode,err)
+                    thread.join(timeout=60);self.assertFalse(thread.is_alive())
+                    status,body=results[0];self.assertIn('dinnae be any such beestie',body,key);self.assertEqual(before,state(),key)
+                finally:
+                    if process.poll() is None:process.terminate();process.wait(timeout=5)
+                    if thread:thread.join(timeout=60)
+            q('UPDATE mounts SET mountactive=1 WHERE mountid=?',[ids['pony']])
             # Too little gold: the 1.1.2 refusal, nothing charged. A stale form (purse changed) is refused.
             q('UPDATE accounts SET gold=99 WHERE acctid=?',[player]);fields=form(f"stables.php?op=buymount&id={ids['pony']}",buy('pony'))
             status,body=request(buy('pony'),fields);self.assertIn('Cannae ye see that',body);self.assertEqual(('99','10','0','0'),state())
@@ -6973,6 +6998,138 @@ function MODULE_dohook($hook,$args) {
         finally:
             for who in created: q('DELETE FROM accounts_output WHERE acctid=?',[who]);q('DELETE FROM accounts WHERE acctid=?',[who])
             q('UPDATE accounts SET superuser=? WHERE acctid=?',[original,player])
+
+    def test_module_manager_authority_http(self):
+        q=self.query;text=lambda body:re.sub(r'\s+',' ',html.unescape(re.sub(r'<[^>]+>','',body)))
+        saved={t:q(f'SELECT * FROM {t}') for t in ['modules','module_settings','module_userprefs','module_objprefs','module_hooks','module_event_hooks']}
+        village=q("SELECT value FROM settings WHERE setting='villagename'");village=village[0]['value'] if village else 'Degolburg'
+        # A file in modules/ that is not a bundled module (archive-only code): listing it must not run it.
+        stray='resurrectionarchive'+os.urandom(4).hex();path=ROOT/'modules'/f'{stray}.php';signal=ROOT/'tests'/'fixtures'/f'{stray}.ran'
+        path.write_text("<?php file_put_contents(%r, 'ran');\nfunction STRAY_getmoduleinfo(){return ['name'=>'Archive','author'=>'x','version'=>'1.0','category'=>'Archive'];}\nfunction STRAY_install(){return true;}\nfunction STRAY_uninstall(){return true;}\n".replace('STRAY',stray)%str(signal))
+        renamed=False
+        try:
+            with self._content_editor_fixture() as f:
+                q,player,request,login,form=(f[k] for k in ['q','player','request','login','form'])
+                post=lambda url,fields,**values:request(url,list({**fields,**values}.items()))
+                cat='Forest%20Specials';url=lambda op,module='crazyaudrey',c=cat:f'modules.php?op={op}&module={module}&cat={c}'
+                mass=f'modules.php?op=mass&cat={cat}';uninstalled='modules.php?op=mass&cat='
+                row=lambda:(q("SELECT active FROM modules WHERE modulename='crazyaudrey'") or [None])[0]
+                settings=lambda:q("SELECT setting,value FROM module_settings WHERE modulename='crazyaudrey' ORDER BY setting")
+                prefs=lambda:(q("SELECT setting,userid,value FROM module_userprefs WHERE modulename='crazyaudrey' ORDER BY setting,userid"),
+                              q("SELECT objtype,setting,objid,value FROM module_objprefs WHERE modulename='crazyaudrey' ORDER BY objtype,setting,objid"))
+                hooks=lambda:(q("SELECT location,`function`,whenactive,priority FROM module_hooks WHERE modulename='crazyaudrey' ORDER BY location"),
+                              q("SELECT event_type,event_chance FROM module_event_hooks WHERE modulename='crazyaudrey' ORDER BY event_type"))
+                q("UPDATE modules SET active=0 WHERE modulename='crazyaudrey'")
+                q("UPDATE module_settings SET value='100' WHERE modulename='crazyaudrey' AND setting='villagepercent'")
+                q("INSERT INTO module_userprefs (modulename,setting,userid,value) VALUES ('crazyaudrey','played',?,'1') ON DUPLICATE KEY UPDATE value='1'",[player])
+                q("INSERT INTO module_objprefs (modulename,objtype,setting,objid,value) VALUES ('crazyaudrey','mounts','fixture',1,'x')")
+                q("UPDATE accounts SET alive=1,hitpoints=10,location=?,specialinc='',specialmisc='' WHERE acctid=?",[village,player])
+                # An installed module that is not bundled, with markup in every listed field.
+                fixturecat="Fixture <i>Cat</i> & 'q'";fixturecaturl=urllib.parse.quote(fixturecat,safe='')
+                q("INSERT INTO modules (modulename,formalname,description,moduleauthor,active,filename,installdate,installedby,filemoddate,category,infokeys,version,download) VALUES "
+                  "('resurrectionmanagerfixture','<b>Fixture</b>','\"><img src=x onerror=1>','<script>alert(1)</script><br>Second Author',1,'resurrectionmanagerfixture.php',NOW(),'<u>Admin</u>',NOW(),?,'||','1.0','')",[fixturecat])
+                start=(settings(),prefs(),hooks())
+                ops=['install','uninstall','activate','deactivate','reinstall']
+                f['matrix'](65536,[('modules.php',None),(f'modules.php?cat={cat}',None),(url('activate'),None),*[(url(op),{'x':'1'}) for op in ops],(mass,{'x':'1'})])
+                self.assertEqual('0',row()['active']);self.assertEqual(start,(settings(),prefs(),hooks()))
+                login(65536)
+                # Every listed field is escaped; a module that is not bundled offers only Deactivate.
+                status,body=request(f'modules.php?cat={fixturecaturl}');self.assertEqual(200,status,body[:2000])
+                for raw in ['<script>','<img src=x','<i>Cat</i>','<u>Admin</u>','<b>Fixture</b>']: self.assertNotIn(raw,body)
+                self.assertIn('Second Author',text(body));self.assertIn('<script>alert(1)</script>',text(body))
+                self.assertIn('op=deactivate&amp;module=resurrectionmanagerfixture',body)
+                for op in ['activate','uninstall','reinstall']: self.assertNotIn(f'op={op}&amp;module=resurrectionmanagerfixture',body)
+                # The uninstalled list names the stray file as not installable and never runs it.
+                status,body=request('modules.php');self.assertEqual(200,status);self.assertFalse(signal.exists())
+                self.assertIn(f'{stray}.php',body);self.assertIn('Not a bundled module',text(body));self.assertNotIn(f'value=\'{stray}\'',body)
+                # GET shows only the confirmation, bound to the state; unknown, stray, wrong-state and extra-parameter requests are refused.
+                for bad in [url('activate','nosuchmodule'),url('install',stray),url('activate',stray),url('uninstall','resurrectionmanagerfixture'),url('activate','x.y'),
+                            url('activate',''),'modules.php?op=other&module=crazyaudrey',url('activate')+'&sortby=active',url('activate')+'&module[]=x']:
+                    self.assertEqual(400,request(bad)[0],bad)
+                self.assertEqual(409,request(url('install'))[0]);self.assertEqual(405,request(mass)[0])
+                fields=form(url('activate'),url('activate'));self.assertEqual(['action_token','csrf_token'],sorted(fields))
+                self.assertEqual('0',row()['active']);self.assertFalse(signal.exists())
+                self.assertEqual(403,post(url('activate'),fields,csrf_token='0'*64)[0])
+                self.assertEqual(409,request(url('activate'),[('csrf_token',fields['csrf_token'])])[0])
+                self.assertEqual(400,post(url('activate'),fields,extra='1')[0]);self.assertEqual('0',row()['active'])
+                # A form for another module or operation does not carry over.
+                self.assertEqual(409,post(url('deactivate','resurrectionmanagerfixture',fixturecaturl),fields)[0])
+                calls=f['state']['call']
+                with self._datacache_server(calls) as (cache,f['state']['call']):
+                    try:
+                        def village_shows():
+                            status,body=request('village.php');self.assertEqual(200,status,body[:2000]);return 'Crazy Audrey is here' in text(body)
+                        def cached():
+                            return {p.name:p.stat().st_mtime_ns for p in cache.iterdir() if re.match(r'datacache_(hook-|event-|moduleprepare)',p.name)}
+                        def act(op,target,fields,expect=200):
+                            # Each operation drops every cached hook, event and preload row the earlier pages read.
+                            before=cached();self.assertTrue(before)
+                            time.sleep(.01);status,body=request(target,fields if isinstance(fields,list) else list(fields.items()));self.assertEqual(expect,status,body[:3000])
+                            after=cached()
+                            for name,mtime in before.items(): self.assertNotEqual(mtime,after.get(name),(op,name))
+                            return body
+                        self.assertFalse(village_shows())
+                        body=act('activate',url('activate'),fields);self.assertIn('Performing activate on crazyaudrey',text(body))
+                        self.assertEqual('1',row()['active']);self.assertTrue(village_shows())
+                        self.assertEqual(409,post(url('activate'),fields)[0])
+                        # Mass: the list's own buttons only, every box a module the list showed, all checked before any change.
+                        fields=form(f'modules.php?cat={cat}',mass);self.assertEqual(['action_token','csrf_token'],sorted(fields))
+                        for extra in [[('deactivate','Deactivate'),('module[]','crazyaudrey'),('uninstall','Uninstall')],[('install','Install'),('module[]','crazyaudrey')],
+                                      [('deactivate','Deactivate'),('module[]','crazyaudrey'),('module[]','crazyaudrey')],[('deactivate','Deactivate'),('module[]','x.y')],
+                                      [('deactivate','Deactivate'),('module[x]','crazyaudrey')],[('deactivate','Deactivate'),('module[]','crazyaudrey'),('other','1')]]:
+                            self.assertEqual(400,request(mass,[*fields.items(),*extra])[0],extra)
+                        for bad in ['nosuchmodule',stray,'resurrectionmanagerfixture']:
+                            fields=form(f'modules.php?cat={cat}',mass)
+                            self.assertEqual(400,request(mass,[*fields.items(),('deactivate','Deactivate'),('module[]','crazyaudrey'),('module[]',bad)])[0],bad)
+                            self.assertEqual('1',row()['active'])
+                        # A list that changed since its form was shown is stale.
+                        fields=form(f'modules.php?cat={cat}',mass);q("UPDATE modules SET active=1-active WHERE modulename='fairy'")
+                        self.assertEqual(409,request(mass,[*fields.items(),('deactivate','Deactivate'),('module[]','crazyaudrey')])[0])
+                        q("UPDATE modules SET active=1-active WHERE modulename='fairy'");self.assertEqual('1',row()['active'])
+                        fields=form(f'modules.php?cat={cat}',mass);body=act('deactivate',mass,[*fields.items(),('deactivate','Deactivate'),('module[]','crazyaudrey')])
+                        self.assertIn('Performing deactivate on crazyaudrey',text(body));self.assertEqual('0',row()['active']);self.assertFalse(village_shows())
+                        self.assertEqual(409,request(mass,[*fields.items(),('deactivate','Deactivate'),('module[]','crazyaudrey')])[0])
+                        fields=form(f'modules.php?cat={cat}',mass);act('activate',mass,[*fields.items(),('activate','Activate'),('module[]','crazyaudrey')]);self.assertTrue(village_shows())
+                        # Reinstall keeps settings and preferences, re-registers the same hooks and leaves the module inactive.
+                        fields=form(f'modules.php?cat={cat}',mass);body=act('reinstall',mass,[*fields.items(),('reinstall','Reinstall'),('module[]','crazyaudrey')])
+                        self.assertIn('Performing reinstall on crazyaudrey',text(body));self.assertEqual('0',row()['active']);self.assertEqual(start,(settings(),prefs(),hooks()))
+                        self.assertFalse(village_shows())
+                        fields=form(url('activate'),url('activate'));act('activate',url('activate'),fields);self.assertTrue(village_shows())
+                        # Uninstall: the module's script, then its entry, hooks, settings and preferences together. A failure on the
+                        # last delete keeps all of them, deactivates the module and says so; uninstalling again finishes.
+                        fields=form(url('uninstall'),url('uninstall'))
+                        q('RENAME TABLE module_objprefs TO module_objprefs_fixture');renamed=True
+                        status,body=post(url('uninstall'),fields);self.assertEqual(500,status,body[:3000])
+                        q('RENAME TABLE module_objprefs_fixture TO module_objprefs');renamed=False
+                        self.assertIn('Running module uninstall script',text(body));self.assertIn('none of them were deleted',text(body));self.assertIn('Uninstall it again to finish',text(body))
+                        self.assertNotIn('Deleting module entry',text(body))
+                        self.assertEqual('0',row()['active']);self.assertEqual(start,(settings(),prefs(),hooks()));self.assertFalse(village_shows())
+                        self.assertEqual(409,post(url('uninstall'),fields)[0])
+                        fields=form(url('uninstall'),url('uninstall'));body=act('uninstall',url('uninstall'),fields);t=text(body)
+                        steps=['Running module uninstall script','Deleting module entry','Deleting module hooks','Deleting module settings','Deleting module user prefs','Deleting module object prefs']
+                        self.assertEqual(sorted(t.index(s) for s in steps),[t.index(s) for s in steps])
+                        self.assertIsNone(row());self.assertEqual(([],([],[]),([],[])),(settings(),prefs(),hooks()));self.assertFalse(village_shows())
+                        self.assertEqual(409,post(url('uninstall'),fields)[0])
+                        # Install: only from the uninstalled list's bundled modules; one stray name refuses the whole request.
+                        fields=form('modules.php',uninstalled)
+                        self.assertEqual(400,request(uninstalled,[*fields.items(),('install','Install'),('module[]','crazyaudrey'),('module[]',stray)])[0]);self.assertIsNone(row())
+                        self.assertFalse(signal.exists())
+                        fields=form(url('install'),url('install'));self.assertEqual(400,post(url('install',stray),fields)[0])
+                        body=act('install',url('install'),fields);self.assertIn('Module installed. It is not yet active.',text(body))
+                        defaults=[{'setting':k,'value':v} for k,v in sorted({'cost':'5','animal':'Kitten','animals':'Kittens','lanimal':'kitten','lanimals':'kittens','sound':'mew',
+                            'buffname':'Warm Fuzzies','gamedaysremaining':'-1','defaultanimal':'Kitten','defaultanimals':'Kittens','defaultsound':'mew','defaultbuffname':'Warm Fuzzies',
+                            'profit':'5','villagepercent':'20'}.items())]
+                        self.assertEqual('0',row()['active']);self.assertEqual((defaults,([],[]),start[2]),(settings(),prefs(),hooks()))
+                        self.assertEqual(409,post(url('install'),fields)[0]);self.assertFalse(village_shows())
+                    finally: f['state']['call']=calls
+                self.assertFalse(signal.exists())
+        finally:
+            if renamed: q('RENAME TABLE module_objprefs_fixture TO module_objprefs')
+            path.unlink(missing_ok=True);signal.unlink(missing_ok=True)
+            for table,rows in saved.items():
+                q(f'DELETE FROM {table}')
+                for chunk in [rows[i:i+200] for i in range(0,len(rows),200)]:
+                    q(f'INSERT INTO {table} ('+','.join('`'+k+'`' for k in chunk[0])+') VALUES '+','.join('('+','.join('?' for _ in r)+')' for r in chunk),[v for r in chunk for v in r.values()])
 
     def test_news_and_bio_format_stored_stray_percent_http(self):
         # A defeat news row stores its taunt as a sub-format. One stored before the taunt editor refused a stray %, or with

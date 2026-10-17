@@ -265,3 +265,14 @@ Local, PHP 8.5.11 / MySQL 8.4 (supporting evidence only; CI is the acceptance):
   preference test.
 - Two open edit forms for the same row share one intent; the second save is 409 and must
   be reloaded.
+
+## Acceptance, 2026-10-17
+
+`19cbb4e3c5814476d0d11ce6fcbcb92cb5941b39` is accepted on its own run. Confirmed through the
+GitHub Actions run and job API: Modern core **38991243831 SUCCESS**, all 12 jobs, with both
+`result` jobs SUCCESS (PHP 8.4 / MariaDB 11.4 at 01:47:43Z, PHP 8.5 / MySQL 8.4 at
+01:48:55Z, 2026-10-17; run started 01:31:38Z). Baseline integrity **38991243814 SUCCESS**
+(01:31:51Z). Content editors part 3, the bio page fatal for a character without a mount, the
+bio login SQL and the mount owner lookup are Done in `ROADMAP.md`. The stables purchase lock
+gap listed above is closed as a candidate in
+[the module manager record](MODULE-MANAGER-AUTHORITY-20261017.md).

@@ -1253,47 +1253,70 @@ function deactivate_module($module){
 	}
 }
 
+/**
+ * Uninstall a module. Its own uninstall script runs first (it may still read its settings, and dag and drinks drop
+ * their tables, which commits implicitly), then its entry, hooks, settings and preferences go in one transaction. The
+ * module is deactivated before anything else, so a failure partway never leaves a half-removed module running. On a
+ * failure the page says what was and was not removed, the response is 500, and the result is false; the module is
+ * then still installed (inactive) and can be uninstalled again to finish.
+ */
 function uninstall_module($module){
+    global $dbinfo, $mostrecentmodule;
     if (!resurrection_module_manager()) { return false; }
     require_once 'lib/web_security.php';
     resurrection_require_post();
     if (!is_string($module) || !preg_match('/\\A[A-Za-z][A-Za-z0-9_]*\\z/', $module)) { return false; }
-	if (injectmodule($module,true)) {
+	if (!injectmodule($module,true)) {
+		return false;
+	}
+    $connection = $dbinfo['connection'];
+    if ($connection->inTransaction()) { throw new LogicException('Nested module uninstall.'); }
+    db_query('UPDATE ' . db_prefix('modules') . ' SET active=0 WHERE modulename=?', true, [$module]);
+    resurrection_invalidate_module_runtime($module);
+    $scriptRan = false;
+    try {
 		$fname = $module."_uninstall";
 		output("Running module uninstall script`n");
 		tlschema("module-{$module}");
-		$fname();
-		tlschema();
-
-		output("Deleting module entry`n");
-		$sql = "DELETE FROM " . db_prefix("modules") . " WHERE modulename=?";
-        db_query($sql, true, [$module]);
+        try { $fname(); } finally { tlschema(); }
+        $scriptRan = true;
+        $mostrecentmodule = $module;
+        // The page lists each deletion only once all of them are kept.
+        $before = $GLOBALS['output'] ?? '';
+        $connection->beginTransaction();
+        try {
+            output("Deleting module entry`n");
+            db_query('DELETE FROM ' . db_prefix('modules') . ' WHERE modulename=?', true, [$module]);
+            output("Deleting module hooks`n");
+            db_query('DELETE FROM ' . db_prefix('module_hooks') . ' WHERE modulename=?', true, [$module]);
+            db_query('DELETE FROM ' . db_prefix('module_event_hooks') . ' WHERE modulename=?', true, [$module]);
+            output("Deleting module settings`n");
+            db_query('DELETE FROM ' . db_prefix('module_settings') . ' WHERE modulename=?', true, [$module]);
+            output("Deleting module user prefs`n");
+            db_query('DELETE FROM ' . db_prefix('module_userprefs') . ' WHERE modulename=?', true, [$module]);
+            output("Deleting module object prefs`n");
+            db_query('DELETE FROM ' . db_prefix('module_objprefs') . ' WHERE modulename=?', true, [$module]);
+            $connection->commit();
+        } catch (Throwable $error) {
+            if ($connection->inTransaction()) { $connection->rollBack(); }
+            $GLOBALS['output'] = $before;
+            throw $error;
+        }
+    } catch (Throwable $error) {
+        error_log('Module uninstall of ' . $module . ' failed: ' . $error->getMessage());
         resurrection_invalidate_module_runtime($module);
-
-		output("Deleting module hooks`n");
-		module_wipehooks();
-
-		output("Deleting module settings`n");
-		$sql = "DELETE FROM " . db_prefix("module_settings") .
-			" WHERE modulename='$module'";
-		db_query($sql);
-		invalidatedatacache("modulesettings-$module");
-
-		output("Deleting module user prefs`n");
-		$sql = "DELETE FROM " . db_prefix("module_userprefs") .
-			" WHERE modulename='$module'";
-		db_query($sql);
-
-		output("Deleting module object prefs`n");
-		$sql = "DELETE FROM " . db_prefix("module_objprefs") .
-			" WHERE modulename='$module'";
-		db_query($sql);
-		invalidatedatacache("inject-$module");
-		massinvalidate("moduleprepare");
-		return true;
-	} else {
-		return false;
-	}
+        if ($scriptRan) {
+            output("`\$The module uninstall script ran, but deleting its entry, hooks, settings, user prefs and object prefs failed, so none of them were deleted.  The module is still installed and is now inactive.  Uninstall it again to finish.`0`n");
+        } else {
+            output("`\$The module uninstall script failed.  Its entry, hooks, settings, user prefs and object prefs were not deleted.  The module is still installed and is now inactive.`0`n");
+        }
+        http_response_code(500);
+        return false;
+    }
+    resurrection_invalidate_module_runtime($module);
+	invalidatedatacache("inject-$module");
+	massinvalidate("moduleprepare");
+	return true;
 }
 
 function install_module($module, $force=true){

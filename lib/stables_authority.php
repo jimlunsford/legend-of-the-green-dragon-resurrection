@@ -2,10 +2,14 @@
 require_once __DIR__ . '/player_mutation.php';
 require_once __DIR__ . '/../src/Security/ScalarState.php';
 
-/** @return array<string, mixed>|null A mount row, bound by id. */
-function resurrection_stables_mount(int $id): ?array {
+/**
+ * A mount row, bound by id. Inside a purchase it is read under lock ($lock), so a mount the editor deactivates or
+ * deletes meanwhile is seen as it is once that change commits, not as an earlier snapshot.
+ * @return array<string, mixed>|null
+ */
+function resurrection_stables_mount(int $id, bool $lock = false): ?array {
     if ($id < 1) return null;
-    $rows = db_query('SELECT * FROM ' . db_prefix('mounts') . ' WHERE mountid=?', true, [$id]);
+    $rows = db_query('SELECT * FROM ' . db_prefix('mounts') . ' WHERE mountid=?' . ($lock ? ' FOR UPDATE' : ''), true, [$id]);
     return count($rows) === 1 ? $rows[0] : null;
 }
 

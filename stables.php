@@ -163,7 +163,7 @@ if ($op==""){
 		// The offer, funds (counting the 2/3 trade-in), mount, purse, buff and hooks change together, under lock.
 		$bought = resurrection_player_mutation(function () use ($id) {
 			global $session, $playermount;
-			$mount = resurrection_stables_mount($id);
+			$mount = resurrection_stables_mount($id, true);
 			if ($mount === null || !resurrection_stables_offered($mount)) return array('outcome'=>'missing');
 			$repaygold = $playermount ? round($playermount['mountcostgold']*2/3,0) : 0;
 			$repaygems = $playermount ? round($playermount['mountcostgems']*2/3,0) : 0;

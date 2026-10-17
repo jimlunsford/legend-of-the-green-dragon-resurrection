@@ -65,28 +65,21 @@ Each family is DONE only when its acceptance evidence passes on both supported C
 - [x] Content editors part 1: weapons, armor, taunts, titles, including the title rebuild (`weaponeditor.php`, `armoreditor.php`, `taunt.php`, `titleedit.php`) (`CONTENT-EDITORS-PART1-AUTHORITY-20261016.md`). Accepted at `6820b80`, Modern core 38958259938, Baseline integrity 38958259926.
 - [x] Content editors part 2: creatures, masters (`creatures.php`, `masters.php`) (`CONTENT-EDITORS-PART2-AUTHORITY-20261016.md`). Accepted at `82a48fb`, Modern core 38971089072, Baseline integrity 38971089075.
 - [x] News formatting fatal: a stored taunt with a stray `%` made `news.php` and `bio.php` fail on PHP 8 in `sprintf_translate()` (`lib/translator.php`, `lib/output.php`), found during content editors part 1 (`CONTENT-EDITORS-PART2-AUTHORITY-20261016.md`). Accepted at `82a48fb`, Modern core 38971089072, Baseline integrity 38971089075.
+- [x] Content editors part 3: mounts and companions: object add, edit, save, delete, give, take, activate, deactivate, and the owner refunds on mount delete (`mounts.php`, `companions.php`) (`CONTENT-EDITORS-PART3-AUTHORITY-20261017.md`). Accepted at `19cbb4e`, Modern core 38991243831, Baseline integrity 38991243814.
+- [x] Bio page fatal for a character without a mount: PHP 8's false-to-array deprecation at `bio.php:97`, found during content editors part 2 (`CONTENT-EDITORS-PART3-AUTHORITY-20261017.md`). Accepted at `19cbb4e`, Modern core 38991243831, Baseline integrity 38991243814.
+- [x] Bio page lookup by login pasted `char` into SQL (`bio.php`), found during content editors part 2 (`CONTENT-EDITORS-PART3-AUTHORITY-20261017.md`). Accepted at `19cbb4e`, Modern core 38991243831, Baseline integrity 38991243814.
+- [x] Mount owner lookup (`mounts.php?op=xml`) answered before the editor's `SU_EDIT_MOUNTS` check, with its ID pasted into SQL, found during content editors part 3 (`CONTENT-EDITORS-PART3-AUTHORITY-20261017.md`). Accepted at `19cbb4e`, Modern core 38991243831, Baseline integrity 38991243814.
 
 ### Current
 
-- [ ] None in progress. Choose the next bounded task from Remaining.
+- [ ] Module manager and remaining preference editors (`modules.php`; candidate in `MODULE-MANAGER-AUTHORITY-20261017.md`). Every lifecycle op is POST + CSRF + a one-use intent bound to the module and its state; only bundled modules install; uninstall reports what it removed. The preference-editor inventory found no open request writer.
+- [ ] Stables purchase reads the mount without a lock, so a mount deactivated and deleted meanwhile could be bought (`stables.php`), found during content editors part 3 (candidate in `MODULE-MANAGER-AUTHORITY-20261017.md`)
 
 ### Remaining
 
 Infrastructure and records:
 
 - [ ] Replace the PR #1 body with a short current summary that links here.
-
-Route families:
-
-- [ ] Bio page fatal for a character without a mount: PHP 8's false-to-array deprecation at `bio.php:97`, found during content editors part 2 (`CONTENT-EDITORS-PART2-AUTHORITY-20261016.md`; candidate with part 3 in `CONTENT-EDITORS-PART3-AUTHORITY-20261017.md`)
-- [ ] Bio page lookup by login pastes `char` into SQL (`bio.php`), found during content editors part 2 (candidate with part 3 in `CONTENT-EDITORS-PART3-AUTHORITY-20261017.md`)
-- [ ] Mount owner lookup (`mounts.php?op=xml`) answered before the editor's `SU_EDIT_MOUNTS` check, with its ID pasted into SQL, found during content editors part 3 (candidate in `CONTENT-EDITORS-PART3-AUTHORITY-20261017.md`)
-- [ ] Stables purchase reads the mount without a lock, so a mount deactivated and deleted meanwhile could be bought (`stables.php`), found during content editors part 3 (`CONTENT-EDITORS-PART3-AUTHORITY-20261017.md`)
-
-Administration:
-
-- [ ] Content editors part 3: mounts and companions: object add, edit, save, delete, give, take, activate, deactivate, and the owner refunds on mount delete (`mounts.php`, `companions.php`; candidate in `CONTENT-EDITORS-PART3-AUTHORITY-20261017.md`). The `mounts.php` module preference editor is already closed (shared typed settings editor and mount object preferences, above).
-- [ ] Module manager and remaining preference editors (`modules.php`)
 
 State and maintenance:
 
