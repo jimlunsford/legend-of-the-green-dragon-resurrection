@@ -5,6 +5,7 @@ require_once __DIR__ . '/src/Compatibility/array_cursor.php';
 // translator ready
 
 require_once("lib/http.php");
+require_once __DIR__ . '/src/Security/PreferenceState.php';
 
 require_once("lib/villagenav.php");
 require_once("common.php");
@@ -89,10 +90,33 @@ if ($op=="suicide" && getsetting("selfdelete",0)!=0) {
     $oldvalues = $session['user']['prefs'];
 
 	$post = httpallpost();
+	// A page rendered before this release may still post the old hidden field; it is never read.
 	unset($post['oldvalues']);
 
 	if (count($post)==0){
 	}else{
+		$nonsettings = array(
+			"csrf_token"=>1,
+            "currentpassword"=>1,
+            "pass1"=>1,
+			"pass2"=>1,
+			"email"=>1,
+			"template"=>1,
+			"bio"=>1
+		);
+		// Check the preferences this post would store before anything is changed.
+		$candidate = $session['user']['prefs'];
+		foreach ($post as $key => $val) {
+			if ((isset($nonsettings[$key]) && $nonsettings[$key]) || strstr((string)$key, "___")) continue;
+			$candidate[$key] = httppost((string)$key);
+		}
+		try {
+			$candidate = \Resurrection\Security\PreferenceState::map($candidate);
+			\Resurrection\Security\PreferenceState::encode($candidate);
+		} catch (DomainException $error) {
+			http_response_code(400);
+			exit('Your preferences were not saved: a value is not valid. Nothing was changed.');
+		}
         $pass1 = $_POST['pass1'] ?? '';
         $pass2 = $_POST['pass2'] ?? '';
         if ($pass1 !== $pass2) { output('Your passwords do not match.`n'); }
@@ -106,15 +130,6 @@ if ($op=="suicide" && getsetting("selfdelete",0)!=0) {
         unset($_POST['currentpassword'], $_POST['pass1'], $_POST['pass2']);
 
 		reset($post);
-		$nonsettings = array(
-			"csrf_token"=>1,
-            "currentpassword"=>1,
-            "pass1"=>1,
-			"pass2"=>1,
-			"email"=>1,
-			"template"=>1,
-			"bio"=>1
-		);
 		foreach($post as $key=>$val){
 			// If this is one we don't save, skip
 			if (isset($nonsettings[$key]) && $nonsettings[$key]) continue;
@@ -137,7 +152,7 @@ if ($op=="suicide" && getsetting("selfdelete",0)!=0) {
 				set_module_pref($key, $val, $module);
 				continue;
 			}
-			$session['user']['prefs'][$key]=httppost($key);
+			$session['user']['prefs'][$key]=$candidate[$key];
 		}
 		$bio = ($_POST['bio'] ?? '');
 		$bio = comment_sanitize($bio);
@@ -305,9 +320,8 @@ if ($op=="suicide" && getsetting("selfdelete",0)!=0) {
 	$form = array_merge($form, $msettings);
 	$prefs = array_merge($prefs, $mdata);
 	rawoutput("<form action='prefs.php?op=save' method='POST'>" . resurrection_csrf_field());
-	$info = showform($form,$prefs);
-	rawoutput("<input type='hidden' value=\"" .
-			htmlentities(serialize($info), ENT_COMPAT, getsetting("charset", "ISO-8859-1"))."\" name='oldvalues'>");
+	// 1.1.2 posted the shown values back as a serialized `oldvalues` field; the stored preferences are compared instead.
+	showform($form,$prefs);
 
 	rawoutput("</form><br />");
 	addnav("","prefs.php?op=save");

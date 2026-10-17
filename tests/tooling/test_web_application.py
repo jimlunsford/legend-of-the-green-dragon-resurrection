@@ -7549,6 +7549,80 @@ function MODULE_dohook($hook,$args) {
             q('DELETE FROM settings WHERE setting IN (?,?,?)',keys)
             for row in saved: setting(row['setting'],row['value'])
 
+    def test_navigation_and_preference_state_http(self):
+        q=self.query
+        player=q('SELECT acctid FROM accounts WHERE login=?',['WebPlayer'])[0]['acctid']
+        saved=q('SELECT prefs,allowednavs,restorepage FROM accounts WHERE acctid=?',[player])[0]
+        snapshot=lambda: (q('SELECT * FROM accounts WHERE acctid=?',[player]),q('SELECT * FROM accounts_output WHERE acctid=?',[player]),
+            q('SELECT * FROM module_userprefs WHERE userid=? ORDER BY modulename,setting',[player]))
+        def stored(column,value): q('UPDATE accounts SET '+column+'=? WHERE acctid=?',[value,player])
+        # Preferences as 1.1.2's prefs.php, commentary.php and the client-side tab script left them.
+        legacy=('a:6:{s:8:"language";s:2:"en";s:9:"tabconfig";s:1:"1";s:9:"timestamp";s:1:"0";s:10:"timeformat";'
+            's:10:"[m/d h:ia]";s:10:"timeoffset";d:-5.5;s:16:"showFormTabIndex";s:1:"0";}')
+        valid={'prefs':legacy,'allowednavs':'a:1:{s:11:"village.php";b:1;}','restorepage':'village.php'}
+        def reset():
+            for column,value in valid.items(): stored(column,value)
+        password="Synthetic web O'Reilly \\ password"
+        malformed=[('prefs','Invalid stored preference state',['garbage','O:8:"stdClass":0:{}','s:3:"abc";','a:1:{s:9:"tabconfig";s:3:"yes";}',
+                'a:1:{i:5;s:1:"x";}','a:1:{s:8:"language";s:13:"en\' OR 1=1 --";}','a:1:{s:9:"timestamp";a:0:{}}']),
+            ('allowednavs','Invalid stored navigation state',['garbage','O:8:"stdClass":0:{}','s:11:"village.php";','a:1:{s:11:"village.php";i:1;}',
+                'a:1:{i:1;s:11:"village.php";}']),
+            ('restorepage','Invalid stored navigation state',["village.php?x='><script>",'javascript:alert(1)','village.php?a b','village.php?a="b"','/village.php'])]
+        try:
+            reset(); request=self._security_client()
+            # Malformed stored state stops an ordinary page and writes nothing.
+            for column,message,values in malformed:
+                for value in values:
+                    with self.subTest(page=column,value=value):
+                        reset(); stored(column,value); before=snapshot()
+                        status,body=request('village.php'); self.assertEqual(409,status,body[:2000]); self.assertIn(message,body)
+                        self.assertEqual(before,snapshot())
+            # ... and stops a login before it is recorded.
+            for column,message,values in malformed:
+                for value in values:
+                    with self.subTest(login=column,value=value):
+                        reset(); stored(column,value); before=snapshot()
+                        fresh=self._security_client(login=None)
+                        _,body=fresh('home.php')
+                        token=re.search(r'name=[\'"]csrf_token[\'"] value=[\'"]([a-f0-9]{64})',body).group(1)
+                        status,body=fresh('login.php',{'csrf_token':token,'name':'WebPlayer','password':password})
+                        self.assertEqual(409,status,body[:2000]); self.assertIn(message,body); self.assertIn('You were not logged in',body)
+                        self.assertEqual(before,snapshot())
+            with self.subTest('a blank time offset from 1.1.2 reads as 0'):
+                # 1.1.2 stored a cleared int field as ""; PHP 8 throws a TypeError on "" * 3600.
+                reset(); stored('prefs',legacy.replace('d:-5.5;','s:0:"";')); request=self._security_client(); self._security_allow(player,'prefs.php')
+                status,body=request('prefs.php'); self.assertEqual(200,status,body[:2000])
+                self.assertIn('s:10:"timeoffset";i:0;',q('SELECT prefs FROM accounts WHERE acctid=?',[player])[0]['prefs'])
+            with self.subTest('the preference writer checks every value before anything is changed'):
+                reset(); request=self._security_client(); self._security_allow(player,'prefs.php')
+                status,body=request('prefs.php'); self.assertEqual(200,status,body[:2000]); self.assertNotIn('oldvalues',body)
+                csrf=re.search(r'name=[\'"]csrf_token[\'"] value=[\'"]([a-f0-9]{64})',body).group(1)
+                for field,value in [('timestamp','9'),('tabconfig','yes'),('timeoffset','soon'),('language',"en' OR 1=1 -- "),('5','x'),('bad[]','x')]:
+                    with self.subTest(field=field,value=value):
+                        before=snapshot()
+                        status,body=request('prefs.php?op=save',{'csrf_token':csrf,field:value,'currentpassword':password,
+                            'pass1':'Synthetic new password 1','pass2':'Synthetic new password 1'})
+                        # prefs.php already refused a posted array as 'Invalid preference.'
+                        self.assertEqual(400,status,body[:2000]); self.assertIn('Invalid preference.' if field=='bad[]' else 'Your preferences were not saved',body)
+                        self.assertEqual(before,snapshot())
+                status,body=request('prefs.php?op=save',{'csrf_token':csrf,'timestamp':'1','timeoffset':''})
+                self.assertEqual(200,status,body[:2000]); self.assertIn('Settings Saved',body)
+                prefs=q('SELECT prefs FROM accounts WHERE acctid=?',[player])[0]['prefs']
+                self.assertIn('s:9:"timestamp";s:1:"1";',prefs); self.assertIn('s:10:"timeoffset";i:0;',prefs)
+            with self.subTest('a request the restorepage column cannot hold keeps the previous page'):
+                reset(); request=self._security_client(); long='village.php?x='+'a'*120; self._security_allow(player,long)
+                status,body=request(long); self.assertEqual(200,status,body[:2000])
+                self.assertEqual('village.php',q('SELECT restorepage FROM accounts WHERE acctid=?',[player])[0]['restorepage'])
+            with self.subTest("Fix Navs' empty value still leads to the corrupted-navs page, as in 1.1.2"):
+                reset(); request=self._security_client(); stored('allowednavs','')
+                status,body=request('village.php'); self.assertEqual(302,status,body[:2000])
+                status,body=request('badnav.php'); self.assertEqual(200,status,body[:2000]); self.assertIn('Your Navs Are Corrupted',body)
+            with self.subTest('1.1.2 saved a wrapped non-array value back as entry 0; it is dropped'):
+                reset(); request=self._security_client(); stored('allowednavs','a:2:{i:0;s:0:"";s:11:"village.php";b:1;}')
+                status,body=request('village.php'); self.assertEqual(200,status,body[:2000])
+        finally:
+            for column in ['prefs','allowednavs','restorepage']: stored(column,saved[column])
+
     def _security_client(self, login='WebPlayer', password="Synthetic web O'Reilly \\ password", port=None):
         class NoRedirect(urllib.request.HTTPRedirectHandler):
             def redirect_request(self, *args): return None

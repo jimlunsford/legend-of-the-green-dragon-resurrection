@@ -1,5 +1,7 @@
 <?php
 require_once __DIR__ . '/../src/Compatibility/array_cursor.php';
+require_once __DIR__ . '/../src/Security/NavigationState.php';
+require_once __DIR__ . '/../src/Security/PreferenceState.php';
 // translator ready
 // addnews ready
 // mail ready
@@ -13,7 +15,10 @@ function saveuser(){
 		// are undone.
 		restore_buff_fields();
 
-		$session['user']['allowednavs']=serialize($session['allowednavs']);
+		// Store only navigation and preference state the readers accept; a failure writes nothing.
+		$session['user']['allowednavs']=serialize(\Resurrection\Security\NavigationState::map($session['allowednavs']));
+		if (array_key_exists('restorepage', $session['user'])) \Resurrection\Security\NavigationState::restorePage($session['user']['restorepage']);
+		if (array_key_exists('prefs', $session['user'])) $session['user']['prefs']=\Resurrection\Security\PreferenceState::encode($session['user']['prefs']);
 		// Torment presentation may calculate display fields but cannot persist buff changes.
         $session['user']['bufflist']=defined('RESURRECTION_GRAVEYARD_READ_ONLY')
             ? $baseaccount['bufflist'] : serialize($session['bufflist']);

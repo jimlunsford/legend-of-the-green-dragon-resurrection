@@ -256,3 +256,12 @@ All local, PHP 8.5.11. Supporting evidence only; CI is the acceptance.
 - **Operator objects.** A view or an odd-named table in the game database keeps the
   optimization due at every maintenance run, by design (above).
 - **Log size.** The log line still lists every table, as 1.1.2 did.
+
+## Acceptance, 2026-10-17
+
+`05485ec` is accepted on its own run. Confirmed through the GitHub Actions run and job API:
+Modern core **39044082958 SUCCESS**, all 12 jobs, with both `result` jobs SUCCESS (PHP 8.4 /
+MariaDB 11.4 at 15:30:08Z, PHP 8.5 / MySQL 8.4 at 15:32:43Z, 2026-10-17; run started
+15:13:17Z). Baseline integrity **39044082762 SUCCESS**. Truthful completion reporting moves to
+Done in `ROADMAP.md`. The mail notification link gap above is recorded in `ROADMAP.md`
+Remaining, for the final rescan.

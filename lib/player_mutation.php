@@ -2,6 +2,8 @@
 require_once __DIR__ . '/web_security.php';
 require_once __DIR__ . '/buffs.php';
 require_once __DIR__ . '/../src/Security/ActionToken.php';
+require_once __DIR__ . '/../src/Security/NavigationState.php';
+require_once __DIR__ . '/../src/Security/PreferenceState.php';
 
 /** Issue an intent for an explicitly named action and authoritative state. */
 function resurrection_action_fields(string $scope, string $context): string {
@@ -64,6 +66,8 @@ function resurrection_player_mutation(callable $action, array $participants = []
         }
         $values = $session['user'];
         $values['bufflist'] = serialize($session['bufflist']);
+        if (array_key_exists('prefs', $values)) { $values['prefs'] = \Resurrection\Security\PreferenceState::encode($values['prefs']); }
+        if (array_key_exists('restorepage', $values)) { \Resurrection\Security\NavigationState::restorePage($values['restorepage']); }
         if (is_array($companions)) { $values['companions'] = serialize($companions); }
         $sets = []; $parameters = [];
         foreach ($values as $key => $value) {

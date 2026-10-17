@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/../src/Security/ScalarState.php';
+require_once __DIR__ . '/../src/Security/PreferenceState.php';
 require_once __DIR__ . '/../src/Security/MailContent.php';
 require_once __DIR__ . '/../src/Security/GameMasterMailSender.php';
 require_once 'lib/is_email.php';
@@ -34,8 +35,8 @@ function systemmail($to, $subject, $body, $from=0, $noemail=false) {
             $from = \Resurrection\Security\GameMasterMailSender::resolve($accounts[$sender], $from->label)->label;
         } else { $from = $sender; }
         $row = $accounts[$to];
-        $prefs = \Resurrection\Security\ScalarState::read($row['prefs']);
-        if (!is_array($prefs)) $prefs = [];
+        // A recipient whose stored preferences are not valid rejects the mail; nothing is inserted.
+        $prefs = \Resurrection\Security\PreferenceState::read($row['prefs']);
         $serialized = 0;
         if ($sender === 0) {
             if (is_array($subject)) { $subject = serialize(\Resurrection\Security\MailContent::translated($subject)); $serialized |= 1; }

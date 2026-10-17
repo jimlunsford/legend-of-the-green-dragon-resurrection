@@ -34,6 +34,22 @@ final class SystemMailTest extends TestCase
         self::assertSame($before,db_query('SELECT COUNT(*) n FROM mail')[0]['n']);
     }
 
+    public function testRecipientWithMalformedPreferencesNeverInserts(): void
+    {
+        $db=$GLOBALS['dbinfo']['connection']; $before=db_query('SELECT COUNT(*) n FROM mail')[0]['n'];
+        $db->beginTransaction();
+        try {
+            $GLOBALS['mail_notifications']=[];
+            foreach (['garbage','O:8:"stdClass":0:{}',serialize(['emailonmail'=>'yes']),serialize([5=>'x'])] as $prefs) {
+                db_query('UPDATE accounts SET prefs=? WHERE acctid=1',true,[$prefs]);
+                try { systemmail(1,['Subject'],['Body'],0,true); self::fail('Malformed recipient preferences accepted'); }
+                catch (\DomainException $e) { self::assertNotEmpty($e->getMessage()); }
+                self::assertSame($before,db_query('SELECT COUNT(*) n FROM mail')[0]['n']);
+            }
+            self::assertSame([],$GLOBALS['mail_notifications']);
+        } finally {$db->rollBack();unset($GLOBALS['mail_notifications']);}
+    }
+
     public function testTranslatedSchemaAndExplicitTransactionNotificationOwnership(): void
     {
         $db=$GLOBALS['dbinfo']['connection']; $before=db_query('SELECT COUNT(*) n FROM mail')[0]['n'];

@@ -424,3 +424,141 @@ The mount and companion editors (`mounts.php`, `companions.php`, new
 Candidate inventory: **107 sites / 50 files / 40 serialize writers-checks / 66
 ScalarState reads / one centralized unserialize**. ScalarState limits are unchanged. See
 [content editors part 3](CONTENT-EDITORS-PART3-AUTHORITY-20261017.md).
+
+## Business-schema inventory, 2026-10-17
+
+Recounted at `05485ec` with the same token method, which again reproduces 112 / 53 / 42 /
+69 / 1 at `4478c06` and 108 / 50 / 40 / 67 / 1 at `8257aed`: **107 sites / 50 files / 40
+serialize writers-checks / 66 ScalarState reads / one centralized unserialize**, unchanged
+since content editors part 3 (the account deletion, expiration and completion reporting
+tasks added no call).
+
+Each site below has a category from the `ROADMAP.md` list (or "other") and its status after
+the serialized business schemas part 1 candidate, against the definition of done in
+[serialized schemas part 1](SERIALIZED-SCHEMAS-PART1-20261017.md). "This commit" marks a
+closure in that candidate. Line numbers are those at `05485ec`. Statuses other than the
+navigation, preference and editor old value closures come from reading the code at
+`05485ec`; that document marks which findings were verified by a probe.
+
+| Site | Kind | Category | Status after this commit | Evidence or gap |
+|---|---|---|---|---|
+| `battle.php:28` | read | general combat | OPEN | Each caller runs its route schema first, but the Forest-specialty caller's `SpecialtyCombatState` is looser than `ForestCombatState`; the post-round value is not re-read before commit on the Dragon and Forest-specialty routes |
+| `bio.php:128` | read | translation arrays (news) | OPEN | No shape check before `sprintf_translate`; a non-array gives a TypeError page; no malformed test |
+| `common.php:256` | read | buffs | OPEN | Second read after hydration; a non-array silently becomes `[]`; only transmute is checked |
+| `common.php:342` | read | companions | OPEN | `SkeletonCompanionState::companions`, 409; exact only for the skeleton warrior, other companions only need to be arrays |
+| `companions.php:159` | read | companions | OPEN | Editor display; abilities with wrong types are rendered unchecked; no malformed test |
+| `healer.php:13` | read | other: donation config | n/a | Value never used (dead read, as in 1.1.2) |
+| `lib/accounts.php:27` | ser | buffs | CLOSED | Constant `[]`, which every buff schema accepts |
+| `lib/accounts.php:27` | ser | other: dragon points | CLOSED | Constant `[]`, accepted by `DragonPointState::read` |
+| `lib/accounts.php:27` | ser | preferences | CLOSED | Constant `[]`, accepted by `PreferenceState` (`NavigationPreferenceStateTest`) |
+| `lib/accounts.php:28` | ser | companions | CLOSED | Constant `[]` |
+| `lib/accounts.php:28` | ser | navigation | CLOSED | Constant `[village.php => true]`, accepted by `NavigationState` |
+| `lib/addnews.php:75` | ser | translation arrays (news) | OPEN | Writer serializes any arguments with no schema |
+| `lib/arrayutil.php:32` | ser | other: shared encoder | n/a | `createstring()`; its callers write badguy and companions, covered under those categories |
+| `lib/buffs.php:101` | read | companions | OPEN | Skeleton check only, then `apply_companion` writes without the full schema |
+| `lib/clan_authority.php:73` | ser | translation arrays (mail) | CLOSED | Not stored: a bound `WHERE subject=?` comparison |
+| `lib/clan_authority.php:157` | ser | other: clan context hash | CLOSED | Not stored: hash input |
+| `lib/commentary_security.php:28` | ser | other: commentary snapshot | OPEN | Writer stores `SELECT *` plus author fields with no schema |
+| `lib/commentary_security.php:71` | read | other: commentary snapshot | OPEN | `is_array` then 409; keys and types unchecked before the restore INSERT; no malformed test |
+| `lib/datacache.php:35` | read | other: data cache | n/a | Not business state; an invalid file reads as a miss and is recomputed |
+| `lib/datacache.php:56` | ser | other: data cache | n/a | Not business state |
+| `lib/dragon_combat.php:69` | ser | general combat | CLOSED | Serializes what `DragonCombatState::read` returned; `DragonCombatStateTest`, `test_dragon_specialty_authority_matrix` |
+| `lib/dragon_combat.php:87` | ser | general combat | CLOSED | `DragonCombatState::victory` exact shape; `test_dragon_transitions_rewards_and_rollback` |
+| `lib/dump_item.php:12` | read | other: admin dump display | n/a | Escaped display of a stored value; a failed read shows the literal |
+| `lib/dump_item.php:28` | read | other: admin dump display | n/a | `dump_item_ascode()` has no callers |
+| `lib/forcednavigation.php:23` | read | buffs | OPEN | Transmute 400 and `SpecialtyBuffState::collection` 409, but only specialty and transmute entries are exact; other buffs only need to be arrays |
+| `lib/forcednavigation.php:36` | read | other: dragon points | OPEN | A non-array becomes `[]` without `DragonPointState::read`; `saveuser()` can then overwrite a corrupt history (from code reading) |
+| `lib/forcednavigation.php:37` | read | preferences | CLOSED | **This commit**: `PreferenceState::read`, 409 before any write; `NavigationPreferenceStateTest`, `test_navigation_and_preference_state_http` |
+| `lib/forcednavigation.php:39` | read | navigation | CLOSED | **This commit**: `NavigationState::read` (with `restorePage`), 409 before any write; same tests |
+| `lib/forcednavigation.php:40` | read | navigation | CLOSED | **This commit**: same read as :39 |
+| `lib/graveyard_combat.php:13` | read | buffs | OPEN | `ForestBuffState::validate`, 409, nothing written; criterion 4 fails: it rejects buffs 1.1.2 and shipped modules write (the installer Pony mount buff, verified) |
+| `lib/graveyard_combat.php:15` | read | companions | CLOSED | `ForestCompanionState`, 409; `test_graveyard_malformed_state_and_explicit_repair` |
+| `lib/graveyard_combat.php:91` | ser | general combat | OPEN | Re-read after the round (`GraveyardCombatStateTest`); criterion 4: a 1.1.2 in-flight torment is rejected and no exception is recorded (from code reading) |
+| `lib/http.php:44` | ser | other: form helper | n/a | `postparse()` has no callers |
+| `lib/inn/inn_room.php:4` | read | other: donation config | n/a | Value never used (dead read, as in 1.1.2) |
+| `lib/mail.php:137` | read | translation arrays (mail) | OPEN | Inert: no tracked file includes `lib/mail.php`; the live readers use `MailContent::stored`. Switch or record as excluded |
+| `lib/mail.php:138` | read | translation arrays (mail) | OPEN | Inert: no tracked file includes `lib/mail.php`; the live readers use `MailContent::stored`. Switch or record as excluded |
+| `lib/mail.php:179` | read | translation arrays (mail) | OPEN | Inert: no tracked file includes `lib/mail.php`; the live readers use `MailContent::stored`. Switch or record as excluded |
+| `lib/mail.php:180` | read | translation arrays (mail) | OPEN | Inert: no tracked file includes `lib/mail.php`; the live readers use `MailContent::stored`. Switch or record as excluded |
+| `lib/mail.php:185` | read | translation arrays (mail) | OPEN | Inert: no tracked file includes `lib/mail.php`; the live readers use `MailContent::stored`. Switch or record as excluded |
+| `lib/mail.php:186` | read | translation arrays (mail) | OPEN | Inert: no tracked file includes `lib/mail.php`; the live readers use `MailContent::stored`. Switch or record as excluded |
+| `lib/mail.php:289` | read | translation arrays (mail) | OPEN | Inert: no tracked file includes `lib/mail.php`; the live readers use `MailContent::stored`. Switch or record as excluded |
+| `lib/mail.php:290` | read | translation arrays (mail) | OPEN | Inert: no tracked file includes `lib/mail.php`; the live readers use `MailContent::stored`. Switch or record as excluded |
+| `lib/mail.php:296` | read | translation arrays (mail) | OPEN | Inert: no tracked file includes `lib/mail.php`; the live readers use `MailContent::stored`. Switch or record as excluded |
+| `lib/mail.php:297` | read | translation arrays (mail) | OPEN | Inert: no tracked file includes `lib/mail.php`; the live readers use `MailContent::stored`. Switch or record as excluded |
+| `lib/motd.php:48` | read | other: motd poll | OPEN | `body`/`opt` used unchecked |
+| `lib/motd.php:222` | ser | other: motd poll | OPEN | Stores posted values unchecked; motd.php is still 1.1.2 SQL |
+| `lib/mount_companion_editor.php:134` | ser | mounts | OPEN | Checks `is_array` plus `NewDayState::buffs`, not the combat consumers' check; refuses text `minioncount` |
+| `lib/mount_companion_editor.php:158` | ser | companions | CLOSED | Built from typed fields only; `test_mount_and_companion_editor_authority_http` |
+| `lib/mount_companion_editor.php:385` | read | companions | OPEN | `ForestCompanionState`, 500 and rollback, but no malformed stored-abilities test (criterion 5) |
+| `lib/newday_daily.php:60` | read | mounts | CLOSED | `NewDayState::buffs`, 409; `test_normal_newday_canonical_context_races_and_specialties` |
+| `lib/newday_daily.php:64` | read | mounts | CLOSED | Same bytes as :60; hash input |
+| `lib/newday_daily.php:89` | read | buffs | CLOSED | `NewDayState::buffs`, 409; `test_normal_newday_stale_replay_transport_and_corruption`, `NewDayStateTest` |
+| `lib/newday_daily.php:98` | read | buffs | CLOSED | Hash input; the values are validated at :89 and :90 |
+| `lib/newday_daily_outcomes.php:76` | read | mounts | CLOSED | Checked at newday_daily.php:61 in the same transaction (the New Day result buff list is not re-checked: buffs writer gap) |
+| `lib/output.php:432` | ser | translation arrays (labels) | CLOSED | Not stored: in-request nav key |
+| `lib/output.php:623` | read | translation arrays (labels) | CLOSED | Not stored: decodes the in-request key made at :432 |
+| `lib/output.php:712` | ser | translation arrays (labels) | CLOSED | Not stored: lookup key |
+| `lib/player_mutation.php:66` | ser | buffs | OPEN | Serializes the session buff list with no schema |
+| `lib/player_mutation.php:67` | ser | companions | OPEN | Serializes companions with no schema |
+| `lib/player_mutation.php:71` | ser | other: generic save | OPEN | Serializes any array field; prefs are now encoded by `PreferenceState::encode` first (**this commit**), dragon points still fall through (closes with dragon points) |
+| `lib/player_mutation.php:84` | ser | other: generic save | CLOSED | Not stored: in-memory `$baseaccount` bookkeeping |
+| `lib/pvp_combat.php:26` | ser | general combat | CLOSED | Not stored: hash input |
+| `lib/pvp_combat.php:39` | ser | general combat | CLOSED | Not stored: hash input; the badguy it uses is read through `PvpState` |
+| `lib/pvp_combat.php:46` | read | buffs | OPEN | `ForestBuffState::validate`, 409; criterion 4 fails as at graveyard_combat.php:13 |
+| `lib/ramius_outcomes.php:76` | read | mounts | CLOSED | Checked under lock; result checked by `NewDayState::buffs`; `test_ramius_hooks_canonical_state_and_stale_mount` |
+| `lib/ramius_resurrection.php:48` | read | companions | CLOSED | `ForestCompanionState`; `test_ramius_stale_state_settings_and_malformed_authority` |
+| `lib/saveuser.php:16` | ser | navigation | CLOSED | **This commit**: stores only `NavigationState::map()` output; `restorepage` and `prefs` are checked in the same place |
+| `lib/saveuser.php:19` | ser | buffs | OPEN | Serializes the session buff list with no schema |
+| `lib/saveuser.php:20` | ser | companions | OPEN | Serializes companions with no schema |
+| `lib/saveuser.php:26` | ser | other: generic save | OPEN | As player_mutation.php:71 |
+| `lib/specialty_combat.php:39` | ser | buffs | OPEN | Serializes the buff list after only the transmute step; the specialty route runs no full buff schema |
+| `lib/stables_authority.php:34` | read | mounts | OPEN | `is_array` only; a wrongly shaped array is stored through `apply_buff` |
+| `lib/systemmail.php:37` | read | preferences | CLOSED | **This commit**: `PreferenceState::read`; a malformed recipient rejects the mail, nothing inserted (`SystemMailTest::testRecipientWithMalformedPreferencesNeverInserts`) |
+| `lib/systemmail.php:41` | ser | translation arrays (mail) | CLOSED | `MailContent::translated`; `SystemMailTest` |
+| `lib/systemmail.php:42` | ser | translation arrays (mail) | CLOSED | `MailContent::translated`; `SystemMailTest` |
+| `lib/systemmail.php:98` | read | translation arrays (mail) | CLOSED | Re-reads its own value through `translated()`; post-commit, best effort |
+| `lib/systemmail.php:102` | read | translation arrays (mail) | CLOSED | As :98 |
+| `lib/training_combat.php:37` | read | buffs | OPEN | `ForestBuffState::validate`, 409; criterion 4 fails as at graveyard_combat.php:13 |
+| `lib/training_combat.php:52` | read | general combat | OPEN | Pre-read for the master id, then `TrainingCombatState::read`; criterion 4: the 1.1.2 `{type:train}` state is rejected and no exception is recorded (from code reading) |
+| `lib/training_combat.php:139` | ser | general combat | OPEN | Re-read after the round (`TrainingCombatStateTest`); criterion 4 as :52 |
+| `lib/translator.php:137` | read | preferences | CLOSED | **This commit**: `PreferenceState::read` (post-commit mail delivery; a failure skips the email) |
+| `login.php:54` | read | other: dragon points | OPEN | Reads prefs and dragon points; prefs now go through `PreferenceState` before the login is recorded (**this commit**); dragon points still fall back to `[]` |
+| `login.php:57` | read | buffs | OPEN | No check; the value is unused and never saved by login.php |
+| `login.php:58` | read | navigation | CLOSED | **This commit**: `NavigationState::read` and `restorePage` before the login is recorded, 409; `test_navigation_and_preference_state_http` |
+| `mercenarycamp.php:216` | read | companions | OPEN | No check; a bad value reaches `apply_companion` and is saved |
+| `moderate.php:137` | read | other: commentary snapshot | OPEN | No check; a `false` value is indexed |
+| `mounts.php:234` | read | mounts | OPEN | Editor display; a non-array becomes `[]`; non-string fields unchecked |
+| `news.php:73` | read | translation arrays (news) | OPEN | As bio.php:128; `test_news_and_bio_format_stored_stray_percent_http` covers valid rows only |
+| `paylog.php:37` | read | other: payment log | OPEN | GET loop writes `processdate` from an unchecked value |
+| `paylog.php:65` | read | other: payment log | OPEN | Display fields unchecked |
+| `prefs.php:310` | ser | editor old values | CLOSED | **This commit**: the hidden `oldvalues` field is no longer written; nothing reads a posted or stored `oldvalues` (posted copies are discarded unread) |
+| `src/Game/DragonCombatState.php:13` | read | general combat | CLOSED | `DragonCombatStateTest` (legacy flat format, malformed), `test_dragon_specialty_authority_matrix` |
+| `src/Game/DragonCombatState.php:52` | read | general combat | CLOSED | `victory()`; `test_dragon_transitions_rewards_and_rollback` |
+| `src/Game/DragonPointState.php:26` | read | other: dragon points | CLOSED | `DragonPointStateTest`, `test_dragon_points_invalid_requests_stale_and_corruption` |
+| `src/Game/DragonPointState.php:108` | ser | other: dragon points | CLOSED | Not stored: validation round trip |
+| `src/Game/DragonPointState.php:125` | ser | other: dragon points | CLOSED | Not stored: validation round trip |
+| `src/Game/ForestCombatState.php:13` | read | general combat | CLOSED | `ForestCombatStateTest`, `test_ordinary_forest_malformed_preserved_and_repair` (1.1.2 shape accepted) |
+| `src/Game/GraveyardCombatState.php:24` | read | general combat | OPEN | As graveyard_combat.php:91 |
+| `src/Game/SpecialtyCombatState.php:13` | read | general combat | OPEN | Looser than `ForestCombatState` for the same value (no reward-ledger, AI or flag checks) and stricter in two 1.1.2 cases (no `creatureid`, `spellpoints`) |
+| `src/Game/TrainingCombatState.php:46` | read | general combat | OPEN | As training_combat.php:52 |
+| `src/Security/MailContent.php:53` | ser | translation arrays (mail) | CLOSED | Not stored: size and canonical check inside `translated()` |
+| `src/Security/MailContent.php:54` | read | translation arrays (mail) | CLOSED | As :53; `MailContentTest` |
+| `src/Security/MailContent.php:72` | read | translation arrays (mail) | CLOSED | `stored()`; `MailContentTest`, `test_player_mail_notifications_commit_failure_preferences_and_display` |
+| `src/Security/PvpState.php:11` | read | general combat | CLOSED | `PvpStateTest`, `test_pvp_malformed_state_preserved_and_repaired`; old encounters fail closed by design (`PVP-COMBAT-AUTHORITY-20260927.md`) |
+| `src/Security/PvpState.php:69` | ser | general combat | CLOSED | Not stored: hash input |
+| `src/Security/ScalarState.php:17` | unser | other: central reader | CLOSED | The primitive; `ScalarStateTest` |
+| `src/Security/ScalarState.php:19` | ser | other: central reader | CLOSED | Canonical check; `ScalarStateTest` |
+
+Summary: 49 CLOSED, 50 OPEN, 8 n/a. By category: navigation 5/5 closed, preferences 4/4,
+editor old values 1/1, general combat 9 of 16, buffs 3 of 12, companions 4 of 11, mounts 4 of
+7, news arguments 0 of 3, mail 8 of 18 (the 10 open sites are the inert `lib/mail.php`),
+navigation labels 3/3, other 8 closed, 11 open, 8 n/a of 27.
+
+After the candidate (working-tree recount, same method, new files included): **103 sites / 50
+files / 40 serialize writers-checks / 62 ScalarState reads / one centralized unserialize**.
+`lib/forcednavigation.php` drops from five reads to two (bufflist, dragonpoints), `login.php`
+from three to two (dragonpoints, bufflist), `lib/systemmail.php:37` and `lib/translator.php:137`
+are gone, and `prefs.php` no longer serializes `oldvalues`; `src/Security/NavigationState.php`
+adds one read and `src/Security/PreferenceState.php` one read and one serialize. ScalarState
+limits are unchanged.

@@ -73,10 +73,11 @@ Each family is DONE only when its acceptance evidence passes on both supported C
 - [x] Stables purchase reads the mount under a lock, so a mount deactivated and deleted meanwhile cannot be bought (`stables.php`), found during content editors part 3 (`MODULE-MANAGER-AUTHORITY-20261017.md`). Accepted at `43bcdc4`, Modern core 39026254697, Baseline integrity 39026254784.
 - [x] Expiration cleanup: lock-guarded, each account deleted all or nothing, `last_char_expire` recorded only when no account failed, the warning email marks `sentnotice` only when sent (`lib/expire_chars.php`) (`DELETION-EXPIRATION-AUTHORITY-20261017.md`). Accepted at `4182281`, Modern core 39029578747, Baseline integrity 39029578850.
 - [x] Account deletion failure and retry semantics: one locked transaction per account for the hook, cleanup, clan succession and account row, with the veto honored by all three callers; the user editor's delete and self-deletion take a one-use intent (`lib/charcleanup.php`, `user.php?op=del`, `prefs.php?op=suicide`) (`DELETION-EXPIRATION-AUTHORITY-20261017.md`). Accepted at `4182281`, Modern core 39029578747, Baseline integrity 39029578850.
+- [x] Truthful completion reporting: `OPTIMIZE TABLE` reads each table's result rows, logs counts and failures, and records `lastdboptimize` only when no table failed, under the maintenance lock (`lib/newday/dbcleanup.php`); the petition notice goes through the shared mail helper and a refused notice is logged; `serverurl` is never saved from a request (`lib/petition/petition_default.php`, `referral.php`); every live external email send uses one helper (`COMPLETION-REPORTING-20261017.md`). Accepted at `05485ec`, Modern core 39044082958, Baseline integrity 39044082762.
 
 ### Current
 
-- [ ] Truthful completion reporting: `OPTIMIZE TABLE` reads each table's result rows, logs counts and failures, and records `lastdboptimize` only when no table failed, under the maintenance lock (`lib/newday/dbcleanup.php`); the petition notice goes through the shared mail helper and a refused notice is logged; `serverurl` is never saved from a request (`lib/petition/petition_default.php`, `referral.php`); every live external email send uses one helper (candidate in `COMPLETION-REPORTING-20261017.md`)
+- [ ] Serialized business schemas part 1: per-site inventory with category and status, the definition of done, navigation (`allowednavs`, `restorepage`), preferences and editor old values closed at every read and writer (`lib/forcednavigation.php`, `login.php`, `prefs.php`, `lib/saveuser.php`, `lib/player_mutation.php`, `lib/systemmail.php`), and the badnav.php fatal found while testing (candidate in `SERIALIZED-SCHEMAS-PART1-20261017.md`)
 
 ### Remaining
 
@@ -84,9 +85,21 @@ Infrastructure and records:
 
 - [ ] Replace the PR #1 body with a short current summary that links here.
 
-State and maintenance:
+Route families:
 
-- [ ] Remaining serialized business schemas: general combat, mounts, companions, buffs, translation arrays, preferences, editor old values, navigation (`SERIALIZED-STATE-AUDIT.md`)
+- [ ] Mail notification link: the in-game mail notification email links to the sender's `Host` header, as in 1.1.2 (`lib/systemmail.php`; gap from `COMPLETION-REPORTING-20261017.md`). Goes with the final rescan.
+
+State and maintenance (remaining serialized business schemas, split in `SERIALIZED-SCHEMAS-PART1-20261017.md`; per-site status in `SERIALIZED-STATE-AUDIT.md`):
+
+- [ ] Combat buff compatibility: the combat buff check accepts the buff shapes 1.1.2 and the shipped modules write (installer mount buffs, lover, Crazy Audrey, drinks)
+- [ ] Buffs: a full buff-list schema at hydration and in every buff writer
+- [ ] Mounts: a mount buff schema for the stables, the mount editor and New Day
+- [ ] Companions: the full companion schema at hydration and in every companion writer
+- [ ] Companion abilities: one schema for the mercenary camp, the companion editor and take
+- [ ] General combat: the Forest contract on the Forest-specialty route, and the post-round re-check on Dragon and Forest specialty
+- [ ] General combat: 1.1.2 in-flight Training and Graveyard states, upgraded or recorded as fail-closed exceptions
+- [ ] Translation arrays: a news arguments schema for `news.php`, `bio.php` and `addnews()`; `lib/mail.php` switched or recorded as excluded
+- [ ] Other business state: dragon points at session load, the moderated comment snapshot, the payment log, the MOTD poll
 
 ### Merge gate
 

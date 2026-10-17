@@ -10,7 +10,8 @@ require_once("lib/villagenav.php");
 tlschema("badnav");
 
 if ($session['user']['loggedin'] && $session['loggedin']){
-	if (strpos($session['output'],"<!--CheckNewDay()-->")){
+	// page_footer() clears the session copy of the last page, so it is usually absent here (1.1.2 read it as "").
+	if (strpos($session['output'] ?? '',"<!--CheckNewDay()-->")){
 		checkday();
 	}
 	while (list($key,$val)=resurrection_array_next($session['allowednavs'])){

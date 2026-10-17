@@ -80,7 +80,8 @@ function checkday() {
 				return;
 			} else {
 				$session=$revertsession;
-				$session['user']['restorepage']=$REQUEST_URI;
+				require_once __DIR__ . '/../src/Security/NavigationState.php';
+				if (\Resurrection\Security\NavigationState::validRestorePage($REQUEST_URI)) $session['user']['restorepage']=$REQUEST_URI;
 				$session['allowednavs']=array();
 				addnav("","newday.php");
 				redirect("newday.php");

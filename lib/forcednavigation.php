@@ -1,6 +1,8 @@
 <?php
 require_once __DIR__ . '/../src/Security/ScalarState.php';
 require_once __DIR__ . '/../src/Game/SpecialtyBuffState.php';
+require_once __DIR__ . '/../src/Security/NavigationState.php';
+require_once __DIR__ . '/../src/Security/PreferenceState.php';
 // translator ready
 // addnews ready
 // mail ready
@@ -34,13 +36,18 @@ function do_forced_nav($anonymous,$overrideforced){
                 http_response_code(409); exit('Invalid stored buff state. No game action was completed.');
             }
 			$session['user']['dragonpoints']=\Resurrection\Security\ScalarState::read($session['user']['dragonpoints']);
-			$session['user']['prefs']=\Resurrection\Security\ScalarState::read($session['user']['prefs']);
 			if (!is_array($session['user']['dragonpoints'])) $session['user']['dragonpoints']=array();
-			if (is_array(\Resurrection\Security\ScalarState::read($session['user']['allowednavs']))){
-				$session['allowednavs']=\Resurrection\Security\ScalarState::read($session['user']['allowednavs']);
-			}else{
-				$session['allowednavs']=array($session['user']['allowednavs']);
-			}
+            try {
+                $session['user']['prefs']=\Resurrection\Security\PreferenceState::read($session['user']['prefs']);
+            } catch (DomainException $error) {
+                http_response_code(409); exit('Invalid stored preference state. No game action was completed.');
+            }
+            try {
+                $session['allowednavs']=\Resurrection\Security\NavigationState::read($session['user']['allowednavs']);
+                \Resurrection\Security\NavigationState::restorePage($session['user']['restorepage']);
+            } catch (DomainException $error) {
+                http_response_code(409); exit('Invalid stored navigation state. No game action was completed.');
+            }
 			if (!isset($_SESSION['auth_version']) || $_SESSION['auth_version'] !== (int)$session['user']['authversion'] || $session['user']['locked'] || !$session['user']['loggedin'] || ( (date("U") - strtotime($session['user']['laston'])) > getsetting("LOGINTIMEOUT",900)) ){
 				resurrection_end_session();
                 header('Location: index.php?op=timeout', true, 303);

@@ -230,7 +230,9 @@ $session['counter']++;
 $nokeeprestore=array("newday.php"=>1,"badnav.php"=>1,"motd.php"=>1,"mail.php"=>1,"petition.php"=>1);
 if (OVERRIDE_FORCED_NAV) $nokeeprestore[$SCRIPT_NAME]=1;
 if (!isset($nokeeprestore[$SCRIPT_NAME]) || !$nokeeprestore[$SCRIPT_NAME]) {
-  $session['user']['restorepage']=$REQUEST_URI;
+  // A request the column cannot hold, or with characters a page link never has, keeps the previous page.
+  require_once __DIR__ . '/src/Security/NavigationState.php';
+  if (\Resurrection\Security\NavigationState::validRestorePage($REQUEST_URI)) $session['user']['restorepage']=$REQUEST_URI;
 }else{
 
 }
@@ -240,7 +242,7 @@ if ($logd_version != getsetting("installer_version","-1") && !defined("IS_INSTAL
 	output("In order to perform the upgrade, an admin will have to run through the installer.");
 	output("If you are an admin, please <a href='installer.php'>visit the Installer</a> and complete the upgrade process.`n`n",true);
 	output("`@If you don't know what this all means, just sit tight, we're doing an upgrade and will be done soon, you will be automatically returned to the game when the upgrade is complete.");
-	rawoutput("<meta http-equiv='refresh' content='30; url={$session['user']['restorepage']}'>");
+	rawoutput("<meta http-equiv='refresh' content='30; url=" . htmlspecialchars((string)$session['user']['restorepage'], ENT_QUOTES) . "'>");
 	addnav("Installer (Admins only!)","installer.php");
 	define("NO_SAVE_USER",true);
 	page_footer();

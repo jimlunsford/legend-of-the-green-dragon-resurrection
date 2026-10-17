@@ -1,5 +1,7 @@
 <?php
 require_once __DIR__ . '/src/Security/ScalarState.php';
+require_once __DIR__ . '/src/Security/NavigationState.php';
+require_once __DIR__ . '/src/Security/PreferenceState.php';
 // Authentication boundary; game hooks and navigation remain procedural.
 define('ALLOW_ANONYMOUS', true);
 define('OVERRIDE_FORCED_NAV', true);
@@ -44,18 +46,24 @@ try {
     }
     checkban($account['login']);
     checkban();
+    // Read the stored preference and navigation state before the login is recorded.
+    try { $prefs = \Resurrection\Security\PreferenceState::read($account['prefs']); }
+    catch (DomainException $error) { http_response_code(409); exit('Invalid stored preference state. You were not logged in.'); }
+    try {
+        $allowednavs = \Resurrection\Security\NavigationState::read($account['allowednavs']);
+        \Resurrection\Security\NavigationState::restorePage($account['restorepage']);
+    } catch (DomainException $error) { http_response_code(409); exit('Invalid stored navigation state. You were not logged in.'); }
     $version = resurrection_begin_login((int)$account['acctid'], $account['password']);
     resurrection_rotate_session();
     $_SESSION['auth_version'] = $version;
     unset($account['password']);
     $session['user'] = $account;
     $baseaccount = $account;
-    foreach (['prefs', 'dragonpoints'] as $field) {
-        $value = \Resurrection\Security\ScalarState::read($account[$field]);
-        $session['user'][$field] = is_array($value) ? $value : [];
-    }
+    $session['user']['prefs'] = $prefs;
+    $dragonpoints = \Resurrection\Security\ScalarState::read($account['dragonpoints']);
+    $session['user']['dragonpoints'] = is_array($dragonpoints) ? $dragonpoints : [];
     $session['bufflist'] = \Resurrection\Security\ScalarState::read($account['bufflist']);
-    $session['allowednavs'] = \Resurrection\Security\ScalarState::read($account['allowednavs']);
+    $session['allowednavs'] = $allowednavs;
     modulehook('check-login');
     $session['loggedin'] = true;
     $session['user']['loggedin'] = true;
