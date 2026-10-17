@@ -62,6 +62,18 @@ function systemmail($to, $subject, $body, $from=0, $noemail=false) {
     return true;
 }
 
+/**
+ * The game's external email transport (PHP mail()), shared by mail notifications and the expiration warning.
+ * True only when the transport accepted the message; an address that is not a valid email, or a header value
+ * containing a line break, is never handed to it.
+ */
+function resurrection_send_email(string $address, string $subject, string $body, string $from): bool {
+    if (filter_var($address, FILTER_VALIDATE_EMAIL) === false || preg_match('/[\r\n]/', $subject . $from)) return false;
+    // A refused delivery warns; the application's error handler turns that into an exception.
+    try { return @mail($address, $subject, $body, 'From: ' . $from); }
+    catch (ErrorException $error) { return false; }
+}
+
 // External delivery is best effort after commit, never authority to repeat an INSERT.
 function resurrection_systemmail_notification(...$notification) {
     try { return resurrection_systemmail_deliver(...$notification); }
@@ -132,7 +144,7 @@ function resurrection_systemmail_deliver($to,$subject,$body,$from,$noemail,$row,
 			$body,
 			$_SERVER['HTTP_HOST'].dirname($_SERVER['SCRIPT_NAME'])
 		),$to);
-		$delivered = @mail($row['emailaddress'],$mailsubj,str_replace("`n","\n",$mailbody),"From: ".getsetting("gameadminemail","postmaster@localhost"));
+		$delivered = resurrection_send_email((string)$row['emailaddress'],$mailsubj,str_replace("`n","\n",$mailbody),getsetting("gameadminemail","postmaster@localhost"));
         if (!$delivered) error_log('Mail notification failed after game mail commit.');
         return $delivered;
 	}

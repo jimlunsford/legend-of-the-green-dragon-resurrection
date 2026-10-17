@@ -220,3 +220,12 @@ Local, PHP 8.5.11 / MySQL 8.4 (supporting evidence only; CI is the acceptance):
   can only be deactivated from the manager; removing it needs its code, which the
   manager no longer runs.
 - The stables deadlock case above is not tested.
+
+## Acceptance, 2026-10-17
+
+`43bcdc4e4536188ba8a324519d5298faeedddb36` is accepted on its own run. Confirmed through the
+GitHub Actions run and job API: Modern core **39026254697 SUCCESS**, all 12 jobs, with both
+`result` jobs SUCCESS (PHP 8.4 / MariaDB 11.4 at 11:03:34Z, PHP 8.5 / MySQL 8.4 at
+11:05:26Z, 2026-10-17; run started 10:47:46Z). Baseline integrity **39026254784 SUCCESS**
+(10:47:57Z). The module manager, the remaining preference editors and the stables mount
+lock are Done in `ROADMAP.md`.

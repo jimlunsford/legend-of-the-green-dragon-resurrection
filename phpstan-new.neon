@@ -39,6 +39,9 @@ parameters:
         - lib/content_editor.php
         - lib/mount_companion_editor.php
         - lib/module_manager.php
+        - lib/charcleanup.php
+        - lib/char_expiration.php
+        - lib/maintenance.php
         - lib/installer/fresh_install.php
         - lib/installer/bundled_modules.php
         - scripts/install.php

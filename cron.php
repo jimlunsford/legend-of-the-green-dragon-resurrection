@@ -18,9 +18,8 @@ try {
     require 'common.php';
     require_once 'lib/installer/fresh_install.php';
     if (resurrection_install_state() !== 'installed') { throw new RuntimeException('Installation incomplete.'); }
-    $rows = db_query('SELECT DATABASE() AS db');
-    $database = db_fetch_assoc($rows)['db'];
-    $lock = 'resurrection-maintenance-' . substr(hash('sha256', $database), 0, 32);
+    require_once 'lib/maintenance.php';
+    $lock = resurrection_maintenance_lock_name();
     $rows = db_query('SELECT GET_LOCK(?,0) AS acquired', true, [$lock]);
     if (db_fetch_assoc($rows)['acquired'] !== '1') { throw new RuntimeException('Maintenance already running.'); }
     try {

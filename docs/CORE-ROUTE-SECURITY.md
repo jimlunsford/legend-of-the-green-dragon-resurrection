@@ -42,6 +42,9 @@ PASS applies only to the named operation and evidence. PARTIAL means protections
 | configuration.php core and declared module settings | Typed patch | Logged-in player | SU_EDIT_CONFIG; declared installed namespace | Existing descriptors; bounded numeric/text/boolean/enum/amount values; declared keys and paired ranges | Bound transactional settings, associated DML and audit | Yes | Yes | One-use context includes namespace, schema and displayed state; locked recheck | Escaped form labels/values/options | PASS exercised shared boundary | Actual authorized/ordinary/anonymous/insufficient role; forged namespace/key; malformed/bounds/enum; CSRF; replay; stale; rollback/fresh retry; configured behavior |
 | mounts.php shared module preferences | Declared object preference patch | Logged-in player | SU_EDIT_MOUNTS; installed declaring module and existing mount | Fixed mounts type; bounded ID; declared key/type/range/text | Bound; actor/module/mount/preference locks; associated audit | Yes | Yes | Object and preference snapshot context; cross-object/module and stale/deleted rejection | Escaped values and labels | PASS enabled mounts boundary | Dark Horse/Goldmine real HTTP role/CSRF/replay/types/bounds/cross-object/module/deletion/rollback; Drinks object editing stays disabled |
 | modules.php lifecycle editor (2026-10-17; supersedes the modules.php part of the "Remaining user preferences" row) | Install / activate / deactivate / reinstall / uninstall, single and mass | Logged-in superuser | SU_MANAGE_MODULES; bundled registry only (an installed non-bundled module can only be deactivated); install state checked | Typed op; module name pattern; exact query parameters and form fields; mass: one list button, distinct entries the list showed | Bound; uninstall's entry, hook, settings and preference deletes in one transaction | Yes; GET confirms only; mass GET 405 | Yes | One-use intent bound to op, module and state (mass: the list and every state), checked under a named lock; repeated and stale forms 409 | Escaped names, descriptions, authors, categories; encoded URLs; non-bundled files never loaded | CANDIDATE, CI pending | test_module_manager_authority_http; MODULE-MANAGER-AUTHORITY-20261017.md |
+| user.php?op=del account deletion (2026-10-17; supersedes the delete part of the user.php row) | Delete an account with its output, commentary, module prefs, mail, news, clan succession; news line and debug log | Logged-in superuser | SU_EDIT_USERS (1.1.2: any editor may delete any account, a megauser or their own) | Typed account ID; only the protected fields | Bound; actor and target locked in ID order, then clan members and the clan; hook, cleanup, account row, news and debug log in one transaction | Yes; the list's Del is a POST form; GET 403 | Yes | One-use intent bound to the account's ID and login; stale 409; repeated or already-gone account shows "0 user deleted." and changes nothing; a delete_character veto or any failure changes nothing | Escaped confirm text and label | CANDIDATE, CI pending | test_account_deletion_authority_http; DELETION-EXPIRATION-AUTHORITY-20261017.md |
+| prefs.php?op=suicide self-deletion (2026-10-17) | Delete your own account, as above; news line; logout | Logged-in player | `selfdelete` setting; own account only (the session's, never the URL's) | Only the protected fields | Bound; same locked transaction | Yes; GET 403 | Yes | One-use intent bound to the account; veto 409 and failure 500 change nothing | Unchanged form | CANDIDATE, CI pending | test_self_deletion_authority_http; DELETION-EXPIRATION-AUTHORITY-20261017.md |
+| cron.php character expiration and warning email (2026-10-17) | Delete expired accounts; warning email; `sentnotice`; `last_char_expire` | CLI only | Maintenance lock held by this connection, else refused | Typed rule settings | Bound selection; each account rechecked and deleted in its own locked transaction | n/a (CLI) | n/a | Lock, not the timestamp, guards concurrency; timestamp recorded only after a run with no failed account; `sentnotice` only after the transport accepted the warning | Game log reports deleted, kept, failed, no longer eligible, sent and unsent | CANDIDATE, CI pending | test_character_expiration_authority_cli; CharacterDeletionTest; DELETION-EXPIRATION-AUTHORITY-20261017.md |
 
 The `prefs.php` player namespace path now rejects ambiguous triple-underscore suffixes, internal preference names, undeclared keys and inactive/missing modules before any write. None of the 24 bundled modules declares an editable `user_`/`check_` preference; future descriptors remain fail-closed until a typed parser is implemented. HTTP attempts to forge Drinks `canedit` and specialty `skill` values leave all module preference rows unchanged. This closes that specific privilege/value-injection path, not the full core preferences or administrator editor family.
 
@@ -830,3 +833,27 @@ are accepted.
   deactivated or deleted meanwhile is not sold.
 
 See [module manager](MODULE-MANAGER-AUTHORITY-20261017.md).
+
+2026-10-17 account deletion and expiration cleanup (`lib/charcleanup.php`, `user.php?op=del`,
+`prefs.php?op=suicide`, `lib/expire_chars.php`): candidate pending CI. The module manager,
+the remaining preference editors and the stables mount lock (`43bcdc4`, Modern core
+39026254697, Baseline integrity 39026254784) are accepted. This closes the first three
+points of "Maintenance classification" above for their code; the `OPTIMIZE TABLE` point
+stays open.
+
+- Deleting an account is one transaction: the `delete_character` hook and its writes (dag's
+  bounty closing), every cleanup delete, clan succession, the account row, and the caller's
+  news line and debug log. A veto or any failure rolls all of it back, so a retry starts from
+  an intact account. The veto is honored by all three callers; 1.1.2's user editor and
+  self-deletion deleted the account row anyway and left the rest behind.
+- Clan disband writes `clanjoindate=NULL` (1.1.2's `'0000-00-00 00:00;00'` fails under strict
+  SQL). Succession keeps 1.1.2's rule; members are locked in the accepted clan code's order.
+- The user editor's delete is a POST form with CSRF and a one-use intent bound to the
+  account; self-deletion takes a one-use intent. All SQL bound.
+- Expiration refuses to run without the maintenance lock, rechecks each account under its
+  lock, deletes each in its own transaction, names vetoed and failed accounts in the game
+  log, and records `last_char_expire` only when none failed. The warning email goes through
+  the shared transport and sets `sentnotice` only when accepted; a refused send no longer
+  fails the maintenance run.
+
+See [account deletion and expiration](DELETION-EXPIRATION-AUTHORITY-20261017.md).

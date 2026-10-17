@@ -11,6 +11,8 @@ require_once("common.php");
 
 tlschema("prefs");
 require_once 'lib/accounts.php';
+require_once 'lib/charcleanup.php';
+require_once 'lib/player_mutation.php';
 if ($_POST || httpget('op') === 'suicide') { resurrection_require_post(); }
 foreach ($_POST as $key => $value) {
     if (!is_string($value)) { http_response_code(400); exit('Invalid preference.'); }
@@ -52,18 +54,28 @@ $op = httpget('op');
 
 if ($op=="suicide" && getsetting("selfdelete",0)!=0) {
 	$userid = (int)$session['user']['acctid'];
-	require_once("lib/charcleanup.php");
-	char_cleanup($userid, CHAR_DELETE_SUICIDE);
-	$sql = "DELETE FROM " . db_prefix("accounts") . " WHERE acctid=?";
-	db_query($sql, true, [$userid]);
+	require_once("lib/admin_authority.php");
+	// One-use intent bound to this account; the cleanup, the account row and the news line commit together.
+	if (array_diff(array_keys($_POST), ['csrf_token', 'action_token']) !== []) { http_response_code(400); exit('Invalid request.'); }
+	resurrection_consume_action('prefs-suicide', resurrection_suicide_context($session['user']));
+	try {
+		resurrection_admin_mutation(function () use ($userid) {
+			global $session;
+			resurrection_char_delete($userid, CHAR_DELETE_SUICIDE);
+			addnews("`#%s quietly passed from this world.",$session['user']['name']);
+		}, $userid);
+	} catch (ResurrectionCharacterDeletionVetoed $error) {
+		http_response_code(409); exit('Your character was not deleted.');
+	} catch (Throwable $error) {
+		http_response_code(500); exit('Nothing was changed. Return to your preferences and try again.');
+	}
 	output("Your character has been deleted!");
-	addnews("`#%s quietly passed from this world.",$session['user']['name']);
 	addnav("Login Page", "index.php");
+	invalidatedatacache("charlisthomepage");
+	invalidatedatacache("list.php-warsonline");
 	resurrection_end_session();
     header('Location: index.php', true, 303);
     exit();
-	invalidatedatacache("charlisthomepage");
-	invalidatedatacache("list.php-warsonline");
 } else {
 
 	checkday();
@@ -303,7 +315,7 @@ if ($op=="suicide" && getsetting("selfdelete",0)!=0) {
 	// Stop clueless lusers from deleting their character just because a
 	// monster killed them.
 	if ($session['user']['alive'] && getsetting("selfdelete",0)!=0) {
-		rawoutput("<form action='prefs.php?op=suicide&userid={$session['user']['acctid']}' method='POST'>" . resurrection_csrf_field());
+		rawoutput("<form action='prefs.php?op=suicide&userid={$session['user']['acctid']}' method='POST'>" . resurrection_action_fields('prefs-suicide', resurrection_suicide_context($session['user'])));
 		$deltext = translate_inline("Delete Character");
 		$conf = translate_inline("Are you sure you wish to delete your character?");
 		rawoutput("<table class='noborder' width='100%'><tr><td width='100%'></td><td style='background-color:#FF00FF' align='right'>");

@@ -7160,6 +7160,255 @@ function MODULE_dohook($hook,$args) {
         finally:
             for who in created: q('DELETE FROM news WHERE accountid=?',[who]);q('DELETE FROM accounts_output WHERE acctid=?',[who]);q('DELETE FROM accounts WHERE acctid=?',[who])
 
+    @contextmanager
+    def _deletion_fixture(self):
+        # A delete_character hook that counts its runs inside the deletion transaction and can veto; dag active with an
+        # open bounty on each account; an optional foreign key that makes the account row's DELETE fail last.
+        q=self.query;module='resurrectiondeletefixture';path=ROOT/'modules'/f'{module}.php'
+        path.write_text("""<?php
+function MODULE_getmoduleinfo() { return ['name'=>'Deletion fixture','version'=>'1.0','author'=>'Tests','category'=>'Tests']; }
+function MODULE_dohook($hook,$args) {
+    db_query("UPDATE settings SET value=value+1 WHERE setting='fixture_delete_count'");
+    $mode=getsetting('fixture_delete_mode','ok');
+    if ($mode==='veto' || (string)$args['acctid']===getsetting('fixture_delete_veto','')) $args['dodel']=false;
+    if ($mode==='slow') { file_put_contents('tests/fixtures/deletion-running','running'); usleep(2000000); }
+    return $args;
+}
+""".replace('MODULE',module))
+        setting=lambda k,v:q('INSERT INTO settings(setting,value) VALUES (?,?) ON DUPLICATE KEY UPDATE value=VALUES(value)',[k,str(v)])
+        saved=q("SELECT setting,value FROM settings WHERE setting IN ('selfdelete','fixture_delete_count','fixture_delete_mode','fixture_delete_veto')")
+        dag=q("SELECT active FROM modules WHERE modulename='dag'");made=[];clans=[]
+        try:
+            q("INSERT INTO modules(modulename,active,version,infokeys) VALUES (?,1,'1.0','|name|version|author|category|')",[module])
+            q("INSERT INTO module_hooks(modulename,location,`function`,whenactive,priority) VALUES (?,'delete_character',?,'',60)",[module,module+'_dohook'])
+            q("UPDATE modules SET active=1 WHERE modulename='dag'");setting('fixture_delete_count',0);setting('fixture_delete_mode','ok')
+            def make(login,**values):
+                who=int(self._security_target(login));made.append(who)
+                values={'name':f'`2{login} <b>x</b>','clanid':0,'clanrank':0,'clanjoindate':None,'alive':1,'loggedin':0,**values}
+                q('UPDATE accounts SET '+','.join('`'+k+'`=?' for k in values)+' WHERE acctid=?',[*values.values(),who])
+                q("INSERT INTO mail(msgfrom,msgto,subject,body,sent) VALUES (?,1,'from','x',NOW()),('0',?,'to','x',NOW())",[str(who),who])
+                q("INSERT INTO news(newstext,newsdate,accountid,arguments,tlschema) VALUES ('fixture news',CURDATE(),?,'','')",[who])
+                q("INSERT INTO commentary(section,author,comment,postdate) VALUES ('fixture-delete',?,'hello',NOW())",[who])
+                q("INSERT INTO module_userprefs(modulename,setting,userid,value) VALUES (?,'x',?,'1')",[module,who])
+                q("INSERT INTO bounty(amount,target,setter,status) VALUES (5,?,1,0)",[who])
+                return who
+            def traces(who):
+                n=lambda sql,*a:int(q(sql,list(a))[0]['n'])
+                return {'account':n('SELECT COUNT(*) n FROM accounts WHERE acctid=?',who),'output':n('SELECT COUNT(*) n FROM accounts_output WHERE acctid=?',who),
+                        'mail':n('SELECT COUNT(*) n FROM mail WHERE msgto=? OR msgfrom=?',who,str(who)),'news':n("SELECT COUNT(*) n FROM news WHERE accountid=? AND newstext='fixture news'",who),
+                        'commentary':n('SELECT COUNT(*) n FROM commentary WHERE author=?',who),'prefs':n('SELECT COUNT(*) n FROM module_userprefs WHERE userid=?',who),
+                        'openbounty':n('SELECT COUNT(*) n FROM bounty WHERE target=? AND status=0',who)}
+            whole={'account':1,'output':1,'mail':2,'news':1,'commentary':1,'prefs':1,'openbounty':1}
+            gone={'account':0,'output':0,'mail':0,'news':0,'commentary':0,'prefs':0,'openbounty':0}
+            def block(who=None):
+                q('DROP TABLE IF EXISTS fixture_delete_block')
+                if who is not None:
+                    q('CREATE TABLE fixture_delete_block (acctid INT UNSIGNED NOT NULL, FOREIGN KEY (acctid) REFERENCES accounts(acctid)) ENGINE=InnoDB')
+                    q('INSERT INTO fixture_delete_block VALUES (?)',[who])
+            def clan(name,short,*members):
+                q('INSERT INTO clans(clanname,clanshort,customsay) VALUES (?,?,?)',[name,short,''])
+                cid=int(q('SELECT clanid FROM clans WHERE clanname=?',[name])[0]['clanid']);clans.append(cid)
+                for who,rank,joined in members: q('UPDATE accounts SET clanid=?,clanrank=?,clanjoindate=? WHERE acctid=?',[cid,rank,joined,who])
+                return cid
+            count=lambda:int(q("SELECT value FROM settings WHERE setting='fixture_delete_count'")[0]['value'])
+            yield dict(make=make,traces=traces,whole=whole,gone=gone,block=block,clan=clan,count=count,setting=setting,made=made)
+        finally:
+            path.unlink(missing_ok=True);q('DROP TABLE IF EXISTS fixture_delete_block')
+            q('DELETE FROM module_hooks WHERE modulename=?',[module]);q('DELETE FROM modules WHERE modulename=?',[module]);q('DELETE FROM module_userprefs WHERE modulename=?',[module])
+            if dag: q("UPDATE modules SET active=? WHERE modulename='dag'",[dag[0]['active']])
+            q("DELETE FROM settings WHERE setting IN ('selfdelete','fixture_delete_count','fixture_delete_mode','fixture_delete_veto')")
+            (ROOT/'tests'/'fixtures'/'deletion-running').unlink(missing_ok=True)
+            for row in saved: setting(row['setting'],row['value'])
+            for who in made:
+                q('DELETE FROM mail WHERE msgto=? OR msgfrom=?',[who,str(who)]);q('DELETE FROM news WHERE accountid=?',[who])
+                q('DELETE FROM commentary WHERE author=?',[who]);q('DELETE FROM bounty WHERE target=?',[who])
+                q('DELETE FROM debuglog WHERE target=? OR actor=?',[who,who]);q('DELETE FROM accounts_output WHERE acctid=?',[who]);q('DELETE FROM accounts WHERE acctid=?',[who])
+            q("DELETE FROM news WHERE newstext IN ('`#%s was unmade by the gods.','`#%s quietly passed from this world.') AND arguments LIKE '%DelFixture%'")
+            q("DELETE FROM debuglog WHERE message LIKE 'deleted user%DelFixture%'")
+            for cid in clans: q('DELETE FROM clans WHERE clanid=?',[cid])
+
+    def test_account_deletion_authority_http(self):
+        with self._user_editor_fixture() as f, self._deletion_fixture() as d:
+            q,player,request,login=(f[k] for k in ['q','player','request','login'])
+            make,traces,whole,gone,block,clan,count=(d[k] for k in ['make','traces','whole','gone','block','clan','count'])
+            delete=lambda who:f'user.php?op=del&userid={who}'
+            def listed(who,name):
+                status,body=request('user.php?q='+name);self.assertEqual(200,status,body[:2000])
+                self.assertNotIn("href='user.php?op=del",body);return self._security_fields(body,delete(who))
+            news=lambda who:q("SELECT accountid FROM news WHERE newstext='`#%s was unmade by the gods.' AND arguments LIKE ?",[f'%DelFixtureOne{who}%'])
+            one=make('DelFixtureOne',name='DelFixtureOne')
+            q('UPDATE accounts SET name=? WHERE acctid=?',[f'DelFixtureOne{one}',one])
+            # Only an editor with user rights, only POST, only with CSRF and the one-use intent shown for this account.
+            anonymous=self._security_client(login=None)
+            self.assertIn(anonymous(delete(one),{'csrf_token':'x'})[0],[302,303,403])
+            for role in [0,0xFFFFFFFF&~(64|1)]:
+                login(role);self.assertEqual(403,request(delete(one),[('csrf_token','x')])[0],role)
+            login(64);fields=listed(one,'DelFixtureOne')
+            self.assertEqual(403,request(delete(one))[0])
+            self.assertEqual(403,request(delete(one),[('action_token',fields['action_token'])])[0])
+            self.assertEqual(409,request(delete(one),[('csrf_token',fields['csrf_token'])])[0])
+            self.assertEqual(400,request(delete(one),list(fields.items())+[('extra','1')])[0])
+            self.assertEqual(400,request('user.php?op=del&userid=abc',list(fields.items()))[0])
+            self.assertEqual(whole,traces(one));self.assertEqual(0,count())
+            status,body=request(delete(one),list(fields.items()));self.assertEqual(200,status,body[:2000]);self.assertIn('1 user deleted.',body)
+            self.assertEqual(gone,traces(one));self.assertEqual(1,count())
+            self.assertEqual([{'accountid':'0'}],news(one))
+            self.assertEqual(1,len(q("SELECT * FROM debuglog WHERE actor=? AND message=?",[player,f"deleted userDelFixtureOne{one}'0"])))
+            closed=q('SELECT status,winner,windate FROM bounty WHERE target=?',[one])[0];self.assertEqual(('1','0'),(closed['status'],closed['winner']));self.assertIsNotNone(closed['windate'])
+            # A repeated form, or an account that is already gone, is 1.1.2's "0 user deleted." and changes nothing.
+            status,body=request(delete(one),list(fields.items()));self.assertEqual(200,status);self.assertIn('0 user deleted.',body);self.assertEqual(1,count())
+            status,body=request(delete(4294967294),list(fields.items()));self.assertEqual(200,status);self.assertIn('0 user deleted.',body)
+            # A form shown for a different account state is refused.
+            two=make('DelFixtureTwo');fields=listed(two,'DelFixtureTwo');q("UPDATE accounts SET login='DelFixtureTwoX' WHERE acctid=?",[two])
+            self.assertEqual(409,request(delete(two),list(fields.items()))[0]);self.assertEqual(whole,traces(two));q("UPDATE accounts SET login='DelFixtureTwo' WHERE acctid=?",[two])
+            # A hook veto deletes nothing, and its own writes (and dag's bounty closing) are rolled back with the rest.
+            d['setting']('fixture_delete_mode','veto');fields=listed(two,'DelFixtureTwo')
+            status,body=request(delete(two),list(fields.items()));self.assertEqual(200,status);self.assertIn('0 user deleted.',body)
+            self.assertEqual(whole,traces(two));self.assertEqual(1,count());d['setting']('fixture_delete_mode','ok')
+            # A failure at the last step (the account row) leaves everything intact; a fresh form then completes.
+            block(two);fields=listed(two,'DelFixtureTwo')
+            status,body=request(delete(two),list(fields.items()));self.assertEqual(500,status);self.assertIn('Nothing was changed',body)
+            self.assertEqual(whole,traces(two));self.assertEqual(1,count())
+            block();fields=listed(two,'DelFixtureTwo');status,body=request(delete(two),list(fields.items()))
+            self.assertEqual(200,status);self.assertIn('1 user deleted.',body);self.assertEqual(gone,traces(two));self.assertEqual(2,count())
+            # Clan leader: the highest-ranked remaining member, earliest join date first, becomes leader.
+            lead,m,o1,o2,app=(make(n) for n in ['DelFixtureLead','DelFixtureMember','DelFixtureOfficerA','DelFixtureOfficerB','DelFixtureApplicant'])
+            cid=clan('DelFixture Clan','DFCa',(lead,30,'2026-01-01 00:00:00'),(m,10,'2026-01-01 00:00:00'),(o1,20,'2026-01-03 00:00:00'),(o2,20,'2026-01-02 00:00:00'),(app,0,'2026-01-01 00:00:00'))
+            fields=listed(lead,'DelFixtureLead');self.assertIn('1 user deleted.',request(delete(lead),list(fields.items()))[1])
+            ranks={int(r['acctid']):(int(r['clanid']),int(r['clanrank'])) for r in q('SELECT acctid,clanid,clanrank FROM accounts WHERE acctid IN (?,?,?,?)',[m,o1,o2,app])}
+            self.assertEqual({m:(cid,10),o1:(cid,20),o2:(cid,30),app:(cid,0)},ranks);self.assertEqual(1,len(q('SELECT * FROM clans WHERE clanid=?',[cid])))
+            # A leader with nobody above applicant left: the clan is deleted and its applicants leave it with no join date.
+            solo,app2=make('DelFixtureSolo'),make('DelFixtureApplicantB')
+            cid2=clan('DelFixture Solo','DFCb',(solo,30,'2026-01-01 00:00:00'),(app2,0,'2026-01-02 00:00:00'))
+            fields=listed(solo,'DelFixtureSolo');status,body=request(delete(solo),list(fields.items()));self.assertEqual(200,status,body[:2000]);self.assertIn('1 user deleted.',body)
+            self.assertEqual([],q('SELECT * FROM clans WHERE clanid=?',[cid2]))
+            self.assertEqual([{'clanid':'0','clanrank':'0','clanjoindate':None}],q('SELECT clanid,clanrank,clanjoindate FROM accounts WHERE acctid=?',[app2]))
+            # 1.1.2 let any user editor delete a megauser, and their own account; the next request then ends the session.
+            mega=make('DelFixtureMega',superuser=1);fields=listed(mega,'DelFixtureMega')
+            self.assertIn('1 user deleted.',request(delete(mega),list(fields.items()))[1]);self.assertEqual(gone,traces(mega))
+            me=make('DelFixtureSelf',superuser=64);client=self._security_client(login='DelFixtureSelf',password='Synthetic administrator password')
+            def mine(url,data=None):
+                q('UPDATE accounts SET lastnewday=? WHERE acctid=?',[self._current_game_day(),me]);self._security_allow(me,url);return client(url,data)
+            status,body=mine('user.php?q=DelFixtureSelf');self.assertEqual(200,status,body[:2000]);fields=self._security_fields(body,delete(me))
+            status,body=mine(delete(me),fields);self.assertEqual(200,status,body[:2000]);self.assertIn('1 user deleted.',body)
+            self.assertEqual(gone,traces(me))
+            self.assertIn(client('village.php')[0],[302,303])
+
+    def test_self_deletion_authority_http(self):
+        with self._deletion_fixture() as d:
+            q=self.query;make,traces,whole,gone,block,count,setting=(d[k] for k in ['make','traces','whole','gone','block','count','setting'])
+            me=make('DelFixtureSuicide',race='Human',specialty='DA',dragonkills=0,dragonpoints='a:0:{}',restorepage='village.php');q('UPDATE accounts SET name=? WHERE acctid=?',[f'DelFixtureSuicide{me}',me])
+            client=self._security_client(login='DelFixtureSuicide',password='Synthetic administrator password')
+            def call(url,data=None):
+                q('UPDATE accounts SET lastnewday=?,alive=1 WHERE acctid=?',[self._current_game_day(),me]);self._security_allow(me,url);return client(url,data)
+            suicide=f'prefs.php?op=suicide&userid={me}'
+            # Self-deletion off (the default): no form, and a POST changes nothing.
+            setting('selfdelete',0);status,body=call('prefs.php');self.assertEqual(200,status,body[:2000]);self.assertNotIn('op=suicide',body)
+            csrf=re.search(r'name=[\'"]csrf_token[\'"] value=[\'"]([a-f0-9]{64})',body).group(1)
+            self.assertEqual(200,call(suicide,{'csrf_token':csrf})[0]);self.assertEqual(whole,traces(me))
+            setting('selfdelete',1);status,body=call('prefs.php');fields=self._security_fields(body,suicide)
+            self.assertEqual(403,call(suicide)[0]);self.assertEqual(409,call(suicide,{'csrf_token':fields['csrf_token']})[0])
+            self.assertEqual(400,call(suicide,{**fields,'extra':'1'})[0]);self.assertEqual(whole,traces(me))
+            # A veto and a failure at the last step each leave the account and everything it owns intact.
+            setting('fixture_delete_mode','veto');status,body=call('prefs.php');fields=self._security_fields(body,suicide)
+            status,body=call(suicide,fields);self.assertEqual(409,status);self.assertIn('not deleted',body);self.assertEqual(whole,traces(me));self.assertEqual(0,count())
+            setting('fixture_delete_mode','ok');block(me);status,body=call('prefs.php');fields=self._security_fields(body,suicide)
+            status,body=call(suicide,fields);self.assertEqual(500,status);self.assertIn('Nothing was changed',body);self.assertEqual(whole,traces(me));self.assertEqual(0,count())
+            block();status,body=call('prefs.php');fields=self._security_fields(body,suicide)
+            status,body=call(suicide,fields);self.assertEqual(303,status,body[:2000]);self.assertEqual(gone,traces(me));self.assertEqual(1,count())
+            self.assertEqual(1,len(q("SELECT * FROM news WHERE newstext='`#%s quietly passed from this world.' AND accountid=? AND arguments LIKE ?",[me,f'%DelFixtureSuicide{me}%'])))
+            # The session ended with the account: a replay is not a logged-in request.
+            self.assertIn(client(suicide,fields)[0],[302,303,403])
+
+    def test_character_expiration_authority_cli(self):
+        # Every account that is not this test's own is exempt for the duration, so only the fixtures can expire.
+        q=self.query;keys=['last_char_expire','expireoldacct','expirenewacct','expiretrashacct']
+        saved=q('SELECT setting,value FROM settings WHERE setting IN (?,?,?,?)',keys);protected=q('SELECT acctid,superuser FROM accounts')
+        transport=tempfile.TemporaryDirectory(prefix='resurrection-expire-mail-');capture=Path(transport.name)/'capture.txt';program=Path(transport.name)/'sendmail'
+        program.write_text('#!'+sys.executable+"\nimport sys\nfrom pathlib import Path\npayload=sys.stdin.read()\nwith Path(__file__).with_name('capture.txt').open('a') as f:f.write(payload+'\\n=====\\n')\nsys.exit(1 if 'fail@example.invalid' in payload else 0)\n")
+        program.chmod(0o700);signal=ROOT/'tests'/'fixtures'/'deletion-running'
+        setting=lambda k,v:q('INSERT INTO settings(setting,value) VALUES (?,?) ON DUPLICATE KEY UPDATE value=VALUES(value)',[k,str(v)])
+        def cron():
+            q('DELETE FROM settings WHERE setting=? OR setting LIKE ?',['maintenance_day','mh:%'])
+            return [shutil.which('php'),'-d','sendmail_path='+str(program),'cron.php']
+        run=lambda:subprocess.run(cron(),cwd=ROOT,capture_output=True,text=True,timeout=120)
+        expiry=lambda:q("SELECT value FROM settings WHERE setting='last_char_expire'")[0]['value']
+        logs=lambda:[r['message'] for r in q("SELECT message FROM gamelog WHERE category='char expiration' ORDER BY logid")]
+        try:
+            with self._deletion_fixture() as d:
+                make,traces,whole,gone,block,count=(d[k] for k in ['make','traces','whole','gone','block','count'])
+                q('UPDATE accounts SET superuser=superuser|2097152')
+                for key,value in zip(keys,['2000-01-01 00:00:00',45,10,1]): setting(key,value)
+                def aged(login,laston,level=5,dragonkills=2,regdays=400,email='',superuser=0):
+                    who=make(login,level=level,dragonkills=dragonkills,emailaddress=email,sentnotice=0,superuser=superuser)
+                    q(f'UPDATE accounts SET regdate=DATE_SUB(NOW(),INTERVAL {regdays} DAY) WHERE acctid=?',[who])
+                    q(f'UPDATE accounts SET laston={laston} WHERE acctid=?',[who]);return who
+                days=lambda n:f'DATE_SUB(NOW(),INTERVAL {n} DAY)'
+                old=aged('ExpFixtureOld',days(46));new=aged('ExpFixtureNew',days(11),level=1,dragonkills=0)
+                # Never logged on: account creation writes laston equal to regdate.
+                trash=aged('ExpFixtureTrash','regdate',level=1,dragonkills=0,regdays=2)
+                kept={'old':aged('ExpFixtureOldKept',days(44),email='kept@example.invalid'),'new':aged('ExpFixtureNewKept',days(11),level=2,dragonkills=0),
+                      'trash':aged('ExpFixtureTrashKept','DATE_ADD(regdate,INTERVAL 1 HOUR)',level=1,dragonkills=0,regdays=2),
+                      'exempt':aged('ExpFixtureExempt',days(100),email='exempt@example.invalid',superuser=2097152),
+                      'warnfail':aged('ExpFixtureWarnFail',days(42),email='fail@example.invalid')}
+                veto,fail=aged('ExpFixtureVeto',days(50)),aged('ExpFixtureFail',days(50))
+                d['setting']('fixture_delete_veto',veto);block(fail);before=len(logs())
+                # One run: a vetoed and a failed account are kept whole and counted; the rest are deleted; the run is
+                # not recorded, so it is retried. Warning email: sentnotice only where the transport accepted it.
+                result=run();self.assertEqual(0,result.returncode,result.stderr);self.assertEqual('complete',json.loads(result.stdout)['maintenance'])
+                for who in [old,new,trash]: self.assertEqual(gone,traces(who),who)
+                for who in [*kept.values(),veto,fail]: self.assertEqual(whole,traces(who),who)
+                self.assertEqual(3,count());self.assertEqual('2000-01-01 00:00:00',expiry())
+                entries=logs()[before:];self.assertEqual(2,len(entries),entries)
+                self.assertTrue(entries[0].startswith('Deleted 3 accounts:'),entries[0])
+                for text in ['Accounts: ExpFixtureOld:dk2-lv5, ExpFixtureNew:dk0-lv1, ExpFixtureTrash:dk0-lv1','Kept by a module: 1 (ExpFixtureVeto)','Failed, left unchanged: 1 (ExpFixtureFail)']:
+                    self.assertIn(text,entries[0])
+                self.assertEqual('Sent 1 expiration warning emails. 1 could not be sent and will be retried.',entries[1])
+                sent={int(r['acctid']):r['sentnotice'] for r in q('SELECT acctid,sentnotice FROM accounts WHERE acctid IN (?,?,?)',[kept['old'],kept['warnfail'],kept['exempt']])}
+                self.assertEqual({kept['old']:'1',kept['warnfail']:'0',kept['exempt']:'0'},sent)
+                mails=capture.read_text().split('\n=====\n')[:-1];self.assertEqual(2,len(mails))
+                for mail in mails:
+                    self.assertIn('Subject: LoGD Character Expiration',mail);self.assertIn('is about to expire.  If you wish to keep this character, you should log on to him or her soon!',mail)
+                    self.assertIn('From: postmaster@localhost.com',mail)
+                # The retry: the failed account and the no-longer-vetoed one complete, the run is recorded, and only the
+                # unsent warning is sent again.
+                block();d['setting']('fixture_delete_veto','');q("UPDATE accounts SET emailaddress='retry@example.invalid' WHERE acctid=?",[kept['warnfail']])
+                result=run();self.assertEqual(0,result.returncode,result.stderr)
+                for who in [veto,fail]: self.assertEqual(gone,traces(who),who)
+                for who in kept.values(): self.assertEqual(whole,traces(who),who)
+                self.assertEqual(5,count());self.assertNotEqual('2000-01-01 00:00:00',expiry())
+                entries=logs()[before+2:];self.assertEqual(2,len(entries),entries);self.assertTrue(entries[0].startswith('Deleted 2 accounts:'),entries[0])
+                self.assertNotIn('Failed',entries[0]);self.assertEqual('Sent 1 expiration warning emails.',entries[1])
+                self.assertEqual('1',q('SELECT sentnotice FROM accounts WHERE acctid=?',[kept['warnfail']])[0]['sentnotice'])
+                self.assertEqual(3,len(capture.read_text().split('\n=====\n')[:-1]))
+                # Within 23 hours of a recorded run nothing more is expired.
+                late=aged('ExpFixtureLate',days(60));result=run();self.assertEqual(0,result.returncode,result.stderr)
+                self.assertEqual(whole,traces(late));self.assertEqual(before+4,len(logs()))
+                # Only under the maintenance lock: run directly, expiration refuses and changes nothing.
+                setting('last_char_expire','2000-01-01 00:00:00')
+                code="$_SERVER+=['SCRIPT_NAME'=>'cron.php','REQUEST_URI'=>'cron.php','SERVER_NAME'=>'localhost','SERVER_PORT'=>'80','REMOTE_ADDR'=>'','REQUEST_METHOD'=>''];define('ALLOW_ANONYMOUS',true);ob_start();require 'common.php';try{require 'lib/expire_chars.php';$r='ran';}catch(LogicException $e){$r='refused';}while(ob_get_level())ob_end_clean();echo $r;"
+                direct=subprocess.run([shutil.which('php'),'-r',code],cwd=ROOT,capture_output=True,text=True,timeout=60)
+                self.assertEqual('refused',direct.stdout.strip(),direct.stdout[-500:]+direct.stderr[-500:])
+                self.assertEqual(whole,traces(late));self.assertEqual('2000-01-01 00:00:00',expiry())
+                # A second scheduler run while the first is deleting is refused; the account is deleted once.
+                d['setting']('fixture_delete_mode','slow');first=subprocess.Popen(cron(),cwd=ROOT,stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True)
+                try:
+                    for _ in range(200):
+                        if signal.exists() or first.poll() is not None: break
+                        time.sleep(.05)
+                    self.assertTrue(signal.exists(),'First scheduler did not reach the deletion hook')
+                    second=run();self.assertEqual(1,second.returncode);self.assertIn('Maintenance',second.stderr)
+                    out,err=first.communicate(timeout=120);self.assertEqual(0,first.returncode,err)
+                finally:
+                    if first.poll() is None: first.terminate();first.wait(timeout=5)
+                self.assertEqual(gone,traces(late));self.assertEqual(6,count())
+                self.assertEqual(1,sum(1 for m in logs()[before+4:] if m.startswith('Deleted 1 accounts:')))
+        finally:
+            transport.cleanup();signal.unlink(missing_ok=True)
+            for row in protected: q('UPDATE accounts SET superuser=? WHERE acctid=?',[row['superuser'],row['acctid']])
+            q('DELETE FROM settings WHERE setting IN (?,?,?,?) OR setting=? OR setting LIKE ?',[*keys,'maintenance_day','mh:%'])
+            for row in saved: setting(row['setting'],row['value'])
+
     def _security_client(self, login='WebPlayer', password="Synthetic web O'Reilly \\ password", port=None):
         class NoRedirect(urllib.request.HTTPRedirectHandler):
             def redirect_request(self, *args): return None

@@ -69,11 +69,13 @@ Each family is DONE only when its acceptance evidence passes on both supported C
 - [x] Bio page fatal for a character without a mount: PHP 8's false-to-array deprecation at `bio.php:97`, found during content editors part 2 (`CONTENT-EDITORS-PART3-AUTHORITY-20261017.md`). Accepted at `19cbb4e`, Modern core 38991243831, Baseline integrity 38991243814.
 - [x] Bio page lookup by login pasted `char` into SQL (`bio.php`), found during content editors part 2 (`CONTENT-EDITORS-PART3-AUTHORITY-20261017.md`). Accepted at `19cbb4e`, Modern core 38991243831, Baseline integrity 38991243814.
 - [x] Mount owner lookup (`mounts.php?op=xml`) answered before the editor's `SU_EDIT_MOUNTS` check, with its ID pasted into SQL, found during content editors part 3 (`CONTENT-EDITORS-PART3-AUTHORITY-20261017.md`). Accepted at `19cbb4e`, Modern core 38991243831, Baseline integrity 38991243814.
+- [x] Module manager and remaining preference editors: every lifecycle op is POST + CSRF + a one-use intent bound to the module and its state; only bundled modules install; uninstall reports what it removed; the preference-editor inventory found no open request writer (`modules.php`) (`MODULE-MANAGER-AUTHORITY-20261017.md`). Accepted at `43bcdc4`, Modern core 39026254697, Baseline integrity 39026254784.
+- [x] Stables purchase reads the mount under a lock, so a mount deactivated and deleted meanwhile cannot be bought (`stables.php`), found during content editors part 3 (`MODULE-MANAGER-AUTHORITY-20261017.md`). Accepted at `43bcdc4`, Modern core 39026254697, Baseline integrity 39026254784.
 
 ### Current
 
-- [ ] Module manager and remaining preference editors (`modules.php`; candidate in `MODULE-MANAGER-AUTHORITY-20261017.md`). Every lifecycle op is POST + CSRF + a one-use intent bound to the module and its state; only bundled modules install; uninstall reports what it removed. The preference-editor inventory found no open request writer.
-- [ ] Stables purchase reads the mount without a lock, so a mount deactivated and deleted meanwhile could be bought (`stables.php`), found during content editors part 3 (candidate in `MODULE-MANAGER-AUTHORITY-20261017.md`)
+- [ ] Expiration cleanup: lock-guarded, each account deleted all or nothing, `last_char_expire` recorded only when no account failed, the warning email marks `sentnotice` only when sent (`lib/expire_chars.php`; candidate in `DELETION-EXPIRATION-AUTHORITY-20261017.md`)
+- [ ] Account deletion failure and retry semantics: one locked transaction per account for the hook, cleanup, clan succession and account row, with the veto honored by all three callers; the user editor's delete and self-deletion take a one-use intent (`lib/charcleanup.php`, `user.php?op=del`, `prefs.php?op=suicide`; candidate in `DELETION-EXPIRATION-AUTHORITY-20261017.md`)
 
 ### Remaining
 
@@ -84,9 +86,7 @@ Infrastructure and records:
 State and maintenance:
 
 - [ ] Remaining serialized business schemas: general combat, mounts, companions, buffs, translation arrays, preferences, editor old values, navigation (`SERIALIZED-STATE-AUDIT.md`)
-- [ ] Expiration cleanup: `last_char_expire` must not advance before cleanup succeeds (`lib/expire_chars.php`)
-- [ ] Account deletion failure and retry semantics (`lib/charcleanup.php`), including the user editor's delete (`user.php?op=del`, `lib/user/user_del.php`)
-- [ ] Truthful completion reporting for external email and `OPTIMIZE TABLE`
+- [ ] Truthful completion reporting for `OPTIMIZE TABLE` (`lib/newday/dbcleanup.php`) and external email other than the expiration warning (the petition notice in `lib/petition/petition_default.php`). The expiration warning is covered by the expiration item above.
 
 ### Merge gate
 

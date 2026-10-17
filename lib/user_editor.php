@@ -320,6 +320,14 @@ function resurrection_user_editor_save(int $userid, array $userinfo): void {
     }
 }
 
+/**
+ * The list's Del form is bound to the account it was shown for.
+ * @param array<string, mixed> $row
+ */
+function resurrection_user_delete_context(array $row): string {
+    return hash('sha256', json_encode(['del', (string)$row['acctid'], (string)$row['login']], JSON_THROW_ON_ERROR | JSON_INVALID_UTF8_SUBSTITUTE));
+}
+
 /** @param array<string, mixed> $row */
 function resurrection_user_special_context(array $row): string {
     return hash('sha256', json_encode(['special', (string)$row['acctid'], (string)$row['login'], $row['lasthit'], (string)$row['emailvalidation']], JSON_THROW_ON_ERROR | JSON_INVALID_UTF8_SUBSTITUTE));
