@@ -5,6 +5,7 @@
 require_once("common.php");
 require_once("lib/http.php");
 require_once("lib/villagenav.php");
+require_once("lib/equipment_authority.php");
 
 tlschema("weapon");
 
@@ -50,6 +51,9 @@ output("`c`b`&".$texts['title']."`0`b`c");
 tlschema();
 
 $op = httpget("op");
+$shop = resurrection_equipment_shop("weapon");
+// Only the protected POST buys; a GET of the old buy link (a restored page, the New Day "Continue") shows the shop.
+if ($op=="buy" && ($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') $op = "";
 
 if ($op==""){
   	tlschema($schemas['desc']);
@@ -63,12 +67,9 @@ if ($op==""){
   	tlschema();
 
 
-	$sql = "SELECT max(level) AS level FROM " .  db_prefix("weapons") . " WHERE level<=".(int)$session['user']['dragonkills'];
-	$result = db_query($sql);
-	$row = db_fetch_assoc($result);
-
-	$sql = "SELECT * FROM " . db_prefix("weapons") . " WHERE level = ".(int)$row['level']." ORDER BY damage ASC";
-	$result = db_query($sql);
+	// The offered tier: the highest level at or below the dragon kills, as 1.1.2 listed it; bound.
+	$tier = resurrection_equipment_tier($shop, (int)$session['user']['dragonkills']);
+	$result = db_query("SELECT * FROM " . db_prefix("weapons") . " WHERE level=? ORDER BY damage ASC", true, [$tier]);
 
  	tlschema($schemas['tradein']);
   	if (is_array($texts['tradein'])) {
@@ -107,18 +108,17 @@ if ($op==""){
 
 			if ($link) {
 				$color = "`&";
-				rawoutput("<a href='weapons.php?op=buy&id={$row['weaponid']}'>");
+				// 1.1.2 drew a GET link here; the purchase is now this item's protected POST form.
+				resurrection_equipment_form_open($shop, (int)$row['weaponid'], $tier);
 			} else {
 				$color = "`7";
 			}
 			output_notl("%s%s`0",$color,$row['weaponname']);
 			if ($link) {
-				rawoutput("</a>");
+				resurrection_equipment_form_close();
 			}
-			addnav("","weapons.php?op=buy&id={$row['weaponid']}");
 		}else{
 			output_notl("%s%s`0",$color,$row['weaponname']);
-			addnav("","weapons.php?op=buy&id={$row['weaponid']}");
 		}
 		rawoutput("</td><td align='center'>");
 		output_notl("%s%s`0",$color,$row['damage']);
@@ -134,10 +134,15 @@ if ($op==""){
 	rawoutput("</table>");
 	villagenav();
 }else if ($op=="buy"){
-	$id = httpget("id");
-	$sql = "SELECT * FROM " . db_prefix("weapons") . " WHERE weaponid='$id'";
-	$result = db_query($sql);
-	if (db_num_rows($result)==0){
+	// POST + CSRF + the one-use intent issued with this item's form; the purchase runs on the locked account.
+	try {
+		$id = resurrection_equipment_request();
+	} catch (InvalidArgumentException $error) { resurrection_equipment_failure($error); }
+	resurrection_consume_action("weapon-buy-$id", resurrection_equipment_context($shop, $id, resurrection_equipment_tier($shop, (int)$session['user']['dragonkills'])));
+	try {
+		$purchase = resurrection_player_mutation(fn () => resurrection_equipment_purchase($shop, $id));
+	} catch (Throwable $error) { resurrection_equipment_failure($error); }
+	if ($purchase['outcome']=='missing'){
 		tlschema($schemas['nosuchweapon']);
 		output($texts['nosuchweapon']);
 		tlschema();
@@ -145,28 +150,17 @@ if ($op==""){
 		addnav($texts['tryagain'],"weapons.php");
 		tlschema();
 		villagenav();
+	}elseif ($purchase['outcome']=='short'){
+		// Text only, as in 1.1.2: nothing about the account changes.
+		tlschema($schemas['notenoughgold']);
+		output($texts['notenoughgold'],$purchase['row']['weaponname']);
+		tlschema();
+		villagenav();
 	}else{
-		$row = db_fetch_assoc($result);
-		$row = modulehook("modify-weapon", $row);
-		if ($row['value']>($session['user']['gold']+$tradeinvalue)){
-			tlschema($schemas['notenoughgold']);
-			output($texts['notenoughgold'],$row['weaponname']);
-			tlschema();
-			villagenav();
-		}else{
-			tlschema($schemas['payweapon']);
-			output($texts['payweapon'],$session['user']['weapon'],$row['weaponname']);
-			tlschema();
-			debuglog("spent " . ($row['value']-$tradeinvalue) . " gold on the " . $row['weaponname'] . " weapon");
-			$session['user']['gold']-=$row['value'];
-			$session['user']['weapon'] = $row['weaponname'];
-			$session['user']['gold']+=$tradeinvalue;
-			$session['user']['attack']-=$session['user']['weapondmg'];
-			$session['user']['weapondmg'] = $row['damage'];
-			$session['user']['attack']+=$session['user']['weapondmg'];
-			$session['user']['weaponvalue'] = $row['value'];
-			villagenav();
-		}
+		tlschema($schemas['payweapon']);
+		output($texts['payweapon'],$purchase['old'],$purchase['row']['weaponname']);
+		tlschema();
+		villagenav();
 	}
 }
 

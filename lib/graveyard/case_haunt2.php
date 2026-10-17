@@ -1,11 +1,11 @@
 <?php
-$string="%";
-$name = httppost('name');
-for ($x=0;$x<strlen($name);$x++){
-	$string .= substr($name,$x,1)."%";
-}
-$sql = "SELECT login,name,level FROM " . db_prefix("accounts") . " WHERE name LIKE '".addslashes($string)."' AND locked=0 ORDER BY level,login";
-$result = db_query($sql);
+require_once("lib/bank_authority.php");
+try {
+	// The bank's recipient search: each typed UTF-8 character in order, LIKE wildcards matching only themselves.
+	$string = resurrection_bank_search_pattern(\Resurrection\Http\Input::string($_POST, 'name'));
+} catch (InvalidArgumentException $error) { http_response_code(400); exit('Invalid haunt search.'); }
+// Bound; the haunter is not offered (the haunt refuses them).
+$result = db_query("SELECT login,name,level FROM " . db_prefix("accounts") . " WHERE name LIKE ? ESCAPE '|' AND locked=0 AND acctid<>? ORDER BY level,login", true, [$string, (int)$session['user']['acctid']]);
 if (db_num_rows($result)<=0){
 	output("`\$%s`) could find no one who matched the name you gave him.",$deathoverlord);
 }elseif(db_num_rows($result)>100){

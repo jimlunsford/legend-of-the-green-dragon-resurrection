@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/../src/Compatibility/array_cursor.php';
 // addnews ready
 // translator ready
 // mail ready
@@ -10,7 +11,7 @@
 // of the dependancy, but it's not really worth it.
 function register_global(&$var){
 	@reset($var);
-	while (list($key,$val)=@each($var)){
+	while (list($key,$val)=resurrection_array_next($var)){
 		global $$key;
 		$$key = $val;
 	}

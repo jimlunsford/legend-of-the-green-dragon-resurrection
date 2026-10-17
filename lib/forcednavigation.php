@@ -1,4 +1,8 @@
 <?php
+require_once __DIR__ . '/../src/Security/ScalarState.php';
+require_once __DIR__ . '/../src/Game/SpecialtyBuffState.php';
+require_once __DIR__ . '/../src/Security/NavigationState.php';
+require_once __DIR__ . '/../src/Security/PreferenceState.php';
 // translator ready
 // addnews ready
 // mail ready
@@ -8,29 +12,51 @@ function do_forced_nav($anonymous,$overrideforced){
 	global $baseaccount, $session,$REQUEST_URI;
 	rawoutput("<!--\nAllowAnonymous: ".($anonymous?"True":"False")."\nOverride Forced Nav: ".($overrideforced?"True":"False")."\n-->");
 	if (isset($session['loggedin']) && $session['loggedin']){
-		$sql = "SELECT *  FROM ".db_prefix("accounts")." WHERE acctid = '".$session['user']['acctid']."'";
-		$result = db_query($sql);
+		$sql = "SELECT *  FROM ".db_prefix("accounts")." WHERE acctid = ?";
+		$result = db_query($sql, true, [(int)$session['user']['acctid']]);
 		if (db_num_rows($result)==1){
 			$session['user']=db_fetch_assoc($result);
 			$baseaccount = $session['user'];
-			$session['bufflist']=unserialize($session['user']['bufflist']);
-			if (!is_array($session['bufflist'])) $session['bufflist']=array();
-			$session['user']['dragonpoints']=unserialize($session['user']['dragonpoints']);
-			$session['user']['prefs']=unserialize($session['user']['prefs']);
+            unset($session['user']['password']);
+            if (isset($_SESSION['auth_privileges']) && $_SESSION['auth_privileges'] !== (int)$session['user']['superuser']) {
+                resurrection_rotate_session();
+            }
+            $_SESSION['auth_privileges'] = (int)$session['user']['superuser'];
+			$session['bufflist']=\Resurrection\Security\ScalarState::read($session['user']['bufflist']);
+            // Preserve the existing potion validator's controlled 400 response.
+            // Validate it before the shared map check can classify a null entry.
+            if (is_array($session['bufflist']) && array_key_exists('transmute',$session['bufflist'])) {
+                require_once __DIR__ . '/../src/Game/TransmutationState.php';
+                try { \Resurrection\Game\TransmutationState::read($session['bufflist']['transmute']); }
+                catch (DomainException $error) { http_response_code(400); exit('Invalid stored potion state.'); }
+            }
+            try {
+                $session['bufflist']=\Resurrection\Game\SpecialtyBuffState::collection($session['bufflist']);
+            } catch (DomainException $error) {
+                http_response_code(409); exit('Invalid stored buff state. No game action was completed.');
+            }
+			$session['user']['dragonpoints']=\Resurrection\Security\ScalarState::read($session['user']['dragonpoints']);
 			if (!is_array($session['user']['dragonpoints'])) $session['user']['dragonpoints']=array();
-			if (is_array(unserialize($session['user']['allowednavs']))){
-				$session['allowednavs']=unserialize($session['user']['allowednavs']);
-			}else{
-				$session['allowednavs']=array($session['user']['allowednavs']);
-			}
-			if (!$session['user']['loggedin'] || ( (date("U") - strtotime($session['user']['laston'])) > getsetting("LOGINTIMEOUT",900)) ){
-				$session=array();
-				redirect("index.php?op=timeout","Account not logged in but session thinks they are.");
+            try {
+                $session['user']['prefs']=\Resurrection\Security\PreferenceState::read($session['user']['prefs']);
+            } catch (DomainException $error) {
+                http_response_code(409); exit('Invalid stored preference state. No game action was completed.');
+            }
+            try {
+                $session['allowednavs']=\Resurrection\Security\NavigationState::read($session['user']['allowednavs']);
+                \Resurrection\Security\NavigationState::restorePage($session['user']['restorepage']);
+            } catch (DomainException $error) {
+                http_response_code(409); exit('Invalid stored navigation state. No game action was completed.');
+            }
+			if (!isset($_SESSION['auth_version']) || $_SESSION['auth_version'] !== (int)$session['user']['authversion'] || $session['user']['locked'] || !$session['user']['loggedin'] || ( (date("U") - strtotime($session['user']['laston'])) > getsetting("LOGINTIMEOUT",900)) ){
+				resurrection_end_session();
+                header('Location: index.php?op=timeout', true, 303);
+                exit();
 			}
 		}else{
-			$session=array();
-			$session['message']=translate_inline("`4Error, your login was incorrect`0","login");
-			redirect("index.php","Account Disappeared!");
+			resurrection_end_session();
+            header('Location: index.php', true, 303);
+            exit();
 		}
 		db_free_result($result);
 		if (isset($session['allowednavs'][$REQUEST_URI]) && $session['allowednavs'][$REQUEST_URI] && $overrideforced!==true){
@@ -42,6 +68,7 @@ function do_forced_nav($anonymous,$overrideforced){
 		}
 	}else{
 		if (!$anonymous){
+            translator_setup();
 			$session['message']=translate_inline("You are not logged in, this may be because your session timed out.","login");
 			redirect("index.php?op=timeout","Not logged in: $REQUEST_URI");
 		}

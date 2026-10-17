@@ -1,9 +1,9 @@
 <?php
-$result = db_query("SELECT * FROM " . db_prefix("accounts") . " WHERE acctid='$userid'");
+require_once __DIR__ . '/../../src/Compatibility/array_cursor.php';
+require_once __DIR__ . '/../user_editor.php';
+$result = db_query("SELECT * FROM " . db_prefix("accounts") . " WHERE acctid=?", true, [$userid]);
 $row = db_fetch_assoc($result);
-$petition=httpget("returnpetition");
-if ($petition != "")
-	$returnpetition = "&returnpetition=$petition";
+if (!$row) { http_response_code(404); exit('Account not found.'); }
 	if ($petition !=""){
 	addnav("Navigation");
 	addnav("Return to the petition","viewpetition.php?op=view&id=$petition");
@@ -19,7 +19,7 @@ if ($session['user']['superuser'] & SU_EDIT_DONATIONS) {
 addnav("Bans");
 addnav("Set up ban","user.php?op=setupban&userid={$row['acctid']}");
 if (httpget("subop")==""){
-	rawoutput("<form action='user.php?op=special&userid=$userid$returnpetition' method='POST'>");
+	rawoutput("<form action='user.php?op=special&userid=$userid$returnpetition' method='POST'>" . resurrection_action_fields('user-special-' . $userid, resurrection_user_special_context($row)));
 	addnav("","user.php?op=special&userid=$userid$returnpetition");
 	$grant = translate_inline("Grant New Day");
 	rawoutput("<input type='submit' class='button' name='newday' value='$grant'>");
@@ -29,7 +29,9 @@ if (httpget("subop")==""){
 	rawoutput("<input type='submit' class='button' name='clearvalidation' value='$mark'>");
 	rawoutput("</form>");
 		//Show a user's usertable
-	rawoutput("<form action='user.php?op=save&userid=$userid$returnpetition' method='POST'>");
+	// The form's intent is bound to the stored values it shows; a save writes only the fields changed here.
+	$snapshot = resurrection_user_editor_snapshot(resurrection_user_editor_schema($userinfo), $row);
+	rawoutput("<form action='user.php?op=save&userid=$userid$returnpetition' method='POST'>" . resurrection_user_editor_fields($userid, $snapshot));
 	addnav("","user.php?op=save&userid=$userid$returnpetition");
 	$save = translate_inline("Save");
 	rawoutput("<input type='submit' class='button' value='$save'>");
@@ -49,9 +51,10 @@ if (httpget("subop")==""){
 	$args['userinfo']['test'] = "The truth!!!,viewonly";
 	$args['user']['test'] = "Is out there???";
 	*/
+	// A NULL clan join date shows as an empty field, as it did when 1.1.2 stored the zero date.
+	$row['clanjoindate'] = $row['clanjoindate'] ?? '';
 	$showformargs = modulehook("modifyuserview", array("userinfo"=>$userinfo, "user"=>$row));
 	$info = showform($showformargs['userinfo'],$showformargs['user']);
-	rawoutput("<input type='hidden' value=\"".htmlentities(serialize($info), ENT_COMPAT, getsetting("charset", "ISO-8859-1"))."\" name='oldvalues'>");
 	rawoutput("</form>");
 		output("`n`nLast Page Viewed:`n");
 	rawoutput("<iframe src='user.php?op=lasthit&userid=$userid' width='100%' height='400'>");
@@ -63,11 +66,11 @@ if (httpget("subop")==""){
 	addnav("Operations");
 	addnav("Edit user","user.php?op=edit&userid=$userid$returnpetition");
 	$module = httpget('module');
-	$info = get_module_info($module);
-	if (count($info['prefs']) > 0) {
+	$info = db_query('SELECT modulename FROM ' . db_prefix('modules') . ' WHERE modulename=?', true, [$module]) ? get_module_info($module) : [];
+	if (count($info['prefs'] ?? []) > 0) {
 		$data = array();
 		$msettings = array();
-		while (list($key,$val)=each($info['prefs'])){
+		while (list($key,$val)=resurrection_array_next($info['prefs'])){
 			// Handle vals which are arrays.
 			if (is_array($val)) {
 				$v = $val[0];
@@ -81,19 +84,19 @@ if (httpget("subop")==""){
 			// Set up the defaults as well.
 			if (isset($x[1])) $data[$key] = $x[1];
 		}
-		$sql = "SELECT * FROM " . db_prefix("module_userprefs") ." WHERE modulename='$module' AND userid='$userid'";
-		$result = db_query($sql);
+		$sql = "SELECT * FROM " . db_prefix("module_userprefs") ." WHERE modulename=? AND userid=?";
+		$result = db_query($sql, true, [$module, $userid]);
 		while ($row = db_fetch_assoc($result)){
 			$data[$row['setting']] = $row['value'];
 		}
-		rawoutput("<form action='user.php?op=savemodule&module=$module&userid=$userid$returnpetition' method='POST'>");
+		rawoutput("<form action='user.php?op=savemodule&module=$module&userid=$userid$returnpetition' method='POST'>" . resurrection_user_module_fields($module, $userid));
 		addnav("","user.php?op=savemodule&module=$module&userid=$userid$returnpetition");
 		tlschema("module-$module");
 		showform($msettings,$data);
 		tlschema();
 		rawoutput("</form>");
 	}else{
-		output("The $module module doesn't appear to define any user preferences.");
+		output("The %s module doesn't appear to define any user preferences.", $module);
 	}
 }
 module_editor_navs('prefs', "user.php?op=edit&subop=module&userid=$userid$returnpetition&module=");

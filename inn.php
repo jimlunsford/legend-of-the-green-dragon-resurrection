@@ -20,13 +20,42 @@ $vname = getsetting("villagename", LOCATION_FIELDS);
 $barkeep = getsetting('barkeep','`tCedrik');
 
 $op = httpget('op');
-// Correctly reset the location if they fleeing the dragon
-// This needs to be done up here because a special could alter your op.
+require_once("lib/inn_economy.php");
+try {
+	$act = $op == "bartender" ? \Resurrection\Http\Input::choice($_GET, 'act', ['', 'bribe', 'listupstairs', 'colors', 'specialty'], '') : '';
+} catch (InvalidArgumentException $error) { http_response_code(400); exit('Invalid inn request.'); }
+// A bribe answers only the services offered on that answer; leaving them forfeits it.
+if (!in_array($act, ['listupstairs', 'specialty'], true)) unset($_SESSION['inn_bribe']);
+$fled = false;
 if ($op == "fleedragon") {
-	$session['user']['location'] = $vname;
+	// Only the Dragon encounter the Forest displayed may be fled, once; GET shows the choice.
+	if (!resurrection_inn_flee_offered()) { http_response_code(409); exit('There is no dragon to run from.'); }
+	if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
+		try {
+			resurrection_inn_fields();
+			resurrection_consume_action('inn-fleedragon', resurrection_inn_flee_context());
+			resurrection_player_mutation(function () use ($vname) {
+				global $session;
+				if (!resurrection_inn_flee_offered()) throw new DomainException('No dragon encounter.');
+				// Correctly reset the location if they fleeing the dragon
+				$session['user']['location'] = $vname;
+				if ($session['user']['charm'] > 0) $session['user']['charm']--;
+			});
+		} catch (InvalidArgumentException $error) { http_response_code(400); exit('Invalid inn request.');
+		} catch (DomainException $error) { http_response_code(409); exit('There is no dragon to run from.');
+		} catch (Throwable $error) { http_response_code(500); exit('You did not get away. Try again.'); }
+		unset($_SESSION['inn_flee']);
+		$fled = true;
+	}
 }
 
 page_header(array("%s",sanitize($iname)));
+if ($op == "fleedragon" && !$fled) {
+	output("Every instinct in your body wants to run, and run quickly, back to the warm inn.");
+	resurrection_inn_form("inn.php?op=fleedragon", 'inn-fleedragon', resurrection_inn_flee_context(), resurrection_inn_button(translate_inline("Run away like a baby")));
+	addnav("Enter the cave","dragon.php");
+	page_footer();
+}
 $skipinndesc = handle_event("inn");
 
 if (!$skipinndesc) {

@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/src/Security/ScalarState.php';
 // addnews ready
 // translator ready
 // mail ready
@@ -9,7 +10,7 @@ require_once("lib/villagenav.php");
 
 tlschema("healer");
 
-$config = unserialize($session['user']['donationconfig']);
+$config = \Resurrection\Security\ScalarState::read($session['user']['donationconfig']);
 
 $return = httpget("return");
 $returnline = $return>""?"&return=$return":"";

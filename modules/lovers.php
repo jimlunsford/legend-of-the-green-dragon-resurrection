@@ -4,6 +4,7 @@
 // mail ready
 require_once("lib/buffs.php");
 require_once("lib/partner.php");
+require_once("lib/player_mutation.php");
 //should we move charm here?
 //should we move marriedto here?
 
@@ -107,26 +108,65 @@ function lovers_run(){
 	output_notl("`c`b");
 	output($iname);
 	output_notl("`b`c");
-	switch(httpget('op')){
-	case "flirt":
-		if ($session['user']['sex']==SEX_MALE) {
-			require_once("modules/lovers/lovers_violet.php");
-			lovers_violet();
-		} else {
-			require_once("modules/lovers/lovers_seth.php");
-			lovers_seth();
-		}
-		break;
-	case "chat":
-		if ($session['user']['sex']==SEX_MALE) {
-			require_once("modules/lovers/lovers_chat_seth.php");
-			lovers_chat_seth();
-		} else {
-			require_once("modules/lovers/lovers_chat_violet.php");
-			lovers_chat_violet();
-		}
-		break;
-	}
+    try {
+        $op = \Resurrection\Http\Input::choice($_GET, 'op', ['flirt','chat'], 'flirt');
+        if (array_diff(array_keys($_GET), ['module','op','act','c']) !== []) throw new InvalidArgumentException('Unexpected query.');
+        if ($op === 'flirt') {
+            if (isset($_GET['act'])) throw new InvalidArgumentException('Unexpected path.');
+            $state = lovers_state();
+            $context = hash('sha256', json_encode($state, JSON_THROW_ON_ERROR));
+            if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+                resurrection_consume_action('lovers', $context);
+                if (array_diff(array_keys($_POST), ['csrf_token','action_token','action','flirt']) !== []) throw new InvalidArgumentException('Unexpected form field.');
+                // PHP collapses repeated scalar form keys; reject ambiguity before choosing an effect.
+                $keys = [];
+                foreach (explode('&', file_get_contents('php://input')) as $field) {
+                    $key = urldecode(explode('=', $field, 2)[0]);
+                    if (isset($keys[$key])) throw new InvalidArgumentException('Repeated form field.');
+                    $keys[$key] = true;
+                }
+                $married = (int)$session['user']['marriedto'] === INT_MAX;
+                \Resurrection\Http\Input::choice($_POST, 'action', [$married ? 'visit' : 'flirt'], '');
+                $choice = null;
+                if ($married) {
+                    if (isset($_POST['flirt'])) throw new InvalidArgumentException('Married visit has no flirt choice.');
+                } else {
+                    $choice = \Resurrection\Http\Input::integer($_POST, 'flirt', 0, 1);
+                    if ($choice < 1 || $choice > 7) throw new InvalidArgumentException('Invalid flirt choice.');
+                }
+                resurrection_player_mutation(function () use ($state, $choice) {
+                    if (lovers_state(true) !== $state) throw new DomainException('Lovers state changed.');
+                    lovers_story($choice);
+                });
+            } elseif ($_SERVER['REQUEST_METHOD'] === 'GET') {
+                if ((int)$session['user']['marriedto'] === INT_MAX) {
+                    output('Spend some time with %s`0?', get_partner());
+                    lovers_form('Visit', null);
+                } else {
+                    lovers_story(null);
+                }
+            } else {
+                resurrection_require_post();
+            }
+        } else {
+            if ($_SERVER['REQUEST_METHOD'] !== 'GET') resurrection_require_post();
+            if ($_SERVER['REQUEST_METHOD'] !== 'GET') throw new InvalidArgumentException('Chat is read-only.');
+            \Resurrection\Http\Input::choice($_GET, 'act', $session['user']['sex'] == SEX_MALE ? ['', 'armor', 'sports'] : ['', 'fat', 'gossip'], '');
+            if ($session['user']['sex'] == SEX_MALE) {
+                require_once('modules/lovers/lovers_chat_seth.php');
+                lovers_chat_seth();
+            } else {
+                require_once('modules/lovers/lovers_chat_violet.php');
+                lovers_chat_violet();
+            }
+        }
+    } catch (InvalidArgumentException $error) {
+        http_response_code(400); exit('Invalid Lovers action.');
+    } catch (DomainException $error) {
+        http_response_code(409); exit('Lovers is unavailable.');
+    } catch (Throwable $error) {
+        http_response_code(500); exit('Lovers interaction was not completed. Request a fresh form.');
+    }
 	addnav("Return");
 	addnav("I?Return to the Inn","inn.php");
 	villagenav();
@@ -148,4 +188,45 @@ function lovers_getbuff(){
 	);
 	return $buff;
 }
-?>
+/** Read business state without creating the default preference on GET. */
+function lovers_state(bool $lock = false): array {
+    global $session;
+    $user = $session['user'];
+    if (empty($session['loggedin']) || empty($user['acctid']) || (int)$user['alive'] !== 1 ||
+        (int)$user['hitpoints'] <= 0 || $user['specialinc'] !== '') throw new DomainException('Ineligible player.');
+    $suffix = $lock ? ' FOR UPDATE' : '';
+    $module = db_query('SELECT active FROM ' . db_prefix('modules') . ' WHERE modulename=?' . $suffix, true, ['lovers']);
+    if (count($module) !== 1 || (int)$module[0]['active'] !== 1) throw new DomainException('Inactive module.');
+    $rows = db_query('SELECT value FROM ' . db_prefix('module_userprefs') . ' WHERE modulename=? AND setting=? AND userid=?' . $suffix,
+        true, ['lovers','seenlover',(int)$user['acctid']]);
+    $seen = count($rows) === 0 ? '0' : (string)$rows[0]['value'];
+    if ($seen !== '0') throw new DomainException('Daily visit unavailable.');
+    $state = [];
+    foreach (['acctid','lasthit','sex','marriedto','charm','turns','alive','hitpoints','specialinc','location','bufflist'] as $key) {
+        $state[$key] = (string)$user[$key];
+    }
+    $state['seenlover'] = $seen;
+    return $state;
+}
+
+function lovers_form(string $label, ?int $choice): void {
+    $url = 'runmodule.php?module=lovers&op=flirt';
+    addnav('', $url);
+    $context = hash('sha256', json_encode(lovers_state(), JSON_THROW_ON_ERROR));
+    rawoutput('<form method="POST" action="' . htmlspecialchars($url, ENT_QUOTES, 'UTF-8') . '">' .
+        resurrection_action_fields('lovers', $context) . '<input type="hidden" name="action" value="' .
+        ($choice === null ? 'visit' : 'flirt') . '">' . ($choice === null ? '' :
+        '<input type="hidden" name="flirt" value="' . $choice . '">') . '<button class="button">' .
+        htmlspecialchars(translate_inline($label), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '</button></form>');
+}
+
+function lovers_story(?int $choice): void {
+    global $session;
+    if ($session['user']['sex'] == SEX_MALE) {
+        require_once('modules/lovers/lovers_violet.php');
+        lovers_violet($choice);
+    } else {
+        require_once('modules/lovers/lovers_seth.php');
+        lovers_seth($choice);
+    }
+}

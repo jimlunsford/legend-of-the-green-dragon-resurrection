@@ -1,4 +1,8 @@
 <?php
+require_once __DIR__ . '/../src/Security/ScalarState.php';
+require_once __DIR__ . '/../src/Security/PreferenceState.php';
+require_once __DIR__ . '/../src/Compatibility/array_cursor.php';
+require_once __DIR__ . '/../src/Compatibility/LegacySprintf.php';
 // translator ready
 // addnews ready
 // mail ready
@@ -15,7 +19,7 @@ function translator_setup(){
 	}elseif(isset($_COOKIE['language'])){
 		$language = $_COOKIE['language'];
 	}
-	if ($language=="") {
+	if (!is_string($language) || !preg_match("/\\A[a-z]{2,8}\\z/i", $language)) {
 		$language=getsetting("defaultlanguage","en");
 	}
 
@@ -44,7 +48,7 @@ function translate($indata,$namespace=FALSE){
 	if (is_array($indata)){
 		//recursive translation on arrays.
 		$outdata = array();
-		while (list($key,$val)=each($indata)){
+		while (list($key,$val)=resurrection_array_next($indata)){
 			$outdata[$key] = translate($val,$namespace);
 		}
 	}else{
@@ -95,8 +99,8 @@ function sprintf_translate(){
 		}
  	}
 	reset($args);
-	each($args);//skip the first entry which is the output text
-	while (list($key,$val)=each($args)){
+	resurrection_array_next($args);//skip the first entry which is the output text
+	while (list($key,$val)=resurrection_array_next($args)){
 		if (is_array($val)){
 			//When passed a sub-array this represents an independant
 			//translation to happen then be inserted in the master string.
@@ -104,7 +108,9 @@ function sprintf_translate(){
 		}
 	}
 	ob_start();
-	$return = call_user_func_array("sprintf",$args);
+	// PHP 8 throws where PHP 5 warned and returned false (a stray % in stored text): keep PHP 5's result.
+	$format = array_shift($args);
+	$return = \Resurrection\Compatibility\LegacySprintf::format($format, $args);
 	$err = ob_get_contents();
 	ob_end_clean();
 	if ($err > ""){
@@ -127,9 +133,10 @@ function translate_mail($in,$to=0){
 	//this is done by sprintf_translate.
 	//$in[0] = str_replace("`%","`%%",$in[0]);
 	if ($to>0){
-		$language = db_fetch_assoc(db_query("SELECT prefs FROM ".db_prefix("accounts")." WHERE acctid=$to"));
-		$language['prefs'] = unserialize($language['prefs']);
-		$session['tlanguage'] = $language['prefs']['language']?$language['prefs']['language']:getsetting("defaultlanguage","en");
+		$languageResult = db_query("SELECT prefs FROM ".db_prefix("accounts")." WHERE acctid=$to");
+		$language = db_fetch_assoc($languageResult);
+		$language['prefs'] = \Resurrection\Security\PreferenceState::read($language['prefs'] ?? '');
+		$session['tlanguage'] = !empty($language['prefs']['language']) ? $language['prefs']['language'] : getsetting("defaultlanguage","en");
 	}
 	reset($in);
 	// translation offered within translation tool here is in language
@@ -183,7 +190,8 @@ function tlbutton_push($indata,$hot=false,$namespace=FALSE){
 	global $translation_is_enabled,$seentlbuttons,$session;
 	if (!$translation_is_enabled) return;
 	if (!$namespace) $namespace="unknown";
-	if ($session['user']['superuser'] & SU_IS_TRANSLATOR){
+	// checkban empties the session before it translates the ban message: no user is no translator, as in PHP 5.
+	if (($session['user']['superuser'] ?? 0) & SU_IS_TRANSLATOR){
 		if (preg_replace("/[ 	\n\r]|`./",'',$indata)>""){
 			if (isset($seentlbuttons[$namespace][$indata])){
 				$link = "";
@@ -209,7 +217,7 @@ function tlbutton_push($indata,$hot=false,$namespace=FALSE){
 
 function tlbutton_pop(){
 	global $translatorbuttons,$session;
-	if ($session['user']['superuser'] & SU_IS_TRANSLATOR){
+	if (($session['user']['superuser'] ?? 0) & SU_IS_TRANSLATOR){
 		return array_pop($translatorbuttons);
 	}else{
 		return "";
@@ -218,7 +226,7 @@ function tlbutton_pop(){
 
 function tlbutton_clear(){
 	global $translatorbuttons,$session;
-	if ($session['user']['superuser'] & SU_IS_TRANSLATOR){
+	if (($session['user']['superuser'] ?? 0) & SU_IS_TRANSLATOR){
 		$return = tlbutton_pop().join("",$translatorbuttons);
 		$translatorbuttons = array();
 		return $return;

@@ -1,0 +1,9056 @@
+"""Real loopback application requests against the preceding clean CI install."""
+import base64
+from contextlib import contextmanager
+import html
+from html.parser import HTMLParser
+import http.cookiejar
+import json
+import os
+from pathlib import Path
+import re
+import shutil
+import socket
+import subprocess
+import sys
+import time
+import tempfile
+import unittest
+import urllib.error
+import urllib.parse
+import urllib.request
+from xml.etree import ElementTree
+
+ROOT = Path(__file__).resolve().parents[2]
+
+class WebApplicationTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        host = os.environ.get('RESURRECTION_TEST_DB_HOST')
+        if not host:
+            raise unittest.SkipTest('Requires the disposable installed CI database')
+        if os.environ.get('RESURRECTION_TEST_DB_NAME') != 'resurrection_test':
+            raise RuntimeError('Refusing non-test database')
+        cls.config = ROOT / 'dbconnect.php'
+        values = {'DB_HOST': host, 'DB_USER': os.environ['RESURRECTION_TEST_DB_USER'],
+                  'DB_PASS': os.environ['RESURRECTION_TEST_DB_PASSWORD'],
+                  'DB_NAME': 'resurrection_test', 'DB_PREFIX': '',
+                  'DB_USEDATACACHE': 0, 'DB_DATACACHEPATH': ''}
+        encoded = base64.b64encode(json.dumps(values).encode()).decode()
+        with cls.config.open('x') as file:
+            file.write("<?php extract(json_decode(base64_decode('" + encoded + "'),true), EXTR_SKIP);\n")
+        cls.config.chmod(0o600)
+        try:
+            cls.game_clock = cls._pin_game_clock()
+        except BaseException:
+            cls.config.unlink()
+            raise
+        with socket.socket() as sock:
+            sock.bind(('127.0.0.1', 0))
+            cls.port = sock.getsockname()[1]
+        # Outside the application tree; only the loopback fixture server loads this.
+        cls.seed_file = tempfile.NamedTemporaryFile(mode='w', suffix='.php')
+        cls.seed_file.write("<?php if (in_array($_SERVER['HTTP_X_RESURRECTION_FIXTURE'] ?? '', ['skeleton-death','specialty-accounting'], true)) mt_srand(12345); if (($_SERVER['HTTP_X_RESURRECTION_FIXTURE'] ?? '') === 'ordinary-flee-failure') mt_srand(3); if (($_SERVER['HTTP_X_RESURRECTION_FIXTURE'] ?? '') === 'graveyard-round') mt_srand(1); if (($_SERVER['HTTP_X_RESURRECTION_FIXTURE'] ?? '') === 'inn-bribe') mt_srand(4); if (($_SERVER['HTTP_X_RESURRECTION_FIXTURE'] ?? '') === 'graveyard-haunt') mt_srand(7);\n")
+        cls.seed_file.flush()
+        # PHP's actual external-mail transport is replaced ONLY on this fixture server.
+        # The subprocess independently observes committed rows before reporting delivery failure.
+        cls.mail_transport = tempfile.TemporaryDirectory(prefix='resurrection-mail-')
+        cls.mail_capture = Path(cls.mail_transport.name) / 'capture.jsonl'
+        cls.mail_program = Path(cls.mail_transport.name) / 'sendmail'
+        cls.mail_program.write_text('#!' + sys.executable + '\n' + """import sys,json,subprocess,os
+from pathlib import Path
+payload=sys.stdin.read()
+code="require 'dbconnect.php';require 'lib/dbwrapper_pdo.php';db_connect($DB_HOST,$DB_USER,$DB_PASS);db_select_db($DB_NAME);echo json_encode(db_query('SELECT messageid,subject,body FROM mail ORDER BY messageid'));"
+result=subprocess.run([os.environ['MAIL_FIXTURE_PHP'],'-r',code],capture_output=True,text=True)
+with Path(__file__).with_name('capture.jsonl').open('a') as f:f.write(json.dumps({'payload':payload,'rows':json.loads(result.stdout)})+'\\n')
+sys.exit(1)
+""")
+        cls.mail_program.chmod(0o700)
+        os.environ['MAIL_FIXTURE_PHP'] = shutil.which('php')
+        cls.server_log = tempfile.TemporaryFile(mode='w+t')
+        cls.server = subprocess.Popen([shutil.which('php'), '-d', 'display_errors=1', '-d', 'error_reporting=-1',
+                                       '-d', 'zend.exception_ignore_args=1', '-d', 'sendmail_path='+str(cls.mail_program), '-d', 'auto_prepend_file='+cls.seed_file.name, '-S', f'127.0.0.1:{cls.port}', '-t', str(ROOT)],
+                                      stdout=subprocess.DEVNULL, stderr=cls.server_log, cwd=ROOT)
+        for _ in range(100):
+            try:
+                with socket.create_connection(('127.0.0.1', cls.port), timeout=.1):
+                    return
+            except OSError:
+                if cls.server.poll() is not None:
+                    cls.config.unlink()
+                    raise RuntimeError('Application test server exited')
+                time.sleep(.05)
+        cls.server.terminate()
+        cls.config.unlink()
+        raise RuntimeError('Application test server did not start')
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.server.terminate()
+        cls.server.wait(timeout=5)
+        cls.server_log.close()
+        cls.seed_file.close()
+        cls.mail_transport.cleanup()
+        cls.config.unlink()
+
+    @staticmethod
+    def query(sql, parameters=()):
+        code = "require 'dbconnect.php'; require 'lib/dbwrapper_pdo.php'; db_connect($DB_HOST,$DB_USER,$DB_PASS); db_select_db($DB_NAME); $input=json_decode(stream_get_contents(STDIN),true,512,JSON_THROW_ON_ERROR); echo json_encode(db_query($input[0],true,$input[1]),JSON_THROW_ON_ERROR);"
+        result = subprocess.run([shutil.which('php'), '-r', code], input=json.dumps([sql, parameters]), cwd=ROOT,
+                                capture_output=True, text=True, timeout=20)
+        if result.returncode != 0:
+            raise AssertionError('Fixture database operation failed')
+        return json.loads(result.stdout)
+
+    def wager_failure(self, module, player):
+        # DDL is fixture setup, before the real request transaction. No SUPER/trigger privilege.
+        self.assertIn(module,['game_stones','game_dice','game_fivesix'])
+        pattern='%"game":"'+module+'"%"stage":"complete"%'
+        self.query("ALTER TABLE accounts ADD CONSTRAINT fixture_wager_failure CHECK (specialmisc NOT LIKE '"+pattern+"')")
+
+    def remove_wager_failure(self):
+        if self.query("SELECT CONSTRAINT_NAME FROM information_schema.TABLE_CONSTRAINTS WHERE CONSTRAINT_SCHEMA=DATABASE() AND TABLE_NAME='accounts' AND CONSTRAINT_NAME='fixture_wager_failure'"):
+            self.query('ALTER TABLE accounts DROP CONSTRAINT fixture_wager_failure')
+
+    def test_active_maintenance_failures_retries_and_concurrency(self):
+        path = ROOT / 'modules' / 'resurrectionmaintenancefixture.php'
+        signal = ROOT / 'tests' / 'fixtures' / 'maintenance-running'
+        module = 'resurrectionmaintenancefixture'
+        with path.open('x') as file:
+            file.write('''<?php
+function resurrectionmaintenancefixture_getmoduleinfo() {
+    return ['name'=>'Maintenance fixture','version'=>'1.0','author'=>'Synthetic','category'=>'Tests'];
+}
+function resurrectionmaintenancefixture_dohook($hook, $args) {
+    $mode = getsetting('fixture_maint_mode', 'ok');
+    db_query("UPDATE settings SET value=value+1 WHERE setting='fixture_maint_count'");
+    if ($mode === 'throw') throw new RuntimeException('SYNTHETIC-SECRET-MUST-NOT-LOG');
+    if ($mode === 'malformed') return 'invalid';
+    if ($mode === 'database') db_query('INSERT INTO nonexistent_fixture_table VALUES (1)');
+    if ($mode === 'slow') {
+        file_put_contents('tests/fixtures/maintenance-running', 'running');
+        usleep(2000000);
+    }
+    return $args;
+}
+''')
+        def setting(name, value):
+            self.query('INSERT INTO settings (setting,value) VALUES (?,?) ON DUPLICATE KEY UPDATE value=VALUES(value)', [name, str(value)])
+        def run():
+            return subprocess.run([shutil.which('php'), 'cron.php'], cwd=ROOT, capture_output=True, text=True, timeout=60)
+        try:
+            self.query('DELETE FROM settings WHERE setting=? OR setting LIKE ?', ['maintenance_day', 'mh:%'])
+            self.query('UPDATE modules SET active=1')  # Lifecycle independently exercised by PHPUnit.
+            self.query('INSERT INTO modules (modulename,active,version) VALUES (?,1,?)', [module, '1.0'])
+            self.query('INSERT INTO module_hooks (modulename,location,`function`,whenactive,priority) VALUES (?,?,?,?,?)',
+                       [module, 'newday-runonce', module + '_dohook', '', 100])
+            self.query('UPDATE module_settings SET value=3 WHERE modulename=? AND setting=?', ['crazyaudrey', 'gamedaysremaining'])
+            setting('fixture_maint_count', 0)
+            for mode in ['throw', 'malformed', 'database']:
+                setting('fixture_maint_mode', mode)
+                failed = run()
+                self.assertEqual(1, failed.returncode, failed.stdout)
+                self.assertNotIn('SYNTHETIC-SECRET', failed.stdout + failed.stderr)
+                self.assertNotIn('nonexistent_fixture_table', failed.stdout + failed.stderr)
+                self.assertEqual([{'value': ''}], self.query('SELECT value FROM settings WHERE setting=?', ['maintenance_day']))  # getsetting persists its empty default, never a completed day
+                self.assertEqual('0', self.query('SELECT value FROM settings WHERE setting=?', ['fixture_maint_count'])[0]['value'])
+                # Earlier committed active module is not repeated when a later one fails.
+                self.assertEqual('2', self.query('SELECT value FROM module_settings WHERE modulename=? AND setting=?', ['crazyaudrey', 'gamedaysremaining'])[0]['value'])
+            setting('fixture_maint_mode', 'ok')
+            finished = run()
+            self.assertEqual(0, finished.returncode, finished.stderr)
+            self.assertEqual('complete', json.loads(finished.stdout)['maintenance'])
+            self.assertEqual('1', self.query('SELECT value FROM settings WHERE setting=?', ['fixture_maint_count'])[0]['value'])
+            duplicate = run()
+            self.assertEqual('already-complete', json.loads(duplicate.stdout)['maintenance'])
+            self.assertEqual('1', self.query('SELECT value FROM settings WHERE setting=?', ['fixture_maint_count'])[0]['value'])
+            self.query('DELETE FROM settings WHERE setting=? OR setting LIKE ?', ['maintenance_day', 'mh:%'])
+            setting('fixture_maint_mode', 'slow')
+            first = subprocess.Popen([shutil.which('php'), 'cron.php'], cwd=ROOT, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+            try:
+                for _ in range(100):
+                    if signal.exists() or first.poll() is not None:
+                        break
+                    time.sleep(.05)
+                self.assertTrue(signal.exists(), 'First scheduler did not enter its locked active hook')
+                second = run()
+                self.assertEqual(1, second.returncode)
+                out, err = first.communicate(timeout=60)
+                self.assertEqual(0, first.returncode, err)
+                self.assertEqual('complete', json.loads(out)['maintenance'])
+                self.assertEqual('2', self.query('SELECT value FROM settings WHERE setting=?', ['fixture_maint_count'])[0]['value'])
+            finally:
+                if first.poll() is None:
+                    first.terminate()
+                    first.wait(timeout=5)
+        finally:
+            path.unlink()
+            signal.unlink(missing_ok=True)
+            self.query('DELETE FROM module_hooks WHERE modulename=?', [module])
+            self.query('DELETE FROM modules WHERE modulename=?', [module])
+            self.query('UPDATE modules SET active=0')
+            self.query('DELETE FROM settings WHERE setting=? OR setting LIKE ? OR setting LIKE ?',
+                       ['maintenance_day', 'mh:%', 'fixture_maint_%'])
+
+    def test_cli_maintenance_is_once_per_game_day(self):
+        first = subprocess.run([shutil.which('php'), 'cron.php'], cwd=ROOT, capture_output=True, text=True, timeout=60)
+        self.assertEqual(0, first.returncode, first.stderr)
+        self.assertEqual('complete', json.loads(first.stdout)['maintenance'])
+        second = subprocess.run([shutil.which('php'), 'cron.php'], cwd=ROOT, capture_output=True, text=True, timeout=60)
+        self.assertEqual(0, second.returncode, second.stderr)
+        self.assertEqual('already-complete', json.loads(second.stdout)['maintenance'])
+
+    def test_dispatcher_enforces_module_state(self):
+        class NoRedirect(urllib.request.HTTPRedirectHandler):
+            def redirect_request(self, *args):
+                return None
+        client = urllib.request.build_opener(NoRedirect)
+        path = ROOT / 'modules' / 'resurrectionhttpfixture.php'
+        module = 'resurrectionhttpfixture'
+        with path.open('x') as file:
+            file.write('''<?php
+function resurrectionhttpfixture_getmoduleinfo() {
+    return ['name'=>'HTTP fixture','version'=>'1.0','author'=>'Synthetic','category'=>'Tests',
+        'allowanonymous'=>true,'override_forced_nav'=>true,
+        'requires'=>getsetting('fixture_dependency',0) ? ['missingdependency'=>'1.0|Missing'] : []];
+}
+function resurrectionhttpfixture_run() { echo 'fixture-executed'; exit; }
+''')
+        def request(expected_execution=False):
+            try:
+                response = client.open(f'http://127.0.0.1:{self.port}/runmodule.php?module={module}&admin=1&force=1', timeout=15)
+            except urllib.error.HTTPError as error:
+                response = error
+            body = response.read().decode()
+            self.assertNotRegex(body, r'(?i)(fatal error|warning:|deprecated:|notice:|runtime error in)')
+            if expected_execution:
+                self.assertEqual(200, response.status)
+                self.assertEqual('fixture-executed', body.strip())  # historical includes emit a leading newline
+            else:
+                self.assertIn(response.status, (302, 303, 403, 404))
+                self.assertNotIn('fixture-executed', body)
+        try:
+            request()  # uninstalled, despite both forged force parameters
+            self.query('INSERT INTO modules (modulename,active,version) VALUES (?,0,?)', [module, '1.0'])
+            request()  # installed but inactive
+            self.query('UPDATE modules SET active=1 WHERE modulename=?', [module])
+            request(True)
+            self.query('UPDATE settings SET value=? WHERE setting=?', ['1', 'fixture_dependency'])  # getsetting persisted its default
+            request()  # active but missing a dependency
+        finally:
+            path.unlink()
+            self.query('DELETE FROM modules WHERE modulename=?', [module])
+            self.query('DELETE FROM settings WHERE setting=?', ['fixture_dependency'])
+
+    @contextmanager
+    def _seeded_module_actions(self, location='header-runmodule'):
+        # Installed only in this disposable fixture. Production e_rand remains unchanged.
+        name='resurrectionrng'+os.urandom(4).hex(); path=ROOT/'modules'/f'{name}.php'
+        with path.open('x') as file:
+            file.write("""<?php
+function resurrectionrandomfixture_getmoduleinfo() { return ['name'=>'Deterministic test fixture','version'=>'1.0','author'=>'Tests','category'=>'Tests']; }
+function resurrectionrandomfixture_dohook($hook,$args) { mt_srand((int)getsetting('fixture_rng_seed',0)); return $args; }
+""".replace('resurrectionrandomfixture',name))
+        try:
+            self.query('INSERT INTO modules(modulename,active,version) VALUES (?,1,?)',[name,'1.0'])
+            self.query('INSERT INTO module_hooks(modulename,location,`function`,priority,whenactive) VALUES (?,?,?,100,?)',[name,location,name+'_dohook',''])
+            yield lambda seed: self.query('INSERT INTO settings(setting,value) VALUES (?,?) ON DUPLICATE KEY UPDATE value=VALUES(value)',['fixture_rng_seed',str(seed)])
+        finally:
+            self.query('DELETE FROM module_hooks WHERE modulename=?',[name])
+            self.query('DELETE FROM modules WHERE modulename=?',[name])
+            self.query('DELETE FROM settings WHERE setting=?',['fixture_rng_seed'])
+            path.unlink()
+
+    def test_specialty_onboarding_http_authority(self):
+        player=self.query('SELECT acctid FROM accounts WHERE login=?',['WebPlayer'])[0]['acctid']
+        original=self.query('SELECT * FROM accounts WHERE acctid=?',[player])[0]
+        prefs=self.query('SELECT * FROM module_userprefs WHERE userid=?',[player])
+        modules=self.query('SELECT modulename,active FROM modules')
+        self.query('UPDATE modules SET active=1')
+        call=self._security_client(); url='newday.php?continue=1'
+        specialties={'DA':'specialtydarkarts','MP':'specialtymysticpower','TS':'specialtythiefskills'}
+        def setup():
+            self.query('DELETE FROM module_userprefs WHERE userid=? AND modulename IN (?,?,?)',[player,*specialties.values()])
+            self.query('UPDATE accounts SET race=?,specialty=?,location=?,specialinc=?,dragonkills=0,dragonpoints=?,alive=1,hitpoints=100,bufflist=? WHERE acctid=?',
+                ['Human','','Unselected location','','a:0:{}','a:0:{}',player])
+        def state():
+            return self.query('SELECT race,location,specialty,gold,gems,turns,age,attack,defense,dragonkills FROM accounts WHERE acctid=?',[player])[0] | {'internal': self.query('SELECT modulename,setting,value FROM module_userprefs WHERE userid=? AND modulename IN (?,?,?) ORDER BY modulename,setting',[player,*specialties.values()])}
+        def adversarial(path,data=None): self._security_allow(player,path); return call(path,data)
+        def form():
+            self._security_allow(player,'newday.php'); before=state()
+            status,body=call('newday.php'); self.assertEqual(200,status,body[:1000]); self.assertEqual(before,state())
+            found={}
+            for action,part in re.findall(r'<form\b[^>]*action="([^"]+)"[^>]*>(.*?)</form>',body,re.S):
+                if html.unescape(action)!=url: continue
+                choice=re.search(r'name="setspecialty" value="([^"]+)"',part)
+                if choice: found[choice[1]]=self._security_fields(part)|{'onboarding':'specialty','setspecialty':choice[1]}
+            return found,body
+        try:
+            for spec,module in specialties.items():
+                with self.subTest(specialty=spec):
+                    setup(); forms,body=form(); self.assertEqual(set(specialties),set(forms))
+                    self.assertNotIn('href=\'newday.php?setspecialty=',body)
+                    before=state(); self.assertIn(self._security_client(None)(url,forms[spec])[0],[302,303,403]); self.assertEqual(before,state())
+                    for patch in [{'csrf_token':None},{'csrf_token':'0'*64}]:
+                        data=forms[spec]|patch
+                        if data['csrf_token'] is None: del data['csrf_token']
+                        self.assertEqual(403,adversarial(url,data)[0]); self.assertEqual(before,state())
+                    forms,_=form()
+                    self.assertEqual(200,call(url,forms[spec])[0]); after=state()
+                    self.assertEqual(spec,after['specialty']); self.assertEqual(before['location'],after['location'])
+                    self.assertEqual([{'setting':'skill','value':'0'},{'setting':'uses','value':'0'}], self.query('SELECT setting,value FROM module_userprefs WHERE userid=? AND modulename=? ORDER BY setting',[player,module]))
+                    self.assertEqual({k:v for k,v in before.items() if k not in ['specialty','internal']},{k:v for k,v in after.items() if k not in ['specialty','internal']})
+                    self.assertEqual(409,adversarial(url,forms[spec])[0]); self.assertEqual(after,state())
+                    alternative=next(v for k,v in forms.items() if k!=spec)
+                    self.assertEqual(409,adversarial(url,alternative)[0]); self.assertEqual(after,state())
+                    # A separate authenticated request reloads the committed identity/preferences.
+                    call=self._security_client(); adversarial('inn.php'); self.assertEqual(after,state())
+                    # Actual New Day uses the stored skill and historical configured bonus.
+                    self.query('UPDATE accounts SET lasthit=? WHERE acctid=?',['2000-01-01 00:00:00',player])
+                    self.assertEqual(200,self._advance_normal_day(adversarial,player)[0])
+                    bonus=int(self.query('SELECT value FROM settings WHERE setting=?',['specialtybonus'])[0]['value']) if self.query('SELECT value FROM settings WHERE setting=?',['specialtybonus']) else 1
+                    self.assertEqual(spec,state()['specialty'])
+                    self.assertEqual(str(bonus),self.query('SELECT value FROM module_userprefs WHERE userid=? AND modulename=? AND setting=?',[player,module,'uses'])[0]['value'])
+                    # Legitimately cleared specialty retains earned state, never client input.
+                    setup()
+                    for key,value in [('skill','9'),('uses','2')]:
+                        self.query('INSERT INTO module_userprefs(modulename,setting,userid,value) VALUES (?,?,?,?)',[module,key,player,value])
+                    forms,_=form(); self.assertEqual(200,call(url,forms[spec])[0])
+                    self.assertEqual([{'setting':'skill','value':'9'},{'setting':'uses','value':'2'}],self.query('SELECT setting,value FROM module_userprefs WHERE userid=? AND modulename=? ORDER BY setting',[player,module]))
+                    self.query('UPDATE accounts SET lasthit=? WHERE acctid=?',['2000-01-01 00:00:00',player])
+                    self.assertEqual(200,self._advance_normal_day(adversarial,player)[0])
+                    self.assertEqual(str(3+bonus),self.query('SELECT value FROM module_userprefs WHERE userid=? AND modulename=? AND setting=?',[player,module,'uses'])[0]['value'])
+                    setup(); forms,_=form(); self.query('UPDATE modules SET active=0 WHERE modulename=?',[module]); before=state()
+                    self.assertEqual(409,call(url,forms[spec])[0]); self.assertEqual(before,state())
+                    offered,_=form(); self.assertNotIn(spec,offered)
+                    self.query('UPDATE modules SET active=1 WHERE modulename=?',[module])
+                    setup(); forms,_=form()
+                    self.query('UPDATE modules SET modulename=? WHERE modulename=?',['fixture_missing_specialty',module])
+                    try:
+                        before=state(); self.assertEqual(409,call(url,forms[spec])[0]); self.assertEqual(before,state())
+                        offered,_=form(); self.assertNotIn(spec,offered)
+                    finally: self.query('UPDATE modules SET modulename=? WHERE modulename=?',[module,'fixture_missing_specialty'])
+                    setup(); forms,_=form()
+                    path=ROOT/'modules'/(module+'.php'); hidden=path.with_suffix('.fixture-hidden')
+                    path.rename(hidden)
+                    try:
+                        before=state(); self.assertEqual(409,call(url,forms[spec])[0]); self.assertEqual(before,state())
+                    finally: hidden.rename(path)
+                    for malformed in ['-1','1.5','garbage','a:0:{}']:
+                        setup(); forms,_=form()
+                        self.query('INSERT INTO module_userprefs(modulename,setting,userid,value) VALUES (?,?,?,?)',[module,'uses',player,malformed])
+                        before=state(); self.assertEqual(409,call(url,forms[spec])[0]); self.assertEqual(before,state())
+                    setup(); forms,_=form()
+                    self.query('INSERT INTO module_userprefs(modulename,setting,userid,value) VALUES (?,?,?,?)',[module,'skill',player,'3'])
+                    before=state(); self.assertEqual(409,call(url,forms[spec])[0]); self.assertEqual(before,state())
+                    setup(); forms,_=form(); before=state()
+                    self.assertEqual(403,adversarial('newday.php?setspecialty='+spec)[0]); self.assertEqual(before,state())
+                    # Fail the final account write after preference writes; all must roll back.
+                    forms,_=form()
+                    self.query("ALTER TABLE accounts ADD CONSTRAINT fixture_specialty_failure CHECK (login <> 'WebPlayer' OR specialty='')")
+                    try: self.assertEqual(500,call(url,forms[spec])[0])
+                    finally: self.query('ALTER TABLE accounts DROP CONSTRAINT fixture_specialty_failure')
+                    self.assertEqual(before,state()); self.assertEqual(409,adversarial(url,forms[spec])[0]); self.assertEqual(before,state())
+                    forms,_=form(); self.assertEqual(200,call(url,forms[spec])[0]); self.assertEqual(spec,state()['specialty'])
+            for patch in [{'setspecialty':'Unknown'},{'setspecialty':'../modules/specialtydarkarts.php'},{'setspecialty':'specialtydarkarts'},{'setspecialty':''},
+                          {'setspecialty[]':'DA'},{'module':'specialtydarkarts'},{'module':'../common.php'},{'location':'Forged'},
+                          {'skill':'999'},{'uses':'999'},{'prefs[skill]':'999'},{'setspecialty':'drinks'},{'attack':'999'},{'defense':'999'},{'name':'DA'},{'onboarding':'race'}]:
+                setup(); forms,_=form(); before=state()
+                self.assertEqual(400,call(url,forms['DA']|patch)[0]); self.assertEqual(before,state())
+            setup(); forms,_=form(); missing=forms['DA'].copy(); del missing['setspecialty']; before=state()
+            self.assertEqual(400,call(url,missing)[0]); self.assertEqual(before,state())
+            for key,value in [('race','Horrible Gelatinous Blob'),('specialinc','module:goldmine'),('dragonkills',1),('specialty','MP'),('age',999)]:
+                setup(); forms,_=form(); self.query('UPDATE accounts SET '+key+'=? WHERE acctid=?',[value,player]); before=state()
+                self.assertEqual(409,call(url,forms['DA'])[0]); self.assertEqual(before,state())
+            # No implicit GET fallback when every bundled specialty is inactive.
+            setup()
+            for module in specialties.values(): self.query('UPDATE modules SET active=0 WHERE modulename=?',[module])
+            before=state(); offered,body=form(); self.assertEqual({},offered); self.assertIn('No active bundled specialties',body); self.assertEqual(before,state())
+        finally:
+            self.query('DELETE FROM module_userprefs WHERE userid=?',[player])
+            for row in prefs: self.query('INSERT INTO module_userprefs(modulename,setting,userid,value) VALUES (?,?,?,?)',[row['modulename'],row['setting'],row['userid'],row['value']])
+            self.query('UPDATE accounts SET '+','.join(k+'=?' for k in original if k!='acctid')+' WHERE acctid=?',[*[v for k,v in original.items() if k!='acctid'],player])
+            for row in modules: self.query('UPDATE modules SET active=? WHERE modulename=?',[row['active'],row['modulename']])
+
+    @contextmanager
+    def _dragon_point_fixture(self):
+        player=self.query('SELECT acctid FROM accounts WHERE login=?',['WebPlayer'])[0]['acctid']
+        original=self.query('SELECT * FROM accounts WHERE acctid=?',[player])[0]
+        modules=self.query('SELECT modulename,active FROM modules')
+        self.query('UPDATE modules SET active=1')
+        call=self._security_client(); url='newday.php?continue=1'
+        def encode(value):
+            payload=base64.b64encode(json.dumps(value).encode()).decode()
+            return subprocess.check_output([shutil.which('php'),'-r',"echo serialize(json_decode(base64_decode('"+payload+"'),true));"],text=True)
+        def prepare(kills=1,points=None,**extra):
+            values=dict(dragonkills=kills,dragonpoints=encode([] if points is None else points),race='Horrible Gelatinous Blob',
+                specialty='',specialinc='',alive=1,hitpoints=100,maxhitpoints=100,attack=10,defense=20,bufflist='a:0:{}',
+                companions='a:0:{}',badguy='',turns=7,age=1,gold=100,gems=10,superuser=0)
+            values.update(extra)
+            self.query('UPDATE accounts SET '+','.join(k+'=?' for k in values)+' WHERE acctid=?',[*values.values(),player])
+        def state():
+            return self.query('SELECT dragonkills,dragonpoints,maxhitpoints,attack,defense,hitpoints,gold,gems,turns,race,specialty,age,alive,resurrections FROM accounts WHERE acctid=?',[player])[0]
+        def request(path=url,data=None):
+            self._security_allow(player,path); return call(path,data)
+        def forms(path=url):
+            before=state(); status,body=request(path); self.assertEqual(200,status,body[:1500]); self.assertEqual(before,state())
+            found={}
+            for action,part in re.findall(r'<form\b[^>]*action="([^"]+)"[^>]*>(.*?)</form>',body,re.S):
+                mode=re.search(r'name="allocation" value="([^"]+)"',part)
+                if not mode: continue
+                data=self._security_fields(part)|{'allocation':mode[1]}
+                choice=re.search(r'name="type" value="([^"]+)"',part)
+                if choice: data['type']=choice[1]
+                found[choice[1] if choice else 'bulk']=data
+            self.assertTrue(found,body[:2000]);return found,body
+        try: yield dict(player=player,call=call,url=url,prepare=prepare,state=state,request=request,forms=forms,encode=encode)
+        finally:
+            self.query('UPDATE accounts SET '+','.join(k+'=?' for k in original if k!='acctid')+' WHERE acctid=?',[*[v for k,v in original.items() if k!='acctid'],player])
+            for row in modules: self.query('UPDATE modules SET active=? WHERE modulename=?',[row['active'],row['modulename']])
+
+    def test_dragon_points_single_bulk_replay_and_handoffs(self):
+        with self._dragon_point_fixture() as f:
+            for kind,stat,delta in [('hp','maxhitpoints',5),('at','attack',1),('de','defense',1),('ff',None,0)]:
+                with self.subTest(kind=kind):
+                    f['prepare'](); forms,body=f['forms'](); self.assertEqual({'hp','at','de','ff'},set(forms)); self.assertNotIn('newday.php?dk=',body)
+                    before=f['state']()
+                    self.assertIn(self._security_client(None)(f['url'],forms[kind])[0],[302,303,403]);self.assertEqual(before,f['state']())
+                    self.assertEqual(200,f['request'](data=forms[kind])[0]); after=f['state']()
+                    expected=before|{'dragonpoints':f['encode']([kind])}
+                    if stat: expected[stat]=str(int(expected[stat])+delta)
+                    self.assertEqual(expected,after)
+                    self.assertEqual(409,f['request'](data=forms[kind])[0]);self.assertEqual(after,f['state']())
+                    other=next(v for k,v in forms.items() if k!=kind)
+                    self.assertEqual(409,f['request'](data=other)[0]);self.assertEqual(after,f['state']())
+                    status,body=f['request'](); self.assertEqual(200,status); self.assertIn('name="setrace"',body);self.assertEqual(after,f['state']())
+            f['prepare'](5); forms,_=f['forms'](); data=forms['bulk']|dict(hp='2',at='1',de='1',ff='1'); before=f['state']()
+            self.assertEqual(200,f['request'](data=data)[0]); after=f['state']()
+            self.assertEqual(before|dict(maxhitpoints='110',attack='11',defense='21',dragonpoints=f['encode'](['at','de','ff','hp','hp'])),after)
+            self.assertEqual(409,f['request'](data=data)[0]);self.assertEqual(after,f['state']())
+            # Already chosen race hands off to protected specialty forms.
+            f['prepare'](race='Human'); forms,_=f['forms']();self.assertEqual(200,f['request'](data=forms['ff'])[0])
+            status,body=f['request']();self.assertEqual(200,status,body[:1000]);self.assertIn('name="setspecialty"',body)
+            # Fully onboarded handoff exercises only the existing ff downstream consumer.
+            f['prepare'](race='Human',specialty='DA',lastnewday='',lasthit='2000-01-01 00:00:00');forms,_=f['forms']();self.assertEqual(200,f['request'](data=forms['ff'])[0])
+            status,body=f['request']();self.assertEqual(200,status,body[:1000]);self.assertIn('Begin New Day',body)
+            self.assertEqual('1',f['state']()['age'])
+            status,body=f['request'](data=self._security_fields(body)|{'newday':'normal'});self.assertEqual(200,status,body[:1500])
+            self.assertRegex(body,r'You gain.*?1.*?forest.*?fight.*?from spent dragon points')
+            self.assertEqual('2',f['state']()['age']); self.assertEqual(f['encode'](['ff']),f['state']()['dragonpoints'])
+            # Resurrection is routing context, never allocation authority or immediate revival.
+            f['prepare'](alive=0,hitpoints=0);resurl=f['url']+'&resurrection=true';forms,_=f['forms'](resurl);before=f['state']()
+            self.assertEqual(409,f['request'](data=forms['hp'])[0]);self.assertEqual(before,f['state']())
+            forms,_=f['forms'](resurl);self.assertEqual(200,f['request'](resurl,forms['hp'])[0]);self.assertEqual('0',f['state']()['alive'])
+            status,body=f['request'](resurl);self.assertEqual(200,status);self.assertIn('resurrection=true',body);self.assertIn('name="setrace"',body)
+
+    def test_dragon_points_invalid_requests_stale_and_corruption(self):
+        with self._dragon_point_fixture() as f:
+            for kills in [0,1,5]:
+                for query in ['dk=hp','dk=at','dk=de','dk=ff','dk=unknown','pdk=1','pdk=0']:
+                    f['prepare'](kills);before=f['state']();self.assertEqual(403,f['request']('newday.php?'+query)[0]);self.assertEqual(before,f['state']())
+            for data in [{'dk':'hp'},{'pdk':'1'},{'hp':'1'},{'type':'hp'},{'allocation':'single','type':'hp'}]:
+                f['prepare'](0,race='Human',specialty='DA');before=f['state']()
+                self.assertEqual(403,f['request'](data=data)[0]);self.assertEqual(before,f['state']())
+            for bad in ['', '-1','+1','01','1.0','1e0','1junk','4294967296','9999999999999999999999','0','6']:
+                f['prepare'](5);forms,_=f['forms']();before=f['state']()
+                data=forms['bulk']|dict(hp=bad,at='0',de='0',ff='0')
+                self.assertEqual(400,f['request'](data=data)[0],bad);self.assertEqual(before,f['state']())
+            for patch in [{'unknown':'0'},{'forged':'1'},{'hp[]':'5'},{'hp[0]':'5'},{'dragonkills':'999'},{'unspent':'5'},
+                          {'type':'hp'},{'allocation':'single'}]:
+                f['prepare'](5);forms,_=f['forms']();before=f['state']()
+                self.assertEqual(400,f['request'](data=forms['bulk']|dict(hp='5',at='0',de='0',ff='0')|patch)[0]);self.assertEqual(before,f['state']())
+            f['prepare'](5);forms,_=f['forms']();before=f['state']()
+            duplicate=list((forms['bulk']|dict(hp='5',at='0',de='0',ff='0')).items())+[('hp','5')]
+            self.assertEqual(400,f['request'](data=duplicate)[0]);self.assertEqual(before,f['state']())
+            for kind in ['unknown','forged','', 'hp[]']:
+                f['prepare']();forms,_=f['forms']();before=f['state']()
+                self.assertEqual(400,f['request'](data=forms['hp']|{'type':kind})[0]);self.assertEqual(before,f['state']())
+            for token in ['csrf_token','action_token']:
+                for value in [None,'0'*64]:
+                    f['prepare']();forms,_=f['forms']();data=forms['hp'].copy();before=f['state']()
+                    if value is None: del data[token]
+                    else: data[token]=value
+                    self.assertEqual(403 if token=='csrf_token' else 409,f['request'](data=data)[0]);self.assertEqual(before,f['state']())
+            for key,value in [('dragonkills',2),('dragonpoints','a:1:{i:0;s:2:"ff";}'),('maxhitpoints',101),('attack',11),('defense',21),
+                              ('race','Human'),('specialty','DA'),('age',2),('alive',0)]:
+                f['prepare']();forms,_=f['forms']();self.query('UPDATE accounts SET '+key+'=?'+(',hitpoints=0' if key=='alive' else '')+' WHERE acctid=?',[value,f['player']]);before=f['state']()
+                self.assertEqual(409,f['request'](data=forms['hp'])[0],key);self.assertEqual(before,f['state']())
+            # Two separately rendered tabs each have a valid intent. Exactly one wins.
+            f['prepare']();first,_=f['forms']();second,_=f['forms']();self.assertEqual(200,f['request'](data=first['hp'])[0]);after=f['state']()
+            self.assertEqual(409,f['request'](data=second['at'])[0]);self.assertEqual(after,f['state']())
+            for encoded in ['broken','b:0;',f['encode'](['hp','at']),f['encode']([None]),f['encode']([1]),f['encode']([[]]),f['encode']({'bad':'hp'})]:
+                f['prepare'](dragonpoints=encoded);before=f['state']()
+                status,body=f['request']();self.assertEqual(409,status,body[:1000]);self.assertEqual(before,f['state']())
+                self.assertNotIn('name="setrace"',body)
+            f['prepare'](2,['retired_module']);forms,body=f['forms']();self.assertIn('Unknown Spends',body);self.assertEqual({'hp','at','de','ff'},set(forms))
+
+    def test_dragon_points_late_rollback_and_overflow(self):
+        with self._dragon_point_fixture() as f:
+            f['prepare'](5);forms,_=f['forms']();data=forms['bulk']|dict(hp='2',at='1',de='1',ff='1');before=f['state']()
+            self.query("ALTER TABLE accounts ADD CONSTRAINT fixture_dp_failure CHECK (login <> 'WebPlayer' OR maxhitpoints=100)")
+            try:
+                status,body=f['request'](data=data);self.assertEqual(500,status);self.assertNotIn('SQLSTATE',body)
+            finally: self.query('ALTER TABLE accounts DROP CONSTRAINT fixture_dp_failure')
+            self.assertEqual(before,f['state']());self.assertEqual(409,f['request'](data=data)[0]);self.assertEqual(before,f['state']())
+            forms,_=f['forms']();self.assertEqual(200,f['request'](data=forms['bulk']|dict(hp='2',at='1',de='1',ff='1'))[0])
+            self.assertEqual('110',f['state']()['maxhitpoints'])
+            for stat,kind in [('maxhitpoints','hp'),('attack','at'),('defense','de')]:
+                f['prepare'](**{stat:4294967295});forms,_=f['forms']();before=f['state']()
+                self.assertEqual(409,f['request'](data=forms[kind])[0]);self.assertEqual(before,f['state']())
+
+    def test_dragon_points_hook_schema_and_recalculation(self):
+        with self._dragon_point_fixture() as f:
+            module='resurrectiondpointfixture';path=ROOT/'modules'/(module+'.php')
+            with path.open('x') as file:
+                file.write('''<?php
+function resurrectiondpointfixture_getmoduleinfo() { return ['name'=>'DP fixture','version'=>'1.0','author'=>'Synthetic','category'=>'Tests']; }
+function resurrectiondpointfixture_dohook($hook,$args) {
+    global $pdks,$session;
+    $mode=getsetting('fixture_dp_mode','normal');
+    if ($hook==='dkpointlabels') {
+        if ($mode==='disabled') $args['buy']['hp']=0;
+        if ($mode==='extension') { $args['desc']['extra']='Extra <safe> point'; $args['buy']['extra']=1; }
+        if ($mode==='reverse') { $args['desc']=array_reverse($args['desc'],true); $args['buy']=array_reverse($args['buy'],true); }
+        return $args;
+    }
+    db_query("UPDATE settings SET value=value+1 WHERE setting='fixture_dp_called'");
+    if ($mode==='recalc') { $pdks['ff']+=$pdks['hp'];$pdks['hp']=0; }
+    if ($mode==='forged') $pdks['forged']=1;
+    if ($mode==='overspend') $pdks['hp']++;
+    if ($mode==='negative') $pdks['hp']=-1;
+    if ($mode==='authority') $session['user']['dragonkills']++;
+    if ($mode==='late') throw new RuntimeException('DP-SECRET');
+    return $args;
+}
+''')
+            def setting(name,value): self.query('INSERT INTO settings(setting,value) VALUES (?,?) ON DUPLICATE KEY UPDATE value=VALUES(value)',[name,str(value)])
+            def mode(value): setting('fixture_dp_mode',value)
+            def called(): return self.query("SELECT value FROM settings WHERE setting='fixture_dp_called'")[0]['value']
+            try:
+                self.query('INSERT INTO modules(modulename,active,version) VALUES (?,1,?)',[module,'1.0'])
+                for hook in ['dkpointlabels','pdkpointrecalc']:
+                    self.query('INSERT INTO module_hooks(modulename,location,`function`,whenactive,priority) VALUES (?,?,?,?,?)',[module,hook,module+'_dohook','',100])
+                setting('fixture_dp_called',0)
+                f['prepare']();mode('normal');forms,_=f['forms']();mode('reverse')
+                self.assertEqual(200,f['request'](data=forms['hp'])[0]);self.assertEqual('0',called())
+                f['prepare']();mode('normal');forms,_=f['forms']();mode('disabled');before=f['state']()
+                self.assertEqual(409,f['request'](data=forms['hp'])[0]);self.assertEqual(before,f['state']())
+                forms,_=f['forms']();self.assertNotIn('hp',forms)
+                f['prepare']();mode('normal');forms,_=f['forms']();before=f['state']()
+                self._dragon_point_locked_writer(f,forms['hp'],"UPDATE settings SET value='disabled' WHERE setting='fixture_dp_mode'",[])
+                self.assertEqual(before,f['state']())
+                f['prepare']();mode('extension');forms,body=f['forms']();self.assertIn('extra',forms);self.assertIn('&lt;safe&gt;',body)
+                self.assertEqual(200,f['request'](data=forms['extra'])[0]);self.assertEqual(f['encode'](['extra']),f['state']()['dragonpoints'])
+                f['prepare'](5);mode('recalc');forms,_=f['forms']();data=forms['bulk']|dict(hp='5',at='0',de='0',ff='0')
+                self.assertEqual(200,f['request'](data=data)[0]);self.assertEqual('1',called());self.assertEqual('100',f['state']()['maxhitpoints']);self.assertEqual(f['encode'](['ff']*5),f['state']()['dragonpoints'])
+                for value,status in [('forged',400),('overspend',400),('negative',400),('authority',409),('late',500)]:
+                    f['prepare'](5);mode(value);forms,_=f['forms']();before=f['state']();prior=called()
+                    result,body=f['request'](data=forms['bulk']|dict(hp='5',at='0',de='0',ff='0'))
+                    self.assertEqual(status,result,value);self.assertNotIn('DP-SECRET',body);self.assertEqual(before,f['state']());self.assertEqual(prior,called())
+            finally:
+                path.unlink();self.query('DELETE FROM module_hooks WHERE modulename=?',[module]);self.query('DELETE FROM modules WHERE modulename=?',[module])
+                self.query("DELETE FROM settings WHERE setting LIKE 'fixture_dp_%'")
+
+    def _dragon_point_locked_writer(self, f, data, sql, parameters):
+        from concurrent.futures import ThreadPoolExecutor
+        self._security_allow(f['player'],f['url'])
+        code="""require 'dbconnect.php'; require 'lib/dbwrapper_pdo.php'; db_connect($DB_HOST,$DB_USER,$DB_PASS); db_select_db($DB_NAME);
+$db=$dbinfo['connection'];$db->beginTransaction();db_query('SELECT acctid FROM accounts WHERE acctid=? FOR UPDATE',true,[(int)$argv[1]]);
+echo "locked\\n";fflush(STDOUT);$change=json_decode(fgets(STDIN),true,512,JSON_THROW_ON_ERROR);db_query($change[0],true,$change[1]);$db->commit();"""
+        writer=subprocess.Popen([shutil.which('php'),'-r',code,str(f['player'])],cwd=ROOT,stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True)
+        try:
+            self.assertEqual('locked\n',writer.stdout.readline())
+            with ThreadPoolExecutor(max_workers=1) as pool:
+                future=pool.submit(f['call'],f['url'],data)
+                waiting=False
+                try:
+                    for _ in range(100):
+                        rows=self.query("SELECT INFO FROM information_schema.PROCESSLIST WHERE ID<>CONNECTION_ID() AND INFO LIKE '%FOR UPDATE%' AND COMMAND<>'Sleep'")
+                        if rows: waiting=True;break
+                        if future.done():break
+                        time.sleep(.02)
+                finally: writer.stdin.write(json.dumps([sql,parameters])+'\n');writer.stdin.flush();writer.wait(timeout=5)
+                self.assertTrue(waiting,'HTTP did not reach the locked player recheck')
+                self.assertEqual(409,future.result(timeout=20)[0])
+        finally:
+            if writer.poll() is None: writer.kill();writer.wait(timeout=5)
+            for stream in [writer.stdin,writer.stdout,writer.stderr]:stream.close()
+
+    def test_dragon_points_recheck_after_account_lock(self):
+        with self._dragon_point_fixture() as f:
+            f['prepare']();forms,_=f['forms']()
+            self._dragon_point_locked_writer(f,forms['hp'],'UPDATE accounts SET dragonkills=2 WHERE acctid=?',[f['player']])
+            after=f['state']();self.assertEqual('2',after['dragonkills']);self.assertEqual('100',after['maxhitpoints']);self.assertEqual('a:0:{}',after['dragonpoints'])
+
+    def test_race_onboarding_http_authority(self):
+        player=self.query('SELECT acctid FROM accounts WHERE login=?',['WebPlayer'])[0]['acctid']
+        original=self.query('SELECT * FROM accounts WHERE acctid=?',[player])[0]
+        modules=self.query('SELECT modulename,active FROM modules')
+        self.query('UPDATE modules SET active=1')
+        call=self._security_client(); url='newday.php?continue=1'
+        races={'Human':'racehuman','Elf':'raceelf','Dwarf':'racedwarf','Troll':'racetroll'}
+        village=self.query('SELECT value FROM settings WHERE setting=?',['villagename'])[0]['value']
+        def setup():
+            self.query('UPDATE accounts SET race=?,specialty=?,location=?,specialinc=?,dragonkills=0,dragonpoints=?,alive=1,hitpoints=100,bufflist=? WHERE acctid=?',
+                ['Horrible Gelatinous Blob','DA','Unselected location','','a:0:{}','a:0:{}',player])
+        def state():
+            return self.query('SELECT race,location,specialty,gold,gems,turns,age,attack,defense,dragonkills FROM accounts WHERE acctid=?',[player])[0]
+        def adversarial(path,data=None): self._security_allow(player,path); return call(path,data)
+        def form():
+            self._security_allow(player,'newday.php'); before=state()
+            status,body=call('newday.php'); self.assertEqual(200,status,body[:1000]); self.assertEqual(before,state())
+            found={}
+            for action,part in re.findall(r'<form\b[^>]*action="([^"]+)"[^>]*>(.*?)</form>',body,re.S):
+                if html.unescape(action)!=url: continue
+                choice=re.search(r'name="setrace" value="([^"]+)"',part)
+                if choice: found[choice[1]]=self._security_fields(part)|{'onboarding':'race','setrace':choice[1]}
+            return found,body
+        try:
+            for race,module in races.items():
+                with self.subTest(race=race):
+                    setup(); forms,body=form(); self.assertEqual(set(races),set(forms))
+                    self.assertNotIn('href=\'newday.php?setrace=',body)
+                    before=state(); self.assertIn(self._security_client(None)(url,forms[race])[0],[302,303,403]); self.assertEqual(before,state())
+                    for patch in [{'csrf_token':None},{'csrf_token':'0'*64}]:
+                        data=forms[race]|patch
+                        if data['csrf_token'] is None: del data['csrf_token']
+                        self.assertEqual(403,adversarial(url,data)[0]); self.assertEqual(before,state())
+                    forms,_=form()
+                    self.assertEqual(200,call(url,forms[race])[0]); after=state()
+                    self.assertEqual(race,after['race']); self.assertEqual(village,after['location'])
+                    self.assertEqual({k:v for k,v in before.items() if k not in ['race','location']},{k:v for k,v in after.items() if k not in ['race','location']})
+                    self.assertEqual(409,adversarial(url,forms[race])[0]); self.assertEqual(after,state())
+                    alternative=next(v for k,v in forms.items() if k!=race)
+                    self.assertEqual(409,adversarial(url,alternative)[0]); self.assertEqual(after,state())
+                    # A separate authenticated request reloads the committed identity/location.
+                    call=self._security_client(); adversarial('inn.php'); self.assertEqual(after,state())
+                    setup(); forms,_=form(); self.query('UPDATE modules SET active=0 WHERE modulename=?',[module]); before=state()
+                    self.assertEqual(409,call(url,forms[race])[0]); self.assertEqual(before,state())
+                    offered,_=form(); self.assertNotIn(race,offered)
+                    self.query('UPDATE modules SET active=1 WHERE modulename=?',[module])
+                    setup(); forms,_=form(); before=state()
+                    self.assertEqual(403,adversarial('newday.php?setrace='+race)[0]); self.assertEqual(before,state())
+                    # One atomic account UPDATE persists race and location. A database CHECK
+                    # at that write proves failed selections leave both fields unchanged.
+                    forms,_=form()
+                    self.query("ALTER TABLE accounts ADD CONSTRAINT fixture_race_failure CHECK (login <> 'WebPlayer' OR race='Horrible Gelatinous Blob')")
+                    try: self.assertEqual(500,call(url,forms[race])[0])
+                    finally: self.query('ALTER TABLE accounts DROP CONSTRAINT fixture_race_failure')
+                    self.assertEqual(before,state()); self.assertEqual(409,adversarial(url,forms[race])[0]); self.assertEqual(before,state())
+                    forms,_=form(); self.assertEqual(200,call(url,forms[race])[0]); self.assertEqual(race,state()['race'])
+            for patch in [{'setrace':'Unknown'},{'setrace':'../modules/racehuman.php'},{'setrace':'racehuman'},{'setrace':''},
+                          {'setrace[]':'Human'},{'module':'racehuman'},{'module':'../common.php'},{'location':'Forged'},
+                          {'attack':'999'},{'defense':'999'},{'name':'Human'},{'onboarding':'specialty'}]:
+                setup(); forms,_=form(); before=state()
+                self.assertEqual(400,call(url,forms['Human']|patch)[0]); self.assertEqual(before,state())
+            setup(); forms,_=form(); missing=forms['Human'].copy(); del missing['setrace']; before=state()
+            self.assertEqual(400,call(url,missing)[0]); self.assertEqual(before,state())
+            for key,value in [('race','Elf'),('specialinc','module:goldmine'),('dragonkills',1),('specialty','MP'),('age',999)]:
+                setup(); forms,_=form(); self.query('UPDATE accounts SET '+key+'=? WHERE acctid=?',[value,player]); before=state()
+                self.assertEqual(409,call(url,forms['Human'])[0]); self.assertEqual(before,state())
+            # No implicit GET fallback is allowed when every bundled race is inactive.
+            setup()
+            for module in races.values(): self.query('UPDATE modules SET active=0 WHERE modulename=?',[module])
+            before=state(); offered,body=form(); self.assertEqual({},offered); self.assertIn('No active bundled races',body); self.assertEqual(before,state())
+        finally:
+            self.query('UPDATE accounts SET '+','.join(k+'=?' for k in original if k!='acctid')+' WHERE acctid=?',[*[v for k,v in original.items() if k!='acctid'],player])
+            for row in modules: self.query('UPDATE modules SET active=? WHERE modulename=?',[row['active'],row['modulename']])
+
+    def test_lovers_alternative_choices_daily_authority_http(self):
+        player=self.query('SELECT acctid FROM accounts WHERE login=?',['WebPlayer'])[0]['acctid']
+        original=self.query('SELECT * FROM accounts WHERE acctid=?',[player])[0]
+        prefs=self.query('SELECT * FROM module_userprefs WHERE userid=?',[player])
+        settings=self.query('SELECT * FROM settings WHERE setting IN (?,?,?)',['bard','barmaid','innname'])
+        modules=self.query('SELECT modulename,active FROM modules')
+        self.query('UPDATE modules SET active=1')
+        call=self._security_client(); url='runmodule.php?module=lovers&op=flirt'
+        def pref(value):
+            self.query('INSERT INTO module_userprefs(modulename,setting,userid,value) VALUES (?,?,?,?) ON DUPLICATE KEY UPDATE value=VALUES(value)',['lovers','seenlover',player,str(value)])
+        def setup(sex=0,charm=1,married=0,turns=10):
+            self.query('UPDATE accounts SET sex=?,charm=?,marriedto=?,turns=?,alive=1,hitpoints=100,maxhitpoints=100,specialinc=?,bufflist=?,race=?,specialty=? WHERE acctid=?',[sex,charm,married,turns,'','a:0:{}','Human','DA',player]); pref(0)
+        def state():
+            return [self.query('SELECT gold,gems,turns,charm,marriedto,hitpoints,bufflist FROM accounts WHERE acctid=?',[player])[0],
+                self.query('SELECT value FROM module_userprefs WHERE modulename=? AND setting=? AND userid=?',['lovers','seenlover',player]),
+                self.query('SELECT newsid FROM news WHERE accountid=? ORDER BY newsid',[player]),
+                self.query('SELECT id FROM debuglog WHERE actor=? ORDER BY id',[player])]
+        def adversarial(path,data=None):
+            # Permit transport through the legacy nav filter only for negative tests, so
+            # the new business boundary must itself reject a forged or replayed action.
+            self._security_allow(player,path); return call(path,data)
+        def forms():
+            # Enter via the real Inn link and submit the real rendered form. Neither
+            # Lovers entry nor its valid POST receives fixture navigation authorization.
+            self._security_allow(player,'inn.php')
+            status,body=call('inn.php'); self.assertEqual(200,status)
+            self.assertIn('runmodule.php?module=lovers',html.unescape(body))
+            entry=next(html.unescape(link) for link in re.findall(r'href=[\'\"]([^\'\"]+)',body) if html.unescape(link).startswith(url))
+            before=state(); status,body=call(entry); self.assertEqual(200,status,body[:1500]); self.assertEqual(before,state())
+            found=[]
+            for action,part in re.findall(r'<form\b[^>]*action="([^"]+)"[^>]*>(.*?)</form>',body,re.S):
+                if html.unescape(action)!=url: continue
+                data=self._security_fields(part)
+                for key,value in re.findall(r'name="(action|flirt)" value="([^"]+)"',part): data[key]=value
+                found.append(data)
+            self.assertEqual(1 if int(self.query('SELECT marriedto FROM accounts WHERE acctid=?',[player])[0]['marriedto'])==4294967295 else 7,len(found))
+            return found,body
+        try:
+            with self._seeded_module_actions() as seed:
+                # Each choice is independently available on both NPC paths. Low/high
+                # random branches use charm=1 and fixed seeds, never a stage counter.
+                lows=[0,2,1,1,24,2]; highs=[1,5,14,0,19,5]
+                for sex in [0,1]:
+                    for choice in range(1,8):
+                        for positive in [False,True]:
+                            with self.subTest(sex=sex,choice=choice,positive=positive):
+                                setup(sex,22 if choice==7 and positive else 1)
+                                seed((highs if positive else lows)[choice-1] if choice<7 else 0)
+                                available,body=forms(); data=available[choice-1]
+                                self.assertEqual(str(choice),data['flirt'])
+                                status,body=call(url,data); self.assertEqual(200,status,body[:2000])
+                                self.assertIn('show in 5 minutes' if sex==1 and choice==6 and not positive else ('Violet' if sex==0 else 'Seth'),body)
+                                saved=state(); account=saved[0]
+                                expected_charm=22 if choice==7 and positive else (2 if positive and choice<7 else (0 if choice in [4,5,6] else 1))
+                                self.assertEqual(expected_charm,int(account['charm']))
+                                self.assertEqual(8 if choice==6 and positive else (0 if choice==7 and not positive else 10),int(account['turns']))
+                                self.assertEqual(4294967295 if choice==7 and positive else 0,int(account['marriedto']))
+                                self.assertEqual([{'value':'1'}],saved[1])
+                                self.assertEqual(choice==7 and positive,'lover' in account['bufflist'])
+                                self.assertIn(adversarial(url,data)[0],[409]); self.assertEqual(saved,state())
+                                self.assertEqual(409,adversarial(url,available[0 if choice!=1 else 1])[0]); self.assertEqual(saved,state())
+                                self.assertEqual(409,adversarial(url)[0]); self.assertEqual(saved,state())
+                    # Married visit historically has no choice, and both +/- charm outcomes.
+                    for rng,delta in [(0,-1),(1,1)]:
+                        setup(sex,10,4294967295); seed(rng)
+                        available,_=forms(); self.assertNotIn('flirt',available[0])
+                        status,body=call(url,available[0]); self.assertEqual(200,status,body[:1500])
+                        saved=state(); self.assertEqual(10+delta,int(saved[0]['charm']))
+                        self.assertEqual(delta==1,'lover' in saved[0]['bufflist']); self.assertEqual([{'value':'1'}],saved[1])
+                        self.assertEqual(409,adversarial(url,available[0])[0]); self.assertEqual(saved,state())
+                    # Capped positive charm and exhaustion floors preserve old formulas.
+                    for charm,turns,choice,expected_charm,expected_turns in [(30,10,1,30,10),(18,1,6,19,0),(18,0,6,19,0)]:
+                        setup(sex,charm,turns=turns); seed(1); available,_=forms()
+                        self.assertEqual(200,call(url,available[choice-1])[0]); saved=state()[0]
+                        self.assertEqual((expected_charm,expected_turns),(int(saved['charm']),int(saved['turns'])))
+                setup(); available,_=forms(); before=state()
+                self.assertIn(self._security_client(None)(url,available[0])[0],[302,303,403]); self.assertEqual(before,state())
+                for patch in [{'csrf_token':None},{'csrf_token':'0'*64}]:
+                    data=available[0]|patch
+                    if data['csrf_token'] is None: del data['csrf_token']
+                    self.assertEqual(403,adversarial(url,data)[0]); self.assertEqual(before,state())
+                for bad in [None,'0','-1','8','999999999999999999999','x','1.0']:
+                    setup(); available,_=forms(); data=available[0].copy(); before=state()
+                    if bad is None: del data['flirt']
+                    else: data['flirt']=bad
+                    self.assertEqual(400,call(url,data)[0]); self.assertEqual(before,state())
+                for patch in [{'flirt[]':'1'},{'action':'visit'},{'marriedto':'4294967295'},{'sex':'1'},
+                              {'effect':'charm'},{'charm':'999'},{'gold':'999'},{'gems':'999'},{'turns':'999'},
+                              {'hitpoints':'999'},{'seenlover':'0'},{'partner':'forged'},{'op':'chat'}]:
+                    setup(); available,_=forms(); before=state()
+                    self.assertEqual(400,call(url,available[0]|patch)[0]); self.assertEqual(before,state())
+                setup(); available,_=forms(); before=state()
+                duplicated=list(available[0].items())+[('flirt','7')]
+                self.assertEqual(400,call(url,duplicated)[0]); self.assertEqual(before,state())
+                setup(married=4294967295); available,_=forms(); before=state()
+                self.assertEqual(400,call(url,available[0]|{'flirt':'1'})[0]); self.assertEqual(before,state())
+                for key,value in [('sex',1),('marriedto',4294967295),('charm',5),('turns',9),('alive',0),('hitpoints',0),('specialinc','module:goldmine')]:
+                    setup(); available,_=forms(); self.query('UPDATE accounts SET '+key+'=? WHERE acctid=?',[value,player]); before=state()
+                    self.assertEqual(409,call(url,available[0])[0]); self.assertEqual(before,state())
+                for value in ['1','-1','garbage','2']:
+                    setup(); available,_=forms(); pref(value); before=state()
+                    self.assertEqual(409,call(url,available[0])[0]); self.assertEqual(before,state())
+                setup(); available,_=forms(); self.query('UPDATE modules SET active=0 WHERE modulename=?',['lovers']); before=state()
+                status,body=call(url,available[0]); self.assertIn('no longer active',body); self.assertEqual(before,state())
+                self.query('UPDATE modules SET active=1 WHERE modulename=?',['lovers'])
+                for married in [0,4294967295]:
+                    setup(married=married); before=state()
+                    self.assertEqual(400,adversarial(url+'&flirt=1')[0]); self.assertEqual(before,state())
+                # Absence of the default row is not a GET write.
+                setup(); self.query('DELETE FROM module_userprefs WHERE modulename=? AND setting=? AND userid=?',['lovers','seenlover',player]); forms()
+                self.assertEqual([],state()[1])
+                # Real final-account CHECK failures roll back news/debug and the preference.
+                for choice,charm in [(6,18),(7,1),(7,22)]:
+                    setup(charm=charm); available,_=forms(); before=state()
+                    self.query("ALTER TABLE accounts ADD CONSTRAINT fixture_lovers_failure CHECK (login <> 'WebPlayer' OR (turns=10 AND marriedto=0))")
+                    try: self.assertEqual(500,call(url,available[choice-1])[0])
+                    finally: self.query('ALTER TABLE accounts DROP CONSTRAINT fixture_lovers_failure')
+                    self.assertEqual(before,state())
+                    self.assertEqual(409,adversarial(url,available[choice-1])[0]); self.assertEqual(before,state())
+                    available,_=forms(); self.assertEqual(200,call(url,available[choice-1])[0])
+                # Normal New Day resets availability; the previous day's form stays stale.
+                setup(); seed(1); available,_=forms(); old=available[1]
+                self.assertEqual(200,call(url,available[0])[0]); self.assertEqual(409,adversarial(url)[0])
+                self.query('UPDATE accounts SET lasthit=? WHERE acctid=?',['2000-01-01 00:00:00',player])
+                self.assertEqual(200,self._advance_normal_day(adversarial,player)[0]); self.assertEqual([{'value':'0'}],state()[1])
+                self.assertEqual(409,adversarial(url,old)[0])
+                available,_=forms(); self.assertEqual(200,call(url,available[0])[0]); persisted=state()
+                call=self._security_client(); adversarial('inn.php'); self.assertEqual(persisted,state())
+                # NPC-married New Day attrition and divorce are historical daily rules.
+                for sex in [0,1]:
+                    for charm,rng,after_day,married_after in [(10,1,10,4294967295),(1,0,0,0)]:
+                        setup(sex,charm,4294967295); seed(rng); available,_=forms()
+                        self.assertEqual(200,call(url,available[0])[0])
+                        self.query('UPDATE accounts SET dragonkills=0,lasthit=? WHERE acctid=?',['2000-01-01 00:00:00',player])
+                        self.assertEqual(200,self._advance_normal_day(adversarial,player)[0])
+                        saved=state(); self.assertEqual(after_day,int(saved[0]['charm']))
+                        self.assertEqual(married_after,int(saved[0]['marriedto'])); self.assertEqual([{'value':'0'}],saved[1])
+                        available,_=forms(); self.assertEqual(200,call(url,available[0])[0])
+                # Configured names keep apostrophes, slashes, UTF-8 and color, while markup escapes.
+                for setting in ['bard','barmaid','innname']:
+                    self.query('INSERT INTO settings(setting,value) VALUES (?,?) ON DUPLICATE KEY UPDATE value=VALUES(value)',[setting,"`2O'Reilly \\ 雪 <img src=x>"])
+                for sex in [0,1]:
+                    setup(sex); available,body=forms(); self.assertNotIn('<img src=x>',body); self.assertIn('&lt;img',body); self.assertIn('雪',body)
+                    self.assertEqual(200,call(url,available[0])[0])
+                    for act in ['', 'armor' if sex==0 else 'fat', 'sports' if sex==0 else 'gossip']:
+                        before=state(); status,body=adversarial('runmodule.php?module=lovers&op=chat&act='+act)
+                        self.assertEqual(200,status); self.assertEqual(before,state()); self.assertNotIn('<img src=x>',body)
+        finally:
+            self.query('UPDATE accounts SET '+','.join(k+'=?' for k in original if k!='acctid')+' WHERE acctid=?',[*[v for k,v in original.items() if k!='acctid'],player])
+            self.query('DELETE FROM module_userprefs WHERE userid=?',[player])
+            for row in prefs: self.query('INSERT INTO module_userprefs(modulename,setting,userid,value) VALUES (?,?,?,?)',[row['modulename'],row['setting'],player,row['value']])
+            for key in ['bard','barmaid','innname']: self.query('DELETE FROM settings WHERE setting=?',[key])
+            for row in settings: self.query('INSERT INTO settings(setting,value) VALUES (?,?)',[row['setting'],row['value']])
+            for row in modules: self.query('UPDATE modules SET active=? WHERE modulename=?',[row['active'],row['modulename']])
+
+    def test_goldmine_deterministic_http_authority(self):
+        player=self.query('SELECT acctid FROM accounts WHERE login=?',['WebPlayer'])[0]['acctid']
+        original=self.query('SELECT * FROM accounts WHERE acctid=?',[player])[0]
+        saved=self.query('SELECT * FROM module_settings WHERE modulename IN (?,?,?,?,?)',['goldmine','racehuman','raceelf','racedwarf','racetroll'])
+        self.query('UPDATE modules SET active=1')
+        self.query('INSERT INTO mounts(mountname,mountcategory,mountbuff) VALUES (?,?,?)',['Mine fixture','Fixture','a:0:{}'])
+        mount=int(self.query('SELECT mountid FROM mounts WHERE mountname=?',['Mine fixture'])[0]['mountid'])
+        call=self._security_client()
+        def request(url,form=None): self._security_allow(player,url); return call(url,form)
+        def setting(key,value,module='goldmine'):
+            self.query('INSERT INTO module_settings(modulename,setting,value) VALUES (?,?,?) ON DUPLICATE KEY UPDATE value=VALUES(value)',[module,key,str(value)])
+        def pref(key,value):
+            self.query('INSERT INTO module_objprefs(modulename,objtype,objid,setting,value) VALUES (?,?,?,?,?) ON DUPLICATE KEY UPDATE value=VALUES(value)',['goldmine','mounts',mount,key,str(value)])
+        def state(): return self.query('SELECT gold,gems,turns,alive,hitpoints,experience,hashorse,specialinc,bufflist FROM accounts WHERE acctid=?',[player])[0]
+        def reset(horse=0,race='Human',turns=10):
+            self.query('UPDATE accounts SET gold=1000,gems=20,turns=?,alive=1,hitpoints=100,maxhitpoints=100,experience=100,level=7,hashorse=?,race=?,specialty=?,specialinc=?,bufflist=? WHERE acctid=?',[turns,horse,race,'DA','module:goldmine','a:0:{}',player])
+        url='forest.php?op=mine'
+        def form():
+            before=state(); status,body=request(url); self.assertEqual(200,status,body[:1000]); self.assertEqual(before,state())
+            fields=self._security_fields(body)
+            self.assertEqual(403,request(url,{})[0]); self.assertEqual(before,state())
+            return fields
+        def mine():
+            fields=form(); status,body=request(url,{**fields,'gold':999999,'gems':99999,'outcome':18,'racesave':1,'hashorse':0,'percentgoldloss':0})
+            self.assertEqual(200,status,body[:2000]); after=state()
+            request(url,fields); self.assertEqual(after,state())
+            return after,body
+        try:
+            with self._seeded_module_actions('header-forest') as seed:
+                setting('alwaystether',0); setting('percentgoldloss',50); setting('percentgemloss',25)
+                for race in ['human','elf','dwarf','troll']: setting('minedeathchance',90,'race'+race)
+                # Every historical mining roll is deterministic, including both collapse rolls.
+                seeds=[75,6,91,12,27,10,23,2,3,15,20,48,7,49,4,24,22,30,16,0]
+                for roll,rng in enumerate(seeds,1):
+                    reset(); seed(rng); after,body=mine()
+                    gold,gems,turns=[int(after[k]) for k in ['gold','gems','turns']]
+                    if roll<=5: self.assertEqual((1000,20,9),(gold,gems,turns))
+                    elif roll<=10:
+                        self.assertTrue(1035<=gold<=1140); self.assertEqual((20,9),(gems,turns))
+                    elif roll<=15:
+                        self.assertEqual((1000,9),(gold,turns)); self.assertTrue(21<=gems<=22)
+                    elif roll<=18:
+                        self.assertTrue(1070<=gold<=1280); self.assertTrue(21<=gems<=23); self.assertEqual(9,turns)
+                    else: self.assertIn('massive cave in',body)
+                    self.assertEqual('',after['specialinc'])
+                # No mount death and exact configured percentage loss, including endpoints.
+                for loss,expectedGold,expectedGems in [(0,1000,20),(25,750,15),(100,0,0)]:
+                    setting('percentgoldloss',loss); setting('percentgemloss',loss); reset(); seed(0)
+                    after,_=mine(); self.assertEqual([0,0,110,expectedGold,expectedGems],[int(after[k]) for k in ['alive','hitpoints','experience','gold','gems']])
+                setting('percentgoldloss',50); setting('percentgemloss',25)
+                # Real shipped rescue hooks, no archive race dependency.
+                for race in ['Human','Elf','Dwarf','Troll']:
+                    setting('minedeathchance',0,'race'+race.lower()); reset(race=race); seed(0)
+                    after,_=mine(); self.assertEqual([1,100,0,1000,20],[int(after[k]) for k in ['alive','hitpoints','turns','gold','gems']])
+                    setting('minedeathchance',90,'race'+race.lower())
+                # Mount seed 47 collapses after automatic-tether and entrance rolls.
+                for enter,auto,die,save,alive,kept,text in [
+                    (0,0,100,100,0,True,'tether'),(100,100,100,100,0,True,'tether'),
+                    (100,0,0,0,0,True,'managed to escape'),(100,0,100,0,0,False,'bones'),
+                    (100,0,100,100,1,True,'drag you to safety')]:
+                    setting('alwaystether',auto)
+                    for key,value in [('entermine',enter),('dieinmine',die),('saveplayer',save)]: pref(key,value)
+                    reset(mount); seed(47); after,body=mine()
+                    self.assertEqual(alive,int(after['alive'])); self.assertEqual(mount if kept else 0,int(after['hashorse'])); self.assertIn(text,body)
+                # Preferences preserve LoGD color text while HTML is escaped by output().
+                pref('savemsg','`2SAFE <img src=x onerror=alert(1)>'); reset(mount); seed(47)
+                after,body=mine(); self.assertIn('SAFE',body); self.assertNotIn('<img src=x onerror=',body)
+                # Stale forms bind the mount record, preference values, settings and race chance.
+                for change in [lambda:pref('saveplayer',0),lambda:setting('percentgoldloss',51),
+                               lambda:setting('minedeathchance',89,'racehuman'),
+                               lambda:self.query('UPDATE mounts SET mountname=? WHERE mountid=?',['Changed fixture',mount])]:
+                    reset(mount); fields=form(); change(); before=state()
+                    self.assertEqual(409,request(url,fields)[0]); self.assertEqual(before,state())
+                for key,bad in [('entermine','101'),('dieinmine','-1'),('saveplayer','bad')]:
+                    old=self.query('SELECT value FROM module_objprefs WHERE modulename=? AND objid=? AND setting=?',['goldmine',mount,key])[0]['value']
+                    pref(key,bad); reset(mount); before=state(); self.assertEqual(409,request(url)[0]); self.assertEqual(before,state()); pref(key,old)
+                setting('percentgoldloss','101'); reset(); before=state(); self.assertEqual(409,request(url)[0]); self.assertEqual(before,state()); setting('percentgoldloss',50)
+                reset(254); before=state(); self.assertEqual(409,request(url)[0]); self.assertEqual(before,state())
+                reset(); before=state()
+                for bad in ['forest.php?op[]=mine','forest.php?op=forged']:
+                    self.assertEqual(400,request(bad)[0]); self.assertEqual(before,state())
+                fields=form(); self.query('UPDATE modules SET active=0 WHERE modulename=?',['goldmine']); before=state()
+                request(url,fields); self.assertEqual(before,state()); self.query('UPDATE modules SET active=1 WHERE modulename=?',['goldmine'])
+                self.assertIn(self._security_client(None)(url,fields)[0],[302,303,403]); self.assertEqual(before,state())
+                # Final-account failure rolls back debug/news and currency together; fresh retry works.
+                reset(); seed(0); fields=form(); before=state()
+                counts=[self.query('SELECT COUNT(*) AS n FROM '+table)[0]['n'] for table in ['debuglog','news']]
+                self.query('ALTER TABLE accounts ADD CONSTRAINT fixture_mine_failure CHECK (alive=1)')
+                try: self.assertEqual(500,request(url,fields)[0])
+                finally: self.query('ALTER TABLE accounts DROP CONSTRAINT fixture_mine_failure')
+                self.assertEqual(before,state()); self.assertEqual(counts,[self.query('SELECT COUNT(*) AS n FROM '+table)[0]['n'] for table in ['debuglog','news']])
+                self.assertEqual(409,request(url,fields)[0]); self.assertEqual(before,state())
+                after,_=mine(); self.assertEqual(0,int(after['alive']))
+                reset(turns=0); seed(0); after,_=mine(); self.assertEqual([1000,20,1],[int(after[k]) for k in ['gold','gems','alive']])
+        finally:
+            self.query('UPDATE accounts SET '+','.join(k+'=?' for k in original if k!='acctid')+' WHERE acctid=?',[*[v for k,v in original.items() if k!='acctid'],player])
+            self.query('DELETE FROM module_objprefs WHERE modulename=? AND objid=?',['goldmine',mount]); self.query('DELETE FROM mounts WHERE mountid=?',[mount])
+            for module in ['goldmine','racehuman','raceelf','racedwarf','racetroll']: self.query('DELETE FROM module_settings WHERE modulename=?',[module])
+            for row in saved: setting(row['setting'],row['value'],row['modulename'])
+            self.query('UPDATE modules SET active=0')
+
+    def test_outhouse_configured_outcomes_http(self):
+        player=self.query('SELECT acctid FROM accounts WHERE login=?',['WebPlayer'])[0]['acctid']
+        original=self.query('SELECT * FROM accounts WHERE acctid=?',[player])[0]
+        prefs=self.query('SELECT * FROM module_userprefs WHERE userid=?',[player])
+        saved=self.query('SELECT setting,value FROM module_settings WHERE modulename=?',['outhouse'])
+        self.query('UPDATE modules SET active=1'); call=self._security_client()
+        def request(url,form=None): self._security_allow(player,url); return call(url,form)
+        def pref(key,value): self.query('INSERT INTO module_userprefs(modulename,setting,userid,value) VALUES (?,?,?,?) ON DUPLICATE KEY UPDATE value=VALUES(value)',['outhouse',key,player,str(value)])
+        def setting(key,value): self.query('INSERT INTO module_settings(modulename,setting,value) VALUES (?,?,?) ON DUPLICATE KEY UPDATE value=VALUES(value)',['outhouse',key,str(value)])
+        def state(): return self.query('SELECT gold,gems,turns FROM accounts WHERE acctid=?',[player])[0]
+        def action(op,expected=200):
+            url='runmodule.php?module=outhouse&op='+op
+            before=state(); status,body=request(url); self.assertEqual(200,status); self.assertEqual(before,state())
+            form=self._security_fields(body); self.assertEqual(403,request(url,{})[0]); self.assertEqual(before,state())
+            status,body=request(url,form); self.assertEqual(expected,status,body[:1500]); after=state()
+            self.assertEqual(409,request(url,form)[0]); self.assertEqual(after,state())
+            return after
+        try:
+            with self._seeded_module_actions() as seed:
+                for key,value in {'cost':7,'giveback':3,'goldinhand':0,'takeback':20,'badmusthit':0}.items(): setting(key,value)
+                # paid/free, rewards, no reward, penalty and lower bound. Seeds only choose historical outcomes.
+                cases=[('pay','washpay',100,100,100,0,100,96,6,11),('pay','washpay',0,0,0,0,100,93,5,10),
+                       ('pay','washpay',100,0,0,0,100,96,5,10),('free','washfree',100,0,0,0,100,103,5,10),
+                       ('free','washfree',100,0,0,1,100,100,5,10),('free','nowash',0,0,0,0,3,0,5,10)]
+                for visit,finish,good,gem,turn,rng,gold,expectedGold,expectedGems,expectedTurns in cases:
+                    seed(rng); pref('usedouthouse',0); pref('stage',0)
+                    self.query('UPDATE accounts SET gold=?,gems=5,turns=10,alive=1,specialinc=? WHERE acctid=?',[gold,'',player])
+                    for key,value in {'goodmusthit':good,'givegempercent':gem,'giveturnchance':turn}.items(): setting(key,value)
+                    action(visit); after=action(finish)
+                    self.assertEqual([expectedGold,expectedGems,expectedTurns],[int(after[k]) for k in ['gold','gems','turns']])
+                    before=state(); action(finish,409); action(visit,409); self.assertEqual(before,state())
+                for key,bad in [('cost','-1'),('goodmusthit','101'),('givegempercent','bad'),('takeback','21')]:
+                    old=self.query('SELECT value FROM module_settings WHERE modulename=? AND setting=?',['outhouse',key])[0]['value']
+                    pref('usedouthouse',0); pref('stage',0); setting(key,bad); before=state()
+                    action('free',409); self.assertEqual(before,state()); setting(key,old)
+                pref('usedouthouse','invalid'); before=state(); action('free',409); self.assertEqual(before,state())
+                pref('usedouthouse',1); pref('stage',2)
+                self.query('UPDATE accounts SET lasthit=?,race=?,specialty=? WHERE acctid=?',['2000-01-01 00:00:00','Human','DA',player])
+                self.assertEqual(200,self._advance_normal_day(request,player)[0])
+                actual={r['setting']:r['value'] for r in self.query('SELECT setting,value FROM module_userprefs WHERE modulename=? AND userid=?',['outhouse',player])}
+                self.assertEqual('0',actual['usedouthouse']); self.assertEqual('0',actual['stage'])
+                action('free')
+        finally:
+            self.query('UPDATE accounts SET '+','.join(k+'=?' for k in original if k!='acctid')+' WHERE acctid=?',[*[v for k,v in original.items() if k!='acctid'],player])
+            self.query('DELETE FROM module_userprefs WHERE userid=?',[player])
+            for row in prefs: self.query('INSERT INTO module_userprefs(modulename,setting,userid,value) VALUES (?,?,?,?)',[row['modulename'],row['setting'],player,row['value']])
+            self.query('DELETE FROM module_settings WHERE modulename=?',['outhouse'])
+            for row in saved: setting(row['setting'],row['value'])
+            self.query('UPDATE modules SET active=0')
+
+    def test_sethsong_all_configured_effects_http(self):
+        player=self.query('SELECT acctid FROM accounts WHERE login=?',['WebPlayer'])[0]['acctid']
+        original=self.query('SELECT * FROM accounts WHERE acctid=?',[player])[0]
+        prefs=self.query('SELECT * FROM module_userprefs WHERE userid=?',[player])
+        saved=self.query('SELECT setting,value FROM module_settings WHERE modulename=?',['sethsong'])
+        self.query('UPDATE modules SET active=1'); call=self._security_client(); url='runmodule.php?module=sethsong'
+        def request(path,form=None): self._security_allow(player,path); return call(path,form)
+        def pref(value): self.query('INSERT INTO module_userprefs(modulename,setting,userid,value) VALUES (?,?,?,?) ON DUPLICATE KEY UPDATE value=VALUES(value)',['sethsong','been',player,str(value)])
+        def setting(key,value): self.query('INSERT INTO module_settings(modulename,setting,value) VALUES (?,?,?) ON DUPLICATE KEY UPDATE value=VALUES(value)',['sethsong',key,str(value)])
+        def state(): return self.query('SELECT gold,gems,turns,hitpoints,charm FROM accounts WHERE acctid=?',[player])[0]
+        def listen():
+            before=state(); status,body=request(url); self.assertEqual(200,status); self.assertEqual(before,state())
+            form=self._security_fields(body)
+            self.assertEqual(403,request(url,{})[0]); self.assertEqual(before,state())
+            status,body=request(url,form); self.assertEqual(200,status,body[:1500]); after=state()
+            self.assertEqual(409,request(url,form)[0]); self.assertEqual(after,state())
+            return after
+        try:
+            with self._seeded_module_actions() as seed:
+                config={'visits':1,'mingold':13,'maxgold':13,'mingems':2,'maxgems':2,'hpgain':20,'bhploss':10,'shploss':20,'goldloss':7}
+                for key,value in config.items(): setting(key,value)
+                seeds=[44,39,71,22,15,4,47,1,23,5,10,17,2,3,8,0,28,9,6]
+                for outcome,rng in enumerate(seeds):
+                    pref(0); seed(rng)
+                    self.query('UPDATE accounts SET gold=100,gems=5,turns=10,hitpoints=50,maxhitpoints=100,charm=5,sex=0,alive=1,specialinc=? WHERE acctid=?',['',player])
+                    expected={'gold':100,'gems':5,'turns':10,'hitpoints':50,'charm':5}
+                    if outcome==0: expected['turns']=12
+                    if outcome in [1,2,6,13,14,15]: expected['turns']=11
+                    if outcome in [5,11]: expected['turns']=9
+                    if outcome==3: expected['gold']=113
+                    if outcome==4: expected['hitpoints']=120
+                    if outcome==7: expected['hitpoints']=40
+                    if outcome==8: expected['gold']=93
+                    if outcome==9: expected['gems']=7
+                    if outcome in [10,12]: expected['hitpoints']=100
+                    if outcome==16: expected['hitpoints']=30
+                    if outcome==18: expected['charm']=4
+                    actual=listen(); self.assertEqual(expected,{k:int(v) for k,v in actual.items()},'song '+str(outcome))
+                    self.assertEqual('1',self.query('SELECT value FROM module_userprefs WHERE modulename=? AND setting=? AND userid=?',['sethsong','been',player])[0]['value'])
+                    status,body=request(url); self.assertEqual(200,status); self.assertNotIn('name="action_token"',body); self.assertEqual(actual,state())
+                # Female charm, HP floor, insufficient gold, zero gem reward and overfull HP.
+                for rng,patch,configPatch,field,expected in [(0,{'sex':1},{},'charm',6),(1,{'hitpoints':1},{},'hitpoints',1),
+                    (23,{'gold':6},{},'gold',6),(5,{}, {'mingems':0,'maxgems':0},'gems',5),
+                    (15,{'hitpoints':150},{},'hitpoints',180)]:
+                    pref(0); seed(rng)
+                    self.query('UPDATE accounts SET gold=100,gems=5,turns=10,hitpoints=50,maxhitpoints=100,charm=5,sex=0 WHERE acctid=?',[player])
+                    for key,value in config.items(): setting(key,value)
+                    for key,value in configPatch.items(): setting(key,value)
+                    self.query('UPDATE accounts SET '+','.join(k+'=?' for k in patch)+' WHERE acctid=?',list(patch.values())+[player]) if patch else None
+                    self.assertEqual(expected,int(listen()[field]))
+                for key,value in config.items(): setting(key,value)
+                setting('visits',2); pref(0); seed(9)
+                listen(); listen()
+                before=state(); self.assertNotIn('name="action_token"',request(url)[1]); self.assertEqual(before,state())
+                for key,bad in [('visits','-1'),('hpgain','101'),('mingold','14'),('goldloss','-1')]:
+                    pref(0); _,body=request(url); form=self._security_fields(body); old=self.query('SELECT value FROM module_settings WHERE modulename=? AND setting=?',['sethsong',key])[0]['value']
+                    setting(key,bad); before=state(); self.assertEqual(409,request(url,form)[0]); self.assertEqual(before,state()); setting(key,old)
+                pref('garbage'); self.assertEqual(409,request(url)[0]); pref(2)
+                self.query('UPDATE accounts SET lasthit=?,race=?,specialty=? WHERE acctid=?',['2000-01-01 00:00:00','Human','DA',player])
+                self.assertEqual(200,self._advance_normal_day(request,player)[0])
+                self.assertEqual('0',self.query('SELECT value FROM module_userprefs WHERE modulename=? AND setting=? AND userid=?',['sethsong','been',player])[0]['value'])
+                listen()
+        finally:
+            self.query('UPDATE accounts SET '+','.join(k+'=?' for k in original if k!='acctid')+' WHERE acctid=?',[*[v for k,v in original.items() if k!='acctid'],player])
+            self.query('DELETE FROM module_userprefs WHERE userid=?',[player])
+            for row in prefs: self.query('INSERT INTO module_userprefs(modulename,setting,userid,value) VALUES (?,?,?,?)',[row['modulename'],row['setting'],player,row['value']])
+            self.query('DELETE FROM module_settings WHERE modulename=?',['sethsong'])
+            for row in saved: setting(row['setting'],row['value'])
+            self.query('UPDATE modules SET active=0')
+
+    def test_shared_typed_settings_http(self):
+        player=self.query('SELECT acctid FROM accounts WHERE login=?',['WebPlayer'])[0]['acctid']
+        original=self.query('SELECT superuser FROM accounts WHERE acctid=?',[player])[0]['superuser']
+        core_saved=self.query('SELECT value FROM settings WHERE setting=?',['autofightfull'])
+        modules=['cedrikspotions','darkhorse']
+        saved={m:self.query('SELECT setting,value FROM module_settings WHERE modulename=?',[m]) for m in modules}
+        self.query('UPDATE modules SET active=1')
+        call=self._security_client()
+        def request(url,fields=None):
+            self._security_allow(player,url); return call(url,fields)
+        def urls(module):
+            base='configuration.php?op=modulesettings&module='+module
+            return base,base+'&save=1'
+        def values(module):
+            return self.query('SELECT setting,value FROM module_settings WHERE modulename=? ORDER BY setting',[module])
+        try:
+            base,save=urls('cedrikspotions')
+            self.assertIn(self._security_client(login=None)(base)[0],[302,303,403])
+            for role in [0,2]:
+                self.query('UPDATE accounts SET superuser=? WHERE acctid=?',[role,player]); call=self._security_client()
+                self.assertEqual(403,request(base)[0]); self.assertEqual(403,request(save,{'transcost':'3'})[0])
+            self.query('UPDATE accounts SET superuser=128 WHERE acctid=?',[player]); call=self._security_client()
+            before=values('cedrikspotions')
+            _,body=request(base); form=self._security_fields(body,save)
+            for fields in [{},{**form,'csrf_token':'bad','transcost':'3'}]: self.assertEqual(403,request(save,fields)[0])
+            self.assertEqual(403,request(save)[0]); self.assertEqual(before,values('cedrikspotions'))
+            for invalid in [{'namespace':'core'},{'undeclared':'1'},{'transcost[]':'2'},{'transcost':'0'},{'transcost':'11'},{'transcost':'1e1'},{'transmuteturns':'2147483648'},{'survive':'true'},{'atkmod':'nan'},{'minrand':'9','maxrand':'2'},{'charmgain':'-1'}]:
+                _,body=request(base); form=self._security_fields(body,save)
+                self.assertEqual(400,request(save,{**form,**invalid})[0]); self.assertEqual(before,values('cedrikspotions'))
+            for module in ['missing','../darkhorse','core']:
+                self.assertIn(request(urls(module)[0])[0],[400,404])
+            for patch in [{'transcost':'1','transmuteturns':'1','atkmod':'.1','defmod':'2','survive':'0'}, {'transcost':'10','transmuteturns':'20','atkmod':'2','defmod':'.1','survive':'1'}]:
+                _,body=request(base); form={**self._security_fields(body,save),**patch}
+                self.assertEqual(200,request(save,form)[0]); self.assertEqual(409,request(save,form)[0])
+                actual={x['setting']:x['value'] for x in values('cedrikspotions')}
+                for key,value in patch.items(): self.assertEqual(value,actual[key])
+            # A second tab cannot overwrite an intervening editor change.
+            _,body=request(base); stale={**self._security_fields(body,save),'transcost':'3'}
+            self.query('UPDATE module_settings SET value=4 WHERE modulename=? AND setting=?',['cedrikspotions','transcost'])
+            self.assertEqual(409,request(save,stale)[0])
+            # Failure after the first setting and its audit but before the second setting rolls back the entire patch.
+            before=values('cedrikspotions')
+            audit_before=self.query('SELECT count(*) AS n FROM gamelog WHERE who=?',[player])
+            player_before=self.query('SELECT gold,gems,bufflist FROM accounts WHERE acctid=?',[player])
+            self.query("ALTER TABLE module_settings ADD CONSTRAINT fixture_editor_log CHECK (modulename <> 'cedrikspotions' OR setting <> 'transmuteturns' OR value <> '5')")
+            try:
+                _,body=request(base); form={**self._security_fields(body,save),'transcost':'5','transmuteturns':'5'}
+                self.assertEqual(500,request(save,form)[0]); self.assertEqual(before,values('cedrikspotions'))
+                self.assertEqual(audit_before,self.query('SELECT count(*) AS n FROM gamelog WHERE who=?',[player]))
+                self.assertEqual(player_before,self.query('SELECT gold,gems,bufflist FROM accounts WHERE acctid=?',[player]))
+                self.assertEqual(409,request(save,form)[0])
+            finally: self.query('ALTER TABLE module_settings DROP CONSTRAINT fixture_editor_log')
+            _,body=request(base); self.assertEqual(200,request(save,{**self._security_fields(body,save),'transcost':'5','transmuteturns':'5'})[0])
+            # Consume the exact configuration written through HTTP, as an ordinary player.
+            potion_before=self.query('SELECT gems,race,bufflist FROM accounts WHERE acctid=?',[player])[0]
+            try:
+                self.query("UPDATE accounts SET superuser=0,gems=100,race='Human',bufflist='a:0:{}' WHERE acctid=?",[player]); call=self._security_client()
+                potion='runmodule.php?module=cedrikspotions&op=gems'; _,body=request(potion)
+                purchase=html.unescape(re.search(r'<form action=[\'\"]([^\'\"]+)',body).group(1))
+                self.assertEqual(200,request(purchase,dict(self._security_fields(body),wish='5',gemcount='10'))[0])
+                actual=self.query('SELECT gems,bufflist FROM accounts WHERE acctid=?',[player])[0]
+                self.assertEqual('95',actual['gems']); self.assertIn('s:6:"rounds";i:5;',actual['bufflist'])
+            finally:
+                self.query('UPDATE accounts SET gems=?,race=?,bufflist=?,superuser=128 WHERE acctid=?',[potion_before['gems'],potion_before['race'],potion_before['bufflist'],player]); call=self._security_client()
+            base,save=urls('darkhorse'); text='Tavern " onfocus="alert(1) <script>é</script> \\ O\'Reilly'
+            _,body=request(base); self.assertEqual(200,request(save,{**self._security_fields(body,save),'tavernname':text})[0])
+            _,body=request(base); self.assertNotIn('<script>é</script>',body); self.assertIn('&lt;script&gt;é&lt;/script&gt;',body)
+            self.assertEqual(text,{x['setting']:x['value'] for x in values('darkhorse')}['tavernname'])
+            # Core uses the same declared namespace and enum contract.
+            base='configuration.php'; save=base+'?op=save'
+            _,body=request(base); self.assertEqual(400,request(save,{**self._security_fields(body,save),'autofightfull':'99'})[0])
+            _,body=request(base); self.assertEqual(400,request(save,{**self._security_fields(body,save),'resurrection_install':'0'})[0])
+            _,body=request(base); form=dict(self._security_fields(body,save),autofightfull='1')
+            result=request(save,form); self.assertEqual(200,result[0],result[1][:1500]); self.assertEqual(409,request(save,form)[0])
+            self.assertEqual('1',self.query('SELECT value FROM settings WHERE setting=?',['autofightfull'])[0]['value'])
+        finally:
+            self.query('DELETE FROM settings WHERE setting=?',['autofightfull'])
+            if core_saved: self.query('INSERT INTO settings(setting,value) VALUES (?,?)',['autofightfull',core_saved[0]['value']])
+            for m,rows in saved.items():
+                self.query('DELETE FROM module_settings WHERE modulename=?',[m])
+                for row in rows: self.query('INSERT INTO module_settings(modulename,setting,value) VALUES (?,?,?)',[m,row['setting'],row['value']])
+            self.query('UPDATE accounts SET superuser=? WHERE acctid=?',[original,player]); self.query('UPDATE modules SET active=0')
+
+    def test_shared_mount_preferences_http(self):
+        player=self.query('SELECT acctid FROM accounts WHERE login=?',['WebPlayer'])[0]['acctid']
+        original=self.query('SELECT superuser FROM accounts WHERE acctid=?',[player])[0]['superuser']
+        self.query('UPDATE modules SET active=1'); ids=[]
+        call=self._security_client()
+        def request(url,fields=None): self._security_allow(player,url); return call(url,fields)
+        def urls(ident,module='darkhorse'):
+            suffix=f'&subop=module&id={ident}&module={module}'
+            return 'mounts.php?op=edit'+suffix,'mounts.php?op=save'+suffix
+        def snapshot(): return self.query('SELECT * FROM module_objprefs WHERE objtype=? ORDER BY modulename,objid,setting',['mounts'])
+        try:
+            for name in ['Editor fixture one','Editor fixture two']:
+                self.query('INSERT INTO mounts(mountname,mountcategory) VALUES (?,?)',[name,'Fixture'])
+                ids.append(self.query('SELECT mountid FROM mounts WHERE mountname=?',[name])[0]['mountid'])
+            base,save=urls(ids[0]); before=snapshot()
+            self.assertIn(self._security_client(login=None)(base)[0],[302,303,403])
+            for role in [0,128]:
+                self.query('UPDATE accounts SET superuser=? WHERE acctid=?',[role,player]); call=self._security_client()
+                self.assertEqual(403,request(base)[0]); self.assertEqual(403,request(save,{'findtavern':'1'})[0])
+            self.query('UPDATE accounts SET superuser=2 WHERE acctid=?',[player]); call=self._security_client()
+            _,body=request(base); form=self._security_fields(body,save)
+            self.assertEqual(before,snapshot())
+            for data in [None,{},dict(form,csrf_token='bad',findtavern='1')]: self.assertEqual(403,request(save,data)[0])
+            for patch in [{'findtavern':'2'},{'findtavern':'2147483648'},{'findtavern[]':'1'},{'forged':'1'},{'objtype':'accounts'},{'objid':ids[1]},{'module':'goldmine'}]:
+                _,body=request(base); self.assertEqual(400,request(save,{**self._security_fields(body,save),**patch})[0]); self.assertEqual(before,snapshot())
+            _,body=request(base); form=dict(self._security_fields(body,save),findtavern='1')
+            self.assertEqual(409,request(urls(ids[1])[1],form)[0]); self.assertEqual(409,request(urls(ids[0],'goldmine')[1],form)[0])
+            for ident in ['0','-1','999999999','1e2',str(ids[0])+'%20OR%201=1']:
+                self.assertEqual(400,request(urls(ident)[0])[0])
+            self.assertEqual(400,request(base+'&objtype=accounts')[0])
+            self.assertEqual(400,request(urls(ids[0],'cedrikspotions')[0])[0])
+            _,body=request(base); form=dict(self._security_fields(body,save),findtavern='1')
+            result=request(save,form); self.assertEqual(200,result[0],result[1]); self.assertEqual(409,request(save,form)[0])
+            self.assertEqual('1',self.query('SELECT value FROM module_objprefs WHERE modulename=? AND objid=? AND setting=?',['darkhorse',ids[0],'findtavern'])[0]['value'])
+            _,body=request(base); form=dict(self._security_fields(body,save),findtavern='0')
+            self.query('UPDATE mounts SET mountname=? WHERE mountid=?',['Changed fixture',ids[0]])
+            self.assertEqual(409,request(save,form)[0])
+            # Configured range/text consumer and actual multi-write rollback.
+            base,save=urls(ids[0],'goldmine'); before=snapshot()
+            audit_before=self.query('SELECT count(*) AS n FROM gamelog WHERE who=?',[player])
+            player_before=self.query('SELECT gold,gems,bufflist FROM accounts WHERE acctid=?',[player])
+            _,body=request(base); form=dict(self._security_fields(body,save),entermine='100',dieinmine='0',tethermsg='<script>fixture</script>')
+            self.query("ALTER TABLE module_objprefs ADD CONSTRAINT fixture_object_log CHECK (value <> '<script>fixture</script>')")
+            try:
+                self.assertEqual(500,request(save,form)[0]); self.assertEqual(before,snapshot()); self.assertEqual(409,request(save,form)[0])
+                self.assertEqual(audit_before,self.query('SELECT count(*) AS n FROM gamelog WHERE who=?',[player]))
+                self.assertEqual(player_before,self.query('SELECT gold,gems,bufflist FROM accounts WHERE acctid=?',[player]))
+            finally: self.query('ALTER TABLE module_objprefs DROP CONSTRAINT fixture_object_log')
+            _,body=request(base); form=dict(self._security_fields(body,save),entermine='100',dieinmine='0',tethermsg='<script>fixture</script>')
+            self.assertEqual(200,request(save,form)[0]); _,body=request(base); self.assertIn('&lt;script&gt;fixture&lt;/script&gt;',body)
+            _,body=request(base); form=dict(self._security_fields(body,save),entermine='101'); self.assertEqual(400,request(save,form)[0])
+            _,body=request(base); form=dict(self._security_fields(body,save),entermine='0'); self.query('DELETE FROM mounts WHERE mountid=?',[ids[0]])
+            self.assertEqual(400,request(save,form)[0])
+        finally:
+            for ident in ids:
+                self.query('DELETE FROM module_objprefs WHERE objtype=? AND objid=?',['mounts',ident]); self.query('DELETE FROM mounts WHERE mountid=?',[ident])
+            self.query('UPDATE accounts SET superuser=? WHERE acctid=?',[original,player]); self.query('UPDATE modules SET active=0')
+
+    def test_transmutation_persistence_and_failure_http(self):
+        player=self.query('SELECT acctid FROM accounts WHERE login=?',['WebPlayer'])[0]['acctid']
+        columns='gems,race,specialty,bufflist,maxhitpoints,hitpoints,attack,defense,turns,specialinc,badguy,dragonkills,dragonpoints,age,superuser'
+        original=self.query(f'SELECT {columns} FROM accounts WHERE acctid=?',[player])[0]
+        saved=self.query('SELECT setting,value FROM module_settings WHERE modulename=?',['cedrikspotions'])
+        self.query('UPDATE modules SET active=1'); call=self._security_client()
+        base='runmodule.php?module=cedrikspotions&op=gems'
+        def request(url,form=None): self._security_allow(player,url); return call(url,form)
+        def setting(key,value): self.query('INSERT INTO module_settings(modulename,setting,value) VALUES (?,?,?) ON DUPLICATE KEY UPDATE value=VALUES(value)',['cedrikspotions',key,str(value)])
+        def buffs():
+            value=self.query('SELECT bufflist FROM accounts WHERE acctid=?',[player])[0]['bufflist']
+            code="require 'vendor/autoload.php'; echo json_encode(\\Resurrection\\Security\\ScalarState::read(stream_get_contents(STDIN)),JSON_THROW_ON_ERROR);"
+            result=subprocess.run([shutil.which('php'),'-r',code],input=value,text=True,capture_output=True,cwd=ROOT,check=True)
+            return json.loads(result.stdout)
+        def stored(value):
+            code='echo serialize(json_decode(stream_get_contents(STDIN),true,512,JSON_THROW_ON_ERROR));'
+            data=subprocess.run([shutil.which('php'),'-r',code],input=json.dumps(value),text=True,capture_output=True,cwd=ROOT,check=True).stdout
+            self.query('UPDATE accounts SET bufflist=? WHERE acctid=?',[data,player])
+        def buy():
+            status,body=request(base); self.assertEqual(200,status,body[:1500])
+            url=html.unescape(re.search(r'<form action=[\'"]([^\'"]+)',body).group(1))
+            form=dict(self._security_fields(body),wish='5',gemcount='10',rounds='999',atkmod='999',race='Elf')
+            return url,form,request(url,form)
+        try:
+            for key,value in {'random':0,'transcost':2,'transmuteturns':2,'atkmod':'.5','defmod':'.75','survive':1}.items(): setting(key,value)
+            self.query("UPDATE accounts SET gems=100,race='Human',specialty='DA',bufflist='a:0:{}',dragonkills=0,dragonpoints='a:0:{}',specialinc='' WHERE acctid=?",[player])
+            url,form,result=buy(); self.assertEqual(200,result[0],result[1][:1500])
+            self.assertEqual('98',self.query('SELECT gems FROM accounts WHERE acctid=?',[player])[0]['gems'])
+            first=buffs()['transmute']; self.assertEqual(2,first['rounds']); self.assertEqual(.5,first['atkmod']); self.assertEqual(.75,first['defmod']); self.assertEqual(1,first['survivenewday'])
+            self.assertEqual('Horrible Gelatinous Blob',self.query('SELECT race FROM accounts WHERE acctid=?',[player])[0]['race'])
+            self.assertNotIn('racialbenefit',buffs()); self.assertEqual(409,request(url,form)[0]); self.assertEqual(first,buffs()['transmute'])
+            # A fresh login hydrates the committed buff; navigation does not spend rounds.
+            call=self._security_client(); self.assertEqual(200,request(base)[0]); self.assertEqual(first['rounds'],buffs()['transmute']['rounds'])
+            # Repeated legitimate purchase adds duration, retaining the original effect/carry snapshot.
+            setting('atkmod','2'); setting('survive',0)
+            self.assertEqual(200,buy()[2][0]); self.assertEqual(4,buffs()['transmute']['rounds']); self.assertEqual(.5,buffs()['transmute']['atkmod']); self.assertEqual(1,buffs()['transmute']['survivenewday'])
+            # Exercise the shipped race-selection and actual New Day route. This is persistence
+            # evidence only, not certification of onboarding authority or New Day replay.
+            status,body=request('newday.php'); self.assertEqual(200,status)
+            raceform=self._security_fields(body)|{'onboarding':'race','setrace':'Human'}
+            self.assertEqual(200,call('newday.php?continue=1',raceform)[0])
+            self.assertEqual(200,self._advance_normal_day(request,player)[0]); self.assertEqual(4,buffs()['transmute']['rounds'])
+            self.assertEqual(200,request('newday.php?continue=1')[0]); self.assertEqual(4,buffs()['transmute']['rounds'])
+            # Failure on final account write must undo the preceding real potion debug log.
+            before=self.query('SELECT gems,race,bufflist FROM accounts WHERE acctid=?',[player])
+            logs=self.query('SELECT count(*) AS n FROM debuglog WHERE actor=?',[player])
+            balance=int(before[0]['gems'])-2
+            self.query(f"ALTER TABLE accounts ADD CONSTRAINT fixture_transmute CHECK (login <> 'WebPlayer' OR gems <> {balance})")
+            try:
+                url,form,result=buy(); self.assertEqual(500,result[0]); self.assertEqual(before,self.query('SELECT gems,race,bufflist FROM accounts WHERE acctid=?',[player])); self.assertEqual(logs,self.query('SELECT count(*) AS n FROM debuglog WHERE actor=?',[player])); self.assertEqual(409,request(url,form)[0])
+            finally: self.query('ALTER TABLE accounts DROP CONSTRAINT fixture_transmute')
+            self.assertEqual(200,buy()[2][0]); self.assertEqual(6,buffs()['transmute']['rounds'])
+            # Actual Forest HTTP combat persists one spent sickness round per fight request.
+            enemy=self.query('SELECT * FROM creatures ORDER BY creatureid LIMIT 1')[0]
+            enemy.update(creaturehealth=1000000,creatureattack=1,creaturedefense=1,creaturelevel=1,playerstarthp=10000,diddamage=0)
+            combat={'enemies':[enemy],'options':{'type':'forest'}}
+            encoded=subprocess.run([shutil.which('php'),'-r','echo serialize(json_decode(stream_get_contents(STDIN),true));'],input=json.dumps(combat),text=True,capture_output=True,cwd=ROOT,check=True).stdout
+            self.query("UPDATE accounts SET badguy=?,hitpoints=10000,maxhitpoints=10000,attack=1,defense=100,specialinc='' WHERE acctid=?",[encoded,player])
+            for remaining in range(5,-1,-1):
+                status,body=self._ordinary_attack(request); self.assertEqual(200,status,body[:1500])
+                if remaining: self.assertEqual(remaining,buffs()['transmute']['rounds'])
+                else: self.assertNotIn('transmute',buffs())
+            self.query("UPDATE accounts SET badguy='' WHERE acctid=?",[player])
+            # A new potion without carry expires at the next real New Day.
+            stored({}); self.assertEqual(200,buy()[2][0]); self.assertEqual(0,buffs()['transmute']['survivenewday'])
+            status,body=request('newday.php'); self.assertEqual(200,status)
+            raceform=self._security_fields(body)|{'onboarding':'race','setrace':'Human'}
+            self.assertEqual(200,call('newday.php?continue=1',raceform)[0]); self.assertEqual(200,self._advance_normal_day(request,player)[0]); self.assertNotIn('transmute',buffs())
+            for invalid in [None,{},dict(first,rounds=0),dict(first,rounds=-1),dict(first,rounds=2147483648),dict(first,atkmod='<attack>'),dict(first,defmod=[]),dict(first,forged=1)]:
+                stored({'transmute':invalid}); before=self.query('SELECT gems,race,bufflist FROM accounts WHERE acctid=?',[player])
+                self.assertEqual(400,request(base)[0]); self.assertEqual(before,self.query('SELECT gems,race,bufflist FROM accounts WHERE acctid=?',[player]))
+            stored({}); self.assertEqual(200,request(base)[0])
+        finally:
+            self.query('UPDATE accounts SET '+','.join(k+'=?' for k in original)+' WHERE acctid=?',[*original.values(),player])
+            self.query('DELETE FROM module_settings WHERE modulename=?',['cedrikspotions'])
+            for row in saved: self.query('INSERT INTO module_settings(modulename,setting,value) VALUES (?,?,?)',['cedrikspotions',row['setting'],row['value']])
+            self.query('UPDATE modules SET active=0')
+
+
+    def test_forest_specialty_post_authority_and_rollback(self):
+        player=self.query('SELECT acctid FROM accounts WHERE login=?',['WebPlayer'])[0]['acctid']
+        original=self.query('SELECT * FROM accounts WHERE acctid=?',[player])[0]
+        prefs=self.query('SELECT * FROM module_userprefs WHERE userid=?',[player])
+        registry=self.query('SELECT modulename,active FROM modules')
+        companion_setting=self.query("SELECT value FROM settings WHERE setting='enablecompanions'")
+        self.query('UPDATE modules SET active=0')
+        self.query("UPDATE modules SET active=1 WHERE modulename IN ('specialtydarkarts','specialtymysticpower','specialtythiefskills')")
+        call=self._security_client(); url='forest.php?op=specialty'
+        def request(path,data=None): self._security_allow(player,path); return call(path,data)
+        def encode(value):
+            return subprocess.run([shutil.which('php'),'-r','echo serialize(json_decode(stream_get_contents(STDIN),true));'],input=json.dumps(value),text=True,capture_output=True,cwd=ROOT,check=True).stdout
+        enemy=self.query('SELECT * FROM creatures ORDER BY creatureid LIMIT 1')[0]
+        enemy.update(creaturehealth=1000000,creatureattack=1,creaturedefense=1,creaturelevel=10,playerstarthp=10000,diddamage=0)
+        combat={'enemies':[enemy],'options':{'type':'forest'}}
+        def prepare(spec='DA',uses='9',skill='15',state=None):
+            self.query("UPDATE accounts SET level=10,alive=1,race='Human',specialty=?,dragonkills=0,dragonpoints='a:0:{}',badguy=?,companions='a:0:{}',bufflist='a:0:{}',hitpoints=10000,maxhitpoints=10000,attack=10,defense=10000,specialinc='' WHERE acctid=?",[spec,encode(combat if state is None else state),player])
+            for module in ['specialtydarkarts','specialtymysticpower','specialtythiefskills']:
+                for key,value in [('uses',uses),('skill',skill)]:
+                    self.query('INSERT INTO module_userprefs(modulename,setting,userid,value) VALUES (?,?,?,?) ON DUPLICATE KEY UPDATE value=VALUES(value)',[module,key,player,value])
+        def state():
+            return self.query('SELECT specialty,gold,gems,experience,hitpoints,maxhitpoints,alive,turns,age,attack,defense,badguy,companions,bufflist FROM accounts WHERE acctid=?',[player])+self.query("SELECT modulename,setting,value FROM module_userprefs WHERE userid=? AND modulename IN ('specialtydarkarts','specialtymysticpower','specialtythiefskills') ORDER BY modulename,setting",[player])
+        def form(level='1'):
+            status,body=request(url); self.assertEqual(200,status,body[:1800]); return self._security_fields(body)|{'level':level}
+        def decoded(encoded):
+            return json.loads(subprocess.run([shutil.which('php'),'-r',"require 'src/Security/ScalarState.php'; echo json_encode(\\Resurrection\\Security\\ScalarState::read(stream_get_contents(STDIN)),JSON_THROW_ON_ERROR);"],input=encoded,text=True,capture_output=True,cwd=ROOT,check=True).stdout)
+        def rejected(data,expected=409):
+            before=state(); status,body=request(url,data); self.assertEqual(expected,status,body[:2000]); self.assertEqual(before,state())
+        try:
+            for spec,module in [('DA','specialtydarkarts'),('MP','specialtymysticpower'),('TS','specialtythiefskills')]:
+                for level in ['1','2','3','5']:
+                    with self.subTest(spec=spec,level=level):
+                        prepare(spec); data=form(level); before=state()
+                        self.assertEqual(200,request(url,data)[0])
+                        after=state(); self.assertNotEqual(before[0]['badguy'],after[0]['badguy'])
+                        effects={('DA','3'):{'badguydmgmod':.5},('DA','5'):{'badguyatkmod':0,'badguydefmod':0},
+                            ('MP','1'):{'regen':'10','aura':True},('MP','2'):{'minioncount':1,'minbadguydamage':1,'maxbadguydamage':30,'areadamage':True},
+                            ('MP','3'):{'lifetap':1},('MP','5'):{'damageshield':2},('TS','1'):{'badguyatkmod':.5},
+                            ('TS','2'):{'atkmod':2},('TS','3'):{'badguyatkmod':0},('TS','5'):{'atkmod':3,'defmod':3}}
+                        if (spec,level) in effects:
+                            buff=decoded(after[0]['bufflist'])[spec.lower()+level]
+                            self.assertEqual(4,buff['rounds'])
+                            for key,value in effects[spec,level].items(): self.assertEqual(value,buff[key])
+                        self.assertEqual(str(9-int(level)),self.query('SELECT value FROM module_userprefs WHERE userid=? AND modulename=? AND setting=?',[player,module,'uses'])[0]['value'])
+                        self.assertEqual(200,request('village.php')[0]); self.assertEqual(after,state())
+                        rejected(data); rejected(data)
+                        # A late account-write constraint rejects after the preference write.
+                        prepare(spec); data=form(level); before=state()
+                        self.query("ALTER TABLE accounts ADD CONSTRAINT fixture_specialty_failure CHECK (login <> 'WebPlayer' OR badguy = '"+before[0]['badguy'].replace("'","''")+"')")
+                        try: rejected(data,500)
+                        finally: self.query('ALTER TABLE accounts DROP CONSTRAINT fixture_specialty_failure')
+                        rejected(data); self.assertEqual(200,request(url,form(level))[0])
+                # Real consumption followed by the shipped New Day restoration.
+                prepare(spec); self.assertEqual(200,request(url,form('5'))[0])
+                self.assertEqual('4',self.query('SELECT value FROM module_userprefs WHERE userid=? AND modulename=? AND setting=?',[player,module,'uses'])[0]['value'])
+                self.query("UPDATE accounts SET badguy='' WHERE acctid=?",[player])
+                self.assertEqual(200,self._advance_normal_day(request,player)[0])
+                bonus=self.query("SELECT value FROM settings WHERE setting='specialtybonus'")
+                expected=5+int(bonus[0]['value'] if bonus else 1)
+                self.assertEqual(str(expected),self.query('SELECT value FROM module_userprefs WHERE userid=? AND modulename=? AND setting=?',[player,module,'uses'])[0]['value'])
+                self.assertEqual(spec,self.query('SELECT specialty FROM accounts WHERE acctid=?',[player])[0]['specialty'])
+                # Stored authority failures, including unchanged state on missing/invalid form.
+                for uses in ['0','-1','broken','9999999999','a:0:{}']:
+                    prepare(spec,uses=uses)
+                    rejected({'level':'1'},409 if uses not in ['0'] else 403)
+                prepare(spec,uses='4'); rejected(form('5'))
+                prepare(spec); data=form('5')
+                self.query("UPDATE module_userprefs SET value='4' WHERE userid=? AND modulename=? AND setting='uses'",[player,module]); rejected(data)
+                prepare(spec); data=form()
+                self.query("UPDATE module_userprefs SET value='0' WHERE userid=? AND modulename=? AND setting='skill'",[player,module]); rejected(data)
+                prepare(spec); data=form()
+                self.query('UPDATE modules SET active=0 WHERE modulename=?',[module]); rejected(data)
+                self.query('UPDATE modules SET active=1 WHERE modulename=?',[module])
+            prepare('DA')
+            self.query("INSERT INTO settings(setting,value) VALUES ('enablecompanions','0') ON DUPLICATE KEY UPDATE value='0'")
+            data=form(); self.assertEqual(200,request(url,data)[0])
+            result=state(); buff=decoded(result[0]['bufflist'])['da1']
+            self.assertEqual(4,buff['rounds']); self.assertEqual(4,buff['minioncount']); self.assertEqual(6,buff['maxbadguydamage'])
+            self.assertEqual([],decoded(result[0]['companions'])); rejected(data)
+            self.assertEqual('8',self.query("SELECT value FROM module_userprefs WHERE userid=? AND modulename='specialtydarkarts' AND setting='uses'",[player])[0]['value'])
+            self.query("DELETE FROM settings WHERE setting='enablecompanions'")
+            for row in companion_setting: self.query("INSERT INTO settings(setting,value) VALUES ('enablecompanions',?)",[row['value']])
+            for level in ['', '0','-1','2.0','six','4','9999999999']:
+                prepare(); data=form(); data['level']=level; rejected(data,400)
+            prepare(); data=form(); del data['level']; rejected(data,400)
+            prepare(); data=form(); del data['level']; data['level[]']='1'; rejected(data,400)
+            for field in ['damage','healing','companion','uses','skill','specialty','target','buff']:
+                prepare(); data=form(); data[field]='999'; rejected(data,400)
+            for token in ['csrf_token','action_token']:
+                prepare(); data=form(); del data[token]; rejected(data,403 if token=='csrf_token' else 409)
+                prepare(); data=form(); data[token]='bad'; rejected(data,403 if token=='csrf_token' else 409)
+            for spec in ['', 'MP']:
+                prepare(); data=form(); self.query('UPDATE accounts SET specialty=? WHERE acctid=?',[spec,player]); rejected(data)
+            malformed=[{},[],{'enemies':[],'options':{'type':'forest'}}]
+            for key,value in [('creaturehealth',0),('creaturehealth',-1),('creaturehealth','invalid'),('creaturehealth',2147483648),('creatureattack',[]),('creaturedefense',-1),('creatureid',0),('dead',True),('istarget',[]),('terminal',True)]:
+                malformed.append({'enemies':[dict(enemy,**{key:value})],'options':{'type':'forest'}})
+            for malformed_state in malformed:
+                prepare(state=malformed_state); rejected({'level':'1'})
+            for encoded in ['', 'broken','O:8:"stdClass":0:{}']:
+                prepare(); self.query('UPDATE accounts SET badguy=? WHERE acctid=?',[encoded,player]); rejected({'level':'1'})
+            prepare(); data=form(); self.query("UPDATE accounts SET badguy='' WHERE acctid=?",[player]); rejected(data)
+            prepare(); data=form(); changed={'enemies':[dict(enemy,creaturehealth=999999)],'options':{'type':'forest'}}
+            self.query('UPDATE accounts SET badguy=? WHERE acctid=?',[encode(changed),player]); rejected(data)
+            prepare(); before=state(); self.assertEqual(200,request(url)[0]); self.assertEqual(before,state())
+            for path in ['forest.php?op=fight&skill=DA&l=1','forest.php?op=fight&skill=MP&l=5','forest.php?op=fight&skill=TS&l=3']:
+                self.assertEqual(400,request(path)[0]); self.assertEqual(before,state())
+            anonymous=self._security_client(login=None); self.assertIn(anonymous(url,{'level':'1'})[0],[302,303,403]); self.assertEqual(before,state())
+            for path in ['battle.php','battle.php?op=fight&skill=DA&l=1','battle.php/extra?op=fight&skill=DA&l=1']:
+                for data in [None,{'level':'1','skill':'DA'}]:
+                    self.assertEqual(404,request(path,data)[0]); self.assertEqual(before,state())
+                    self.assertEqual(404,anonymous(path,data)[0]); self.assertEqual(before,state())
+        finally:
+            self.query("DELETE FROM settings WHERE setting='enablecompanions'")
+            for row in companion_setting: self.query("INSERT INTO settings(setting,value) VALUES ('enablecompanions',?)",[row['value']])
+            self.query('UPDATE accounts SET '+','.join(k+'=?' for k in original)+' WHERE acctid=?',[*original.values(),player])
+            self.query('DELETE FROM module_userprefs WHERE userid=?',[player])
+            for row in prefs: self.query('INSERT INTO module_userprefs(modulename,setting,userid,value) VALUES (?,?,?,?)',[row['modulename'],row['setting'],player,row['value']])
+            for row in registry: self.query('UPDATE modules SET active=? WHERE modulename=?',[row['active'],row['modulename']])
+
+    @contextmanager
+    def _specialty_accounting_fixture(self, route='forest'):
+        player=self.query('SELECT acctid FROM accounts WHERE login=?',['WebPlayer'])[0]['acctid']
+        original=self.query('SELECT * FROM accounts WHERE acctid=?',[player])[0]
+        prefs=self.query('SELECT * FROM module_userprefs WHERE userid=?',[player])
+        registry=self.query('SELECT * FROM modules')
+        hooks=self.query('SELECT * FROM module_hooks WHERE location=?',['apply-specialties'])
+        setting_values={'enablecompanions':'1','dropmingold':'0','forestgemchance':'25','instantexp':'0'}
+        settings=self.query("SELECT * FROM settings WHERE setting IN ('enablecompanions','dropmingold','forestgemchance','instantexp')")
+        modules={'DA':'specialtydarkarts','MP':'specialtymysticpower','TS':'specialtythiefskills'}
+        self.query('UPDATE modules SET active=0')
+        self.query("UPDATE modules SET active=1 WHERE modulename IN ('specialtydarkarts','specialtymysticpower','specialtythiefskills')")
+        for key,value in setting_values.items():
+            self.query('INSERT INTO settings(setting,value) VALUES (?,?) ON DUPLICATE KEY UPDATE value=VALUES(value)',[key,value])
+        call=self._security_client(); url=route+'.php?op=specialty'
+        def request(path=url,data=None):
+            self._security_allow(player,path)
+            return call(path,data,fixture='specialty-accounting')
+        def encode(value):
+            return subprocess.run([shutil.which('php'),'-r','echo serialize(json_decode(stream_get_contents(STDIN),true));'],input=json.dumps(value),text=True,capture_output=True,cwd=ROOT,check=True).stdout
+        def decode(value):
+            return json.loads(subprocess.run([shutil.which('php'),'-r',"require 'src/Security/ScalarState.php'; echo json_encode(\\Resurrection\\Security\\ScalarState::read(stream_get_contents(STDIN)),JSON_THROW_ON_ERROR);"],input=value,text=True,capture_output=True,cwd=ROOT,check=True).stdout)
+        enemy=self.query('SELECT * FROM creatures ORDER BY creatureid LIMIT 1')[0]
+        enemy.update(creaturename='Accounting Target',creaturehealth=100000,creatureattack=120,creaturedefense=80,creaturelevel=10,playerstarthp=500,diddamage=0)
+        if route=='dragon':
+            enemy={k:v for k,v in enemy.items() if k in ['creaturename','creatureweapon','creaturelevel','creatureattack','creaturedefense','creaturehealth','diddamage','playerstarthp']}
+            enemy.update(type='dragon',creaturelevel=18)
+        def prepare(spec,**changes):
+            values=dict(level=10,alive=1,race='Human',specialty=spec,dragonkills=0,dragonpoints='a:0:{}',badguy=encode({'enemies':[enemy],'options':{'type':route,'didsurprise':1}}),companions='a:0:{}',bufflist='a:0:{}',hitpoints=500,maxhitpoints=1000,attack=100,defense=50,specialinc='',superuser=0)
+            if route=='dragon': values['level']=15
+            values.update(changes)
+            self.query('UPDATE accounts SET '+','.join(k+'=?' for k in values)+' WHERE acctid=?',[*values.values(),player])
+            for module in modules.values():
+                for key,value in [('uses','9'),('skill','15')]:
+                    self.query('INSERT INTO module_userprefs(modulename,setting,userid,value) VALUES (?,?,?,?) ON DUPLICATE KEY UPDATE value=VALUES(value)',[module,key,player,value])
+        def snapshot():
+            return self.query('SELECT specialty,gold,gems,experience,hitpoints,maxhitpoints,alive,turns,age,attack,defense,badguy,companions,bufflist FROM accounts WHERE acctid=?',[player])+self.query("SELECT modulename,setting,value FROM module_userprefs WHERE userid=? ORDER BY modulename,setting",[player])
+        def form(level):
+            status,body=request(); self.assertEqual(200,status,body[:2000])
+            if route=='dragon':
+                forms=[part for action,part in re.findall(r'<form[^>]*action="([^"]+)"[^>]*>(.*?)</form>',body,re.S) if html.unescape(action)==url]
+                self.assertTrue(forms,body[:2000]); body=forms[0]
+            return self._security_fields(body)|{'level':str(level)}
+        def rejected(data,expected=409):
+            before=snapshot(); status,body=request(data=data)
+            self.assertEqual(expected,status,body[:2000]); self.assertEqual(before,snapshot())
+        try:
+            yield dict(player=player,modules=modules,enemy=enemy,prepare=prepare,request=request,encode=encode,decode=decode,snapshot=snapshot,form=form,rejected=rejected)
+        finally:
+            self.query('UPDATE accounts SET '+','.join(k+'=?' for k in original)+' WHERE acctid=?',[*original.values(),player])
+            self.query('DELETE FROM module_userprefs WHERE userid=?',[player])
+            for row in prefs: self.query('INSERT INTO module_userprefs(modulename,setting,userid,value) VALUES (?,?,?,?)',[row['modulename'],row['setting'],player,row['value']])
+            for row in registry:
+                self.query('REPLACE INTO modules ('+','.join(row)+') VALUES ('+','.join('?' for _ in row)+')',list(row.values()))
+            self.query('DELETE FROM module_hooks WHERE location=?',['apply-specialties'])
+            for row in hooks:
+                self.query('INSERT INTO module_hooks ('+','.join('`'+k+'`' for k in row)+') VALUES ('+','.join('?' for _ in row)+')',list(row.values()))
+            self.query("DELETE FROM settings WHERE setting IN ('enablecompanions','dropmingold','forestgemchance','instantexp')")
+            for row in settings: self.query('INSERT INTO settings(setting,value) VALUES (?,?)',[row['setting'],row['value']])
+
+    def _ordinary_attack(self, request):
+        url='forest.php?op=fight'
+        status,body=request(url); self.assertEqual(200,status,body[:2000])
+        return request(url,self._security_fields(body,url))
+
+    @contextmanager
+    def _graveyard_fixture(self):
+        with self._specialty_accounting_fixture() as f:
+            settings=self.query("SELECT * FROM settings WHERE setting IN ('gravechance','autofight','autofightfull')")
+            creatures=self.query('SELECT * FROM creatures WHERE graveyard=1')
+            self.query('UPDATE creatures SET graveyard=0 WHERE graveyard=1')
+            enemy=dict(f['enemy']);enemy.pop('creatureid',None)
+            for key in ['playerstarthp','diddamage']: enemy.pop(key,None)
+            enemy.update(creaturename='Torment Fixture',graveyard=1)
+            self.query('INSERT INTO creatures ('+','.join(enemy)+') VALUES ('+','.join('?' for _ in enemy)+')',list(enemy.values()))
+            enemyid=self.query("SELECT creatureid FROM creatures WHERE creaturename='Torment Fixture'")[0]['creatureid']
+            for key in ['gravechance','autofight','autofightfull']:
+                self.query('INSERT INTO settings(setting,value) VALUES (?,0) ON DUPLICATE KEY UPDATE value=0',[key])
+            call=self._security_client()
+            def request(path='graveyard.php?op=fight',data=None,seed=None):
+                self._security_allow(f['player'],path); return call(path,data,fixture=seed or ('graveyard-round' if path=='graveyard.php?op=fight' else 'specialty-accounting'))
+            def patch(**values): self.query('UPDATE accounts SET '+','.join(k+'=?' for k in values)+' WHERE acctid=?',[*values.values(),f['player']])
+            def prepare(**changes):
+                # Keep onboarding complete alongside the real committed New Day marker.
+                # An empty specialty correctly makes is_new_day() reject search before DML.
+                f['prepare']('DA',alive=0,hitpoints=0,badguy='',soulpoints=100,gravefights=5,deathpower=100)
+                patch(**changes) if changes else None
+            def snapshot():
+                return self.query('SELECT alive,hitpoints,soulpoints,gravefights,deathpower,attack,defense,level,gold,gems,experience,badguy,companions,bufflist,specialinc,specialmisc FROM accounts WHERE acctid=?',[f['player']])[0]
+            def form(op='fight'):
+                url='graveyard.php?op='+op;code,body=request(url);self.assertEqual(200,code,body[:3000]);return self._security_fields(body,url)
+            def reject(data,op='fight',status=409):
+                before=snapshot();news=self.query('SELECT * FROM news'); code,body=request('graveyard.php?op='+op,data)
+                self.assertEqual(status,code,body[:3000]);self.assertEqual(before,snapshot());self.assertEqual(news,self.query('SELECT * FROM news'))
+                self.assertNotIn('Stack trace',body);self.assertNotIn('SQLSTATE',body)
+            def enter():
+                data=form('search'); code,body=request('graveyard.php?op=search',data);self.assertEqual(200,code,body[:3000]);return data,body
+            try: yield f|dict(request=request,patch=patch,gprepare=prepare,gsnapshot=snapshot,gform=form,greject=reject,enter=enter,enemyid=enemyid)
+            finally:
+                self.query('DELETE FROM creatures WHERE creatureid=?',[enemyid])
+                for row in creatures: self.query('UPDATE creatures SET graveyard=1 WHERE creatureid=?',[row['creatureid']])
+                self.query("DELETE FROM settings WHERE setting IN ('gravechance','autofight','autofightfull')")
+                for row in settings: self.query('INSERT INTO settings(setting,value) VALUES (?,?)',[row['setting'],row['value']])
+
+    def test_graveyard_search_round_authority_and_replay(self):
+        with self._graveyard_fixture() as f:
+            buff={'proof':dict(name='Preserve on GET',schema='fixture',rounds=5,atkmod=2)}
+            f['gprepare'](bufflist=f['encode'](buff)); before=f['gsnapshot']()
+            for op in ['','search','fight','run']:
+                code,body=f['request']('graveyard.php'+('?op='+op if op else ''));self.assertEqual(200,code,body[:2000]);self.assertEqual(before,f['gsnapshot']())
+            data=f['gform']('search'); f['greject'](data|dict(csrf_token='bad'),'search',403)
+            for field in ['creatureid','creatureattack','creatureexp','victory','alive','soulpoints','deathpower','type','auto','newtarget']:
+                f['greject'](f['gform']('search')|{field:'999'},'search',400)
+            data,body=f['enter']();after=f['gsnapshot']();state=f['decode'](after['badguy']);enemy=state['enemies'][0]
+            self.assertEqual('4',after['gravefights']);self.assertEqual([],f['decode'](after['bufflist']));self.assertEqual('100',after['deathpower'])
+            self.assertEqual(f['enemyid'],enemy['creatureid']);self.assertEqual(22,enemy['creatureattack']);self.assertEqual(22*.7,enemy['creaturedefense']);self.assertEqual(10,enemy['creaturelevel'])
+            self.assertRegex(state['options']['encounter'],r'^[a-f0-9]{32}$');self.assertEqual('0',after['hitpoints']);self.assertEqual(before['attack'],after['attack']);self.assertEqual(before['defense'],after['defense'])
+            f['greject'](data,'search');old=f['gform']();data=f['gform']();code,body=f['request'](data=data);self.assertEqual(200,code,body[:3000]);roundstate=f['gsnapshot']()
+            self.assertEqual('4',roundstate['gravefights']);self.assertEqual('0',roundstate['hitpoints']);self.assertEqual(state['options']['encounter'],f['decode'](roundstate['badguy'])['options']['encounter'])
+            self.assertEqual('95',roundstate['soulpoints']);self.assertEqual(94,f['decode'](roundstate['badguy'])['enemies'][0]['creaturehealth']);self.assertEqual(96,enemy['creaturehealth']);self.assertEqual(13,enemy['creatureexp'])
+            f['greject'](old);f['greject'](data)
+
+    def test_graveyard_search_rollback_and_eligibility(self):
+        with self._graveyard_fixture() as f:
+            self.assertTrue(self.query('SELECT lastnewday FROM accounts WHERE acctid=?',[f['player']])[0]['lastnewday'])
+            for changes in [dict(alive=1,hitpoints=100),dict(alive=1,hitpoints=0),dict(alive=0,hitpoints=1),dict(specialinc='module:goldmine'),dict(badguy='broken'),dict(specialty='')]:
+                f['gprepare'](); data=f['gform']('search');f['patch'](**changes);f['greject'](data,'search')
+            f['gprepare']();data=f['gform']('search');f['patch'](gravefights=0);f['greject'](data,'search');code,body=f['request']('graveyard.php?op=search');self.assertEqual(200,code);self.assertNotIn('action_token',body)
+            f['gprepare']();data=f['gform']('search');self.query("ALTER TABLE accounts ADD CONSTRAINT fixture_grave_search CHECK (login <> 'WebPlayer' OR gravefights=5)")
+            try: f['greject'](data,'search',500)
+            finally: self.query('ALTER TABLE accounts DROP CONSTRAINT fixture_grave_search')
+            f['greject'](data,'search');f['enter']();self.assertEqual('4',f['gsnapshot']()['gravefights'])
+
+    def test_graveyard_victory_defeat_and_late_rollback(self):
+        with self._graveyard_fixture() as f, self._specialty_terminal_capture() as terminal:
+            for outcome,hp in [('victory',2),('victory',1),('defeat',1)]:
+                f['gprepare']();f['enter']();row=f['gsnapshot']();state=f['decode'](row['badguy'])
+                if outcome=='victory': state['enemies'][0]['creaturehealth']=hp;f['patch'](badguy=f['encode'](state))
+                else: f['patch'](soulpoints=hp)
+                before=f['gsnapshot']();news_before=len(self.query('SELECT * FROM news'));self.query('DELETE FROM fixture_specialty_terminal');data=f['gform']();old=f['gform']()
+                check='deathpower=100' if outcome=='victory' else 'gravefights=4'
+                self.query("ALTER TABLE accounts ADD CONSTRAINT fixture_grave_terminal CHECK (login <> 'WebPlayer' OR "+check+")")
+                try: f['greject'](data,status=500);self.assertEqual([],terminal())
+                finally: self.query('ALTER TABLE accounts DROP CONSTRAINT fixture_grave_terminal')
+                f['greject'](data);data=f['gform']();code,body=f['request'](data=data);self.assertEqual(200,code,body[:3000]);after=f['gsnapshot']()
+                self.assertEqual('',after['badguy']);self.assertEqual('0',after['alive']);self.assertEqual('0',after['hitpoints']);self.assertEqual(before['attack'],after['attack']);self.assertEqual(before['defense'],after['defense'])
+                self.assertEqual(1,len(terminal()));self.assertEqual('battle-'+outcome,terminal()[0]['hook']);self.assertEqual(news_before+(outcome=='defeat'),len(self.query('SELECT * FROM news')))
+                self.assertEqual(before['experience'],after['experience']);self.assertEqual(before['gold'],after['gold'])
+                if outcome=='victory':
+                    self.assertEqual(113,int(after['deathpower']));self.assertEqual('4',after['gravefights']);self.assertEqual(hp-2,terminal()[0]['enemy']['creaturehealth'])
+                else: self.assertEqual('100',after['deathpower']);self.assertEqual('0',after['gravefights']);self.assertEqual('0',after['soulpoints'])
+                f['greject'](data);f['greject'](old)
+
+    def test_graveyard_malformed_state_and_explicit_repair(self):
+        with self._graveyard_fixture() as f:
+            f['gprepare']();f['enter']();good=f['gsnapshot']()['badguy'];base=f['decode'](good)
+            cases=['broken','O:8:"stdClass":0:{}','b:0;','a:0:{}',good+'tail']
+            for key,value in dict(creatureid=0,creaturename=[],creaturehealth=0,creatureattack=-1,creaturedefense=99,creaturelevel=11,creatureexp=999,dead=True,istarget=False,playerstarthp=-1,creaturegold=100).items():
+                state=json.loads(json.dumps(base));state['enemies'][0][key]=value;cases.append(f['encode'](state))
+            for key,value in dict(type='forest',encounter='bad',maxattacks=0).items():
+                state=json.loads(json.dumps(base));state['options'][key]=value;cases.append(f['encode'](state))
+            state=json.loads(json.dumps(base));state['enemies'].append(state['enemies'][0]);cases.append(f['encode'](state))
+            for encoded in cases:
+                data=f['gform']();f['patch'](badguy=encoded);f['greject'](data);before=f['gsnapshot']();self.assertEqual(409,f['request']()[0]);self.assertEqual(before,f['gsnapshot']());f['patch'](badguy=good)
+            for field in ['companions','bufflist']:
+                for encoded in ['b:0;','a:1:{s:3:"bad";a:0:{}}']:
+                    data=f['gform']();f['patch'](**{field:encoded});f['greject'](data);f['patch'](**{field:'a:0:{}'})
+            self.assertEqual(200,f['request'](data=f['gform']())[0])
+
+    def test_graveyard_event_handoff_is_atomic_and_does_not_consume_fight(self):
+        with self._graveyard_fixture() as f:
+            module='resurrectiongravefixture';path=ROOT/'modules'/(module+'.php')
+            path.write_text("<?php\nfunction resurrectiongravefixture_getmoduleinfo(){return ['name'=>'Grave fixture','version'=>'1','author'=>'Tests','category'=>'Tests'];}\nfunction resurrectiongravefixture_runevent($type,$link){throw new RuntimeException('Event must be deferred');}\n")
+            self.query('INSERT INTO modules(modulename,active,version) VALUES (?,1,?)',[module,'1'])
+            self.query('INSERT INTO module_event_hooks(event_type,modulename,event_chance) VALUES (?,?,?)',['graveyard',module,'100'])
+            self.query("UPDATE settings SET value=100 WHERE setting='gravechance'")
+            try:
+                f['gprepare']();data=f['gform']('search');self.query("ALTER TABLE accounts ADD CONSTRAINT fixture_grave_event CHECK (login <> 'WebPlayer' OR specialinc='')")
+                try: f['greject'](data,'search',500)
+                finally: self.query('ALTER TABLE accounts DROP CONSTRAINT fixture_grave_event')
+                f['greject'](data,'search');data,body=f['enter']();row=f['gsnapshot']()
+                self.assertEqual('module:'+module,row['specialinc']);self.assertEqual('5',row['gravefights']);self.assertEqual('',row['badguy']);self.assertEqual('100',row['soulpoints']);self.assertEqual('100',row['deathpower'])
+                self.assertIn('graveyard.php',body);self.assertNotIn('forest.php',body);f['greject'](data,'search')
+            finally:
+                self.query('DELETE FROM module_event_hooks WHERE modulename=?',[module]);self.query('DELETE FROM modules WHERE modulename=?',[module]);path.unlink()
+
+    def test_graveyard_companion_suspension_and_skeleton_exclusion(self):
+        with self._graveyard_fixture() as f:
+            skeleton=dict(name='`4Skeleton Warrior',hitpoints=43,maxhitpoints=43,attack=26.5,defense=14.5,dyingtext='`$Your skeleton warrior crumbles to dust.`n',abilities=dict(fight=True),ignorelimit=True)
+            helper=dict(name='Shade Helper',hitpoints=100,maxhitpoints=100,attack=20,defense=10,abilities=dict(fight=True),allowinshades=True,dyingtext='Helper falls',schema='fixture')
+            excluded=helper|dict(name='Excluded Helper',allowinshades=False)
+            self.query("UPDATE modules SET active=1 WHERE modulename='drinks'")
+            self.query("INSERT INTO module_userprefs(modulename,setting,userid,value) VALUES ('drinks','drunkeness',?,'75') ON DUPLICATE KEY UPDATE value='75'",[f['player']])
+            def prefs(): return self.query('SELECT * FROM module_userprefs WHERE userid=? ORDER BY modulename,setting',[f['player']])
+            buff={'proof':dict(name='Preserve until commit',schema='fixture',rounds=5,atkmod=2)}
+            f['gprepare'](bufflist=f['encode'](buff),companions=f['encode'](dict(helper=helper,excluded=excluded,skeleton_warrior=skeleton)))
+            before=f['gsnapshot']();before_prefs=prefs()
+            day=self.query('SELECT lastnewday FROM accounts WHERE acctid=?',[f['player']])[0]['lastnewday'];self.assertTrue(day)
+            data=f['gform']('search');self.query("ALTER TABLE accounts ADD CONSTRAINT fixture_grave_companion CHECK (login <> 'WebPlayer' OR gravefights=5)")
+            try:
+                self.assertEqual(before,f['gsnapshot']());self.assertEqual(before_prefs,prefs())
+                f['greject'](data,'search',500)
+                self.assertEqual(before,f['gsnapshot']());self.assertEqual(before_prefs,prefs())
+            finally: self.query('ALTER TABLE accounts DROP CONSTRAINT fixture_grave_companion')
+            f['greject'](data,'search');self.assertEqual(before_prefs,prefs())
+            _,body=f['enter']();row=f['gsnapshot']();companions=f['decode'](row['companions'])
+            self.assertEqual('4',row['gravefights']);self.assertEqual([],f['decode'](row['bufflist']))
+            self.assertEqual('0',next(p['value'] for p in prefs() if p['modulename']=='drinks' and p['setting']=='drunkeness'))
+            self.assertEqual(day,self.query('SELECT lastnewday FROM accounts WHERE acctid=?',[f['player']])[0]['lastnewday'])
+            self.assertEqual(skeleton|dict(suspended=True),companions['skeleton_warrior']);self.assertEqual(excluded|dict(suspended=True),companions['excluded'])
+            self.assertEqual(94,companions['helper']['hitpoints']);self.assertEqual(85,f['decode'](row['badguy'])['enemies'][0]['creaturehealth']);self.assertTrue(companions['helper']['used']);self.assertNotIn('Skeleton Warrior hits',body);self.assertNotIn('Excluded Helper hits',body)
+            text=re.sub(r'\s+',' ',html.unescape(re.sub('<[^>]+>',' ',body)))
+            self.assertLess(text.index('RIPOSTE for 4'),text.index('Shade Helper hits Torment Fixture for 11'));self.assertLess(text.index('Shade Helper hits Torment Fixture for 11'),text.index('hits Shade Helper for 6'))
+            # Suspension is retained at terminal combat because the player is still dead.
+            state=f['decode'](row['badguy']);state['enemies'][0]['creaturehealth']=1;f['patch'](badguy=f['encode'](state));code,body=f['request'](data=f['gform']());self.assertEqual(200,code,body[:3000])
+            self.assertEqual('',f['gsnapshot']()['badguy']);companions=f['decode'](f['gsnapshot']()['companions'])
+            self.assertEqual(skeleton|dict(suspended=True),companions['skeleton_warrior']);self.assertTrue(companions['excluded']['suspended'])
+            f['gprepare'](companions=f['encode'](dict(helper=helper|dict(hitpoints=1))));_,body=f['enter']();row=f['gsnapshot']();self.assertEqual([],f['decode'](row['companions']));self.assertEqual(85,f['decode'](row['badguy'])['enemies'][0]['creaturehealth']);self.assertIn('Helper falls',body)
+
+    def test_graveyard_flee_success_failure_caps_and_rollback(self):
+        with self._graveyard_fixture() as f:
+            for favor,expected in [(100,87),(5,0),(0,0)]:
+                f['gprepare'](deathpower=favor);f['enter']();before=f['gsnapshot']();data=f['gform']('run');old=f['gform']()
+                # Seed 3 belongs only to the loopback fixture prepend, never request authority in production.
+                self.query("ALTER TABLE accounts ADD CONSTRAINT fixture_grave_flee CHECK (login <> 'WebPlayer' OR badguy<>'')")
+                try:
+                    code,body=f['request']('graveyard.php?op=run',data,seed='ordinary-flee-failure');self.assertEqual(500,code,body[:3000]);self.assertEqual(before,f['gsnapshot']())
+                finally: self.query('ALTER TABLE accounts DROP CONSTRAINT fixture_grave_flee')
+                f['greject'](data,'run');data=f['gform']('run');code,body=f['request']('graveyard.php?op=run',data,seed='ordinary-flee-failure');self.assertEqual(200,code,body[:3000]);after=f['gsnapshot']()
+                self.assertEqual(str(expected),after['deathpower']);self.assertEqual('',after['badguy']);self.assertEqual('4',after['gravefights']);self.assertEqual(before['soulpoints'],after['soulpoints']);self.assertEqual('0',after['hitpoints']);f['greject'](data,'run');f['greject'](old)
+            f['gprepare']();f['enter']();data=f['gform']('run');self.query("ALTER TABLE accounts ADD CONSTRAINT fixture_grave_run CHECK (login <> 'WebPlayer' OR soulpoints=100)")
+            try: f['greject'](data,'run',500)
+            finally: self.query('ALTER TABLE accounts DROP CONSTRAINT fixture_grave_run')
+            f['greject'](data,'run');data=f['gform']('run');old=f['gform']();code,body=f['request']('graveyard.php?op=run',data);self.assertEqual(200,code,body[:3000]);row=f['gsnapshot']()
+            self.assertEqual('92',row['soulpoints']);self.assertEqual(96,f['decode'](row['badguy'])['enemies'][0]['creaturehealth']);self.assertEqual('100',row['deathpower']);self.assertEqual('4',row['gravefights']);self.assertIn('summoned back',body);f['greject'](data,'run');f['greject'](old)
+
+    def test_graveyard_unsigned_favor_overflow_and_zero_soul(self):
+        with self._graveyard_fixture() as f:
+            f['gprepare'](deathpower=4294967295);f['enter']();state=f['decode'](f['gsnapshot']()['badguy']);state['enemies'][0]['creaturehealth']=1;f['patch'](badguy=f['encode'](state));f['greject'](f['gform']())
+            f['patch'](deathpower=4294967282);code,body=f['request'](data=f['gform']());self.assertEqual(200,code,body[:3000]);self.assertEqual('4294967295',f['gsnapshot']()['deathpower'])
+            f['gprepare'](soulpoints=0);data,body=f['enter']();row=f['gsnapshot']();self.assertEqual('0',row['gravefights']);self.assertEqual('0',row['soulpoints']);self.assertEqual('100',row['deathpower']);self.assertEqual('',row['badguy']);f['greject'](data,'search')
+
+    def test_graveyard_header_buff_transaction_and_new_encounter_binding(self):
+        with self._graveyard_fixture() as f:
+            self.query("UPDATE modules SET active=1 WHERE modulename='drinks'")
+            self.query("INSERT INTO module_userprefs(modulename,setting,userid,value) VALUES ('drinks','drunkeness',?,'75') ON DUPLICATE KEY UPDATE value='75'",[f['player']])
+            def drunk():return self.query("SELECT value FROM module_userprefs WHERE modulename='drinks' AND setting='drunkeness' AND userid=?",[f['player']])[0]['value']
+            buff={'proof':dict(name='Temporary attack',schema='fixture',rounds=5,**{'tempstat-attack':20})}
+            f['gprepare'](bufflist=f['encode'](buff));before=f['gsnapshot']()
+            code,body=f['request']('graveyard.php');self.assertEqual(200,code,body[:3000]);self.assertEqual(before,f['gsnapshot']());self.assertEqual('75',drunk())
+            data=f['gform']('search');self.query("ALTER TABLE accounts ADD CONSTRAINT fixture_grave_header CHECK (login <> 'WebPlayer' OR gravefights=5)")
+            try: f['greject'](data,'search',500);self.assertEqual('75',drunk())
+            finally: self.query('ALTER TABLE accounts DROP CONSTRAINT fixture_grave_header')
+            f['enter']();self.assertEqual('0',drunk());self.assertEqual('100',f['gsnapshot']()['attack']);self.assertEqual([],f['decode'](f['gsnapshot']()['bufflist']))
+            old=f['gform']();combat=f['decode'](f['gsnapshot']()['badguy']);combat['options']['encounter']='b'*32;f['patch'](badguy=f['encode'](combat));f['greject'](old)
+            f['patch'](gravefights=0);data=f['gform']();code,body=f['request'](data=data);self.assertEqual(200,code,body[:3000]);self.assertEqual('0',f['gsnapshot']()['gravefights'])
+
+    @contextmanager
+    def _training_fixture(self):
+        with self._specialty_accounting_fixture() as f:
+            masters=self.query('SELECT * FROM masters ORDER BY creatureid')
+            keys=['automaster','multimaster','companionslevelup','displaymasternews','referminlevel','refereraward','autofight','autofightfull']
+            saved={k:self.query('SELECT * FROM settings WHERE setting=?',[k]) for k in keys}
+            def setting(k,v): self.query('INSERT INTO settings(setting,value) VALUES (?,?) ON DUPLICATE KEY UPDATE value=VALUES(value)',[k,str(v)])
+            for k,v in dict(automaster=0,multimaster=1,companionslevelup=1,displaymasternews=1,referminlevel=4,refereraward=25,autofight=1,autofightfull=1).items(): setting(k,v)
+            def prepare(**changes):
+                values=dict(level=10,experience=15143,hitpoints=500,maxhitpoints=100,attack=100,defense=50,
+                    seenmaster=0,badguy='',specialty='TS',soulpoints=50,turns=20,gold=1000,gems=10,referer=0,refererawarded=0)
+                values.update(changes); f['prepare']('TS',**values)
+            def master(hp=100000,attack=120,defense=80):
+                self.query('UPDATE masters SET creaturehealth=?,creatureattack=?,creaturedefense=? WHERE creaturelevel=10',[hp,attack,defense])
+            def snapshot():
+                row=self.query('SELECT * FROM accounts WHERE acctid=?',[f['player']])[0]
+                ignore=['allowednavs','restorepage','laston','lastip','gentime','gentimecount','gensize','uniqueid','loggedin']
+                return [{k:v for k,v in row.items() if k not in ignore}]+self.query('SELECT modulename,setting,value FROM module_userprefs WHERE userid=? ORDER BY modulename,setting',[f['player']])
+            def form(op='fight',**fields):
+                code,body=f['request']('train.php?op='+op); self.assertEqual(200,code,body[:3000])
+                parts=[part for url,part in re.findall(r'<form[^>]*action="([^"]+)"[^>]*>(.*?)</form>',body,re.S) if html.unescape(url)=='train.php?op='+op]
+                self.assertTrue(parts,body[:2500]); return self._security_fields(parts[0])|fields
+            def action(data,op='fight'): return f['request']('train.php?op='+op,data)
+            def reject(data,op='fight',status=409):
+                before=snapshot(); code,body=action(data,op); self.assertEqual(status,code,body[:3000]); self.assertEqual(before,snapshot())
+            def enter(**changes):
+                prepare(**changes); data=form('challenge'); code,body=action(data,'challenge'); self.assertEqual(200,code,body[:3000]); return data
+            f.update(prepare_training=prepare,training_master=master,training_snapshot=snapshot,training_form=form,
+                training_action=action,training_reject=reject,enter=enter,setting=setting,masters=masters)
+            try: yield f
+            finally:
+                for row in masters: self.query('REPLACE INTO masters ('+','.join(row)+') VALUES ('+','.join('?' for _ in row)+')',list(row.values()))
+                for k in keys:
+                    self.query('DELETE FROM settings WHERE setting=?',[k])
+                    for row in saved[k]: self.query('INSERT INTO settings(setting,value) VALUES (?,?)',[k,row['value']])
+
+    def test_training_entry_authority_and_stale_round(self):
+        with self._training_fixture() as f:
+            f['training_master'](attack=1000); f['prepare_training'](hitpoints=5000,specialty='')
+            snap=f['training_snapshot']; form=f['training_form']; action=f['training_action']; reject=f['training_reject']
+            # A committed day cannot bypass incomplete specialty onboarding. GET is presentation-only.
+            missing=snap(); day=missing[0]['lastnewday']; self.assertTrue(day)
+            self.assertEqual(['1','5000','15143','Human','','0','a:0:{}','','0',''],
+                [missing[0][key] for key in ['alive','hitpoints','experience','race','specialty','dragonkills','dragonpoints','badguy','seenmaster','specialinc']])
+            data=form('challenge'); self.assertEqual(missing,snap())
+            reject(data,'challenge'); self.assertEqual(missing,snap())
+            # Restore only specialty and obtain fresh forms below, proving the same day is eligible.
+            self.query("UPDATE accounts SET specialty='TS' WHERE acctid=?",[f['player']])
+            before=snap()
+            for path in ['train.php','train.php?op=question','train.php?op=challenge','train.php?op=autochallenge','train.php?op=fight','train.php?op=run']:
+                self.assertEqual(200,f['request'](path)[0]); self.assertEqual(before,snap())
+            for field in ['victory','master','level','experience','eligible','advancement','target','creaturehealth','attack','defense','reward','skill','l']:
+                data=form('challenge'); reject(dict(data,**{field:'1'}),'challenge',400)
+                self.assertEqual(400,f['request']('train.php?op=challenge&'+field+'=1')[0]); self.assertEqual(before,snap())
+            data=form('challenge')
+            reject({},'challenge',403); reject(dict(data,csrf_token='bad'),'challenge',403)
+            reject({k:v for k,v in data.items() if k!='action_token'},'challenge',409)
+            self.assertIn(self._security_client(None)('train.php?op=challenge',data)[0],[302,303,403])
+            self.assertEqual(before,snap())
+            stale=form('challenge'); code,body=action(data,'challenge'); self.assertEqual(200,code,body[:3000]); reject(data,'challenge'); reject(stale,'challenge')
+            state=f['decode'](snap()[0]['badguy']); self.assertEqual('10',str(state['enemies'][0]['creatureid'])); self.assertEqual(10,state['options']['traininglevel']); self.assertEqual('1',snap()[0]['seenmaster'])
+            self.assertEqual(day,snap()[0]['lastnewday'])
+            before=snap(); stale=form(); data=form(); self.assertEqual(before,snap()); code,body=action(data); self.assertEqual(200,code,body[:3000])
+            after=snap(); enemy=f['decode'](after[0]['badguy'])['enemies'][0]
+            self.assertEqual(('5000',100000),(before[0]['hitpoints'],f['decode'](before[0]['badguy'])['enemies'][0]['creaturehealth'])); self.assertEqual(('4823',99960),(after[0]['hitpoints'],enemy['creaturehealth']))
+            self.assertTrue(enemy['istarget']); reject(data); reject(stale)
+            self.assertEqual(200,f['request']('train.php?op=fight')[0]); self.assertEqual(after,snap())
+
+    def test_training_eligibility_shipped_masters_and_dragon_scale(self):
+        with self._training_fixture() as f:
+            prepare=f['prepare_training']; form=f['training_form']; action=f['training_action']; snap=f['training_snapshot']
+            # Actual preserved master row, no requested identity or stat substitution.
+            for level,exp,ident in [(1,100,1),(10,15143,10),(12,23840,12),(14,36071,14)]:
+                prepare(level=level,experience=exp,maxhitpoints=level*10,hitpoints=1000,attack=1,defense=1000,race='Elf')
+                code,body=action(form('challenge'),'challenge'); self.assertEqual(200,code,body[:3000])
+                state=f['decode'](snap()[0]['badguy']); enemy=state['enemies'][0]
+                self.assertEqual(str(ident),str(enemy['creatureid'])); self.assertEqual(str(level),str(enemy['creaturelevel']))
+                row=next(x for x in f['masters'] if int(x['creatureid'])==ident)
+                for key in ['creatureattack','creaturedefense']: self.assertEqual(float(row[key]),float(enemy[key]))
+                self.assertEqual(int(row['creaturehealth']),enemy['trainingmaxhp'])
+                if level==12: self.assertIn('another Elf',enemy['creaturelose'])
+            prepare(experience=15142); code,body=action(form('challenge'),'challenge'); self.assertEqual(200,code,body[:2000]); after=snap()[0]
+            self.assertEqual('',after['badguy']); self.assertEqual('10',after['level']); self.assertEqual('1',after['seenmaster']); self.assertEqual('15142',after['experience'])
+            f['training_reject']({},'challenge',403)
+            for patch in [dict(level=0),dict(level=15),dict(level=65535),dict(hitpoints=0,alive=0),dict(alive=0),dict(specialinc='event')]:
+                prepare(**patch); before=snap(); code,_=f['request']('train.php?op=challenge'); self.assertIn(code,[409,200]); self.assertEqual(before,snap())
+                self.assertIn(action({},'challenge')[0],[409,403]); self.assertEqual(before,snap())
+            # Complete onboarding with fight allocations that do not affect the training budget.
+            prepare(level=1,experience=100,dragonkills=4,dragonpoints=f['encode'](['ff']*4),maxhitpoints=10,hitpoints=10)
+            self.assertEqual(200,action(form('challenge'),'challenge')[0]); self.assertEqual('',snap()[0]['badguy']) # DK requirement is 200.
+            f['training_master'](); prepare(dragonkills=4,dragonpoints=f['encode'](['at','de','hp','ff']),experience=16143,maxhitpoints=110)
+            self.assertEqual(200,action(form('challenge'),'challenge')[0]); enemy=f['decode'](snap()[0]['badguy'])['enemies'][0]
+            self.assertEqual(100005,enemy['trainingmaxhp']); self.assertEqual(120,enemy['creatureattack']); self.assertEqual(80,enemy['creaturedefense'])
+            # Missing nearest master cannot create combat; fixture removal is explicitly restored.
+            self.query('DELETE FROM masters'); prepare(); before=snap(); self.assertEqual(409,f['request']('train.php?op=challenge')[0]); self.assertEqual(before,snap())
+
+    def test_training_victory_zero_negative_replay_and_next_level(self):
+        with self._training_fixture() as f, self._specialty_terminal_capture() as terminal:
+            f['training_master'](hp=10000,attack=0,defense=0)
+            for hp in [10,9]:
+                f['enter'](attack=0,defense=1000,specialty='TS')
+                row=f['training_snapshot']()[0]; state=f['decode'](row['badguy']); state['enemies'][0]['creaturehealth']=hp
+                buff={'proof':{'name':'Fixture','schema':'train','effectmsg':'','effectnodmgmsg':'','effectfailmsg':'','rounds':3,'allowintrain':1,'minioncount':1,'minbadguydamage':10,'maxbadguydamage':10}}
+                self.query('UPDATE accounts SET badguy=?,bufflist=? WHERE acctid=?',[f['encode'](state),f['encode'](buff),f['player']])
+                self.query('DELETE FROM fixture_specialty_terminal')
+                before=f['training_snapshot'](); stale=f['training_form'](); data=f['training_form']()
+                code,body=f['training_action'](data); self.assertEqual(200,code,body[:3000]); after=f['training_snapshot']()
+                observed=terminal(); self.assertEqual(1,len(observed)); self.assertEqual(hp-10,observed[0]['enemy']['creaturehealth'])
+                expected=before[0]|dict(level='11',maxhitpoints='110',soulpoints='55',attack='1',defense='1001',seenmaster='0',badguy='')
+                # Overfull HP remains overfull; historical heal is a floor, never a cap.
+                for key in ['level','maxhitpoints','soulpoints','attack','defense','seenmaster','badguy','hitpoints','experience','gold','gems','turns','location','dragonkills','dragonpoints','authversion','race','specialty','alive']:
+                    self.assertEqual(expected[key],after[0][key],key)
+                self.assertEqual('16',self.query("SELECT value FROM module_userprefs WHERE userid=? AND modulename='specialtythiefskills' AND setting='skill'",[f['player']])[0]['value'])
+                f['training_reject'](data); f['training_reject'](stale); f['training_reject'](data,'challenge')
+                for path in ['train.php?op=challenge&victory=1','train.php?op=challenge&master=10']:
+                    self.assertEqual(400,f['request'](path)[0]); self.assertEqual(after,f['training_snapshot']())
+                self.assertEqual(200,f['request']('train.php?op=question')[0]); self.assertEqual(after,f['training_snapshot']())
+                # Experience was not spent, but is below level 11's 19121 requirement.
+                self.assertEqual(200,f['training_action'](f['training_form']('challenge'),'challenge')[0]); self.assertEqual('11',f['training_snapshot']()[0]['level']); self.assertEqual('',f['training_snapshot']()[0]['badguy'])
+
+    def test_training_settlement_rollback_and_defeat(self):
+        with self._training_fixture() as f, self._specialty_terminal_capture() as terminal:
+            for win in [True,False]:
+                f['training_master'](hp=10000,attack=0 if win else 10000,defense=0)
+                f['enter'](attack=0,defense=1000,hitpoints=1000)
+                row=f['training_snapshot']()[0]; state=f['decode'](row['badguy']); state['enemies'][0]['creaturehealth']=10 if win else 10000
+                buffs={'proof':{'name':'Fixture','schema':'train','effectmsg':'','effectnodmgmsg':'','effectfailmsg':'','rounds':3,'allowintrain':1,'minioncount':1,'minbadguydamage':10,'maxbadguydamage':10}} if win else {}
+                if not win:
+                    buffs={'retained':dict(name='Retained',schema='train',rounds=3,atkmod=2),'expires':dict(name='Expires',schema='train',rounds=3,atkmod=2,expireafterfight=1)}
+                    skeleton=dict(name='`4Skeleton Warrior',hitpoints=20,maxhitpoints=43,attack=26.5,defense=14.5,dyingtext='`$Your skeleton warrior crumbles to dust.`n',abilities=dict(fight=True),ignorelimit=True)
+                    self.query('UPDATE accounts SET companions=? WHERE acctid=?',[f['encode']({'skeleton_warrior':skeleton}),f['player']])
+                self.query('UPDATE accounts SET badguy=?,bufflist=?,hitpoints=1,defense=0 WHERE acctid=?',[f['encode'](state),f['encode'](buffs),f['player']])
+                self.query('DELETE FROM fixture_specialty_terminal')
+                before=f['training_snapshot'](); news=self.query('SELECT count(*) AS n FROM news WHERE accountid=?',[f['player']]); data=f['training_form']()
+                self.query("ALTER TABLE accounts ADD CONSTRAINT fixture_training_failure CHECK (login <> 'WebPlayer' OR badguy <> '')")
+                try:
+                    f['training_reject'](data,status=500); self.assertEqual([],terminal()); self.assertEqual(news,self.query('SELECT count(*) AS n FROM news WHERE accountid=?',[f['player']]))
+                finally: self.query('ALTER TABLE accounts DROP CONSTRAINT fixture_training_failure')
+                f['training_reject'](data); code,body=f['training_action'](f['training_form']()); self.assertEqual(200,code,body[:3000]); after=f['training_snapshot']()[0]
+                self.assertEqual('11' if win else '10',after['level']); self.assertEqual('110' if win else '100',after['hitpoints']); self.assertEqual('1',after['alive']); self.assertEqual('',after['badguy'])
+                self.assertEqual('0' if win else '1',after['seenmaster']); self.assertEqual(1,len(terminal()))
+                for key in ['experience','gold','gems','turns','location','dragonkills','authversion']:
+                    self.assertEqual(before[0][key],after[key],key)
+                if not win:
+                    for key in ['maxhitpoints','attack','defense','soulpoints']: self.assertEqual(before[0][key],after[key])
+                    buffs=f['decode'](after['bufflist']); self.assertNotIn('expires',buffs); self.assertEqual(3,buffs['retained']['rounds']); self.assertFalse(buffs['retained']['suspended'])
+                    companion=f['decode'](after['companions'])['skeleton_warrior']; self.assertEqual(20,companion['hitpoints']); self.assertFalse(companion['suspended'])
+                    self.assertNotIn('name="action_token"',f['request']('train.php?op=challenge')[1]); f['training_reject'](data,'challenge')
+
+    def test_training_corrupt_state_preserved_and_repaired(self):
+        with self._training_fixture() as f:
+            f['training_master'](); f['enter'](); base=f['training_snapshot']()[0]; valid=f['decode'](base['badguy']); encode=f['encode']
+            cases=['broken','O:8:"stdClass":0:{}',encode(False),encode([]),encode({'enemies':[],'options':{'type':'train'}})]
+            for key,value in [('creatureid',999),('creatureid',[]),('creaturelevel',11),('creaturehealth',0),('creaturehealth',-1),('creaturehealth',99999999),('creatureattack',[]),('creatureattack',121),('creaturedefense',-1),('dead',True),('istarget',False),('killedplayer',True),('reward',999),('trainingmaxhp',1)]:
+                state=json.loads(json.dumps(valid)); state['enemies'][0][key]=value; cases.append(encode(state))
+            for options in [dict(type='forest'),dict(traininglevel=11),dict(encounter='bad'),dict(experience=[999])]:
+                state=json.loads(json.dumps(valid)); state['options'].update(options); cases.append(encode(state))
+            state=json.loads(json.dumps(valid)); state['enemies']*=2; cases.append(encode(state))
+            for value in cases:
+                self.query('UPDATE accounts SET badguy=? WHERE acctid=?',[value,f['player']]); before=f['training_snapshot']()
+                for data in [None,{'csrf_token':'bad'}]:
+                    code,body=f['request']('train.php?op=fight',data); self.assertEqual(409,code,body[:2500]); self.assertNotRegex(body,r'Warning:|Fatal error:|SQLSTATE'); self.assertEqual(before,f['training_snapshot']())
+            self.query('UPDATE accounts SET badguy=? WHERE acctid=?',[base['badguy'],f['player']])
+            for column,value in [('bufflist',encode(False)),('bufflist','broken'),('bufflist','O:8:"stdClass":0:{}'),('companions','O:8:"stdClass":0:{}'),('bufflist',encode({'bad':{'rounds':1,'atkmod':[]}})),('companions',encode({'bad':{'hitpoints':-1}}))]:
+                self.query('UPDATE accounts SET '+column+'=? WHERE acctid=?',[value,f['player']]); before=f['training_snapshot'](); code,body=f['request']('train.php?op=fight'); self.assertIn(code,[400,409]); self.assertEqual(before,f['training_snapshot']()); self.assertNotRegex(body,r'Warning:|Fatal error:|SQLSTATE')
+                self.query('UPDATE accounts SET '+column+'=? WHERE acctid=?',[base[column],f['player']])
+            self.assertEqual(200,f['training_action'](f['training_form']())[0])
+
+    def test_training_buffs_companions_and_context_canonicalization(self):
+        with self._training_fixture() as f:
+            f['training_master'](); encode=f['encode']; decode=f['decode']; snap=f['training_snapshot']
+            guard=dict(name='Training guard',hitpoints=1000,maxhitpoints=1000,attack=2,defense=3,abilities=dict(fight=True),
+                attackperlevel=1,defenseperlevel=2,maxhitpointsperlevel=3,allowintrain=1)
+            skeleton=dict(name='`4Skeleton Warrior',hitpoints=43,maxhitpoints=43,attack=26.5,defense=14.5,
+                dyingtext='`$Your skeleton warrior crumbles to dust.`n',abilities=dict(fight=True),ignorelimit=True)
+            buffs={'excluded':dict(name='Fixture',schema='train',effectmsg='',effectnodmgmsg='',effectfailmsg='',rounds=5,regen=10),'allowed':dict(name='Fixture',schema='train',effectmsg='',effectnodmgmsg='',effectfailmsg='',rounds=5,regen=3,allowintrain=1)}
+            f['enter'](companions=encode(dict(skeleton_warrior=skeleton,guard=guard)),bufflist=encode(buffs))
+            before=snap()[0]; data=f['training_form'](); state=decode(before['badguy'])
+            # Reorder each record, preserving collection execution order, then use the existing intent.
+            state['enemies'][0]=dict(reversed(list(state['enemies'][0].items())))
+            buffstate=decode(before['bufflist']); companions=decode(before['companions'])
+            buffstate={k:dict(reversed(list(v.items()))) for k,v in buffstate.items()}
+            companions={k:dict(reversed(list(v.items()))) for k,v in companions.items()}
+            self.query('UPDATE accounts SET badguy=?,bufflist=?,companions=? WHERE acctid=?',[encode(state),encode(buffstate),encode(companions),f['player']])
+            code,body=f['training_action'](data); self.assertEqual(200,code,body[:3000]); after=snap()[0]
+            actual=decode(after['companions']); self.assertEqual(43,actual['skeleton_warrior']['hitpoints']); self.assertTrue(actual['skeleton_warrior']['suspended'])
+            self.assertNotIn('Skeleton Warrior hits',body); self.assertIn('Training guard',body)
+            plain=html.unescape(re.sub(r'<[^>]*>','',body)); companion_move=re.search(r'Training guard (?:hits|tries to hit)',plain); player_move=re.search(r'You (?:hit|try to hit)',plain)
+            master_move=re.search(r'Sensei Noetha (?:hits you|tries to hit you)',plain)
+            self.assertIsNotNone(companion_move); self.assertIsNotNone(player_move); self.assertIsNotNone(master_move)
+            self.assertLess(player_move.start(),master_move.start()); self.assertLess(master_move.start(),companion_move.start())
+            actualbuffs=decode(after['bufflist']); self.assertEqual(5,actualbuffs['excluded']['rounds']); self.assertTrue(actualbuffs['excluded']['suspended']); self.assertLess(actualbuffs['allowed']['rounds'],buffstate['allowed']['rounds'])
+            # Every material participant/state change invalidates a form without another round.
+            for column,value in [('experience',15144),('hitpoints',400),('attack',99),('seenmaster',0),('level',11),('dragonkills',1),('location','Elsewhere')]:
+                old=snap()[0][column]; data=f['training_form'](); self.query('UPDATE accounts SET '+column+'=? WHERE acctid=?',[value,f['player']]); f['training_reject'](data)
+                self.query('UPDATE accounts SET '+column+'=? WHERE acctid=?',[old,f['player']])
+            for column in ['bufflist','companions']:
+                old=snap()[0][column]; data=f['training_form'](); changed=decode(old)
+                if column=='bufflist': changed['allowed']['rounds']+=1
+                else: changed['guard']['hitpoints']-=1
+                self.query('UPDATE accounts SET '+column+'=? WHERE acctid=?',[encode(changed),f['player']]); f['training_reject'](data)
+                self.query('UPDATE accounts SET '+column+'=? WHERE acctid=?',[old,f['player']])
+            # Winning phase excludes the skeleton, then historical advancement heals/grows surviving companions.
+            state=decode(snap()[0]['badguy']); state['enemies'][0]['creaturehealth']=1
+            self.query('UPDATE accounts SET badguy=?,bufflist=? WHERE acctid=?',[encode(state),encode({'finish':dict(name='Fixture',schema='train',effectmsg='',effectnodmgmsg='',effectfailmsg='',rounds=2,allowintrain=1,minioncount=1,minbadguydamage=10,maxbadguydamage=10)}),f['player']])
+            self.assertEqual(200,f['training_action'](f['training_form']())[0]); after=decode(snap()[0]['companions'])
+            self.assertEqual(43,after['skeleton_warrior']['hitpoints']); self.assertFalse(after['skeleton_warrior']['suspended'])
+            self.assertEqual(3,after['guard']['attack']); self.assertEqual(5,after['guard']['defense']); self.assertEqual(1003,after['guard']['maxhitpoints']); self.assertEqual(1003,after['guard']['hitpoints'])
+
+    def test_training_autochallenge_maximum_and_multimaster(self):
+        with self._training_fixture() as f:
+            f['setting']('automaster',1); f['training_master'](attack=0); f['prepare_training'](experience=19121,hitpoints=50)
+            before=f['training_snapshot'](); data=f['training_form']('autochallenge'); self.assertEqual(before,f['training_snapshot']()); f['training_reject'](data,'autochallenge')
+            f['prepare_training'](experience=19122,hitpoints=50)
+            before=f['training_snapshot'](); data=f['training_form']('autochallenge'); self.assertEqual(before,f['training_snapshot']())
+            self.assertEqual(200,f['training_action'](data,'autochallenge')[0]); self.assertEqual('100',f['training_snapshot']()[0]['hitpoints']); f['training_reject'](data,'autochallenge')
+            self.assertEqual('1',f['training_snapshot']()[0]['seenmaster'])
+            # Level 14 is last training master. Level 15 cannot recreate combat or bypass Dragon progression.
+            for multi in [0,1]:
+                f['setting']('automaster',0); f['setting']('multimaster',multi)
+                f['enter'](level=14,experience=36071,maxhitpoints=140,hitpoints=1000,attack=0,defense=1000)
+                state=f['decode'](f['training_snapshot']()[0]['badguy']); state['enemies'][0]['creaturehealth']=1
+                self.query('UPDATE accounts SET badguy=?,bufflist=? WHERE acctid=?',[f['encode'](state),f['encode']({'finish':dict(name='Fixture',schema='train',effectmsg='',effectnodmgmsg='',effectfailmsg='',rounds=2,allowintrain=1,minioncount=1,minbadguydamage=10,maxbadguydamage=10)}),f['player']])
+                data=f['training_form'](); self.assertEqual(200,f['training_action'](data)[0]); after=f['training_snapshot']()
+                self.assertEqual('15',after[0]['level']); self.assertEqual('150',after[0]['maxhitpoints']); self.assertEqual(str(1-multi),after[0]['seenmaster'])
+                self.assertIn('memories',f['request']('train.php')[1]); self.assertEqual(after,f['training_snapshot']()); f['training_reject'](data); f['training_reject'](data,'challenge')
+            # Multimaster permits a fresh earned next level when experience already satisfies it.
+            f['setting']('multimaster',1); f['enter'](experience=19121,attack=0,defense=1000)
+            state=f['decode'](f['training_snapshot']()[0]['badguy']); state['enemies'][0]['creaturehealth']=1
+            self.query('UPDATE accounts SET badguy=?,bufflist=? WHERE acctid=?',[f['encode'](state),f['encode']({'finish':dict(name='Fixture',schema='train',effectmsg='',effectnodmgmsg='',effectfailmsg='',rounds=2,allowintrain=1,minioncount=1,minbadguydamage=10,maxbadguydamage=10)}),f['player']])
+            self.assertEqual(200,f['training_action'](f['training_form']())[0]); self.assertEqual('11',f['training_snapshot']()[0]['level'])
+            self.assertEqual(200,f['training_action'](f['training_form']('challenge'),'challenge')[0])
+            state=f['decode'](f['training_snapshot']()[0]['badguy']); self.assertEqual('11',str(state['enemies'][0]['creatureid']))
+
+    def test_training_referral_and_specialty_rollback(self):
+        with self._training_fixture() as f:
+            ref=self.query("SELECT acctid,donation FROM accounts WHERE login='FixtureAdmin'")[0]
+            f['training_master'](attack=0); f['enter'](attack=0,defense=1000,specialty='TS',referer=ref['acctid'])
+            state=f['decode'](f['training_snapshot']()[0]['badguy']); state['enemies'][0]['creaturehealth']=1
+            self.query('UPDATE accounts SET badguy=?,bufflist=? WHERE acctid=?',[f['encode'](state),f['encode']({'finish':dict(name='Fixture',schema='train',effectmsg='',effectnodmgmsg='',effectfailmsg='',rounds=2,allowintrain=1,minioncount=1,minbadguydamage=10,maxbadguydamage=10)}),f['player']])
+            data=f['training_form'](); before=f['training_snapshot'](); mail=self.query('SELECT count(*) AS n FROM mail WHERE msgto=?',[ref['acctid']])
+            self.query("ALTER TABLE accounts ADD CONSTRAINT fixture_training_referral CHECK (login <> 'WebPlayer' OR level <> 11)")
+            try:
+                f['training_reject'](data,status=500); self.assertEqual(before,f['training_snapshot']())
+                self.assertEqual(ref['donation'],self.query('SELECT donation FROM accounts WHERE acctid=?',[ref['acctid']])[0]['donation'])
+                self.assertEqual(mail,self.query('SELECT count(*) AS n FROM mail WHERE msgto=?',[ref['acctid']]))
+            finally: self.query('ALTER TABLE accounts DROP CONSTRAINT fixture_training_referral')
+            try:
+                self.assertEqual(200,f['training_action'](f['training_form']())[0]); f['training_reject'](data)
+                self.assertEqual(int(ref['donation'])+25,int(self.query('SELECT donation FROM accounts WHERE acctid=?',[ref['acctid']])[0]['donation']))
+                self.assertEqual('1',f['training_snapshot']()[0]['refererawarded']); self.assertEqual(int(mail[0]['n'])+1,int(self.query('SELECT count(*) AS n FROM mail WHERE msgto=?',[ref['acctid']])[0]['n']))
+            finally: self.query('UPDATE accounts SET donation=? WHERE acctid=?',[ref['donation'],ref['acctid']])
+
+    def test_training_entry_rollback_settings_and_autofight(self):
+        with self._training_fixture() as f:
+            f['training_master'](attack=0,defense=0); f['prepare_training'](attack=1,defense=1000)
+            before=f['training_snapshot'](); data=f['training_form']('challenge')
+            self.query("ALTER TABLE accounts ADD CONSTRAINT fixture_training_entry CHECK (login <> 'WebPlayer' OR seenmaster <> 1)")
+            try: f['training_reject'](data,'challenge',500)
+            finally: self.query('ALTER TABLE accounts DROP CONSTRAINT fixture_training_entry')
+            self.assertEqual(before,f['training_snapshot']()); f['training_reject'](data,'challenge')
+            self.assertEqual(200,f['training_action'](f['training_form']('challenge'),'challenge')[0])
+            for rounds in ['five','ten','full']:
+                data=f['training_form'](rounds=rounds)
+                if rounds=='full':
+                    # Fully supported until-end action uses a small remaining live target.
+                    state=f['decode'](f['training_snapshot']()[0]['badguy']); state['enemies'][0]['creaturehealth']=1
+                    self.query('UPDATE accounts SET badguy=? WHERE acctid=?',[f['encode'](state),f['player']]); data=f['training_form'](rounds=rounds)
+                code,body=f['training_action'](data); self.assertEqual(200,code,body[:2500]); f['training_reject'](data)
+            f['enter'](attack=1,defense=1000)
+            data=f['training_form'](); f['setting']('multimaster',0); f['training_reject'](data); f['setting']('multimaster',1)
+            data=f['training_form'](); self.query('UPDATE masters SET creatureattack=1 WHERE creaturelevel=10'); f['training_reject'](data); self.query('UPDATE masters SET creatureattack=0 WHERE creaturelevel=10')
+            data=f['training_form'](); self.query("UPDATE module_userprefs SET value='16' WHERE userid=? AND modulename='specialtythiefskills' AND setting='skill'",[f['player']]); f['training_reject'](data)
+            for rounds in ['one','999','0']:
+                f['training_reject'](f['training_form'](rounds=rounds),status=400)
+            f['setting']('autofight',0); f['training_reject'](f['training_form'](rounds='five'),status=400)
+
+    def test_training_specialty_growth_and_bundled_racial_buffs(self):
+        with self._training_fixture() as f:
+            for spec,race,stat,expression in [('DA','Elf','defmod','(<defense>?(1+((1+floor(<level>/5))/<defense>)):0)'),
+                ('MP','Troll','atkmod','(<attack>?(1+((1+floor(<level>/5))/<attack>)):0)'),
+                ('TS','Elf','defmod','(<defense>?(1+((1+floor(<level>/5))/<defense>)):0)')]:
+                f['training_master'](attack=0)
+                racial=dict(name='Racial benefit',schema='module-race'+race.lower(),rounds=-1,allowintrain=1,allowinpvp=1,**{stat:expression})
+                f['enter'](attack=100,defense=100,specialty=spec,race=race,bufflist=f['encode']({'racialbenefit':racial}))
+                self.query("UPDATE module_userprefs SET value='17' WHERE userid=? AND modulename=? AND setting='skill'",[f['player'],f['modules'][spec]])
+                state=f['decode'](f['training_snapshot']()[0]['badguy']); state['enemies'][0]['creaturehealth']=1
+                finish=dict(name='Finish',schema='train',rounds=2,allowintrain=1,minioncount=1,minbadguydamage=10,maxbadguydamage=10,effectmsg='',effectnodmgmsg='',effectfailmsg='')
+                self.query('UPDATE accounts SET badguy=?,bufflist=? WHERE acctid=?',[f['encode'](state),f['encode']({'racialbenefit':racial,'finish':finish}),f['player']])
+                data=f['training_form'](); code,body=f['training_action'](data); self.assertEqual(200,code,body[:2500]); after=f['training_snapshot']()[0]
+                self.assertEqual(('11','101','101'),(after['level'],after['attack'],after['defense']))
+                prefs=self.query('SELECT setting,value FROM module_userprefs WHERE userid=? AND modulename=? ORDER BY setting',[f['player'],f['modules'][spec]])
+                self.assertEqual([{'setting':'skill','value':'18'},{'setting':'uses','value':'10'}],prefs)
+                buff=f['decode'](after['bufflist'])['racialbenefit']; self.assertEqual(expression,buff[stat]); self.assertEqual(-1,buff['rounds']); self.assertFalse(buff.get('suspended',False)); f['training_reject'](data)
+
+    @contextmanager
+    def _ordinary_forest_fixture(self):
+        with self._specialty_accounting_fixture() as f:
+            request=f['request']; url='forest.php?op=fight'
+            def form(op='fight',**fields):
+                status,body=request('forest.php?op='+op)
+                self.assertEqual(200,status,body[:2000])
+                parts=[part for url,part in re.findall(r'<form[^>]*action="([^"]+)"[^>]*>(.*?)</form>',body,re.S) if html.unescape(url)=='forest.php?op='+op]
+                self.assertTrue(parts,body[:2000])
+                return self._security_fields(parts[0])|fields
+            def action(data,op='fight'): return request('forest.php?op='+op,data)
+            def reject(data,op='fight',status=409):
+                before=f['snapshot'](); code,body=action(data,op)
+                self.assertEqual(status,code,body[:2000]); self.assertEqual(before,f['snapshot']())
+            f.update(ordinary_form=form,action=action,reject=reject)
+            yield f
+
+    def test_ordinary_forest_http_authority_and_context(self):
+        with self._ordinary_forest_fixture() as f:
+            f['prepare']('TS',specialty='',badguy=f['encode']({'enemies':[dict(f['enemy'],creatureattack=1000)],'options':{'type':'forest','didsurprise':1}}),gold=1000,gems=10,experience=1000,turns=20)
+            before=f['snapshot']()
+            for path in ['forest.php?op=fight','forest.php?op=run','forest.php?op=newtarget&newtarget=1','forest.php?op=fight&auto=full','forest.php']:
+                status,body=f['request'](path); self.assertEqual(200,status,body[:2000]); self.assertEqual(before,f['snapshot']())
+            form=f['ordinary_form']; action=f['action']; reject=f['reject']
+            data=form(); reject({k:v for k,v in data.items() if k!='csrf_token'},status=403)
+            reject(dict(data,csrf_token='0'*64),status=403)
+            reject({k:v for k,v in data.items() if k!='action_token'})
+            for key in ['target','newtarget','targetid','index','creaturehealth','creatureattack','creaturedefense','creaturelevel','creatureexp','creaturegold','gems','reward','multiplier','victory','dead','istarget','skill','l']:
+                reject(dict(form(),**{key:'1'}),status=400)
+            old=form(); data=form(); code,body=action(data); self.assertEqual(200,code,body[:2000])
+            after=f['snapshot']()[0]; combat=f['decode'](after['badguy'])
+            self.assertEqual('323',after['hitpoints']); self.assertEqual(99960,combat['enemies'][0]['creaturehealth'])
+            self.assertTrue(combat['enemies'][0]['istarget']); self.assertEqual([],f['decode'](after['companions']))
+            self.assertEqual(['1000','1000','10'],[after[k] for k in ['gold','experience','gems']])
+            reject(data); reject(old)
+            persisted=f['snapshot'](); form(); self.assertEqual(persisted,f['snapshot']())
+            # Equivalent associative key ordering leaves the current intent valid.
+            data=form(); reordered=dict(reversed(list(combat.items())))
+            reordered['enemies']=[dict(reversed(list(combat['enemies'][0].items())))]
+            self.query('UPDATE accounts SET badguy=? WHERE acctid=?',[f['encode'](reordered),f['player']])
+            code,body=action(data); self.assertEqual(200,code,body[:2000])
+            # A restart with otherwise identical stats has a new server encounter identity.
+            data=form(); combat=f['decode'](f['snapshot']()[0]['badguy']); combat['options']['encounter']='a'*32
+            self.query('UPDATE accounts SET badguy=? WHERE acctid=?',[f['encode'](combat),f['player']]); reject(data)
+            anonymous=self._security_client(login=None)
+            self.assertIn(anonymous('forest.php?op=fight')[0],[302,303,403])
+            self.assertIn(anonymous('forest.php?op=fight',data)[0],[302,303,403])
+
+    def test_ordinary_forest_progression_rewards_and_rollback(self):
+        with self._ordinary_forest_fixture() as f, self._specialty_terminal_capture() as terminal:
+            encode=f['encode']; decode=f['decode']; form=f['ordinary_form']; action=f['action']; reject=f['reject']
+            self.query("UPDATE settings SET value='1' WHERE setting='forestgemchance'")
+            for instant in [0,1]:
+                self.query("UPDATE settings SET value=? WHERE setting='instantexp'",[str(instant)])
+                for hp in [40,39]:
+                    a=dict(f['enemy'],creaturehealth=hp,creatureexp=100,creaturegold=40,istarget=True)
+                    b=dict(f['enemy'],creatureid=2,creaturename='Second Target',creatureattack=1000,creaturehealth=100000,creatureexp=200,creaturegold=60,istarget=False)
+                    f['prepare']('TS',specialty='',badguy=encode({'enemies':[a,b],'options':{'type':'forest','didsurprise':1,'maxattacks':1}}),gold=1000,gems=10,experience=1000,turns=20)
+                    stale=form(); first=form(); code,body=action(first); self.assertEqual(200,code,body[:2000])
+                    after=f['snapshot']()[0]; combat=decode(after['badguy']); corpse=combat['enemies'][0]
+                    self.assertEqual(hp-40,corpse['creaturehealth']); self.assertTrue(corpse['dead']); self.assertFalse(corpse['istarget'])
+                    self.assertTrue(combat['enemies'][1]['istarget']); self.assertEqual(100000,combat['enemies'][1]['creaturehealth'])
+                    self.assertEqual(['500',str(1000+50*instant),'1000','10'],[after[k] for k in ['hitpoints','experience','gold','gems']])
+                    reject(first); reject(stale); reject(dict(form(),newtarget='0'),status=400)
+                    fresh=form(); self.assertEqual(200,action(fresh)[0]); progressed=decode(f['snapshot']()[0]['badguy'])
+                    self.assertEqual(corpse,progressed['enemies'][0]); self.assertEqual(99960,progressed['enemies'][1]['creaturehealth']); reject(fresh)
+                    stale=form(); progressed['enemies'][1]['creaturehealth']=40
+                    self.query('UPDATE accounts SET badguy=? WHERE acctid=?',[encode(progressed),f['player']]); reject(stale)
+                    self.query('DELETE FROM fixture_specialty_terminal'); data=form(); before=f['snapshot']()
+                    self.query("ALTER TABLE accounts ADD CONSTRAINT fixture_ordinary_terminal CHECK (login <> 'WebPlayer' OR badguy <> '')")
+                    try:
+                        code,body=action(data); self.assertEqual(500,code,body[:2000]); self.assertEqual(before,f['snapshot']()); self.assertEqual([],terminal()); reject(data)
+                    finally: self.query('ALTER TABLE accounts DROP CONSTRAINT fixture_ordinary_terminal')
+                    final=form(); code,body=action(final); self.assertEqual(200,code,body[:2000]); after=f['snapshot']()[0]
+                    self.assertEqual('',after['badguy']); self.assertEqual('1150',after['experience']); self.assertEqual('11',after['gems'])
+                    self.assertEqual('1044',after['gold']); self.assertEqual(2,len(terminal())); self.assertEqual(['battle-victory']*2,[x['hook'] for x in terminal()])
+                    self.assertEqual(['323','1'],[after[k] for k in ['hitpoints','alive']]); reject(final); reject(first)
+
+    def test_ordinary_forest_defeat_and_rollback(self):
+        with self._ordinary_forest_fixture() as f, self._specialty_terminal_capture() as terminal:
+            enemy=dict(f['enemy'],creatureattack=1000,creaturegold=100,creatureexp=100)
+            f['prepare']('TS',specialty='',hitpoints=177,badguy=f['encode']({'enemies':[enemy],'options':{'type':'forest','didsurprise':1}}),gold=1000,gems=10,experience=1000,turns=20)
+            form=f['ordinary_form']; action=f['action']; reject=f['reject']; stale=form(); data=form(); before=f['snapshot']()
+            news=self.query('SELECT * FROM news ORDER BY newsid')
+            self.query("ALTER TABLE accounts ADD CONSTRAINT fixture_ordinary_terminal CHECK (login <> 'WebPlayer' OR badguy <> '')")
+            try:
+                code,body=action(data); self.assertEqual(500,code,body[:2000]); self.assertEqual(before,f['snapshot']()); self.assertEqual(news,self.query('SELECT * FROM news ORDER BY newsid')); self.assertEqual([],terminal()); reject(data)
+            finally: self.query('ALTER TABLE accounts DROP CONSTRAINT fixture_ordinary_terminal')
+            final=form(); code,body=action(final); self.assertEqual(200,code,body[:2000]); after=f['snapshot']()[0]
+            self.assertEqual(['0','0','0','10','900',''],[after[k] for k in ['alive','hitpoints','gold','gems','experience','badguy']])
+            self.assertEqual([],f['decode'](after['bufflist'])); self.assertEqual([],f['decode'](after['companions']))
+            self.assertEqual('battle-defeat',terminal()[0]['hook']); self.assertEqual(99960,terminal()[0]['enemy']['creaturehealth'])
+            self.assertEqual(len(news)+1,len(self.query('SELECT * FROM news'))); reject(final); reject(stale)
+
+    def test_ordinary_forest_malformed_preserved_and_repair(self):
+        with self._ordinary_forest_fixture() as f:
+            import copy
+            f['prepare']('TS',specialty=''); valid=f['snapshot']()[0]['badguy']; base=f['decode'](valid)
+            cases=['','a:0:{}','broken','O:8:"stdClass":0:{}',f['encode'](True),f['encode']({'enemies':[],'options':{'type':'forest'}})]
+            patches=[('creatureid',0),('creatureid',1.5),('creaturehealth',True),('creaturehealth',-1),('creatureattack',-1),('creaturedefense',[]),('creaturelevel','1e2'),('creatureexp',-1),('creaturegold',{}),('dead',True),('istarget',[]),('cannotbetarget',True),('unknown',1)]
+            for key,value in patches:
+                state=copy.deepcopy(base); state['enemies'][0][key]=value; cases.append(f['encode'](state))
+            for options in [{'type':'pvp'},{'type':'forest','maxattacks':0},{'type':'forest','didsurprise':[]},{'type':'forest','experience':[99999]},{'type':'forest','unknown':True}]:
+                state=copy.deepcopy(base); state['options']=options; cases.append(f['encode'](state))
+            state=copy.deepcopy(base); state['enemies']=[dict(f['enemy'],istarget=True),dict(f['enemy'],istarget=True)]; cases.append(f['encode'](state))
+            state=copy.deepcopy(base); state['enemies']=[f['enemy']]*101; cases.append(f['encode'](state))
+            for bad in cases:
+                self.query('UPDATE accounts SET badguy=? WHERE acctid=?',[bad,f['player']]); before=f['snapshot']()
+                code,body=f['request']('forest.php?op=fight'); self.assertEqual(409,code,body[:2000]); self.assertEqual(before,f['snapshot']())
+                code,body=f['action']({'csrf_token':'0'*64,'action_token':'0'*64}); self.assertEqual(409,code,body[:2000]); self.assertEqual(before,f['snapshot']())
+            # Explicit operator repair restores the original valid encounter, never a silent reset.
+            self.query('UPDATE accounts SET badguy=? WHERE acctid=?',[valid,f['player']]); self.assertEqual(200,f['action'](f['ordinary_form']())[0])
+            for field,value in [('bufflist','a:1:{s:1:"x";i:2;}'),('bufflist',f['encode']({'unknown':{'rounds':1,'atkmod':[]}})),('companions','a:1:{s:1:"x";i:2;}'),('companions',f['encode']({'unknown':{'hitpoints':1,'attack':[]}}))]:
+                f['prepare']('TS',specialty='',**{field:value}); before=f['snapshot'](); code,body=f['request']('forest.php?op=fight')
+                self.assertEqual(409,code,body[:2000]); self.assertEqual(before,f['snapshot']())
+
+    def test_ordinary_forest_search_escape_and_event_handoff(self):
+        with self._ordinary_forest_fixture() as f:
+            saved=self.query("SELECT * FROM settings WHERE setting IN ('forestchance','autofight','autofightfull')")
+            try:
+                for key,value in [('forestchance','0'),('autofight','1'),('autofightfull','1')]:
+                    self.query('INSERT INTO settings(setting,value) VALUES (?,?) ON DUPLICATE KEY UPDATE value=VALUES(value)',[key,value])
+                # New search requires completed onboarding, even for ordinary combat.
+                f['prepare']('TS',badguy='',gold=1000,gems=10,experience=1000,turns=20)
+                day=self.query('SELECT lastnewday FROM accounts WHERE acctid=?',[f['player']])[0]['lastnewday']
+                self.assertTrue(day)
+                # The same committed day cannot bypass a missing specialty prerequisite.
+                self.query("UPDATE accounts SET specialty='' WHERE acctid=?",[f['player']])
+                def gameplay():
+                    account=self.query('SELECT * FROM accounts WHERE acctid=?',[f['player']])[0]
+                    for key in ['laston','gentime','gentimecount','gensize','allowednavs','restorepage','lastip','uniqueid']: account.pop(key,None)
+                    return account,f['snapshot']()[1:]
+                missing=gameplay()
+                self.assertEqual(['Human','','0','a:0:{}','','20',day],
+                    [missing[0][key] for key in ['race','specialty','dragonkills','dragonpoints','badguy','turns','lastnewday']])
+                denied=f['ordinary_form']('search'); self.assertEqual(missing,gameplay())
+                f['reject'](denied,'search',409); self.assertEqual(missing,gameplay())
+                # Restoring only the selected specialty makes the following search eligible.
+                self.query("UPDATE accounts SET specialty='TS' WHERE acctid=?",[f['player']])
+                before=f['snapshot'](); data=f['ordinary_form']('search'); self.assertEqual(before,f['snapshot']())
+                f['reject']({},'search',403)
+                stale=f['ordinary_form']('search'); code,body=f['action'](data,'search'); self.assertEqual(200,code,body[:3000])
+                after=f['snapshot']()[0]; state=f['decode'](after['badguy']); self.assertEqual('19',after['turns'])
+                self.assertEqual(day,self.query('SELECT lastnewday FROM accounts WHERE acctid=?',[f['player']])[0]['lastnewday'])
+                self.assertRegex(state['options']['encounter'],r'^[a-f0-9]{32}$'); f['reject'](data,'search'); f['reject'](stale,'search')
+                # The form emitted by the mutating response must work immediately after DB hydration.
+                data=self._security_fields(body,'forest.php?op=run'); code,body=f['action'](data,'run'); self.assertEqual(200,code,body[:3000]); f['reject'](data,'run')
+                # Independently establish the deterministic successful escape.
+                f['prepare']('TS',specialty='',gold=1000,gems=10,experience=1000,turns=20)
+                data=f['ordinary_form']('run'); code,body=f['action'](data,'run'); self.assertEqual(200,code,body[:2000]); f['reject'](data,'run')
+                after=f['snapshot']()[0]
+                self.assertEqual('',after['badguy']); self.assertEqual(['500','1000','1000','10'],[after[k] for k in ['hitpoints','experience','gold','gems']])
+                # Search failure is late enough to roll back turn, encounter and surprise HP.
+                f['prepare']('TS',badguy='',turns=20); data=f['ordinary_form']('search'); before=f['snapshot']()
+                self.query("ALTER TABLE accounts ADD CONSTRAINT fixture_ordinary_search CHECK (login <> 'WebPlayer' OR turns <> 19)")
+                try:
+                    code,body=f['action'](data,'search'); self.assertEqual(500,code,body[:2000]); self.assertEqual(before,f['snapshot']()); f['reject'](data,'search')
+                finally:self.query('ALTER TABLE accounts DROP CONSTRAINT fixture_ordinary_search')
+                self.assertEqual(200,f['action'](f['ordinary_form']('search'),'search')[0])
+                # Cave discovery used to mutate seendragon on GET. Its own scoped POST is replay-safe.
+                f['prepare']('TS',specialty='',badguy='',level=15,seendragon=0)
+                data=f['ordinary_form']('dragon'); self.assertEqual('0',self.query('SELECT seendragon FROM accounts WHERE acctid=?',[f['player']])[0]['seendragon'])
+                self.assertEqual(200,f['action'](data,'dragon')[0]); self.assertEqual('1',self.query('SELECT seendragon FROM accounts WHERE acctid=?',[f['player']])[0]['seendragon']); f['reject'](data,'dragon')
+                # One POST may select the historically configured five/ten/full action, never a GET.
+                for rounds in ['five','ten','full']:
+                    hp=45 if rounds=='full' else 100000
+                    enemy=dict(f['enemy'],creaturehealth=hp,creaturegold=0,creatureexp=100)
+                    f['prepare']('TS',specialty='',badguy=f['encode']({'enemies':[enemy],'options':{'type':'forest','didsurprise':1}}))
+                    data=f['ordinary_form'](rounds=rounds); code,body=f['action'](data); self.assertEqual(200,code,body[:2000]); f['reject'](data)
+                    if rounds=='full': self.assertEqual('',f['snapshot']()[0]['badguy'])
+                    else: self.assertLess(f['decode'](f['snapshot']()[0]['badguy'])['enemies'][0]['creaturehealth'],99955)
+                # Legacy target and automatic query parameters cannot authorize mutations.
+                f['prepare']('TS',specialty='')
+                for query in ['&newtarget=0','&auto=full','&type=thrill']:
+                    data=f['ordinary_form'](); before=f['snapshot'](); code,body=f['request']('forest.php?op=fight'+query,data)
+                    self.assertEqual(400,code,body[:2000]); self.assertEqual(before,f['snapshot']())
+                # The failed-escape seed retains the target and executes enemy retaliation only.
+                enemy=dict(f['enemy'],creatureattack=1000)
+                f['prepare']('TS',specialty='',hitpoints=5000,maxhitpoints=10000,badguy=f['encode']({'enemies':[enemy],'options':{'type':'forest','didsurprise':1}}))
+                call=self._security_client()
+                def failure_request(data=None):
+                    self._security_allow(f['player'],'forest.php?op=run')
+                    return call('forest.php?op=run',data,fixture='ordinary-flee-failure')
+                code,body=failure_request(); data=self._security_fields(body,'forest.php?op=run')
+                code,body=failure_request(data); self.assertEqual(200,code,body[:2000]); after=f['snapshot']()[0]
+                self.assertEqual(100000,f['decode'](after['badguy'])['enemies'][0]['creaturehealth'])
+                self.assertEqual('3936',after['hitpoints']); before=f['snapshot'](); self.assertEqual(409,failure_request(data)[0]); self.assertEqual(before,f['snapshot']())
+            finally:
+                self.query("DELETE FROM settings WHERE setting IN ('forestchance','autofight','autofightfull')")
+                for row in saved:self.query('INSERT INTO settings(setting,value) VALUES (?,?)',[row['setting'],row['value']])
+
+    def test_ordinary_forest_shield_simultaneous_terminal_and_companion(self):
+        with self._ordinary_forest_fixture() as f, self._specialty_terminal_capture() as terminal:
+            e,d=f['encode'],f['decode']; player=f['player']
+            # Obtain the actual certified shield producer, then consume it through ordinary attack.
+            f['prepare']('MP',hitpoints=5000,maxhitpoints=10000)
+            self.assertEqual(200,f['request'](data=f['form'](5))[0]); shield=d(f['snapshot']()[0]['bufflist'])
+            for targethp in [394,393,395]:
+                enemy=dict(f['enemy'],creatureattack=1000,creaturehealth=targethp,creaturegold=0,creatureexp=100)
+                f['prepare']('MP',hitpoints=177,bufflist=e(shield),badguy=e({'enemies':[enemy],'options':{'type':'forest','didsurprise':1}}),gold=1000,gems=10,experience=1000,turns=20)
+                self.query('DELETE FROM fixture_specialty_terminal'); data=f['ordinary_form'](); code,body=f['action'](data); self.assertEqual(200,code,body[:2000])
+                after=f['snapshot']()[0]; victory=targethp<=394
+                self.assertEqual('',after['badguy']); self.assertEqual('battle-victory' if victory else 'battle-defeat',terminal()[0]['hook'])
+                self.assertEqual(targethp-394,terminal()[0]['enemy']['creaturehealth']); self.assertEqual(0,terminal()[0]['hp'])
+                self.assertEqual('1' if victory else '0',after['hitpoints']); self.assertEqual('1' if victory else '0',after['alive'])
+                self.assertEqual(3,d(after['bufflist'])['mp5']['rounds']); f['reject'](data)
+            # Real skeleton plus real regeneration: ordinary action uses existing validation and ordering.
+            f['prepare']('DA',hitpoints=5000,maxhitpoints=10000,badguy=e({'enemies':[dict(f['enemy'],creatureattack=40,creaturedefense=1)],'options':{'type':'forest','didsurprise':1}}))
+            self.assertEqual(200,f['request'](data=f['form'](1))[0]); skeleton=d(f['snapshot']()[0]['companions'])
+            skeleton['skeleton_warrior']['hitpoints']=30
+            weak=e({'enemies':[dict(f['enemy'],creatureattack=1,creaturedefense=1)],'options':{'type':'forest','didsurprise':1}})
+            f['prepare']('MP',companions=e(skeleton),hitpoints=5000,maxhitpoints=10000,badguy=weak)
+            self.assertEqual(200,f['request'](data=f['form'](1))[0]); buffs=d(f['snapshot']()[0]['bufflist']); skeleton=d(f['snapshot']()[0]['companions'])
+            f['prepare']('MP',hitpoints=500,companions=e(skeleton),bufflist=e(buffs),badguy=weak); stale=f['ordinary_form'](); data=f['ordinary_form']()
+            before=f['snapshot']()
+            self.query("ALTER TABLE accounts ADD CONSTRAINT fixture_ordinary_companion CHECK (login <> 'WebPlayer' OR hitpoints <> 510)")
+            try:
+                code,body=f['action'](data); self.assertEqual(500,code,body[:2000]); self.assertEqual(before,f['snapshot']()); f['reject'](data)
+            finally:self.query('ALTER TABLE accounts DROP CONSTRAINT fixture_ordinary_companion')
+            data=f['ordinary_form']()
+            code,body=f['action'](data); self.assertEqual(200,code,body[:2000]); after=f['snapshot']()[0]
+            self.assertEqual(3,d(after['bufflist'])['mp1']['rounds']); self.assertEqual('510',after['hitpoints'])
+            expected=dict(skeleton['skeleton_warrior'],hitpoints=36,used=True)
+            self.assertEqual({'skeleton_warrior':expected},d(after['companions'])); f['reject'](data); f['reject'](stale)
+            fresh=f['ordinary_form'](); skeleton=d(after['companions']); key=next(iter(skeleton)); skeleton[key]['hitpoints']-=1
+            self.query('UPDATE accounts SET companions=? WHERE acctid=?',[e(skeleton),player]); f['reject'](fresh)
+
+    def test_defeated_target_progression_exact_zero_negative_and_terminal(self):
+        with self._specialty_accounting_fixture() as f, self._specialty_terminal_capture() as terminal:
+            player=f['player']; encode=f['encode']; decode=f['decode']
+            self.query("UPDATE settings SET value='1' WHERE setting='forestgemchance'")
+            for starting_hp in [88,87]:
+                for outcome in ['victory','defeat']:
+                    with self.subTest(first_target_hp=starting_hp,outcome=outcome):
+                        self.query('DELETE FROM fixture_specialty_terminal')
+                        a=dict(f['enemy'],creaturehealth=starting_hp,creatureexp=100,creaturegold=0,istarget=True)
+                        b=dict(f['enemy'],creatureid=2,creaturename='Second Target',creatureattack=1000,creatureexp=200,creaturegold=0,istarget=False)
+                        f['prepare']('TS',badguy=encode({'enemies':[a,b],'options':{'type':'forest','didsurprise':1,'maxattacks':1}}),gold=1000,gems=10,experience=1000,turns=20)
+                        stale=f['form'](2); first=f['form'](2)
+                        status,body=f['request'](data=first); self.assertEqual(200,status,body[:2000])
+                        state=f['snapshot']()[0]; combat=decode(state['badguy']); corpse=combat['enemies'][0]
+                        self.assertEqual(starting_hp-88,corpse['creaturehealth']); self.assertTrue(corpse['dead']); self.assertFalse(corpse['istarget'])
+                        self.assertTrue(combat['enemies'][1]['istarget']); self.assertFalse(combat['enemies'][1]['dead'])
+                        self.assertEqual(100000,combat['enemies'][1]['creaturehealth'])
+                        self.assertEqual(['500','1000','1000','10'],[state[k] for k in ['hitpoints','experience','gold','gems']])
+                        self.assertEqual(4,decode(state['bufflist'])['ts2']['rounds']); self.assertEqual([],terminal())
+                        f['rejected'](first); f['rejected'](stale)
+                        # Every request-side target/stat override rejects against the actual progressed state.
+                        for patch in [{'newtarget':'0'},{'newtarget':'2'},{'creaturehealth':'100000'},{'enemy':'0'}]:
+                            f['rejected'](dict(f['form'](2),**patch),400)
+                        fresh=f['form'](2); status,body=f['request'](data=fresh); self.assertEqual(200,status,body[:2000])
+                        state=f['snapshot']()[0]; progressed=decode(state['badguy'])
+                        self.assertEqual(corpse,progressed['enemies'][0])
+                        self.assertEqual(99912,progressed['enemies'][1]['creaturehealth'])
+                        self.assertEqual('323',state['hitpoints']); self.assertEqual('1000',state['experience'])
+                        self.assertEqual(4,decode(state['bufflist'])['ts2']['rounds'])
+                        self.assertEqual('5',self.query("SELECT value FROM module_userprefs WHERE userid=? AND modulename='specialtythiefskills' AND setting='uses'",[player])[0]['value'])
+                        f['rejected'](fresh); f['rejected'](first)
+                        stale=f['form'](2)
+                        if outcome=='victory':
+                            progressed['enemies'][1]['creaturehealth']=88
+                            self.query('UPDATE accounts SET badguy=? WHERE acctid=?',[encode(progressed),player])
+                        else: self.query('UPDATE accounts SET hitpoints=177 WHERE acctid=?',[player])
+                        f['rejected'](stale)
+                        final=f['form'](2); status,body=f['request'](data=final); self.assertEqual(200,status,body[:2000])
+                        after=f['snapshot']()[0]
+                        self.assertEqual('',after['badguy']); self.assertEqual([],decode(after['companions']))
+                        self.assertEqual('3',self.query("SELECT value FROM module_userprefs WHERE userid=? AND modulename='specialtythiefskills' AND setting='uses'",[player])[0]['value'])
+                        self.assertEqual(2,len(terminal()))
+                        self.assertEqual(['battle-'+outcome]*2,[event['hook'] for event in terminal()])
+                        self.assertEqual(starting_hp-88,terminal()[0]['enemy']['creaturehealth'])
+                        self.assertEqual(0 if outcome=='victory' else 99824,terminal()[1]['enemy']['creaturehealth'])
+                        expected=['1','323','1000','1150','11'] if outcome=='victory' else ['0','0','0','900','10']
+                        self.assertEqual(expected,[after[k] for k in ['alive','hitpoints','gold','experience','gems']])
+                        before=terminal(); f['rejected'](final); f['rejected'](fresh); f['rejected'](first); self.assertEqual(before,terminal())
+
+    def test_defeated_target_thieving_remaining_progression_and_terminal(self):
+        # Weapon kills skip defense-only activation; TS1/TS3 retain five
+        # rounds on A, while TS5 spends an offense round. No formula changes.
+        cases=[(1,40,40,70,5),(3,40,58,0,5),(5,135,135,104,4)]
+        with self._specialty_accounting_fixture() as f, self._specialty_terminal_capture() as terminal:
+            encode=f['encode']; decode=f['decode']; player=f['player']
+            self.query("UPDATE settings SET value='1' WHERE setting='forestgemchance'")
+            for level,weapon_damage,round_damage,incoming,first_rounds in cases:
+                for overkill in [0,1]:
+                    for outcome in ['victory','defeat']:
+                        with self.subTest(level=level,overkill=overkill,outcome=outcome):
+                            self.query('DELETE FROM fixture_specialty_terminal')
+                            a=dict(f['enemy'],creaturehealth=weapon_damage-overkill,creatureexp=100,creaturegold=0,istarget=True)
+                            b=dict(f['enemy'],creatureid=2,creaturename='Second Target',creatureattack=1000,creatureexp=200,creaturegold=0,istarget=False)
+                            f['prepare']('TS',badguy=encode({'enemies':[a,b],'options':{'type':'forest','didsurprise':1,'maxattacks':1}}),gold=1000,gems=10,experience=1000,turns=20)
+                            # Earned skill 45 supports fifteen remaining uses, enough
+                            # for three legitimate Backstabs without replenishment.
+                            self.query("UPDATE module_userprefs SET value=CASE setting WHEN 'skill' THEN '45' ELSE '15' END WHERE userid=? AND modulename='specialtythiefskills' AND setting IN ('skill','uses')",[player])
+                            stale=f['form'](level); first=f['form'](level)
+                            status,body=f['request'](data=first); self.assertEqual(200,status,body[:2000])
+                            state=f['snapshot']()[0]; combat=decode(state['badguy']); corpse=combat['enemies'][0]; key='ts'+str(level)
+                            self.assertEqual(-overkill,corpse['creaturehealth']); self.assertTrue(corpse['dead']); self.assertFalse(corpse['istarget'])
+                            self.assertTrue(combat['enemies'][1]['istarget']); self.assertFalse(combat['enemies'][1]['dead'])
+                            self.assertEqual(100000,combat['enemies'][1]['creaturehealth'])
+                            self.assertEqual(['500','1000','1000','10'],[state[k] for k in ['hitpoints','experience','gold','gems']])
+                            self.assertEqual(first_rounds,decode(state['bufflist'])[key]['rounds']); self.assertEqual([],terminal())
+                            self.assertEqual(str(15-level),self.query("SELECT value FROM module_userprefs WHERE userid=? AND modulename='specialtythiefskills' AND setting='uses'",[player])[0]['value'])
+                            f['rejected'](first); f['rejected'](stale)
+                            f['rejected'](dict(f['form'](level),newtarget='0'),400)
+                            fresh=f['form'](level); status,body=f['request'](data=fresh); self.assertEqual(200,status,body[:2000])
+                            state=f['snapshot']()[0]; progressed=decode(state['badguy'])
+                            self.assertEqual(corpse,progressed['enemies'][0]); self.assertEqual(100000-round_damage,progressed['enemies'][1]['creaturehealth'])
+                            self.assertEqual(500-incoming,int(state['hitpoints'])); self.assertEqual(4,decode(state['bufflist'])[key]['rounds'])
+                            self.assertEqual(['1000','1000','10'],[state[k] for k in ['experience','gold','gems']]); self.assertEqual([],terminal())
+                            self.assertEqual(str(15-2*level),self.query("SELECT value FROM module_userprefs WHERE userid=? AND modulename='specialtythiefskills' AND setting='uses'",[player])[0]['value'])
+                            f['rejected'](fresh); f['rejected'](first)
+                            stale_b=f['form'](level)
+                            if outcome=='victory':
+                                progressed['enemies'][1]['creaturehealth']=weapon_damage-overkill
+                            elif level==3:
+                                # Hidden Attack stops enemy attacks, not the
+                                # historical weapon riposte against high defense.
+                                progressed['enemies'][1]['creaturedefense']=1000
+                            self.query('UPDATE accounts SET badguy=?,hitpoints=? WHERE acctid=?',[encode(progressed),500-incoming if outcome=='victory' else (22 if level==3 else incoming),player])
+                            f['rejected'](stale_b)
+                            final=f['form'](level); status,body=f['request'](data=final); self.assertEqual(200,status,body[:2000])
+                            after=f['snapshot']()[0]; events=terminal()
+                            self.assertEqual('',after['badguy']); self.assertEqual([],decode(after['companions']))
+                            self.assertEqual(str(15-3*level),self.query("SELECT value FROM module_userprefs WHERE userid=? AND modulename='specialtythiefskills' AND setting='uses'",[player])[0]['value'])
+                            self.assertEqual(['battle-'+outcome]*2,[event['hook'] for event in events]); self.assertEqual(-overkill,events[0]['enemy']['creaturehealth'])
+                            final_target=-overkill if outcome=='victory' else 100000-round_damage-(0 if level==3 else weapon_damage)
+                            self.assertEqual(final_target,events[1]['enemy']['creaturehealth'])
+                            expected=['1',str(500-incoming),'1000','1150','11'] if outcome=='victory' else ['0','0','0','900','10']
+                            self.assertEqual(expected,[after[k] for k in ['alive','hitpoints','gold','experience','gems']])
+                            retained=first_rounds if outcome=='victory' else (5 if level==3 else 4)
+                            self.assertEqual(retained,decode(after['bufflist'])[key]['rounds'])
+                            self.assertEqual('21' if outcome=='victory' and level==3 else '20',after['turns'])
+                            f['rejected'](final); f['rejected'](fresh); f['rejected'](first); self.assertEqual(events,terminal())
+
+    def test_dragon_and_forest_thieving_combined_modifiers_and_natural_expiration(self):
+        # All four effects can coexist through normal same-specialty casts.
+        # Values include historical power-move and riposte damage, not just
+        # raw multipliers. Each request starts from the same fixture RNG seed.
+        rounds=[
+            (1,4930,99960,14,{'ts1':4}),
+            (5,4930,99824,9,{'ts1':3,'ts5':4}),
+            (2,4930,99447,7,{'ts1':2,'ts5':3,'ts2':4}),
+            (3,4930,99006,4,{'ts1':1,'ts5':2,'ts2':3,'ts3':4}),
+            (None,4930,98565,4,{'ts5':1,'ts2':2,'ts3':3}),
+            (None,4930,98124,4,{'ts2':1,'ts3':2}),
+            (None,4930,98018,4,{'ts3':1}),
+            (None,4930,97960,4,{}),
+            (None,4753,97920,4,{}),
+        ]
+        for route in ['forest','dragon']:
+            with self.subTest(route=route), self._specialty_accounting_fixture(route) as f:
+                enemy=dict(f['enemy'],creatureattack=1000)
+                f['prepare']('TS',badguy=f['encode']({'enemies':[enemy],'options':{'type':route,'didsurprise':1}}),hitpoints=5000,maxhitpoints=10000)
+                self.query("UPDATE module_userprefs SET value=CASE setting WHEN 'skill' THEN '45' ELSE '15' END WHERE userid=? AND modulename='specialtythiefskills' AND setting IN ('skill','uses')",[f['player']])
+                before=f['snapshot']()[0]
+                for level,hp,targethp,uses,remaining in rounds:
+                    stale=f['form'](1)
+                    if level is not None:
+                        data=f['form'](level); status,body=f['request'](data=data)
+                    elif route=='dragon':
+                        path='dragon.php?op=fight'; status,body=f['request'](path); self.assertEqual(200,status,body[:2000])
+                        status,body=f['request'](path,self._security_fields(body,path))
+                    else:
+                        status,body=self._ordinary_attack(f['request'])
+                    self.assertEqual(200,status,body[:2000]); state=f['snapshot']()[0]
+                    self.assertEqual(hp,int(state['hitpoints'])); self.assertEqual(targethp,f['decode'](state['badguy'])['enemies'][0]['creaturehealth'])
+                    buffs=f['decode'](state['bufflist'])
+                    self.assertEqual(remaining,{k:v['rounds'] for k,v in (buffs.items() if isinstance(buffs,dict) else [])})
+                    self.assertEqual(str(uses),self.query("SELECT value FROM module_userprefs WHERE userid=? AND modulename='specialtythiefskills' AND setting='uses'",[f['player']])[0]['value'])
+                    for key in ['gold','gems','experience','alive','attack','defense','turns']: self.assertEqual(before[key],state[key])
+                    self.assertEqual([],f['decode'](state['companions'])); f['rejected'](stale)
+                    if level is not None: f['rejected'](data)
+
+
+    @contextmanager
+    def _darkarts_companion_fixture(self, route):
+        with self._specialty_accounting_fixture(route) as f:
+            encode,decode,player=f['encode'],f['decode'],f['player']
+            def combat(attack=40, defense=1, hp=100000):
+                return encode({'enemies':[dict(f['enemy'],creatureattack=attack,
+                    creaturedefense=defense,creaturehealth=hp)],
+                    'options':{'type':route,'didsurprise':1}})
+            def prepare(**changes):
+                f['prepare']('DA',badguy=combat(),gold=1000,gems=10,experience=1000,turns=20,**changes)
+                # A trained DA player can afford the real combined sequence.
+                for key,value in [('uses','40'),('skill','120')]:
+                    self.query("UPDATE module_userprefs SET value=? WHERE userid=? AND modulename='specialtydarkarts' AND setting=?",[value,player,key])
+            def uses():
+                return int(self.query("SELECT value FROM module_userprefs WHERE userid=? AND modulename='specialtydarkarts' AND setting='uses'",[player])[0]['value'])
+            def cast(level):
+                data=f['form'](level); before=uses()
+                status,body=f['request'](data=data); self.assertEqual(200,status,body[:2500])
+                self.assertEqual(before-level,uses())
+                after=f['snapshot'](); f['rejected'](data)
+                # A separate request rehydrates the exact committed business state.
+                if after[0]['badguy']:
+                    path='dragon.php?op=prologue1' if route=='dragon' and 'dragonVictory' in after[0]['badguy'] else route+'.php?op=specialty'
+                    self.assertEqual(200,f['request'](path)[0])
+                else: self.assertEqual(302 if after[0]['alive']=='0' else 200,f['request']('village.php')[0])
+                self.assertEqual(after,f['snapshot']())
+                return body,data
+            def patch(**values):
+                self.query('UPDATE accounts SET '+','.join(k+'=?' for k in values)+' WHERE acctid=?',[*values.values(),player])
+            def state():
+                a=f['snapshot']()[0]
+                return a,decode(a['companions']),decode(a['bufflist'])
+            def ordered(body,*messages):
+                text=re.sub(r'\s+',' ',html.unescape(re.sub('<[^>]+>',' ',body)))
+                position=-1
+                for message in messages:
+                    found=text.find(message,position+1); self.assertGreater(found,position,text)
+                    position=found
+            yield f|dict(combat=combat,prepare_da=prepare,cast=cast,patch=patch,uses=uses,state=state,ordered=ordered)
+
+    def test_darkarts_companion_injury_death_defeat_and_rollback(self):
+        for route,maxhp,injured,hurt in [('forest',43,17,13),('dragon',60,37,12)]:
+            with self.subTest(route=route), self._darkarts_companion_fixture(route) as f, self._specialty_terminal_capture() as terminal:
+                d,e=f['decode'],f['encode']; f['prepare_da']()
+                body,created=f['cast'](1); a,c,b=f['state']()
+                self.assertEqual(injured,c['skeleton_warrior']['hitpoints'])
+                self.assertEqual(maxhp,c['skeleton_warrior']['maxhitpoints'])
+                self.assertEqual('500',a['hitpoints']); self.assertEqual(99929 if route=='forest' else 99923,d(a['badguy'])['enemies'][0]['creaturehealth'])
+                f['ordered'](body,'You hit Accounting Target for 47 points','you RIPOSTE for 14 points',
+                    'Skeleton Warrior hits Accounting Target','hits Skeleton Warrior for '+str(maxhp-injured)+' points')
+                # Curse halves companion retaliation with historical integer rounding.
+                body,_=f['cast'](3); a,c,b=f['state'](); wounded=c
+                self.assertEqual(injured-hurt,c['skeleton_warrior']['hitpoints'])
+                self.assertEqual(4,b['da3']['rounds']); self.assertEqual('500',a['hitpoints'])
+                self.assertEqual(99858 if route=='forest' else 99846,d(a['badguy'])['enemies'][0]['creaturehealth'])
+                f['ordered'](body,'You hit Accounting Target for 47 points','deals only half damage',
+                    'Skeleton Warrior hits Accounting Target','hits Skeleton Warrior for '+str(hurt)+' points')
+                # Lethal companion riposte/retaliation is a multi-write transition.
+                f['patch'](badguy=f['combat'](120,80)); failed=f['form'](3); before=f['snapshot']()
+                escaped=before[0]['companions'].replace("'","''")
+                self.query("ALTER TABLE accounts ADD CONSTRAINT fixture_da_companion CHECK (login <> 'WebPlayer' OR companions='"+escaped+"')")
+                try:
+                    f['rejected'](failed,500); self.assertEqual([],terminal())
+                finally: self.query('ALTER TABLE accounts DROP CONSTRAINT fixture_da_companion')
+                f['rejected'](failed); self.assertEqual(before,f['snapshot']())
+                body,death=f['cast'](3); a,c,b=f['state']()
+                self.assertEqual([],c); self.assertNotIn('da1',b); self.assertEqual(4,b['da3']['rounds'])
+                self.assertEqual('500',a['hitpoints']); self.assertEqual(99955,d(a['badguy'])['enemies'][0]['creaturehealth'])
+                self.assertEqual(1,body.count('Your skeleton warrior crumbles to dust.'))
+                f['ordered'](body,'You hit Accounting Target','Skeleton Warrior tries to hit Accounting Target',
+                    'hits Skeleton Warrior','Your skeleton warrior crumbles to dust.')
+                body,_=f['cast'](3); self.assertNotIn('Skeleton Warrior',body); self.assertEqual([],f['state']()[1])
+                self.assertEqual(99910,d(f['state']()[0]['badguy'])['enemies'][0]['creaturehealth']); f['rejected'](death)
+                # Death never summons fallback minions; a fresh cast explicitly replaces it.
+                f['patch'](badguy=f['combat'](1)); body,_=f['cast'](1)
+                self.assertEqual(maxhp,f['state']()[1]['skeleton_warrior']['hitpoints']); self.assertNotIn('da1',f['state']()[2])
+                healthy=f['state']()[1]
+                f['patch'](companions=e(wounded)); f['cast'](1)
+                self.assertEqual(1,len(f['state']()[1])); self.assertEqual(healthy,f['state']()[1])
+                for companion in [healthy,wounded]:
+                    with self.subTest(companion_hp=companion['skeleton_warrior']['hitpoints']):
+                        f['prepare_da'](companions=e(companion),hitpoints=89)
+                        f['patch'](badguy=f['combat'](1000,80)); self.query('DELETE FROM fixture_specialty_terminal')
+                        body,dead=f['cast'](3); a,c,b=f['state'](); events=terminal()
+                        self.assertEqual(['0','0','0','900' if route=='forest' else '1000'],[a[k] for k in ['alive','hitpoints','gold','experience']])
+                        self.assertEqual('',a['badguy']); self.assertEqual(dict(companion['skeleton_warrior'],used=False),c['skeleton_warrior'])
+                        self.assertEqual(4,b['da3']['rounds']); self.assertEqual(['battle-defeat'],[x['hook'] for x in events])
+                        self.assertEqual(99960,events[0]['enemy']['creaturehealth']); self.assertEqual(c,events[0]['companions'])
+                        self.assertNotIn('Skeleton Warrior hits',body); self.assertNotIn('crumbles to dust',body)
+                        f['rejected'](dead); self.assertEqual(events,terminal())
+
+    def test_darkarts_companion_combined_natural_expiration(self):
+        cases=[('forest',[99929,99858,99787,99475,99163,98851,98539,98258],[17,4,4,4,4,4,4,4]),
+               ('dragon',[99923,99846,99758,99430,99102,98774,98446,98153],[37,25,25,25,25,25,25,25])]
+        rounds=[{}, {'da3':4}, {'da3':3,'da5':4}, {'da3':2,'da5':3},
+                {'da3':1,'da5':2}, {'da5':1}, {}, {}]
+        for route,targets,companions in cases:
+            with self.subTest(route=route), self._darkarts_companion_fixture(route) as f:
+                f['prepare_da']()
+                for n,level in enumerate([1,3,5,2,2,2,2,2]):
+                    body,_=f['cast'](level); a,c,b=f['state']()
+                    self.assertEqual(targets[n],f['decode'](a['badguy'])['enemies'][0]['creaturehealth'])
+                    self.assertEqual(companions[n],c['skeleton_warrior']['hitpoints'])
+                    self.assertEqual(487 if n==7 else 500,int(a['hitpoints']))
+                    self.assertEqual(rounds[n],{k:v['rounds'] for k,v in b.items()} if b else {})
+                    self.assertNotIn('da2',b)
+                    if n in [5,6]:
+                        f['ordered'](body,'doll hurting it for 263 points','You hit Accounting Target',
+                            'Skeleton Warrior hits Accounting Target','Your curse has faded.' if n==5 else "Your victim's soul has been restored.")
+                self.assertEqual(21,f['uses']())
+
+    def test_darkarts_companion_target_progression_and_terminal_order(self):
+        with self._darkarts_companion_fixture('forest') as f, self._specialty_terminal_capture() as terminal:
+            d,e=f['decode'],f['encode']
+            self.query("UPDATE settings SET value='1' WHERE setting='forestgemchance'")
+            for overkill in [0,1]:
+                with self.subTest(overkill=overkill):
+                    f['prepare_da'](); f['cast'](1); f['cast'](3)
+                    self.assertEqual(4,f['state']()[1]['skeleton_warrior']['hitpoints'])
+                    a=dict(f['enemy'],creatureattack=40,creaturedefense=1,creaturehealth=71-overkill,
+                           creatureexp=100,creaturegold=0,istarget=True)
+                    b=dict(a,creatureid=2,creaturename='Second Target',creaturehealth=100000,
+                           creatureexp=200,istarget=False)
+                    f['patch'](badguy=e({'enemies':[a,b],'options':{'type':'forest','didsurprise':1,'maxattacks':1}}))
+                    self.query('DELETE FROM fixture_specialty_terminal'); stale=f['form'](3)
+                    body,first=f['cast'](3); account,c,buffs=f['state'](); state=d(account['badguy'])
+                    corpse=state['enemies'][0]
+                    self.assertEqual(-overkill,corpse['creaturehealth']); self.assertTrue(corpse['dead']); self.assertFalse(corpse['istarget'])
+                    self.assertTrue(state['enemies'][1]['istarget']); self.assertEqual(100000,state['enemies'][1]['creaturehealth'])
+                    self.assertEqual(['500','1000','10','1000'],[account[k] for k in ['hitpoints','gold','gems','experience']])
+                    self.assertEqual([],terminal()); self.assertEqual(4,buffs['da3']['rounds']); f['rejected'](stale)
+                    if overkill:
+                        self.assertEqual(4,c['skeleton_warrior']['hitpoints']); self.assertNotIn('crumbles to dust',body)
+                    else:
+                        self.assertEqual([],c); self.assertEqual(1,body.count('Your skeleton warrior crumbles to dust.'))
+                    # A fresh action uses B; Wither Soul protects the injured survivor.
+                    body,_=f['cast'](5); account,c,buffs=f['state'](); state=d(account['badguy'])
+                    self.assertEqual(corpse,state['enemies'][0])
+                    self.assertEqual(99929 if overkill else 99951,state['enemies'][1]['creaturehealth'])
+                    self.assertEqual({'da3':3,'da5':4},{k:v['rounds'] for k,v in buffs.items()})
+                    if overkill:
+                        self.assertEqual(4,c['skeleton_warrior']['hitpoints'])
+                        f['ordered'](body,'You hit Second Target','Skeleton Warrior hits Second Target')
+                    else: self.assertNotIn('Skeleton Warrior',body)
+                    state['enemies'][1]['creaturehealth']=263-overkill
+                    f['patch'](badguy=e(state)); body,final=f['cast'](2); account,finalc,buffs=f['state']()
+                    self.assertEqual('',account['badguy']); self.assertEqual(['1','500','1000','11','1150'],[account[k] for k in ['alive','hitpoints','gold','gems','experience']])
+                    self.assertEqual(26,f['uses']()); self.assertEqual(2,len(terminal()))
+                    self.assertEqual(['battle-victory']*2,[x['hook'] for x in terminal()])
+                    self.assertEqual([-overkill,-overkill],[x['enemy']['creaturehealth'] for x in terminal()])
+                    self.assertEqual({'da3':3,'da5':4},{k:v['rounds'] for k,v in buffs.items()})
+                    if overkill:
+                        self.assertEqual(dict(c['skeleton_warrior'],used=False),finalc['skeleton_warrior'])
+                    else: self.assertEqual([],finalc)
+                    events=terminal(); f['rejected'](first); f['rejected'](final); self.assertEqual(events,terminal())
+
+    def test_darkarts_dragon_companion_simultaneous_victory_and_expiration(self):
+        with self._darkarts_companion_fixture('dragon') as f, self._specialty_terminal_capture() as terminal:
+            d,e=f['decode'],f['encode']; request=f['request']
+            for overkill in [0,1]:
+                with self.subTest(overkill=overkill):
+                    f['prepare_da'](); f['cast'](1)
+                    for _ in range(3): f['cast'](3)
+                    account,c,b=f['state'](); self.assertEqual(1,c['skeleton_warrior']['hitpoints'])
+                    b['da3']['rounds']=1 # Valid last-active-round state of the real producer.
+                    f['patch'](badguy=f['combat'](hp=77-overkill),bufflist=e(b))
+                    self.query('DELETE FROM fixture_specialty_terminal')
+                    path='dragon.php?op=fight'; status,body=request(path); self.assertEqual(200,status)
+                    action=self._security_fields(body,path); beforeuses=f['uses']()
+                    status,body=request(path,action); self.assertEqual(200,status,body[:2500])
+                    account,c,b=f['state'](); events=terminal(); pending=d(account['badguy'])
+                    self.assertTrue(pending['dragonVictory']); self.assertEqual(0,pending['dragonkills'])
+                    self.assertEqual('500',account['hitpoints']); self.assertEqual(beforeuses,f['uses']()); self.assertNotIn('da3',b)
+                    self.assertEqual(['battle-victory'],[x['hook'] for x in events]); self.assertEqual(-overkill,events[0]['enemy']['creaturehealth'])
+                    self.assertEqual(c,events[0]['companions'])
+                    if overkill:
+                        self.assertEqual(1,c['skeleton_warrior']['hitpoints']); self.assertNotIn('crumbles to dust',body)
+                        f['ordered'](body,'Skeleton Warrior hits Accounting Target','Your curse has faded.')
+                    else:
+                        self.assertEqual([],c); self.assertEqual(1,body.count('Your skeleton warrior crumbles to dust.'))
+                        f['ordered'](body,'Skeleton Warrior hits Accounting Target','hits Skeleton Warrior for 12 points',
+                            'Your skeleton warrior crumbles to dust.','Your curse has faded.')
+                    continuation=self._security_fields(body,'dragon.php?op=prologue1')
+                    before=f['snapshot'](); self.assertEqual(409,request(path,action)[0]); self.assertEqual(before,f['snapshot']())
+                    self.assertEqual(200,request('dragon.php?op=prologue1')[0]); self.assertEqual(before,f['snapshot']())
+                    status,body=request('dragon.php?op=prologue1',continuation); self.assertEqual(200,status,body[:2500])
+                    self.assertEqual([],f['state']()[1]); self.assertEqual('',f['state']()[0]['badguy'])
+                    self.assertEqual(['1','1'],list(self.query('SELECT dragonkills,level FROM accounts WHERE acctid=?',[f['player']])[0].values()))
+                    after=f['snapshot'](); self.assertEqual(409,request('dragon.php?op=prologue1',continuation)[0]); self.assertEqual(after,f['snapshot']()); self.assertEqual(events,terminal())
+
+    def test_darkarts_fallback_minions_combined_and_terminal(self):
+        cases=[('forest',4,6,8,[99921,99842,99758,99474,99190,98900,98610,98339]),
+               ('dragon',6,9,20,[99901,99802,99697,99377,99057,98767,98477,98206])]
+        rounds=[{'da1':4},{'da1':3,'da3':4},{'da1':2,'da3':3,'da5':4},
+                {'da1':1,'da3':2,'da5':3},{'da3':1,'da5':2},{'da5':1},{},{}]
+        for route,count,damage,minionhit,targets in cases:
+            with self.subTest(route=route), self._darkarts_companion_fixture(route) as f, self._specialty_terminal_capture() as terminal:
+                d,e=f['decode'],f['encode'];f['prepare_da']();stale=f['form'](1)
+                self.query("UPDATE settings SET value='0' WHERE setting='enablecompanions'");f['rejected'](stale)
+                for field in ['enablecompanions','companion','minioncount']:
+                    f['rejected'](f['form'](1)|{field:'1'},400)
+                for n,level in enumerate([1,3,5,2,2,2,2,2]):
+                    body,_=f['cast'](level); a,c,b=f['state']()
+                    self.assertEqual([],c);self.assertNotIn('Skeleton Warrior',body)
+                    self.assertEqual(targets[n],d(a['badguy'])['enemies'][0]['creaturehealth'])
+                    self.assertEqual(487 if n==7 else 500,int(a['hitpoints']))
+                    self.assertEqual(rounds[n],{k:v['rounds'] for k,v in b.items()} if b else {})
+                    if n==0:
+                        self.assertEqual(count,b['da1']['minioncount']);self.assertEqual(damage,b['da1']['maxbadguydamage'])
+                        fallback=b['da1']
+                    if n==4:f['ordered'](body,'An undead minion','doll hurting it','You hit Accounting Target','Your skeleton minions crumble to dust.')
+                # Historical setting selects the DA1 producer; it does not suspend
+                # a previously created warrior. Prove coexistence instead of
+                # inventing a disabled-companion cleanup policy.
+                self.query("UPDATE settings SET value='1' WHERE setting='enablecompanions'")
+                f['prepare_da']();f['cast'](1);old=f['form'](1)
+                self.query("UPDATE settings SET value='0' WHERE setting='enablecompanions'");f['rejected'](old)
+                body,_=f['cast'](1);account,c,buffs=f['state']()
+                self.assertEqual(99845 if route=='forest' else 99803,d(account['badguy'])['enemies'][0]['creaturehealth'])
+                self.assertEqual('500',account['hitpoints']);self.assertEqual(4,buffs['da1']['rounds']);self.assertEqual(38,f['uses']())
+                f['ordered'](body,'An undead minion','You hit Accounting Target','Skeleton Warrior hits Accounting Target')
+                if route=='forest':
+                    self.assertEqual([],c);self.assertEqual(1,body.count('Your skeleton warrior crumbles to dust.'))
+                else:self.assertEqual(37,c['skeleton_warrior']['hitpoints'])
+                if route=='forest':
+                    f['prepare_da'](bufflist=e({'da1':dict(fallback,rounds=1)}))
+                    a=dict(f['enemy'],creatureattack=40,creaturedefense=1,creaturehealth=minionhit,istarget=True)
+                    b=dict(a,creatureid=2,creaturename='Second Target',creaturehealth=100000,istarget=False)
+                    f['patch'](badguy=e({'enemies':[a,b],'options':{'type':'forest','didsurprise':1,'maxattacks':1}}))
+                    self.query('DELETE FROM fixture_specialty_terminal');old=f['form'](3)
+                    f['cast'](3);account,c,buffs=f['state']();progressed=d(account['badguy'])
+                    self.assertEqual(0,progressed['enemies'][0]['creaturehealth']);self.assertTrue(progressed['enemies'][0]['dead'])
+                    self.assertTrue(progressed['enemies'][1]['istarget']);self.assertEqual(100000,progressed['enemies'][1]['creaturehealth'])
+                    self.assertNotIn('da1',buffs);self.assertEqual(5,buffs['da3']['rounds']);self.assertEqual([],c);self.assertEqual([],terminal());f['rejected'](old)
+                    f['cast'](2);account,c,buffs=f['state']();progressed=d(account['badguy'])
+                    self.assertEqual(99729,progressed['enemies'][1]['creaturehealth']);self.assertEqual('493',account['hitpoints'])
+                    self.assertEqual([],c);self.assertNotIn('da1',buffs);self.assertEqual(4,buffs['da3']['rounds']);self.assertEqual([],terminal())
+                # Last-round fallback can itself end the encounter before player,
+                # companion or defensive effects. The schema is a real cast's output.
+                for outcome in ['victory','defeat']:
+                    f['prepare_da'](bufflist=e({'da1':dict(fallback,rounds=1)}),hitpoints=1 if outcome=='defeat' else 500)
+                    f['patch'](badguy=f['combat'](1000 if outcome=='defeat' else 40,1000 if outcome=='defeat' else 1,
+                                                100000 if outcome=='defeat' else minionhit))
+                    self.query('DELETE FROM fixture_specialty_terminal')
+                    body,action=f['cast'](3);a,c,b=f['state']();events=terminal()
+                    self.assertEqual([],c);self.assertNotIn('da1',b);self.assertEqual(5,b['da3']['rounds'])
+                    self.assertEqual(['battle-'+outcome],[x['hook'] for x in events])
+                    self.assertEqual(100000-minionhit if outcome=='defeat' else 0,events[0]['enemy']['creaturehealth'])
+                    f['ordered'](body,'An undead minion','Your skeleton minions crumble to dust.')
+                    self.assertNotIn('Skeleton Warrior',body)
+                    if outcome=='defeat':
+                        self.assertEqual(['0','0',''],[a[k] for k in ['alive','hitpoints','badguy']])
+                    elif route=='dragon':
+                        self.assertTrue(d(a['badguy'])['dragonVictory'])
+                        continuation=self._security_fields(body,'dragon.php?op=prologue1')
+                        before=f['snapshot']();self.assertEqual(200,f['request']('dragon.php?op=prologue1')[0]);self.assertEqual(before,f['snapshot']())
+                        self.assertEqual(200,f['request']('dragon.php?op=prologue1',continuation)[0])
+                        after=f['snapshot']();self.assertEqual([],f['state']()[1]);self.assertEqual([],f['state']()[2])
+                        self.assertEqual(409,f['request']('dragon.php?op=prologue1',continuation)[0]);self.assertEqual(after,f['snapshot']())
+                    else:self.assertEqual('',a['badguy'])
+                    f['rejected'](action);self.assertEqual(events,terminal())
+
+    def test_darkarts_injured_companion_target_transition_and_terminal(self):
+        # Voodoo kills A before the companion phase. The injured, real-produced
+        # skeleton must carry to B, including when B kills the player first.
+        with self._specialty_accounting_fixture() as f, self._specialty_terminal_capture() as terminal:
+            player=f['player']; encode=f['encode']; decode=f['decode']
+            self.query("UPDATE settings SET value='1' WHERE setting='forestgemchance'")
+            for overkill in [0,1]:
+                for outcome in ['victory','defeat']:
+                    with self.subTest(overkill=overkill,outcome=outcome):
+                        weak=dict(f['enemy'],creatureattack=1,creaturedefense=1)
+                        f['prepare']('DA',badguy=encode({'enemies':[weak],'options':{'type':'forest','didsurprise':1}}))
+                        self.assertEqual(200,f['request'](data=f['form'](1))[0])
+                        skeleton=decode(f['snapshot']()[0]['companions'])['skeleton_warrior']
+                        self.assertEqual(43,skeleton['hitpoints'])
+                        skeleton=dict(skeleton,hitpoints=30)
+                        a=dict(f['enemy'],creaturehealth=263-overkill,creatureexp=100,creaturegold=0,istarget=True)
+                        b=dict(f['enemy'],creatureid=2,creaturename='Second Target',creatureexp=200,creaturegold=0,istarget=False)
+                        self.query('UPDATE accounts SET badguy=?,companions=?,hitpoints=500,gold=1000,gems=10,experience=1000,turns=20 WHERE acctid=?',
+                            [encode({'enemies':[a,b],'options':{'type':'forest','didsurprise':1,'maxattacks':1}}),encode({'skeleton_warrior':skeleton}),player])
+                        self.query('DELETE FROM fixture_specialty_terminal')
+                        stale=f['form'](2); first=f['form'](2)
+                        status,body=f['request'](data=first); self.assertEqual(200,status,body[:2000])
+                        after=f['snapshot']()[0]; progressed=decode(after['badguy']); corpse=progressed['enemies'][0]
+                        self.assertEqual(-overkill,corpse['creaturehealth']); self.assertTrue(corpse['dead']); self.assertFalse(corpse['istarget'])
+                        self.assertTrue(progressed['enemies'][1]['istarget']); self.assertEqual(100000,progressed['enemies'][1]['creaturehealth'])
+                        self.assertEqual(dict(skeleton,used=False),decode(after['companions'])['skeleton_warrior'])
+                        self.assertEqual(['500','1000','10','1000'],[after[k] for k in ['hitpoints','gold','gems','experience']])
+                        self.assertEqual([],terminal()); f['rejected'](first); f['rejected'](stale)
+                        # Malformation after actual progression cannot silently heal or
+                        # discard the companion, spend uses, or change either target.
+                        valid=after['companions']; fresh=f['form'](2)
+                        self.query('UPDATE accounts SET companions=? WHERE acctid=?',[encode({'skeleton_warrior':dict(skeleton,hitpoints=0)}),player])
+                        f['rejected'](fresh)
+                        self.query('UPDATE accounts SET companions=? WHERE acctid=?',[valid,player])
+                        if outcome=='victory':
+                            progressed['enemies'][1]['creaturehealth']=263-overkill
+                        else:
+                            progressed['enemies'][1].update(creatureattack=1000,creaturedefense=1000)
+                        self.query('UPDATE accounts SET badguy=?,hitpoints=? WHERE acctid=?',[encode(progressed),500 if outcome=='victory' else 11,player])
+                        f['rejected'](fresh)
+                        final=f['form'](2 if outcome=='victory' else 3)
+                        status,body=f['request'](data=final); self.assertEqual(200,status,body[:2000])
+                        after=f['snapshot']()[0]; events=terminal()
+                        self.assertEqual('',after['badguy']); self.assertEqual(['battle-'+outcome]*2,[e['hook'] for e in events])
+                        self.assertEqual(-overkill,events[0]['enemy']['creaturehealth'])
+                        self.assertEqual(-overkill if outcome=='victory' else 100000,events[1]['enemy']['creaturehealth'])
+                        self.assertEqual(30,decode(after['companions'])['skeleton_warrior']['hitpoints'])
+                        expected=['1','500','1000','11','1150'] if outcome=='victory' else ['0','0','0','10','900']
+                        self.assertEqual(expected,[after[k] for k in ['alive','hitpoints','gold','gems','experience']])
+                        self.assertEqual('4' if outcome=='victory' else '3',self.query("SELECT value FROM module_userprefs WHERE userid=? AND modulename='specialtydarkarts' AND setting='uses'",[player])[0]['value'])
+                        f['rejected'](final); f['rejected'](first); self.assertEqual(events,terminal())
+
+    @contextmanager
+    def _mystic_progression_fixture(self):
+        with self._specialty_accounting_fixture() as f:
+            e,d,player=f['encode'],f['decode'],f['player']
+            def patch(**values):
+                self.query('UPDATE accounts SET '+','.join(k+'=?' for k in values)+' WHERE acctid=?',[*values.values(),player])
+            def combat(hp,attack=1000,defense=80):
+                a=dict(f['enemy'],creaturehealth=hp,creatureattack=attack,creaturedefense=defense,creatureexp=100,creaturegold=0,istarget=True)
+                b=dict(a,creatureid=2,creaturename='Second Target',creaturehealth=100000,creatureexp=200,istarget=False)
+                return e({'enemies':[a,b],'options':{'type':'forest','didsurprise':1,'maxattacks':1}})
+            def prepare(**values):
+                defaults=dict(badguy=combat(100000),hitpoints=5000,maxhitpoints=10000,gold=1000,gems=10,experience=1000,turns=20)
+                defaults.update(values); f['prepare']('MP',**defaults)
+                for key,value in [('uses','40'),('skill','120')]:
+                    self.query("UPDATE module_userprefs SET value=? WHERE userid=? AND modulename='specialtymysticpower' AND setting=?",[value,player,key])
+            def uses():
+                return int(self.query("SELECT value FROM module_userprefs WHERE userid=? AND modulename='specialtymysticpower' AND setting='uses'",[player])[0]['value'])
+            def cast(level):
+                stale=f['form'](1); data=f['form'](level); before=uses()
+                status,body=f['request'](data=data); self.assertEqual(200,status,body[:2500])
+                self.assertEqual(before-level,uses()); f['rejected'](data); f['rejected'](stale)
+                saved=f['snapshot']()
+                if saved[0]['badguy']: self.assertEqual(200,f['request']()[0])
+                self.assertEqual(saved,f['snapshot']())
+                return body,data
+            def fight():
+                stale=f['form'](1); before=uses()
+                status,body=self._ordinary_attack(f['request']); self.assertEqual(200,status,body[:2500])
+                self.assertEqual(before,uses()); f['rejected'](stale)
+                return body
+            def state():
+                a=f['snapshot']()[0]
+                return a,d(a['badguy']) if a['badguy'] else {},d(a['bufflist'])
+            yield f|dict(patch=patch,combat=combat,prepare_mp=prepare,uses=uses,cast=cast,fight=fight,state=state)
+
+    def test_mystic_effect_target_progression_and_fresh_recast(self):
+        # Earth Fist rolls 16 at player level 15; Lifetap heals the 40-point
+        # weapon hit; Lightning Aura reflects 177*2 after that weapon hit.
+        with self._mystic_progression_fixture() as f, self._specialty_terminal_capture() as terminal:
+            for level,damage,attack,playerlevel,hp in [(2,16,120,15,4914),(3,40,1000,10,4863),(5,394,1000,10,4823)]:
+                for delta in [1,0,-1]:
+                    with self.subTest(level=level,delta=delta):
+                        f['prepare_mp'](level=playerlevel,badguy=f['combat'](damage+delta,attack))
+                        body,first=f['cast'](level); a,c,b=f['state']()
+                        self.assertEqual(delta,c['enemies'][0]['creaturehealth'])
+                        self.assertEqual(100000,c['enemies'][1]['creaturehealth'])
+                        self.assertEqual(4,b['mp'+str(level)]['rounds'])
+                        self.assertEqual(hp if delta>0 or level==5 else (5040 if level==3 else 5000),int(a['hitpoints']))
+                        self.assertEqual(delta<=0,bool(c['enemies'][0]['dead']))
+                        self.assertEqual(delta<=0,bool(c['enemies'][1]['istarget']))
+                        self.assertEqual([],terminal())
+                        self.assertEqual(['1000','1000','10'],[a[k] for k in ['gold','experience','gems']])
+                        if delta>0:
+                            f['fight'](); a,c,b=f['state']()
+                            self.assertTrue(c['enemies'][0]['dead']); self.assertTrue(c['enemies'][1]['istarget'])
+                        corpse=c['enemies'][0]
+                        for patch in [{'newtarget':'0'},{'newtarget':'2'},{'enemy':'0'}]:
+                            f['rejected'](dict(f['form'](level),**patch),400)
+                        before=int(a['hitpoints']); body,second=f['cast'](level); a,c,b=f['state']()
+                        self.assertEqual(corpse,c['enemies'][0]); self.assertEqual(100000-damage,c['enemies'][1]['creaturehealth'])
+                        self.assertEqual(before+({2:-86,3:-137,5:-177}[level]),int(a['hitpoints']))
+                        self.assertEqual(4,b['mp'+str(level)]['rounds']); self.assertEqual(40-2*level,f['uses']())
+                        self.assertEqual([],terminal()); self.assertEqual('1000',a['experience'])
+                        f['rejected'](first); f['rejected'](second)
+
+    def test_mystic_expiration_at_target_transition(self):
+        with self._mystic_progression_fixture() as f:
+            for level,damage,attack,playerlevel in [(1,40,1000,10),(2,16,120,15),(3,40,1000,10),(5,394,1000,10)]:
+                for rounds in [3,1]:
+                    with self.subTest(level=level,rounds=rounds):
+                        f['prepare_mp'](level=playerlevel); f['cast'](level)
+                        a,c,b=f['state'](); key='mp'+str(level); b[key]['rounds']=rounds
+                        old=f['form'](1)
+                        f['patch'](badguy=f['combat'](damage,attack),bufflist=f['encode'](b),hitpoints=5000)
+                        f['rejected'](old); f['fight'](); a,c,b=f['state']()
+                        self.assertEqual(0,c['enemies'][0]['creaturehealth']); self.assertTrue(c['enemies'][1]['istarget'])
+                        self.assertEqual({1:5010,2:5000,3:5040,5:4823}[level],int(a['hitpoints']))
+                        if rounds==1: self.assertNotIn(key,b)
+                        else: self.assertEqual(rounds-1,b[key]['rounds'])
+                        corpse=c['enemies'][0]; before=int(a['hitpoints'])
+                        f['fight'](); a,c,b=f['state']()
+                        active=rounds>1
+                        self.assertEqual(corpse,c['enemies'][0])
+                        self.assertEqual(100000-(damage if active and level in [2,5] else (45 if level==2 else 40)),c['enemies'][1]['creaturehealth'])
+                        self.assertEqual(before+({1:-167,2:-86,3:-137,5:-177}[level] if active else (0 if level==2 else -177)),int(a['hitpoints']))
+                        if active: self.assertEqual(1,b[key]['rounds'])
+                        else: self.assertNotIn(key,b)
+                        self.assertEqual(40-level,f['uses']())
+
+    def test_mystic_progressed_terminal_healing_shield_and_rollback(self):
+        with self._mystic_progression_fixture() as f, self._specialty_terminal_capture() as terminal:
+            # A is already legitimately defeated before each distinct B outcome.
+            for level,firsthp in [(1,40),(3,40),(5,394)]:
+                for outcome in ['victory','defeat']:
+                    with self.subTest(level=level,outcome=outcome):
+                        self.query('DELETE FROM fixture_specialty_terminal')
+                        f['prepare_mp'](badguy=f['combat'](firsthp)); f['cast'](level)
+                        a,c,b=f['state'](); self.assertTrue(c['enemies'][0]['dead'])
+                        corpse=c['enemies'][0]; b['mp'+str(level)]['rounds']=1
+                        c['enemies'][1]['creaturehealth']=(394 if level==5 else 40) if outcome=='victory' else 100000
+                        # Lifetap heals before death is assessed. Shield continues
+                        # reflecting even when the incoming hit is lethal.
+                        hp=167 if level==5 else (127 if outcome=='defeat' else 1)
+                        f['patch'](badguy=f['encode'](c),bufflist=f['encode'](b),hitpoints=hp)
+                        stale=f['form'](1); f['cast'](3 if level==1 else 1); a,c,b=f['state'](); events=terminal()
+                        self.assertEqual('',a['badguy']); self.assertEqual(2,len(events))
+                        self.assertEqual(['battle-'+outcome]*2,[x['hook'] for x in events])
+                        self.assertEqual(corpse['creaturehealth'],events[0]['enemy']['creaturehealth'])
+                        self.assertEqual(0 if outcome=='victory' else (99606 if level==5 else 99960),events[1]['enemy']['creaturehealth'])
+                        self.assertEqual(({1:51,3:51,5:1}[level] if outcome=='victory' else 0),int(a['hitpoints']))
+                        self.assertEqual('1' if outcome=='victory' else '0',a['alive'])
+                        self.assertNotIn('mp'+str(level),b); self.assertEqual(40-level-(3 if level==1 else 1),f['uses']())
+                        f['rejected'](stale); self.assertEqual(events,terminal())
+            # Real regeneration + Lifetap + shield, with A killed by reflection.
+            # B still living makes simultaneous A/player death a defeat.
+            for hp,outcome in [(127,'defeat'),(128,None)]:
+                self.query('DELETE FROM fixture_specialty_terminal')
+                f['prepare_mp'](); f['cast'](1); f['cast'](3)
+                a,c,b=f['state']()
+                for key in ['mp1','mp3']: b[key]['rounds']=1
+                f['patch'](badguy=f['combat'](394),bufflist=f['encode'](b),hitpoints=hp)
+                failed=f['form'](5); before=f['snapshot']()
+                # This CHECK is reached after preference, buff, HP, target and
+                # (in defeat) observer writes. Every write must roll back.
+                self.query("ALTER TABLE accounts ADD CONSTRAINT fixture_mp_progression CHECK (login <> 'WebPlayer' OR hitpoints="+str(hp)+")")
+                try:
+                    f['rejected'](failed,500); self.assertEqual(before,f['snapshot']()); self.assertEqual([],terminal())
+                finally: self.query('ALTER TABLE accounts DROP CONSTRAINT fixture_mp_progression')
+                f['rejected'](failed); body,data=f['cast'](5); a,c,b=f['state']()
+                self.assertEqual(31,f['uses']()); self.assertNotIn('mp1',b); self.assertNotIn('mp3',b); self.assertEqual(4,b['mp5']['rounds'])
+                if outcome:
+                    self.assertEqual(['0','0','0','900'],[a[k] for k in ['alive','hitpoints','gold','experience']])
+                    self.assertEqual(['battle-defeat']*2,[x['hook'] for x in terminal()])
+                    self.assertEqual([0,100000],[x['enemy']['creaturehealth'] for x in terminal()])
+                else:
+                    self.assertEqual('1',a['hitpoints']); self.assertEqual(0,c['enemies'][0]['creaturehealth'])
+                    self.assertTrue(c['enemies'][1]['istarget']); self.assertEqual(100000,c['enemies'][1]['creaturehealth'])
+                    self.assertEqual([],terminal()); self.assertEqual('1000',a['experience'])
+                saved=terminal(); f['rejected'](data); self.assertEqual(saved,terminal())
+
+    def test_mystic_aura_companion_progression_natural_expiration(self):
+        with self._mystic_progression_fixture() as f:
+            # The bundled forgetfulness potion resets specialty without clearing
+            # companions; onboarding can select MP. Retain real DA producer state,
+            # as in the existing healing-aura test, without casting DA as MP.
+            f['prepare']('DA',badguy=f['combat'](100000,1,1))
+            self.assertEqual(200,f['request'](data=f['form'](1))[0])
+            companion=f['decode'](f['snapshot']()[0]['companions']); companion['skeleton_warrior']['hitpoints']=30
+            for transition in [1,5]:
+                with self.subTest(transition_round=transition):
+                    f['prepare_mp'](badguy=f['combat'](74 if transition==1 else 100000,1,1),companions=f['encode'](companion),hitpoints=995,maxhitpoints=1000)
+                    for n in range(1,7):
+                        if n==5 and transition==5:
+                            a,c,b=f['state'](); c['enemies'][0]['creaturehealth']=74
+                            f['patch'](badguy=f['encode'](c))
+                        if n==6: f['patch'](hitpoints=990)
+                        body,_=f['cast'](1) if n==1 else (f['fight'](),None)
+                        a,c,b=f['state'](); comp=f['decode'](a['companions'])['skeleton_warrior']
+                        self.assertEqual(min(43,30+3*min(n,5)),comp['hitpoints'])
+                        self.assertEqual(990 if n==6 else 1000,int(a['hitpoints']))
+                        if n<5: self.assertEqual(5-n,b['mp1']['rounds'])
+                        else: self.assertNotIn('mp1',b)
+                        text=re.sub(r'\s+',' ',html.unescape(re.sub('<[^>]+>',' ',body)))
+                        if n<=5:
+                            self.assertIn('regenerates for '+str(3 if n<5 else 1)+' health',text)
+                            self.assertLess(text.index('healing aura'),text.index('You hit'))
+                        else: self.assertNotIn('healing aura',text)
+                        self.assertLess(text.index('You hit'),text.index('RIPOSTE'))
+                        self.assertLess(text.index('RIPOSTE'),text.index('Skeleton Warrior hits'))
+                        if n>=transition:
+                            self.assertEqual(-1,c['enemies'][0]['creaturehealth']); self.assertTrue(c['enemies'][1]['istarget'])
+                            self.assertEqual(100000-76*(n-transition),c['enemies'][1]['creaturehealth'])
+                        self.assertEqual(39,f['uses']()); self.assertEqual('1000',a['experience'])
+
+            # Aura heals before the companion's exact-zero killing strike and
+            # the historical retaliation that still occurs at zero enemy HP.
+            f['prepare_mp'](badguy=f['combat'](71,40,1),companions=f['encode'](companion),hitpoints=995,maxhitpoints=1000)
+            body,_=f['cast'](1); a,c,b=f['state']()
+            self.assertEqual(7,f['decode'](a['companions'])['skeleton_warrior']['hitpoints']) # 30+3-26
+            self.assertEqual(0,c['enemies'][0]['creaturehealth']); self.assertTrue(c['enemies'][1]['istarget'])
+            self.assertEqual('1000',a['hitpoints']); self.assertEqual(4,b['mp1']['rounds'])
+            text=re.sub(r'\s+',' ',html.unescape(re.sub('<[^>]+>',' ',body)))
+            positions=[text.index(x) for x in ['healing aura','You hit Accounting Target for 47',
+                'you RIPOSTE for 14','Skeleton Warrior hits Accounting Target for 10','hits Skeleton Warrior for 26']]
+            self.assertEqual(sorted(positions),positions)
+            c['enemies'][1]['creatureattack']=1; f['patch'](badguy=f['encode'](c))
+            f['fight'](); a,c,b=f['state']()
+            self.assertEqual(10,f['decode'](a['companions'])['skeleton_warrior']['hitpoints'])
+            self.assertEqual([0,99924],[x['creaturehealth'] for x in c['enemies']]); self.assertEqual(3,b['mp1']['rounds'])
+
+    def test_mystic_all_effects_cross_target_and_expire_naturally(self):
+        # All four effects come from real MP casts. Earth Fist consumes an RNG
+        # draw, producing a 24-point weapon riposte and 62-point enemy hit;
+        # shield returns 48+124, Lifetap never heals negative damage.
+        with self._mystic_progression_fixture() as f:
+            f['prepare_mp'](badguy=f['combat'](100000,120))
+            expected=[(1,5010,99955,{'mp1':4}),
+                (3,5065,99910,{'mp1':3,'mp3':4}),
+                (5,5120,99865,{'mp1':2,'mp3':3,'mp5':4}),
+                (2,5044,100000,{'mp1':1,'mp3':2,'mp5':3,'mp2':4}),
+                (None,4968,99827,{'mp3':1,'mp5':2,'mp2':3}),
+                (None,4882,99654,{'mp5':1,'mp2':2}),
+                (None,4796,99481,{'mp2':1}),
+                (None,4710,99480,{}),(None,4710,99435,{})]
+            for n,(level,hp,targethp,rounds) in enumerate(expected,1):
+                if n==4:
+                    a,c,b=f['state'](); c['enemies'][0]['creaturehealth']=173
+                    f['patch'](badguy=f['encode'](c))
+                body,_=f['cast'](level) if level else (f['fight'](),None)
+                a,c,b=f['state']()
+                self.assertEqual(hp,int(a['hitpoints']))
+                self.assertEqual(targethp,c['enemies'][1 if n>=4 else 0]['creaturehealth'])
+                self.assertEqual(rounds,{k:v['rounds'] for k,v in (b.items() if isinstance(b,dict) else [])})
+                if n>=4:
+                    self.assertEqual(0,c['enemies'][0]['creaturehealth']); self.assertTrue(c['enemies'][0]['dead'])
+                    self.assertTrue(c['enemies'][1]['istarget'])
+                self.assertEqual('1000',a['experience']); self.assertEqual('1000',a['gold'])
+            self.assertEqual(29,f['uses']())
+
+    def test_mystic_aura_companion_and_earth_fist_terminal(self):
+        with self._mystic_progression_fixture() as f, self._specialty_terminal_capture() as terminal:
+            f['prepare']('DA',badguy=f['combat'](100000,1,1))
+            self.assertEqual(200,f['request'](data=f['form'](1))[0])
+            companion=f['decode'](f['snapshot']()[0]['companions']); companion['skeleton_warrior']['hitpoints']=30
+            for effect in ['aura','earth']:
+                for outcome in ['victory','defeat']:
+                    with self.subTest(effect=effect,outcome=outcome):
+                        self.query('DELETE FROM fixture_specialty_terminal')
+                        f['prepare_mp'](level=15,badguy=f['combat'](47,1,1),companions=f['encode'](companion),hitpoints=995,maxhitpoints=1000)
+                        f['cast'](1); a,c,b=f['state']()
+                        self.assertEqual(0,c['enemies'][0]['creaturehealth']); self.assertEqual(35,f['decode'](a['companions'])['skeleton_warrior']['hitpoints'])
+                        b['mp1']['rounds']=1
+                        if effect=='earth':
+                            # Obtain the exact real producer before selecting a
+                            # final-active-round boundary, as retained tests do.
+                            f['cast'](2); a,c,produced=f['state'](); b['mp2']=produced['mp2']; b['mp2']['rounds']=1
+                        c['enemies'][1].update(creatureattack=120 if effect=='earth' else 1000,creaturedefense=80,
+                            creaturehealth=(16 if effect=='earth' else 40) if outcome=='victory' else 100000)
+                        current=f['decode'](a['companions']); current['skeleton_warrior']['hitpoints']=30
+                        f['patch'](badguy=f['encode'](c),bufflist=f['encode'](b),companions=f['encode'](current),hitpoints=1)
+                        f['cast'](3); a,c,b=f['state'](); events=terminal()
+                        self.assertEqual('',a['badguy']); self.assertEqual(['battle-'+outcome]*2,[x['hook'] for x in events])
+                        self.assertEqual((16 if effect=='earth' else 56) if outcome=='victory' else 0,int(a['hitpoints']))
+                        self.assertEqual(35,f['decode'](a['companions'])['skeleton_warrior']['hitpoints'])
+                        self.assertNotIn('mp1',b); self.assertNotIn('mp2',b)
+                        self.assertEqual(0 if outcome=='victory' else (99984 if effect=='earth' else 99960),events[1]['enemy']['creaturehealth'])
+                        self.assertEqual(False,f['decode'](a['companions'])['skeleton_warrior']['used'])
+                        self.assertEqual(34 if effect=='earth' else 36,f['uses']())
+
+    def test_mystic_combined_final_round_simultaneous_terminal(self):
+        # Regeneration then Lifetap adds exactly level+40 HP before 177 damage.
+        # Shield returns 354. The one-HP target difference distinguishes defeat
+        # from simultaneous victory without changing the historical formulas.
+        for route in ['forest','dragon']:
+            with self._specialty_accounting_fixture(route) as f, self._specialty_terminal_capture() as terminal:
+                player=f['player']; encode=f['encode']; decode=f['decode']
+                for targethp in [393,394,395]:
+                    with self.subTest(route=route,targethp=targethp):
+                        f['prepare']('MP',hitpoints=5000,maxhitpoints=10000)
+                        for level in [1,3]: self.assertEqual(200,f['request'](data=f['form'](level))[0])
+                        buffs=decode(f['snapshot']()[0]['bufflist'])
+                        for key in ['mp1','mp3']: buffs[key]['rounds']=1
+                        enemy=dict(f['enemy'],creaturehealth=targethp,creatureattack=1000)
+                        if route=='forest': enemy.update(creaturegold=0,creatureexp=100)
+                        self.query('UPDATE accounts SET badguy=?,bufflist=?,hitpoints=?,gold=1000,gems=10,experience=1000 WHERE acctid=?',
+                            [encode({'enemies':[enemy],'options':{'type':route,'didsurprise':1}}),encode(buffs),127 if route=='forest' else 122,player])
+                        self.query('DELETE FROM fixture_specialty_terminal')
+                        old=f['form'](1); data=f['form'](5)
+                        status,body=f['request'](data=data); self.assertEqual(200,status,body[:2000])
+                        after=f['snapshot']()[0]; events=terminal(); victory=targethp<=394
+                        self.assertEqual(1,len(events)); self.assertEqual('battle-victory' if victory else 'battle-defeat',events[0]['hook'])
+                        self.assertEqual(0,events[0]['hp']); self.assertEqual(targethp-394,events[0]['enemy']['creaturehealth'])
+                        remaining=decode(after['bufflist']); self.assertNotIn('mp1',remaining); self.assertNotIn('mp3',remaining)
+                        self.assertEqual(4,remaining['mp5']['rounds']); self.assertEqual([],decode(after['companions']))
+                        self.assertEqual('0',self.query("SELECT value FROM module_userprefs WHERE userid=? AND modulename='specialtymysticpower' AND setting='uses'",[player])[0]['value'])
+                        self.assertEqual('1' if route=='forest' and victory else '0',after['hitpoints'])
+                        self.assertEqual('1' if route=='forest' and victory else '0',after['alive'])
+                        if route=='dragon' and victory:
+                            self.assertIs(False,decode(after['badguy'])['dragonVictory'])
+                            self.assertEqual(['1000','10','1000'],[after[k] for k in ['gold','gems','experience']])
+                        else:
+                            self.assertEqual('',after['badguy'])
+                            self.assertEqual('1000' if victory else '0',after['gold'])
+                            if not victory: self.assertEqual('900' if route=='forest' else '1000',after['experience'])
+                        f['rejected'](data); f['rejected'](old); self.assertEqual(events,terminal())
+
+    def test_thieving_combined_target_terminal_rollback(self):
+        # Insult survives A's early weapon kill; Poison spends its offense
+        # round. Its final remaining round then expires during B settlement.
+        with self._specialty_accounting_fixture() as f, self._specialty_terminal_capture() as terminal:
+            player=f['player']; encode=f['encode']; decode=f['decode']
+            self.query("UPDATE settings SET value='1' WHERE setting='forestgemchance'")
+            for outcome in ['victory','defeat']:
+                with self.subTest(outcome=outcome):
+                    f['prepare']('TS',hitpoints=5000,maxhitpoints=10000)
+                    self.assertEqual(200,f['request'](data=f['form'](1))[0])
+                    a=dict(f['enemy'],creaturehealth=88,creatureexp=100,creaturegold=0,istarget=True)
+                    b=dict(f['enemy'],creatureid=2,creaturename='Second Target',creatureattack=1000,creatureexp=200,creaturegold=0,istarget=False)
+                    self.query('UPDATE accounts SET badguy=?,hitpoints=500,gold=1000,gems=10,experience=1000,turns=20 WHERE acctid=?',
+                        [encode({'enemies':[a,b],'options':{'type':'forest','didsurprise':1,'maxattacks':1}}),player])
+                    self.query('DELETE FROM fixture_specialty_terminal')
+                    first=f['form'](2); self.assertEqual(200,f['request'](data=first)[0])
+                    after=f['snapshot']()[0]; progressed=decode(after['badguy']); corpse=progressed['enemies'][0]; buffs=decode(after['bufflist'])
+                    self.assertEqual(0,corpse['creaturehealth']); self.assertFalse(corpse['istarget']); self.assertTrue(corpse['dead'])
+                    self.assertEqual(100000,progressed['enemies'][1]['creaturehealth']); self.assertTrue(progressed['enemies'][1]['istarget'])
+                    self.assertEqual({'ts1':4,'ts2':4},{k:v['rounds'] for k,v in buffs.items()}); self.assertEqual([],terminal())
+                    f['rejected'](first); stale=f['form'](1)
+                    buffs['ts2']['rounds']=1
+                    if outcome=='victory': progressed['enemies'][1]['creaturehealth']=88
+                    self.query('UPDATE accounts SET badguy=?,bufflist=?,hitpoints=? WHERE acctid=?',[encode(progressed),encode(buffs),500 if outcome=='victory' else 70,player])
+                    f['rejected'](stale); data=f['form'](1); before=f['snapshot']()
+                    # Force failure after both target hooks and preference writes.
+                    self.query("ALTER TABLE accounts ADD CONSTRAINT fixture_combined_terminal CHECK (login <> 'WebPlayer' OR badguy <> '')")
+                    try:
+                        self.assertEqual(500,f['request'](data=data)[0]); self.assertEqual(before,f['snapshot']()); self.assertEqual([],terminal())
+                        f['rejected'](data)
+                    finally: self.query('ALTER TABLE accounts DROP CONSTRAINT fixture_combined_terminal')
+                    final=f['form'](1); status,body=f['request'](data=final); self.assertEqual(200,status,body[:2000])
+                    after=f['snapshot']()[0]; events=terminal(); remaining=decode(after['bufflist'])
+                    self.assertEqual('',after['badguy']); self.assertEqual(['battle-'+outcome]*2,[e['hook'] for e in events])
+                    self.assertEqual(0,events[0]['enemy']['creaturehealth']); self.assertEqual(0 if outcome=='victory' else 99912,events[1]['enemy']['creaturehealth'])
+                    self.assertNotIn('ts2',remaining); self.assertEqual(5 if outcome=='victory' else 4,remaining['ts1']['rounds'])
+                    expected=['1','500','1000','11','1150'] if outcome=='victory' else ['0','0','0','10','900']
+                    self.assertEqual(expected,[after[k] for k in ['alive','hitpoints','gold','gems','experience']])
+                    self.assertEqual('5',self.query("SELECT value FROM module_userprefs WHERE userid=? AND modulename='specialtythiefskills' AND setting='uses'",[player])[0]['value'])
+                    f['rejected'](final); f['rejected'](first); self.assertEqual(events,terminal())
+
+    def test_dragon_effect_accounting_duration_and_corruption(self):
+        cases=[('DA',2,120,4914,99737),('DA',3,1000,4911,99960),('DA',5,1000,5000,99951),
+            ('MP',1,120,5015,99955),('MP',2,120,4914,99984),('MP',3,120,5045,99955),
+            ('MP',5,1000,4823,99606),('TS',1,1000,4930,99960),('TS',2,120,5000,99907),
+            ('TS',3,1000,5000,99942),('TS',5,1000,4896,99865)]
+        with self._specialty_accounting_fixture('dragon') as f:
+            def fight():
+                status,body=f['request']('dragon.php?op=fight'); self.assertEqual(200,status,body[:2000])
+                status,body=f['request']('dragon.php?op=fight',self._security_fields(body,'dragon.php?op=fight')); self.assertEqual(200,status,body[:2000])
+            for spec,level,attack,hp,targethp in cases:
+                with self.subTest(spec=spec,level=level):
+                    state={'enemies':[dict(f['enemy'],creatureattack=attack)],'options':{'type':'dragon','didsurprise':1}}
+                    f['prepare'](spec,badguy=f['encode'](state),hitpoints=5000,maxhitpoints=10000)
+                    status,body=f['request'](data=f['form'](level)); self.assertEqual(200,status,body[:2000])
+                    after=f['snapshot']()[0]
+                    self.assertEqual(hp,int(after['hitpoints']),body[-2000:]); self.assertEqual(targethp,f['decode'](after['badguy'])['enemies'][0]['creaturehealth'])
+                    key=spec.lower()+str(level)
+                    if key=='da2': self.assertNotIn(key,f['decode'](after['bufflist'])); continue
+                    self.assertEqual(4,f['decode'](after['bufflist'])[key]['rounds'])
+                    for remaining in [3,2,1,0,0]:
+                        fight(); buffs=f['decode'](f['snapshot']()[0]['bufflist'])
+                        if remaining: self.assertEqual(remaining,buffs[key]['rounds'])
+                        else: self.assertNotIn(key,buffs)
+                    self.assertEqual(str(9-level),self.query('SELECT value FROM module_userprefs WHERE userid=? AND modulename=? AND setting=?',[f['player'],f['modules'][spec],'uses'])[0]['value'])
+            # Genuine persisted producers supply the starting schema for corruption tests.
+            for spec,level in [('DA',3),('MP',1),('MP',2),('MP',3),('MP',5),('TS',1),('TS',2),('TS',3),('TS',5)]:
+                f['prepare'](spec); self.assertEqual(200,f['request'](data=f['form'](level))[0])
+                buffs=f['decode'](f['snapshot']()[0]['bufflist']); key=spec.lower()+str(level)
+                for patch in [{'rounds':0},{'rounds':6},{'forged':1},{'schema':'forged'}]:
+                    corrupt=dict(buffs); corrupt[key]=dict(buffs[key],**patch)
+                    self.query('UPDATE accounts SET bufflist=? WHERE acctid=?',[f['encode'](corrupt),f['player']]); before=f['snapshot']()
+                    for path,data in [('dragon.php?op=fight',None),('dragon.php?op=specialty',None),('dragon.php?op=specialty',{'level':str(level)})]:
+                        self.assertEqual(409,f['request'](path,data)[0]); self.assertEqual(before,f['snapshot']())
+                self.query('UPDATE accounts SET bufflist=? WHERE acctid=?',[f['encode'](buffs),f['player']])
+            f['prepare']('DA'); self.assertEqual(200,f['request'](data=f['form'](1))[0])
+            for encoded in ['broken',f['encode']({'skeleton_warrior':{'hitpoints':1}})]:
+                self.query('UPDATE accounts SET companions=? WHERE acctid=?',[encoded,f['player']]); before=f['snapshot']()
+                self.assertEqual(409,f['request']()[0]); self.assertEqual(before,f['snapshot']())
+
+    def test_dragon_specialty_authority_matrix(self):
+        with self._specialty_accounting_fixture('dragon') as f:
+            anonymous=self._security_client(login=None); before=f['snapshot']()
+            for op in ['begin','fight','specialty','prologue1','godmode','restart']:
+                for fields in [None,{'level':'2','csrf_token':'forged','action_token':'forged'}]:
+                    self.assertIn(anonymous('dragon.php?op='+op,fields)[0],[302,303,403]); self.assertEqual(before,f['snapshot']())
+            for spec,module in f['modules'].items():
+                for level in [1,2,3,5]:
+                    with self.subTest(specialty=spec,level=level):
+                        f['prepare'](spec); data=f['form'](level); stale=f['form'](level)
+                        before=f['snapshot'](); status,body=f['request'](data=data)
+                        self.assertEqual(200,status,body[:2000]); after=f['snapshot']()
+                        self.assertNotEqual(before[0]['badguy'],after[0]['badguy'])
+                        self.assertEqual(str(9-level),self.query('SELECT value FROM module_userprefs WHERE userid=? AND modulename=? AND setting=?',[f['player'],module,'uses'])[0]['value'])
+                        buffs=f['decode'](after[0]['bufflist']); companions=f['decode'](after[0]['companions'])
+                        if spec=='DA' and level==1:
+                            self.assertTrue(companions==[] or companions['skeleton_warrior']['maxhitpoints']==60)
+                        elif spec=='DA' and level==2: self.assertNotIn('da2',buffs)
+                        else: self.assertEqual(4,buffs[spec.lower()+str(level)]['rounds'])
+                        f['rejected'](data); f['rejected'](data); f['rejected'](stale)
+                        self.assertEqual(200,f['request']('dragon.php?op=fight')[0]); self.assertEqual(after,f['snapshot']())
+                    for case in ['wrong','none','inactive','skill','uses','zero','malformed','negative','excessive','missing','malformed-combat','zero-hp','negative-hp','dead','terminal','stale','csrf','invalid-csrf','unsupported','malformed-level','handler']:
+                        with self.subTest(specialty=spec,level=level,case=case):
+                            f['prepare'](spec); data=f['form'](level); expected=409
+                            if case in ['wrong','none']:
+                                self.query('UPDATE accounts SET specialty=? WHERE acctid=?',['' if case=='none' else ('MP' if spec=='DA' else 'DA'),f['player']])
+                            elif case=='inactive': self.query('UPDATE modules SET active=0 WHERE modulename=?',[module])
+                            elif case=='handler': self.query("UPDATE module_hooks SET `function`='missing_handler' WHERE modulename=? AND location='apply-specialties'",[module])
+                            elif case in ['skill','uses','zero','malformed','negative','excessive']:
+                                value={'skill':str(level-1),'uses':str(level-1),'zero':'0','malformed':'broken','negative':'-1','excessive':'9999999999'}[case]
+                                self.query('UPDATE module_userprefs SET value=? WHERE userid=? AND modulename=? AND setting=?',[value,f['player'],module,'skill' if case=='skill' else 'uses'])
+                            elif case in ['missing','malformed-combat']:
+                                self.query('UPDATE accounts SET badguy=? WHERE acctid=?',['' if case=='missing' else 'broken',f['player']])
+                            elif case in ['zero-hp','negative-hp','dead','terminal','stale']:
+                                change={'zero-hp':{'creaturehealth':0},'negative-hp':{'creaturehealth':-1},'dead':{'dead':True},'terminal':{'terminal':True},'stale':{'creaturename':'Another Dragon'}}[case]
+                                self.query('UPDATE accounts SET badguy=? WHERE acctid=?',[f['encode']({'enemies':[dict(f['enemy'],**change)],'options':{'type':'dragon','didsurprise':1}}),f['player']])
+                            elif case in ['csrf','invalid-csrf']:
+                                if case=='csrf': del data['csrf_token']
+                                else: data['csrf_token']='invalid'
+                                expected=403
+                            else: data['level']='4' if case=='unsupported' else '2.0'; expected=400
+                            try: f['rejected'](data,expected)
+                            finally:
+                                self.query('UPDATE modules SET active=1 WHERE modulename=?',[module])
+                                self.query("UPDATE module_hooks SET `function`=? WHERE modulename=? AND location='apply-specialties'",[module+'_dohook',module])
+                    # Independent insufficient authority, using a currently valid lower-level form.
+                    if level>1:
+                        for key in ['skill','uses']:
+                            f['prepare'](spec)
+                            self.query('UPDATE module_userprefs SET value=? WHERE userid=? AND modulename=? AND setting=?',[str(level-1),f['player'],module,key])
+                            f['rejected'](f['form'](level))
+
+    def test_dragon_transitions_rewards_and_rollback(self):
+        with self._specialty_accounting_fixture('dragon') as f, self._specialty_terminal_capture() as terminal:
+            player=f['player']; request=f['request']; encode=f['encode']; decode=f['decode']
+            def extra():
+                return [f['snapshot'](),self.query('SELECT dragonkills,slaydragon,level,charm,dragonpoints,authversion FROM accounts WHERE acctid=?',[player]),
+                    self.query('SELECT newsid FROM news WHERE accountid=? ORDER BY newsid',[player]),
+                    self.query('SELECT id FROM debuglog WHERE actor=? ORDER BY id',[player]),terminal()]
+            def combat(**changes): return encode({'enemies':[dict(f['enemy'],**changes)],'options':{'type':'dragon','didsurprise':1}})
+            def ordinary(path='dragon.php?op=fight'):
+                status,body=request(path); self.assertEqual(200,status,body[:2000])
+                return self._security_fields(body,path)
+            # Entry GET cannot replace combat or start the surprise round.
+            f['prepare']('DA',badguy='',hitpoints=150,maxhitpoints=150,attack=100,defense=100)
+            before=extra(); status,body=request('dragon.php'); self.assertEqual(200,status,body[:2000]); self.assertEqual(before,extra())
+            begin=self._security_fields(body,'dragon.php?op=begin')
+            for fields in [{},dict(begin,csrf_token='bad')]: self.assertEqual(403,request('dragon.php?op=begin',fields)[0]); self.assertEqual(before,extra())
+            status,body=request('dragon.php?op=begin',begin); self.assertEqual(200,status,body[:2000])
+            live=extra(); self.assertEqual('dragon',decode(f['snapshot']()[0]['badguy'])['options']['type'])
+            self.assertEqual(409,request('dragon.php?op=begin',begin)[0]); self.assertEqual(live,extra())
+            for op in ['','fight','run','specialty']:
+                before=extra(); self.assertEqual(200,request('dragon.php'+('?op='+op if op else ''))[0]); self.assertEqual(before,extra())
+            for query in ['op=fight&skill=DA&l=2','op=prologue1&flawless=1','op=fight&newtarget=0','op=fight&auto=full']:
+                before=extra(); self.assertEqual(400,request('dragon.php?'+query)[0]); self.assertEqual(before,extra())
+            # Stale identity includes prologue, completed kill, and different combat family.
+            for changed in ['',combat(creaturehealth=0),encode({'dragonVictory':True,'dragonkills':0}),
+                            encode({'enemies':[f['enemy']],'options':{'type':'forest'}})]:
+                f['prepare']('DA'); data=f['form'](2)
+                self.query('UPDATE accounts SET badguy=? WHERE acctid=?',[changed,player]); f['rejected'](data)
+            f['prepare']('DA'); data=f['form'](2)
+            self.query('UPDATE accounts SET dragonkills=1 WHERE acctid=?',[player]); f['rejected'](data)
+            # Developer controls retain their historical capability behind POST and role checks.
+            f['prepare']('DA',hitpoints=150,maxhitpoints=150,defense=100000)
+            for op in ['godmode','restart']:
+                before=extra(); self.assertEqual(409,request('dragon.php?op='+op)[0]); self.assertEqual(before,extra())
+            self.query('UPDATE accounts SET superuser=2048 WHERE acctid=?',[player])
+            status,body=request('dragon.php?op=fight'); self.assertEqual(200,status,body[:2000])
+            restart=self._security_fields(body,'dragon.php?op=restart'); god=self._security_fields(body,'dragon.php?op=godmode')
+            # Role removal invalidates a previously offered developer action.
+            self.query('UPDATE accounts SET superuser=0 WHERE acctid=?',[player])
+            before=extra(); self.assertEqual(409,request('dragon.php?op=godmode',god)[0]); self.assertEqual(before,extra())
+            self.query('UPDATE accounts SET superuser=2048 WHERE acctid=?',[player])
+            status,body=request('dragon.php?op=fight'); self.assertEqual(200,status,body[:2000])
+            # Privilege changes rotate CSRF; obtain a current form after regrant.
+            restart=self._security_fields(body,'dragon.php?op=restart')
+            status,body=request('dragon.php?op=restart',restart); self.assertEqual(200,status,body[:2000])
+            one=decode(f['snapshot']()[0]['badguy'])['options']['dragonEncounter']
+            stale=f['form'](2); restart=self._security_fields(body,'dragon.php?op=restart')
+            status,body=request('dragon.php?op=restart',restart); self.assertEqual(200,status,body[:2000])
+            two=decode(f['snapshot']()[0]['badguy'])['options']['dragonEncounter']; self.assertNotEqual(one,two); f['rejected'](stale)
+            # Forced failures after specialty preference writes and terminal news writes.
+            for spec,level,terminal_round in [('DA',1,False),('MP',1,False),('TS',2,False),('DA',2,False),('DA',2,True)]:
+                f['prepare'](spec,badguy=combat(creaturehealth=1 if terminal_round else 100000),hitpoints=150,maxhitpoints=150)
+                data=f['form'](level); before=extra()
+                self.query("ALTER TABLE accounts ADD CONSTRAINT fixture_dragon_failure CHECK (login <> 'WebPlayer' OR badguy NOT LIKE '%"+('dragonVictory' if terminal_round else 'istarget')+"%')")
+                try:
+                    status,body=request(data=data); self.assertEqual(500,status,body[:2000]); self.assertEqual(before,extra())
+                    f['rejected'](data)
+                finally: self.query('ALTER TABLE accounts DROP CONSTRAINT fixture_dragon_failure')
+                status,body=request(data=f['form'](level)); self.assertEqual(200,status,body[:2000])
+            # Exact persisted, server-derived flawless outcome. Continuation is a separate one-use transaction.
+            self.query('DELETE FROM fixture_specialty_terminal')
+            f['prepare']('DA',badguy=combat(creaturehealth=1,creatureattack=1,creaturedefense=1),hitpoints=150,maxhitpoints=150,gold=1000,gems=10,charm=0)
+            # Generate a real companion before the lethal Voodoo round.
+            f['prepare']('DA',badguy=combat(creatureattack=1,creaturedefense=1),hitpoints=150,maxhitpoints=150,gold=1000,gems=10,charm=0)
+            self.assertEqual(200,request(data=f['form'](1))[0]); skeleton=decode(f['snapshot']()[0]['companions'])
+            self.assertIn('skeleton_warrior',skeleton)
+            self.assertEqual(60,skeleton['skeleton_warrior']['hitpoints']); self.assertEqual(60,skeleton['skeleton_warrior']['maxhitpoints'])
+            self.query('UPDATE accounts SET badguy=? WHERE acctid=?',[combat(creaturehealth=1,creatureattack=1,creaturedefense=1),player])
+            stale_fight=ordinary(); data=f['form'](2)
+            status,body=request(data=data); self.assertEqual(200,status,body[:2000])
+            outcome=decode(f['snapshot']()[0]['badguy']); self.assertEqual({'dragonVictory':True,'dragonkills':0}, {k:v for k,v in outcome.items() if k!='dragonEncounter'}); self.assertRegex(outcome['dragonEncounter'],r'^[a-f0-9]{32}$')
+            self.assertEqual('6',self.query("SELECT value FROM module_userprefs WHERE userid=? AND modulename='specialtydarkarts' AND setting='uses'",[player])[0]['value'])
+            self.assertEqual(dict(skeleton['skeleton_warrior'],used=False),decode(f['snapshot']()[0]['companions'])['skeleton_warrior'])
+            self.assertEqual('battle-victory',terminal()[-1]['hook'])
+            continuation=self._security_fields(body,'dragon.php?op=prologue1'); before=extra()
+            f['rejected'](data); self.assertEqual(409,request('dragon.php?op=fight',stale_fight)[0]); self.assertEqual(before,extra())
+            self.assertEqual(200,request('dragon.php?op=prologue1')[0]); self.assertEqual(before,extra())
+            for fields,code in [({},403),(dict(continuation,csrf_token='bad'),403),(dict(continuation,flawless='1'),400)]:
+                self.assertEqual(code,request('dragon.php?op=prologue1',fields)[0]); self.assertEqual(before,extra())
+            continuation=ordinary('dragon.php?op=prologue1')
+            self.query("ALTER TABLE accounts ADD CONSTRAINT fixture_dragon_reset CHECK (login <> 'WebPlayer' OR dragonkills <> 1)")
+            try:
+                status,body=request('dragon.php?op=prologue1',continuation); self.assertEqual(500,status,body[:2000]); self.assertEqual(before,extra())
+                self.assertEqual(409,request('dragon.php?op=prologue1',continuation)[0]); self.assertEqual(before,extra())
+            finally: self.query('ALTER TABLE accounts DROP CONSTRAINT fixture_dragon_reset')
+            continuation=ordinary('dragon.php?op=prologue1')
+            authversion=self.query('SELECT authversion FROM accounts WHERE acctid=?',[player])
+            status,body=request('dragon.php?op=prologue1',continuation); self.assertEqual(200,status,body[:2000])
+            self.assertEqual(authversion,self.query('SELECT authversion FROM accounts WHERE acctid=?',[player]))
+            after=self.query('SELECT dragonkills,level,gold,gems,charm,specialty,badguy,bufflist,companions FROM accounts WHERE acctid=?',[player])[0]
+            self.assertEqual(['1','1','250','11','5','',''],[after[k] for k in ['dragonkills','level','gold','gems','charm','specialty','badguy']])
+            self.assertEqual([],decode(after['bufflist'])); self.assertEqual([],decode(after['companions']))
+            for row in self.query("SELECT value FROM module_userprefs WHERE userid=? AND setting IN ('skill','uses') AND modulename IN ('specialtydarkarts','specialtymysticpower','specialtythiefskills')",[player]): self.assertEqual('0',row['value'])
+            before=extra()
+            for path,fields in [('dragon.php?op=prologue1',continuation),('dragon.php?op=specialty',data),('dragon.php?op=fight',stale_fight),('dragon.php?op=begin',begin)]:
+                self.assertEqual(409,request(path,fields)[0]); self.assertEqual(before,extra())
+            # Dragon defeat retains XP, loses all gold and clears combat exactly once.
+            f['prepare']('MP',badguy=combat(creatureattack=100000,creaturedefense=100000),hitpoints=1,maxhitpoints=150,gold=1000,experience=1000)
+            data=f['form'](3); status,body=request(data=data); self.assertEqual(200,status,body[:2000])
+            after=f['snapshot']()[0]
+            self.assertEqual(['0','0','0','1000',''],[after[k] for k in ['alive','hitpoints','gold','experience','badguy']])
+            self.assertEqual('6',self.query("SELECT value FROM module_userprefs WHERE userid=? AND modulename='specialtymysticpower' AND setting='uses'",[player])[0]['value'])
+            self.assertEqual('battle-defeat',terminal()[-1]['hook']); before=extra(); f['rejected'](data); self.assertEqual(before,extra())
+            # Historical Dragon simultaneous lethal shield victory still reaches
+            # prologue at zero player HP. No Forest mushroom recovery is invented.
+            for dragon_hp in [394,393]:
+                self.query('DELETE FROM fixture_specialty_terminal')
+                f['prepare']('MP',badguy=combat(creaturehealth=dragon_hp,creatureattack=1000),hitpoints=177,maxhitpoints=150,gold=1000,gems=10,charm=0)
+                data=f['form'](5); status,body=request(data=data); self.assertEqual(200,status,body[:2000])
+                after=f['snapshot']()[0]; self.assertEqual('0',after['hitpoints']); self.assertEqual('0',after['alive'])
+                self.assertEqual(False,decode(after['badguy'])['dragonVictory'])
+                self.assertEqual('battle-victory',terminal()[0]['hook']); self.assertEqual(dragon_hp-394,terminal()[0]['enemy']['creaturehealth'])
+                continuation=self._security_fields(body,'dragon.php?op=prologue1')
+                before=extra(); self.assertEqual(200,request('dragon.php?op=prologue1')[0]); self.assertEqual(before,extra())
+                status,body=request('dragon.php?op=prologue1',continuation); self.assertEqual(200,status,body[:2000])
+                result=self.query('SELECT dragonkills,hitpoints,alive,gold,gems,badguy,bufflist FROM accounts WHERE acctid=?',[player])[0]
+                self.assertEqual(['1','10','1','100','10',''],[result[k] for k in ['dragonkills','hitpoints','alive','gold','gems','badguy']])
+                self.assertEqual([],decode(result['bufflist'])); before=extra()
+                self.assertEqual(409,request('dragon.php?op=prologue1',continuation)[0]); self.assertEqual(before,extra())
+
+
+    def test_specialty_independent_level_authority(self):
+        with self._specialty_accounting_fixture() as f:
+            for spec,module in f['modules'].items():
+                for level in [1,2,3,5]:
+                    for case in ['wrong','none','inactive','skill','uses','zero','malformed','negative','excessive','missing','malformed-combat','zero-hp','negative-hp','dead','terminal','stale','csrf','invalid-csrf','unsupported','malformed-level']:
+                        with self.subTest(specialty=spec,level=level,case=case):
+                            f['prepare'](spec); data=f['form'](level); expected=409
+                            if case in ['wrong','none']:
+                                self.query('UPDATE accounts SET specialty=? WHERE acctid=?',['' if case=='none' else ('MP' if spec=='DA' else 'DA'),f['player']])
+                            elif case=='inactive': self.query('UPDATE modules SET active=0 WHERE modulename=?',[module])
+                            elif case in ['skill','uses','zero','malformed','negative','excessive']:
+                                value={'skill':str(level-1),'uses':str(level-1),'zero':'0','malformed':'broken','negative':'-1','excessive':'9999999999'}[case]
+                                self.query('UPDATE module_userprefs SET value=? WHERE userid=? AND modulename=? AND setting=?',[value,f['player'],module,'skill' if case=='skill' else 'uses'])
+                            elif case in ['missing','malformed-combat']:
+                                self.query('UPDATE accounts SET badguy=? WHERE acctid=?',['' if case=='missing' else 'broken',f['player']])
+                            elif case in ['zero-hp','negative-hp','dead','terminal','stale']:
+                                change={'zero-hp':{'creaturehealth':0},'negative-hp':{'creaturehealth':-1},'dead':{'dead':True},'terminal':{'terminal':True},'stale':{'creaturehealth':99999}}[case]
+                                self.query('UPDATE accounts SET badguy=? WHERE acctid=?',[f['encode']({'enemies':[dict(f['enemy'],**change)],'options':{'type':'forest','didsurprise':1}}),f['player']])
+                            elif case in ['csrf','invalid-csrf']:
+                                if case=='csrf': del data['csrf_token']
+                                else: data['csrf_token']='invalid'
+                                expected=403
+                            else:
+                                data['level']='4' if case=='unsupported' else '2.0'; expected=400
+                            try: f['rejected'](data,expected)
+                            finally: self.query('UPDATE modules SET active=1 WHERE modulename=?',[module])
+                    # A valid intent against independently insufficient authority must
+                    # fail too, not merely an intent made stale by a changed preference.
+                    for key in ['skill','uses']:
+                        f['prepare'](spec)
+                        self.query('UPDATE module_userprefs SET value=? WHERE userid=? AND modulename=? AND setting=?',[str(level-1),f['player'],module,key])
+                        if level==1:
+                            status,body=f['request'](); self.assertEqual(200,status)
+                            self.assertNotIn('name="action_token"',body)
+                            continue
+                        f['rejected'](f['form'](level))
+
+    def test_specialty_module_availability_changes(self):
+        with self._specialty_accounting_fixture() as f:
+            for spec,module in f['modules'].items():
+                registry=self.query('SELECT * FROM modules WHERE modulename=?',[module])[0]
+                hook=self.query('SELECT * FROM module_hooks WHERE modulename=? AND location=?',[module,'apply-specialties'])[0]
+                for level in [1,2,3,5]:
+                    for case in ['uninstalled','inactive','file','handler','missing-hook','conditional-hook']:
+                        with self.subTest(specialty=spec,level=level,case=case):
+                            f['prepare'](spec); data=f['form'](level)
+                            path=ROOT/'modules'/(module+'.php'); hidden=path.with_suffix('.fixture-unavailable')
+                            try:
+                                if case=='uninstalled': self.query('DELETE FROM modules WHERE modulename=?',[module])
+                                elif case=='inactive': self.query('UPDATE modules SET active=0 WHERE modulename=?',[module])
+                                elif case=='file': path.rename(hidden)
+                                elif case=='missing-hook': self.query('DELETE FROM module_hooks WHERE modulename=? AND location=?',[module,'apply-specialties'])
+                                else:
+                                    field='function' if case=='handler' else 'whenactive'
+                                    self.query('UPDATE module_hooks SET `'+field+'`=? WHERE modulename=? AND location=?',['invalid_handler' if case=='handler' else 'false',module,'apply-specialties'])
+                                f['rejected'](data)
+                                before=f['snapshot'](); status,body=f['request']()
+                                self.assertEqual(409,status,body[:2000]); self.assertEqual(before,f['snapshot']())
+                            finally:
+                                if hidden.exists(): hidden.rename(path)
+                                self.query('REPLACE INTO modules ('+','.join(registry)+') VALUES ('+','.join('?' for _ in registry)+')',list(registry.values()))
+                                self.query('DELETE FROM module_hooks WHERE modulename=? AND location=?',[module,'apply-specialties'])
+                                self.query('INSERT INTO module_hooks ('+','.join('`'+k+'`' for k in hook)+') VALUES ('+','.join('?' for _ in hook)+')',list(hook.values()))
+
+    def test_specialty_nonexposing_callers_reject_injection(self):
+        with self._specialty_accounting_fixture() as f:
+            anonymous=self._security_client(login=None)
+            for spec in f['modules']:
+                f['prepare'](spec)
+                for level in [1,2,3,5]:
+                    for route in ['train.php','graveyard.php']:
+                        for params in [{'skill':spec},{'l':str(level)},{'skill':spec,'l':str(level)},{'skill[]':spec,'l[]':str(level)}]:
+                            for method in ['GET','POST']:
+                                url=route+'?op=fight'+('&'+urllib.parse.urlencode(params) if method=='GET' else '')
+                                data=None if method=='GET' else params
+                                before=f['snapshot']()
+                                self.assertEqual(400,f['request'](url,data)[0])
+                                self.assertEqual(before,f['snapshot']())
+                                self.assertEqual(400,anonymous(url,data)[0])
+                                self.assertEqual(before,f['snapshot']())
+
+    @contextmanager
+    def _specialty_terminal_capture(self):
+        # Observe the real terminal hook inside the same transaction, before the
+        # caller clears combat. No outcome, RNG, HP or formula is substituted.
+        module='resurrectionspecialtyobserver'
+        path=ROOT/'modules'/(module+'.php')
+        path.write_text('''<?php
+function resurrectionspecialtyobserver_getmoduleinfo() { return ['name'=>'Fixture observer','version'=>'1','author'=>'Tests','category'=>'Tests']; }
+function resurrectionspecialtyobserver_dohook($hook,$args) {
+    global $session, $companions;
+    db_query('INSERT INTO fixture_specialty_terminal (payload) VALUES (?)',true,
+        [json_encode(['hook'=>$hook,'enemy'=>$args,'hp'=>$session['user']['hitpoints'],'buffs'=>$session['bufflist'],'companions'=>$companions],JSON_THROW_ON_ERROR)]);
+    return $args;
+}
+''')
+        self.query('CREATE TABLE fixture_specialty_terminal (payload LONGTEXT NOT NULL) ENGINE=InnoDB')
+        self.query('INSERT INTO modules(modulename,active,version) VALUES (?,1,?)',[module,'1'])
+        for hook in ['battle-victory','battle-defeat']:
+            self.query('INSERT INTO module_hooks(modulename,location,`function`,whenactive,priority) VALUES (?,?,?,?,?)',[module,hook,module+'_dohook','',100])
+        try:
+            yield lambda: [json.loads(row['payload']) for row in self.query('SELECT payload FROM fixture_specialty_terminal')]
+        finally:
+            self.query('DELETE FROM module_hooks WHERE modulename=?',[module])
+            self.query('DELETE FROM modules WHERE modulename=?',[module])
+            self.query('DROP TABLE fixture_specialty_terminal')
+            self.assertEqual([],self.query("SHOW TABLES LIKE 'fixture_specialty_terminal'"))
+            path.unlink()
+            self.assertFalse(path.exists())
+
+    def test_specialty_adverse_defeat_accounting(self):
+        # spec, level, enemy attack/defense, starting HP, exact terminal enemy
+        # HP, retained rounds, and ordered historical combat messages.
+        cases=[
+            ('DA',1,1000,1000,1,100000,None,['RIPOSTED for 22 points']),
+            ('DA',2,120,80,24,99737,None,['doll hurting it for 263 points','RIPOSTED for 24 points']),
+            ('DA',3,1000,1000,11,100000,5,['RIPOSTED for 11 points']),
+            ('DA',3,1000,80,89,99960,4,['You hit Accounting Target for 40 points','hits you for 89 points']),
+            ('MP',1,1000,80,167,99960,4,['regenerate for 10 health','You hit Accounting Target for 40 points','hits you for 177 points']),
+            ('MP',2,120,80,24,99999,4,['earth pummels Accounting Target for 1 points','RIPOSTED for 24 points']),
+            ('MP',3,1000,1000,22,100000,4,['RIPOSTED for 22 points','weapon wails as you deal no damage']),
+            ('MP',5,1000,80,177,99606,4,['You hit Accounting Target for 40 points','hits you for 177 points','hitting for 354 damage']),
+            ('TS',1,1000,80,70,99960,4,['You hit Accounting Target for 40 points','hits you for 70 points']),
+            ('TS',2,1000,80,177,99912,4,['You hit Accounting Target for 88 points','hits you for 177 points']),
+            ('TS',3,1000,1000,22,100000,5,['RIPOSTED for 22 points']),
+            ('TS',5,1000,80,104,99865,4,['You hit Accounting Target for 135 points','hits you for 104 points']),
+        ]
+        with self._specialty_accounting_fixture() as f, self._specialty_terminal_capture() as terminal:
+            for spec,level,attack,defense,hp,targethp,rounds,messages in cases:
+                with self.subTest(specialty=spec,level=level,defense=defense):
+                    self.query('DELETE FROM fixture_specialty_terminal')
+                    combat={'enemies':[dict(f['enemy'],creatureattack=attack,creaturedefense=defense)],'options':{'type':'forest','didsurprise':1}}
+                    f['prepare'](spec,hitpoints=hp,gold=1000,experience=1000,badguy=f['encode'](combat))
+                    before=f['snapshot']()[0]; stale=f['form'](1); data=f['form'](level)
+                    status,body=f['request'](data=data); self.assertEqual(200,status,body[:2000])
+                    after=f['snapshot']()[0]; events=terminal(); self.assertEqual(1,len(events)); event=events[0]
+                    self.assertEqual('battle-defeat',event['hook']); self.assertEqual(0,event['hp'])
+                    self.assertEqual(targethp,event['enemy']['creaturehealth']); self.assertTrue(event['enemy']['killedplayer'])
+                    self.assertEqual(['0','0','0','900',''],[after[k] for k in ['hitpoints','alive','gold','experience','badguy']])
+                    for key in ['gems','turns','attack','defense']: self.assertEqual(before[key],after[key])
+                    self.assertEqual(str(9-level),self.query('SELECT value FROM module_userprefs WHERE userid=? AND modulename=? AND setting=?',[f['player'],f['modules'][spec],'uses'])[0]['value'])
+                    buffs=f['decode'](after['bufflist']); key=spec.lower()+str(level)
+                    if rounds is None: self.assertNotIn(key,buffs)
+                    else: self.assertEqual(rounds,buffs[key]['rounds'])
+                    companions=f['decode'](after['companions'])
+                    if spec=='DA' and level==1:
+                        self.assertEqual(43,companions['skeleton_warrior']['hitpoints'])
+                        self.assertEqual(event['companions'],companions)
+                    else: self.assertEqual([],companions)
+                    text=re.sub(r'\s+',' ',html.unescape(re.sub('<[^>]+>',' ',body)))
+                    offsets=[text.index(message) for message in messages]
+                    self.assertEqual(sorted(offsets),offsets)
+                    self.assertNotIn('You have slain',text)
+                    if 'RIPOSTED' in messages[-1]: self.assertNotIn('Accounting Target hits you for',text)
+                    f['rejected'](data); f['rejected'](data); f['rejected'](stale)
+                    self.assertEqual(events,terminal())
+                    self.assertEqual(200,f['request']('news.php')[0]); read=f['snapshot']()[0]
+                    if spec=='DA' and level==1:
+                        suspended=f['decode'](read['companions'])
+                        self.assertEqual(dict(companions['skeleton_warrior'],suspended=True),suspended['skeleton_warrior'])
+                        read['companions']=after['companions']
+                    self.assertEqual(after,read)
+
+    def test_specialty_shield_terminal_and_lifetap_adversity(self):
+        with self._specialty_accounting_fixture() as f, self._specialty_terminal_capture() as terminal:
+            # A one-HP difference chooses live combat, real defeat, or historical
+            # simultaneous lethal victory with the Forest mushroom recovery.
+            for hp,targethp,endinghp,endingtarget,outcome in [
+                (178,395,1,1,None),(177,395,0,1,'battle-defeat'),
+                (178,394,1,0,'battle-victory'),(177,394,1,0,'battle-victory'),
+                (1,393,1,-1,'battle-victory')]:
+                with self.subTest(hp=hp,targethp=targethp):
+                    self.query('DELETE FROM fixture_specialty_terminal')
+                    f['prepare']('MP',hitpoints=hp,gold=1000,gems=0,experience=1000,badguy=f['encode']({'enemies':[dict(f['enemy'],creatureattack=1000,creaturehealth=targethp)],'options':{'type':'forest','didsurprise':1}}))
+                    before=f['snapshot']()[0]; old=f['form'](1); data=f['form'](5)
+                    status,body=f['request'](data=data); self.assertEqual(200,status,body[:2000]); after=f['snapshot']()[0]
+                    self.assertEqual(endinghp,int(after['hitpoints']))
+                    self.assertEqual(4,f['decode'](after['bufflist'])['mp5']['rounds'])
+                    self.assertEqual('4',self.query("SELECT value FROM module_userprefs WHERE userid=? AND modulename='specialtymysticpower' AND setting='uses'",[f['player']])[0]['value'])
+                    text=re.sub(r'\s+',' ',html.unescape(re.sub('<[^>]+>',' ',body)))
+                    self.assertLess(text.index('hits you for 177 points'),text.index('hitting for 354 damage'))
+                    events=terminal()
+                    if outcome is None:
+                        self.assertEqual([],events); self.assertEqual(endingtarget,f['decode'](after['badguy'])['enemies'][0]['creaturehealth'])
+                        for key in ['alive','gold','gems','experience','turns']: self.assertEqual(before[key],after[key])
+                    else:
+                        self.assertEqual(1,len(events)); self.assertEqual(outcome,events[0]['hook'])
+                        self.assertEqual(endingtarget,events[0]['enemy']['creaturehealth']); self.assertEqual('',after['badguy'])
+                        if outcome=='battle-victory':
+                            self.assertEqual(['1','1008','1','1014'],[after[k] for k in ['alive','gold','gems','experience']])
+                            self.assertEqual(1 if hp>177 else 0,events[0]['hp'])
+                            self.assertEqual(hp<=177,'restorative properties' in text)
+                        else: self.assertEqual(['0','0','0','900'],[after[k] for k in ['alive','gold','gems','experience']])
+                    f['rejected'](data); f['rejected'](old); self.assertEqual(events,terminal())
+            # Unsuccessful Lifetap cannot heal negative damage or compound it.
+            f['prepare']('MP',hitpoints=500,badguy=f['encode']({'enemies':[dict(f['enemy'],creatureattack=1000,creaturedefense=1000)],'options':{'type':'forest','didsurprise':1}}))
+            data=f['form'](3); status,body=f['request'](data=data); self.assertEqual(200,status,body[:2000])
+            after=f['snapshot']()[0]
+            self.assertEqual(301,int(after['hitpoints'])) # 500 - 22 riposte - 177 attack
+            self.assertEqual(100000,f['decode'](after['badguy'])['enemies'][0]['creaturehealth'])
+            self.assertEqual(4,f['decode'](after['bufflist'])['mp3']['rounds']); f['rejected'](data)
+
+    def test_specialty_duration_consumes_active_phases(self):
+        with self._specialty_accounting_fixture() as f:
+            # Every persistent specialty buff through its natural last round.
+            # DA1 uses the supported minion fallback; skeleton has no round TTL.
+            self.query("UPDATE settings SET value='0' WHERE setting='enablecompanions'")
+            for spec,levels in [('DA',[1,3,5]),('MP',[1,2,3,5]),('TS',[1,2,3,5])]:
+                for level in levels:
+                    with self.subTest(specialty=spec,level=level):
+                        f['prepare'](spec,hitpoints=5000,maxhitpoints=10000)
+                        data=f['form'](level); key=spec.lower()+str(level)
+                        for round_number in range(1,6):
+                            status,body=f['request'](data=data) if round_number==1 else self._ordinary_attack(f['request'])
+                            self.assertEqual(200,status,body[:2000]); buffs=f['decode'](f['snapshot']()[0]['bufflist'])
+                            if round_number<5: self.assertEqual(5-round_number,buffs[key]['rounds'])
+                            else: self.assertNotIn(key,buffs)
+                            self.assertEqual(str(9-level),self.query('SELECT value FROM module_userprefs WHERE userid=? AND modulename=? AND setting=?',[f['player'],f['modules'][spec],'uses'])[0]['value'])
+                        self.assertEqual(200,self._ordinary_attack(f['request'])[0]); self.assertNotIn(key,f['decode'](f['snapshot']()[0]['bufflist']))
+                        f['rejected'](data)
+            # Wither Soul cannot cause ordinary enemy retaliation while active.
+            # At one HP the player survives five rounds, then dies on round six.
+            f['prepare']('DA',hitpoints=1,badguy=f['encode']({'enemies':[dict(f['enemy'],creatureattack=1000)],'options':{'type':'forest','didsurprise':1}}))
+            data=f['form'](5)
+            for n in range(5):
+                self.assertEqual(200,(f['request'](data=data) if n==0 else self._ordinary_attack(f['request']))[0])
+                self.assertEqual('1',f['snapshot']()[0]['hitpoints'])
+            self.assertNotIn('da5',f['decode'](f['snapshot']()[0]['bufflist']))
+            self.assertEqual(200,self._ordinary_attack(f['request'])[0]); self.assertEqual('0',f['snapshot']()[0]['alive']); f['rejected'](data)
+
+    def test_specialty_buff_business_schema_rejects_corruption(self):
+        with self._specialty_accounting_fixture() as f:
+            self.query("UPDATE settings SET value='0' WHERE setting='enablecompanions'")
+            for spec,levels in [('DA',[1,3,5]),('MP',[1,2,3,5]),('TS',[1,2,3,5])]:
+                for level in levels:
+                    f['prepare'](spec,hitpoints=5000,maxhitpoints=10000)
+                    self.assertEqual(200,f['request'](data=f['form'](level))[0])
+                    valid=f['decode'](f['snapshot']()[0]['bufflist']); key=spec.lower()+str(level)
+                    old=f['form'](1)
+                    missing=dict(valid[key]); del missing['rounds']
+                    corrupt=[[],missing]
+                    for field,value in [('rounds',0),('rounds',-1),('rounds',6),('atkmod','NaN'),('lifetap',999),('used',2),('suspended','yes'),('schema','forged'),('tempstat-attack',100),('effectmsg','<img src=x onerror=alert(1)>')]:
+                        corrupt.append(dict(valid[key],**{field:value}))
+                    encoded=[f['encode']({key:value}) for value in corrupt]
+                    encoded += ['broken','O:8:"stdClass":0:{}',f['encode']('not a map'),f['encode']({key:None})]
+                    for state in encoded:
+                        with self.subTest(specialty=spec,level=level,state=state[:90]):
+                            self.query('UPDATE accounts SET bufflist=? WHERE acctid=?',[state,f['player']])
+                            before=f['snapshot']()
+                            for path,data in [('forest.php?op=specialty',None),('forest.php?op=specialty',old),('forest.php?op=fight',None)]:
+                                status,body=f['request'](path,data)
+                                self.assertEqual(409,status,body[:2000]); self.assertIn('Invalid stored buff state',body)
+                                self.assertEqual(before,f['snapshot']())
+                    self.query('UPDATE accounts SET bufflist=? WHERE acctid=?',[f['encode'](valid),f['player']])
+                    self.assertEqual(200,f['request']()[0])
+
+    def test_specialty_final_round_victory_and_defeat(self):
+        with self._specialty_accounting_fixture() as f, self._specialty_terminal_capture() as terminal:
+            self.query("UPDATE settings SET value='0' WHERE setting='enablecompanions'")
+            for spec,levels in [('DA',[1,3,5]),('MP',[1,2,3,5]),('TS',[1,2,3,5])]:
+                for level in levels:
+                    for outcome in ['victory','defeat']:
+                        if spec=='DA' and level==5 and outcome=='defeat': continue # zero attack AND defense
+                        with self.subTest(specialty=spec,level=level,outcome=outcome):
+                            f['prepare'](spec,hitpoints=5000,maxhitpoints=10000)
+                            data=f['form'](level); self.assertEqual(200,f['request'](data=data)[0])
+                            buffs=f['decode'](f['snapshot']()[0]['bufflist']); key=spec.lower()+str(level)
+                            buffs[key]['rounds']=1
+                            target=dict(f['enemy'],creaturehealth=1 if outcome=='victory' else 100000,creatureattack=1 if outcome=='victory' else 1000,creaturedefense=1 if outcome=='victory' else 1000)
+                            f['prepare'](spec,bufflist=f['encode'](buffs),hitpoints=500 if outcome=='victory' else 1,badguy=f['encode']({'enemies':[target],'options':{'type':'forest','didsurprise':1}}))
+                            old=f['form'](1); before=f['snapshot']()[0]
+                            status,body=self._ordinary_attack(f['request']); self.assertEqual(200,status,body[:2000])
+                            after=f['snapshot']()[0]; remaining=f['decode'](after['bufflist'])
+                            # Defense-only activation is skipped on early weapon victory
+                            # or lethal riposte, though its modifier already affected the roll.
+                            retained=(spec,level) in [('DA',3),('TS',1),('TS',3)]
+                            if retained: self.assertEqual(1,remaining[key]['rounds'])
+                            else: self.assertNotIn(key,remaining)
+                            self.assertEqual('1' if outcome=='victory' else '0',after['alive'])
+                            self.assertEqual('9',self.query('SELECT value FROM module_userprefs WHERE userid=? AND modulename=? AND setting=?',[f['player'],f['modules'][spec],'uses'])[0]['value'])
+                            f['rejected'](data); f['rejected'](old)
+
+    def test_specialty_gameplay_accounting(self):
+        # Fixed RNG, actual producer + battle + committed HTTP result. These
+        # explicit totals account for hits/ripostes as well as the named effect.
+        cases=[
+            ('DA',1,120,80,5000,99955,['Your skeleton warrior crumbles to dust.']),
+            ('DA',2,120,80,4914,99737,['doll hurting it for 263 points!','RIPOSTED for 24 points','hits you for 62 points']),
+            ('DA',3,1000,80,4911,99960,['You hit Accounting Target for 40 points','hits you for 89 points']),
+            ('DA',5,1000,80,5000,99951,['You hit Accounting Target for 47 points','RIPOSTE for 2 points']),
+            ('MP',1,120,80,5010,99955,['You regenerate for 10 health.']),
+            ('MP',2,120,80,4914,99999,['earth pummels Accounting Target for 1 points.','RIPOSTED for 24 points','hits you for 62 points']),
+            ('MP',3,120,80,5045,99955,['You are healed for 40 health.','You are healed for 5 health.']),
+            ('MP',5,120,80,5000,99955,['slightly singed by your lightning, but otherwise unharmed.']),
+            ('MP',5,1000,80,4823,99606,['hits you for 177 points','hitting for 354 damage.']),
+            ('TS',1,1000,80,4930,99960,['hits you for 70 points']),
+            ('TS',2,120,80,5000,99907,['You hit Accounting Target for 88 points','RIPOSTE for 5 points']),
+            ('TS',3,1000,80,5000,99942,['You hit Accounting Target for 40 points','RIPOSTE for 18 points']),
+            ('TS',5,120,80,5000,99823,['You hit Accounting Target for 135 points','RIPOSTE for 42 points']),
+            ('TS',5,1000,80,4896,99865,['You hit Accounting Target for 135 points','hits you for 104 points']),
+            ('DA',1,1,1,5000,99924,['Skeleton Warrior hits Accounting Target for 10 points','Skeleton Warrior RIPOSTES for 1 points']),
+        ]
+        with self._specialty_accounting_fixture() as f:
+            for spec,level,attack,defense,hp,targethp,messages in cases:
+                with self.subTest(specialty=spec,level=level,enemy_attack=attack,enemy_defense=defense):
+                    combat={'enemies':[dict(f['enemy'],creatureattack=attack,creaturedefense=defense)],'options':{'type':'forest','didsurprise':1}}
+                    f['prepare'](spec,badguy=f['encode'](combat),hitpoints=5000,maxhitpoints=10000)
+                    before=f['snapshot']()[0]; data=f['form'](level)
+                    status,body=f['request'](data=data); self.assertEqual(200,status,body[:2000])
+                    after=f['snapshot']()[0]; text=re.sub(r'\s+',' ',html.unescape(re.sub('<[^>]+>',' ',body)))
+                    self.assertEqual(hp,int(after['hitpoints'])); self.assertEqual(targethp,f['decode'](after['badguy'])['enemies'][0]['creaturehealth'])
+                    for message in messages: self.assertIn(message,text)
+                    for key in ['gold','gems','experience','attack','defense','alive']: self.assertEqual(before[key],after[key])
+                    self.assertEqual(str(9-level),self.query('SELECT value FROM module_userprefs WHERE userid=? AND modulename=? AND setting=?',[f['player'],f['modules'][spec],'uses'])[0]['value'])
+                    if spec=='DA' and level==1:
+                        companions=f['decode'](after['companions'])
+                        if attack==1: self.assertEqual(43,companions['skeleton_warrior']['hitpoints'])
+                        else: self.assertEqual([],companions)
+                    elif spec=='DA' and level==2: self.assertNotIn('da2',f['decode'](after['bufflist']))
+                    else: self.assertEqual(4,f['decode'](after['bufflist'])[spec.lower()+str(level)]['rounds'])
+                    f['rejected'](data); f['rejected'](data)
+                    self.assertEqual(200,f['request']('village.php')[0]); self.assertEqual(after,f['snapshot']()[0])
+            # Same deterministic unmodified damage roll: 177 incoming damage.
+            # Curse rounds 177*0.5 to 89; shield reflects 177*2 = 354.
+            f['prepare']('DA',badguy=f['encode']({'enemies':[dict(f['enemy'],creatureattack=1000)],'options':{'type':'forest','didsurprise':1}}),hitpoints=5000,maxhitpoints=10000)
+            self.assertEqual(200,self._ordinary_attack(f['request'])[0])
+            self.assertEqual(4823,int(f['snapshot']()[0]['hitpoints']))
+            self.assertEqual(99960,f['decode'](f['snapshot']()[0]['badguy'])['enemies'][0]['creaturehealth'])
+
+    def test_specialty_healing_aura_and_expiration(self):
+        with self._specialty_accounting_fixture() as f:
+            weak={'enemies':[dict(f['enemy'],creatureattack=1,creaturedefense=1)],'options':{'type':'forest','didsurprise':1}}
+            f['prepare']('DA',badguy=f['encode'](weak))
+            self.assertEqual(200,f['request'](data=f['form'](1))[0])
+            skeleton=f['decode'](f['snapshot']()[0]['companions'])['skeleton_warrior']
+            skeleton['hitpoints']=30
+            f['prepare']('MP',badguy=f['encode'](weak),hitpoints=995,maxhitpoints=1000,companions=f['encode']({'skeleton_warrior':skeleton}))
+            data=f['form'](1)
+            for round_number in range(1,6):
+                status,body=f['request'](data=data) if round_number==1 else self._ordinary_attack(f['request'])
+                self.assertEqual(200,status,body[:2000]); after=f['snapshot']()[0]
+                text=re.sub(r'\s+',' ',html.unescape(re.sub('<[^>]+>',' ',body)))
+                self.assertLess(text.index('regenerate'),text.index('You hit Accounting Target'))
+                self.assertIn('regenerates for '+str(3 if round_number<5 else 1)+' health due to your healing aura.',text)
+                self.assertIn('You regenerate for 5 health.' if round_number==1 else 'You have no wounds to regenerate.',text)
+                self.assertEqual('8',self.query('SELECT value FROM module_userprefs WHERE userid=? AND modulename=? AND setting=?',[f['player'],'specialtymysticpower','uses'])[0]['value'])
+                self.assertEqual(1000,int(after['hitpoints']))
+                self.assertEqual(min(43,30+3*round_number),f['decode'](after['companions'])['skeleton_warrior']['hitpoints'])
+                buffs=f['decode'](after['bufflist'])
+                if round_number<5: self.assertEqual(5-round_number,buffs['mp1']['rounds'])
+                else: self.assertNotIn('mp1',buffs)
+            self.query('UPDATE accounts SET hitpoints=990 WHERE acctid=?',[f['player']])
+            self.assertEqual(200,self._ordinary_attack(f['request'])[0]); self.assertEqual(990,int(f['snapshot']()[0]['hitpoints']))
+            f['rejected'](data)
+            # Lifetap cannot heal above max HP or remove HP from a full player.
+            for hp in [995,1000]:
+                f['prepare']('MP',hitpoints=hp,maxhitpoints=1000)
+                self.assertEqual(200,f['request'](data=f['form'](3))[0])
+                self.assertEqual(1000,int(f['snapshot']()[0]['hitpoints']))
+
+    def test_specialty_terminal_rewards_area_and_fallback(self):
+        with self._specialty_accounting_fixture() as f:
+            for hp in [263,262]:
+                f['prepare']('DA',badguy=f['encode']({'enemies':[dict(f['enemy'],creaturehealth=hp)],'options':{'type':'forest','didsurprise':1}}))
+                before=f['snapshot']()[0]; old=f['form'](1); data=f['form'](2)
+                status,body=f['request'](data=data); self.assertEqual(200,status,body[:2000])
+                after=f['snapshot']()[0]; text=re.sub(r'\s+',' ',html.unescape(re.sub('<[^>]+>',' ',body)))
+                self.assertIn('doll hurting it for 263 points!',text)
+                self.assertNotIn('You hit Accounting Target',text)
+                self.assertEqual(14,int(after['experience'])-int(before['experience']))
+                self.assertEqual(44,int(after['gold'])-int(before['gold']))
+                self.assertEqual(1,int(after['turns'])-int(before['turns']))
+                self.assertEqual(before['gems'],after['gems'])
+                self.assertEqual('7',self.query('SELECT value FROM module_userprefs WHERE userid=? AND modulename=? AND setting=?',[f['player'],'specialtydarkarts','uses'])[0]['value'])
+                self.assertEqual('',after['badguy']); self.assertEqual(before['hitpoints'],after['hitpoints'])
+                f['rejected'](data); f['rejected'](old)
+            f['prepare']('DA')
+            self.query("UPDATE settings SET value='0' WHERE setting='enablecompanions'")
+            data=f['form'](1); status,body=f['request'](data=data); self.assertEqual(200,status,body[:2000])
+            after=f['snapshot']()[0]
+            self.assertEqual(491,int(after['hitpoints']))
+            self.assertEqual(99985,f['decode'](after['badguy'])['enemies'][0]['creaturehealth'])
+            self.assertEqual([],f['decode'](after['companions']))
+            self.assertEqual(4,f['decode'](after['bufflist'])['da1']['rounds'])
+            f['rejected'](data)
+            f['prepare']('MP',badguy=f['encode']({'enemies':[dict(f['enemy'],creatureattack=1,creaturedefense=1),dict(f['enemy'],creatureid=2,creaturename='Accounting Second',creatureattack=1,creaturedefense=1)],'options':{'type':'forest','didsurprise':1}}))
+            old=f['form'](1); data=f['form'](2)
+            status,body=f['request'](data=data); self.assertEqual(200,status,body[:2000])
+            after=f['snapshot']()[0]; enemies=f['decode'](after['badguy'])['enemies']
+            self.assertEqual([99986,99973],[e['creaturehealth'] for e in enemies])
+            self.assertEqual([True,False],[e['istarget'] for e in enemies])
+            self.assertEqual(500,int(after['hitpoints']))
+            self.assertEqual(4,f['decode'](after['bufflist'])['mp2']['rounds'])
+            self.assertEqual('7',self.query('SELECT value FROM module_userprefs WHERE userid=? AND modulename=? AND setting=?',[f['player'],'specialtymysticpower','uses'])[0]['value'])
+            text=re.sub(r'\s+',' ',html.unescape(re.sub('<[^>]+>',' ',body)))
+            self.assertIn('earth pummels Accounting Target for 1 points.',text)
+            self.assertIn('earth pummels Accounting Second for 22 points.',text)
+            f['rejected'](data); f['rejected'](old)
+            # A server-side target change invalidates the complete state-bound form.
+            data=f['form'](2); combat=f['decode'](after['badguy'])
+            combat['enemies'][0]['istarget']=False; combat['enemies'][1]['istarget']=True
+            self.query('UPDATE accounts SET badguy=? WHERE acctid=?',[f['encode'](combat),f['player']])
+            f['rejected'](data)
+            # This proves live-target binding, not dead-target progression.
+
+
+    def test_darkarts_companion_business_state_http(self):
+        # Real Forest POST action proves the producer/consumer representation.
+        # Broader route and complete module certification remain separate blockers.
+        player=self.query('SELECT acctid FROM accounts WHERE login=?',['WebPlayer'])[0]['acctid']
+        original=self.query('SELECT * FROM accounts WHERE acctid=?',[player])[0]
+        prefs=self.query('SELECT * FROM module_userprefs WHERE userid=?',[player])
+        settings=self.query('SELECT * FROM settings WHERE setting=?',['enablecompanions'])
+        registry=self.query('SELECT modulename,active FROM modules')
+        self.query('UPDATE modules SET active=0')
+        self.query("UPDATE modules SET active=1 WHERE modulename='specialtydarkarts'")
+        call=self._security_client()
+        def request(url,form=None,fixture=None): self._security_allow(player,url); return call(url,form,fixture=fixture)
+        def encode(value):
+            return subprocess.run([shutil.which('php'),'-r','echo serialize(json_decode(stream_get_contents(STDIN),true));'],input=json.dumps(value),text=True,capture_output=True,cwd=ROOT,check=True).stdout
+        def companions():
+            encoded=self.query('SELECT companions FROM accounts WHERE acctid=?',[player])[0]['companions']
+            code="require 'src/Security/ScalarState.php'; echo json_encode(\\Resurrection\\Security\\ScalarState::read(stream_get_contents(STDIN)),JSON_THROW_ON_ERROR);"
+            return json.loads(subprocess.run([shutil.which('php'),'-r',code],input=encoded,text=True,capture_output=True,cwd=ROOT,check=True).stdout)
+        def snapshot():
+            return self.query('SELECT gold,gems,experience,hitpoints,badguy,companions,bufflist FROM accounts WHERE acctid=?',[player]) + self.query("SELECT setting,value FROM module_userprefs WHERE userid=? AND modulename='specialtydarkarts' ORDER BY setting",[player])
+        try:
+            self.query("INSERT INTO settings(setting,value) VALUES ('enablecompanions','1') ON DUPLICATE KEY UPDATE value='1'")
+            enemy=self.query('SELECT * FROM creatures ORDER BY creatureid LIMIT 1')[0]
+            enemy.update(creaturehealth=1000000,creatureattack=1,creaturedefense=0,creaturelevel=10,playerstarthp=10000,diddamage=0)
+            self.query("UPDATE accounts SET level=10,alive=1,race='Human',specialty='DA',dragonkills=0,dragonpoints='a:0:{}',badguy=?,companions='a:0:{}',bufflist='a:0:{}',hitpoints=10000,maxhitpoints=10000,attack=1,defense=10000,specialinc='' WHERE acctid=?",[encode({'enemies':[enemy],'options':{'type':'forest'}}),player])
+            for key,value in [('skill','15'),('uses','5')]:
+                self.query("INSERT INTO module_userprefs(modulename,setting,userid,value) VALUES ('specialtydarkarts',?,?,?) ON DUPLICATE KEY UPDATE value=VALUES(value)",[key,player,value])
+            status,body=request('forest.php?op=specialty'); self.assertEqual(200,status,body[:2000])
+            form=self._security_fields(body)|{'level':'1'}
+            status,body=request('forest.php?op=specialty',form); self.assertEqual(200,status,body[:2000])
+            skeleton=companions()['skeleton_warrior']
+            consumed=snapshot()
+            self.assertEqual(409,request('forest.php?op=specialty',form)[0]); self.assertEqual(consumed,snapshot())
+            self.assertEqual(43,skeleton['maxhitpoints']); self.assertGreater(skeleton['hitpoints'],0)
+            self.assertEqual(26.5,skeleton['attack']); self.assertEqual(14.5,skeleton['defense'])
+            self.assertEqual({'fight':True},skeleton['abilities']); self.assertIs(skeleton['used'],True)
+            self.assertEqual('4',self.query("SELECT value FROM module_userprefs WHERE userid=? AND modulename='specialtydarkarts' AND setting='uses'",[player])[0]['value'])
+            call=self._security_client(); self.assertEqual(200,request('village.php')[0]); self.assertEqual(skeleton,companions()['skeleton_warrior'])
+            # Voodoo's positive minimum damage deterministically ends a one-HP fight.
+            # A living skeleton has no expireafterfight flag and must survive victory.
+            terminal={'enemies':[dict(enemy,creaturehealth=1)],'options':{'type':'forest'}}
+            self.query('UPDATE accounts SET badguy=? WHERE acctid=?',[encode(terminal),player])
+            status,body=request('forest.php?op=specialty'); self.assertEqual(200,status,body[:2000])
+            victoryform=self._security_fields(body)|{'level':'2'}
+            status,body=request('forest.php?op=specialty',victoryform); self.assertEqual(200,status,body[:2000])
+            self.assertEqual('',self.query('SELECT badguy FROM accounts WHERE acctid=?',[player])[0]['badguy'])
+            retained=companions()['skeleton_warrior']; self.assertEqual(skeleton['hitpoints'],retained['hitpoints'])
+            self.assertEqual(skeleton['attack'],retained['attack']); before=snapshot()
+            self.assertEqual(409,request('forest.php?op=specialty',victoryform)[0]); self.assertEqual(before,snapshot())
+            self.assertEqual(200,self._advance_normal_day(request,player)[0]); self.assertEqual(retained,companions()['skeleton_warrior'])
+            # A fixed RNG seed drives the real companion damage/removal path.
+            lethal={'enemies':[dict(enemy,creaturehealth=100000000,creatureattack=100000,creaturedefense=100000)],'options':{'type':'forest'}}
+            wounded=dict(skeleton,hitpoints=1)
+            self.query('UPDATE accounts SET badguy=?,companions=?,hitpoints=1000000000,maxhitpoints=1000000000,attack=1,defense=1 WHERE acctid=?',[encode(lethal),encode({'skeleton_warrior':wounded}),player])
+            status,body=request('forest.php?op=specialty'); self.assertEqual(200,status,body[:2000])
+            deathform=self._security_fields(body)|{'level':'3'}
+            status,body=request('forest.php?op=specialty',deathform,fixture='skeleton-death')
+            self.assertEqual(200,status,body[:2000]); self.assertIn('Your skeleton warrior crumbles to dust.',body)
+            self.assertEqual([],companions()); before=snapshot()
+            self.assertEqual(409,request('forest.php?op=specialty',deathform,fixture='skeleton-death')[0]); self.assertEqual(before,snapshot())
+            status,body=request('forest.php?op=specialty'); self.assertEqual(200,status)
+            self.assertEqual(200,request('forest.php?op=specialty',self._security_fields(body)|{'level':'2'},fixture='skeleton-death')[0]); self.assertEqual([],companions())
+            # Return to a live encounter before injecting malformed persisted companions.
+            self.query('UPDATE accounts SET badguy=? WHERE acctid=?',[encode({'enemies':[enemy],'options':{'type':'forest'}}),player])
+            # Valid persistent runtime flags and injury survive read-only hydration.
+            for flags in [{'used':False,'suspended':True},{'used':True,'suspended':False}]:
+                state=dict(skeleton,hitpoints=1,**flags)
+                self.query('UPDATE accounts SET companions=? WHERE acctid=?',[encode({'skeleton_warrior':state}),player])
+                self.assertEqual(200,request('village.php')[0]); self.assertEqual(state,companions()['skeleton_warrior'])
+            malformed=[None,{},dict(skeleton,hitpoints=0),dict(skeleton,hitpoints=-1),dict(skeleton,hitpoints=44),
+                dict(skeleton,hitpoints='43'),dict(skeleton,maxhitpoints=2147483648),dict(skeleton,attack=27.5),
+                dict(skeleton,defense=[]),dict(skeleton,used=1),dict(skeleton,suspended='1'),
+                dict(skeleton,rounds=1),dict(skeleton,cannotdie=True),dict(skeleton,expireafterfight=True),
+                dict(skeleton,abilities={'fight':True,'magic':100}),dict(skeleton,extra={'nested':1})]
+            for key in ['name','hitpoints','maxhitpoints','attack','defense','abilities','ignorelimit','dyingtext']:
+                state=dict(skeleton); del state[key]; malformed.append(state)
+            payloads=[encode({'skeleton_warrior':state}) for state in malformed]
+            payloads += ['broken','a:0:{}junk','O:8:"stdClass":0:{}','a:1:{s:16:"skeleton_warrior";O:8:"stdClass":0:{}}',encode('wrong root')]
+            for payload in payloads:
+                with self.subTest(payload=payload[:100]):
+                    self.query('UPDATE accounts SET companions=? WHERE acctid=?',[payload,player]); before=snapshot()
+                    for fields in [None,{'skill':'DA','l':'1','companions':'forged'}]:
+                        status,body=request('forest.php?op=specialty',fields)
+                        self.assertEqual(409,status,body[:1000]); self.assertEqual(before,snapshot())
+            # Recovery is explicit fixture/admin repair, never silent state deletion.
+            self.query('UPDATE accounts SET companions=? WHERE acctid=?',[encode({'skeleton_warrior':skeleton}),player])
+            self.assertEqual(200,request('village.php')[0]); self.assertEqual(skeleton,companions()['skeleton_warrior'])
+            # Retained Dragon lifecycle, through a real win and its generated continuation.
+            # This is NOT certification of the still-legacy Dragon HTTP authority.
+            dragon={'creaturename':'The Green Dragon','creaturelevel':18,'creatureweapon':'Great Flaming Maw',
+                'creatureattack':1,'creaturedefense':1,'creaturehealth':1,'diddamage':0,'type':'dragon'}
+            self.query("UPDATE accounts SET badguy=?,level=15,hitpoints=150,maxhitpoints=150,attack=1,defense=1,bufflist='a:0:{}' WHERE acctid=?",[encode(dragon),player])
+            self.query("UPDATE module_userprefs SET value='5' WHERE userid=? AND modulename='specialtydarkarts' AND setting='uses'",[player])
+            status,body=request('dragon.php?op=specialty'); self.assertEqual(200,status,body[:2000])
+            forms=[part for action,part in re.findall(r'<form[^>]*action="([^"]+)"[^>]*>(.*?)</form>',body,re.S) if action=='dragon.php?op=specialty']
+            status,body=request('dragon.php?op=specialty',self._security_fields(forms[0])|{'level':'2'}); self.assertEqual(200,status,body[:2000])
+            self.assertIn('skeleton_warrior',companions())
+            link=re.search(r'dragon\.php\?op=prologue1',body)
+            self.assertIsNotNone(link,body[:2000]); self.assertEqual(200,request('dragon.php?op=prologue1',self._security_fields(body,'dragon.php?op=prologue1'))[0])
+            self.assertEqual([],companions()); self.assertEqual('1',self.query('SELECT dragonkills FROM accounts WHERE acctid=?',[player])[0]['dragonkills'])
+        finally:
+            self.query('UPDATE accounts SET '+','.join(k+'=?' for k in original)+' WHERE acctid=?',[*original.values(),player])
+            self.query('DELETE FROM module_userprefs WHERE userid=?',[player])
+            for row in prefs: self.query('INSERT INTO module_userprefs(modulename,setting,userid,value) VALUES (?,?,?,?)',[row['modulename'],row['setting'],player,row['value']])
+            self.query("DELETE FROM settings WHERE setting='enablecompanions'")
+            for row in settings: self.query('INSERT INTO settings(setting,value) VALUES (?,?)',[row['setting'],row['value']])
+            for row in registry: self.query('UPDATE modules SET active=? WHERE modulename=?',[row['active'],row['modulename']])
+
+
+    def test_fairy_settings_and_dragon_carry_http(self):
+        player=self.query('SELECT acctid FROM accounts WHERE login=?',['WebPlayer'])[0]['acctid']
+        original=self.query('SELECT * FROM accounts WHERE acctid=?',[player])[0]
+        prefs=self.query('SELECT * FROM module_userprefs WHERE userid=?',[player])
+        self.query('UPDATE modules SET active=1'); call=self._security_client()
+        settings=self.query('SELECT setting,value FROM module_settings WHERE modulename=?',['fairy'])
+        def request(url,form=None): self._security_allow(player,url); return call(url,form)
+        try:
+            for carry in [1,0]:
+                self.query('UPDATE accounts SET '+','.join(k+'=?' for k in original if k!='acctid')+' WHERE acctid=?',[*[v for k,v in original.items() if k!='acctid'],player])
+                self.query("UPDATE accounts SET alive=1,level=15,dragonkills=0,dragonpoints='a:0:{}',maxhitpoints=165,hitpoints=165,gems=100,bufflist='a:0:{}',attack=100000,defense=100000,race='Human',specialty='DA',specialinc='' WHERE acctid=?",[player])
+                for module in ['cedrikspotions','fairy']:
+                    self.query('INSERT INTO module_userprefs(modulename,setting,userid,value) VALUES (?,?,?,?) ON DUPLICATE KEY UPDATE value=VALUES(value)',[module,'extrahps',player,'15' if module=='fairy' else '0'])
+                # Save Fairy's actual declared settings through the certified editor.
+                self.query('UPDATE accounts SET superuser=128 WHERE acctid=?',[player]); call=self._security_client()
+                base='configuration.php?op=modulesettings&module=fairy'; save=base+'&save=1'
+                for invalid in [{'carrydk':'2'},{'hptoaward':'0'},{'hptoaward':'6'},{'fftoaward':'6'}]:
+                    _,body=request(base); form=self._security_fields(body,save)
+                    self.assertEqual(400,request(save,{**form,**invalid})[0])
+                _,body=request(base); form={**self._security_fields(body,save),'carrydk':str(carry),'hptoaward':'5','fftoaward':'5'}
+                self.assertEqual(200,request(save,form)[0]); self.assertEqual(409,request(save,form)[0])
+                self.query('UPDATE accounts SET superuser=0 WHERE acctid=?',[player]); call=self._security_client()
+                enemy={'creaturename':'Synthetic Green Dragon','creatureweapon':'Padded stick','creaturelevel':18,'creatureattack':1,'creaturedefense':1,'creaturehealth':1,'diddamage':0,'type':'dragon'}
+                encoded=subprocess.run([shutil.which('php'),'-r','echo serialize(json_decode(stream_get_contents(STDIN),true));'],input=json.dumps(enemy),text=True,capture_output=True,cwd=ROOT,check=True).stdout
+                self.query('UPDATE accounts SET badguy=? WHERE acctid=?',[encoded,player])
+                # Exercise the real battle with a deterministic roll, not a probabilistic victory.
+                with self._seeded_module_actions('header-dragon') as seed:
+                    seed(0)
+                    status,body=request('dragon.php?op=fight'); self.assertEqual(200,status,body[:1500])
+                    status,body=request('dragon.php?op=fight',self._security_fields(body,'dragon.php?op=fight')); self.assertEqual(200,status,body[:1500])
+                link=re.search(r'href=[\'"](dragon.php\?op=prologue1[^\'"]*)',body); self.assertIsNotNone(link,body[:1500])
+                status,body=request(html.unescape(link.group(1)),self._security_fields(body,'dragon.php?op=prologue1')); self.assertEqual(200,status,body[:1500])
+                state=self.query('SELECT dragonkills,maxhitpoints,bufflist FROM accounts WHERE acctid=?',[player])[0]
+                self.assertEqual('1',state['dragonkills']); self.assertEqual(str(25 if carry else 10),state['maxhitpoints']); self.assertNotIn('transmute',state['bufflist'])
+                self.assertEqual(str(15 if carry else 0),self.query('SELECT value FROM module_userprefs WHERE userid=? AND modulename=? AND setting=?',[player,'fairy','extrahps'])[0]['value'])
+        finally:
+            self.query('UPDATE accounts SET '+','.join(k+'=?' for k in original if k!='acctid')+' WHERE acctid=?',[*[v for k,v in original.items() if k!='acctid'],player])
+            self.query('DELETE FROM module_userprefs WHERE userid=?',[player])
+            for row in prefs: self.query('INSERT INTO module_userprefs(modulename,setting,userid,value) VALUES (?,?,?,?)',[row['modulename'],row['setting'],player,row['value']])
+            self.query('DELETE FROM module_settings WHERE modulename=?',['fairy'])
+            for row in settings: self.query('INSERT INTO module_settings(modulename,setting,value) VALUES (?,?,?)',['fairy',row['setting'],row['value']])
+            self.query('UPDATE modules SET active=0')
+
+    def test_potions_dragon_reset_persistence_http(self):
+        player=self.query('SELECT acctid FROM accounts WHERE login=?',['WebPlayer'])[0]['acctid']
+        original=self.query('SELECT * FROM accounts WHERE acctid=?',[player])[0]
+        prefs=self.query('SELECT * FROM module_userprefs WHERE userid=?',[player])
+        self.query('UPDATE modules SET active=1'); call=self._security_client()
+        settings=self.query('SELECT setting,value FROM module_settings WHERE modulename=?',['cedrikspotions'])
+        def request(url,form=None): self._security_allow(player,url); return call(url,form)
+        def setting(key,value): self.query('INSERT INTO module_settings(modulename,setting,value) VALUES (?,?,?) ON DUPLICATE KEY UPDATE value=VALUES(value)',['cedrikspotions',key,str(value)])
+        def buy(wish):
+            base='runmodule.php?module=cedrikspotions&op=gems'; _,body=request(base)
+            url=html.unescape(re.search(r'<form action=[\'"]([^\'"]+)',body).group(1))
+            status,body=request(url,dict(self._security_fields(body),wish=str(wish),gemcount='10')); self.assertEqual(200,status,body[:1500])
+        try:
+            for carry in [1,0]:
+                self.query('UPDATE accounts SET '+','.join(k+'=?' for k in original if k!='acctid')+' WHERE acctid=?',[*[v for k,v in original.items() if k!='acctid'],player])
+                self.query("UPDATE accounts SET alive=1,level=15,dragonkills=0,dragonpoints='a:0:{}',maxhitpoints=150,hitpoints=150,gems=100,bufflist='a:0:{}',attack=100000,defense=100000,race='Human',specialty='DA',specialinc='' WHERE acctid=?",[player])
+                for module in ['cedrikspotions','fairy']:
+                    self.query('INSERT INTO module_userprefs(modulename,setting,userid,value) VALUES (?,?,?,?) ON DUPLICATE KEY UPDATE value=VALUES(value)',[module,'extrahps',player,'0'])
+                for key,value in {'carrydk':carry,'random':0,'maxcost':2,'vitalgain':3,'transcost':2,'transmuteturns':20,'survive':1,'atkmod':'.5','defmod':'.75'}.items(): setting(key,value)
+                call=self._security_client(); buy(2); buy(5)
+                self.assertEqual('165',self.query('SELECT maxhitpoints FROM accounts WHERE acctid=?',[player])[0]['maxhitpoints'])
+                self.assertEqual('15',self.query('SELECT value FROM module_userprefs WHERE userid=? AND modulename=? AND setting=?',[player,'cedrikspotions','extrahps'])[0]['value'])
+                enemy={'creaturename':'Synthetic Green Dragon','creatureweapon':'Padded stick','creaturelevel':18,'creatureattack':1,'creaturedefense':1,'creaturehealth':1,'diddamage':0,'type':'dragon'}
+                encoded=subprocess.run([shutil.which('php'),'-r','echo serialize(json_decode(stream_get_contents(STDIN),true));'],input=json.dumps(enemy),text=True,capture_output=True,cwd=ROOT,check=True).stdout
+                self.query('UPDATE accounts SET badguy=? WHERE acctid=?',[encoded,player])
+                # Exercise the real battle with a deterministic roll, not a probabilistic victory.
+                with self._seeded_module_actions('header-dragon') as seed:
+                    seed(0)
+                    status,body=request('dragon.php?op=fight'); self.assertEqual(200,status,body[:1500])
+                    status,body=request('dragon.php?op=fight',self._security_fields(body,'dragon.php?op=fight')); self.assertEqual(200,status,body[:1500])
+                link=re.search(r'href=[\'"](dragon.php\?op=prologue1[^\'"]*)',body); self.assertIsNotNone(link,body[:1500])
+                status,body=request(html.unescape(link.group(1)),self._security_fields(body,'dragon.php?op=prologue1')); self.assertEqual(200,status,body[:1500])
+                state=self.query('SELECT dragonkills,maxhitpoints,bufflist FROM accounts WHERE acctid=?',[player])[0]
+                self.assertEqual('1',state['dragonkills']); self.assertEqual(str(25 if carry else 10),state['maxhitpoints']); self.assertNotIn('transmute',state['bufflist'])
+                self.assertEqual(str(15 if carry else 0),self.query('SELECT value FROM module_userprefs WHERE userid=? AND modulename=? AND setting=?',[player,'cedrikspotions','extrahps'])[0]['value'])
+        finally:
+            self.query('UPDATE accounts SET '+','.join(k+'=?' for k in original if k!='acctid')+' WHERE acctid=?',[*[v for k,v in original.items() if k!='acctid'],player])
+            self.query('DELETE FROM module_userprefs WHERE userid=?',[player])
+            for row in prefs: self.query('INSERT INTO module_userprefs(modulename,setting,userid,value) VALUES (?,?,?,?)',[row['modulename'],row['setting'],player,row['value']])
+            self.query('DELETE FROM module_settings WHERE modulename=?',['cedrikspotions'])
+            for row in settings: self.query('INSERT INTO module_settings(modulename,setting,value) VALUES (?,?,?)',['cedrikspotions',row['setting'],row['value']])
+            self.query('UPDATE modules SET active=0')
+
+    def test_darkhorse_mounted_entry_and_exit_http(self):
+        player=self.query('SELECT acctid FROM accounts WHERE login=?',['WebPlayer'])[0]['acctid']
+        original=self.query('SELECT hashorse,specialinc,specialmisc,gold,superuser,turns FROM accounts WHERE acctid=?',[player])[0]
+        forest_saved=self.query('SELECT value FROM settings WHERE setting=?',['forestchance'])
+        saved=self.query('SELECT value FROM module_settings WHERE modulename=? AND setting=?',['darkhorse','tavernname'])
+        self.query('UPDATE modules SET active=1')
+        self.query('INSERT INTO mounts(mountname,mountcategory) VALUES (?,?)',['Tavern fixture','Fixture'])
+        ident=self.query('SELECT mountid FROM mounts WHERE mountname=?',['Tavern fixture'])[0]['mountid']
+        call=self._security_client(); url='runmodule.php?module=darkhorse&op=enter'
+        def request(path,data=None): self._security_allow(player,path); return call(path,data)
+        def state(): return self.query('SELECT hashorse,specialinc,specialmisc,gold FROM accounts WHERE acctid=?',[player])
+        def preference(value): self.query('INSERT INTO module_objprefs(modulename,objtype,setting,objid,value) VALUES (?,?,?,?,?) ON DUPLICATE KEY UPDATE value=VALUES(value)',['darkhorse','mounts','findtavern',ident,str(value)])
+        try:
+            self.query("UPDATE accounts SET hashorse=0,specialinc='',specialmisc='',gold=1000 WHERE acctid=?",[player])
+            self.assertIn(self._security_client(login=None)(url)[0],[302,303,403])
+            self.assertEqual(403,request(url+'&mountid='+str(ident)+'&findtavern=1')[0])
+            self.query('UPDATE accounts SET hashorse=? WHERE acctid=?',[ident,player])
+            for value in ['0','2','true','1e0']:
+                preference(value); before=state(); self.assertEqual(403,request(url)[0]); self.assertEqual(before,state())
+            preference(1); before=state(); status,body=request(url); self.assertEqual(200,status); self.assertEqual(before,state())
+            form=self._security_fields(body,url)
+            for bad in [{},dict(form,csrf_token='bad')]: self.assertEqual(403,request(url,bad)[0]); self.assertEqual(before,state())
+            # Authoritative object changes invalidate an already rendered entrance.
+            self.query('UPDATE mounts SET mountname=? WHERE mountid=?',['Changed Tavern fixture',ident]); self.assertEqual(409,request(url,form)[0])
+            _,body=request(url); form=self._security_fields(body,url)
+            preference(0); self.assertEqual(403,request(url,form)[0]); preference(1)
+            # The same typed settings editor supplies the real displayed tavern name.
+            self.query('UPDATE accounts SET superuser=128 WHERE acctid=?',[player]); call=self._security_client()
+            edit='configuration.php?op=modulesettings&module=darkhorse'; save=edit+'&save=1'
+            _,body=request(edit); title='Configured Tavern <script>safe</script>'
+            self.assertEqual(200,request(save,dict(self._security_fields(body,save),tavernname=title))[0])
+            self.query('UPDATE accounts SET superuser=0 WHERE acctid=?',[player]); call=self._security_client()
+            _,body=request(url); form=dict(self._security_fields(body,url),mountid='999',findtavern='0',gold='0')
+            status,body=request(url,form); self.assertEqual(200,status,body[:2000]); self.assertIn('Configured Tavern',body); self.assertNotIn('<script>safe</script>',body)
+            self.assertEqual('module:darkhorse',state()[0]['specialinc']); self.assertEqual('1000',state()[0]['gold']); self.assertEqual(409,request(url,form)[0])
+            leave='forest.php?op=leave'; before=state(); _,body=request(leave); self.assertEqual(before,state()); form=self._security_fields(body,leave)
+            self.assertEqual(403,request(leave,{})[0]); self.assertEqual(before,state())
+            self.assertEqual(200,request(leave,form)[0]); self.assertEqual('',state()[0]['specialinc']); after=state()
+            # After the event has ended, the same POST cannot re-enter/charge/reward.
+            request(leave,form); self.assertEqual(after,state())
+            # The real Forest selector discovers the encounter without a tavern mount.
+            self.query('UPDATE modules SET active=0'); self.query('UPDATE modules SET active=1 WHERE modulename=?',['darkhorse'])
+            self.query('INSERT INTO settings(setting,value) VALUES (?,?) ON DUPLICATE KEY UPDATE value=VALUES(value)',['forestchance','100'])
+            self.query("UPDATE accounts SET hashorse=0,specialinc='',turns=10 WHERE acctid=?",[player])
+            _,body=request('forest.php?eventhandler=module:darkhorse&op=tavern'); self.assertEqual('',state()[0]['specialinc'])
+            status,body=request('forest.php?op=search'); self.assertEqual(200,status,body[:1000])
+            status,body=request('forest.php?op=search',self._security_fields(body,'forest.php?op=search')); self.assertEqual(200,status,body[:1000])
+            status,body=request('forest.php'); self.assertEqual(200,status,body[:1000]); self.assertIn('cluster of trees',body)
+            self.assertEqual('module:darkhorse',state()[0]['specialinc']); self.assertEqual('1000',state()[0]['gold'])
+            _,body=request('forest.php?op=tavern'); self.assertIn('Configured Tavern',body)
+            leave='forest.php?op=leaveleave'; _,body=request(leave); form=self._security_fields(body,leave)
+            self.assertEqual(200,request(leave,form)[0]); self.assertEqual('',state()[0]['specialinc'])
+            self.query('UPDATE accounts SET hashorse=? WHERE acctid=?',[ident,player]); _,body=request(url); form=self._security_fields(body,url)
+            self.query('DELETE FROM mounts WHERE mountid=?',[ident]); self.assertEqual(403,request(url,form)[0])
+        finally:
+            self.query('DELETE FROM settings WHERE setting=?',['forestchance'])
+            if forest_saved: self.query('INSERT INTO settings(setting,value) VALUES (?,?)',['forestchance',forest_saved[0]['value']])
+            self.query('DELETE FROM module_objprefs WHERE objtype=? AND objid=?',['mounts',ident]); self.query('DELETE FROM mounts WHERE mountid=?',[ident])
+            self.query('UPDATE accounts SET '+','.join(k+'=?' for k in original)+' WHERE acctid=?',[*original.values(),player])
+            if saved: self.query('UPDATE module_settings SET value=? WHERE modulename=? AND setting=?',[saved[0]['value'],'darkhorse','tavernname'])
+            self.query('UPDATE modules SET active=0')
+
+
+    @contextmanager
+    def _normal_day_fixture(self):
+        with self._dragon_point_fixture() as f:
+            player=f['player']; original_prefs=self.query('SELECT * FROM module_userprefs WHERE userid=?',[player])
+            original_settings=self.query('SELECT * FROM settings'); original_module_settings=self.query('SELECT * FROM module_settings')
+            def setting(key,value): self.query('INSERT INTO settings(setting,value) VALUES (?,?) ON DUPLICATE KEY UPDATE value=VALUES(value)',[key,str(value)])
+            def pref(module,key,value): self.query('INSERT INTO module_userprefs(modulename,setting,userid,value) VALUES (?,?,?,?) ON DUPLICATE KEY UPDATE value=VALUES(value)',[module,key,player,str(value)])
+            def prepare(**patch):
+                f['prepare'](3,['ff','hp','ff'],race='Human',specialty='DA',lastnewday='',lasthit='2000-01-01 00:00:00',
+                    resurrections=2,level=6,seenmaster=1,playerfights=0,transferredtoday=2,amountouttoday=100,seendragon=1,
+                    fedmount=1,boughtroomtoday=1,soulpoints=1,gravefights=0,hauntedby='A ghost',goldinbank=1000,
+                    hashorse=0,restorepage='village.php',charm=10,marriedto=0,**patch)
+                self.query('DELETE FROM module_userprefs WHERE userid=?',[player])
+                for module,key in [('dag','bounties'),('drinks','harddrinks'),('lovers','seenlover'),('outhouse','usedouthouse'),
+                    ('outhouse','stage'),('sethsong','been'),('crazyaudrey','played'),('crazyaudrey','paidvisit'),('game_fivesix','playstoday')]: pref(module,key,2)
+                pref('drinks','drunkeness',70)
+                for module in ['specialtydarkarts','specialtymysticpower','specialtythiefskills']:
+                    pref(module,'skill',9);pref(module,'uses',0)
+            def form():
+                status,body=f['request'](); self.assertEqual(200,status,body[:2000])
+                return self._security_fields(body)|{'newday':'normal'}
+            def state():
+                account=self.query('SELECT * FROM accounts WHERE acctid=?',[player])[0]
+                for key in ['laston','gentime','gentimecount','gensize','allowednavs','restorepage','lastip','uniqueid']: account.pop(key,None)
+                return account,self.query('SELECT modulename,setting,value FROM module_userprefs WHERE userid=? ORDER BY modulename,setting',[player]),self.query('SELECT * FROM news WHERE accountid=? ORDER BY newsid',[player])
+            try:
+                for key,value in {'turns':10,'mininterest':10,'maxinterest':10,'fightsforinterest':7,'maxgoldforinterest':100000,'pvpday':4,'gravefightsperday':12,'specialtybonus':2}.items(): setting(key,value)
+                self.query("UPDATE module_settings SET value='1' WHERE modulename='racehuman' AND setting='bonus'")
+                prepare()
+                yield f|dict(prepare=prepare,form=form,state=state,setting=setting,pref=pref)
+            finally:
+                self.query('DELETE FROM module_userprefs WHERE userid=?',[player])
+                for row in original_prefs: pref(row['modulename'],row['setting'],row['value'])
+                self.query('DELETE FROM settings')
+                for row in original_settings: setting(row['setting'],row['value'])
+                self.query('DELETE FROM module_settings')
+                for row in original_module_settings: self.query('INSERT INTO module_settings(modulename,setting,value) VALUES (?,?,?)',[row['modulename'],row['setting'],row['value']])
+
+    def test_normal_newday_get_core_living_dead_and_hook_inventory(self):
+        with self._normal_day_fixture() as f, self._seeded_module_actions('pre-newday') as seed:
+            hooks=self.query("SELECT h.modulename,h.location FROM module_hooks h JOIN modules m USING(modulename) WHERE m.active=1 AND h.location IN ('newday','newday-intercept') ORDER BY h.modulename")
+            expected=['crazyaudrey','dag','drinks','game_fivesix','lovers','outhouse','raceelf','racehuman','racetroll','sethsong','specialtydarkarts','specialtymysticpower','specialtythiefskills']
+            self.assertEqual(expected,[r['modulename'] for r in hooks]);self.assertEqual({'newday'},{r['location'] for r in hooks})
+            for alive in [1,0]:
+                f['prepare']();self.query('UPDATE accounts SET alive=?,hitpoints=? WHERE acctid=?',[alive,8 if alive else 0,f['player']]);seed(1)
+                before=f['state']();form=f['form'](); self.assertEqual(before,f['state']()); f['form']();self.assertEqual(before,f['state']())
+                status,body=f['request'](data=form);self.assertEqual(200,status,body[:2500]); after,prefs,news=f['state']()
+                self.assertEqual(2,int(after['age']));self.assertEqual(2+(not alive),int(after['resurrections']));self.assertEqual('1',after['alive'])
+                self.assertEqual('100',after['hitpoints']);self.assertEqual('0',after['seenmaster']);self.assertEqual('1100',after['goldinbank'])
+                # Fixed 10% interest consumes no RNG; seed 1 gives (0,1), spirits +1.
+                self.assertEqual('1',after['spirits']);self.assertEqual('12',after['turns']) # 10+1+2-1+1-1
+                for key,value in {'playerfights':4,'transferredtoday':0,'amountouttoday':0,'seendragon':0,'fedmount':0,'boughtroomtoday':0,'soulpoints':80,'gravefights':12}.items(): self.assertEqual(value,int(after[key]),key)
+                self.assertEqual('',after['hauntedby']);self.assertEqual('2000-01-01 00:00:00',after['recentcomments']);self.assertNotEqual(before[0]['lasthit'],after['lasthit']);self.assertRegex(after['lastnewday'],r'^\d{4}-\d{2}-\d{2}$')
+                self.assertEqual(before[2],news);self.assertNotIn('Ramius',body)
+                values={(r['modulename'],r['setting']):r['value'] for r in prefs}
+                for module in ['specialtydarkarts','specialtymysticpower','specialtythiefskills']: self.assertEqual('5' if module=='specialtydarkarts' else '3',values[(module,'uses')])
+                for module,key in [('dag','bounties'),('drinks','harddrinks'),('drinks','drunkeness'),('lovers','seenlover'),('outhouse','usedouthouse'),('outhouse','stage'),('sethsong','been'),('crazyaudrey','played'),('crazyaudrey','paidvisit'),('game_fivesix','playstoday')]: self.assertEqual('0',values[(module,key)])
+                settled=f['state'](); self.assertEqual(409,f['request'](data=form)[0]);self.assertEqual(settled,f['state']())
+                self.assertNotIn('name="newday"',f['request']()[1]);self.assertEqual(settled,f['state']())
+                # Changing presentation/legacy day fields cannot undo the durable guard.
+                self.query("UPDATE accounts SET lasthit='2000-01-01 00:00:00' WHERE acctid=?",[f['player']])
+                self.assertNotIn('name="newday"',f['request']()[1])
+                self.assertEqual(200,f['request']('village.php')[0])
+                # The same durable day cannot bypass newly incomplete onboarding.
+                self.query("UPDATE accounts SET specialty='' WHERE acctid=?",[f['player']])
+                self.assertEqual(302,f['request']('village.php')[0])
+                self.assertIn('name="setspecialty"',f['request']()[1])
+
+    def test_normal_newday_interest_spirits_mounts_buffs_companions(self):
+        with self._normal_day_fixture() as f, self._seeded_module_actions('pre-newday') as seed:
+            mount=self.query('SELECT * FROM mounts ORDER BY mountid LIMIT 1')[0]
+            try:
+                for balance,turns,cap,expected in [(101,7,100000,111),(-101,99,100000,-111),(1000,8,100000,1000),(1000,7,1000,1000),(1000,7,0,1100)]:
+                    f['prepare']();f['setting']('maxgoldforinterest',cap);seed(1)
+                    self.query('UPDATE accounts SET goldinbank=?,turns=? WHERE acctid=?',[balance,turns,f['player']])
+                    self.assertEqual(200,f['request'](data=f['form']())[0]);self.assertEqual(expected,int(f['state']()[0]['goldinbank']))
+                for rng,spirits,mff in [(0,0,0),(2,-2,-2),(1,1,3)]:
+                    f['prepare']();seed(rng)
+                    buff={'name':'Daily mount','rounds':5,'atkmod':1.1,'schema':'mounts'}
+                    self.query('UPDATE mounts SET mountbuff=?,mountforestfights=? WHERE mountid=?',[f['encode'](buff),mff,mount['mountid']])
+                    companion={'name':'Fixture companion','hitpoints':10,'maxhitpoints':10,'attack':1,'defense':1,'abilities':{'fight':1},'suspended':True}
+                    effects={'ordinary':{'name':'ordinary','rounds':3,'atkmod':1.2,'schema':'test'},'carried':{'name':'carried','rounds':2,'defmod':1.3,'survivenewday':1,'newdaymessage':'Carried once','schema':'test'}}
+                    self.query('UPDATE accounts SET hashorse=?,bufflist=?,companions=? WHERE acctid=?',[mount['mountid'],f['encode'](effects),f['encode']({'allowed':companion|{'allowinshades':1},'excluded':companion|{'allowinshades':0}}),f['player']])
+                    before=f['state']();form=f['form']();self.assertEqual(before,f['state']())
+                    status,body=f['request'](data=form);self.assertEqual(200,status,body[:2500]);after=f['state']()[0]
+                    self.assertEqual(spirits,int(after['spirits']));self.assertEqual(11+spirits+mff,int(after['turns']))
+                    decoded=self._normal_day_decode(after['bufflist']);self.assertNotIn('ordinary',decoded);self.assertEqual(2,decoded['carried']['rounds']);self.assertEqual(5,decoded['mount']['rounds']);self.assertEqual(1,body.count('Carried once'))
+                    for comp in self._normal_day_decode(after['companions']).values(): self.assertFalse(comp['suspended'])
+            finally:
+                self.query('UPDATE mounts SET '+','.join(k+'=?' for k in mount if k!='mountid')+' WHERE mountid=?',[*[v for k,v in mount.items() if k!='mountid'],mount['mountid']])
+
+    def _normal_day_decode(self, value):
+        return json.loads(subprocess.check_output([shutil.which('php'),'-r','echo json_encode(unserialize(stream_get_contents(STDIN),["allowed_classes"=>false]));'],input=value,text=True))
+
+    def test_normal_newday_stale_replay_transport_and_corruption(self):
+        with self._normal_day_fixture() as f:
+            for patch in [dict(goldinbank=1001),dict(age=4),dict(race='Elf'),dict(specialty='MP'),dict(alive=0),dict(hashorse=200),dict(bufflist='a:0:{}')]:
+                f['prepare']();first=f['form']()
+                if patch==dict(bufflist='a:0:{}'): patch={'bufflist':f['encode']({'changed':{'name':'changed','rounds':2,'atkmod':1.1,'schema':'test'}})}
+                self.query('UPDATE accounts SET '+','.join(k+'=?' for k in patch)+' WHERE acctid=?',[*patch.values(),f['player']]);before=f['state']()
+                self.assertEqual(409,f['request'](data=first)[0]);self.assertEqual(before,f['state']())
+            f['prepare']();form=f['form']();f['setting']('gameoffsetseconds',86400);before=f['state']()
+            self.assertEqual(409,f['request'](data=form)[0]);self.assertEqual(before,f['state']());f['setting']('gameoffsetseconds',0)
+            f['prepare']();first=f['form']();second=f['form']();self.assertEqual(200,f['request'](data=first)[0]);before=f['state']()
+            self.assertEqual(409,f['request'](data=second)[0]);self.assertEqual(before,f['state']())
+            for extra in [{'csrf_token':'0'*64},{'turns':'999'},{'age':'999'},{'newday':'early'},{'current_day':'x'}]:
+                f['prepare']();form=f['form']();before=f['state']();self.assertIn(f['request'](data=form|extra)[0],[400,403]);self.assertEqual(before,f['state']())
+            for patch in [dict(dragonpoints='N;'),dict(bufflist='a:1:{s:3:"bad";a:0:{}}'),dict(companions='N;'),dict(hashorse=200),dict(level=0)]:
+                f['prepare']();self.query('UPDATE accounts SET '+','.join(k+'=?' for k in patch)+' WHERE acctid=?',[*patch.values(),f['player']]);before=f['state']()
+                self.assertEqual(409,f['request']()[0]);self.assertEqual(before,f['state']())
+            for bad in ['NaN','INF','1e999','garbage','-101']:
+                f['prepare']();f['setting']('maxinterest',bad);before=f['state']();self.assertEqual(409,f['request']()[0]);self.assertEqual(before,f['state']())
+            f['setting']('maxinterest',10);f['prepare']();f['setting']('maxgoldforinterest',0)
+            self.query('UPDATE accounts SET goldinbank=2147483647 WHERE acctid=?',[f['player']]);form=f['form']();before=f['state']()
+            self.assertEqual(409,f['request'](data=form)[0]);self.assertEqual(before,f['state']())
+
+    def test_normal_newday_late_account_and_bundled_hook_rollback(self):
+        with self._normal_day_fixture() as f:
+            for hook_failure in [False,True]:
+                f['prepare']()
+                comp={'name':'Returning companion','hitpoints':10,'maxhitpoints':10,'attack':1,'defense':1,'abilities':{'fight':1},'suspended':True,'allowinshades':0}
+                buffs={'ordinary':{'name':'ordinary','schema':'test','rounds':3},'carry':{'name':'carry','schema':'test','rounds':2,'survivenewday':1}}
+                self.query('UPDATE accounts SET bufflist=?,companions=?,alive=0,hitpoints=0,charm=1,marriedto=4294967295 WHERE acctid=?',[f['encode'](buffs),f['encode']({'returning':comp}),f['player']])
+                form=f['form']();before=f['state']()
+                logs=self.query('SELECT * FROM debuglog WHERE actor=?',[f['player']])
+                if hook_failure:
+                    # Actual bundled specialty hook attempts to restore uses after core effects.
+                    self.query("ALTER TABLE module_userprefs ADD CONSTRAINT fixture_daily_failure CHECK (userid <> "+str(f['player'])+" OR modulename <> 'specialtydarkarts' OR setting <> 'uses' OR value='0')")
+                    table='module_userprefs'
+                else:
+                    self.query("ALTER TABLE accounts ADD CONSTRAINT fixture_daily_failure CHECK (login <> 'WebPlayer' OR age=1)")
+                    table='accounts'
+                try: self.assertEqual(500,f['request'](data=form)[0])
+                finally: self.query('ALTER TABLE '+table+' DROP CONSTRAINT fixture_daily_failure')
+                self.assertEqual(before,f['state']());self.assertEqual(logs,self.query('SELECT * FROM debuglog WHERE actor=?',[f['player']]))
+                self.assertEqual(409,f['request'](data=form)[0]);self.assertEqual(before,f['state']())
+                self.assertEqual(200,f['request'](data=f['form']())[0]);self.assertEqual('2',f['state']()[0]['age'])
+
+    def test_normal_newday_locked_revalidation_after_competing_commit(self):
+        import threading
+        with self._normal_day_fixture() as f:
+            form=f['form']();player=f['player']
+            # Independent database connection owns the account lock while the real
+            # HTTP POST hydrates yesterday's state and waits at its own lock.
+            code="""require 'dbconnect.php';require 'lib/dbwrapper_pdo.php';db_connect($DB_HOST,$DB_USER,$DB_PASS);db_select_db($DB_NAME);
+$db=$GLOBALS['dbinfo']['connection'];$db->beginTransaction();db_query('SELECT acctid FROM accounts WHERE acctid=? FOR UPDATE',true,[(int)$argv[1]]);echo "LOCKED\\n";flush();fgets(STDIN);
+db_query('UPDATE accounts SET age=age+1,lastnewday=? WHERE acctid=?',true,[$argv[2],(int)$argv[1]]);$db->commit();"""
+            # Obtain today's actual application identity from a successful reset of
+            # this fixture, then restore yesterday before the competing lock test.
+            self.assertEqual(200,f['request'](data=form)[0]);day=f['state']()[0]['lastnewday'];f['prepare']();form=f['form']()
+            self._security_allow(player,f['url'])
+            process=subprocess.Popen([shutil.which('php'),'-r',code,str(player),day],cwd=ROOT,stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True)
+            results=[];thread=None
+            try:
+                self.assertEqual('LOCKED',process.stdout.readline().strip())
+                thread=threading.Thread(target=lambda: results.append(f['call'](f['url'],form)));thread.start()
+                waiting=False
+                for _ in range(100):
+                    rows=self.query("SELECT INFO FROM information_schema.PROCESSLIST WHERE INFO LIKE '%accounts%FOR UPDATE%'")
+                    if any('WHERE acctid=' in (r['INFO'] or '') and 'SELECT INFO' not in (r['INFO'] or '') for r in rows): waiting=True;break
+                    time.sleep(.02)
+                self.assertTrue(waiting,'HTTP request did not reach the locked authority check')
+                process.stdin.write('commit\n');process.stdin.flush();out,err=process.communicate(timeout=10);self.assertEqual(0,process.returncode,err)
+                thread.join(timeout=20);self.assertFalse(thread.is_alive());self.assertEqual(409,results[0][0]);after=f['state']()[0]
+                self.assertEqual('2',after['age']);self.assertEqual('1000',after['goldinbank']);self.assertEqual('7',after['turns']);self.assertEqual(day,after['lastnewday'])
+            finally:
+                if process.poll() is None: process.terminate();process.wait(timeout=5)
+                if thread: thread.join(timeout=20)
+
+    def test_normal_newday_canonical_context_races_and_specialties(self):
+        with self._normal_day_fixture() as f:
+            for race,spec in [('Human','DA'),('Elf','MP'),('Troll','TS'),('Dwarf','DA')]:
+                f['prepare']();self.query('UPDATE accounts SET race=?,specialty=? WHERE acctid=?',[race,spec,f['player']]);form=f['form']()
+                self.assertEqual(200,f['request'](data=form)[0]);state,prefs,_=f['state']();buffs=self._normal_day_decode(state['bufflist'])
+                if race in ['Elf','Troll']: self.assertEqual(-1,buffs['racialbenefit']['rounds']);self.assertIn('defmod' if race=='Elf' else 'atkmod',buffs['racialbenefit'])
+                elif race=='Dwarf': self.assertNotIn('racialbenefit',buffs)
+                values={(r['modulename'],r['setting']):r['value'] for r in prefs}
+                selected={'DA':'specialtydarkarts','MP':'specialtymysticpower','TS':'specialtythiefskills'}[spec]
+                self.assertEqual('5',values[(selected,'uses')])
+            f['prepare']();buff={'name':'Carry','schema':'test','rounds':2,'survivenewday':1,'defmod':1.1}
+            self.query('UPDATE accounts SET bufflist=? WHERE acctid=?',[f['encode']({'carry':buff}),f['player']]);form=f['form']()
+            self.query('UPDATE accounts SET bufflist=? WHERE acctid=?',[f['encode']({'carry':dict(reversed(list(buff.items())))}),f['player']])
+            self.assertEqual(200,f['request'](data=form)[0])
+            # Missing authoritative mount and malformed raw mount effect both reject.
+            mount=self.query('SELECT * FROM mounts ORDER BY mountid LIMIT 1')[0]
+            try:
+                f['prepare']();self.query('UPDATE accounts SET hashorse=? WHERE acctid=?',[mount['mountid'],f['player']])
+                self.query("UPDATE mounts SET mountbuff='N;' WHERE mountid=?",[mount['mountid']]);before=f['state']()
+                self.assertEqual(409,f['request']()[0]);self.assertEqual(before,f['state']())
+            finally: self.query('UPDATE mounts SET mountbuff=? WHERE mountid=?',[mount['mountbuff'],mount['mountid']])
+
+    def test_normal_newday_extension_hooks_and_stale_sources(self):
+        with self._normal_day_fixture() as f:
+            name='resurrectiondailyfixture';path=ROOT/'modules'/f'{name}.php'
+            path.write_text("""<?php
+function resurrectiondailyfixture_getmoduleinfo(){return ['name'=>'Daily fixture','version'=>'1','author'=>'Tests','category'=>'Tests'];}
+function resurrectiondailyfixture_dohook($hook,$args){
+ db_query("UPDATE settings SET value=value+1 WHERE setting=?",true,['fx_'.$hook]);return $args;
+}
+""")
+            try:
+                self.query('INSERT INTO modules(modulename,active,version) VALUES (?,1,?)',[name,'1'])
+                for hook in ['newday-intercept','pre-newday','newday']:
+                    self.query('INSERT INTO module_hooks(modulename,location,`function`,whenactive,priority) VALUES (?,?,?,?,?)',[name,hook,name+'_dohook','',0]);f['setting']('fx_'+hook,0)
+                form=f['form']();f['form']()
+                def counts(): return [r['value'] for r in self.query("SELECT value FROM settings WHERE setting LIKE 'fx_%newday%' ORDER BY setting")]
+                self.assertEqual(['0','0','0'],counts());self.assertEqual(200,f['request'](data=form)[0]);self.assertEqual(['1','1','1'],counts())
+                self.assertEqual(409,f['request'](data=form)[0]);self.assertEqual(['1','1','1'],counts())
+                for change in [lambda:f['setting']('turns',11),lambda:f['pref']('drinks','drunkeness',0),lambda:self.query('UPDATE module_hooks SET priority=priority+1 WHERE modulename=?',[name])]:
+                    f['prepare']();form=f['form']();change();before=f['state']();self.assertEqual(409,f['request'](data=form)[0]);self.assertEqual(before,f['state']())
+                mount=self.query('SELECT * FROM mounts ORDER BY mountid LIMIT 1')[0]
+                try:
+                    f['prepare']();self.query('UPDATE accounts SET hashorse=? WHERE acctid=?',[mount['mountid'],f['player']]);form=f['form']()
+                    self.query('UPDATE mounts SET mountforestfights=mountforestfights+1 WHERE mountid=?',[mount['mountid']]);before=f['state']()
+                    self.assertEqual(409,f['request'](data=form)[0]);self.assertEqual(before,f['state']())
+                    form=f['form']();self.assertEqual(200,f['request'](data=form)[0])
+                    self.assertEqual('20',self._normal_day_decode(f['state']()[0]['bufflist'])['mount']['rounds'])
+                finally:self.query('UPDATE mounts SET mountforestfights=? WHERE mountid=?',[mount['mountforestfights'],mount['mountid']])
+            finally:
+                self.query('DELETE FROM module_hooks WHERE modulename=?',[name]);self.query('DELETE FROM modules WHERE modulename=?',[name]);path.unlink()
+
+    @staticmethod
+    def _current_game_day():
+        # A new PHP process reads current settings and calls the application clock.
+        # Never substitute UTC's calendar date or duplicate convertgametime in Python.
+        code = """require 'dbconnect.php';require 'lib/dbwrapper_pdo.php';
+require 'lib/datacache.php';require 'lib/settings.php';require 'lib/datetime.php';
+db_connect($DB_HOST,$DB_USER,$DB_PASS);db_select_db($DB_NAME);
+echo json_encode(gmdate('Y-m-d',gametime()),JSON_THROW_ON_ERROR);"""
+        result = subprocess.run([shutil.which('php'), '-r', code], cwd=ROOT,
+                                capture_output=True, text=True, timeout=20, check=True)
+        return json.loads(result.stdout)
+
+    # A shard must finish inside one game day. The CI job timeout bounds a shard's run.
+    GAME_CLOCK_MINIMUM_HEADROOM = 3600
+
+    @staticmethod
+    def _game_clock(pin=False):
+        # The application's own clock (gametime()) reports the day and the real seconds left in it.
+        # With pin, the run starts a minute after a game day boundary: the epoch moves to that
+        # boundary minus 30 days (the installer's shape), and the day offset is cleared.
+        code = """require 'dbconnect.php';require 'lib/dbwrapper_pdo.php';
+require 'lib/datacache.php';require 'lib/settings.php';require 'lib/datetime.php';
+db_connect($DB_HOST,$DB_USER,$DB_PASS);db_select_db($DB_NAME);
+$days=(int)getsetting('daysperday',4);
+if ($argv[1]==='pin') {
+    savesetting('game_epoch',gmdate('Y-m-d H:i:s O',time()-60-30*86400));
+    savesetting('gameoffsetseconds',0);
+}
+$now=gametime();
+echo json_encode(['day'=>gmdate('Y-m-d',$now),'headroom'=>intdiv(86400-$now%86400,$days),'length'=>intdiv(86400,$days)],JSON_THROW_ON_ERROR);"""
+        result = subprocess.run([shutil.which('php'), '-r', code, 'pin' if pin else 'read'], cwd=ROOT,
+                                capture_output=True, text=True, timeout=20, check=True)
+        return json.loads(result.stdout)
+
+    @classmethod
+    def _pin_game_clock(cls):
+        # The game day rolls over every 24/daysperday hours (00:00, 06:00, 12:00 and 18:00 UTC by
+        # default). A shard that crossed one saw every fixture's day go stale at once.
+        clock = cls._game_clock(pin=True)
+        if clock['headroom'] < max(cls.GAME_CLOCK_MINIMUM_HEADROOM, clock['length'] - 300):
+            raise RuntimeError('Game clock was not pinned: %r' % clock)
+        return clock
+
+    def test_game_clock_pinned_away_from_rollover(self):
+        # The run starts with a full game day of headroom; without the pin a run could start
+        # seconds before a boundary. Restore the exact pinned settings so later tests keep one day.
+        clock_settings = "SELECT setting,value FROM settings WHERE setting IN ('game_epoch','gameoffsetseconds') ORDER BY setting"
+        pinned = self.query(clock_settings)
+        current = self._game_clock()
+        self.assertEqual(self.game_clock['day'], current['day'])
+        self.assertGreaterEqual(current['headroom'], self.GAME_CLOCK_MINIMUM_HEADROOM)
+        try:
+            near = time.strftime('%Y-%m-%d %H:%M:%S +0000', time.gmtime(int(time.time()) + 30 - 30 * 86400))
+            self.query("UPDATE settings SET value=? WHERE setting='game_epoch'", [near])
+            self.assertLessEqual(self._game_clock()['headroom'], 30)
+            repinned = self._pin_game_clock()
+            self.assertGreaterEqual(repinned['headroom'], repinned['length'] - 120)
+            self.assertEqual(repinned['day'], self._game_clock()['day'])
+        finally:
+            for row in pinned:
+                self.query('UPDATE settings SET value=? WHERE setting=?', [row['value'], row['setting']])
+        self.assertEqual(pinned, self.query(clock_settings))
+        self.assertEqual(self.game_clock['day'], self._current_game_day())
+
+    @contextmanager
+    def _ramius_fixture(self):
+        with self._normal_day_fixture() as f:
+            # Retain the accepted daily transition, but do not cache its day across cases.
+            self.assertEqual(200,f['request'](data=f['form']())[0])
+            url='newday.php?resurrection=true'
+            fixture = dict(f)
+            def prepare(**patch):
+                f['prepare']()
+                day = self._current_game_day()
+                values=dict(alive=0,hitpoints=0,deathpower=113,lastnewday=day,playerfights=2,soulpoints=9,gravefights=3)
+                values.update(patch)
+                self.query('UPDATE accounts SET '+','.join(k+'=?' for k in values)+' WHERE acctid=?',[*values.values(),f['player']])
+                fixture['day'] = day
+            def request(path=url,data=None): return f['request'](path,data)
+            def form(path=url):
+                status,body=request(path);self.assertEqual(200,status,body[:2500])
+                return self._security_fields(body,url)|{'resurrection':'ramius'}
+            prepare()
+            fixture.update(prepare=prepare,request=request,form=form,url=url)
+            yield fixture
+
+    def test_ramius_fixture_refreshes_after_game_day_rollover(self):
+        # Login may update online counters before the parent snapshots settings.
+        # Assert exact restoration of the clock configuration this case exercises.
+        clock_settings = "SELECT * FROM settings WHERE setting IN ('game_epoch','daysperday','gameoffsetseconds') ORDER BY setting"
+        settings = self.query(clock_settings)
+        try:
+            with self._ramius_fixture() as f:
+                old_day = f['day']; form = f['form'](); before = f['state']()
+                offset = self.query("SELECT value FROM settings WHERE setting='gameoffsetseconds'")
+                f['setting']('gameoffsetseconds', int(offset[0]['value']) - 86400)
+                new_day = self._current_game_day()
+                self.assertNotEqual(old_day, new_day)
+                # The old marker and form really are stale; production must reject both.
+                self.assertEqual(old_day, f['state']()[0]['lastnewday'])
+                self.assertEqual(409, f['request']()[0])
+                self.assertEqual(409, f['request'](data=form)[0])
+                self.assertEqual(before, f['state']())
+                f['prepare']()
+                self.assertEqual(new_day, f['day'])
+                self.assertEqual(new_day, f['state']()[0]['lastnewday'])
+                self.assertEqual(200, f['request'](data=f['form']())[0])
+                self.assertEqual(new_day, f['state']()[0]['lastnewday'])
+        finally:
+            self.assertEqual(settings, self.query(clock_settings))
+
+    def test_ramius_get_core_favor_hooks_and_daily_separation(self):
+        with self._ramius_fixture() as f:
+            for favor in [0,24,99,100,101,113,10000,4294967295]:
+                f['prepare'](deathpower=favor);before=f['state']()
+                status,body=f['request']('graveyard.php?op=question');self.assertEqual(200,status,body[:1500]);self.assertEqual(before,f['state']())
+                self.assertEqual(favor>=100,'(100 favor)' in body)
+                if favor<100:
+                    for url in ['graveyard.php?op=resurrection',f['url']]:
+                        self.assertEqual(409,f['request'](url)[0]);self.assertEqual(before,f['state']())
+                    continue
+                ritual=f['form']('graveyard.php?op=resurrection');self.assertEqual(before,f['state']())
+                f['form']();self.assertEqual(before,f['state']())
+                status,body=f['request'](data=ritual);self.assertEqual(200,status,body[:2500])
+                after,prefs,news=f['state']()
+                for key,value in dict(deathpower=favor-100,alive=1,hitpoints=100,maxhitpoints=100,resurrections=3,age=2,spirits=-6,
+                    turns=6,playerfights=2,soulpoints=9,gravefights=3,transferredtoday=0,amountouttoday=0,seendragon=0,seenmaster=0,fedmount=0,boughtroomtoday=0).items():
+                    self.assertEqual(value,int(after[key]),key)
+                # 10 base +2 ff -6 resurrection -1 haunted +1 Human. Graveyard sobering precedes New Day.
+                self.assertEqual('',after['hauntedby']);self.assertEqual(f['day'],after['lastnewday'])
+                self.assertEqual(before[0]['lasthit'],after['recentcomments']);self.assertNotEqual(before[0]['lasthit'],after['lasthit'])
+                self.assertEqual('1100',after['goldinbank']);self.assertIn('Resurrected',body)
+                self.assertEqual('village.php?c=1',self.query('SELECT restorepage FROM accounts WHERE acctid=?',[f['player']])[0]['restorepage'])
+                added=news[len(before[2]):];self.assertEqual(1,len(added));self.assertIn('Ramius',added[0]['arguments'])
+                values={(p['modulename'],p['setting']):p['value'] for p in prefs}
+                for module in ['specialtydarkarts','specialtymysticpower','specialtythiefskills']:self.assertEqual('5' if module=='specialtydarkarts' else '3',values[(module,'uses')])
+                for module,key in [('dag','bounties'),('drinks','harddrinks'),('drinks','drunkeness'),('lovers','seenlover'),('outhouse','usedouthouse'),('outhouse','stage'),('sethsong','been'),('crazyaudrey','played'),('crazyaudrey','paidvisit'),('game_fivesix','playstoday')]:self.assertEqual('0',values[(module,key)])
+                settled=f['state']();self.assertEqual(409,f['request'](data=ritual)[0]);self.assertEqual(settled,f['state']())
+                self.assertEqual(409,f['request']()[0]);self.assertEqual(settled,f['state']())
+                status,body=f['request']('newday.php?continue=1');self.assertEqual(200,status);self.assertNotIn('Begin New Day',body);self.assertEqual(settled,f['state']())
+                self.assertEqual(200,f['request']('village.php?c=1')[0])
+            # Due ordinary resurrection takes no favor, uses ordinary daily-only counters.
+            f['prepare'](lastnewday='2000-01-01');before=f['state']()
+            self.assertEqual(409,f['request']()[0]);self.assertEqual(before,f['state']())
+            url='newday.php?continue=1';status,body=f['request'](url);self.assertEqual(200,status)
+            normal=self._security_fields(body)|{'newday':'normal'}
+            self.assertEqual(200,f['request'](url,normal)[0]);after=f['state']()[0]
+            for key,value in dict(deathpower=113,playerfights=4,soulpoints=80,gravefights=12).items():self.assertEqual(value,int(after[key]))
+            self.assertIn(int(after['spirits']),range(-2,3));self.assertEqual(409,f['request'](url,normal)[0])
+            # Next actual day remains eligible after early resurrection.
+            f['prepare']();self.assertEqual(200,f['request'](data=f['form']())[0]);f['setting']('gameoffsetseconds',86400)
+            status,body=f['request'](url);self.assertEqual(200,status);self.assertIn('Begin New Day',body)
+            self.assertEqual(200,f['request'](url,self._security_fields(body)|{'newday':'normal'})[0]);self.assertNotEqual(f['day'],f['state']()[0]['lastnewday'])
+
+    def test_ramius_turns_interest_mount_buffs_and_companions(self):
+        with self._ramius_fixture() as f:
+            for setting,expected in [('-6',7),('0',13),('-3',10),('-12',1),('-13',1),('+4',17),('0%',13),('-50%',7),('-100%',1),('-101%',1),('+50%',19)]:
+                f['prepare'](hauntedby='');f['setting']('resurrectionturns',setting)
+                status,body=f['request'](data=f['form']());self.assertEqual(200,status,body[:2500]);self.assertEqual(expected,int(f['state']()[0]['turns']))
+            f['setting']('resurrectionturns',-6)
+            for balance,turns,cap,expected in [(105,7,100000,116),(-105,99,100000,-116),(1000,8,100000,1000),(1000,7,1000,1000),(1000,7,0,1100)]:
+                f['prepare'](goldinbank=balance,turns=turns);f['setting']('maxgoldforinterest',cap)
+                self.assertEqual(200,f['request'](data=f['form']())[0]);self.assertEqual(expected,int(f['state']()[0]['goldinbank']))
+            mount=self.query('SELECT * FROM mounts ORDER BY mountid LIMIT 1')[0]
+            try:
+                for mff in [-2,0,3]:
+                    f['prepare'](hashorse=mount['mountid'])
+                    self.query('UPDATE mounts SET mountbuff=?,mountforestfights=?,newday=? WHERE mountid=?',[f['encode']({'name':'Ramius mount','rounds':5,'atkmod':1.1,'schema':'mounts'}),mff,'Ramius mount awakens',mount['mountid']])
+                    comp={'name':'Returning companion','hitpoints':10,'maxhitpoints':10,'attack':1,'defense':1,'abilities':{'fight':1},'suspended':True}
+                    skeleton={'name':'`4Skeleton Warrior','hitpoints':20,'maxhitpoints':30,'attack':17.5,'defense':8.5,'dyingtext':'`$Your skeleton warrior crumbles to dust.`n','abilities':{'fight':True},'ignorelimit':True,'suspended':True}
+                    buffs={'ordinary':{'name':'ordinary','rounds':3,'atkmod':1.2,'schema':'test'},'carry':{'name':'carry','rounds':2,'defmod':1.3,'survivenewday':1,'newdaymessage':'Ramius carry once','schema':'test'}}
+                    self.query('UPDATE accounts SET bufflist=?,companions=? WHERE acctid=?',[f['encode'](buffs),f['encode']({'allowed':comp|{'allowinshades':1},'excluded':comp|{'allowinshades':0},'skeleton_warrior':skeleton}),f['player']])
+                    before=f['state']();form=f['form']('graveyard.php?op=resurrection');self.assertEqual(before,f['state']())
+                    status,body=f['request'](data=form);self.assertEqual(200,status,body[:2500]);after=f['state']()[0]
+                    self.assertEqual(6+mff,int(after['turns']));self.assertEqual(1,body.count('Ramius mount awakens'));self.assertEqual(1,body.count('Ramius carry once'))
+                    effects=self._normal_day_decode(after['bufflist']);self.assertNotIn('ordinary',effects);self.assertEqual(2,effects['carry']['rounds']);self.assertEqual(5,effects['mount']['rounds'])
+                    for companion in self._normal_day_decode(after['companions']).values():self.assertFalse(companion['suspended'])
+            finally:self.query('UPDATE mounts SET '+','.join(k+'=?' for k in mount if k!='mountid')+' WHERE mountid=?',[*[v for k,v in mount.items() if k!='mountid'],mount['mountid']])
+
+    def test_ramius_stale_state_settings_and_malformed_authority(self):
+        with self._ramius_fixture() as f:
+            changes=[dict(deathpower=114),dict(deathpower=99),dict(lastnewday='2000-01-01'),dict(alive=1,hitpoints=100),
+                dict(badguy='a:0:{}'),dict(specialinc='deferred-event'),dict(goldinbank=1001),dict(playerfights=3),dict(hauntedby='New ghost'),
+                dict(race='Elf'),dict(specialty='MP'),dict(hashorse=200),dict(companions=f['encode']({'friend':{'name':'Friend','hitpoints':10,'maxhitpoints':10,'attack':1,'defense':1,'abilities':{'fight':1}}})),
+                dict(bufflist=f['encode']({'carry':{'name':'carry','rounds':2,'schema':'test','survivenewday':1}}))]
+            for patch in changes:
+                f['prepare']();form=f['form']();self.query('UPDATE accounts SET '+','.join(k+'=?' for k in patch)+' WHERE acctid=?',[*patch.values(),f['player']]);before=f['state']()
+                self.assertEqual(409,f['request'](data=form)[0],patch);self.assertEqual(before,f['state']())
+            for key,value in [('resurrectionturns','-5'),('turns',11),('deathoverlord','Changed'),('gameoffsetseconds',86400)]:
+                f['prepare']();form=f['form']();saved=self.query('SELECT value FROM settings WHERE setting=?',[key]);f['setting'](key,value);before=f['state']()
+                self.assertEqual(409,f['request'](data=form)[0]);self.assertEqual(before,f['state']())
+                self.query('DELETE FROM settings WHERE setting=?',[key])
+                if saved:f['setting'](key,saved[0]['value'])
+            for patch in [dict(dragonpoints='N;'),dict(bufflist='a:1:{s:3:"bad";a:0:{}}'),dict(companions='N;'),dict(hashorse=200),dict(level=0),
+                dict(alive=1,hitpoints=0),dict(alive=0,hitpoints=-1),dict(age=4294967295),dict(resurrections=4294967295),dict(maxhitpoints=0),dict(maxhitpoints=2147483648)]:
+                f['prepare'](**patch);before=f['state']();self.assertEqual(409,f['request']()[0],patch);self.assertEqual(before,f['state']())
+            for bad in ['NaN','1e2','10%%','-6oops','1.5', '4294967296']:
+                f['prepare']();f['setting']('resurrectionturns',bad);before=f['state']();self.assertEqual(409,f['request']()[0]);self.assertEqual(before,f['state']())
+            f['setting']('resurrectionturns',-6)
+            for patch in [dict(goldinbank=2147483647),dict(goldinbank=-2147483648)]:
+                f['prepare'](**patch);f['setting']('maxgoldforinterest',0);form=f['form']();before=f['state']()
+                self.assertEqual(409,f['request'](data=form)[0]);self.assertEqual(before,f['state']())
+            f['prepare'](age=4294967294,resurrections=4294967294,soulpoints=0,gravefights=0,maxhitpoints=2147483647)
+            f['setting']('mininterest',0);f['setting']('maxinterest',0);f['setting']('turns',4294967293)
+            status,body=f['request'](data=f['form']());self.assertEqual(200,status,body[:2000]);after=f['state']()[0]
+            for key,value in dict(age=4294967295,resurrections=4294967295,hitpoints=2147483647,soulpoints=0,gravefights=0,turns=4294967289).items():self.assertEqual(value,int(after[key]),key)
+            f['setting']('turns',10)
+            # Same-day request context cannot bypass protected incomplete onboarding.
+            for patch in [dict(dragonkills=4),dict(race='Horrible Gelatinous Blob'),dict(specialty='')]:
+                f['prepare'](**patch);before=f['state']();status,body=f['request']();self.assertEqual(200,status,body[:1000]);self.assertNotIn('value="ramius"',body);self.assertEqual(before,f['state']())
+
+    def test_ramius_strict_transport_replay_and_multiple_forms(self):
+        with self._ramius_fixture() as f:
+            for suffix in ['1','True','false','true&resurrection=true','true&resurrection[]=true','true&turns=999','true&current_day=2026-01-01','true&action.token=x']:
+                f['prepare']();before=f['state']();self.assertEqual(400,f['request']('newday.php?resurrection='+suffix)[0]);self.assertEqual(before,f['state']())
+            for extra in [{'deathpower':'999'},{'turns':'999'},{'spirits':'6'},{'alive':'1'},{'hitpoints':'100'},{'resurrections':'0'},{'age':'0'},{'day':f['day']},{'rate':'0'},{'resurrection':'true'},{'csrf_token':'0'*64},{'action_token':'0'*64}]:
+                f['prepare']();form=f['form']();before=f['state']();self.assertIn(f['request'](data=form|extra)[0],[400,403,409]);self.assertEqual(before,f['state']())
+            # urlencode(list-of-pairs) preserves duplicate authority keys on the wire.
+            for extra in [('resurrection','ramius'),('action_token','duplicate'),('action.token','bad'),('action_token[]','bad'),('csrf_token','duplicate')]:
+                f['prepare']();form=f['form']();before=f['state']();self.assertIn(f['request'](data=list(form.items())+[extra])[0],[400,403,409]);self.assertEqual(before,f['state']())
+            f['prepare']();first=f['form']();second=f['form']();self.assertEqual(200,f['request'](data=first)[0]);settled=f['state']()
+            self.assertEqual(409,f['request'](data=second)[0]);self.assertEqual(settled,f['state']());self.assertEqual(409,f['request'](data=first)[0]);self.assertEqual(settled,f['state']())
+
+    def test_ramius_late_account_and_hook_rollback(self):
+        with self._ramius_fixture() as f:
+            for hook_failure in [False,True]:
+                comp={'name':'Returning companion','hitpoints':10,'maxhitpoints':10,'attack':1,'defense':1,'abilities':{'fight':1},'suspended':True,'allowinshades':0}
+                buffs={'ordinary':{'name':'ordinary','schema':'test','rounds':3},'carry':{'name':'carry','schema':'test','rounds':2,'survivenewday':1}}
+                f['prepare'](bufflist=f['encode'](buffs),companions=f['encode']({'friend':comp}),charm=1,marriedto=4294967295)
+                form=f['form']();before=f['state']();logs=self.query('SELECT * FROM debuglog WHERE actor=?',[f['player']])
+                if hook_failure:
+                    self.query("ALTER TABLE module_userprefs ADD CONSTRAINT fixture_ramius_failure CHECK (userid <> "+str(f['player'])+" OR modulename <> 'specialtydarkarts' OR setting <> 'uses' OR value='0')");table='module_userprefs'
+                else:
+                    self.query("ALTER TABLE accounts ADD CONSTRAINT fixture_ramius_failure CHECK (login <> 'WebPlayer' OR age=1)");table='accounts'
+                try:self.assertEqual(500,f['request'](data=form)[0])
+                finally:self.query('ALTER TABLE '+table+' DROP CONSTRAINT fixture_ramius_failure')
+                self.assertEqual(before,f['state']());self.assertEqual(logs,self.query('SELECT * FROM debuglog WHERE actor=?',[f['player']]))
+                self.assertEqual('113',f['state']()[0]['deathpower']);self.assertEqual(f['day'],f['state']()[0]['lastnewday'])
+                self.assertEqual(409,f['request'](data=form)[0]);self.assertEqual(before,f['state']())
+                self.assertEqual(200,f['request'](data=f['form']())[0]);self.assertEqual('13',f['state']()[0]['deathpower'])
+
+    def test_ramius_hooks_canonical_state_and_stale_mount(self):
+        with self._ramius_fixture() as f:
+            name='resurrectionramiusfixture';path=ROOT/'modules'/f'{name}.php'
+            path.write_text("""<?php
+function resurrectionramiusfixture_getmoduleinfo(){return ['name'=>'Ramius fixture','version'=>'1','author'=>'Tests','category'=>'Tests'];}
+function resurrectionramiusfixture_dohook($hook,$args){
+ if ($hook !== 'newday-intercept' && ($args['resurrection'] ?? null) !== 'true') throw new DomainException('Missing resurrection context');
+ db_query('UPDATE settings SET value=value+1 WHERE setting=?',true,['fr_'.$hook]);return $args;
+}
+""")
+            try:
+                self.query('INSERT INTO modules(modulename,active,version) VALUES (?,1,?)',[name,'1'])
+                for hook in ['newday-intercept','pre-newday','newday']:
+                    self.query('INSERT INTO module_hooks(modulename,location,`function`,whenactive,priority) VALUES (?,?,?,?,?)',[name,hook,name+'_dohook','',0]);f['setting']('fr_'+hook,0)
+                def counts():return [r['value'] for r in self.query("SELECT value FROM settings WHERE setting LIKE 'fr_%' ORDER BY setting")]
+                before=f['state']();form=f['form']('graveyard.php?op=resurrection');f['form']();self.assertEqual(before,f['state']());self.assertEqual(['0','0','0'],counts())
+                self.assertEqual(200,f['request'](data=form)[0]);self.assertEqual(['1','1','1'],counts())
+                f['prepare']();form=f['form']();self.query('UPDATE module_hooks SET priority=1 WHERE modulename=?',[name]);before=f['state']()
+                self.assertEqual(409,f['request'](data=form)[0]);self.assertEqual(before,f['state']());self.assertEqual(['1','1','1'],counts())
+                buff={'name':'Carry','schema':'test','rounds':2,'survivenewday':1,'defmod':1.1}
+                f['prepare'](bufflist=f['encode']({'carry':buff}));form=f['form']()
+                self.query('UPDATE accounts SET bufflist=? WHERE acctid=?',[f['encode']({'carry':dict(reversed(list(buff.items())))}),f['player']]);self.assertEqual(200,f['request'](data=form)[0])
+                mount=self.query('SELECT * FROM mounts ORDER BY mountid LIMIT 1')[0]
+                try:
+                    f['prepare'](hashorse=mount['mountid']);form=f['form']();self.query('UPDATE mounts SET mountforestfights=mountforestfights+1 WHERE mountid=?',[mount['mountid']]);before=f['state']()
+                    self.assertEqual(409,f['request'](data=form)[0]);self.assertEqual(before,f['state']())
+                    self.query("UPDATE mounts SET mountbuff='N;' WHERE mountid=?",[mount['mountid']]);before=f['state']();self.assertEqual(409,f['request']()[0]);self.assertEqual(before,f['state']())
+                finally:self.query('UPDATE mounts SET mountforestfights=?,mountbuff=? WHERE mountid=?',[mount['mountforestfights'],mount['mountbuff'],mount['mountid']])
+            finally:self.query('DELETE FROM module_hooks WHERE modulename=?',[name]);self.query('DELETE FROM modules WHERE modulename=?',[name]);path.unlink()
+
+    def test_ramius_locked_revalidation_after_competing_commit(self):
+        import threading
+        with self._ramius_fixture() as f:
+            form=f['form']();player=f['player']
+            code="""require 'dbconnect.php';require 'lib/dbwrapper_pdo.php';db_connect($DB_HOST,$DB_USER,$DB_PASS);db_select_db($DB_NAME);
+$db=$GLOBALS['dbinfo']['connection'];$db->beginTransaction();db_query('SELECT acctid FROM accounts WHERE acctid=? FOR UPDATE',true,[(int)$argv[1]]);echo "LOCKED\\n";flush();fgets(STDIN);
+db_query('UPDATE accounts SET deathpower=114 WHERE acctid=?',true,[(int)$argv[1]]);$db->commit();"""
+            self._security_allow(player,f['url']);process=subprocess.Popen([shutil.which('php'),'-r',code,str(player)],cwd=ROOT,stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True)
+            results=[];thread=None
+            try:
+                self.assertEqual('LOCKED',process.stdout.readline().strip());thread=threading.Thread(target=lambda:results.append(f['call'](f['url'],form)));thread.start()
+                waiting=False
+                for _ in range(100):
+                    rows=self.query("SELECT INFO FROM information_schema.PROCESSLIST WHERE INFO LIKE '%accounts%FOR UPDATE%'")
+                    if any('WHERE acctid=' in (r['INFO'] or '') and 'SELECT INFO' not in (r['INFO'] or '') for r in rows):waiting=True;break
+                    time.sleep(.02)
+                self.assertTrue(waiting,'HTTP did not reach the account lock')
+                process.stdin.write('commit\n');process.stdin.flush();out,err=process.communicate(timeout=10);self.assertEqual(0,process.returncode,err)
+                thread.join(timeout=20);self.assertFalse(thread.is_alive());self.assertEqual(409,results[0][0]);after=f['state']()[0]
+                for key,value in dict(deathpower=114,alive=0,age=1,resurrections=2,goldinbank=1000,turns=7).items():self.assertEqual(value,int(after[key]))
+            finally:
+                if process.poll() is None:process.terminate();process.wait(timeout=5)
+                if thread:thread.join(timeout=20)
+
+    def test_ramius_rejects_live_torment_without_abandoning_it(self):
+        with self._graveyard_fixture() as f:
+            f['gprepare']();f['patch'](deathpower=113,lastnewday=self._current_game_day())
+            url='newday.php?resurrection=true';status,body=f['request'](url);self.assertEqual(200,status,body[:2000])
+            form=self._security_fields(body,url)|{'resurrection':'ramius'}
+            f['enter']();before=f['gsnapshot']();self.assertTrue(before['badguy'])
+            for path,data in [('graveyard.php?op=question',None),('graveyard.php?op=resurrection',None),(url,None),(url,form)]:
+                self.assertEqual(409,f['request'](path,data)[0]);self.assertEqual(before,f['gsnapshot']())
+
+    def test_ramius_two_concurrent_sessions_settle_exactly_once(self):
+        import threading
+        import copy
+        # Independent HTTP listeners guarantee both POSTs reach the database,
+        # without depending on the development server's accept-queue scheduling.
+        with socket.socket() as sock:sock.bind(('127.0.0.1',0));port=sock.getsockname()[1]
+        log=tempfile.TemporaryFile(mode='w+t')
+        server=subprocess.Popen([shutil.which('php'),'-d','display_errors=1','-d','error_reporting=-1','-S',f'127.0.0.1:{port}','-t',str(ROOT)],cwd=ROOT,stdout=subprocess.DEVNULL,stderr=log)
+        try:
+            for _ in range(100):
+                try:
+                    with socket.create_connection(('127.0.0.1',port),timeout=.1):break
+                except OSError:time.sleep(.02)
+            with self._ramius_fixture() as f:
+                f['prepare']();first_form=f['form']()
+                # A second login deliberately invalidates the first auth version.
+                # Clone only this disposable authenticated fixture session so PHP's
+                # session-file mutex cannot hide a missing database revalidation.
+                second=self._security_client(login=None,port=port);clone_id=os.urandom(16).hex()
+                session_path=Path(subprocess.check_output([shutil.which('php'),'-r','echo session_save_path();'],text=True))
+                original_id=next(c.value for c in f['call'].cookiejar if c.name=='PHPSESSID')
+                clone_path=session_path/('sess_'+clone_id)
+                shutil.copyfile(session_path/('sess_'+original_id),clone_path)
+                for cookie in f['call'].cookiejar:
+                    cookie=copy.copy(cookie)
+                    if cookie.name=='PHPSESSID':cookie.value=clone_id
+                    second.cookiejar.set_cookie(cookie)
+                second_form=dict(first_form)
+                before=f['state']();self._security_allow(f['player'],f['url'])
+                code="""require 'dbconnect.php';require 'lib/dbwrapper_pdo.php';db_connect($DB_HOST,$DB_USER,$DB_PASS);db_select_db($DB_NAME);
+$db=$GLOBALS['dbinfo']['connection'];$db->beginTransaction();db_query('SELECT acctid FROM accounts WHERE acctid=? FOR UPDATE',true,[(int)$argv[1]]);echo "LOCKED\\n";flush();fgets(STDIN);$db->commit();"""
+                process=subprocess.Popen([shutil.which('php'),'-r',code,str(f['player'])],cwd=ROOT,stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True)
+                results=[];threads=[]
+                try:
+                    self.assertEqual('LOCKED',process.stdout.readline().strip())
+                    for client,form in [(f['call'],first_form),(second,second_form)]:
+                        thread=threading.Thread(target=lambda client=client,form=form:results.append(client(f['url'],form)));threads.append(thread);thread.start()
+                    waiting=False
+                    for _ in range(100):
+                        rows=self.query("SELECT INFO FROM information_schema.PROCESSLIST WHERE INFO LIKE '%accounts%FOR UPDATE%'")
+                        if sum('WHERE acctid=' in (r['INFO'] or '') and 'SELECT INFO' not in (r['INFO'] or '') for r in rows)>=2:waiting=True;break
+                        time.sleep(.02)
+                    if not waiting:
+                        log.seek(0)
+                        self.fail('Both HTTP requests must reach the account lock: '+repr([(r[0],r[1][:150]) for r in results])+repr(self.query('SELECT STATE,INFO FROM information_schema.PROCESSLIST'))+log.read()[-3000:])
+                    process.stdin.write('commit\n');process.stdin.flush();out,err=process.communicate(timeout=10);self.assertEqual(0,process.returncode,err)
+                    for thread in threads:thread.join(timeout=20);self.assertFalse(thread.is_alive())
+                    self.assertEqual([200,409],sorted(r[0] for r in results),results)
+                    after=f['state']();self.assertEqual(len(before[2])+1,len(after[2]))
+                    for key,value in dict(deathpower=13,age=2,resurrections=3,alive=1,turns=6,goldinbank=1100).items():self.assertEqual(value,int(after[0][key]),key)
+                finally:
+                    if process.poll() is None:process.terminate();process.wait(timeout=5)
+                    for thread in threads:thread.join(timeout=20)
+                    clone_path.unlink(missing_ok=True)
+        finally:
+            server.terminate();server.wait(timeout=5);log.close()
+
+    def _advance_normal_day(self, request, player):
+        # Existing module matrices simulate another day, then use the actual POST.
+        self.query("UPDATE accounts SET lastnewday='',lasthit='2000-01-01 00:00:00' WHERE acctid=?",[player])
+        url='newday.php?continue=1'
+        self._security_allow(player,url)
+        status,body=request(url)
+        self.assertEqual(200,status,body[:2000])
+        result=request(url,self._security_fields(body)|{'newday':'normal'})
+        self.assertEqual(200,result[0],result[1][:3000])
+        return result
+
+    @contextmanager
+    def _mail_fixture(self):
+        actor=int(self.query('SELECT acctid FROM accounts WHERE login=?',['WebPlayer'])[0]['acctid'])
+        saved=self.query('SELECT superuser,locked,prefs,emailaddress FROM accounts WHERE acctid=?',[actor])[0]
+        keys=['mailsizelimit','inboxlimit','onlyunreadmails','superuseryommessage']
+        prior=self.query('SELECT setting,value FROM settings WHERE setting IN (?,?,?,?)',keys)
+        targets=[int(self._security_target('MailAlpha')),int(self._security_target('MailAlpine')),int(self._security_target('MailOther'))]
+        for ident,name in zip(targets,['Mail Alpha','Mail Alpine','Unrelated']):
+            self.query('UPDATE accounts SET name=?,locked=0,prefs=? WHERE acctid=?',[name,'a:1:{s:10:"dirtyemail";b:1;}',ident])
+        self.query('UPDATE accounts SET superuser=0,locked=0 WHERE acctid=?',[actor])
+        def setting(key,value):
+            self.query('INSERT INTO settings (setting,value) VALUES (?,?) ON DUPLICATE KEY UPDATE value=VALUES(value)',[key,str(value)])
+        for k,v in [('mailsizelimit',1024),('inboxlimit',50),('onlyunreadmails',1),('superuseryommessage','Synthetic admin notice')]:setting(k,v)
+        client=self._security_client()
+        def form(url='mail.php?op=write&to=MailAlpha',data=None):
+            status,body=client(url,data);self.assertEqual(200,status,body[:2000])
+            result=self._security_fields(body,'mail.php?op=send')
+            result.update(to='MailAlpha',subject='Subject',body='Body')
+            return result,body
+        def mails():return self.query('SELECT * FROM mail WHERE msgto IN (?,?,?) ORDER BY messageid',targets)
+        try:yield dict(actor=actor,targets=targets,client=client,form=form,setting=setting,mails=mails)
+        finally:
+            for ident in targets:
+                self.query('DELETE FROM mail WHERE msgto=? OR msgfrom=?',[ident,str(ident)])
+                self.query('DELETE FROM accounts_output WHERE acctid=?',[ident]);self.query('DELETE FROM accounts WHERE acctid=?',[ident])
+            self.query('UPDATE accounts SET '+','.join(k+'=?' for k in saved)+' WHERE acctid=?',list(saved.values())+[actor])
+            self.query('DELETE FROM settings WHERE setting IN (?,?,?,?)',keys)
+            for row in prior:setting(row['setting'],row['value'])
+
+    def test_player_mail_send_transport_search_and_bounds(self):
+        with self._mail_fixture() as f:
+            c=f['client'];send='mail.php?op=send'
+            anon=self._security_client(login=None)
+            for url in [send,'mail.php?op=write&to=MailAlpha','mail.php?op=write&replyto=1','mail.php?op=address']:
+                self.assertNotEqual(200,anon(url)[0]);self.assertEqual([],f['mails']())
+            self.assertEqual(403,c(send)[0])
+            for data in [{},{'to':'MailAlpha','subject':'x','body':'x'}]:self.assertEqual(403,c(send,data)[0])
+            for data in [{'to[]':'x'},{'to.x':'x'},{'to':'MailAlpha','msgfrom':'0'}, [('to','MailAlpha'),('to','MailOther')]]:
+                self.assertEqual(400,c('mail.php?op=write',data)[0]);self.assertEqual([],f['mails']())
+            for term in ["' OR 1=1 --",'%', '_', 'NothingLikeThis']:
+                status,body=c('mail.php?op=write',{'to':term});self.assertEqual(200,status);self.assertNotIn('action_token',body)
+            form,body=f['form']('mail.php?op=write',{'to':'Mail Al'})
+            self.assertIn('<select',body);self.assertIn('MailAlpine',body);self.assertNotIn('value="MailOther"',body)
+            self.assertEqual(409,c(send,form|{'to':'MailOther'})[0]);self.assertEqual([],f['mails']())
+            form,_=f['form']('mail.php?op=write',{'to':'Mail Al'})
+            self.assertEqual(200,c(send,form|{'to':'MailAlpine'})[0]);self.assertEqual(str(f['targets'][1]),f['mails']()[-1]['msgto'])
+            for extra in [{'from':'0'},{'from':'System'},{'msgfrom':str(f['targets'][0])},{'msgto':'1'},{'count':'0'},{'returnto':'1'},{'replyto':'1'},{'body[]':'x'},{'csrf.token':'x'}]:
+                form,_=f['form']();before=f['mails']();self.assertEqual(400,c(send,form|extra)[0]);self.assertEqual(before,f['mails']())
+            form,_=f['form']();before=f['mails']()
+            self.assertEqual(400,c(send,list(form.items())+[('subject','duplicate')])[0]);self.assertEqual(before,f['mails']())
+            self.assertEqual(403,c(send,form|{'csrf_token':'0'*64})[0]);self.assertEqual(before,f['mails']())
+            form,_=f['form']();second,_=f['form']();self.assertEqual(form,second)
+            self.assertEqual(200,c(send,form)[0]);after=f['mails']();self.assertEqual(str(f['actor']),after[-1]['msgfrom']);self.assertEqual(str(f['actor']),after[-1]['originator'])
+            self.assertEqual(409,c(send,form)[0]);self.assertEqual(409,c(send,second)[0]);self.assertEqual(after,f['mails']())
+            f['setting']('mailsizelimit',5)
+            for subject,body,expected in [('', '', ''),('normal','1234','1234'),('雪'*255,'12345','12345'),('controls`n\r\n\t','123456','12345'),('literal','雪雪','雪'),('line','a\r\nb\rc','a\nb\nc'),('line','a\nb`nc','a\nb\nc')]:
+                form,_=f['form']();self.assertEqual(200,c(send,form|{'subject':subject,'body':body})[0]);row=f['mails']()[-1]
+                self.assertEqual(expected,row['body']);self.assertEqual(subject.replace('`n','').replace('\r','').replace('\n','').replace('\t',''),row['subject'])
+            form,_=f['form']();before=f['mails']();self.assertEqual(409,c(send,form|{'subject':'雪'*256})[0]);self.assertEqual(before,f['mails']())
+            f['setting']('mailsizelimit',1024)
+            plain='a:1:{i:0;s:5:"hello";}'
+            form,_=f['form']();self.assertEqual(200,c(send,form|{'subject':plain,'body':plain})[0]);self.assertEqual(plain,f['mails']()[-1]['body'])
+
+    def test_player_mail_reply_ownership_staleness_and_rendering(self):
+        with self._mail_fixture() as f:
+            c=f['client'];actor=f['actor'];target=f['targets'][0];send='mail.php?op=send'
+            def message(sender,owner,subject='Original',body='Original body'):
+                self.query('INSERT INTO mail(msgfrom,msgto,subject,body,sent) VALUES (?,?,?,?,NOW())',[str(sender),owner,subject,body])
+                return int(self.query('SELECT MAX(messageid) AS id FROM mail')[0]['id'])
+            owned=message(target,actor,'<img src=x>','</textarea><script>bad()</script>')
+            foreign=message(target,f['targets'][1],'PRIVATE FOREIGN','SECRET FOREIGN')
+            system=message(0,actor)
+            try:
+                for ident in [foreign,4294967295,system]:
+                    status,body=c('mail.php?op=write&replyto='+str(ident));self.assertEqual(409,status);self.assertNotIn('action_token',body);self.assertNotIn('SECRET FOREIGN',body)
+                status,body=c('mail.php?op=read&id='+str(foreign));self.assertEqual(200,status);self.assertNotIn('SECRET FOREIGN',body)
+                url='mail.php?op=write&replyto='+str(owned)
+                form,body=f['form'](url);self.assertIn('RE: &lt;img src=x&gt;',body);self.assertIn('&lt;/textarea&gt;',body);self.assertNotIn('<script>bad()',body);self.assertIn('Original Message from Mail Alpha',body)
+                self.assertEqual(400,c(url+'&to=MailOther')[0]);self.assertEqual(409,c(send,form|{'to':'MailOther'})[0]);self.assertEqual(1,len(f['mails']()))
+                form,_=f['form'](url);original=self.query('SELECT * FROM mail WHERE messageid=?',[owned]);self.assertEqual(200,c(send,form)[0]);self.assertEqual(str(target),f['mails']()[-1]['msgto'])
+                # Successful return is an owned read, with the historical mark-seen behavior.
+                original[0]['seen']='1';self.assertEqual(original,self.query('SELECT * FROM mail WHERE messageid=?',[owned]))
+                for field,value in [('login','RenamedRecipient'),('name','Renamed display'),('locked',1)]:
+                    prior=self.query('SELECT '+field+' FROM accounts WHERE acctid=?',[target])[0][field]
+                    form,_=f['form'](url);before=f['mails']();self.query('UPDATE accounts SET '+field+'=? WHERE acctid=?',[value,target])
+                    self.assertEqual(409,c(send,form)[0]);self.assertEqual(before,f['mails']());self.query('UPDATE accounts SET '+field+'=? WHERE acctid=?',[prior,target])
+                form,_=f['form'](url);before=f['mails']();self.query('UPDATE mail SET body=? WHERE messageid=?',['changed',owned]);self.assertEqual(409,c(send,form)[0]);self.assertEqual(before,f['mails']())
+                form,_=f['form'](url);self.query('DELETE FROM mail WHERE messageid=?',[owned]);self.assertEqual(409,c(send,form)[0]);self.assertEqual(before,f['mails']())
+                # A removed original sender is unavailable even if its orphan source remains.
+                deleted=message(f['targets'][2],actor);form,_=f['form']('mail.php?op=write&replyto='+str(deleted))
+                self.query('DELETE FROM accounts WHERE acctid=?',[f['targets'][2]]);self.assertEqual(409,c(send,form|{'to':'MailOther'})[0])
+                self.assertEqual(409,c('mail.php?op=write&replyto='+str(deleted))[0])
+                self.query('DELETE FROM mail WHERE messageid=?',[deleted])
+            finally:self.query('DELETE FROM mail WHERE messageid IN (?,?,?)',[owned,foreign,system])
+
+    def test_player_mail_gamemaster_settings_locked_and_capacity(self):
+        with self._mail_fixture() as f:
+            c=f['client'];send='mail.php?op=send';actor=f['actor'];target=f['targets'][0]
+            self.assertEqual(409,c('mail.php?op=write',{'to':'MailAlpha','from':'Ramius'})[0])
+            gm=int(subprocess.check_output([shutil.which('php'),'-r',"require 'lib/constants.php';echo SU_IS_GAMEMASTER;"],cwd=ROOT,text=True))
+            self.query('UPDATE accounts SET superuser=? WHERE acctid=?',[gm,actor])
+            for label in ['System','`^System','0','1','99999999999999999999','1notSystem']:
+                self.assertEqual(409,c('mail.php?op=write',{'to':'MailAlpha','from':label})[0])
+            form,_=f['form']('mail.php?op=write',{'to':'MailAlpha','from':"`^Ramius O'Reilly"})
+            self.assertNotIn('from',form);self.assertEqual(200,c(send,form)[0]);self.assertEqual("`^Ramius O'Reilly",f['mails']()[-1]['msgfrom'])
+            form,_=f['form']('mail.php?op=write',{'to':'MailAlpha','from':'Ramius'})
+            self.query('UPDATE accounts SET superuser=0 WHERE acctid=?',[actor]);before=f['mails']();self.assertEqual(403,c(send,form)[0]);self.assertEqual(before,f['mails']())
+            for field,value in [('locked',1),('name','New name'),('prefs','a:0:{}')]:
+                prior=self.query('SELECT '+field+' FROM accounts WHERE acctid=?',[target])[0][field];form,_=f['form']()
+                self.query('UPDATE accounts SET '+field+'=? WHERE acctid=?',[value,target]);self.assertEqual(409,c(send,form)[0]);self.assertEqual(before,f['mails']())
+                if field=='locked':
+                    self.assertNotIn('action_token',c('mail.php?op=write',{'to':'MailAlpha'})[1]);self.assertNotIn('action_token',c('mail.php?op=write&to=MailAlpha')[1])
+                self.query('UPDATE accounts SET '+field+'=? WHERE acctid=?',[prior,target])
+            for key,value in [('mailsizelimit',100),('inboxlimit',2),('onlyunreadmails',0),('superuseryommessage','Changed warning')]:
+                prior=self.query('SELECT value FROM settings WHERE setting=?',[key])[0]['value'];form,_=f['form']();f['setting'](key,value)
+                self.assertEqual(409,c(send,form)[0]);self.assertEqual(before,f['mails']());f['setting'](key,prior)
+            for key,bad in [('mailsizelimit','-1'),('mailsizelimit','0'),('mailsizelimit','65536'),('inboxlimit','10001'),('onlyunreadmails','yes')]:
+                prior=self.query('SELECT value FROM settings WHERE setting=?',[key])[0]['value'];f['setting'](key,bad)
+                self.assertEqual(409,c('mail.php?op=write&to=MailAlpha')[0]);f['setting'](key,prior)
+            f['setting']('inboxlimit',1);form,_=f['form']();self.assertEqual(409,c(send,form)[0])
+            self.query('UPDATE mail SET seen=1 WHERE msgto=?',[target]);form,_=f['form']();self.assertEqual(200,c(send,form)[0])
+            f['setting']('onlyunreadmails',0);form,_=f['form']();self.assertEqual(409,c(send,form)[0])
+            # Form issued with capacity, filled before submit.
+            self.query('DELETE FROM mail WHERE msgto=?',[target]);form,_=f['form']()
+            self.query('INSERT INTO mail(msgfrom,msgto,subject,body,sent) VALUES (0,?,?,?,NOW())',[target,'fill','body'])
+            before=f['mails']();self.assertEqual(409,c(send,form)[0]);self.assertEqual(before,f['mails']())
+
+    def test_player_mail_late_failure_consumption_and_fresh_retry(self):
+        with self._mail_fixture() as f:
+            c=f['client'];send='mail.php?op=send';target=f['targets'][0];actor=f['actor']
+            self.query('INSERT INTO mail(msgfrom,msgto,subject,body,sent) VALUES (?,?,?,?,NOW())',[str(target),actor,'Source','Unchanged original'])
+            source=int(self.query('SELECT MAX(messageid) AS id FROM mail')[0]['id'])
+            gm=int(subprocess.check_output([shutil.which('php'),'-r',"require 'lib/constants.php';echo SU_IS_GAMEMASTER;"],cwd=ROOT,text=True))
+            try:
+                for mode in ['normal','reply','gm']:
+                    self.query('UPDATE accounts SET superuser=? WHERE acctid=?',[gm if mode=='gm' else 0,actor])
+                    def getform():return f['form']('mail.php?op=write&replyto='+str(source) if mode=='reply' else 'mail.php?op=write',None if mode=='reply' else ({'to':'MailAlpha','from':'Ramius'} if mode=='gm' else {'to':'MailAlpha'}))[0]
+                    form=getform();before=f['mails']();original=self.query('SELECT * FROM mail WHERE messageid=?',[source])
+                    # Real INSERT failure, after authority and capacity locks. No early rejection.
+                    self.query("ALTER TABLE mail ADD CONSTRAINT fixture_mail_failure CHECK (body <> 'LATE FAIL')")
+                    try:self.assertEqual(500,c(send,form|{'body':'LATE FAIL'})[0])
+                    finally:self.query('ALTER TABLE mail DROP CONSTRAINT fixture_mail_failure')
+                    self.assertEqual(before,f['mails']());self.assertEqual(original,self.query('SELECT * FROM mail WHERE messageid=?',[source]))
+                    self.assertEqual(409,c(send,form)[0]);fresh=getform();self.assertEqual(200,c(send,fresh)[0]);self.assertEqual(len(before)+1,len(f['mails']()))
+                    self.assertEqual('Ramius' if mode=='gm' else str(actor),f['mails']()[-1]['msgfrom'])
+            finally:self.query('DELETE FROM mail WHERE messageid=?',[source])
+
+    def test_player_mail_capacity_two_independent_senders(self):
+        import threading
+        with socket.socket() as sock:sock.bind(('127.0.0.1',0));port=sock.getsockname()[1]
+        log=tempfile.TemporaryFile(mode='w+t')
+        server=subprocess.Popen([shutil.which('php'),'-d','display_errors=1','-d','error_reporting=-1','-S',f'127.0.0.1:{port}','-t',str(ROOT)],cwd=ROOT,stdout=subprocess.DEVNULL,stderr=log)
+        try:
+            for _ in range(100):
+                try:
+                    with socket.create_connection(('127.0.0.1',port),timeout=.1):break
+                except OSError:time.sleep(.02)
+            with self._mail_fixture() as f:
+                target=f['targets'][0];second_id=f['targets'][2];f['setting']('inboxlimit',1)
+                password=self.query('SELECT password FROM accounts WHERE acctid=?',[f['actor']])[0]['password']
+                self.query('UPDATE accounts SET password=? WHERE acctid=?',[password,second_id])
+                second=self._security_client('MailOther',port=port)
+                first_form,_=f['form']();status,body=second('mail.php?op=write&to=MailAlpha');self.assertEqual(200,status)
+                second_form=self._security_fields(body,'mail.php?op=send')|{'to':'MailAlpha','subject':'Concurrent second','body':'Body'}
+                code="""require 'dbconnect.php';require 'lib/dbwrapper_pdo.php';db_connect($DB_HOST,$DB_USER,$DB_PASS);db_select_db($DB_NAME);
+$db=$GLOBALS['dbinfo']['connection'];$db->beginTransaction();db_query('SELECT acctid FROM accounts WHERE acctid=? FOR UPDATE',true,[(int)$argv[1]]);echo "LOCKED\n";flush();fgets(STDIN);$db->commit();"""
+                barrier=subprocess.Popen([shutil.which('php'),'-r',code,str(target)],cwd=ROOT,stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True)
+                results=[];threads=[]
+                try:
+                    self.assertEqual('LOCKED',barrier.stdout.readline().strip())
+                    for client,form in [(f['client'],first_form),(second,second_form)]:
+                        thread=threading.Thread(target=lambda client=client,form=form:results.append(client('mail.php?op=send',form)));threads.append(thread);thread.start()
+                    waiting=False
+                    for _ in range(100):
+                        rows=self.query("SELECT INFO FROM information_schema.PROCESSLIST WHERE INFO LIKE '%accounts%FOR UPDATE%'")
+                        if sum('WHERE acctid=' in (r['INFO'] or '') and 'SELECT INFO' not in (r['INFO'] or '') for r in rows)>=2:waiting=True;break
+                        time.sleep(.02)
+                    self.assertTrue(waiting,'Both independent senders must reach the SQL recipient lock')
+                    barrier.stdin.write('commit\n');barrier.stdin.flush();_,err=barrier.communicate(timeout=10);self.assertEqual(0,barrier.returncode,err)
+                    for thread in threads:thread.join(timeout=20);self.assertFalse(thread.is_alive())
+                    self.server_log.seek(0); log.seek(0)
+                    self.assertEqual([200,409],sorted(r[0] for r in results),repr(results)+self.server_log.read()[-2000:]+log.read()[-2000:]);self.assertEqual(1,len(f['mails']()))
+                    for client,form in [(f['client'],first_form),(second,second_form)]:self.assertEqual(409,client('mail.php?op=send',form)[0])
+                    self.assertEqual(1,len(f['mails']()))
+                finally:
+                    if barrier.poll() is None:barrier.terminate();barrier.wait(timeout=5)
+                    for thread in threads:thread.join(timeout=20)
+        finally:server.terminate();server.wait(timeout=5);log.close()
+
+    def test_player_mail_notifications_commit_failure_preferences_and_display(self):
+        with self._mail_fixture() as f:
+            c=f['client'];target=f['targets'][0];send='mail.php?op=send'
+            def captures():return [json.loads(x) for x in self.mail_capture.read_text().splitlines()] if self.mail_capture.exists() else []
+            def prefs(email,system,emailaddress='recipient@example.invalid'):
+                encoded='a:3:{s:11:"emailonmail";b:'+str(int(email))+';s:10:"systemmail";b:'+str(int(system))+';s:10:"dirtyemail";b:1;}'
+                self.query('UPDATE accounts SET prefs=?,emailaddress=? WHERE acctid=?',[encoded,emailaddress,target])
+            prefs(True,True)
+            form,_=f['form']();before=captures()
+            self.query("ALTER TABLE mail ADD CONSTRAINT fixture_mail_failure CHECK (body <> 'LATE FAIL')")
+            try:self.assertEqual(500,c(send,form|{'body':'LATE FAIL'})[0])
+            finally:self.query('ALTER TABLE mail DROP CONSTRAINT fixture_mail_failure')
+            self.assertEqual([],f['mails']());self.assertEqual(before,captures());self.assertEqual(409,c(send,form)[0])
+            form,_=f['form']();self.assertEqual(200,c(send,form|{'subject':'Commit probe','body':'Unique committed body'})[0])
+            after=captures();self.assertEqual(len(before)+1,len(after));self.assertTrue(any(r['body']=='Unique committed body' for r in after[-1]['rows']))
+            self.assertIn('Unique committed body',after[-1]['payload']);self.assertNotIn('PHPSESSID',after[-1]['payload'])
+            self.assertEqual(409,c(send,form)[0]);self.assertEqual(1,len(f['mails']()));self.assertEqual(after,captures())
+            for email,system,address in [(False,True,'recipient@example.invalid'),(True,False,'invalid-address')]:
+                prefs(email,system,address);form,_=f['form']();self.assertEqual(200,c(send,form)[0]);self.assertEqual(after,captures())
+            # Literal serialized-looking player content survives inbox/read without translation.
+            literal='a:1:{i:0;s:5:"hello";}'
+            self.query('INSERT INTO mail(msgfrom,msgto,subject,body,sent) VALUES (?,?,?,?,NOW())',[str(target),f['actor'],literal,literal])
+            mid=int(self.query('SELECT MAX(messageid) AS id FROM mail')[0]['id'])
+            try:
+                self.assertIn('a:1:',c('mail.php')[1]);self.assertIn('a:1:',c('mail.php?op=read&id='+str(mid))[1])
+                self.query('UPDATE mail SET msgfrom=?,subject=?,body=? WHERE messageid=?',['Ramius',literal,literal,mid])
+                rendered=c('mail.php?op=read&id='+str(mid))[1];self.assertIn('a:1:',rendered);self.assertNotIn('op=write&amp;replyto',rendered)
+                self.assertEqual(409,c('mail.php?op=write&replyto='+str(mid))[0])
+                self.query('UPDATE mail SET msgfrom=?,subject=?,body=? WHERE messageid=?',['0','a:1:{i:0;s:14:"Trusted notice";}','a:2:{i:0;s:8:"Hello %s";i:1;s:3:"Jim";}',mid])
+                rendered=c('mail.php?op=read&id='+str(mid))[1];self.assertIn('Trusted notice',rendered);self.assertIn('Hello Jim',rendered);self.assertNotIn('a:2:',rendered)
+                self.assertEqual(409,c('mail.php?op=write&replyto='+str(mid))[0])
+                # Retained unread/delete ownership and CSRF operations.
+                csrf=self._security_fields(f['form']()[1])['csrf_token']
+                self.assertEqual(303,c('mail.php?op=unread',{'csrf_token':csrf,'id':str(mid)})[0]);self.assertEqual('0',self.query('SELECT seen FROM mail WHERE messageid=?',[mid])[0]['seen'])
+                foreign=int(f['mails']()[0]['messageid']);self.assertEqual(303,c('mail.php?op=unread',{'csrf_token':csrf,'id':str(foreign)})[0]);self.assertEqual(3,len(f['mails']()))
+                self.assertEqual(303,c('mail.php?op=process',[('csrf_token',csrf),('msg[]',str(foreign))])[0]);self.assertEqual(3,len(f['mails']()))
+                self.assertEqual(403,c('mail.php?op=del',{'id':str(mid)})[0]);self.assertEqual(303,c('mail.php?op=del',{'csrf_token':csrf,'id':str(mid)})[0])
+            finally:self.query('DELETE FROM mail WHERE messageid=?',[mid])
+
+    def test_player_mail_privilege_rechecked_after_waiting_for_account_lock(self):
+        import threading
+        with self._mail_fixture() as f:
+            actor=f['actor'];c=f['client']
+            gm=int(subprocess.check_output([shutil.which('php'),'-r',"require 'lib/constants.php';echo SU_IS_GAMEMASTER;"],cwd=ROOT,text=True))
+            self.query('UPDATE accounts SET superuser=? WHERE acctid=?',[gm,actor])
+            form,_=f['form']('mail.php?op=write',{'to':'MailAlpha','from':'Ramius'})
+            code="""require 'dbconnect.php';require 'lib/dbwrapper_pdo.php';db_connect($DB_HOST,$DB_USER,$DB_PASS);db_select_db($DB_NAME);
+$db=$GLOBALS['dbinfo']['connection'];$db->beginTransaction();db_query('SELECT acctid FROM accounts WHERE acctid=? FOR UPDATE',true,[(int)$argv[1]]);echo "LOCKED\n";flush();fgets(STDIN);db_query('UPDATE accounts SET superuser=0 WHERE acctid=?',true,[(int)$argv[1]]);$db->commit();"""
+            barrier=subprocess.Popen([shutil.which('php'),'-r',code,str(actor)],cwd=ROOT,stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True)
+            results=[];thread=threading.Thread(target=lambda:results.append(c('mail.php?op=send',form)))
+            try:
+                self.assertEqual('LOCKED',barrier.stdout.readline().strip());thread.start();waiting=False
+                for _ in range(100):
+                    rows=self.query("SELECT INFO FROM information_schema.PROCESSLIST WHERE INFO LIKE '%accounts%FOR UPDATE%'")
+                    if any('WHERE acctid=' in (r['INFO'] or '') and 'SELECT INFO' not in (r['INFO'] or '') for r in rows):waiting=True;break
+                    time.sleep(.02)
+                self.assertTrue(waiting,'Send must pass initial authentication/CSRF and reach the account lock before privilege revocation')
+                barrier.stdin.write('revoke\n');barrier.stdin.flush();_,err=barrier.communicate(timeout=10);self.assertEqual(0,barrier.returncode,err)
+                thread.join(timeout=20);self.assertFalse(thread.is_alive());self.assertEqual(409,results[0][0]);self.assertEqual([],f['mails']())
+                # Existing authentication rotates CSRF on the following request; a fresh normal form works.
+                fresh,_=f['form']();self.assertEqual(409,c('mail.php?op=send',form|{'csrf_token':fresh['csrf_token']})[0]);self.assertEqual(200,c('mail.php?op=send',fresh)[0])
+                self.assertEqual(str(actor),f['mails']()[-1]['msgfrom'])
+            finally:
+                if barrier.poll() is None:barrier.terminate();barrier.wait(timeout=5)
+                if thread.ident is not None:thread.join(timeout=20)
+
+    def test_player_mail_system_helper_notifications_and_missing_recipients(self):
+        with self._mail_fixture() as f:
+            target=f['targets'][0]
+            def captures():return [json.loads(x) for x in self.mail_capture.read_text().splitlines()] if self.mail_capture.exists() else []
+            code="""require 'dbconnect.php';require 'lib/dbwrapper_pdo.php';db_connect($DB_HOST,$DB_USER,$DB_PASS);db_select_db($DB_NAME);
+require 'lib/constants.php';require 'lib/datacache.php';require 'lib/settings.php';require 'lib/output.php';require 'lib/translator.php';require 'lib/systemmail.php';
+$session=['user'=>['acctid'=>1,'superuser'=>0,'prefs'=>[]]];$output='';$translation_is_enabled=false;translator_setup();
+$REQUEST_URI='mail.php';$_SERVER['HTTP_HOST']='localhost';$_SERVER['SCRIPT_NAME']='/mail.php';$to=(int)$argv[1];$noemail=$argv[2]==='1';
+echo json_encode(systemmail($to,['Trusted %s','notice'],['Hello %s','Jim'],0,$noemail));"""
+            def helper(noemail=False,to=target):
+                result=subprocess.run([shutil.which('php'),'-d','sendmail_path='+str(self.mail_program),'-r',code,str(to),'1' if noemail else '0'],cwd=ROOT,capture_output=True,text=True,timeout=15)
+                self.assertEqual(0,result.returncode,result.stderr);self.assertNotRegex(result.stdout+result.stderr,r'(?i)(warning:|notice:|fatal error|deprecated:)')
+                return json.loads(result.stdout)
+            for email,system,noemail,expected in [(False,True,False,0),(True,False,False,0),(True,True,True,0),(True,True,False,1)]:
+                prefs='a:2:{s:11:"emailonmail";b:'+str(int(email))+';s:10:"systemmail";b:'+str(int(system))+';}'
+                self.query('UPDATE accounts SET prefs=?,emailaddress=? WHERE acctid=?',[prefs,'recipient@example.invalid',target])
+                before=captures();self.assertTrue(helper(noemail));after=captures();self.assertEqual(len(before)+expected,len(after))
+            self.assertIn('Hello Jim',after[-1]['payload']);self.assertNotIn('a:2:',after[-1]['payload']);self.assertTrue(any('Hello %s' in r['body'] for r in after[-1]['rows']))
+            count=len(f['mails']());before=captures();self.assertFalse(helper(to=4294967295));self.assertEqual(count,len(f['mails']()));self.assertEqual(before,captures())
+
+    def test_systemmail_clan_application_null_description_reminder(self):
+        # New clans store NULL clandesc: the applicant is recorded and receives no reminder.
+        q=self.query;actor=int(q('SELECT acctid FROM accounts WHERE login=?',['WebPlayer'])[0]['acctid'])
+        saved=q('SELECT name,clanid,clanrank,clanjoindate,allowednavs FROM accounts WHERE acctid=?',[actor])[0]
+        officer=int(self._security_target('ClanMailOfficer'))
+        ser=lambda items:'a:%d:{%s}'%(len(items),''.join('i:%d;s:%d:"%s";'%(i,len(v.encode()),v) for i,v in enumerate(items)))
+        try:
+            for desc,reminder in [(None,None),('Line one\nLine two %s','Line one`nLine two %s')]:
+                q('DELETE FROM clans WHERE clanshort=?',['CMT']);q('INSERT INTO clans (clanname,clanshort,clandesc) VALUES (?,?,?)',['Clan Mail',"CMT",desc])
+                clan=int(q('SELECT clanid FROM clans WHERE clanshort=?',['CMT'])[0]['clanid'])
+                q('UPDATE accounts SET clanid=?,clanrank=20 WHERE acctid=?',[clan,officer]);q('UPDATE accounts SET name=?,clanid=0,clanrank=0 WHERE acctid=?',['Clan Applicant',actor])
+                q('DELETE FROM mail WHERE msgto IN (?,?)',[actor,officer])
+                url=f'clan.php?op=apply&to={clan}';client=self._security_client();self._security_allow(actor,url)
+                # Applying is a protected POST from the registrar's form; the GET only asks.
+                status,body=client(url);self.assertEqual(200,status);self.assertEqual('0',q('SELECT clanid FROM accounts WHERE acctid=?',[actor])[0]['clanid'])
+                self._security_allow(actor,url);self.assertEqual(200,client(url,self._security_fields(body,url))[0])
+                self.assertEqual(str(clan),q('SELECT clanid FROM accounts WHERE acctid=?',[actor])[0]['clanid'])
+                rows=q('SELECT msgto,msgfrom,subject,body FROM mail WHERE msgto IN (?,?) ORDER BY messageid',[actor,officer])
+                self.assertEqual([(str(officer),'0',ser(['`@Clan App: `&%s`0','Clan Applicant']))],[(r['msgto'],r['msgfrom'],r['subject']) for r in rows[:1]])
+                mine=[r for r in rows if r['msgto']==str(actor)]
+                if reminder is None:self.assertEqual([],mine)
+                else:
+                    self.assertEqual(1,len(mine));self.assertEqual(('0',ser(['Clan Application Reminder'])),(mine[0]['msgfrom'],mine[0]['subject']))
+                    self.assertTrue(mine[0]['body'].startswith('a:4:{i:0;s:'));self.assertTrue(mine[0]['body'].endswith(ser(['','Clan Mail','CMT',reminder]).split('";',1)[1]))
+        finally:
+            q('DELETE FROM mail WHERE msgto IN (?,?)',[actor,officer]);q('DELETE FROM clans WHERE clanshort=?',['CMT'])
+            q('UPDATE accounts SET name=?,clanid=?,clanrank=?,clanjoindate=?,allowednavs=? WHERE acctid=?',list(saved.values())+[actor])
+            q('DELETE FROM accounts_output WHERE acctid=?',[officer]);q('DELETE FROM accounts WHERE acctid=?',[officer])
+
+    def _petition_fixture(self, status=0, body='Petition fixture', pageinfo='', closed_days=None):
+        closed=', NOW() - INTERVAL ? DAY' if closed_days is not None else ''
+        values=[status,body,pageinfo]+([closed_days] if closed_days is not None else [])
+        self.query('INSERT INTO petitions (author,date,status,body,pageinfo,ip,id'+(',closedate' if closed else '')+') VALUES ((SELECT acctid FROM accounts WHERE login=?),NOW(),?,?,?,\'127.0.0.1\',\'\''+closed+')',['PetitionAuthor']+values)
+        return int(self.query('SELECT MAX(petitionid) AS m FROM petitions')[0]['m'])
+
+    def test_petition_admin_status_authority_http(self):
+        q=self.query;player=int(q('SELECT acctid FROM accounts WHERE login=?',['WebPlayer'])[0]['acctid'])
+        original=q('SELECT superuser FROM accounts WHERE acctid=?',[player])[0]['superuser']
+        author=int(self._security_target('PetitionAuthor'));created=[]
+        state=lambda pid:q('SELECT status,closeuserid,closedate FROM petitions WHERE petitionid=?',[pid])
+        call=None
+        def request(url,fields=None):
+            self._security_allow(player,url);return call(url,fields)
+        def login(role):
+            nonlocal call;q('UPDATE accounts SET superuser=? WHERE acctid=?',[role,player]);call=self._security_client()
+        try:
+            p1=self._petition_fixture(body="[description] = <script>alert(7)</script> back\\slash O'Reilly",pageinfo='<b>page</b> \\ info');p2=self._petition_fixture()
+            created+=[p1,p2];missing=p2+1000
+            view=f'viewpetition.php?op=view&id={p1}';setp=f'viewpetition.php?op=setstat&id={p1}'
+            form=lambda pid:self._security_fields(request(f'viewpetition.php?op=view&id={pid}')[1],f'viewpetition.php?op=setstat&id={pid}')
+            before=state(p1)
+            anonymous=self._security_client(login=None)
+            for url,fields in [('viewpetition.php',None),(view,None),(setp,{'setstat':'2'})]: self.assertIn(anonymous(url,fields)[0],[302,303,403])
+            # Every bit except SU_EDIT_PETITIONS is insufficient.
+            for role in [0,16|64|128]:
+                login(role)
+                for url,fields in [('viewpetition.php',None),(view,None),(setp,{'setstat':'2'})]: self.assertEqual(403,request(url,fields)[0])
+            self.assertEqual(before,state(p1))
+            login(8)
+            # GET only displays: the historical setstat link and a GET to the form target change nothing.
+            status,body=request(f'viewpetition.php?setstat=2&id={p1}');self.assertEqual(200,status);self.assertNotRegex(body,r'\?setstat=')
+            self.assertEqual(405,request(setp)[0]);self.assertEqual(before,state(p1))
+            self.assertNotIn("<img src=x>",body)
+            status,body=request(view+'&viewpageinfo=1');self.assertEqual(200,status)
+            self.assertNotIn('<script>alert(7)</script>',body);self.assertIn("&lt;script&gt;alert(7)&lt;/script&gt; back\\slash O'Reilly",body)
+            self.assertNotIn('<b>page</b>',body);self.assertIn('&lt;b&gt;page&lt;/b&gt; \\ info',body);self.assertNotIn('<img src=x>',body)
+            self.assertIn('ide Details',body);self.assertNotIn(f'id={p1}}}',body)
+            self.assertRegex(html.unescape(body),rf"href=['\"]viewpetition\.php\?op=view&id={p1}(?:&c=[^'\"]*)?['\"]")
+            for url in [f'viewpetition.php?op=view&id={bad}' for bad in ['abc','0','-1','4294967296','1e3']]+[f'viewpetition.php?op=del&id={p1}','viewpetition.php?page=x',f'viewpetition.php?op=view&id={p1}&viewpageinfo=2']:
+                self.assertEqual(400,request(url)[0],url)
+            self.assertEqual(404,request(f'viewpetition.php?op=view&id={missing}')[0])
+            fields=form(p1)
+            for bad in [{},{'setstat':'8'},{'setstat':'-1'},{'setstat':'x'},{'setstat[]':'1'}]: self.assertEqual(400,request(setp,{**fields,**bad})[0],bad)
+            self.assertEqual(404,request(f'viewpetition.php?op=setstat&id={missing}',{**fields,'setstat':'1'})[0])
+            self.assertEqual(403,request(setp,{'action_token':fields['action_token'],'setstat':'1'})[0])
+            self.assertEqual(403,request(setp,{**fields,'csrf_token':'0'*64,'setstat':'1'})[0])
+            self.assertEqual(before,state(p1))
+            # The rejected submissions did not spend the intent; it changes the status once.
+            self.assertEqual(200,request(setp,{**fields,'setstat':'1'})[0])
+            after=state(p1)[0];self.assertEqual(('1',str(player)),(after['status'],after['closeuserid']));self.assertNotEqual(before[0]['closedate'],after['closedate'])
+            self.assertEqual(409,request(setp,{**fields,'setstat':'4'})[0]);self.assertEqual([after],state(p1))
+            # A list form is stale once another admin changes the petition.
+            listed=self._security_fields(request('viewpetition.php')[1],setp)
+            q('UPDATE petitions SET status=4 WHERE petitionid=?',[p1])
+            self.assertEqual(409,request(setp,{**listed,'setstat':'2'})[0]);self.assertEqual('4',state(p1)[0]['status'])
+            # Setting the current status is the historical no-op, and the form is still single-use.
+            q("UPDATE petitions SET closeuserid=0,closedate='2020-01-02 03:04:05' WHERE petitionid=?",[p1]);quiet=state(p1)
+            fields=form(p1);self.assertEqual(200,request(setp,{**fields,'setstat':'4'})[0]);self.assertEqual(quiet,state(p1))
+            self.assertEqual(409,request(setp,{**fields,'setstat':'4'})[0])
+            # A failing status write rolls back; the spent intent cannot retry, a fresh one can.
+            # MySQL rejects CHECK on the auto-increment ID, so mark this petition through a column the update does not touch.
+            q('UPDATE petitions SET ip=? WHERE petitionid=?',['198.51.100.7',p1])
+            q("ALTER TABLE petitions ADD CONSTRAINT fixture_petition_status CHECK (ip <> '198.51.100.7' OR status <> 7)")
+            try:
+                fields=form(p1);self.assertEqual(500,request(setp,{**fields,'setstat':'7'})[0]);self.assertEqual(quiet,state(p1))
+                self.assertEqual(409,request(setp,{**fields,'setstat':'7'})[0]);self.assertEqual(quiet,state(p1))
+            finally: q('ALTER TABLE petitions DROP CONSTRAINT fixture_petition_status')
+            fields=form(p1);self.assertEqual(200,request(setp,{**fields,'setstat':'7'})[0]);self.assertEqual(('7',str(player)),tuple(state(p1)[0][k] for k in ['status','closeuserid']))
+        finally:
+            for pid in created: q('DELETE FROM commentary WHERE section=?',[f'pet-{pid}']);q('DELETE FROM petitions WHERE petitionid=?',[pid])
+            q('UPDATE accounts SET superuser=? WHERE acctid=?',[original,player])
+            q('DELETE FROM accounts_output WHERE acctid=?',[author]);q('DELETE FROM accounts WHERE acctid=?',[author])
+
+    def test_petition_admin_cleanup_and_commentary_http(self):
+        q=self.query;player=int(q('SELECT acctid FROM accounts WHERE login=?',['WebPlayer'])[0]['acctid'])
+        original=q('SELECT superuser FROM accounts WHERE acctid=?',[player])[0]['superuser']
+        author=int(self._security_target('PetitionAuthor'));created=[]
+        call=None
+        def request(url,fields=None):
+            self._security_allow(player,url);return call(url,fields)
+        def login(role):
+            nonlocal call;q('UPDATE accounts SET superuser=? WHERE acctid=?',[role,player]);call=self._security_client()
+        def present(pid):
+            return (len(q('SELECT petitionid FROM petitions WHERE petitionid=?',[pid])),len(q('SELECT commentid FROM commentary WHERE section=?',[f'pet-{pid}'])))
+        def comment_form(body):
+            class Forms(HTMLParser):
+                def __init__(self): super().__init__();self.forms=[];self.current=None
+                def handle_starttag(self,tag,attrs):
+                    attributes=dict(attrs)
+                    if tag=='form': self.current=[html.unescape(attributes.get('action','')),{}]
+                    elif tag=='input' and self.current is not None and 'name' in attributes: self.current[1][attributes['name']]=attributes.get('value','')
+                def handle_endtag(self,tag):
+                    if tag=='form' and self.current is not None: self.forms.append(self.current);self.current=None
+            forms=Forms();forms.feed(body)
+            return next(form for form in forms.forms if 'insertcommentary' in form[1])
+        try:
+            expired=self._petition_fixture(status=2,closed_days=8);recent=self._petition_fixture(status=2,closed_days=1);old_open=self._petition_fixture(status=0,closed_days=8)
+            created+=[expired,recent,old_open]
+            for pid in created: q('INSERT INTO commentary (postdate,section,author,comment) VALUES (NOW(),?,?,?)',[f'pet-{pid}',player,'Fixture note'])
+            # Authorization precedes retention: refused viewers delete nothing.
+            for role in [0,16|64|128]:
+                login(role);self.assertEqual(403,request('viewpetition.php')[0])
+            self.assertIn(self._security_client(login=None)('viewpetition.php')[0],[302,303,403]);self.assertEqual((1,1),present(expired))
+            login(8)
+            # Retention is all or nothing: a late petition delete failure restores the commentary deleted before it.
+            q('CREATE TABLE fixture_petition_hold (pid INT(11) UNSIGNED NOT NULL, FOREIGN KEY (pid) REFERENCES petitions(petitionid)) ENGINE=InnoDB')
+            try:
+                q('INSERT INTO fixture_petition_hold (pid) VALUES (?)',[expired])
+                status,body=request('viewpetition.php');self.assertEqual(200,status);self.assertIn('could not be removed',body)
+                self.assertEqual((1,1),present(expired))
+            finally: q('DROP TABLE fixture_petition_hold')
+            status,body=request('viewpetition.php');self.assertEqual(200,status);self.assertRegex(body,r'[1-9][0-9]* expired closed petition\(s\) and their commentary were removed')
+            self.assertEqual((0,0),present(expired));self.assertEqual((1,1),present(recent));self.assertEqual((1,1),present(old_open))
+            status,body=request('viewpetition.php');self.assertEqual(200,status);self.assertNotIn('were removed',body);self.assertNotIn('could not be removed',body)
+            self.assertEqual((1,1),present(recent))
+            # A protected comment stamps its own existing petition, bound; a mismatched section stamps nothing.
+            stamp=lambda pid:q('SELECT closeuserid,closedate FROM petitions WHERE petitionid=?',[pid])
+            q("UPDATE petitions SET closeuserid=0,closedate='2020-01-02 03:04:05' WHERE petitionid IN (?,?)",[recent,old_open])
+            quiet={pid:stamp(pid) for pid in [recent,old_open]}
+            action,fields=comment_form(request(f'viewpetition.php?op=view&id={recent}')[1])
+            self.assertEqual(f'pet-{recent}',fields['section'])
+            self.assertEqual(200,request(action,{**fields,'insertcommentary':'Admin follow-up'})[0])
+            self.assertEqual(2,present(recent)[1]);self.assertEqual(str(player),stamp(recent)[0]['closeuserid']);self.assertNotEqual(quiet[recent],stamp(recent))
+            self.assertEqual(quiet[old_open],stamp(old_open))
+            stamped=stamp(recent)
+            action,fields=comment_form(request(f'viewpetition.php?op=view&id={old_open}')[1])
+            self.assertIn(request(f'viewpetition.php?op=view&id={recent}',{**fields,'insertcommentary':'Misdirected note'})[0],[200,400])
+            self.assertEqual(stamped,stamp(recent));self.assertEqual(quiet[old_open],stamp(old_open))
+        finally:
+            for pid in created: q('DELETE FROM commentary WHERE section=?',[f'pet-{pid}']);q('DELETE FROM petitions WHERE petitionid=?',[pid])
+            q('UPDATE accounts SET superuser=? WHERE acctid=?',[original,player])
+            q('DELETE FROM accounts_output WHERE acctid=?',[author]);q('DELETE FROM accounts WHERE acctid=?',[author])
+
+    @contextmanager
+    def _inn_fixture(self):
+        q=self.query;player=int(q('SELECT acctid FROM accounts WHERE login=?',['WebPlayer'])[0]['acctid'])
+        original=q('SELECT * FROM accounts WHERE acctid=?',[player])[0]
+        prefs=q('SELECT * FROM module_userprefs WHERE userid=?',[player])
+        modules=q('SELECT modulename,active FROM modules')
+        names=['innfee','innname','villagename','allowspecialswitch','pvp']
+        settings=q('SELECT setting,value FROM settings WHERE setting IN ('+','.join('?' for _ in names)+')',names)
+        q("UPDATE modules SET active=1 WHERE modulename IN ('specialtydarkarts','specialtymysticpower','specialtythiefskills')")
+        for key,value in [('innfee','5%'),('allowspecialswitch','1'),('pvp','1')]:
+            q('INSERT INTO settings(setting,value) VALUES (?,?) ON DUPLICATE KEY UPDATE value=VALUES(value)',[key,value])
+        village=q("SELECT value FROM settings WHERE setting='villagename'");village=village[0]['value'] if village else 'Degolburg'
+        inn=q("SELECT value FROM settings WHERE setting='innname'");inn=inn[0]['value'] if inn else 'The Boar\'s Head Inn'
+        f={'player':player,'village':village,'inn':inn,'call':None}
+        def login(): f['call']=self._security_client()
+        def request(url,data=None,fixture=None):
+            self._security_allow(player,url);return f['call'](url,data,fixture)
+        def setup(**changes):
+            values=dict(alive=1,hitpoints=100,maxhitpoints=100,specialinc='',specialmisc='',badguy='',level=5,gold=1000,goldinbank=0,gems=10,
+                boughtroomtoday=0,charm=3,seendragon=0,location=village,race='Human',specialty='DA',dragonkills=0,dragonpoints='a:0:{}',
+                bufflist='a:0:{}',companions='a:0:{}',restorepage='village.php');values.update(changes)
+            q('UPDATE accounts SET '+','.join(k+'=?' for k in values)+',lasthit=NOW() WHERE acctid=?',[*values.values(),player])
+        def state(*fields):
+            return q('SELECT '+','.join(fields or ['gold','goldinbank','gems','boughtroomtoday','location','loggedin','charm','specialty','seendragon'])+' FROM accounts WHERE acctid=?',[player])[0]
+        f.update(login=login,request=request,setup=setup,state=state)
+        try: yield f
+        finally:
+            q('UPDATE accounts SET '+','.join(k+'=?' for k in original if k!='acctid')+' WHERE acctid=?',[*[v for k,v in original.items() if k!='acctid'],player])
+            q('DELETE FROM module_userprefs WHERE userid=?',[player])
+            for row in prefs: q('INSERT INTO module_userprefs(modulename,setting,userid,value) VALUES (?,?,?,?)',[row['modulename'],row['setting'],row['userid'],row['value']])
+            for row in modules: q('UPDATE modules SET active=? WHERE modulename=?',[row['active'],row['modulename']])
+            q('DELETE FROM settings WHERE setting IN ('+','.join('?' for _ in names)+')',names)
+            for row in settings: q('INSERT INTO settings(setting,value) VALUES (?,?)',[row['setting'],row['value']])
+
+    def test_inn_room_and_dragon_flee_authority_http(self):
+        q=self.query
+        with self._inn_fixture() as f:
+            request,state,player=f['request'],f['state'],f['player']
+            anonymous=self._security_client(login=None)
+            for url,data in [('inn.php?op=room',None),('inn.php?op=room&pay=1',{'x':'1'}),('inn.php?op=fleedragon',None)]: self.assertIn(anonymous(url,data)[0],[302,303,403])
+            f['login']();f['setup']();before=state()
+            # Level 5: expense round(5*(10+ln 5))=58; the 5% bank fee makes 61.
+            status,body=request('inn.php?op=room');self.assertEqual(200,status);self.assertIn('58',body);self.assertNotIn('pay=2',html.unescape(body))
+            # GET only displays; a forced bank payment with an empty bank is refused, never driven negative.
+            status,body=request('inn.php?op=room&pay=2');self.assertEqual(200,status);self.assertIn("so that's how it is",html.unescape(body));self.assertNotIn('action_token',body)
+            self.assertEqual(400,request('inn.php?op=room&pay=3')[0]);self.assertEqual(before,state())
+            q('UPDATE accounts SET goldinbank=1000 WHERE acctid=?',[player]);bank=self._security_fields(request('inn.php?op=room&pay=2')[1],'inn.php?op=room&pay=2')
+            q('UPDATE accounts SET goldinbank=0 WHERE acctid=?',[player])
+            self.assertEqual(409,request('inn.php?op=room&pay=2',bank)[0]);self.assertEqual(before,state())
+            form=self._security_fields(request('inn.php?op=room&pay=1')[1],'inn.php?op=room&pay=1');self.assertEqual(before,state())
+            self.assertEqual(403,request('inn.php?op=room&pay=1',{'action_token':form['action_token']})[0])
+            self.assertEqual(403,request('inn.php?op=room&pay=1',{**form,'csrf_token':'0'*64})[0])
+            self.assertEqual(400,request('inn.php?op=room&pay=1',{**form,'gold':'0'})[0]);self.assertEqual(before,state())
+            q('UPDATE accounts SET gold=999 WHERE acctid=?',[player]);self.assertEqual(409,request('inn.php?op=room&pay=1',form)[0])
+            q('UPDATE accounts SET gold=1000 WHERE acctid=?',[player]);self.assertEqual(before,state())
+            # A failing account write after the debug log rolls back both; the spent intent cannot retry.
+            logs=lambda:q("SELECT COUNT(*) AS n FROM debuglog WHERE actor=? AND message LIKE 'spent % gold on an inn room'",[player])[0]['n']
+            logged=logs();form=self._security_fields(request('inn.php?op=room&pay=1')[1],'inn.php?op=room&pay=1')
+            q("ALTER TABLE accounts ADD CONSTRAINT fixture_inn_room CHECK (login <> 'WebPlayer' OR boughtroomtoday = 0)")
+            try:
+                self.assertEqual(500,request('inn.php?op=room&pay=1',form)[0]);self.assertEqual(before,state());self.assertEqual(logged,logs())
+                self.assertEqual(409,request('inn.php?op=room&pay=1',form)[0])
+            finally: q('ALTER TABLE accounts DROP CONSTRAINT fixture_inn_room')
+            form=self._security_fields(request('inn.php?op=room&pay=1')[1],'inn.php?op=room&pay=1')
+            self.assertEqual(303,request('inn.php?op=room&pay=1',form)[0])
+            rented=state();self.assertEqual(('942','0','1',f['inn'],'0'),(rented['gold'],rented['goldinbank'],rented['boughtroomtoday'],rented['location'],rented['loggedin']))
+            self.assertEqual('inn.php?op=strolldown',state('restorepage')['restorepage'])
+            self.assertEqual(int(logged)+1,int(logs()))
+            # The rental logged the player out; the old session can neither play nor replay.
+            self.assertIn(request('inn.php')[0],[302,303]);self.assertNotEqual(200,request('inn.php?op=room&pay=1',form)[0]);self.assertEqual(rented,state())
+            # Already paid today: the room is free to re-enter, from either path.
+            f['login']();status,body=request('inn.php?op=room');self.assertEqual(200,status);self.assertIn('already paid',body)
+            form=self._security_fields(request('inn.php?op=room&pay=1')[1],'inn.php?op=room&pay=1');self.assertEqual(303,request('inn.php?op=room&pay=1',form)[0])
+            self.assertEqual(('942','0','1'),tuple(state()[k] for k in ['gold','goldinbank','boughtroomtoday']))
+            # The bank path pays the fee from the bank only.
+            f['login']();f['setup'](gold=0,goldinbank=1000);status,body=request('inn.php?op=room');self.assertIn('pay=2',html.unescape(body))
+            form=self._security_fields(request('inn.php?op=room&pay=2')[1],'inn.php?op=room&pay=2');self.assertEqual(303,request('inn.php?op=room&pay=2',form)[0])
+            self.assertEqual(('0','939','1'),tuple(state()[k] for k in ['gold','goldinbank','boughtroomtoday']))
+            # Dragon flee: never without the Forest encounter, once with it, charm floor 0.
+            f['login']();f['setup'](level=15);before=state()
+            self.assertEqual(409,request('inn.php?op=fleedragon')[0]);self.assertEqual(409,request('inn.php?op=fleedragon',{'x':'1'})[0]);self.assertEqual(before,state())
+            def encounter():
+                seek=self._security_fields(request('forest.php?op=dragon')[1],'forest.php?op=dragon')
+                status,body=request('forest.php?op=dragon',seek);self.assertEqual(200,status,body[:1500]);self.assertIn('inn.php?op=fleedragon',html.unescape(body))
+            encounter();seen=state();self.assertEqual('1',seen['seendragon'])
+            status,body=request('inn.php?op=fleedragon');self.assertEqual(200,status);self.assertEqual(seen,state())
+            flee=self._security_fields(body,'inn.php?op=fleedragon')
+            self.assertEqual(403,request('inn.php?op=fleedragon',{'action_token':flee['action_token']})[0]);self.assertEqual(seen,state())
+            q('UPDATE accounts SET charm=4 WHERE acctid=?',[player]);self.assertEqual(409,request('inn.php?op=fleedragon',flee)[0])
+            q('UPDATE accounts SET charm=3 WHERE acctid=?',[player])
+            status,body=request('inn.php?op=fleedragon',flee);self.assertEqual(200,status);self.assertIn('as if the Devil himself',body)
+            fled=state();self.assertEqual(('2',f['village']),(fled['charm'],fled['location']))
+            self.assertEqual(409,request('inn.php?op=fleedragon',flee)[0]);self.assertEqual(409,request('inn.php?op=fleedragon')[0]);self.assertEqual(fled,state())
+            f['setup'](level=15,charm=0);encounter()
+            flee=self._security_fields(request('inn.php?op=fleedragon')[1],'inn.php?op=fleedragon')
+            self.assertEqual(200,request('inn.php?op=fleedragon',flee)[0]);self.assertEqual('0',state()['charm'])
+
+    def test_inn_bartender_bribe_and_specialty_authority_http(self):
+        q=self.query
+        with self._inn_fixture() as f:
+            request,state,player=f['request'],f['state'],f['player']
+            bribe='inn.php?op=bartender&act=bribe';switch='inn.php?op=bartender&act=specialty';upstairs='inn.php?op=bartender&act=listupstairs'
+            logs=lambda:q("SELECT COUNT(*) AS n FROM debuglog WHERE actor=? AND message LIKE 'spent %'",[player])[0]['n']
+            anonymous=self._security_client(login=None)
+            for url in [bribe,bribe+'&type=gem&amt=1',switch,upstairs]: self.assertIn(anonymous(url)[0],[302,303,403])
+            f['login']();f['setup']();before=state();logged=logs()
+            status,body=request(bribe);self.assertEqual(200,status);self.assertIn('type=gold&amt=500',html.unescape(body));self.assertEqual(before,state())
+            # Only the six offered tiers for level 5 exist; negative, off-tier and unknown requests are refused before any effect.
+            for query in ['type=gem&amt=-1','type=gem&amt=4','type=gem&amt=0','type=gold&amt=49','type=gold&amt=1000000','type=gold&amt=-500','type=diamond&amt=1','type=gem&amt=abc','type=gem','type[]=gem&amt=1']:
+                self.assertEqual(400,request(bribe+'&'+query)[0],query);self.assertEqual(400,request(bribe+'&'+query,{'csrf_token':'0'*64})[0],query)
+            self.assertEqual(400,request('inn.php?op=bartender&act=steal')[0])
+            # GET only displays the offer; the POST needs CSRF and its one-use intent.
+            status,body=request(bribe+'&type=gem&amt=1');self.assertEqual(200,status);form=self._security_fields(body,bribe+'&type=gem&amt=1')
+            self.assertEqual(403,request(bribe+'&type=gem&amt=1',{'action_token':form['action_token']})[0])
+            self.assertEqual(403,request(bribe+'&type=gem&amt=1',{**form,'csrf_token':'0'*64})[0]);self.assertEqual(before,state());self.assertEqual(logged,logs())
+            # Without a successful bribe, the services it unlocks are closed.
+            for url in [switch,upstairs]: self.assertEqual(403,request(url)[0]);self.assertEqual(403,request(url,{'specialty':'MP'})[0])
+            # A short purse costs nothing and keeps 1.1.2's words.
+            f['setup'](gems=0);form=self._security_fields(request(bribe+'&type=gem&amt=1')[1],bribe+'&type=gem&amt=1')
+            status,body=request(bribe+'&type=gem&amt=1',form);self.assertEqual(200,status);self.assertIn("You don't have 1 gems!",html.unescape(body))
+            self.assertIn('stands there staring at you blankly',body);self.assertEqual('0',state()['gems']);self.assertEqual(logged,logs())
+            # Seeded outcomes: chance 90 (3 gems) answers, chance 30 (1 gem) does not; both are paid exactly once.
+            f['setup'](gems=10)
+            def offer(amount):
+                url=f'{bribe}&type=gem&amt={amount}';form=self._security_fields(request(url)[1],url)
+                status,body=request(url,form,fixture='inn-bribe');self.assertEqual(200,status,body[:1500]);return url,form,body
+            url,form,body=offer(1);self.assertIn('your gem is gone',body);self.assertEqual('9',state()['gems'])
+            self.assertEqual(409,request(url,form,fixture='inn-bribe')[0]);self.assertEqual('9',state()['gems'])
+            for target in [switch,upstairs]: self.assertEqual(403,request(target)[0])
+            def unlock():
+                url,form,body=offer(3);self.assertIn('What can I do for you, kid?',body);return url,form
+            paid_url,paid_form=unlock();self.assertEqual('6',state()['gems']);self.assertEqual(int(logged)+2,int(logs()))
+            status,body=request(upstairs);self.assertEqual(200,status)
+            q("UPDATE settings SET value='0' WHERE setting='pvp'");self.assertEqual(403,request(upstairs)[0]);q("UPDATE settings SET value='1' WHERE setting='pvp'")
+            q("UPDATE settings SET value='0' WHERE setting='allowspecialswitch'");self.assertEqual(403,request(switch)[0]);q("UPDATE settings SET value='1' WHERE setting='allowspecialswitch'")
+            # Only installed, active bundled specialties; stale and replayed switches change nothing.
+            q('INSERT INTO module_userprefs(modulename,setting,userid,value) VALUES (?,?,?,?),(?,?,?,?) ON DUPLICATE KEY UPDATE value=VALUES(value)',
+                ['specialtydarkarts','skill',player,'7','specialtydarkarts','uses',player,'3']);prefs=q('SELECT modulename,setting,value FROM module_userprefs WHERE userid=? ORDER BY modulename,setting',[player])
+            status,body=request(switch+'&specialty=XX');self.assertEqual(200,status);self.assertEqual('DA',state()['specialty'])
+            form=self._security_fields(body,switch)
+            for bad in [{'specialty':'XX'},{'specialty':''},{},{'specialty[]':'MP'},{'specialty':'MP','skill':'99'}]: self.assertEqual(400,request(switch,{**form,**bad})[0],bad)
+            q("UPDATE modules SET active=0 WHERE modulename='specialtymysticpower'");self.assertEqual(400,request(switch,{**form,'specialty':'MP'})[0])
+            q("UPDATE modules SET active=1 WHERE modulename='specialtymysticpower'");q("UPDATE accounts SET specialty='TS' WHERE acctid=?",[player])
+            self.assertEqual(409,request(switch,{**form,'specialty':'MP'})[0]);self.assertEqual('TS',state()['specialty'])
+            q("UPDATE accounts SET specialty='DA' WHERE acctid=?",[player])
+            form=self._security_fields(request(switch)[1],switch)
+            status,body=request(switch,{**form,'specialty':'MP'});self.assertEqual(200,status);self.assertIn("You're all set",html.unescape(body))
+            # Only the selection changes; every specialty keeps its stored skill and uses.
+            self.assertEqual('MP',state()['specialty']);self.assertEqual(prefs,q('SELECT modulename,setting,value FROM module_userprefs WHERE userid=? ORDER BY modulename,setting',[player]))
+            for target in [switch,upstairs]: self.assertEqual(403,request(target)[0])
+            self.assertEqual(403,request(switch,{**form,'specialty':'TS'})[0]);self.assertEqual('MP',state()['specialty'])
+            # The answered bribe cannot be paid or answered again.
+            self.assertEqual(409,request(paid_url,paid_form,fixture='inn-bribe')[0]);self.assertEqual('6',state()['gems']);self.assertEqual(403,request(switch)[0])
+            # Leaving the bartender forfeits an unused answer.
+            unlock();self.assertEqual(200,request('inn.php')[0]);self.assertEqual(403,request(switch)[0])
+            # The practice form escapes the request URI it posts back to.
+            colors='inn.php?op=bartender&act=colors&x="><b>q</b>'
+            status,body=request(colors,{'testtext':'<i>t</i>'});self.assertEqual(200,status);self.assertNotIn('"><b>q</b>',body);self.assertNotIn('<i>t</i>',body)
+
+    @contextmanager
+    def _clan_fixture(self):
+        q=self.query;player=int(q('SELECT acctid FROM accounts WHERE login=?',['WebPlayer'])[0]['acctid'])
+        original=q('SELECT * FROM accounts WHERE acctid=?',[player])[0]
+        names=['goldtostartclan','gemstostartclan'];settings=q('SELECT setting,value FROM settings WHERE setting IN (?,?)',names)
+        mail=int(q('SELECT COALESCE(MAX(messageid),0) AS m FROM mail')[0]['m']);clans=int(q('SELECT COALESCE(MAX(clanid),0) AS m FROM clans')[0]['m'])
+        targets=[]
+        def clan(name,short):
+            q('INSERT INTO clans (clanname,clanshort) VALUES (?,?)',[name,short]);return int(q('SELECT clanid FROM clans WHERE clanshort=?',[short])[0]['clanid'])
+        def target(login,clanid,rank,days):
+            acct=int(self._security_target(login));targets.append(acct)
+            q('UPDATE accounts SET clanid=?,clanrank=?,clanjoindate=NOW() - INTERVAL ? DAY WHERE acctid=?',[clanid,rank,days,acct]);return acct
+        def place(acct,clanid,rank,days=1):
+            q('UPDATE accounts SET clanid=?,clanrank=?,clanjoindate='+('NULL' if clanid==0 else 'NOW() - INTERVAL ? DAY')+' WHERE acctid=?',[clanid,rank,*([] if clanid==0 else [days]),acct])
+        def member(acct):
+            row=q('SELECT clanid,clanrank,clanjoindate FROM accounts WHERE acctid=?',[acct])[0];return (row['clanid'],row['clanrank'],row['clanjoindate'] is None)
+        f={'player':player,'call':None,'clan':clan,'target':target,'place':place,'member':member}
+        def login(): f['call']=self._security_client()
+        def request(url,data=None):
+            self._security_allow(player,url);return f['call'](url,data)
+        def notices(to,subject):
+            ser='a:%d:{%s}'%(len(subject),''.join('i:%d;s:%d:"%s";'%(i,len(v.encode()),v) for i,v in enumerate(subject)))
+            return int(q('SELECT COUNT(*) AS n FROM mail WHERE msgto=? AND msgfrom=0 AND seen=0 AND subject=?',[to,ser])[0]['n'])
+        f.update(login=login,request=request,notices=notices)
+        q("UPDATE accounts SET name=?,alive=1,hitpoints=100,specialinc='',badguy='',gold=1000,gems=10,lasthit=NOW() WHERE acctid=?",["Clan O'Reilly 雪",player])
+        for key,value in [('goldtostartclan','100'),('gemstostartclan','2')]:
+            q('INSERT INTO settings(setting,value) VALUES (?,?) ON DUPLICATE KEY UPDATE value=VALUES(value)',[key,value])
+        try: yield f
+        finally:
+            q('UPDATE accounts SET '+','.join(k+'=?' for k in original if k!='acctid')+' WHERE acctid=?',[*[v for k,v in original.items() if k!='acctid'],player])
+            for acct in targets: q('DELETE FROM accounts_output WHERE acctid=?',[acct]);q('DELETE FROM accounts WHERE acctid=?',[acct])
+            q('DELETE FROM mail WHERE messageid>?',[mail]);q('DELETE FROM clans WHERE clanid>?',[clans])
+            q('DELETE FROM settings WHERE setting IN (?,?)',names)
+            for row in settings: q('INSERT INTO settings(setting,value) VALUES (?,?)',[row['setting'],row['value']])
+
+    def test_clan_rank_and_removal_authority_http(self):
+        q=self.query
+        with self._clan_fixture() as f:
+            request,member,place,player=f['request'],f['member'],f['place'],f['player']
+            a=f['clan']('Alpha Hall','ALPHA');b=f['clan']('Beta Hall','BETA')
+            app=f['target']('ClanApplicantA',a,0,9);mem=f['target']('ClanMemberA',a,10,8);off=f['target']('ClanOfficerA',a,20,7)
+            other=f['target']('ClanMemberB',b,10,6);f['target']('ClanLeaderB',b,30,5)
+            name=q('SELECT name FROM accounts WHERE acctid=?',[mem])[0]['name'];self.assertIn("'",name);self.assertIn('雪',name)
+            anonymous=self._security_client(login=None)
+            for data in [None,{'clanaction':'remove'}]: self.assertIn(anonymous(f'clan.php?op=membership&member={mem}',data)[0],[302,303,403])
+            place(player,a,20,3);f['login']();rows=lambda:[member(x) for x in [app,mem,off,other]];before=rows()
+            # The 1.1.2 GET links only display now, including cross-clan targets in another clan.
+            for url in [f'clan.php?op=membership&setrank=31&whoacctid={other}',f'clan.php?op=membership&remove={other}',
+                        f'clan.php?op=membership&setrank=30&whoacctid={mem}',f'clan.php?op=membership&remove={mem}']:
+                self.assertEqual(200,request(url)[0],url);self.assertEqual(before,rows(),url)
+            status,body=request('clan.php?op=membership');self.assertEqual(200,status);self.assertNotIn(f'member={other}',html.unescape(body))
+            form=lambda target:self._security_fields(request('clan.php?op=membership')[1],f'clan.php?op=membership&member={target}')
+            url=lambda target:f'clan.php?op=membership&member={target}'
+            # Cross-clan: no form exists for a member of another clan; a forged one changes nothing.
+            fields=form(mem);self.assertEqual(409,request(url(other),{**fields,'clanaction':'remove'})[0]);self.assertEqual(before,rows())
+            for bad in [{'clanaction':'jump'},{'clanaction':''},{'clanaction[]':'remove'},{'clanaction':'remove','clanrank':'31'}]:
+                self.assertEqual(400,request(url(mem),{**fields,**bad})[0],bad)
+            self.assertEqual(403,request(url(mem),{'action_token':fields['action_token'],'clanaction':'promote'})[0])
+            self.assertEqual(403,request(url(mem),{**fields,'csrf_token':'0'*64,'clanaction':'promote'})[0]);self.assertEqual(before,rows())
+            # An officer cannot promote a fellow officer (1.1.2 offered no such link).
+            self.assertEqual(409,request(url(off),{**form(off),'clanaction':'promote'})[0]);self.assertEqual(before,rows())
+            # Approval: the officer promotes the applicant to member; the form is single-use.
+            fields=form(app);self.assertEqual(200,request(url(app),{**fields,'clanaction':'promote'})[0]);self.assertEqual(a,int(member(app)[0]));self.assertEqual('10',member(app)[1])
+            self.assertEqual(409,request(url(app),{**fields,'clanaction':'promote'})[0]);self.assertEqual('10',member(app)[1])
+            # Promotion is capped at the actor's own rank; demotion and stale forms.
+            self.assertEqual(200,request(url(mem),{**form(mem),'clanaction':'promote'})[0]);self.assertEqual('20',member(mem)[1])
+            self.assertEqual(200,request(url(off),{**form(off),'clanaction':'demote'})[0]);self.assertEqual('10',member(off)[1])
+            fields=form(off);q('UPDATE accounts SET clanrank=20 WHERE acctid=?',[off]);self.assertEqual(409,request(url(off),{**fields,'clanaction':'remove'})[0]);self.assertEqual('20',member(off)[1])
+            # Removal clears membership and the target's unread application notices, whatever the name contains.
+            apply_short='`@Clan App: `&%s`0';self.assertEqual(0,f['notices'](off,[apply_short,name]))
+            q('INSERT INTO mail (msgfrom,msgto,subject,body,sent,seen) VALUES (0,?,?,?,NOW(),0)',[off,'a:2:{i:0;s:%d:"%s";i:1;s:%d:"%s";}'%(len(apply_short.encode()),apply_short,len(name.encode()),name),'x'])
+            self.assertEqual(1,f['notices'](off,[apply_short,name]))
+            self.assertEqual(200,request(url(mem),{**form(mem),'clanaction':'remove'})[0]);self.assertEqual(('0','0',True),member(mem));self.assertEqual(0,f['notices'](off,[apply_short,name]))
+            # Members see no operations; the target of another clan never changed.
+            place(player,a,10,3);f['login']();status,body=request('clan.php?op=membership');self.assertEqual(200,status);self.assertNotIn('clanaction',body)
+            self.assertEqual(before[3],member(other))
+            # Leaders may raise an officer to leader; the founder may step down to leader.
+            place(player,a,30,3);f['login']();self.assertEqual(200,request(url(off),{**form(off),'clanaction':'promote'})[0]);self.assertEqual('30',member(off)[1])
+            place(player,a,31,3);f['login']();self.assertEqual(200,request(url(player),{**form(player),'clanaction':'stepdown'})[0]);self.assertEqual('30',member(player)[1])
+
+    def test_clan_creation_application_and_withdrawal_http(self):
+        q=self.query
+        with self._clan_fixture() as f:
+            request,member,place,player=f['request'],f['member'],f['place'],f['player']
+            a=f['clan']('Alpha Hall','ALPHA');off=f['target']('ClanOfficerA',a,20,7);empty=f['clan']('Empty Hall','EMPTY');f['target']('ClanOnlyApplicant',empty,0,4)
+            place(player,0,0);f['login']()
+            purse=lambda:tuple(q('SELECT gold,gems FROM accounts WHERE acctid=?',[player])[0].values())
+            clan_named=lambda name:q('SELECT clanid FROM clans WHERE clanname=?',[name])
+            new='clan.php?op=new&apply=1'
+            def new_form(): return self._security_fields(request('clan.php?op=new')[1],new)
+            # Invalid, duplicate and unfunded applications create nothing and take nothing.
+            for clanname,clanshort,text in [('Bad Hall 9','BAD','consist only of letters'),('Ab','AB','at least 5'),('Fine Hall','A','at least 2'),('Alpha Hall','ALPHB','is already taken'),('Other Hall','ALPHA','is already taken')]:
+                status,body=request(new,{**new_form(),'clanname':clanname,'clanshort':clanshort});self.assertEqual(200,status);self.assertIn(text,html.unescape(body),clanname)
+            self.assertEqual(403,request(new,{'clanname':'Gamma Hall','clanshort':'GAMMA'})[0]);self.assertEqual(400,request(new,{**new_form(),'clanname[]':'x','clanshort':'GAMMA'})[0])
+            # Without the fee the registrar offers no form (1.1.2), and a form from a richer moment is stale.
+            fields=new_form();q('UPDATE accounts SET gold=50 WHERE acctid=?',[player])
+            status,body=request('clan.php?op=new');self.assertIn('do not have enough gold',html.unescape(body));self.assertNotIn('action_token',body)
+            self.assertEqual(409,request(new,{**fields,'clanname':'Gamma Hall','clanshort':'GAMMA'})[0])
+            self.assertEqual(('50','10'),purse());self.assertEqual([],clan_named('Gamma Hall'));q('UPDATE accounts SET gold=1000 WHERE acctid=?',[player])
+            # A failing founder write after the clan INSERT rolls both back; the spent form cannot retry.
+            fields=new_form()
+            q("ALTER TABLE accounts ADD CONSTRAINT fixture_clan_founder CHECK (login <> 'WebPlayer' OR clanrank <> 31)")
+            try:
+                self.assertEqual(500,request(new,{**fields,'clanname':"O'Brien Hall",'clanshort':'OBH'})[0]);self.assertEqual([],clan_named("O'Brien Hall"));self.assertEqual(('1000','10'),purse())
+                self.assertEqual(409,request(new,{**fields,'clanname':"O'Brien Hall",'clanshort':'OBH'})[0])
+            finally: q('ALTER TABLE accounts DROP CONSTRAINT fixture_clan_founder')
+            fields=new_form();status,body=request(new,{**fields,'clanname':"O'Brien Hall",'clanshort':'OBH'});self.assertEqual(200,status);self.assertIn("created a new clan named O'Brien Hall",html.unescape(body))
+            mine=int(clan_named("O'Brien Hall")[0]['clanid']);self.assertEqual((str(mine),'31',False),member(player));self.assertEqual(('900','8'),purse())
+            self.assertNotEqual(500,request(new,{**fields,'clanname':'Delta Hall','clanshort':'DELTA'})[0]);self.assertEqual([],clan_named('Delta Hall'));self.assertEqual(('900','8'),purse())
+            # The last member leaving deletes the clan and resets its applicants, in one protected step.
+            hopeful=f['target']('ClanHopeful',mine,0,2)
+            self.assertEqual(200,request('clan.php?op=withdraw')[0]);self.assertEqual((str(mine),'31',False),member(player))
+            fields=self._security_fields(request('clan.php?op=withdrawconfirm')[1],'clan.php?op=withdraw')
+            status,body=request('clan.php?op=withdraw',fields);self.assertEqual(200,status);self.assertIn('it has been deleted',body)
+            self.assertEqual([],clan_named("O'Brien Hall"));self.assertEqual(('0','0',True),member(player));self.assertEqual(('0','0',True),member(hopeful))
+            self.assertNotEqual(500,request('clan.php?op=withdraw',fields)[0]);self.assertEqual(('0','0',True),member(player));self.assertEqual([],clan_named("O'Brien Hall"))
+            # Applications: only to a listed clan, by a player in no clan; GET only asks.
+            status,body=request('clan.php?op=apply');self.assertIn(f'op=apply&to={a}',html.unescape(body));self.assertNotIn(f'op=apply&to={empty}',html.unescape(body))
+            for target in [empty,999999]: self.assertEqual(409,request(f'clan.php?op=apply&to={target}')[0])
+            self.assertEqual(400,request('clan.php?op=apply&to=x')[0]);self.assertEqual(('0','0',True),member(player))
+            subject=['`@Clan App: `&%s`0',"Clan O'Reilly 雪"]
+            def apply():
+                fields=self._security_fields(request(f'clan.php?op=apply&to={a}')[1],f'clan.php?op=apply&to={a}')
+                self.assertEqual(200,request(f'clan.php?op=apply&to={a}',fields)[0]);return fields
+            fields=apply();self.assertEqual((str(a),'0',False),member(player));self.assertEqual(1,f['notices'](off,subject))
+            self.assertEqual(409,request(f'clan.php?op=apply&to={a}',fields)[0])
+            # Withdrawing the application, then applying again, leaves exactly one unread notice.
+            self.assertEqual(200,request('clan.php?op=withdraw')[0]);self.assertEqual(str(a),member(player)[0])
+            fields=self._security_fields(request('clan.php?op=withdraw')[1],'clan.php?op=withdraw')
+            self.assertEqual(200,request('clan.php?op=withdraw',fields)[0]);self.assertEqual(('0','0',True),member(player));self.assertEqual(0,f['notices'](off,subject))
+            apply();self.assertEqual(1,f['notices'](off,subject))
+            # Sole-leader withdrawal promotes the highest-ranking, then oldest, member and notifies officers.
+            senior=f['target']('ClanSenior',a,10,30);f['target']('ClanJunior',a,10,1)
+            place(player,a,30,40);place(off,a,0,7);f['login']()
+            fields=self._security_fields(request('clan.php?op=withdrawconfirm')[1],'clan.php?op=withdraw')
+            status,body=request('clan.php?op=withdraw',fields);self.assertEqual(200,status);self.assertIn('Promoting',body)
+            self.assertEqual('30',member(senior)[1]);self.assertEqual(('0','0',True),member(player))
+            self.assertEqual(1,f['notices'](senior,['`$Clan Withdraw: `&%s`0',"Clan O'Reilly 雪"]))
+
+    def test_clan_housekeeping_on_view_http(self):
+        q=self.query
+        with self._clan_fixture() as f:
+            request,member,place,player=f['request'],f['member'],f['place'],f['player']
+            a=f['clan']('Alpha Hall','ALPHA');off=f['target']('ClanOfficerA',a,20,9);f['target']('ClanMemberA',a,10,3)
+            empty=f['clan']('Empty Hall','EMPTY');waiting=f['target']('ClanOnlyApplicant',empty,0,4)
+            # A clan without a leader promotes its highest-ranking, oldest member once, under lock.
+            place(player,a,10,1);f['login']();status,body=request('clan.php');self.assertEqual(200,status,body[:1500])
+            self.assertIn('There is currently no leader',body);self.assertEqual('30',member(off)[1]);self.assertEqual('10',member(player)[1])
+            status,body=request('clan.php');self.assertNotIn('There is currently no leader',body)
+            # The clan list removes a clan with no member above applicant, and only that clan.
+            status,body=request('clan.php?op=list');self.assertEqual(200,status)
+            self.assertEqual([],q('SELECT clanid FROM clans WHERE clanid=?',[empty]));self.assertEqual(1,len(q('SELECT clanid FROM clans WHERE clanid=?',[a])))
+            self.assertEqual(str(empty),member(waiting)[0])
+
+    def _clan_page_tools(self, request):
+        has=lambda body,name:re.search(r'name=[\'"]'+re.escape(name)+r'[\'"]',body) is not None
+        csrf=lambda body:re.search(r'name=[\'"]csrf_token[\'"] value=[\'"]([a-f0-9]{64})',body).group(1)
+        def comment_form(body):
+            class Forms(HTMLParser):
+                def __init__(self): super().__init__();self.forms=[];self.current=None
+                def handle_starttag(self,tag,attrs):
+                    attributes=dict(attrs)
+                    if tag=='form': self.current=[html.unescape(attributes.get('action','')),{}]
+                    elif tag=='input' and self.current is not None and 'name' in attributes: self.current[1][attributes['name']]=attributes.get('value','')
+                def handle_endtag(self,tag):
+                    if tag=='form' and self.current is not None: self.forms.append(self.current);self.current=None
+            forms=Forms();forms.feed(body)
+            return next(form for form in forms.forms if 'insertcommentary' in form[1])
+        return has,csrf,comment_form
+
+    def test_clan_motd_description_and_say_authority_http(self):
+        q=self.query
+        with self._clan_fixture() as f:
+            request,place,player=f['request'],f['place'],f['player']
+            has,csrf,comment_form=self._clan_page_tools(request)
+            a=f['clan']('Alpha Hall','ALPHA');b=f['clan']('Beta Hall','BETA');f['target']('ClanLeaderA',a,30,9);f['target']('ClanLeaderB',b,30,8)
+            text=lambda clan:tuple(q('SELECT clanmotd,clandesc,motdauthor,descauthor,customsay FROM clans WHERE clanid=?',[clan])[0].values())
+            url='clan.php?op=motd';fresh=text(a);other=text(b);self.assertEqual((None,None,'0','0'),fresh[:4])
+            form=lambda:self._security_fields(request(url)[1],url)
+            motd="MoTD O'Reilly \\ 雪 <b>bold</b> `^gold";desc="Desc O'Hara \\\\ 雪 <img src=x onerror=alert(1)>\nline two";say="O'R \\ 雪<q>x"
+            # Anonymous visitors, players in no clan and plain members change nothing.
+            anonymous=self._security_client(login=None)
+            for data in [None,{'clanmotd':'x'}]: self.assertIn(anonymous(url,data)[0],[302,303,403])
+            place(player,0,0);f['login']();status,body=request(url);self.assertEqual(200,status);self.assertFalse(has(body,'clanmotd'))
+            self.assertIn(request(url,{'clanmotd':'x'})[0],[200,403]);self.assertEqual(fresh,text(a))
+            place(player,a,10);f['login']();status,body=request(url);self.assertEqual(200,status)
+            self.assertIn("You do not have authority to change your clan's motd or description.",html.unescape(body));self.assertFalse(has(body,'clanmotd'))
+            self.assertEqual(403,request(url,{'csrf_token':csrf(request('clan.php')[1]),'action_token':'0'*64,'clanmotd':'x'})[0]);self.assertEqual(fresh,text(a))
+            # Officers edit the MoTD and description of their own clan (a new clan's NULL text renders); GET only displays.
+            place(player,a,20);f['login']();status,body=request(url);self.assertEqual(200,status,body[:1500])
+            self.assertTrue(has(body,'clanmotd'));self.assertTrue(has(body,'clandesc'));self.assertFalse(has(body,'customsay'))
+            self.assertEqual(200,request(url+'&clanmotd=x&clandesc=y&customsay=z')[0]);self.assertEqual(fresh,text(a))
+            fields=form()
+            self.assertEqual(403,request(url,{'action_token':fields['action_token'],'clanmotd':motd})[0])
+            self.assertEqual(403,request(url,{**fields,'csrf_token':'0'*64,'clanmotd':motd})[0])
+            for bad in [{'customsay':'Officer say'},{'clanmotd[]':motd},{'clanmotd':motd,'motdauthor':'1'},{'clanmotd':b'\xff\xfe'}]:
+                self.assertEqual(400,request(url,{**fields,**bad})[0],bad)
+            self.assertEqual(fresh,text(a))
+            status,body=request(url,{**fields,'clanmotd':motd,'clandesc':desc});self.assertEqual(200,status)
+            self.assertIn('Updating MoTD',body);self.assertIn('Updating description',body)
+            self.assertEqual((motd,desc,str(player),str(player),fresh[4]),text(a));self.assertEqual(other,text(b))
+            # Replayed and stale forms write nothing.
+            self.assertEqual(409,request(url,{**fields,'clanmotd':'Replayed'})[0]);self.assertEqual(motd,text(a)[0])
+            fields=form();q('UPDATE clans SET clanmotd=? WHERE clanid=?',['Changed elsewhere',a])
+            self.assertEqual(409,request(url,{**fields,'clanmotd':'Stale'})[0]);self.assertEqual('Changed elsewhere',text(a)[0])
+            q('UPDATE clans SET clanmotd=? WHERE clanid=?',[motd,a])
+            # The text is shown escaped wherever it appears, with its author.
+            for page in ['clan.php',url]:
+                status,body=request(page);self.assertEqual(200,status)
+                for raw in ['<img src=x','<b>bold']: self.assertNotIn(raw,body,page)
+                self.assertIn("O'Hara \\\\ 雪",html.unescape(body),page);self.assertIn("by Clan O'Reilly 雪",html.unescape(body),page)
+            # The historical 4096-character limits hold on the server, by characters.
+            self.assertEqual(200,request(url,{**form(),'clanmotd':'é'*5000,'clandesc':'雪'*4097})[0]);self.assertEqual(('é'*4096,'雪'*4096),text(a)[:2])
+            # Another clan's officer: a form from clan A cannot write once the player is in clan B, and B's form writes only B.
+            fields=form();place(player,b,20)
+            self.assertEqual(409,request(url,{**fields,'clanmotd':'Cross clan'})[0]);self.assertEqual('é'*4096,text(a)[0]);self.assertEqual(other,text(b))
+            f['login']();self.assertEqual(200,request(url,{**form(),'clanmotd':'Beta news'})[0]);self.assertEqual('Beta news',text(b)[0]);self.assertEqual('é'*4096,text(a)[0])
+            # Leaders also set the custom say line: one line, 15 characters, escaped in the form and in commentary.
+            place(player,a,30);f['login']();q('UPDATE clans SET customsay=? WHERE clanid=?',['"x\'><q>',a])
+            status,body=request(url);self.assertTrue(has(body,'customsay'));self.assertNotIn('<q>',body);self.assertIn('"x\'><q>',html.unescape(body))
+            fields=form()
+            for bad in [{'customsay':'a\nb'},{'customsay':'a\x00b'}]: self.assertEqual(400,request(url,{**fields,**bad})[0],bad)
+            status,body=request(url,{**fields,'customsay':say});self.assertEqual(200,status);self.assertIn('Updating custom say line',body);self.assertEqual(say,text(a)[4])
+            self.assertEqual(200,request(url,{**form(),'customsay':'é'*20})[0]);self.assertEqual('é'*15,text(a)[4])
+            self.assertEqual(200,request(url,{**form(),'customsay':say})[0]);self.assertEqual(say,text(a)[4])
+            status,body=request('clan.php');self.assertEqual(200,status);self.assertNotIn('<q>',body)
+            action,fields=comment_form(body);self.assertEqual(200,request(action,{**fields,'insertcommentary':'Hello <q>there'})[0])
+            self.assertEqual(f':`3{say}, "`#Hello <q>there`3"',q('SELECT comment FROM commentary WHERE section=? ORDER BY commentid DESC LIMIT 1',[f'clan-{a}'])[0]['comment'])
+            status,body=request('clan.php');self.assertNotIn('<q>',body);self.assertIn(f'{say}, "',html.unescape(body))
+            # A late write failure rolls back every change; the spent form cannot retry and a fresh one succeeds.
+            before=text(a);late={'clanmotd':'Rolled MoTD','clandesc':'Rolled desc','customsay':'Rollback say'};fields=form()
+            q("ALTER TABLE clans ADD CONSTRAINT fixture_clan_say CHECK (customsay <> 'Rollback say')")
+            try:
+                self.assertEqual(500,request(url,{**fields,**late})[0]);self.assertEqual(before,text(a))
+                self.assertEqual(409,request(url,{**fields,**late})[0]);self.assertEqual(before,text(a))
+            finally: q('ALTER TABLE clans DROP CONSTRAINT fixture_clan_say')
+            self.assertEqual(200,request(url,{**form(),**late})[0]);self.assertEqual(('Rolled MoTD','Rolled desc',str(player),str(player),'Rollback say'),text(a))
+            q('DELETE FROM commentary WHERE section IN (?,?)',[f'clan-{a}',f'clan-{b}'])
+
+    def test_clan_detail_rename_and_block_authority_http(self):
+        q=self.query
+        with self._clan_fixture() as f:
+            request,place,player=f['request'],f['place'],f['player']
+            has,csrf,_=self._clan_page_tools(request)
+            a=f['clan']('Alpha Hall','ALPHA');b=f['clan']('Beta Hall','BETA');f['target']('ClanLeaderA',a,30,9);f['target']('ClanLeaderB',b,30,8)
+            row=lambda:tuple(q('SELECT clanname,clanshort,clandesc,descauthor FROM clans WHERE clanid=?',[a])[0].values())
+            url=f'clan.php?detail={a}';fresh=row();self.assertEqual(('Alpha Hall','ALPHA',None,'0'),fresh)
+            def role(bits): q('UPDATE accounts SET superuser=? WHERE acctid=?',[bits,player]);f['login']()
+            form=lambda:self._security_fields(request(url)[1],url)
+            # The public view of a new clan (NULL description) renders without moderator controls; detail must be a clan id.
+            place(player,b,10);role(0)
+            status,body=request(url);self.assertEqual(200,status,body[:1500]);self.assertIn('current clan membership of Alpha Hall < ALPHA >',html.unescape(body))
+            self.assertFalse(has(body,'clanname'))
+            for bad,code in [(urllib.parse.quote(f'{a} OR 1=1'),400),('999999',404)]: self.assertEqual(code,request('clan.php?detail='+bad)[0],bad)
+            # Only SU_EDIT_COMMENTS moderates.
+            forged={'clanname':'Hacked Hall','clanshort':'HACK','block':'Block'}
+            self.assertEqual(403,request(url,{**forged,'csrf_token':csrf(request('clan.php')[1])})[0]);self.assertEqual(fresh,row())
+            role(64);status,body=request(url);self.assertEqual(200,status);self.assertFalse(has(body,'clanname'))
+            self.assertEqual(403,request(url,{**forged,'csrf_token':csrf(request('clan.php')[1])})[0]);self.assertEqual(fresh,row())
+            role(16);status,body=request(url);self.assertEqual(200,status);self.assertTrue(has(body,'clanname'));self.assertTrue(has(body,'block'))
+            self.assertEqual(200,request(url+'&clanname=Gamma+Hall&clanshort=GAMMA&block=1')[0]);self.assertEqual(fresh,row())
+            fields=form()
+            self.assertEqual(403,request(url,{'action_token':fields['action_token'],'clanname':'Gamma Hall','clanshort':'GAMMA'})[0])
+            for bad in [{'clanname[]':'x','clanshort':'GAMMA'},{'clanname':'Gamma Hall','clanshort':'GAMMA','descauthor':'0'},{'clanname':'Gamma Hall','clanshort':'GAMMA','block':'1','unblock':'1'}]:
+                self.assertEqual(400,request(url,{**fields,**bad})[0],bad)
+            self.assertEqual(fresh,row())
+            # Renames follow the clan-creation rules: letters, spaces, apostrophes and dashes, the lengths, and unique names.
+            for name,short,message in [('Bad Hall 9','BAD','consist only of letters'),('<b>Evil</b> Hall','EVIL','consist only of letters'),('Snow 雪 Hall','SNOW','consist only of letters'),
+                                       ('`^Gold Hall','GOLD','consist only of letters'),('Ab','AB','at least 5'),('Fine Hall','A','at least 2'),('Beta Hall','GAMMA','is already taken'),('Gamma Hall','BETA','is already taken')]:
+                status,body=request(url,{**form(),'clanname':name,'clanshort':short});self.assertEqual(200,status,name);self.assertIn(message,html.unescape(body),name);self.assertEqual(fresh,row(),name)
+            fields=form();status,body=request(url,{**fields,'clanname':"O'Brien-Hall",'clanshort':'OBH'});self.assertEqual(200,status)
+            self.assertIn('Updating clan names',body);self.assertEqual(("O'Brien-Hall",'OBH',None,'0'),row());self.assertEqual(('Beta Hall','BETA'),tuple(q('SELECT clanname,clanshort FROM clans WHERE clanid=?',[b])[0].values()))
+            self.assertEqual(409,request(url,{**fields,'clanname':'Replay Hall','clanshort':'RPL'})[0]);self.assertEqual("O'Brien-Hall",row()[0])
+            fields=form();q("UPDATE clans SET clandesc='Edited meanwhile' WHERE clanid=?",[a])
+            self.assertEqual(409,request(url,{**fields,'clanname':"O'Brien-Hall",'clanshort':'OBH','block':'x'})[0]);self.assertEqual('0',row()[3])
+            # Block replaces the description with the historical text; the clan's officers cannot edit it until a moderator unblocks.
+            status,body=request(url,{**form(),'clanname':"O'Brien-Hall",'clanshort':'OBH','block':'Save & Block public description'});self.assertEqual(200,status)
+            self.assertIn('Blocking public description',body);blocked=("O'Brien-Hall",'OBH','Description blocked for inappropriate usage.','4294967295');self.assertEqual(blocked,row())
+            self.assertTrue(has(request(url)[1],'unblock'))
+            place(player,a,20);role(0);motd='clan.php?op=motd'
+            status,body=request(motd);self.assertEqual(200,status,body[:1500]);self.assertIn('Your clan has been blocked from posting a description.',body);self.assertFalse(has(body,'clandesc'))
+            self.assertEqual(400,request(motd,{**self._security_fields(body,motd),'clanmotd':'News','clandesc':'Sneaky'})[0]);self.assertEqual(blocked,row())
+            self.assertEqual(200,request(motd,{**self._security_fields(request(motd)[1],motd),'clanmotd':'News'})[0]);self.assertEqual(blocked,row())
+            role(16);status,body=request(url,{**form(),'clanname':"O'Brien-Hall",'clanshort':'OBH','unblock':'Save & UNblock public description'});self.assertEqual(200,status)
+            self.assertIn('UNblocking public description',body);self.assertEqual(("O'Brien-Hall",'OBH','','0'),row())
+            # The public description stays escaped.
+            q('UPDATE clans SET clandesc=? WHERE clanid=?',["<img src=x onerror=alert(2)> O'Hara \\ 雪\nline two",a])
+            status,body=request(url);self.assertEqual(200,status);self.assertNotIn('<img src=x',body);self.assertIn("O'Hara \\ 雪",html.unescape(body))
+
+    @contextmanager
+    def _bank_fixture(self):
+        q=self.query;player=int(q('SELECT acctid FROM accounts WHERE login=?',['WebPlayer'])[0]['acctid'])
+        original=q('SELECT * FROM accounts WHERE acctid=?',[player])[0]
+        names=['borrowperlevel','transferperlevel','maxtransferout','transferreceive','mintransferlev','allowgoldtransfer']
+        settings=q('SELECT setting,value FROM settings WHERE setting IN ('+','.join('?' for _ in names)+')',names)
+        mail=int(q('SELECT COALESCE(MAX(messageid),0) AS m FROM mail')[0]['m']);targets=[]
+        f={'player':player,'call':None,'targets':targets}
+        def setting(key,value): q('INSERT INTO settings(setting,value) VALUES (?,?) ON DUPLICATE KEY UPDATE value=VALUES(value)',[key,value])
+        for key,value in zip(names,['20','25','25','3','3','1']): setting(key,value)
+        def login(): f['call']=self._security_client()
+        def request(url,data=None):
+            self._security_allow(player,url);return f['call'](url,data)
+        def setup(**changes):
+            values=dict(alive=1,level=5,dragonkills=0,gold=500,goldinbank=200,amountouttoday=0,transferredtoday=0,specialinc='',restorepage='village.php');values.update(changes)
+            q('UPDATE accounts SET '+','.join(k+'=?' for k in values)+',lasthit=NOW() WHERE acctid=?',[*values.values(),player])
+        def state(acct=None):
+            return tuple(q('SELECT gold,goldinbank,amountouttoday,transferredtoday FROM accounts WHERE acctid=?',[acct or player])[0].values())
+        def target(login,**changes):
+            acct=int(self._security_target(login));targets.append(acct)
+            if changes: q('UPDATE accounts SET '+','.join(k+'=?' for k in changes)+' WHERE acctid=?',[*changes.values(),acct])
+            return acct
+        f.update(login=login,request=request,setup=setup,state=state,setting=setting,target=target)
+        q("UPDATE accounts SET name=? WHERE acctid=?",["Bank O'Reilly 雪",player])
+        try: yield f
+        finally:
+            q('UPDATE accounts SET '+','.join(k+'=?' for k in original if k!='acctid')+' WHERE acctid=?',[*[v for k,v in original.items() if k!='acctid'],player])
+            for acct in targets: q('DELETE FROM accounts_output WHERE acctid=?',[acct]);q('DELETE FROM accounts WHERE acctid=?',[acct])
+            q('DELETE FROM mail WHERE messageid>?',[mail])
+            q('DELETE FROM settings WHERE setting IN ('+','.join('?' for _ in names)+')',names)
+            for row in settings: q('INSERT INTO settings(setting,value) VALUES (?,?)',[row['setting'],row['value']])
+
+    def test_bank_deposit_withdraw_and_borrow_authority_http(self):
+        with self._bank_fixture() as f:
+            request,state,setup=f['request'],f['state'],f['setup']
+            anonymous=self._security_client(login=None)
+            for url in ['bank.php?op=depositfinish','bank.php?op=withdrawfinish']:
+                for data in [None,{'amount':'1'}]: self.assertIn(anonymous(url,data)[0],[302,303,403])
+            setup();f['login']();before=state();self.assertEqual(('500','200','0','0'),before)
+            deposit='bank.php?op=depositfinish';withdraw='bank.php?op=withdrawfinish'
+            # GET only displays: 1.1.2 treated the missing amount as "all" and deposited or withdrew everything.
+            for url in [deposit,withdraw,'bank.php?op=transfer3']:
+                self.assertEqual(200,request(url)[0],url);self.assertEqual(before,state(),url)
+            form=lambda op,action:self._security_fields(request('bank.php?op='+op)[1],action)
+            fields=form('deposit',deposit)
+            self.assertEqual(403,request(deposit,{'action_token':fields['action_token'],'amount':'10'})[0])
+            self.assertEqual(403,request(deposit,{**fields,'csrf_token':'0'*64,'amount':'10'})[0])
+            # Amounts are canonical non-negative integers; 1.1.2's abs((int)) coercion turned typos into "all" or flipped signs.
+            for bad in [{'amount':'-50'},{'amount':'1.5'},{'amount':'abc'},{'amount':'12abc'},{'amount':'99999999999999999999999'},{'amount[]':'1'},{'amount':'10','goldinbank':'9'}]:
+                self.assertEqual(400,request(deposit,{**fields,**bad})[0],bad)
+            self.assertEqual(before,state())
+            status,body=request(deposit,{**fields,'amount':'999999999'});self.assertEqual(200,status);self.assertIn('Not enough gold in hand to deposit',body);self.assertEqual(before,state())
+            fields=form('deposit',deposit);status,body=request(deposit,{**fields,'amount':'100'});self.assertEqual(200,status)
+            self.assertIn('records your deposit of',html.unescape(body));self.assertEqual(('400','300','0','0'),state())
+            self.assertEqual(409,request(deposit,{**fields,'amount':'100'})[0]);self.assertEqual(('400','300','0','0'),state())
+            fields=form('deposit',deposit);self.query('UPDATE accounts SET gold=450 WHERE acctid=?',[f['player']])
+            self.assertEqual(409,request(deposit,{**fields,'amount':'10'})[0]);self.assertEqual(('450','300','0','0'),state())
+            # Deposit all (empty or 0), withdraw, the bank refusal, withdraw all.
+            self.assertEqual(200,request(deposit,{**form('deposit',deposit),'amount':''})[0]);self.assertEqual(('0','750','0','0'),state())
+            self.assertEqual(200,request(withdraw,{**form('withdraw',withdraw),'amount':'50'})[0]);self.assertEqual(('50','700','0','0'),state())
+            status,body=request(withdraw,{**form('withdraw',withdraw),'amount':'701'});self.assertIn('Not enough gold in the bank to withdraw',body);self.assertEqual(('50','700','0','0'),state())
+            self.assertEqual(200,request(withdraw,{**form('withdraw',withdraw),'amount':'0'})[0]);self.assertEqual(('750','0','0','0'),state())
+            # Borrowing: level 5 x 20 = 100 in total, existing debt included; the balance is withdrawn first.
+            setup(gold=0,goldinbank=30);status,body=request(withdraw,{**form('borrow',withdraw),'amount':'130','borrow':'x'})
+            self.assertEqual(200,status);self.assertIn('You withdraw your remaining',body);self.assertIn('Additionally, you borrow',body);self.assertEqual(('130','-100','0','0'),state())
+            # Borrow more while in debt: past the limit is refused, within it is granted; deposits pay the debt down.
+            status,body=request('bank.php?op=borrow');self.assertEqual(200,status)
+            status,body=request(withdraw,{**self._security_fields(body,withdraw),'amount':'1','borrow':'x'})
+            self.assertIn('you may only borrow up to a total of',html.unescape(body));self.assertEqual(('130','-100','0','0'),state())
+            setup(gold=0,goldinbank=-40);status,body=request(withdraw,{**form('borrow',withdraw),'amount':'60','borrow':'x'})
+            self.assertIn('You borrow',body);self.assertEqual(('60','-100','0','0'),state())
+            setup(gold=70,goldinbank=-100);status,body=request(deposit,{**form('deposit',deposit),'amount':'70'})
+            self.assertIn('debt of',html.unescape(body));self.assertEqual(('0','-30','0','0'),state())
+            # The withdraw form cannot borrow, and a borrow form's intent cannot withdraw.
+            setup(gold=0,goldinbank=10);fields=form('withdraw',withdraw)
+            self.assertEqual(409,request(withdraw,{**fields,'amount':'50','borrow':'x'})[0]);self.assertEqual(('0','10','0','0'),state())
+
+    def test_bank_transfer_authority_http(self):
+        q=self.query
+        with self._bank_fixture() as f:
+            request,state,setup,player=f['request'],f['state'],f['setup'],f['player']
+            recipient=f['target']('BankRecipient',level=4,goldinbank=0,transferredtoday=0)
+            f['target']('BankLockedRecipient',level=4,locked=1);decoy=f['target']('BankDecoy',level=4)
+            q('UPDATE accounts SET name=? WHERE acctid=?',["`2O'Reilly \\ 雪 ab! <img src=x>",decoy])
+            anonymous=self._security_client(login=None)
+            for data in [None,{'to':'BankRecipient','amount':'50'}]: self.assertIn(anonymous('bank.php?op=transfer3',data)[0],[302,303,403])
+            setup(gold=30,goldinbank=100);f['login']();before=state();other=state(recipient)
+            search='bank.php?op=transfer2';complete='bank.php?op=transfer3'
+            def offer(to,amount):
+                status,body=request(search,{'to':to,'amount':amount});self.assertEqual(200,status,body[:1500]);return body
+            # The search matches display names, as in 1.1.2; this one names only BankRecipient.
+            def fields(amount='50'): return self._security_fields(offer("O'Reilly \\ 雪 %_!",amount),complete)
+            subject='`^You have received a money transfer!`0';subject='a:1:{i:0;s:%d:"%s";}'%(len(subject.encode()),subject)
+            mails=lambda:int(q('SELECT COUNT(*) AS n FROM mail WHERE msgto=? AND msgfrom=0 AND subject=?',[recipient,subject])[0]['n'])
+            # Transfers disabled, or below the minimum level without a dragon kill: refused on every step, not just hidden.
+            for key,value,changes in [('allowgoldtransfer','0',{}),('mintransferlev','3',{'level':2})]:
+                f['setting'](key,value);setup(gold=30,goldinbank=100,**changes)
+                for url,data in [('bank.php?op=transfer',None),(search,{'to':'BankRecipient','amount':'50'}),(complete,{'to':'BankRecipient','amount':'50'})]:
+                    self.assertEqual(403,request(url,data)[0],(key,url))
+                f['setting'](key,'1' if key=='allowgoldtransfer' else '3')
+            setup(gold=30,goldinbank=100);self.assertEqual(before,state())
+            # Search binds a literal pattern: apostrophes, backslashes, UTF-8, % and _ match only themselves; locked accounts never appear.
+            body=offer("O'Reilly \\ 雪 %_!",'50');self.assertNotIn('<img src=x',body)
+            self.assertEqual(['BankRecipient'],[html.unescape(v) for v in re.findall(r'name=[\'"]to[\'"] value=[\'"]([^\'"]*)',body)])
+            body=offer("O'Reilly",'50');self.assertNotIn('<img src=x',body);options=[html.unescape(v) for v in re.findall(r'<option value=[\'"]([^\'"]*)',body)]
+            self.assertIn('BankRecipient',options);self.assertIn('BankDecoy',options);self.assertNotIn('BankLockedRecipient',options)
+            for bad in ['-50','5.5','abc','99999999999999999999999']: self.assertEqual(400,request(search,{'to':'BankRecipient','amount':bad})[0],bad)
+            # The completing POST needs CSRF and the intent issued for this amount; GET only displays.
+            form=fields()
+            self.assertEqual(403,request(complete,{'action_token':form['action_token'],'to':'BankRecipient','amount':'50'})[0])
+            self.assertEqual(409,request(complete,{**form,'to':'BankRecipient','amount':'100'})[0]);self.assertEqual(before,state())
+            for bad in [{'to':'BankRecipient','amount':'-50'},{'to[]':'BankRecipient','amount':'50'},{'to':'BankRecipient','amount':'50','goldinbank':'1'}]:
+                self.assertEqual(400,request(complete,{**fields(),**bad})[0],bad)
+            # Every historical limit, on the locked rows; nothing moves. The intent binds the amount; the recipient is checked at completion.
+            cases=[('NoSuchLogin','50',{},'run into an accounting error'),('BankLockedRecipient','50',{},'run into an accounting error'),
+                   ('WebPlayer','50',{},'You may not transfer money to yourself'),('BankRecipient','150',{},'How can you transfer'),
+                   ('BankRecipient','50',{'amountouttoday':100},'not allowed to transfer more than'),('BankRecipient','101',{'gold':500},'may only receive up to'),
+                   ('BankRecipient','4',{},'at least as much as your level')]
+            for to,amount,changes,message in cases:
+                setup(**{'gold':30,'goldinbank':100,**changes});mine=state();form=fields(amount)
+                status,body=request(complete,{**form,'to':to,'amount':amount});self.assertEqual(200,status,to);self.assertIn(message,html.unescape(body),to)
+                self.assertEqual(mine,state(),to);self.assertEqual(other,state(recipient),to);self.assertEqual(0,mails())
+            setup(gold=30,goldinbank=100);q('UPDATE accounts SET transferredtoday=3 WHERE acctid=?',[recipient])
+            status,body=request(complete,{**fields(),'to':'BankRecipient','amount':'50'});self.assertIn('has received too many transfers today',html.unescape(body))
+            q('UPDATE accounts SET transferredtoday=0 WHERE acctid=?',[recipient])
+            # A debtor is refused at search and at completion.
+            setup(gold=500,goldinbank=-10)
+            for url,data in [('bank.php?op=transfer',None),(search,{'to':'BankRecipient','amount':'50'})]:
+                status,body=request(url,data);self.assertIn('refuses to transfer money for someone who is in debt',body);self.assertNotIn('op=transfer3',body)
+            # Success: hand gold first, then the bank; the recipient's credit, counters and notice commit together.
+            setup(gold=30,goldinbank=100);form=fields()
+            status,body=request(complete,{**form,'to':'BankRecipient','amount':'50'});self.assertEqual(200,status);self.assertIn('The transfer has been completed!',body)
+            self.assertEqual(('0','80','50','0'),state());self.assertEqual(('50','1'),(state(recipient)[1],state(recipient)[3]));self.assertEqual(1,mails())
+            self.assertEqual(409,request(complete,{**form,'to':'BankRecipient','amount':'50'})[0]);self.assertEqual(('0','80','50','0'),state());self.assertEqual(1,mails())
+            # A late failure on the sender's own write rolls back the credit, counters and notice; a fresh intent succeeds.
+            setup(gold=0,goldinbank=80,amountouttoday=50);form=fields();mine=state();theirs=state(recipient)
+            q("ALTER TABLE accounts ADD CONSTRAINT fixture_bank_sender CHECK (login <> 'WebPlayer' OR amountouttoday <> 100)")
+            try:
+                self.assertEqual(500,request(complete,{**form,'to':'BankRecipient','amount':'50'})[0])
+                self.assertEqual(mine,state());self.assertEqual(theirs,state(recipient));self.assertEqual(1,mails())
+                self.assertEqual(409,request(complete,{**form,'to':'BankRecipient','amount':'50'})[0])
+            finally: q('ALTER TABLE accounts DROP CONSTRAINT fixture_bank_sender')
+            # The notice names the sender (apostrophe and UTF-8) and its amount.
+            self.assertEqual(200,request(complete,{**fields(),'to':'BankRecipient','amount':'50'})[0])
+            self.assertEqual(('0','30','100','0'),state());self.assertEqual('100',state(recipient)[1]);self.assertEqual(2,mails())
+            body=q('SELECT body FROM mail WHERE msgto=? ORDER BY messageid DESC LIMIT 1',[recipient])[0]['body'];self.assertIn("Bank O'Reilly 雪",body)
+
+    def test_weapon_and_armor_purchase_authority_http(self):
+        q=self.query;player=int(q('SELECT acctid FROM accounts WHERE login=?',['WebPlayer'])[0]['acctid'])
+        original=q('SELECT * FROM accounts WHERE acctid=?',[player])[0]
+        shops=[('weapons.php','weapons','weaponid','weaponname','damage','weapon','weapondmg','weaponvalue','attack'),
+               ('armor.php','armor','armorid','armorname','defense','armor','armordef','armorvalue','defense')]
+        try:
+            client=self._security_client()
+            def request(url,data=None):
+                # Recompute the authoritative game day for every request (the day rolls over at 18:00 UTC).
+                q('UPDATE accounts SET lastnewday=? WHERE acctid=?',[self._current_game_day(),player])
+                self._security_allow(player,url);return client(url,data)
+            for page,table,idc,namec,statc,item,itemstat,itemvalue,total in shops:
+                items={}
+                for key,name,value,stat,level in [('tier',"Tier O'Reilly \\ 雪 <b>Blade</b>",130,7,2),('costly','Tier Costly',131,8,2),('higher','Higher Gear',10,99,3),('lower','Lower Gear',10,1,1)]:
+                    q(f'INSERT INTO {table} ({namec},value,{statc},level) VALUES (?,?,?,?)',[name,value,stat,level])
+                    items[key]=int(q(f'SELECT MAX({idc}) AS id FROM {table}')[0]['id'])
+                state=lambda:tuple(q(f'SELECT gold,{item},{itemstat},{itemvalue},{total} FROM accounts WHERE acctid=?',[player])[0].values())
+                # Dragon kills 2 with two dragon points: the shop offers tier 2 (seeded items plus ours).
+                q(f"UPDATE accounts SET dragonkills=2,dragonpoints=?,race='Human',specialty='DA',alive=1,gold=100,{item}='Old Stick',{itemstat}=3,{itemvalue}=40,{total}=10,lasthit=NOW() WHERE acctid=?",
+                  ['a:2:{i:0;s:2:"ff";i:1;s:2:"ff";}',player])
+                buy=lambda key:f'{page}?op=buy&id={items[key]}';before=state()
+                anonymous=self._security_client(login=None)
+                for data in [None,{'x':'1'}]: self.assertIn(anonymous(buy('tier'),data)[0],[302,303,403],page)
+                # The listing offers one form per affordable item of the tier (trade-in counted: 100 + 30 = 130), escaped.
+                status,body=request(page);self.assertEqual(200,status,body[:1500]);self.assertNotIn('<b>Blade',body)
+                actions=[html.unescape(a) for a in re.findall(r'<form\b[^>]*action=[\'"]([^\'"]+)',body)]
+                self.assertIn(buy('tier'),actions);self.assertNotIn(buy('costly'),actions);self.assertNotIn(buy('higher'),actions);self.assertNotIn(buy('lower'),actions)
+                form=lambda key:self._security_fields(request(page)[1],buy(key))
+                # GET only displays: 1.1.2 bought on GET, and replayed it from a restored page or New Day's "Continue".
+                self.assertEqual(200,request(buy('tier'))[0]);self.assertEqual(before,state(),page)
+                fields=form('tier')
+                self.assertEqual(403,request(buy('tier'),{'action_token':fields['action_token']})[0])
+                self.assertEqual(403,request(buy('tier'),{**fields,'csrf_token':'0'*64})[0])
+                for url in [f'{page}?op=buy&id=abc',f'{page}?op=buy&id=0',f'{page}?op=buy']: self.assertEqual(400,request(url,fields)[0],url)
+                self.assertEqual(400,request(buy('tier'),{**fields,'gold':'9'})[0])
+                # Unknown items and items of another tier have no form; a forged POST changes nothing.
+                for url in [f'{page}?op=buy&id=99999999',buy('higher'),buy('lower')]: self.assertEqual(409,request(url,fields)[0],url)
+                self.assertEqual(before,state(),page)
+                fields=form('tier');q('UPDATE accounts SET gold=101 WHERE acctid=?',[player]);self.assertEqual(409,request(buy('tier'),fields)[0])
+                q('UPDATE accounts SET gold=100 WHERE acctid=?',[player]);self.assertEqual(before,state(),page)
+                # A late failure on the account write rolls back gold, item and stats; the spent intent cannot retry.
+                fields=form('tier');q(f"ALTER TABLE accounts ADD CONSTRAINT fixture_equipment CHECK (login <> 'WebPlayer' OR {itemstat} <> 7)")
+                try:
+                    self.assertEqual(500,request(buy('tier'),fields)[0]);self.assertEqual(before,state(),page)
+                    self.assertEqual(409,request(buy('tier'),fields)[0])
+                finally: q('ALTER TABLE accounts DROP CONSTRAINT fixture_equipment')
+                # Exact 1.1.2 results: gold 100 - 130 + round(40 x .75) = 0; total 10 - 3 + 7 = 14.
+                fields=form('tier');status,body=request(buy('tier'),fields);self.assertEqual(200,status);self.assertIn('takes your',body);self.assertIn('Old Stick',body)
+                self.assertEqual(('0',"Tier O'Reilly \\ 雪 <b>Blade</b>",'7','130','14'),state(),page)
+                self.assertEqual(409,request(buy('tier'),fields)[0]);self.assertEqual('0',state()[0])
+                # Funds count the trade-in under lock (round(130 x .75) = 98): a price raised after the form shows the theft text and changes nothing.
+                q('UPDATE accounts SET gold=33 WHERE acctid=?',[player]);fields=form('costly');q(f'UPDATE {table} SET value=132 WHERE {idc}=?',[items['costly']]);mine=state()
+                status,body=request(buy('costly'),fields);self.assertEqual(200,status);self.assertIn('Secure in your theft',body);self.assertEqual(mine,state(),page)
+                q(f'UPDATE {table} SET value=131 WHERE {idc}=?',[items['costly']])
+                self.assertEqual(200,request(buy('costly'),form('costly'))[0]);self.assertEqual(('0','Tier Costly','8','131','15'),state(),page)
+                # The item must still be in the offered tier when the purchase runs.
+                q(f'UPDATE {table} SET level=2 WHERE {idc}=?',[items['lower']]);fields=form('lower');q(f'UPDATE {table} SET level=1 WHERE {idc}=?',[items['lower']]);mine=state()
+                status,body=request(buy('lower'),fields);self.assertEqual(200,status);self.assertIn('one too many bonks',body);self.assertEqual(mine,state(),page)
+                q(f'DELETE FROM {table} WHERE {idc} IN (?,?,?,?)',list(items.values()))
+        finally:
+            for page,table,idc,namec,*_ in shops: q(f"DELETE FROM {table} WHERE {namec} IN (?,?,?,?)",["Tier O'Reilly \\ 雪 <b>Blade</b>",'Tier Costly','Higher Gear','Lower Gear'])
+            q('UPDATE accounts SET '+','.join(k+'=?' for k in original if k!='acctid')+' WHERE acctid=?',[*[v for k,v in original.items() if k!='acctid'],player])
+
+    def test_stables_buy_feed_and_sell_authority_http(self):
+        q=self.query;player=int(q('SELECT acctid FROM accounts WHERE login=?',['WebPlayer'])[0]['acctid'])
+        original=q('SELECT * FROM accounts WHERE acctid=?',[player])[0]
+        saved=q("SELECT setting,value FROM settings WHERE setting='allowfeed'")
+        village=q("SELECT value FROM settings WHERE setting='villagename'");village=village[0]['value'] if village else 'Degolburg'
+        buff=lambda rounds:'a:4:{s:4:"name";s:4:"Pony";s:6:"rounds";i:%d;s:6:"atkmod";d:1.1;s:6:"schema";s:6:"mounts";}'%rounds
+        ids={}
+        try:
+            for key,name,gold,gems,active,where,dk,stored in [('pony',"Pony O'Reilly \\ 雪 <b>",100,2,1,'all',0,buff(20)),('horse','Fixture Horse',300,2,1,'all',0,buff(20)),
+                    ('inactive','Fixture Inactive',10,0,0,'all',0,buff(20)),('elsewhere','Fixture Elsewhere',10,0,1,'Elsewhere',0,buff(20)),
+                    ('costly','Fixture Dragon Mount',10,0,1,'all',5,buff(20)),('broken','Fixture Broken',10,0,1,'all',0,'not serialized')]:
+                q("INSERT INTO mounts (mountname,mountdesc,mountcategory,mountbuff,mountcostgems,mountcostgold,mountactive,mountforestfights,newday,recharge,partrecharge,mountfeedcost,mountlocation,mountdkcost) VALUES (?,'Fixture','Fixture',?,?,?,?,0,'','','',5,?,?)",
+                  [name,stored,gems,gold,active,where,dk])
+                ids[key]=int(q('SELECT MAX(mountid) AS id FROM mounts')[0]['id'])
+            q("UPDATE accounts SET dragonkills=2,dragonpoints=?,race='Human',specialty='DA',alive=1,gold=1000,gems=10,hashorse=0,fedmount=0,level=5,location=?,bufflist='a:0:{}',lasthit=NOW() WHERE acctid=?",
+              ['a:2:{i:0;s:2:"ff";i:1;s:2:"ff";}',village,player])
+            q("INSERT INTO settings(setting,value) VALUES ('allowfeed','0') ON DUPLICATE KEY UPDATE value='0'")
+            state=lambda:tuple(q('SELECT gold,gems,hashorse,fedmount FROM accounts WHERE acctid=?',[player])[0].values())
+            rounds=lambda:(re.search(r's:6:"rounds";i:(\d+)',q('SELECT bufflist FROM accounts WHERE acctid=?',[player])[0]['bufflist']) or [None,None])[1]
+            logs=lambda:int(q('SELECT COUNT(*) AS n FROM debuglog WHERE actor=?',[player])[0]['n'])
+            anonymous=self._security_client(login=None)
+            for data in [None,{'x':'1'}]: self.assertIn(anonymous(f"stables.php?op=confirmbuy&id={ids['pony']}",data)[0],[302,303,403])
+            client=self._security_client()
+            def request(url,data=None):
+                # Recompute the authoritative game day for every request (the day rolls over at 18:00 UTC).
+                q('UPDATE accounts SET lastnewday=? WHERE acctid=?',[self._current_game_day(),player])
+                self._security_allow(player,url);return client(url,data)
+            buy=lambda key:f"stables.php?op=confirmbuy&id={ids[key]}"
+            def form(page,action):
+                status,body=request(page);self.assertEqual(200,status,body[:1500]);return self._security_fields(body,action)
+            # The listing offers only active mounts stabled here within the dragon-kill cost; examining others shows nothing.
+            status,body=request('stables.php');self.assertEqual(200,status,body[:1500])
+            offered={int(i) for i in re.findall(r'op=examine&(?:amp;)?id=(\d+)',body)}&set(ids.values())
+            self.assertEqual({ids['pony'],ids['horse'],ids['broken']},offered)
+            for key in ['inactive','elsewhere','costly']:
+                status,body=request(f"stables.php?op=examine&id={ids[key]}");self.assertIn('dinnae be any such beestie',body,key);self.assertNotIn('op=buymount',body)
+            status,body=request(f"stables.php?op=examine&id={ids['pony']}");self.assertIn(f"op=buymount&amp;id={ids['pony']}",body);self.assertNotIn('<b>',body.split('Creature:')[1][:200])
+            # GET only asks: 1.1.2 bought on GET buymount (no mount) and confirmbuy, fed on GET feed and sold on GET confirmsell.
+            before=state()
+            for url in [f"stables.php?op=buymount&id={ids['pony']}",buy('pony'),'stables.php?op=feed','stables.php?op=confirmsell']:
+                self.assertEqual(200,request(url)[0],url);self.assertEqual(before,state(),url)
+            fields=form(f"stables.php?op=buymount&id={ids['pony']}",buy('pony'))
+            self.assertEqual(403,request(buy('pony'),{'action_token':fields['action_token']})[0])
+            self.assertEqual(403,request(buy('pony'),{**fields,'csrf_token':'0'*64})[0])
+            for url in ['stables.php?op=confirmbuy&id=abc','stables.php?op=confirmbuy&id=0','stables.php?op=confirmbuy']: self.assertEqual(400,request(url,fields)[0],url)
+            self.assertEqual(400,request(buy('pony'),{**fields,'hashorse':'1'})[0])
+            # Unknown, inactive, elsewhere and too-costly mounts: no form, and a forged POST changes nothing.
+            for key in ['inactive','elsewhere','costly']:
+                status,body=request(f"stables.php?op=buymount&id={ids[key]}");self.assertNotIn('op=confirmbuy',body,key)
+                self.assertEqual(409,request(buy(key),fields)[0],key)
+            self.assertEqual(409,request('stables.php?op=confirmbuy&id=99999999',fields)[0]);self.assertEqual(before,state())
+            # The offer is rechecked under lock: a mount withdrawn after its form was issued is not sold.
+            fields=form(f"stables.php?op=buymount&id={ids['pony']}",buy('pony'));q('UPDATE mounts SET mountactive=0 WHERE mountid=?',[ids['pony']])
+            status,body=request(buy('pony'),fields);self.assertIn('dinnae be any such beestie',body);self.assertEqual(before,state())
+            q('UPDATE mounts SET mountactive=1 WHERE mountid=?',[ids['pony']])
+            # The mount is read under lock inside the purchase: an editor's deactivation or delete that is still uncommitted when
+            # the purchase starts is waited for and then seen, so the purchase is refused rather than sold from an older snapshot.
+            import threading
+            q("INSERT INTO mounts (mountname,mountdesc,mountcategory,mountbuff,mountcostgems,mountcostgold,mountactive,mountforestfights,newday,recharge,partrecharge,mountfeedcost,mountlocation,mountdkcost) VALUES ('Fixture Doomed','Fixture','Fixture',?,0,10,1,0,'','','',5,'all',0)",[buff(20)])
+            ids['doomed']=int(q('SELECT MAX(mountid) AS id FROM mounts')[0]['id'])
+            holder="""require 'dbconnect.php';require 'lib/dbwrapper_pdo.php';db_connect($DB_HOST,$DB_USER,$DB_PASS);db_select_db($DB_NAME);
+$db=$GLOBALS['dbinfo']['connection'];$db->beginTransaction();db_query($argv[1],true,[(int)$argv[2]]);echo "HELD\\n";flush();fgets(STDIN);$db->commit();"""
+            for key,change in [('pony','UPDATE mounts SET mountactive=0 WHERE mountid=?'),('doomed','DELETE FROM mounts WHERE mountid=?')]:
+                fields=form(f"stables.php?op=buymount&id={ids[key]}",buy(key));results=[];thread=None
+                process=subprocess.Popen([shutil.which('php'),'-r',holder,change,str(ids[key])],cwd=ROOT,stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True)
+                try:
+                    self.assertEqual('HELD',process.stdout.readline().strip())
+                    self._security_allow(player,buy(key));q('UPDATE accounts SET lastnewday=? WHERE acctid=?',[self._current_game_day(),player])
+                    thread=threading.Thread(target=lambda key=key,fields=fields:results.append(client(buy(key),fields)));thread.start()
+                    for _ in range(150):
+                        rows=q("SELECT INFO FROM information_schema.PROCESSLIST WHERE INFO LIKE '%mounts%FOR UPDATE%'")
+                        if not thread.is_alive() or any('SELECT INFO' not in (r['INFO'] or '') for r in rows):break
+                        time.sleep(.02)
+                    process.stdin.write('commit\n');process.stdin.flush();out,err=process.communicate(timeout=10);self.assertEqual(0,process.returncode,err)
+                    thread.join(timeout=60);self.assertFalse(thread.is_alive())
+                    status,body=results[0];self.assertIn('dinnae be any such beestie',body,key);self.assertEqual(before,state(),key)
+                finally:
+                    if process.poll() is None:process.terminate();process.wait(timeout=5)
+                    if thread:thread.join(timeout=60)
+            q('UPDATE mounts SET mountactive=1 WHERE mountid=?',[ids['pony']])
+            # Too little gold: the 1.1.2 refusal, nothing charged. A stale form (purse changed) is refused.
+            q('UPDATE accounts SET gold=99 WHERE acctid=?',[player]);fields=form(f"stables.php?op=buymount&id={ids['pony']}",buy('pony'))
+            status,body=request(buy('pony'),fields);self.assertIn('Cannae ye see that',body);self.assertEqual(('99','10','0','0'),state())
+            fields=form(f"stables.php?op=buymount&id={ids['pony']}",buy('pony'));q('UPDATE accounts SET gold=1000 WHERE acctid=?',[player])
+            self.assertEqual(409,request(buy('pony'),fields)[0]);self.assertEqual(before,state())
+            # A malformed stored buff stops the purchase before anything is charged or logged.
+            n=logs();fields=form(f"stables.php?op=buymount&id={ids['broken']}",buy('broken'))
+            self.assertEqual(500,request(buy('broken'),fields)[0]);self.assertEqual(before,state());self.assertEqual(n,logs())
+            # A late failure on the account write rolls back purse, mount, buff and log; the spent intent cannot retry.
+            fields=form(f"stables.php?op=buymount&id={ids['pony']}",buy('pony'))
+            q(f"ALTER TABLE accounts ADD CONSTRAINT fixture_stables CHECK (login <> 'WebPlayer' OR hashorse <> {ids['pony']})")
+            try:
+                self.assertEqual(500,request(buy('pony'),fields)[0]);self.assertEqual(before,state());self.assertEqual(n,logs());self.assertIsNone(rounds())
+                self.assertEqual(409,request(buy('pony'),fields)[0])
+            finally: q('ALTER TABLE accounts DROP CONSTRAINT fixture_stables')
+            fields=form(f"stables.php?op=buymount&id={ids['pony']}",buy('pony'));status,body=request(buy('pony'),fields)
+            self.assertEqual(200,status);self.assertIn('leads out a fine',body);self.assertEqual(('900','8',str(ids['pony']),'0'),state());self.assertEqual('20',rounds());self.assertEqual(n+1,logs())
+            self.assertEqual(409,request(buy('pony'),fields)[0]);self.assertEqual(('900','8',str(ids['pony']),'0'),state())
+            # Trading in: 2/3 of the old mount counts toward gold and gems (round(100x2/3)=67, round(2x2/3)=1).
+            q('UPDATE accounts SET gems=0 WHERE acctid=?',[player]);fields=form(f"stables.php?op=buymount&id={ids['horse']}",buy('horse'))
+            status,body=request(buy('horse'),fields);self.assertIn('Cannae ye see that',body);self.assertEqual(('900','0',str(ids['pony']),'0'),state())
+            q('UPDATE accounts SET gems=8 WHERE acctid=?',[player]);fields=form(f"stables.php?op=buymount&id={ids['horse']}",buy('horse'))
+            status,body=request(buy('horse'),fields);self.assertIn('You hand over the reins',body);self.assertEqual(('667','7',str(ids['horse']),'0'),state())
+            # Feeding: disabled, not hungry, half price, once a day, full price and too little gold. Grub is round(5 x 5) = 25.
+            status,body=request('stables.php?op=feed');self.assertIn('cannae feed yer critter',body);self.assertNotIn('action_token',body)
+            q("UPDATE settings SET value='1' WHERE setting='allowfeed'")
+            fields=form('stables.php?op=feed','stables.php?op=feed');status,body=request('stables.php?op=feed',fields);self.assertIn("isn't hungry",body);self.assertEqual(('667','7',str(ids['horse']),'0'),state())
+            q('UPDATE accounts SET bufflist=? WHERE acctid=?',['a:1:{s:5:"mount";%s}'%buff(15),player])
+            fields=form('stables.php?op=feed','stables.php?op=feed');status,body=request('stables.php?op=feed',fields);self.assertIn('50% discount',body)
+            self.assertEqual(('654','7',str(ids['horse']),'1'),state());self.assertEqual('20',rounds())
+            self.assertEqual(409,request('stables.php?op=feed',fields)[0]);status,body=request('stables.php?op=feed');self.assertNotIn('action_token',body)
+            q('UPDATE accounts SET fedmount=0,bufflist=? WHERE acctid=?',['a:1:{s:5:"mount";%s}'%buff(3),player])
+            fields=form('stables.php?op=feed','stables.php?op=feed');status,body=request('stables.php?op=feed',fields);self.assertIn('eats all the food greedily',body)
+            self.assertEqual(('629','7',str(ids['horse']),'1'),state())
+            q('UPDATE accounts SET fedmount=0,gold=10,bufflist=? WHERE acctid=?',['a:1:{s:5:"mount";%s}'%buff(3),player])
+            fields=form('stables.php?op=feed','stables.php?op=feed');status,body=request('stables.php?op=feed',fields);self.assertIn("don't have enough gold",body);self.assertEqual(('10','7',str(ids['horse']),'0'),state())
+            # Selling: round(300 x 2/3) = 200 gold and round(2 x 2/3) = 1 gem; the buff goes; replay and selling with no mount change nothing.
+            q('UPDATE accounts SET gold=629 WHERE acctid=?',[player]);fields=form('stables.php?op=sellmount','stables.php?op=confirmsell')
+            status,body=request('stables.php?op=confirmsell',fields);self.assertEqual(200,status);self.assertIn('lone tear',body);self.assertEqual(('829','8','0','0'),state());self.assertIsNone(rounds())
+            self.assertEqual(409,request('stables.php?op=confirmsell',fields)[0]);self.assertEqual(('829','8','0','0'),state())
+            status,body=request('stables.php?op=sellmount');self.assertNotIn('op=confirmsell',body)
+            status,body=request('stables.php?op=feed');self.assertNotIn('action_token',body);self.assertEqual(409,request('stables.php?op=feed',fields)[0])
+            self.assertEqual(('829','8','0','0'),state())
+        finally:
+            for mount in ids.values(): q('DELETE FROM mounts WHERE mountid=?',[mount])
+            q("DELETE FROM settings WHERE setting='allowfeed'")
+            for row in saved: q('INSERT INTO settings(setting,value) VALUES (?,?)',[row['setting'],row['value']])
+            q('UPDATE accounts SET '+','.join(k+'=?' for k in original if k!='acctid')+' WHERE acctid=?',[*[v for k,v in original.items() if k!='acctid'],player])
+
+    def test_graveyard_haunt_authority_http(self):
+        q=self.query;player=int(q('SELECT acctid FROM accounts WHERE login=?',['WebPlayer'])[0]['acctid'])
+        original=q('SELECT * FROM accounts WHERE acctid=?',[player])[0];targets=[]
+        try:
+            victim=self._security_target('HauntVictim');targets.append(victim);hidden=self._security_target('HauntLocked');targets.append(hidden)
+            plain=self._security_target('HauntPlain');targets.append(plain)
+            q("UPDATE accounts SET level=0,hauntedby='',locked=0 WHERE acctid=?",[victim]);q("UPDATE accounts SET level=0,hauntedby='',locked=1 WHERE acctid=?",[hidden])
+            q("UPDATE accounts SET name='Plain Haunt Name',level=0,hauntedby='',locked=0 WHERE acctid=?",[plain])
+            # 58 characters with an apostrophe, a backslash and UTF-8: hauntedby is varchar(50), names varchar(60).
+            ghost="`7Ghost O'Reilly \\ 雪 "+'x'*37
+            self.assertEqual(58,len(ghost))
+            q("UPDATE accounts SET alive=0,hitpoints=0,deathpower=100,level=0,specialinc='',specialmisc='',name=? WHERE acctid=?",[ghost,player])
+            state=lambda:(q('SELECT deathpower FROM accounts WHERE acctid=?',[player])[0]['deathpower'],q('SELECT hauntedby FROM accounts WHERE acctid=?',[victim])[0]['hauntedby'],
+                int(q('SELECT COUNT(*) AS n FROM news')[0]['n']),int(q('SELECT COUNT(*) AS n FROM mail WHERE msgto=?',[victim])[0]['n']))
+            haunt=lambda login='HauntVictim':'graveyard.php?op=haunt3&name='+login
+            failures=['they sneezed','completely unaware of your presence','trip over your ghostly tail','eating sausage','"Neat!"','panic at the sight of a ghost']
+            anonymous=self._security_client(login=None)
+            for data in [None,{'x':'1'}]: self.assertIn(anonymous(haunt(),data)[0],[302,303,403])
+            client=self._security_client()
+            def request(url,data=None):
+                # Recompute the authoritative game day for every request (the day rolls over at 18:00 UTC).
+                q('UPDATE accounts SET lastnewday=? WHERE acctid=?',[self._current_game_day(),player])
+                # Seeded rolls; level 0 always rolls 0, and level 100000 against level 0 succeeds under this seed.
+                self._security_allow(player,url);return client(url,data,fixture='graveyard-haunt')
+            def form(login='HauntVictim'):
+                status,body=request(haunt(login));self.assertEqual(200,status,body[:1500]);return self._security_fields(body,haunt(login))
+            def search(name):
+                status,body=request('graveyard.php?op=haunt2',{'name':name});self.assertEqual(200,status,body[:1500])
+                return set(re.findall(r"op=haunt3&name=([A-Za-z]+)'",body)),body
+            # The search binds the typed name, matches UTF-8 characters, treats % and _ literally, lists only other unlocked accounts and escapes names.
+            found,body=search("O'Reilly");self.assertEqual({'HauntVictim'},found);self.assertNotIn('<img src=x>',body)
+            self.assertEqual({'HauntVictim'},search('雪')[0]);self.assertEqual({'HauntVictim'},search('%_')[0]);self.assertEqual(set(),search('_x_')[0])
+            self.assertNotIn('WebPlayer',search('Ghost')[0])
+            for data in [{'name[]':'x'},{'name':b'\xe9'}]: self.assertEqual(400,request('graveyard.php?op=haunt2',data)[0],data)
+            # GET only asks: 1.1.2 charged favor and haunted on GET op=haunt3, replayably.
+            before=state();status,body=request(haunt());self.assertEqual(200,status,body[:1500]);self.assertEqual(before,state());self.assertNotIn('<img src=x>',body)
+            fields=form();self.assertEqual(before,state())
+            self.assertEqual(403,request(haunt(),{'action_token':fields['action_token']})[0]);self.assertEqual(403,request(haunt(),{**fields,'csrf_token':'0'*64})[0])
+            self.assertEqual(400,request(haunt(),{**fields,'deathpower':'1000'})[0])
+            for url in ['graveyard.php?op=haunt3','graveyard.php?op=haunt3&name=','graveyard.php?op=haunt3&name[]=HauntVictim']: self.assertEqual(400,request(url,fields)[0],url)
+            # Locked, unknown and the haunter's own account offer no form, and a forged POST changes nothing.
+            for login in ['HauntLocked','NoSuchHauntTarget','WebPlayer']:
+                status,body=request(haunt(login));self.assertIn('lost their concentration',body,login);self.assertNotIn('action_token',body)
+                self.assertEqual(409,request(haunt(login),fields)[0],login)
+            self.assertEqual(before,state())
+            # Too little favor: Ramius refuses and offers no form; a form issued with more favor is stale.
+            q('UPDATE accounts SET deathpower=24 WHERE acctid=?',[player]);status,body=request(haunt());self.assertIn('not yet impressed',body);self.assertNotIn('action_token',body)
+            self.assertEqual(409,request(haunt(),fields)[0]);self.assertEqual(('24',*before[1:]),state())
+            q('UPDATE accounts SET deathpower=100 WHERE acctid=?',[player])
+            # The living are sent to the village (graveyard.php) and cannot use a form issued while dead.
+            fields=form();q('UPDATE accounts SET alive=1,hitpoints=10 WHERE acctid=?',[player])
+            for data in [None,fields]:
+                status,body=request(haunt(),data);self.assertIn(status,[302,303]);self.assertEqual(before,state())
+            q('UPDATE accounts SET alive=0,hitpoints=0 WHERE acctid=?',[player])
+            # A failed haunt (level 0 always rolls 0, never more than the target's roll) costs 25 favor once and makes news; no notice. Replay is refused.
+            fields=form();status,body=request(haunt(),fields);self.assertEqual(200,status,body[:1500]);self.assertNotIn('You have successfully haunted',body)
+            self.assertEqual(1,sum(text in body for text in failures),body[-3000:])
+            self.assertEqual(('75','',before[2]+1,before[3]),state());self.assertIn('unsuccessfully haunted',q('SELECT newstext FROM news ORDER BY newsid DESC LIMIT 1')[0]['newstext'])
+            self.assertEqual(409,request(haunt(),fields)[0]);self.assertEqual(('75','',before[2]+1,before[3]),state())
+            # A late failure on the player's write rolls back favor, target, news and notice; the spent intent cannot retry.
+            q('UPDATE accounts SET level=100000 WHERE acctid=?',[player]);before=state();fields=form()
+            q("ALTER TABLE accounts ADD CONSTRAINT fixture_haunt CHECK (login <> 'WebPlayer' OR deathpower <> 50)")
+            try:
+                self.assertEqual(500,request(haunt(),fields)[0]);self.assertEqual(before,state());self.assertEqual(409,request(haunt(),fields)[0])
+            finally: q('ALTER TABLE accounts DROP CONSTRAINT fixture_haunt')
+            # A fresh form succeeds: favor, the target's mark (the name as is, truncated to 50 as 1.1.2's MySQL did), news and one notice together.
+            fields=form();status,body=request(haunt(),fields);self.assertEqual(200,status,body[:1500]);self.assertIn('You have successfully haunted',body)
+            self.assertEqual(('50',ghost[:50],before[2]+1,before[3]+1),state())
+            mail=q('SELECT msgfrom,subject,body FROM mail WHERE msgto=?',[victim]);self.assertEqual(1,len(mail));self.assertEqual('0',mail[0]['msgfrom'])
+            self.assertIn('You have been haunted',mail[0]['subject']);self.assertIn(ghost,mail[0]['body'])
+            self.assertEqual(409,request(haunt(),fields)[0]);self.assertEqual(('50',ghost[:50],before[2]+1,before[3]+1),state())
+            # Already haunted: no form; a form issued before someone else's haunt is stale and charges nothing.
+            status,body=request(haunt());self.assertIn('already been haunted',body);self.assertNotIn('action_token',body)
+            q("UPDATE accounts SET hauntedby='' WHERE acctid=?",[victim]);fields=form();q("UPDATE accounts SET hauntedby='Another Ghost' WHERE acctid=?",[victim])
+            self.assertEqual(409,request(haunt(),fields)[0]);self.assertEqual(('50','Another Ghost',before[2]+1,before[3]+1),state())
+        finally:
+            for target in targets:
+                q('DELETE FROM mail WHERE msgto=?',[target]);q('DELETE FROM accounts_output WHERE acctid=?',[target]);q('DELETE FROM accounts WHERE acctid=?',[target])
+            q('UPDATE accounts SET '+','.join(k+'=?' for k in original if k!='acctid')+' WHERE acctid=?',[*[v for k,v in original.items() if k!='acctid'],player])
+
+    def test_graveyard_restore_authority_http(self):
+        q=self.query;player=int(q('SELECT acctid FROM accounts WHERE login=?',['WebPlayer'])[0]['acctid'])
+        original=q('SELECT * FROM accounts WHERE acctid=?',[player])[0];url='graveyard.php?op=restore'
+        state=lambda:tuple(q('SELECT deathpower,soulpoints FROM accounts WHERE acctid=?',[player])[0].values())
+        def prepare(favor,soul,level=10,**extra):
+            values=dict(alive=0,hitpoints=0,deathpower=favor,soulpoints=soul,level=level,specialinc='',specialmisc='',**extra)
+            q('UPDATE accounts SET '+','.join(k+'=?' for k in values)+' WHERE acctid=?',[*values.values(),player])
+        try:
+            prepare(10,40)
+            anonymous=self._security_client(login=None)
+            for data in [None,{'x':'1'}]: self.assertIn(anonymous(url,data)[0],[302,303,403])
+            client=self._security_client()
+            def request(data=None,allowed=url):
+                # Recompute the authoritative game day for every request (the day rolls over at 18:00 UTC).
+                q('UPDATE accounts SET lastnewday=? WHERE acctid=?',[self._current_game_day(),player]);self._security_allow(player,allowed);return client(url,data)
+            def form():
+                status,body=request();self.assertEqual(200,status,body[:1500]);return self._security_fields(body,url)
+            # GET only asks. Level 10: max 100; 40 soulpoints cost round(10 x 60 / 100) = 6 favor.
+            before=state();status,body=request();self.assertEqual(200,status,body[:1500]);self.assertIn('Restore Your Soul (6 favor)',body)
+            self.assertNotIn('calls you weak',body);self.assertEqual(('10','40'),before);fields=form();self.assertEqual(before,state())
+            self.assertEqual(403,request({'action_token':fields['action_token']})[0]);self.assertEqual(403,request({**fields,'csrf_token':'0'*64})[0])
+            self.assertEqual(400,request({**fields,'soulpoints':'100'})[0]);self.assertEqual(before,state())
+            # A request this page did not issue (out of the Mausoleum) is not served.
+            self.assertIn(request(fields,allowed='shades.php')[0],[302,303]);self.assertEqual(before,state())
+            # A form issued at other favor or soul is stale.
+            q('UPDATE accounts SET deathpower=11 WHERE acctid=?',[player]);self.assertEqual(409,request(fields)[0]);self.assertEqual(('11','40'),state())
+            prepare(10,40)
+            # The living are sent to the village (graveyard.php) and cannot use a form issued while dead.
+            fields=form();q('UPDATE accounts SET alive=1,hitpoints=10 WHERE acctid=?',[player])
+            for data in [None,fields]:
+                status,_=request(data);self.assertIn(status,[302,303]);self.assertEqual(before,state())
+            prepare(10,40)
+            # A late failure on the player's write rolls back favor and soul; the spent intent cannot retry.
+            fields=form();q("ALTER TABLE accounts ADD CONSTRAINT fixture_restore CHECK (login <> 'WebPlayer' OR soulpoints <> 100)")
+            try:
+                self.assertEqual(500,request(fields)[0]);self.assertEqual(before,state());self.assertEqual(409,request(fields)[0])
+            finally: q('ALTER TABLE accounts DROP CONSTRAINT fixture_restore')
+            # A fresh form restores: favor and soul together, the 1.1.2 text; replay is refused.
+            fields=form();status,body=request(fields);self.assertEqual(200,status,body[:1500]);self.assertIn('calls you weak for needing restoration',body)
+            self.assertIn('6',body);self.assertEqual(('4','100'),state());self.assertEqual(409,request(fields)[0]);self.assertEqual(('4','100'),state())
+            # Already full: the 1.1.2 sigh, no form, nothing charged.
+            status,body=request();self.assertIn('restoration before you ask for it',body);self.assertIn("just 'cause they're dead",html.unescape(body))
+            self.assertNotIn('action_token',body);self.assertEqual(('4','100'),state())
+            # Too little favor: the 1.1.2 curse, no form; a form issued with more favor is stale.
+            prepare(10,40);fields=form();q('UPDATE accounts SET deathpower=5 WHERE acctid=?',[player])
+            status,body=request();self.assertIn('curses you and throws you from the Mausoleum',body);self.assertNotIn('action_token',body)
+            self.assertEqual(409,request(fields)[0]);self.assertEqual(('5','40'),state())
+            # 1.1.2's formula rounds a small deficit to no cost: level 1 (max 55) at 53 restores for 0 favor.
+            prepare(0,53,level=1);status,body=request();self.assertIn('Restore Your Soul (0 favor)',body)
+            fields=form();status,body=request(fields);self.assertEqual(200,status);self.assertIn('calls you weak',body);self.assertEqual(('0','55'),state())
+        finally:
+            q('UPDATE accounts SET '+','.join(k+'=?' for k in original if k!='acctid')+' WHERE acctid=?',[*[v for k,v in original.items() if k!='acctid'],player])
+
+    def test_bio_moderation_authority_http(self):
+        q=self.query;player=int(q('SELECT acctid FROM accounts WHERE login=?',['WebPlayer'])[0]['acctid'])
+        original=q('SELECT * FROM accounts WHERE acctid=?',[player])[0];targets=[];call=None
+        blocked=('`iBlocked for inappropriate usage`i','9999-12-31 23:59:59')
+        try:
+            target=int(self._security_target('BioTarget'));targets.append(target);missing=target+1000
+            q("UPDATE accounts SET bio=?,biotime='2026-01-02 03:04:05' WHERE acctid=?",["O'Reilly \\ 雪 <b>bio</b>",target])
+            state=lambda who=target:(*(lambda r:(r['bio'],r['biotime']))(q('SELECT bio,biotime FROM accounts WHERE acctid=?',[who])[0]),
+                int(q('SELECT COUNT(*) AS n FROM mail WHERE msgto=?',[who])[0]['n']))
+            def request(url,data=None):
+                q('UPDATE accounts SET lastnewday=? WHERE acctid=?',[self._current_game_day(),player]);self._security_allow(player,url);return call(url,data)
+            def login(role):
+                nonlocal call;q('UPDATE accounts SET superuser=? WHERE acctid=?',[role,player]);call=self._security_client()
+            act=lambda op,who=target:f'bios.php?op={op}&userid={who}'
+            def form(op,who=target):
+                status,body=request('bios.php');self.assertEqual(200,status,body[:1500]);return self._security_fields(body,act(op,who))
+            anonymous=self._security_client(login=None)
+            for url,data in [('bios.php',None),(act('block'),{'x':'1'})]: self.assertIn(anonymous(url,data)[0],[302,303,403])
+            # Every bit except SU_EDIT_COMMENTS is insufficient.
+            for role in [0,32|8|1024]:
+                login(role)
+                for url,data in [('bios.php',None),(act('block'),None),(act('block'),{'x':'1'})]: self.assertEqual(403,request(url,data)[0],(role,url))
+            login(16);before=state()
+            # GET only displays: the 1.1.2 block link changes nothing and mails no one.
+            status,body=request('bios.php');self.assertEqual(200,status);self.assertNotIn('<img src=x>',body);self.assertNotIn('<b>bio</b>',body)
+            self.assertNotRegex(body,r"href=['\"]bios\.php\?op=");self.assertEqual(before,state())
+            for op in ['block','unblock']: self.assertEqual(405,request(act(op))[0]);self.assertEqual(before,state())
+            for url in ['bios.php?op=x&userid=1','bios.php?op=block','bios.php?op=block&userid=abc','bios.php?op=block&userid=0','bios.php?op=block&userid=4294967296','bios.php?op=block&userid[]=1']:
+                self.assertEqual(400,request(url,{'x':'1'})[0],url)
+            fields=form('block');self.assertEqual(before,state())
+            self.assertEqual(403,request(act('block'),{'action_token':fields['action_token']})[0]);self.assertEqual(403,request(act('block'),{**fields,'csrf_token':'0'*64})[0])
+            self.assertEqual(400,request(act('block'),{**fields,'bio':'x'})[0]);self.assertEqual(404,request(act('block',missing),fields)[0])
+            self.assertEqual(before,state())
+            # Block: the 1.1.2 marker, sentinel and notice together. A replay neither rewrites nor mails again.
+            status,body=request(act('block'),fields);self.assertEqual(200,status,body[:1500]);self.assertEqual((*blocked,1),state())
+            mail=q('SELECT msgfrom,subject,body FROM mail WHERE msgto=?',[target]);self.assertEqual('0',mail[0]['msgfrom'])
+            self.assertIn('Your bio has been blocked',mail[0]['subject']);self.assertIn('you may do so with the petition link.',mail[0]['body'])
+            self.assertEqual(409,request(act('block'),fields)[0]);self.assertEqual((*blocked,1),state())
+            # A blocked bio is offered only Unblock; the block form is spent, and an unblock form issued before a change is stale.
+            status,body=request('bios.php');self._security_fields(body,act('unblock'));self.assertNotIn(html.escape(act('block'))+"'",body)
+            fields=form('unblock');q("UPDATE accounts SET biotime='9999-12-31 23:59:58' WHERE acctid=?",[target])
+            self.assertEqual(409,request(act('unblock'),fields)[0]);self.assertEqual(('`iBlocked for inappropriate usage`i','9999-12-31 23:59:58',1),state())
+            q('UPDATE accounts SET biotime=? WHERE acctid=?',[blocked[1],target])
+            # Unblock: 1.1.2 wrote the zero date, which strict SQL refuses on MySQL 8.4 and MariaDB 11.4; NULL now.
+            fields=form('unblock');self.assertEqual(409,request(act('block'),fields)[0]);fields=form('unblock')
+            status,body=request(act('unblock'),fields);self.assertEqual(200,status,body[:1500]);self.assertEqual(('',None,2),state())
+            self.assertIn('Your bio has been unblocked',q('SELECT subject FROM mail WHERE msgto=? ORDER BY messageid DESC LIMIT 1',[target])[0]['subject'])
+            self.assertEqual(409,request(act('unblock'),fields)[0]);self.assertEqual(('',None,2),state())
+            # A moderator's own bio: prefs.php honors the block, and after unblock (NULL biotime) the bio can be set again.
+            # prefs.php renders every boolean preference it shows; give the fixture player all of them.
+            settings={'ihavenocheer':0,'timestamp':0,'timeoffset':0,'emailonmail':0,'systemmail':0,'dirtyemail':0,'nojump':0,'tabconfig':1}
+            q("UPDATE accounts SET bio='Moderator bio',biotime='2026-01-02 03:04:05',prefs=? WHERE acctid=?",
+                ['a:%d:{%s}'%(len(settings),''.join(f's:{len(k)}:"{k}";i:{v};' for k,v in settings.items())),player]);m=state(player)[2]
+            csrf=form('block',player)['csrf_token']
+            def prefs(bio):
+                return request('prefs.php',{'csrf_token':csrf,'bio':bio,'email':q('SELECT emailaddress FROM accounts WHERE acctid=?',[player])[0]['emailaddress']})
+            fields=form('block',player);self.assertEqual(200,request(act('block',player),fields)[0]);self.assertEqual((*blocked,m+1),state(player))
+            status,body=prefs('Changed');self.assertEqual(200,status);self.assertIn('You cannot modify your bio',body);self.assertEqual((*blocked,m+1),state(player))
+            fields=form('unblock',player);self.assertEqual(200,request(act('unblock',player),fields)[0]);self.assertEqual(('',None,m+2),state(player))
+            status,body=prefs('Fresh bio');self.assertEqual(200,status);after=state(player);self.assertEqual(('Fresh bio',m+2),(after[0],after[2]));self.assertIsNotNone(after[1])
+        finally:
+            q('DELETE FROM mail WHERE msgto=?',[player])
+            for who in targets: q('DELETE FROM mail WHERE msgto=?',[who]);q('DELETE FROM accounts_output WHERE acctid=?',[who]);q('DELETE FROM accounts WHERE acctid=?',[who])
+            q('UPDATE accounts SET '+','.join(k+'=?' for k in original if k!='acctid')+' WHERE acctid=?',[*[v for k,v in original.items() if k!='acctid'],player])
+
+    def test_donation_admin_authority_http(self):
+        q=self.query;player=int(q('SELECT acctid FROM accounts WHERE login=?',['WebPlayer'])[0]['acctid'])
+        original=q('SELECT * FROM accounts WHERE acctid=?',[player])[0];targets=[];call=None
+        module='resurrectiondonation'+os.urandom(4).hex();path=ROOT/'modules'/f'{module}.php'
+        try:
+            donor=int(self._security_target('DonorTarget'));targets.append(donor);other=int(self._security_target('DonorOther'));targets.append(other);missing=other+1000
+            q("UPDATE accounts SET name='Plain Donor Name',donation=0 WHERE acctid=?",[other]);q('UPDATE accounts SET donation=100,donationspent=7 WHERE acctid=?',[donor])
+            q('UPDATE accounts SET donation=10 WHERE acctid=?',[player])
+            state=lambda who=donor:(int(q('SELECT donation FROM accounts WHERE acctid=?',[who])[0]['donation']),int(q('SELECT COUNT(*) AS n FROM mail WHERE msgto=?',[who])[0]['n']),
+                int(q("SELECT COUNT(*) AS n FROM debuglog WHERE actor=? AND field='donation'",[who])[0]['n']))
+            def request(url,data=None):
+                q('UPDATE accounts SET lastnewday=? WHERE acctid=?',[self._current_game_day(),player]);self._security_allow(player,url);return call(url,data)
+            def login(role):
+                nonlocal call;q('UPDATE accounts SET superuser=? WHERE acctid=?',[role,player]);call=self._security_client()
+            add=lambda who=donor:f'donators.php?op=add2&id={who}'
+            reason="Thanks O'Reilly \\ 雪 <b>"
+            def search(name,amt='50',txnid='',why=reason,url='donators.php?op=add1'):
+                status,body=request(url,{'name':name,'amt':amt,'reason':why,'txnid':txnid});self.assertEqual(200,status,body[:1500])
+                return {int(x) for x in re.findall(r"donators\.php\?op=add2&(?:amp;)?id=(\d+)",body)},body
+            def form(amt='50',who=donor,txnid='',name='DonorTarget',why=reason):
+                return self._security_fields(search(name,amt,txnid,why)[1],add(who))
+            def post(fields,amt='50',who=donor,txnid='',why=reason,extra=None):
+                return request(add(who),{**fields,'amt':amt,'reason':why,'txnid':txnid,**(extra or {})})
+            anonymous=self._security_client(login=None)
+            for url,data in [('donators.php',None),(add(),{'amt':'5'})]: self.assertIn(anonymous(url,data)[0],[302,303,403])
+            # Every bit except SU_EDIT_DONATIONS is insufficient.
+            for role in [0,16|8|1024]:
+                login(role)
+                for url,data in [('donators.php',None),('donators.php?op=add1',{'name':'x'}),(add(),{'amt':'5'})]: self.assertEqual(403,request(url,data)[0],(role,url))
+            login(32);before=state();_,pm,pl=state(player)
+            # GET only displays: the 1.1.2 credit link changes nothing.
+            status,body=request('donators.php');self.assertEqual(200,status);self.assertNotIn('<img src=x>',body)
+            self.assertEqual(405,request(add()+'&amt=50&reason=x')[0]);self.assertEqual(before,state())
+            for url in ['donators.php?op=x','donators.php?op=add2&id=abc','donators.php?op=add2&id=0','donators.php?op=add2&id=4294967296','donators.php?op=add1&amt[]=1','donators.php?ret[]=x']:
+                self.assertEqual(400,request(url,{'x':'1'} if 'add2' in url else None)[0],url)
+            # Search: bound, UTF-8 characters, literal % and _, escaped names and values.
+            found,body=search("O'Reilly");self.assertEqual({donor},found);self.assertNotIn('<img src=x>',body);self.assertNotIn('雪 <b>',body)
+            self.assertEqual({donor},search('雪')[0]);self.assertEqual({donor},search('%_')[0]);self.assertEqual(set(),search('_x_')[0])
+            self.assertEqual({donor,other},search('Donor')[0])
+            for data in [{'name[]':'x'},{'name':b'\xe9'},{'reason':b'\xe9'}]: self.assertEqual(400,request('donators.php?op=add1',data)[0],data)
+            # Return whence you came: only the user editor and the petition viewer, never script, quotes or an action URL.
+            for ret,link in [('/user.php?op=edit&userid=5&c=12-345','user.php?op=edit&userid=5'),('/game/viewpetition.php?op=view&id=3','viewpetition.php?op=view&id=3')]:
+                status,body=request('donators.php?op=add1&name=DonorTarget&ret='+urllib.parse.quote(ret,safe=''));self.assertEqual(200,status)
+                self.assertRegex(html.unescape(body),r"href=['\"]"+re.escape(link)+r"[?&]c=")
+            for ret in ["javascript:alert(1)","/x';alert(1);'","/bios.php?op=block&userid=5","/donators.php?op=add2&id=5&amt=9","/user.php?op=edit&userid=5&op=del"]:
+                status,body=request('donators.php?op=add1&name=DonorTarget&ret='+urllib.parse.quote(ret,safe=''));self.assertEqual(200,status)
+                self.assertNotIn('alert(1)',body);self.assertNotIn('bios.php?op=block',body);self.assertNotIn('id=5&amt=9',html.unescape(body))
+                self.assertNotIn('userid=5&op=del',html.unescape(body))
+            # Invalid amounts offer no form and refuse before any write: zero, fractions, text, empty, beyond what the debug log holds.
+            for amt in ['0','-0','1.5','abc','','+5','007','10000000','-10000000','99999999999']:
+                found,body=search('DonorTarget',amt);self.assertEqual(set(),found,amt);self.assertIn('Points must be a whole number',body)
+            self.assertEqual(before,state());fields=form('50')
+            for amt in ['0','1.5','','10000000','-99999999999']: self.assertEqual(400,post(fields,amt)[0],amt)
+            self.assertEqual(400,post(fields,extra={'name':'x'})[0]);self.assertEqual(404,post(fields,who=missing)[0])
+            self.assertEqual(403,request(add(),{'action_token':fields['action_token'],'amt':'50','reason':reason,'txnid':''})[0])
+            self.assertEqual(403,post({**fields,'csrf_token':'0'*64})[0]);self.assertEqual(before,state())
+            # A credit: points, debug log and notice together; the replay is refused.
+            status,body=post(fields);self.assertEqual(200,status,body[:1500]);self.assertEqual((150,1,1),state())
+            mail=q('SELECT subject,body FROM mail WHERE msgto=?',[donor])[0];self.assertIn('Donation Points Added',mail['subject'])
+            self.assertIn('You have received %d donation points for %s.',mail['body']);self.assertIn(reason,mail['body'])
+            log=q("SELECT message,value FROM debuglog WHERE actor=? AND field='donation'",[donor])[0]
+            self.assertEqual(f'Received donator points -- Manually assigned, not based on a known dollar donation [{reason}] (50)',log['message']);self.assertEqual(50.0,float(log['value']))
+            self.assertEqual(409,post(fields)[0]);self.assertEqual((150,1,1),state())
+            # A tampered amount is stale; one point uses the singular notice.
+            fields=form('5');self.assertEqual(409,post(fields,'6')[0]);self.assertEqual((150,1,1),state())
+            fields=form('1');self.assertEqual(200,post(fields,'1')[0]);self.assertEqual((151,2,2),state())
+            self.assertIn('Donation Point Added',q('SELECT subject FROM mail WHERE msgto=? ORDER BY messageid DESC LIMIT 1',[donor])[0]['subject'])
+            # Negative amounts remove points (1.1.2's payment log offered them for reversals), never below zero.
+            fields=form('-51');self.assertEqual(200,post(fields,'-51')[0]);self.assertEqual((100,3,3),state())
+            found,body=search('DonorTarget','-101');self.assertEqual(set(),found);self.assertIn('not enough points to remove',body)
+            fields=form('-100');q('UPDATE accounts SET donation=99 WHERE acctid=?',[donor]);self.assertEqual(400,post(fields,'-100')[0])
+            q('UPDATE accounts SET donation=100 WHERE acctid=?',[donor]);fields=form('-50');q('UPDATE accounts SET donation=60 WHERE acctid=?',[donor])
+            self.assertEqual(409,post(fields,'-50')[0]);self.assertEqual((60,3,3),state())
+            # The balance column holds at most 4294967295.
+            q('UPDATE accounts SET donation=4294967290 WHERE acctid=?',[donor]);self.assertEqual({donor},search('DonorTarget','5')[0]);self.assertEqual(set(),search('DonorTarget','6')[0])
+            q('UPDATE accounts SET donation=100 WHERE acctid=?',[donor])
+            # A late failure on the notice rolls back points and log; the spent intent cannot retry, a fresh one can.
+            fields=form('20',why='Rollback reason');q(f"ALTER TABLE mail ADD CONSTRAINT fixture_donation CHECK (msgto <> {donor} OR body NOT LIKE '%Rollback reason%')")
+            try:
+                self.assertEqual(500,post(fields,'20',why='Rollback reason')[0]);self.assertEqual((100,3,3),state())
+                self.assertEqual(409,post(fields,'20',why='Rollback reason')[0]);self.assertEqual((100,3,3),state())
+            finally: q('ALTER TABLE mail DROP CONSTRAINT fixture_donation')
+            fields=form('20',why='Rollback reason');self.assertEqual(200,post(fields,'20',why='Rollback reason')[0]);self.assertEqual((120,4,4),state())
+            # Self-credit: 1.1.2 added the amount to the session; the session and the database now both hold the credit after later pages.
+            fields=form('25',player,name='WebPlayer');self.assertEqual(200,post(fields,'25',player)[0]);self.assertEqual((35,pm+1,pl+1),state(player))
+            self.assertEqual(200,request('donators.php')[0]);self.assertEqual((35,pm+1,pl+1),state(player))
+            # A transaction credit: the adjustment hook (doubling) and its message, the payment log row, no notice, then the payment log.
+            path.write_text("""<?php
+function MODULE_getmoduleinfo() { return ['name'=>'Donation adjustment fixture','version'=>'1.0','author'=>'Tests','category'=>'Tests']; }
+function MODULE_dohook($hook,$args) { if ($hook==='donation_adjustments') { $args['points']*=2; $args['messages'][]='Fixture adjustment'; } return $args; }
+""".replace('MODULE',module))
+            q('INSERT INTO modules(modulename,active,version) VALUES (?,1,?)',[module,'1.0'])
+            q('INSERT INTO module_hooks(modulename,location,`function`,whenactive,priority) VALUES (?,?,?,?,?)',[module,'donation_adjustments',module+'_dohook','',100])
+            for txn in ['TXN-FIXTURE-1','TXN-FIXTURE-2']: q("INSERT INTO paylog(info,response,txnid,amount,name,acctid,processed,filed,txfee) VALUES ('','',?,0.40,'',0,0,0,0)",[txn])
+            payment=lambda txn='TXN-FIXTURE-1':tuple(q('SELECT acctid,processed FROM paylog WHERE txnid=?',[txn])[0].values())
+            found,body=search('WebPlayer','40','NO-SUCH-TXN');self.assertEqual(set(),found);self.assertIn('unknown or has already been processed',body)
+            self.assertEqual(404,post(form('40',player,name='WebPlayer'),'40',player,'NO-SUCH-TXN')[0]);self.assertEqual((35,pm+1,pl+1),state(player))
+            status,body=request('donators.php?op=add1&name=WebPlayer&amt=40&txnid=TXN-FIXTURE-1');self.assertIn('For transaction: TXN-FIXTURE-1',body)
+            fields=self._security_fields(body,add(player));self.assertEqual(409,post(fields,'40',player,'TXN-FIXTURE-2')[0])
+            fields=form('40',player,'TXN-FIXTURE-1','WebPlayer');status,body=post(fields,'40',player,'TXN-FIXTURE-1')
+            self.assertIn(status,[302,303]);self.assertEqual((115,pm+1,pl+3),state(player));self.assertEqual((str(player),'1'),tuple(map(str,payment())))
+            logs=[r['message'] for r in q("SELECT message FROM debuglog WHERE actor=? AND field='donation' ORDER BY id",[player])]
+            self.assertEqual(['Fixture adjustment (0)',f'Received donator points for donating -- Credited manually [{reason}] (80)'],logs[-2:])
+            self.assertEqual(200,request('donators.php')[0]);self.assertEqual((115,pm+1,pl+3),state(player))
+            # The settled transaction cannot be credited again, by replay or by a fresh form.
+            self.assertEqual(409,post(fields,'40',player,'TXN-FIXTURE-1')[0]);self.assertEqual((115,pm+1,pl+3),state(player))
+            found,body=search('WebPlayer','40','TXN-FIXTURE-1');self.assertEqual(set(),found);self.assertIn('unknown or has already been processed',body)
+        finally:
+            if path.exists(): path.unlink()
+            q('DELETE FROM module_hooks WHERE modulename=?',[module]);q('DELETE FROM modules WHERE modulename=?',[module])
+            q("DELETE FROM paylog WHERE txnid LIKE 'TXN-FIXTURE-%'")
+            for who in [player,*targets]: q("DELETE FROM debuglog WHERE actor=? AND field='donation'",[who])
+            q('DELETE FROM mail WHERE msgto=?',[player])
+            for who in targets: q('DELETE FROM mail WHERE msgto=?',[who]);q('DELETE FROM accounts_output WHERE acctid=?',[who]);q('DELETE FROM accounts WHERE acctid=?',[who])
+            q('UPDATE accounts SET '+','.join(k+'=?' for k in original if k!='acctid')+' WHERE acctid=?',[*[v for k,v in original.items() if k!='acctid'],player])
+
+    def _user_editor_form(self, body, action):
+        # The fields a browser submits for one form: checked, enabled boxes; each select's chosen option.
+        class Forms(HTMLParser):
+            def __init__(self): super().__init__();self.forms=[];self.current=None;self.select=None;self.textarea=None
+            def handle_starttag(self,tag,attrs):
+                a=dict(attrs)
+                if tag=='form': self.current=[html.unescape(a.get('action','')),[]];return
+                if self.current is None or 'disabled' in a: return
+                if tag=='input' and 'name' in a and a.get('type','text').lower() not in ('submit','button'):
+                    if a.get('type','').lower()=='checkbox' and 'checked' not in a: return
+                    self.current[1].append((a['name'],a.get('value') or ''))
+                elif tag=='select': self.select=[a['name'],None,None]
+                elif tag=='option' and self.select is not None:
+                    if self.select[1] is None: self.select[1]=a.get('value','')
+                    if 'selected' in a: self.select[2]=a.get('value','')
+                elif tag=='textarea': self.textarea=[a['name'],'']
+            def handle_data(self,data):
+                if self.textarea is not None: self.textarea[1]+=data
+            def handle_endtag(self,tag):
+                if tag=='select' and self.select is not None and self.current is not None:
+                    self.current[1].append((self.select[0],self.select[2] if self.select[2] is not None else self.select[1]));self.select=None
+                elif tag=='textarea' and self.textarea is not None and self.current is not None: self.current[1].append(tuple(self.textarea));self.textarea=None
+                elif tag=='form' and self.current is not None: self.forms.append(self.current);self.current=None
+        forms=Forms();forms.feed(body)
+        matches=[fields for url,fields in forms.forms if url==action]
+        self.assertEqual(1,len(matches),action+' '+body[:2000])
+        return matches[0]
+
+    @contextmanager
+    def _user_editor_fixture(self):
+        q=self.query;player=int(q('SELECT acctid FROM accounts WHERE login=?',['WebPlayer'])[0]['acctid'])
+        original=q('SELECT * FROM accounts WHERE acctid=?',[player])[0];targets=[];state={}
+        module='resurrectionusereditor'+os.urandom(4).hex();path=ROOT/'modules'/f'{module}.php'
+        signals=ROOT/'tests'/'fixtures'
+        path.write_text("""<?php
+function MODULE_getmoduleinfo() { return ['name'=>'User editor fixture','version'=>'1.0','author'=>'Tests','category'=>'Tests',
+    'prefs'=>['User editor fixture,title','level'=>'Level,int|0','flag'=>'Flag,bool|0','mood'=>'Mood,range,0,10,1|5','note'=>'Note,viewonly|x']]; }
+function MODULE_dohook($hook,$args) {
+    global $session;
+    if ($hook==='validateprefs' && ($args['level'] ?? '')==='13') $args['validation_error']='Unlucky level';
+    $pause='tests/fixtures/MODULE-pause';
+    if ($hook==='everyfooter' && is_file($pause) && trim(file_get_contents($pause))===(string)$session['user']['acctid']) {
+        unlink($pause); file_put_contents('tests/fixtures/MODULE-started','1');
+        for ($i=0; $i<400 && !is_file('tests/fixtures/MODULE-release'); $i++) usleep(25000);
+        $session['user']['turns']++;
+    }
+    return $args;
+}
+""".replace('MODULE',module))
+        q("INSERT INTO modules(modulename,active,version,infokeys) VALUES (?,1,'1.0','|name|version|author|category|prefs|')",[module])
+        for location in ['validateprefs','everyfooter']:
+            q('INSERT INTO module_hooks(modulename,location,`function`,whenactive,priority) VALUES (?,?,?,?,?)',[module,location,module+'_dohook','',100])
+        try:
+            target=int(self._security_target('EditorTarget'));targets.append(target)
+            # A race, a specialty and no unspent dragon points: the player's own pages do not reopen onboarding.
+            q("UPDATE accounts SET title='Farmboy',ctitle='',name=?,gold=100,turns=10,hitpoints=20,emailaddress=?,lastip=?,uniqueid=?,clanjoindate=NULL,banoverride=NULL,race='Human',specialty='DA',dragonkills=0,dragonpoints='a:0:{}' WHERE acctid=?",
+              ["Farmboy O'Reilly \\ 雪 <img src=x>`0",'<b>mail</b>@example.test','<svg onload=1>','"><img src=y>',target])
+            warning="<span class='colLtRed'>Warning:</span>"
+            def request(url,data=None):
+                # The editor shows the game's own "Warning:" text while the target is online; PHP diagnostics still fail.
+                class NoRedirect(urllib.request.HTTPRedirectHandler):
+                    def redirect_request(self, *args): return None
+                q('UPDATE accounts SET lastnewday=? WHERE acctid=?',[self._current_game_day(),player]);self._security_allow(player,url)
+                opener=urllib.request.build_opener(urllib.request.HTTPCookieProcessor(state['call'].cookiejar),NoRedirect)
+                try: response=opener.open(urllib.request.Request(f'http://127.0.0.1:{self.port}/'+url,data=None if data is None else urllib.parse.urlencode(data).encode()),timeout=20)
+                except urllib.error.HTTPError as error: response=error
+                body=response.read().decode('utf-8',errors='replace')
+                self.assertNotRegex(body.replace(warning,''),r'(?i)(fatal error|warning:|deprecated:|notice:)',body[:2000])
+                if response.status==500:
+                    self.server_log.seek(0);body+='\n'.join(self.server_log.read().splitlines()[-8:])
+                return response.status,body
+            def login(role):
+                q('UPDATE accounts SET superuser=? WHERE acctid=?',[role,player]);state['call']=self._security_client()
+            def row(who=target):
+                return q('SELECT * FROM accounts WHERE acctid=?',[who])[0]
+            edit=lambda who=target,extra='':f'user.php?op=edit&userid={who}{extra}'
+            def form(op='save',who=target,extra=''):
+                status,body=request(edit(who,extra));self.assertEqual(200,status,body[:2000])
+                return self._user_editor_form(body,f'user.php?op={op}&userid={who}{extra}')
+            def change(fields,**values):
+                text=lambda v:v if isinstance(v,bytes) else str(v)
+                result=[(k,text(values.pop(k)) if k in values else v) for k,v in fields]
+                return result+[(k,text(v)) for k,v in values.items()]
+            logs=lambda who=target:int(q('SELECT COUNT(*) AS n FROM debuglog WHERE target=?',[who])[0]['n'])
+            yield dict(q=q,player=player,target=target,module=module,signals=signals,request=request,login=login,row=row,edit=edit,form=form,change=change,logs=logs,targets=targets,jar=lambda:state['call'].cookiejar)
+        finally:
+            path.unlink(missing_ok=True)
+            for name in ['pause','started','release']: (signals/f'{module}-{name}').unlink(missing_ok=True)
+            q('DELETE FROM module_hooks WHERE modulename=?',[module]);q('DELETE FROM modules WHERE modulename=?',[module])
+            q('DELETE FROM module_userprefs WHERE modulename=?',[module])
+            if q("SELECT CONSTRAINT_NAME FROM information_schema.TABLE_CONSTRAINTS WHERE CONSTRAINT_SCHEMA=DATABASE() AND TABLE_NAME='accounts' AND CONSTRAINT_NAME='fixture_user_editor'"):
+                q('ALTER TABLE accounts DROP CONSTRAINT fixture_user_editor')
+            for who in targets: q('DELETE FROM debuglog WHERE target=? OR actor=?',[who,who]);q('DELETE FROM accounts_output WHERE acctid=?',[who]);q('DELETE FROM accounts WHERE acctid=?',[who])
+            q('DELETE FROM debuglog WHERE target=?',[player])
+            q('UPDATE accounts SET '+','.join('`'+k+'`=?' for k in original if k!='acctid')+' WHERE acctid=?',[*[v for k,v in original.items() if k!='acctid'],player])
+
+    def test_user_editor_account_save_authority_http(self):
+        with self._user_editor_fixture() as f:
+            q,target,player,request,login,row,form,change,logs=(f[k] for k in ['q','target','player','request','login','row','form','change','logs'])
+            save=f'user.php?op=save&userid={target}'
+            anonymous=self._security_client(login=None)
+            urls=[('user.php',None),(f['edit'](),None),(save,{'gold':'1'}),(f'user.php?op=special&userid={target}',{'newday':'1'}),
+                  (f'user.php?op=savemodule&module={f["module"]}&userid={target}',{'level':'1'}),(f'user.php?op=lasthit&userid={target}',None),(f'user.php?op=debuglog&userid={target}',None)]
+            before=row()
+            for url,data in urls: self.assertIn(anonymous(url,data)[0],[302,303,403],url)
+            # A player, and a superuser holding every flag except Edit Users and megauser, are refused on every op.
+            for role in [0,0xFFFFFFFF&~(64|1)]:
+                login(role)
+                for url,data in urls: self.assertEqual(403,request(url,data)[0],(role,url))
+            self.assertEqual(before,row())
+            # Edit Users and megauser can open the editor; GET changes nothing.
+            for role in [1,64]:
+                login(role)
+                for url,data in urls:
+                    if data is None: self.assertEqual(200,request(url)[0],(role,url))
+                self.assertEqual(403,request(save)[0]);self.assertEqual(before,row())
+            login(64)
+            # Output: names, contact fields and viewonly values are escaped; search text never becomes markup.
+            status,body=request(f['edit']());self.assertEqual(200,status)
+            for raw in ['<img src=x>','<b>mail</b>','<svg onload=1>','"><img src=y>']: self.assertNotIn(raw,body)
+            # The name matches the search text, so the result row and the sort links carrying the text are shown.
+            status,body=request('user.php?op=search',{'q':'<img src=x>'});self.assertEqual(200,status);self.assertNotIn('<img src=x>',body)
+            self.assertIn(f'user.php?op=edit&userid={target}',html.unescape(body));self.assertIn('q=%3Cimg%20src%3Dx%3E',body)
+            for url in ['user.php?sort=login;DROP','user.php?op=search&sort[]=x',f'user.php?op=edit&userid={target}&module=<b>']: self.assertEqual(400,request(url)[0],url)
+            # An unchanged form writes nothing: 1.1.2 rewrote the titled name on every save.
+            fields=form();self.assertIn(('name',"O'Reilly \\ 雪 <img src=x>"),fields)
+            status,body=request(save,fields);self.assertEqual(200,status,body[:2000]);self.assertIn("No fields were changed",body)
+            self.assertEqual(before,row());self.assertEqual(0,logs())
+            # Stale form: the player's later changes survive a save of an older form; only the edited field is written.
+            fields=form();q('UPDATE accounts SET gold=150,hitpoints=7 WHERE acctid=?',[target])
+            status,body=request(save,change(fields,turns=12));self.assertEqual(200,status,body[:2000]);self.assertIn('turns has changed to 12',body)
+            after=row();self.assertEqual(('150','7','12'),(after['gold'],after['hitpoints'],after['turns']));self.assertEqual(1,logs())
+            self.assertEqual(409,request(save,change(fields,turns=12))[0])
+            # A field the admin changed that changed underneath refuses the whole save.
+            fields=form();q('UPDATE accounts SET gold=200 WHERE acctid=?',[target]);before=row()
+            self.assertEqual(409,request(save,change(fields,gold=999,turns=13))[0]);self.assertEqual(before,row());self.assertEqual(1,logs())
+            # Types: every posted field is checked against its descriptor and column before any write; the form stays usable.
+            fields=form();before=row()
+            for values in [{'gold':'ten'},{'gold':'4294967296'},{'gold':'-1'},{'hitpoints':'2147483648'},{'locked':'2'},{'sex':'5'},{'clanjoindate':'tomorrow'},
+                           {'login':'x'*51},{'newpassword':'short'},{'superuser':'64'},{'superuser[3]':'1'},{'acctid':'9'},{'lastip':'1.2.3.4'},{'prefs':'a:0:{}'},
+                           {'referer':'5'},{'marriedto':'5'},{'unknown':'1'},{'oldvalues':'a:0:{}'},{'gold':b'\xe9'}]:
+                self.assertEqual(400,request(save,change(fields,**values))[0],values);self.assertEqual(before,row())
+            self.assertEqual(403,request(save,change(fields,csrf_token='0'*64,gold=5))[0])
+            self.assertEqual(409,request(save,[(k,v) for k,v in change(fields,gold=5) if k!='action_token'])[0]);self.assertEqual(before,row())
+            self.assertEqual(404,request(f'user.php?op=save&userid={target+1000}',fields)[0])
+            # The form is still the open one: the date clears to NULL, the boolean writes, the name keeps its title.
+            fields=form()
+            status,body=request(save,change(fields,clanjoindate='2026-10-16 12:00:00',banoverride=1,name='Renamed',gold=4294967295));self.assertEqual(200,status,body[:2000])
+            after=row();self.assertEqual(('2026-10-16 12:00:00','1','Farmboy Renamed`0','4294967295'),(after['clanjoindate'],after['banoverride'],after['name'],after['gold']))
+            fields=form();self.assertEqual(200,request(save,change(fields,clanjoindate=''))[0]);self.assertIsNone(row()['clanjoindate'])
+            # Superuser rules: Edit Users cannot grant Edit Config (its box is disabled; a forged box is stripped) and cannot remove it.
+            q('UPDATE accounts SET superuser=128 WHERE acctid=?',[target]);fields=form()
+            self.assertNotIn(('superuser[128]','1'),fields);self.assertIn(('superuser[0]','1'),fields)
+            status,body=request(save,fields+[('superuser[64]','1'),('superuser[2048]','1')]);self.assertEqual(200,status,body[:2000])
+            self.assertEqual('192',row()['superuser']);self.assertIn('changed superuser to',q('SELECT message FROM debuglog WHERE target=? ORDER BY id DESC LIMIT 1',[target])[0]['message'])
+            fields=form();self.assertEqual(200,request(save,[(k,v) for k,v in fields if k!='superuser[64]'])[0]);self.assertEqual('128',row()['superuser'])
+            q('UPDATE accounts SET superuser=0 WHERE acctid=?',[target])
+            # Password: hashed, authversion bumped, the player's sessions end, nothing else changes, and the password is not logged.
+            target_client=self._security_client(login='EditorTarget',password='Synthetic administrator password')
+            q('UPDATE accounts SET lastnewday=? WHERE acctid=?',[self._current_game_day(),target]);self._security_allow(target,'list.php')
+            self.assertEqual(200,target_client('list.php')[0])
+            fields=form();self.assertIn("This user is probably logged in",request(f['edit']())[1]);before=row();count=logs()
+            status,body=request(save,change(fields,newpassword='Replacement editor password'));self.assertEqual(200,status,body[:2000])
+            after=row();self.assertEqual(int(before['authversion'])+1,int(after['authversion']));self.assertNotEqual(before['password'],after['password'])
+            self.assertTrue(after['password'].startswith('$2y$'))
+            for key in before:
+                if key not in ['password','authversion']: self.assertEqual(before[key],after[key],key)
+            self.assertEqual(['Administrator changed account password'],[r['message'] for r in q('SELECT message FROM debuglog WHERE target=? ORDER BY id',[target])[count:]])
+            self._security_allow(target,'list.php');status,_=target_client('list.php');self.assertIn(status,[302,303])
+            self._security_client(login='EditorTarget',password='Replacement editor password')
+            # A late failure rolls back the account, its log rows and the editor's session; the spent intent is refused, a fresh one saves.
+            fields=form();before=row();count=logs()
+            # A CHECK cannot name the auto-increment key; no fixture account holds 7777 turns.
+            q('ALTER TABLE accounts ADD CONSTRAINT fixture_user_editor CHECK (turns <> 7777)')
+            try:
+                self.assertEqual(500,request(save,change(fields,gold=300,turns=7777))[0]);self.assertEqual(before,row());self.assertEqual(count,logs())
+                self.assertEqual(409,request(save,change(fields,gold=300,turns=7777))[0])
+            finally: q('ALTER TABLE accounts DROP CONSTRAINT fixture_user_editor')
+            fields=form();self.assertEqual(200,request(save,change(fields,gold=300,turns=7777))[0]);self.assertEqual(('300','7777'),(row()['gold'],row()['turns']))
+            # Online target: a page the player loaded before the save writes only what it changed at its end.
+            online=self._security_client(login='EditorTarget',password='Replacement editor password')
+            with socket.socket() as sock:sock.bind(('127.0.0.1',0));port=sock.getsockname()[1]
+            log=tempfile.TemporaryFile(mode='w+t');import threading
+            server=subprocess.Popen([shutil.which('php'),'-d','display_errors=1','-d','error_reporting=-1','-S',f'127.0.0.1:{port}','-t',str(ROOT)],cwd=ROOT,stdout=subprocess.DEVNULL,stderr=log)
+            started=f['signals']/f'{f["module"]}-started';release=f['signals']/f'{f["module"]}-release';results=[]
+            try:
+                for _ in range(100):
+                    try:
+                        with socket.create_connection(('127.0.0.1',port),timeout=.1):break
+                    except OSError:time.sleep(.02)
+                second=self._security_client(login=None,port=port)
+                for cookie in online.cookiejar: second.cookiejar.set_cookie(cookie)
+                fields=form();q('UPDATE accounts SET lastnewday=? WHERE acctid=?',[self._current_game_day(),target]);self._security_allow(target,'list.php')
+                (f['signals']/f'{f["module"]}-pause').write_text(str(target))
+                thread=threading.Thread(target=lambda:results.append(second('list.php')));thread.start()
+                for _ in range(200):
+                    if started.exists():break
+                    time.sleep(.025)
+                self.assertTrue(started.exists(),'The player page did not reach its footer')
+                status,body=request(save,change(fields,gold=500));self.assertEqual(200,status,body[:2000]);self.assertEqual('500',row()['gold'])
+                release.write_text('1');thread.join(timeout=20);self.assertFalse(thread.is_alive());self.assertEqual(200,results[0][0],results[0][1][:1500])
+                after=row();self.assertEqual(('500','7778'),(after['gold'],after['turns']))
+            finally:
+                release.write_text('1');server.terminate();server.wait(timeout=5);log.close()
+            # Self-edit: the session and the database agree after later pages.
+            fields=form(who=player);status,body=request(f'user.php?op=save&userid={player}',change(fields,gold=4321));self.assertEqual(200,status,body[:2000])
+            self.assertEqual(200,request(f['edit'](player))[0]);self.assertEqual('4321',row(player)['gold'])
+
+    def test_user_editor_special_module_and_log_authority_http(self):
+        with self._user_editor_fixture() as f:
+            q,target,request,login,row,form,change,logs,module=(f[k] for k in ['q','target','request','login','row','form','change','logs','module'])
+            special=f'user.php?op=special&userid={target}';login(64)
+            q("UPDATE accounts SET lasthit='2026-10-16 01:02:03',allowednavs=?,restorepage='forest.php',specialinc='module:x',emailvalidation='abc' WHERE acctid=?",['a:1:{s:10:"forest.php";b:1;}',target])
+            q("UPDATE accounts_output SET output='<script>alert(1)</script><iframe src=x></iframe>' WHERE acctid=?",[target])
+            # Special: one-use, bound to the account, exactly one action, the 1.1.2 writes.
+            before=row();self.assertEqual(403,request(special)[0])
+            fields=form('special');self.assertEqual(before,row())
+            for extra in [[],[('newday','1'),('fixnavs','1')],[('newday','')],[('newday','1'),('x','1')]]: self.assertEqual(400,request(special,fields+extra)[0],extra)
+            self.assertEqual(409,request(special,[(k,v) for k,v in fields if k!='action_token']+[('newday','1')])[0]);self.assertEqual(before,row())
+            status,body=request(special,fields+[('newday','Grant New Day')]);self.assertEqual(200,status,body[:2000]);self.assertIsNone(row()['lasthit'])
+            self.assertEqual(409,request(special,fields+[('newday','Grant New Day')])[0])
+            fields=form('special');q("UPDATE accounts SET lasthit='2026-10-16 02:00:00' WHERE acctid=?",[target])
+            self.assertEqual(409,request(special,fields+[('fixnavs','1')])[0]);self.assertEqual('a:1:{s:10:"forest.php";b:1;}',row()['allowednavs'])
+            fields=form('special');before=row()
+            self.assertEqual(200,request(special,fields+[('fixnavs','Fix Broken Navs')])[0]);after=row()
+            self.assertEqual(('','',''),(after['allowednavs'],after['restorepage'],after['specialinc']));self.assertEqual([],q('SELECT * FROM accounts_output WHERE acctid=?',[target]))
+            for key in before:
+                if key not in ['allowednavs','restorepage','specialinc']: self.assertEqual(before[key],after[key],key)
+            fields=form('special');self.assertEqual(200,request(special,fields+[('clearvalidation','Mark Email As Valid')])[0]);self.assertEqual('',row()['emailvalidation'])
+            # Module preferences: installed modules, declared preferences, typed values; validateprefs can still refuse.
+            pref=lambda key:[r['value'] for r in q('SELECT value FROM module_userprefs WHERE modulename=? AND userid=? AND setting=?',[module,target,key])]
+            save=f'user.php?op=savemodule&module={module}&userid={target}';extra=f'&subop=module&module={module}'
+            status,body=request(f['edit'](extra=extra));self.assertEqual(200,status,body[:2000])
+            fields=self._user_editor_form(body,save);self.assertEqual(['action_token','csrf_token','flag','level','mood'],sorted(k for k,_ in fields))
+            for data in [change(fields,arbitrary=1),change(fields,note='y'),change(fields,level='x'),change(fields,level='1.5'),change(fields,flag=2),
+                         change(fields,mood=11),[(k,v) for k,v in fields if k!='level']+[('level[]','1')]]:
+                self.assertEqual(400,request(save,data)[0],data);self.assertEqual([],pref('arbitrary')+pref('note')+pref('level'))
+            for url in [f'user.php?op=savemodule&module=nosuchmodule&userid={target}',f'user.php?op=savemodule&module=&userid={target}']:
+                self.assertIn(request(url,change(fields))[0],[400,409],url)
+            self.assertEqual(400,request(f'user.php?op=savemodule&module=<b>&userid={target}',change(fields))[0])
+            status,body=request(save,change(fields,level=13));self.assertEqual(200,status);self.assertIn('Unlucky level',body);self.assertEqual([],pref('level'))
+            status,body=request(f['edit'](extra=extra));fields=self._user_editor_form(body,save)
+            status,body=request(save,change(fields,level=7,flag=1,mood=10)+[('showFormTabIndex','1')]);self.assertEqual(200,status,body[:2000])
+            self.assertEqual((['7'],['1'],['10']),(pref('level'),pref('flag'),pref('mood')));self.assertEqual(409,request(save,change(fields,level=8))[0])
+            status,body=request(f['edit'](extra=extra));fields=self._user_editor_form(body,save);q("UPDATE module_userprefs SET value='9' WHERE modulename=? AND userid=? AND setting='level'",[module,target])
+            self.assertEqual(409,request(save,change(fields,flag=0))[0]);self.assertEqual((['9'],['1']),(pref('level'),pref('flag')))
+            # returnpetition: only a positive petition ID reaches the links.
+            status,body=request(f['edit'](extra='&returnpetition=5'));self.assertEqual(200,status)
+            self.assertIn('viewpetition.php?op=view&id=5',html.unescape(body));self._user_editor_form(body,f'user.php?op=save&userid={target}&returnpetition=5')
+            for bad in ["5'><script>x</script>",'0','-1','5&op=del','abc']:
+                status,body=request(f['edit'](extra='&returnpetition='+urllib.parse.quote(bad,safe='')));self.assertEqual(200,status)
+                self.assertNotIn('&returnpetition',html.unescape(body));self.assertNotIn('<script>x</script>',body);self.assertNotIn('viewpetition.php',body)
+            # Debug log and last hit: bound, escaped, and the stored page runs no script in the editor's origin.
+            q("INSERT INTO debuglog(date,actor,target,message,field,value) VALUES (NOW(),?,?,?,?,0)",[target,target,'<img src=z> logged','<b>f</b>'])
+            status,body=request(f'user.php?op=debuglog&userid={target}');self.assertEqual(200,status);self.assertIn('logged',body)
+            for raw in ['<img src=z>','<b>f</b>','<img src=x>']: self.assertNotIn(raw,body)
+            for start in ['-1','abc','1.5']: self.assertEqual(400,request(f'user.php?op=debuglog&userid={target}&start={start}')[0])
+            q("UPDATE accounts_output SET output='<script>alert(1)</script>' WHERE acctid=?",[target]) if q('SELECT acctid FROM accounts_output WHERE acctid=?',[target]) else q("INSERT INTO accounts_output(acctid,output) VALUES (?,'<script>alert(1)</script>')",[target])
+            url=f'user.php?op=lasthit&userid={target}';q('UPDATE accounts SET lastnewday=? WHERE acctid=?',[self._current_game_day(),f['player']]);self._security_allow(f['player'],url)
+            opener=urllib.request.build_opener(urllib.request.HTTPCookieProcessor(f['jar']()))
+            response=opener.open(f'http://127.0.0.1:{self.port}/'+url,timeout=20)
+            self.assertEqual('sandbox',response.headers['Content-Security-Policy']);self.assertIn('<script>alert(1)</script>',response.read().decode())
+
+    def test_user_editor_ban_authority_http(self):
+        with self._user_editor_fixture() as f:
+            q,player,target,request,login,row=(f[k] for k in ['q','player','target','request','login','row'])
+            saved=q('SELECT * FROM bans');bans=lambda:q('SELECT ipfilter,uniqueid,banexpire,banreason,banner FROM bans ORDER BY ipfilter,uniqueid,banexpire,banreason')
+            put=lambda rows:[q('INSERT INTO bans ('+','.join(r)+') VALUES ('+','.join('?' for _ in r)+')',list(r.values())) for r in rows]
+            newest=q("SELECT value FROM settings WHERE setting='newestplayer'")
+            try:
+                q('DELETE FROM bans')
+                save,delban='user.php?op=saveban','user.php?op=delban'
+                urls=[('user.php?op=setupban',None),(f'user.php?op=setupban&userid={target}',None),(save,{'type':'ip','ip':'10.9','duration':'1','reason':'x'}),
+                      ('user.php?op=removeban',None),('user.php?op=removeban&subop=xml&ip=10.&id=',None),(delban,{'ipfilter':'','uniqueid':''})]
+                anonymous=self._security_client(login=None)
+                for url,data in urls: self.assertIn(anonymous(url,data)[0],[302,303,403],url)
+                for role in [0,0xFFFFFFFF&~(64|1)]:
+                    login(role)
+                    for url,data in urls: self.assertEqual(403,request(url,data)[0],(role,url))
+                for role in [1,64]:
+                    login(role)
+                    for url,data in urls: self.assertEqual(200 if data is None else 403,request(url,data)[0],(role,url))
+                self.assertEqual([],bans())
+                # The lgi cookie is the player's stored ID (the value a comment ban, moderate.php, stores) only in the generated
+                # format, 32 hex characters. Anything else is no cookie: the stored ID stays and is sent back, HttpOnly and SameSite=Lax.
+                victim=self._security_client(login='EditorTarget',password='Synthetic administrator password')
+                def visit(value):
+                    for cookie in list(victim.cookiejar):
+                        if cookie.name=='lgi': cookie.value=urllib.parse.quote(value,safe='')
+                    q('UPDATE accounts SET lastnewday=? WHERE acctid=?',[self._current_game_day(),target]);self._security_allow(target,'list.php')
+                    self.assertEqual(200,victim('list.php')[0]);return row()['uniqueid'],[c for c in victim.cookiejar if c.name=='lgi']
+                uid="AAAAAAAAA'><svg/onload=alert(1)>";self.assertEqual(32,len(uid))
+                valid=[c.value for c in victim.cookiejar if c.name=='lgi'][0];self.assertRegex(valid,r'\A[0-9a-f]{32}\Z');self.assertEqual(valid,visit(valid)[0])
+                for bad in [uid,'f'*33,'g'*32,'a'*31,'<b>'+'a'*61]:
+                    stored,cookies=visit(bad);self.assertEqual(valid,stored,bad);self.assertEqual([valid],[c.value for c in cookies],bad)
+                    self.assertTrue(cookies[0].has_nonstandard_attr('HttpOnly'),bad);self.assertEqual('Lax',cookies[0].get_nonstandard_attr('SameSite'),bad)
+                # A stored ID outside the format is replaced on the next request without a valid cookie; a valid cookie replaces any.
+                q('UPDATE accounts SET uniqueid=? WHERE acctid=?',[uid,target]);stored,cookies=visit('g'*32)
+                self.assertRegex(stored,r'\A[0-9a-f]{32}\Z');self.assertNotEqual(valid,stored);self.assertEqual([stored],[c.value for c in cookies])
+                other='0123456789abcdef'*2;self.assertEqual(other,visit(other)[0])
+                # A value stored before this change stays until then, and still matches the bans placed on it.
+                q('UPDATE accounts SET uniqueid=? WHERE acctid=?',[uid,target])
+                decoy,sibling=self._security_target('BanDecoy'),self._security_target('BanSibling');f['targets'].extend([decoy,sibling])
+                q('UPDATE accounts SET lastip=? WHERE acctid=?',["10.%_'.5.6",target])
+                q("UPDATE accounts SET name='BanDecoyName',lastip=?,uniqueid='decoy-id' WHERE acctid=?",["10.99'.5.6",decoy])
+                q("UPDATE accounts SET name='BanSiblingName',lastip=?,uniqueid=? WHERE acctid=?",["10.%_'.5.7",uid,sibling])
+                login(64)
+                # setupban: the reason round-trips as text; the stored IP's % and _ match only themselves; its quote stays inside the script string.
+                reason='"><script>reason</script>'
+                status,body=request(f'user.php?op=setupban&userid={target}&reason='+urllib.parse.quote(reason,safe=''));self.assertEqual(200,status,body[:2000])
+                self.assertIn(('reason',reason),self._user_editor_form(body,save));self.assertNotIn('<script>reason</script>',body)
+                self.assertIn('BanSiblingName',body);self.assertNotIn('BanDecoyName',body);self.assertNotIn('<svg/onload=alert(1)>',body)
+                self.assertNotIn("value='10.%_'",html.unescape(body));self.assertIn('value="10.%_\\u0027.5.',html.unescape(body))
+                # saveban: POST, CSRF, a one-use intent; validation before any write; 1.1.2's texts and debug log.
+                def ban_form():
+                    status,body=request('user.php?op=setupban');self.assertEqual(200,status,body[:2000])
+                    # The IP radio is the checked one; a browser posts only it.
+                    self.assertIn("value='ip' id='ipradio' name='type' checked",body);return {**dict(self._user_editor_form(body,save)),'type':'ip'}
+                post=lambda fields,**values:request(save,list({**fields,**values}.items()))
+                fields=ban_form();self.assertEqual(['action_token','csrf_token','duration','id','ip','reason','type'],sorted(fields))
+                self.assertEqual(('ip','14',"Don't mess with me."),(fields['type'],fields['duration'],fields['reason']))
+                self.assertEqual(403,post(fields,csrf_token='0'*64,ip='10.%_')[0])
+                self.assertEqual(409,request(save,[(k,v) for k,v in {**fields,'ip':'10.%_'}.items() if k!='action_token'])[0])
+                for bad in [{'duration':'-1'},{'duration':'abc'},{'duration':'36501'},{'duration':'99999999999'},{'ip':'1'*16},
+                            {'type':'id','id':'x'*33},{'type':'id','id':''},{'reason':'r'*256},{'type':'other'}]:
+                    self.assertEqual(400,post(fields,**{'ip':'10.%_',**bad})[0],bad)
+                self.assertEqual(400,request(save,[(k,v) for k,v in fields.items() if k!='ip']+[('ip[]','10.')])[0]);self.assertEqual([],bans())
+                day=lambda days:time.strftime('%Y-%m-%d',time.gmtime(time.time()+days*86400))
+                expected={day(14)};status,body=post(fields,ip='10.%_',duration='14',reason='Ban <b>reason</b>');expected.add(day(14))
+                self.assertEqual(200,status,body[:2000]);self.assertIn('1 ban rows entered.',body)
+                name=row(player)['name'];rows=bans();self.assertEqual(1,len(rows))
+                self.assertEqual(('10.%_','','Ban <b>reason</b>',name),(rows[0]['ipfilter'],rows[0]['uniqueid'],rows[0]['banreason'],rows[0]['banner']))
+                self.assertIn(rows[0]['banexpire'],{d+' 00:00:00' for d in expected})
+                log=q("SELECT message FROM debuglog WHERE actor=? AND message LIKE 'entered a ban:%' ORDER BY id",[player])
+                self.assertEqual(['entered a ban: IP: 10.%_ Ends after: '+rows[0]['banexpire'][:10]+'  Reason: "Ban <b>reason</b>"'],[r['message'] for r in log])
+                self.assertEqual(409,post(fields,ip='10.%_',duration='14',reason='Ban <b>reason</b>')[0]);self.assertEqual(rows,bans())
+                # Self-ban: 1.1.2's checks against the request IP and the lgi cookie, and its texts.
+                status,body=post(ban_form(),ip='127.0');self.assertEqual(200,status,body[:2000])
+                self.assertIn("You don't really want to ban yourself now do you??",body);self.assertIn("That's your own IP address!",body)
+                lgi=urllib.parse.unquote([c.value for c in f['jar']() if c.name=='lgi'][0])
+                status,body=post(ban_form(),type='id',id=lgi);self.assertEqual(200,status,body[:2000]);self.assertIn("That's your own ID!",body);self.assertEqual(rows,bans())
+                # A permanent ban on the planted ID stores NULL.
+                status,body=post(ban_form(),type='id',id=uid,duration='0',reason='Permanent');self.assertEqual(200,status,body[:2000])
+                permanent=[r for r in bans() if r['uniqueid']==uid];self.assertEqual(1,len(permanent));self.assertIsNone(permanent[0]['banexpire'])
+                timed=dict(uniqueid=uid,banexpire=time.strftime('%Y-%m-%d %H:%M:%S',time.gmtime(time.time()+3*86400)),banreason='Banned for comments you posted.',banner='Moderator')
+                expired=dict(ipfilter='10.%_',banexpire=day(-1)+' 00:00:00',banreason='Expired reason',banner='Moderator')
+                put([timed,expired]);stored=bans()
+                # removeban: the planted ID is inert in every context; permanent shows Never; expired bans are not listed (1.1.2 purged them).
+                status,body=request('user.php?op=removeban&duration=forever');self.assertEqual(200,status,body[:2000])
+                for raw in ['<svg/onload=alert(1)>','<b>reason</b>',"'><svg"]: self.assertNotIn(raw,body)
+                text=html.unescape(body);self.assertIn('Never',body);self.assertNotRegex(body,r'\d{5,} days');self.assertNotIn('Expired reason',body)
+                self.assertNotIn(f"'{uid}'",text);self.assertIn('&id='+urllib.parse.quote(uid,safe=''),text)
+                links=[html.unescape(link) for link in re.findall(r"href='(user\.php\?op=removeban&(?:amp;)?subop=xml[^']*)'",body)];self.assertEqual(3,len(links))
+                # The list's own links pass the navigation check, repeatedly, and return XML.
+                opener=urllib.request.build_opener(urllib.request.HTTPCookieProcessor(f['jar']()))
+                for link in links+links[:1]:
+                    with opener.open(f'http://127.0.0.1:{self.port}/'+link,timeout=20) as response:
+                        self.assertEqual(f'http://127.0.0.1:{self.port}/'+link,response.geturl());self.assertTrue(response.headers['Content-Type'].startswith('text/xml'))
+                        ElementTree.fromstring(response.read())
+                status,body=request('user.php?op=removeban');self.assertEqual(200,status);self.assertIn('Showing bans that will expire within 2 weeks.',body)
+                self.assertIn('Banned for comments',body);self.assertIn('Ban &lt;b&gt;reason',body);self.assertNotIn('Permanent',body)
+                status,body=request('user.php?op=removeban&duration=1+week');self.assertIn('within 1 week.',body);self.assertIn('Banned for comments',body);self.assertNotIn('Ban &lt;b&gt;reason',body)
+                for bad in ['-1000+years','%3Cb%3Ex','1+week+ago','now']:
+                    status,body=request('user.php?op=removeban&duration='+bad);self.assertEqual(200,status);self.assertIn('within 2 weeks.',body,bad);self.assertNotIn('<b>x',body)
+                # subop=xml: bound lookups, the 1.1.2 matching (a literal IP prefix or the same ID), well-formed XML.
+                def names(ip,uniqueid):
+                    status,body=request('user.php?op=removeban&subop=xml&ip='+urllib.parse.quote(ip,safe='')+'&id='+urllib.parse.quote(uniqueid,safe=''))
+                    self.assertEqual(200,status,body[:2000]);return ' '.join(urllib.parse.unquote_plus(n.get('name')) for n in ElementTree.fromstring(body))
+                self.assertIn('BanSiblingName',names('',uid));self.assertIn('BanSiblingName',names('10.%_',''));self.assertNotIn('BanDecoyName',names('10.%_',''))
+                self.assertEqual('NONE',names("' OR ''='",''));self.assertEqual(400,request('user.php?op=removeban&subop=xml&ip[]=1&id=')[0])
+                # delban: POST, CSRF; it removes exactly the pair shown.
+                status,body=request('user.php?op=removeban&duration=forever')
+                forms=[[(k,html.unescape(v)) for k,v in re.findall(r'name="([a-z_]+)" value="([^"]*)"',part)] for part in re.findall(r'<form action="user\.php\?op=delban" method="POST">(.*?)</form>',body,re.S)]
+                # The permanent and the comment ban share the pair; lifting one lifts both, as 1.1.2's DELETE did.
+                lift=[form for form in forms if ('uniqueid',uid) in form];self.assertEqual(2,len(lift))
+                self.assertEqual(403,request(delban,[(k,v) for k,v in lift[0] if k!='csrf_token'])[0])
+                self.assertEqual(400,request(delban,[(k,v) for k,v in lift[0] if k!='uniqueid']+[('uniqueid[]',uid)])[0]);self.assertEqual(stored,bans())
+                self.assertIn(request(delban,lift[0])[0],[302,303]);self.assertEqual([r for r in stored if (r['ipfilter'],r['uniqueid'])!=('',uid)],bans())
+                # Enforcement, as 1.1.2: a banned login or account creation is refused and sent to the ban message, which lists every
+                # matching ban with its permanent or expiry text and the petition line; each matching ban's lasthit is set.
+                class NoRedirect(urllib.request.HTTPRedirectHandler):
+                    def redirect_request(self, *args): return None
+                def visitor(lgi=None):
+                    jar=http.cookiejar.CookieJar();client=urllib.request.build_opener(urllib.request.HTTPCookieProcessor(jar),NoRedirect)
+                    def call(url,data=None):
+                        try: response=client.open(urllib.request.Request(f'http://127.0.0.1:{self.port}/'+url,data=None if data is None else urllib.parse.urlencode(data).encode()),timeout=20)
+                        except urllib.error.HTTPError as error: response=error
+                        body=response.read().decode('utf-8',errors='replace')
+                        if response.status==500: self.server_log.seek(0);body+='\n'.join(self.server_log.read().splitlines()[-8:])
+                        return response.status,response.headers.get('Location'),body
+                    csrf=re.search(r'name=[\'"]csrf_token[\'"] value=[\'"]([a-f0-9]{64})',call('home.php')[2]).group(1)
+                    for cookie in jar:
+                        if cookie.name=='lgi' and lgi: cookie.value=lgi
+                    return call,csrf
+                def place(*placed):
+                    q('DELETE FROM bans');put([{k:v for k,v in ban.items() if v is not None} for ban in placed]);q("UPDATE bans SET lasthit='2001-01-01 00:00:00'")
+                def shown(call,status,location,matching,other=()):
+                    self.assertEqual((302,'index.php'),(status,location));self.assertEqual((302,'home.php?'),call('index.php')[:2])
+                    status,_,body=call('home.php?');self.assertEqual(200,status,body[:2000]);self.assertNotRegex(body,r'(?i)(fatal error|warning:|deprecated:|notice:)')
+                    text=re.sub(r'\s+',' ',html.unescape(re.sub(r'<[^>]+>','',body)))
+                    self.assertIn('You fall under a ban currently in place on this website:',text);self.assertIn('If you wish, you may appeal your ban with the petition link.',text)
+                    for ban in matching:
+                        self.assertIn(ban['banreason'],text)
+                        if ban.get('banexpire') is not None: self.assertIn('This ban will be removed after '+time.strftime('%b %d, %Y',time.strptime(ban['banexpire'][:10],'%Y-%m-%d'))+'.',text)
+                    self.assertEqual(sum(ban.get('banexpire') is None for ban in matching),text.count('This ban is permanent!'))
+                    self.assertEqual(len(matching)-text.count('This ban is permanent!'),text.count('This ban will be removed after'))
+                    for ban in other: self.assertNotIn(ban['banreason'],text)
+                    hits={r['banreason']:r['lasthit'] for r in q('SELECT banreason,lasthit FROM bans')}
+                    self.assertEqual({b['banreason'] for b in matching},{k for k,v in hits.items() if v>'2020'});self.assertTrue(all(hits[b['banreason']]=='2001-01-01 00:00:00' for b in other))
+                    self.assertTrue((call('village.php')[1] or '').startswith('index.php'))
+                def attempt(uniqueid,superuser=0,banoverride=None):
+                    q('UPDATE accounts SET uniqueid=?,superuser=?,banoverride=? WHERE acctid=?',[uniqueid,superuser,banoverride,target])
+                    call,csrf=visitor();return call,call('login.php',{'csrf_token':csrf,'name':'EditorTarget','password':'Synthetic administrator password'})[:2]
+                prefix,forever={**rows[0],'banreason':'IP prefix reason'},{**permanent[0],'banreason':'Permanent ID reason'}
+                decoys=[dict(ipfilter='10.99',banreason='Decoy IP reason',banner='Moderator'),dict(uniqueid='decoy-id',banreason='Decoy ID reason',banner='Moderator')]
+                place(prefix,forever,*decoys);call,(status,location)=attempt(uid);shown(call,status,location,[prefix,forever],decoys)
+                # The comment ban on a valid stored ID.
+                comment={**timed,'uniqueid':other};place(comment,*decoys);call,(status,location)=attempt(other);shown(call,status,location,[comment],decoys)
+                # 1.1.2's exemptions: banoverride, or any superuser flag outside SU_DOESNT_GIVE_GROTTO.
+                for superuser,banoverride in [(64,None),(0,1)]:
+                    place(prefix,forever);self.assertEqual((303,'village.php'),attempt(uid,superuser,banoverride)[1],(superuser,banoverride))
+                # SU_DEBUG_OUTPUT (8192) alone is inside SU_DOESNT_GIVE_GROTTO, so it is no exemption.
+                place(prefix,forever);call,(status,location)=attempt(uid,8192);shown(call,status,location,[prefix,forever])
+                place(expired);self.assertEqual((303,'village.php'),attempt(uid)[1])
+                q('UPDATE accounts SET superuser=0,banoverride=NULL,uniqueid=? WHERE acctid=?',[uid,target])
+                # Account creation from a banned IP prefix, or a banned ID placed before this change (1.1.2's md5 format), creates nothing.
+                fields=lambda csrf:{'csrf_token':csrf,'name':'BanCreateProbe','pass1':'Synthetic create password','pass2':'Synthetic create password','email':'','sex':'0'}
+                created=lambda:q("SELECT acctid FROM accounts WHERE login='BanCreateProbe'")
+                legacy='5d41402abc4b2a76b9719d911017c592'
+                for ban,lgi in [(dict(ipfilter='127.',banexpire=day(2)+' 00:00:00',banreason='Create IP reason',banner='Moderator'),None),
+                                (dict(uniqueid=legacy,banreason='Create ID reason',banner='Moderator'),legacy)]:
+                    place(ban,*decoys);call,csrf=visitor(lgi);status,location,_=call('create.php');self.assertEqual((302,'index.php'),(status,location))
+                    call,csrf=visitor(lgi);status,location,_=call('create.php?op=create',fields(csrf));shown(call,status,location,[ban],decoys);self.assertEqual([],created())
+                q('DELETE FROM bans');call,csrf=visitor(legacy);status,_,body=call('create.php?op=create',fields(csrf))
+                f['targets'].extend(r['acctid'] for r in created());self.assertEqual(200,status,body[:2000]);self.assertIn('Your account was created.',body);self.assertEqual(1,len(created()))
+            finally:
+                q('DELETE FROM bans');put(saved);q("DELETE FROM debuglog WHERE actor=? AND message LIKE 'entered a ban:%'",[player])
+                q("DELETE FROM settings WHERE setting='newestplayer'");[q("INSERT INTO settings (setting,value) VALUES ('newestplayer',?)",[r['value']]) for r in newest]
+
+    @contextmanager
+    def _content_editor_fixture(self):
+        q=self.query;player=int(q('SELECT acctid FROM accounts WHERE login=?',['WebPlayer'])[0]['acctid'])
+        original=q('SELECT * FROM accounts WHERE acctid=?',[player])[0];state={}
+        def request(url,data=None):
+            q('UPDATE accounts SET lastnewday=? WHERE acctid=?',[self._current_game_day(),player]);self._security_allow(player,url)
+            return state['call'](url,data)
+        def login(role):
+            q('UPDATE accounts SET superuser=? WHERE acctid=?',[role,player]);state['call']=self._security_client()
+        def form(url,action):
+            status,body=request(url);self.assertEqual(200,status,body[:2000]);return dict(self._user_editor_form(body,action))
+        def matrix(gate,urls):
+            # Anonymous, a player and a superuser without the gate flag are refused every page and form; the gate flag opens the pages.
+            anonymous=self._security_client(login=None)
+            for url,data in urls: self.assertIn(anonymous(url,data)[0],[302,303,403],url)
+            for role in [0,0xFFFFFFFF&~(gate|1)]:
+                login(role)
+                for url,data in urls: self.assertEqual(403,request(url,data)[0],(role,url))
+            login(gate)
+            for url,data in urls:
+                if data is None: self.assertEqual(200,request(url)[0],url)
+        def restore(table,key,rows):
+            # Put a content table back as it was, row by row, whatever the editor (or a pre-fix GET link) did to it.
+            saved={r[key]:r for r in rows};now={r[key]:r for r in q(f'SELECT * FROM {table}')}
+            for ident in now.keys()-saved.keys(): q(f'DELETE FROM {table} WHERE {key}=?',[ident])
+            for ident,row in saved.items():
+                if now.get(ident)!=row: q(f'REPLACE INTO {table} ('+','.join(row)+') VALUES ('+','.join('?' for _ in row)+')',list(row.values()))
+        try: yield dict(q=q,player=player,request=request,login=login,form=form,matrix=matrix,restore=restore,state=state)
+        finally: q('UPDATE accounts SET '+','.join('`'+k+'`=?' for k in original if k!='acctid')+' WHERE acctid=?',[*[v for k,v in original.items() if k!='acctid'],player])
+
+    def test_weapon_and_armor_editor_authority_http(self):
+        # 1.1.2's price table, indexed by damage or defense.
+        prices=[None,48,225,585,990,1575,2250,2790,3420,4230,5040,5850,6840,8010,9000,10350];level=90
+        editors=[('weaponeditor.php','weapons','weaponid','weaponname','damage','weapons.php','weapon','weapondmg','weaponvalue','attack'),
+                 ('armoreditor.php','armor','armorid','armorname','defense','armor.php','armor','armordef','armorvalue','defense')]
+        with self._content_editor_fixture() as f:
+            q,player,request,form=(f[k] for k in ['q','player','request','form'])
+            saved={table:q(f'SELECT * FROM {table}') for _,table,*_ in editors}
+            try:
+                for page,table,idc,namec,statc,shop,item,itemstat,itemvalue,total in editors:
+                    rows=lambda:q(f'SELECT {idc},{namec},{statc},value,level FROM {table} WHERE level=? ORDER BY {idc}',[level])
+                    everything=lambda:q(f'SELECT * FROM {table} ORDER BY {idc}')
+                    seeded=q(f'SELECT {idc} AS id FROM {table} WHERE level=1 ORDER BY {idc} LIMIT 1')[0]['id']
+                    home,add,save=f'{page}?level={level}',f'{page}?op=add&level={level}',f'{page}?op=save&level={level}'
+                    f['matrix'](512,[(page,None),(add,None),(f'{page}?op=edit&id={seeded}&level=1',None),(save,{'x':'1'}),(f'{page}?op=del&id={seeded}&level=1',{'x':'1'})])
+                    before=everything()
+                    # GET only displays: 1.1.2 deleted on the list's GET link. Malformed and unknown IDs and levels are refused.
+                    for url in [f'{page}?op=del&id={seeded}&level=1',save]: self.assertEqual(405,request(url)[0],url)
+                    for url in [f'{page}?level=abc',f'{page}?level=-1',f'{page}?level=2147483648',f'{page}?op=edit&id=abc',f'{page}?op=edit&id=0',f'{page}?op=edit',f'{page}?op=other']:
+                        self.assertEqual(400,request(url)[0],url)
+                    self.assertEqual(404,request(f'{page}?op=edit&id=4294967295&level=1')[0]);self.assertEqual(before,everything())
+                    # Add: POST, CSRF and a one-use intent; every field validated before any write; the price from the table.
+                    fields=form(add,save);self.assertEqual(sorted(['action_token','csrf_token',namec,statc]),sorted(fields))
+                    post=lambda fields,url=save,**values:request(url,list({**fields,**values}.items()))
+                    name="Edit O'Reilly \" \\ 雪 <b>x</b>"
+                    self.assertEqual(403,post(fields,**{namec:name,statc:'7','csrf_token':'0'*64})[0])
+                    self.assertEqual(409,request(save,[(k,v) for k,v in {**fields,namec:name,statc:'7'}.items() if k!='action_token'])[0])
+                    for bad in [{statc:'16'},{statc:'0'},{statc:'-1'},{statc:'abc'},{statc:'7.5'},{statc:''},{namec:'雪'*51},{namec:b'\xff'},
+                                {statc+'[]':'7'},{'value':'1'},{'level':'1'},{idc:'-1'},{idc:'x'}]:
+                        self.assertEqual(400,post(fields,**{namec:name,statc:'7',**bad})[0],bad)
+                    self.assertEqual(404,post(fields,**{namec:name,statc:'7',idc:'4294967295'})[0]);self.assertEqual([],rows())
+                    status,body=post(fields,**{namec:name,statc:'7'});self.assertEqual(200,status,body[:2000])
+                    self.assertEqual([(name,'7','2790',str(level))],[(r[namec],r[statc],r['value'],r['level']) for r in rows()])
+                    self.assertEqual(409,post(fields,**{namec:name,statc:'7'})[0]);self.assertEqual(1,len(rows()))
+                    ident=rows()[0][idc];edit=f'{page}?op=edit&id={ident}&level={level}'
+                    status,body=request(home);self.assertEqual(200,status);self.assertNotIn('<b>x</b>',body);self.assertIn('雪',body)
+                    # Edit: the form shows the stored row; a row changed underneath refuses the save; a second copy of the form is spent.
+                    fields=form(edit,save);self.assertEqual((str(ident),name,'7'),(fields[idc],fields[namec],fields[statc]))
+                    q(f'UPDATE {table} SET {namec}=? WHERE {idc}=?',['Changed underneath',ident])
+                    self.assertEqual(409,post(fields,**{namec:'Stale',statc:'9'})[0]);self.assertEqual('Changed underneath',rows()[0][namec])
+                    fields,second=form(edit,save),form(edit,save);self.assertEqual(fields['action_token'],second['action_token'])
+                    status,body=post(fields,**{namec:'雪'*50,statc:'15'});self.assertEqual(200,status,body[:2000])
+                    self.assertEqual([('雪'*50,'15','10350')],[(r[namec],r[statc],r['value']) for r in rows()])
+                    self.assertEqual(409,post(second,**{namec:'Second',statc:'1'})[0]);self.assertEqual('雪'*50,rows()[0][namec])
+                    self.assertEqual(before,[r for r in everything() if r[idc]!=ident])
+                    # The accepted shop offers the saved item at its tier and price, and the purchase copies it whole.
+                    q(f"UPDATE accounts SET dragonkills=?,dragonpoints=?,race='Human',specialty='DA',alive=1,gold=20000,{item}='Old Stick',{itemstat}=3,{itemvalue}=40,{total}=10,lasthit=NOW() WHERE acctid=?",
+                      [level,'a:%d:{%s}'%(level,''.join('i:%d;s:2:"ff";'%i for i in range(level))),player])
+                    buy=f'{shop}?op=buy&id={ident}';status,body=request(shop);self.assertEqual(200,status,body[:2000]);self.assertIn('10350',body)
+                    status,body=request(buy,self._security_fields(body,buy));self.assertEqual(200,status,body[:2000])
+                    self.assertEqual(('9680','雪'*50,'15','10350','22'),tuple(q(f'SELECT gold,{item},{itemstat},{itemvalue},{total} FROM accounts WHERE acctid=?',[player])[0].values()))
+                    # Delete: the list's protected form, bound to the row it showed.
+                    remove=f'{page}?op=del&id={ident}&level={level}'
+                    fields=self._security_fields(request(home)[1],remove);self.assertEqual(405,request(remove)[0])
+                    self.assertEqual(403,request(remove,{'action_token':fields['action_token']})[0]);self.assertEqual(400,post(fields,remove,extra='1')[0])
+                    q(f'UPDATE {table} SET value=1 WHERE {idc}=?',[ident]);self.assertEqual(409,request(remove,fields)[0]);self.assertEqual(1,len(rows()))
+                    fields=self._security_fields(request(home)[1],remove)
+                    for url,status in [(f'{page}?op=del&id=abc&level={level}',400),(f'{page}?op=del&id=4294967295&level={level}',404)]: self.assertEqual(status,request(url,fields)[0],url)
+                    self.assertEqual(200,request(remove,fields)[0]);self.assertEqual([],rows());self.assertEqual(404,request(remove,fields)[0])
+                    self.assertEqual(before,everything())
+            finally:
+                for _,table,idc,*_ in editors: f['restore'](table,idc,saved[table])
+
+    def test_taunt_and_title_editor_authority_http(self):
+        with self._content_editor_fixture() as f:
+            q,player,request,login,form=(f[k] for k in ['q','player','request','login','form'])
+            saved={table:q(f'SELECT * FROM {table}') for table in ['taunts','titles']}
+            accounts=q('SELECT acctid,name,title,ctitle FROM accounts');created=[]
+            post=lambda url,fields,**values:request(url,list({**fields,**values}.items()))
+            try:
+                # Taunts (SU_EDIT_CREATURES).
+                taunts=lambda:q('SELECT * FROM taunts ORDER BY tauntid');seeded=saved['taunts'][0]['tauntid'];before=taunts()
+                f['matrix'](4,[('taunt.php',None),('taunt.php?op=edit',None),(f'taunt.php?op=edit&tauntid={seeded}',None),('taunt.php?op=save&tauntid=',{'x':'1'}),(f'taunt.php?op=del&tauntid={seeded}',{'x':'1'})])
+                for url in [f'taunt.php?op=del&tauntid={seeded}','taunt.php?op=save&tauntid=']: self.assertEqual(405,request(url)[0],url)
+                for url in ['taunt.php?op=edit&tauntid=abc','taunt.php?op=edit&tauntid=-1','taunt.php?op=del','taunt.php?op=other']: self.assertEqual(400,request(url)[0],url)
+                self.assertEqual(404,request('taunt.php?op=edit&tauntid=4294967295')[0]);self.assertEqual(before,taunts())
+                save='taunt.php?op=save&tauntid=';fields=form('taunt.php?op=edit',save);self.assertEqual(['action_token','csrf_token','taunt'],sorted(fields))
+                text='`5"`6Quote" O\'Reilly \\ 雪 <b>x</b>, %w`6! 100%% sure, `%purple`5," %W says.'
+                self.assertEqual(403,post(save,fields,taunt=text,csrf_token='0'*64)[0])
+                self.assertEqual(409,request(save,[('csrf_token',fields['csrf_token']),('taunt',text)])[0])
+                # A % that is not one of the listed codes must be doubled: PHP 8's sprintf throws where 1.1.2's skipped it.
+                for bad in ['100% sure %w','50%!','end 100%','%d of %w','t'*65536,b'\xff']: self.assertEqual(400,post(save,fields,taunt=bad)[0],bad)
+                self.assertEqual(400,post(save,fields,taunt=text,editor='x')[0]);self.assertEqual(400,request(save,[(k,v) for k,v in fields.items() if k!='taunt']+[('taunt[]',text)])[0])
+                self.assertEqual(before,taunts())
+                status,body=post(save,fields,taunt=text);self.assertEqual(200,status,body[:2000]);self.assertNotIn('<b>x</b>',body)
+                added=[r for r in taunts() if r not in before];self.assertEqual([(text,'WebPlayer')],[(r['taunt'],r['editor']) for r in added])
+                self.assertEqual(409,post(save,fields,taunt=text)[0]);self.assertEqual(len(before)+1,len(taunts()))
+                ident=added[0]['tauntid'];edit=f'taunt.php?op=edit&tauntid={ident}';save=f'taunt.php?op=save&tauntid={ident}'
+                status,body=request(edit);self.assertEqual(200,status,body[:2000]);self.assertIn('Baron Munchausen',body);self.assertNotIn('<b>x</b>',body)
+                # A stored taunt with a stray % (a database from before) is shown for repair instead of failing the editor.
+                q("INSERT INTO taunts (taunt,editor) VALUES ('Legacy 100% sure, %w','legacy')");legacy=q("SELECT tauntid FROM taunts WHERE editor='legacy'")[0]['tauntid']
+                status,body=request(f'taunt.php?op=edit&tauntid={legacy}');self.assertEqual(200,status,body[:2000]);self.assertIn('cannot be previewed',body)
+                fields=form(edit,save);self.assertEqual(text,fields['taunt'])
+                q('UPDATE taunts SET taunt=? WHERE tauntid=?',['Changed underneath',ident]);self.assertEqual(409,post(save,fields,taunt='Stale')[0])
+                self.assertEqual('Changed underneath',q('SELECT taunt FROM taunts WHERE tauntid=?',[ident])[0]['taunt'])
+                q("UPDATE taunts SET editor='someone' WHERE tauntid=?",[ident]);fields=form(edit,save)
+                self.assertEqual(200,post(save,fields,taunt='`%%x attacks %w with %X.')[0])
+                self.assertEqual(('`%%x attacks %w with %X.','WebPlayer'),tuple(q('SELECT taunt,editor FROM taunts WHERE tauntid=?',[ident])[0].values()))
+                remove=f'taunt.php?op=del&tauntid={ident}';fields=self._security_fields(request('taunt.php')[1],remove)
+                self.assertEqual(405,request(remove)[0]);self.assertEqual(403,request(remove,{'action_token':fields['action_token']})[0])
+                q("UPDATE taunts SET editor='late' WHERE tauntid=?",[ident]);self.assertEqual(409,request(remove,fields)[0])
+                fields=self._security_fields(request('taunt.php')[1],remove);self.assertEqual(200,request(remove,fields)[0])
+                self.assertEqual([],q('SELECT * FROM taunts WHERE tauntid=?',[ident]));self.assertEqual(404,request(remove,fields)[0])
+                # Titles (SU_EDIT_USERS).
+                titles=lambda:q('SELECT * FROM titles ORDER BY titleid');seeded=saved['titles'][0]['titleid']
+                snapshot=lambda:q('SELECT acctid,name,title,ctitle FROM accounts ORDER BY acctid')
+                f['matrix'](64,[('titleedit.php',None),('titleedit.php?op=add',None),(f'titleedit.php?op=edit&id={seeded}',None),('titleedit.php?op=reset',None),
+                                ('titleedit.php?op=save&id=0',{'x':'1'}),(f'titleedit.php?op=delete&id={seeded}',{'x':'1'}),('titleedit.php?op=reset',{'x':'1'})])
+                before,people=titles(),snapshot()
+                for url in [f'titleedit.php?op=delete&id={seeded}','titleedit.php?op=save&id=0']: self.assertEqual(405,request(url)[0],url)
+                for url in ['titleedit.php?op=edit&id=abc','titleedit.php?op=edit','titleedit.php?op=delete','titleedit.php?op=save&id=x','titleedit.php?op=other']: self.assertEqual(400,request(url)[0],url)
+                self.assertEqual(404,request('titleedit.php?op=edit&id=4294967295')[0]);self.assertEqual((before,people),(titles(),snapshot()))
+                save='titleedit.php?op=save&id=0';fields=form('titleedit.php?op=add',save)
+                self.assertEqual(['action_token','csrf_token','dk','female','male'],sorted(fields));self.assertEqual('0',fields['dk'])
+                good=dict(dk='77',male='Sir Probe',female='Dame "Q" <i>雪</i>')
+                self.assertEqual(403,post(save,fields,**good,csrf_token='0'*64)[0])
+                for bad in [{'dk':'abc'},{'dk':'1.5'},{'dk':'2147483648'},{'dk':''},{'male':'m'*26},{'female':b'\xff'},{'ref':'x'},{'titleid':'5'}]:
+                    self.assertEqual(400,post(save,fields,**{**good,**bad})[0],bad)
+                self.assertEqual(before,titles())
+                status,body=post(save,fields,**good);self.assertEqual(200,status,body[:2000]);self.assertIn('New title added.',body);self.assertNotIn('<i>雪',body)
+                added=[r for r in titles() if r not in before];self.assertEqual([('77','','Sir Probe','Dame "Q" <i>雪</i>')],[(r['dk'],r['ref'],r['male'],r['female']) for r in added])
+                self.assertEqual(409,post(save,fields,**good)[0]);self.assertEqual(len(before)+1,len(titles()))
+                ident=added[0]['titleid'];edit,save=f'titleedit.php?op=edit&id={ident}',f'titleedit.php?op=save&id={ident}'
+                # 1.1.2 reported the affected rows, so an unchanged save says it could not modify the title.
+                fields=form(edit,save);self.assertEqual(('77','Sir Probe'),(fields['dk'],fields['male']))
+                status,body=post(save,fields);self.assertEqual(200,status);self.assertIn('Unable to modify title.',body)
+                fields=form(edit,save);q("UPDATE titles SET female='Underneath' WHERE titleid=?",[ident]);self.assertEqual(409,post(save,fields,male='Stale')[0])
+                fields=form(edit,save);status,body=post(save,fields,male="Sir O'Reilly 雪",female='Dame 雪');self.assertIn('Title modified.',body)
+                self.assertEqual(('77',"Sir O'Reilly 雪",'Dame 雪'),tuple(q('SELECT dk,male,female FROM titles WHERE titleid=?',[ident])[0].values()))
+                q("INSERT INTO titles (dk,ref,male,female) VALUES (78,'','Doomed','Doomed')");doomed=q("SELECT titleid FROM titles WHERE male='Doomed'")[0]['titleid']
+                remove=f'titleedit.php?op=delete&id={doomed}';fields=self._security_fields(request('titleedit.php')[1],remove)
+                self.assertEqual(403,request(remove,{'action_token':fields['action_token']})[0])
+                q("UPDATE titles SET female='Changed' WHERE titleid=?",[doomed]);self.assertEqual(409,request(remove,fields)[0])
+                fields=self._security_fields(request('titleedit.php')[1],remove);status,body=request(remove,fields);self.assertIn('Title deleted.',body)
+                self.assertEqual([],q('SELECT * FROM titles WHERE titleid=?',[doomed]));self.assertEqual(404,request(remove,fields)[0])
+                # The title rebuild. The acting superuser and an online player (rank 0: Farmboy), a custom title, a name that would not fit,
+                # bulk accounts and one whose write fails late (rank 77: the title saved above).
+                q("UPDATE accounts SET dragonkills=0,sex=0,title='Bogus',ctitle='',name='Bogus WebPlayer`0' WHERE acctid=?",[player])
+                def make(login,name,title='Farmboy',ctitle='',dk=77):
+                    ident=int(self._security_target(login));created.append(ident)
+                    q("UPDATE accounts SET name=?,title=?,ctitle=?,dragonkills=?,sex=0,race='Human',specialty='DA',dragonpoints='a:0:{}' WHERE acctid=?",[name,title,ctitle,dk,ident]);return ident
+                online=make('TitleOnline','Bogus TitleOnline`0','Bogus',dk=0);custom=make('TitleCustom','Lord TitleCustom`0',ctitle='Lord')
+                toolong=make('TitleLong','Farmboy '+'L'*50+'`0')
+                columns=[r['COLUMN_NAME'] for r in q("SELECT COLUMN_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='accounts' AND COLUMN_NAME<>'acctid' ORDER BY ORDINAL_POSITION")]
+                values={'login':"CONCAT('TitleBulk',d.n*10+u.n)",'name':"CONCAT('Farmboy TitleBulk',d.n*10+u.n,'`0')"}
+                digits=lambda top:'('+' UNION ALL '.join(f'SELECT {i} AS n' for i in range(top))+')'
+                q('INSERT INTO accounts ('+','.join('`'+c+'`' for c in columns)+') SELECT '+','.join(values.get(c,'a.`'+c+'`') for c in columns)+
+                  f' FROM accounts a CROSS JOIN {digits(6)} d CROSS JOIN {digits(10)} u WHERE a.acctid=? ORDER BY d.n,u.n',[custom])
+                q("UPDATE accounts SET ctitle='',title='Farmboy' WHERE login LIKE 'TitleBulk%'");created.extend(int(r['acctid']) for r in q("SELECT acctid FROM accounts WHERE login LIKE 'TitleBulk%'"))
+                late=make('TitleLate','Farmboy TitleLate`0')
+                peer=self._security_client(login='TitleOnline',password='Synthetic administrator password')
+                def visit():
+                    q('UPDATE accounts SET lastnewday=? WHERE acctid=?',[self._current_game_day(),online]);self._security_allow(online,'list.php');return peer('list.php')
+                self.assertEqual(200,visit()[0])
+                renamed={'Bogus WebPlayer`0':('Farmboy WebPlayer`0','Farmboy'),'Bogus TitleOnline`0':('Farmboy TitleOnline`0','Farmboy'),'Lord TitleCustom`0':('Lord TitleCustom`0',"Sir O'Reilly 雪")}
+                ours=lambda r:int(r['acctid']) in created+[player] and int(r['acctid'])!=toolong
+                def rebuilt(r):
+                    name,title=renamed.get(r['name']) or (r['name'].replace('Farmboy ',"Sir O'Reilly 雪 ",1),"Sir O'Reilly 雪")
+                    return {**r,'name':name,'title':title}
+                start=snapshot()
+                # GET shows the form and changes nothing; a form issued before the titles changed is refused.
+                reset='titleedit.php?op=reset';fields=self._security_fields(request(reset)[1],reset);self.assertEqual(start,snapshot())
+                q("INSERT INTO titles (dk,ref,male,female) VALUES (9999,'','Later','Later')");self.assertEqual(409,request(reset,fields)[0]);q("DELETE FROM titles WHERE dk=9999")
+                self.assertEqual(start,snapshot())
+                # A late failure in the second batch of 50: the first batch commits whole, the failed batch and everything after it are
+                # untouched, and the page says so. The name that would not fit is listed and left alone.
+                q("ALTER TABLE accounts ADD CONSTRAINT fixture_title_rebuild CHECK (login <> 'TitleLate' OR title = 'Farmboy')")
+                try:
+                    fields=self._security_fields(request(reset)[1],reset);status,body=request(reset,fields);self.assertEqual(200,status,body[:2000])
+                    boundary=[r['acctid'] for r in start].index(str(late))//50*50;self.assertGreaterEqual(boundary,50)
+                    after={r['acctid']:r for r in snapshot()}
+                    for index,row in enumerate(start):
+                        if index>=boundary: self.assertEqual(row,after[row['acctid']])
+                        elif ours(row): self.assertEqual(rebuilt(row),after[row['acctid']])
+                    self.assertEqual(start[[r['acctid'] for r in start].index(str(toolong))],after[str(toolong)])
+                    changed=sum(1 for r in start if after[r['acctid']]!=r);self.assertGreaterEqual(changed,40)
+                    text=re.sub(r'\s+',' ',html.unescape(re.sub(r'<[^>]+>','',body)))
+                    self.assertIn(f'The rebuild stopped on a failure. {boundary} of {len(start)} accounts were checked and {changed} changed; the rest were not changed.',text)
+                    self.assertIn('Not changing Farmboy '+'L'*50,text);self.assertNotIn('Done.',text)
+                    retry=self._security_fields(body,reset)
+                finally: q('ALTER TABLE accounts DROP CONSTRAINT fixture_title_rebuild')
+                # The spent form stays spent; the fresh one finishes the rest.
+                self.assertEqual(409,request(reset,fields)[0])
+                status,body=request(reset,retry);self.assertEqual(200,status,body[:2000]);self.assertIn('Done.',body);self.assertEqual(409,request(reset,retry)[0])
+                final={r['acctid']:r for r in snapshot()}
+                for row in start:
+                    if ours(row): self.assertEqual(rebuilt(row),final[row['acctid']])
+                self.assertEqual(start[[r['acctid'] for r in start].index(str(toolong))],final[str(toolong)])
+                # The online player sees the new name on their next page, and their own save does not write the old one back.
+                status,body=visit();self.assertEqual(200,status);self.assertIn('Farmboy TitleOnline',html.unescape(body))
+                self.assertEqual(('Farmboy TitleOnline`0','Farmboy'),tuple(q('SELECT name,title FROM accounts WHERE acctid=?',[online])[0].values()))
+                self.assertEqual(200,request('titleedit.php')[0])
+                self.assertEqual(('Farmboy WebPlayer`0','Farmboy'),tuple(q('SELECT name,title FROM accounts WHERE acctid=?',[player])[0].values()))
+            finally:
+                if q("SELECT CONSTRAINT_NAME FROM information_schema.TABLE_CONSTRAINTS WHERE CONSTRAINT_SCHEMA=DATABASE() AND TABLE_NAME='accounts' AND CONSTRAINT_NAME='fixture_title_rebuild'"):
+                    q('ALTER TABLE accounts DROP CONSTRAINT fixture_title_rebuild')
+                for who in created: q('DELETE FROM accounts_output WHERE acctid=?',[who]);q('DELETE FROM accounts WHERE acctid=?',[who])
+                for row in accounts: q('UPDATE accounts SET name=?,title=?,ctitle=? WHERE acctid=?',[row['name'],row['title'],row['ctitle'],row['acctid']])
+                for table,key in [('taunts','tauntid'),('titles','titleid')]: f['restore'](table,key,saved[table])
+
+    def test_creature_and_master_editor_authority_http(self):
+        saved={table:self.query(f'SELECT * FROM {table}') for table in ['creatures','masters']}
+        stats=lambda level:json.loads(subprocess.run([shutil.which('php'),'-r',f"require 'lib/creatures.php'; echo json_encode(creature_stats({level}));"],text=True,capture_output=True,cwd=ROOT,check=True).stdout)
+        text=lambda body:re.sub(r'\s+',' ',html.unescape(re.sub(r'<[^>]+>','',body)))
+        try:
+            with self._content_editor_fixture() as f:
+                q,player,request,login,form=(f[k] for k in ['q','player','request','login','form'])
+                prefs=lambda:q("SELECT * FROM module_objprefs WHERE objtype='creatures' ORDER BY objid,modulename,setting")
+                post=lambda url,fields,**values:request(url,list({**fields,**values}.items()))
+                creatures=lambda:q('SELECT * FROM creatures ORDER BY creatureid');masters=lambda:q('SELECT * FROM masters ORDER BY creatureid')
+                seeded=saved['creatures'][0]['creatureid'];master=q('SELECT creatureid FROM masters WHERE creaturelevel=10')[0]['creatureid'];before=(creatures(),masters(),prefs())
+                module=f'creatures.php?op=save&subop=module&creatureid={seeded}&module=specialtydarkarts'
+                f['matrix'](4,[('creatures.php',None),('creatures.php?op=add&level=3',None),(f'creatures.php?op=edit&creatureid={seeded}',None),('creatures.php?op=search',{'q':'a'}),
+                               ('creatures.php?op=save',{'x':'1'}),(f'creatures.php?op=del&creatureid={seeded}&level=1',{'x':'1'}),(module,{'x':'1'}),
+                               ('masters.php',None),('masters.php?op=edit&id=0',None),(f'masters.php?op=edit&id={master}',None),('masters.php?op=save&id=0',{'x':'1'}),(f'masters.php?op=del&id={master}',{'x':'1'})])
+                # GET only displays; malformed requests and unknown IDs are refused before anything is read or written.
+                for url in [f'creatures.php?op=del&creatureid={seeded}&level=1','creatures.php?op=save',f'masters.php?op=del&id={master}','masters.php?op=save&id=0']: self.assertEqual(405,request(url)[0],url)
+                for url in ['creatures.php?op=other','creatures.php?level=abc','creatures.php?level=-1','creatures.php?op=edit&creatureid=abc','creatures.php?op=del',
+                            'masters.php?op=other','masters.php?op=edit&id=abc','masters.php?op=edit&id=-1','masters.php?op=del']: self.assertEqual(400,request(url)[0],url)
+                for url in ['creatures.php?op=edit&creatureid=4294967295','masters.php?op=edit&id=4294967295']: self.assertEqual(404,request(url)[0],url)
+                # Creature object preferences: only an installed module's declared preferences (none of the shipped modules declares any).
+                for url,data in [(module,{'evil':'1'}),(module.replace('specialtydarkarts','nosuchmodule'),{'evil':'1'}),(module.replace('specialtydarkarts','..%2Fx'),{'evil':'1'}),
+                                 (module.replace('op=save','op=edit'),None),(module+'&objtype=mounts',{'evil':'1'})]:
+                    self.assertEqual(400,request(url,data)[0],url)
+                self.assertEqual(before,(creatures(),masters(),prefs()))
+                # Add a creature: only the form's declared fields; the stats from 1.1.2's level table.
+                save='creatures.php?op=save';fields=form('creatures.php?op=add&level=3',save)
+                self.assertEqual(sorted(['action_token','csrf_token','creatureid','creaturename','creatureweapon','creaturewin','creaturelose','creaturelevel','forest','graveyard']),sorted(fields))
+                good=dict(creaturename="Probe O'Reilly \" \\ 雪 <b>x</b>",creatureweapon='Pun <i>雪</i>',creaturewin='Beaten 100% "flat"',creaturelose="It's 雪 <b>over</b>",creaturelevel='3',forest='1',graveyard='0')
+                self.assertEqual(('0','3'),(fields['creatureid'],fields['creaturelevel']))
+                self.assertEqual(403,post(save,fields,**good,csrf_token='0'*64)[0]);self.assertEqual(409,request(save,[(k,v) for k,v in {**fields,**good}.items() if k!='action_token'])[0])
+                # 1.1.2 wrote every posted key starting "creature": a forged ID or stat is refused, never written.
+                self.assertEqual(409,post(save,fields,**good,creatureid=str(seeded))[0])
+                for bad in [{'creaturehealth':'1'},{'creatureexp':'99999'},{'creatureaiscript':'bundled:gypsy-bandit'},{'createdby':'x'},{'creaturelevel':'0'},{'creaturelevel':'19'},
+                            {'creaturelevel':'-1'},{'creaturelevel':'abc'},{'forest':'2'},{'graveyard':''},{'creaturename':''},{'creaturename':'n'*51},{'creaturewin':'w'*121},
+                            {'creaturelose':b'\xff'},{'creatureid':'x'},{'creatureid':'-1'}]:
+                    self.assertEqual(400,post(save,fields,**{**good,**bad})[0],bad)
+                self.assertEqual(404,post(save,fields,**good,creatureid='4294967295')[0]);self.assertEqual(before,(creatures(),masters(),prefs()))
+                status,body=post(save,fields,**good);self.assertEqual(200,status,body[:2000]);self.assertIn('Creature saved!',body);self.assertNotIn('<b>x</b>',body)
+                added=[r for r in creatures() if r not in before[0]];self.assertEqual(1,len(added));ident=added[0]['creatureid'];level3=stats(3)
+                self.assertEqual({**{k:v for k,v in good.items()},'createdby':'WebPlayer','creatureaiscript':None,**{k:str(v) for k,v in level3.items()}},{k:added[0][k] for k in [*good,'createdby','creatureaiscript',*level3]})
+                self.assertEqual(409,post(save,fields,**good)[0]);self.assertEqual(len(before[0])+1,len(creatures()))
+                row=lambda:q('SELECT * FROM creatures WHERE creatureid=?',[ident])[0]
+                # Edit: the stored row in the form; a level change takes that level's stats; level 18 (not in 1.1.2's table) keeps them.
+                edit=f'creatures.php?op=edit&creatureid={ident}';fields,second=form(edit,save),form(edit,save)
+                self.assertEqual((str(ident),good['creaturename'],good['creaturewin']),(fields['creatureid'],fields['creaturename'],fields['creaturewin']));self.assertEqual(fields['action_token'],second['action_token'])
+                status,body=post(save,fields,**{**good,'creaturelevel':'17'});self.assertEqual(200,status,body[:2000])
+                self.assertEqual({k:str(v) for k,v in stats(17).items()},{k:row()[k] for k in stats(17)});self.assertEqual(409,post(save,second,**good)[0])
+                q('UPDATE creatures SET creaturehealth=7 WHERE creatureid=?',[ident])
+                fields=form(edit,save);status,body=post(save,fields,**{**good,'creaturelevel':'18','forest':'0','graveyard':'1'});self.assertEqual(200,status,body[:2000])
+                self.assertEqual({**{k:str(v) for k,v in stats(17).items()},'creaturehealth':'7','creaturelevel':'18','forest':'0','graveyard':'1'},{k:row()[k] for k in [*stats(17),'forest','graveyard']})
+                # An unchanged save reports "not saved", as 1.1.2 did from the affected rows; a row changed underneath refuses the save.
+                fields=form(edit,save);status,body=post(save,fields,**{**good,'creaturelevel':'18','forest':'0','graveyard':'1'});self.assertIn('Creature not saved!',text(body))
+                fields=form(edit,save);q("UPDATE creatures SET creatureweapon='Underneath' WHERE creatureid=?",[ident]);self.assertEqual(409,post(save,fields,**good)[0]);self.assertEqual('Underneath',row()['creatureweapon'])
+                # A late write failure rolls the save back; the spent form stays spent and a fresh one saves.
+                fields=form(edit,save);q("ALTER TABLE creatures ADD CONSTRAINT fixture_creature_save CHECK (creaturename <> 'Late failure')")
+                try:
+                    unchanged=row();self.assertEqual(500,post(save,fields,**{**good,'creaturename':'Late failure'})[0]);self.assertEqual(unchanged,row())
+                finally: q('ALTER TABLE creatures DROP CONSTRAINT fixture_creature_save')
+                self.assertEqual(409,post(save,fields,**{**good,'creaturename':'Late failure'})[0])
+                fields=form(edit,save);self.assertEqual(200,post(save,fields,**good)[0]);self.assertEqual((good['creaturename'],'3',str(level3['creaturehealth'])),(row()['creaturename'],row()['creaturelevel'],row()['creaturehealth']))
+                # The A.I. script field is the form's only for SU_MEGAUSER or SU_RAW_SQL, and only the implemented behavior is accepted.
+                login(4|524288);fields=form(edit,save);self.assertIn('creatureaiscript',fields)
+                for script in ['arbitrary php','<?php echo 1; ?>']: self.assertEqual(400,post(save,fields,**good,creatureaiscript=script)[0],script)
+                self.assertEqual(200,post(save,fields,**good,creatureaiscript='bundled:gypsy-bandit')[0]);self.assertEqual('bundled:gypsy-bandit',row()['creatureaiscript'])
+                login(4);fields=form(edit,save);self.assertNotIn('creatureaiscript',fields);self.assertEqual(200,post(save,fields,**{**good,'creatureweapon':'Pun'})[0])
+                self.assertEqual(('bundled:gypsy-bandit','Pun'),(row()['creatureaiscript'],row()['creatureweapon']))
+                fields=form(edit,save);login(4|524288);fields=form(edit,save);self.assertEqual(200,post(save,fields,**good,creatureaiscript='')[0]);self.assertEqual('',row()['creatureaiscript']);login(4)
+                # Search and list: bound, and escaped.
+                for probe in ["O'Reilly","雪 <b>","%' OR 1=1 -- "]:
+                    status,body=request('creatures.php?op=search',{'q':probe});self.assertEqual(200,status,body[:2000]);self.assertNotIn('<b>x</b>',body)
+                    self.assertEqual(probe!="%' OR 1=1 -- ",f'creatures.php?op=edit&amp;creatureid={ident}' in body or f"creatures.php?op=edit&creatureid={ident}" in body,probe)
+                status,body=request('creatures.php?level=3');self.assertIn('Probe O\'Reilly',text(body));self.assertNotIn('<b>over</b>',body)
+                # Delete: the list's protected form, bound to the row it showed.
+                remove=f'creatures.php?op=del&creatureid={ident}&level=3';fields=self._security_fields(request('creatures.php?level=3')[1],remove)
+                self.assertEqual(403,request(remove,{'action_token':fields['action_token']})[0]);q("UPDATE creatures SET creaturegold=1 WHERE creatureid=?",[ident]);self.assertEqual(409,request(remove,fields)[0])
+                fields=self._security_fields(request('creatures.php?level=3')[1],remove);status,body=request(remove,fields);self.assertEqual(200,status);self.assertIn('Creature deleted',body)
+                self.assertEqual([],q('SELECT * FROM creatures WHERE creatureid=?',[ident]));self.assertEqual(404,request(remove,fields)[0])
+                # Masters: id 0 adds with 1.1.2's formulas; an edit keeps the stats, whatever the level.
+                save='masters.php?op=save&id=0';fields=form('masters.php?op=edit&id=0',save);self.assertEqual(sorted(['action_token','csrf_token','level','name','weapon','win','lose']),sorted(fields))
+                good=dict(level='1',name="Sensei O'Reilly 雪 <b>x</b>",weapon='Stick "of" 雪',win='%W wins, %w`^. 100%% sure.',lose="You beat me, %w`&, with your %x!")
+                self.assertEqual(403,post(save,fields,**good,csrf_token='0'*64)[0])
+                for bad in [{'level':'0'},{'level':'-1'},{'level':'195225787'},{'level':'x'},{'name':'n'*51},{'win':'w'*121},{'lose':b'\xff'},
+                            {'win':'100% sure, %w'},{'lose':'%d of %w'},{'creaturehealth':'1'},{'creatureid':'5'}]:
+                    self.assertEqual(400,post(save,fields,**{**good,**bad})[0],bad)
+                self.assertEqual(before[1],masters())
+                status,body=post(save,fields,**good);self.assertEqual(200,status,body[:2000]);self.assertIn('Master Sensei O\'Reilly 雪 <b>x</b> added.',text(body));self.assertNotIn('<b>x</b>',body)
+                added=[r for r in masters() if r not in before[1]];self.assertEqual([('1',good['name'],good['weapon'],good['win'],good['lose'],'12','2','2',None,None)],
+                    [tuple(r[k] for k in ['creaturelevel','creaturename','creatureweapon','creaturewin','creaturelose','creaturehealth','creatureattack','creaturedefense','creaturegold','creatureexp']) for r in added])
+                self.assertEqual(409,post(save,fields,**good)[0]);mid=added[0]['creatureid']
+                # A speech without a code is not formatted by training, so a lone % stays as 1.1.2 showed it.
+                fields=form('masters.php?op=edit&id=0',save);self.assertEqual(200,post(save,fields,**{**good,'level':'7','win':'Gave 100% and lost.'})[0])
+                seven=[r for r in masters() if r['creaturelevel']=='7' and r['creaturewin']=='Gave 100% and lost.'];self.assertEqual([('77','14','14')],[(r['creaturehealth'],r['creatureattack'],r['creaturedefense']) for r in seven])
+                edit,save=f'masters.php?op=edit&id={mid}',f'masters.php?op=save&id={mid}';fields,second=form(edit,save),form(edit,save)
+                self.assertEqual(('1',good['name'],good['lose']),(fields['level'],fields['name'],fields['lose']))
+                status,body=post(save,fields,**{**good,'level':'9'});self.assertIn('updated.',body);self.assertEqual(409,post(save,second,**good)[0])
+                self.assertEqual(('9','12','2','2'),tuple(q('SELECT creaturelevel,creaturehealth,creatureattack,creaturedefense FROM masters WHERE creatureid=?',[mid])[0].values()))
+                fields=form(edit,save);q("UPDATE masters SET creatureweapon='Underneath' WHERE creatureid=?",[mid]);self.assertEqual(409,post(save,fields,**good)[0])
+                for url,code in [('masters.php?op=save&id=4294967295',404),('masters.php?op=save&id=abc',400)]: self.assertEqual(code,post(url,fields,**good)[0],url)
+                remove=f'masters.php?op=del&id={mid}';fields=self._security_fields(request('masters.php')[1],remove)
+                q("UPDATE masters SET creaturegold=1 WHERE creatureid=?",[mid]);self.assertEqual(409,request(remove,fields)[0])
+                fields=self._security_fields(request('masters.php')[1],remove);status,body=request(remove,fields);self.assertIn('Master deleted.',body);self.assertEqual([],q('SELECT * FROM masters WHERE creatureid=?',[mid]))
+                # The level 10 master as the training fight reads it.
+                edit,save=f'masters.php?op=edit&id={master}',f'masters.php?op=save&id={master}';fields=form(edit,save)
+                speech=dict(level='10',name="Sensei O'Reilly 雪",weapon='Stick "of" 雪',win='%W wins. 100%% sure.',lose="You beat me, %w`&, with your %x! 雪 <b>y</b>")
+                self.assertEqual(200,post(save,fields,**speech)[0])
+                f['restore']('masters','creatureid',[r for r in saved['masters'] if r['creatureid']!=master]+q('SELECT * FROM masters WHERE creatureid=?',[master]))
+                # A saved creature as the forest search reads it: the only forest creature at the player's level.
+                fields=form('creatures.php?op=add&level=3','creatures.php?op=save')
+                self.assertEqual(200,post('creatures.php?op=save',fields,creaturename="Forest O'Reilly 雪",creatureweapon='Pun "雪"',creaturewin='Beaten 100% flat',
+                                          creaturelose="It's <b>over</b> 雪",creaturelevel='3',forest='1',graveyard='0')[0])
+                forest=q("SELECT * FROM creatures WHERE creaturename=?",["Forest O'Reilly 雪"])[0];q('UPDATE creatures SET forest=0 WHERE creatureid<>?',[forest['creatureid']])
+                with self._ordinary_forest_fixture() as g:
+                    g['prepare']('TS',badguy='',level=3,maxhitpoints=30,hitpoints=5000,attack=1000,defense=1000,turns=20,gold=0)
+                    code,body=g['action'](g['ordinary_form']('search'),'search');self.assertEqual(200,code,body[:3000])
+                    enemy=g['decode'](g['snapshot']()[0]['badguy'])['enemies'][0]
+                    self.assertEqual((str(forest['creatureid']),"Forest O'Reilly 雪",'Pun "雪"',32,5,4,148),
+                                     (str(enemy['creatureid']),enemy['creaturename'],enemy['creatureweapon'],*(int(enemy[k]) for k in ['creaturehealth','creatureattack','creaturedefense','creaturegold'])))
+                    for _ in range(20):
+                        code,body=g['action'](g['ordinary_form']());self.assertEqual(200,code,body[:3000])
+                        if g['snapshot']()[0]['badguy']=='': break
+                    self.assertEqual('',g['snapshot']()[0]['badguy'])
+                    self.assertIn("It's <b>over</b> 雪",text(body));self.assertNotIn('<b>over</b>',body)
+                # The saved master as the training fight reads and shows it (a guaranteed hit, as in the training tests).
+                with self._training_fixture() as g:
+                    g['training_master'](hp=10000,attack=0,defense=0);g['enter'](attack=0,defense=1000,specialty='TS')
+                    state=g['decode'](g['training_snapshot']()[0]['badguy']);self.assertEqual(("Sensei O'Reilly 雪",'Stick "of" 雪'),(state['enemies'][0]['creaturename'],state['enemies'][0]['creatureweapon']))
+                    state['enemies'][0]['creaturehealth']=5
+                    buff={'proof':{'name':'Fixture','schema':'train','effectmsg':'','effectnodmgmsg':'','effectfailmsg':'','rounds':3,'allowintrain':1,'minioncount':1,'minbadguydamage':10,'maxbadguydamage':10}}
+                    q('UPDATE accounts SET badguy=?,bufflist=?,weapon=? WHERE acctid=?',[g['encode'](state),g['encode'](buff),'Fists',g['player']])
+                    code,body=g['training_action'](g['training_form']());self.assertEqual(200,code,body[:3000]);self.assertEqual('11',g['training_snapshot']()[0]['level'])
+                    page=text(body);self.assertRegex(page,r'You beat me, .+, with your Fists! 雪 <b>y</b>');self.assertNotIn('<b>y</b>',body)
+        finally:
+            for table in ['creatures','masters']:
+                now={r['creatureid']:r for r in self.query(f'SELECT * FROM {table}')};old={r['creatureid']:r for r in saved[table]}
+                for ident in now.keys()-old.keys(): self.query(f'DELETE FROM {table} WHERE creatureid=?',[ident])
+                for ident,row in old.items():
+                    if now.get(ident)!=row: self.query(f'REPLACE INTO {table} ('+','.join(row)+') VALUES ('+','.join('?' for _ in row)+')',list(row.values()))
+            self.query("DELETE FROM module_objprefs WHERE objtype='creatures'")
+
+    @contextmanager
+    def _datacache_server(self, *clients):
+        # A second fixture server with the data cache on, sharing the sessions of the given clients. Its settings are fixed
+        # before it starts (they win over dbconnect.php's, EXTR_SKIP), so no cached copy of a rewritten file can serve a request.
+        cache=tempfile.TemporaryDirectory(prefix='resurrection-cache-');prepend=tempfile.NamedTemporaryFile(mode='w',suffix='.php')
+        prepend.write("<?php $DB_USEDATACACHE=1; $DB_DATACACHEPATH='"+cache.name+"';\n");prepend.flush()
+        with socket.socket() as sock:sock.bind(('127.0.0.1',0));port=sock.getsockname()[1]
+        server=subprocess.Popen([shutil.which('php'),'-d','display_errors=1','-d','error_reporting=-1','-d','zend.exception_ignore_args=1',
+                                 '-d','auto_prepend_file='+prepend.name,'-S',f'127.0.0.1:{port}','-t',str(ROOT)],cwd=ROOT,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
+        try:
+            for _ in range(100):
+                try:
+                    with socket.create_connection(('127.0.0.1',port),timeout=.1):break
+                except OSError:time.sleep(.02)
+            seconds=[]
+            for client in clients:
+                second=self._security_client(login=None,port=port)
+                for cookie in client.cookiejar: second.cookiejar.set_cookie(cookie)
+                seconds.append(second)
+            yield (Path(cache.name),*seconds)
+        finally:
+            server.terminate();server.wait(timeout=20);prepend.close();cache.cleanup()
+
+    def test_mount_and_companion_editor_authority_http(self):
+        q=self.query;php=lambda code,value:subprocess.run([shutil.which('php'),'-r',code],input=json.dumps(value),text=True,capture_output=True,cwd=ROOT,check=True).stdout
+        ser=lambda value:php('echo serialize(json_decode(stream_get_contents(STDIN),true));',value)
+        unser=lambda value:json.loads(php("require 'vendor/autoload.php'; echo json_encode(\\Resurrection\\Security\\ScalarState::read(json_decode(stream_get_contents(STDIN))));",value))
+        text=lambda body:re.sub(r'\s+',' ',html.unescape(re.sub(r'<[^>]+>','',body)))
+        saved={t:q(f'SELECT * FROM {t}') for t in ['mounts','companions']};prefs_before=q("SELECT * FROM module_objprefs WHERE objtype IN ('mounts','companions')");created=[]
+        village=q("SELECT value FROM settings WHERE setting='villagename'");village=village[0]['value'] if village else 'Degolburg'
+        try:
+            with self._content_editor_fixture() as f:
+                q,player,request,login,form,restore=(f[k] for k in ['q','player','request','login','form','restore'])
+                post=lambda url,fields,**values:request(url,list({**fields,**values}.items()))
+                mounts=lambda:q('SELECT * FROM mounts ORDER BY mountid');companions=lambda:q('SELECT * FROM companions ORDER BY companionid')
+                prefs=lambda:q("SELECT * FROM module_objprefs WHERE objtype IN ('mounts','companions') ORDER BY objtype,objid,modulename,setting")
+                me=lambda *keys:tuple(q('SELECT '+','.join(keys)+' FROM accounts WHERE acctid=?',[player])[0].values())
+                def fixture(table,**values):
+                    q(f'INSERT INTO {table} ('+','.join(values)+') VALUES ('+','.join('?' for _ in values)+')',list(values.values()))
+                    return int(q(f"SELECT MAX({'mountid' if table=='mounts' else 'companionid'}) AS id FROM {table}")[0]['id'])
+                buff=ser({'name':'Fixture Buff','rounds':'20','atkmod':'1.1','schema':'mounts'})
+                seed=fixture('mounts',mountname='Seed Mount',mountdesc='d',mountcategory='Fixture',mountbuff=buff,mountcostgems=1,mountcostgold=2,mountactive=1,mountforestfights=0,newday='',recharge='',partrecharge='',mountfeedcost=1,mountlocation='all',mountdkcost=0)
+                broken=fixture('mounts',mountname='Broken Mount',mountdesc='d',mountcategory='Fixture',mountbuff='not serialized',mountcostgems=1,mountcostgold=2,mountactive=1,mountforestfights=0,newday='',recharge='',partrecharge='',mountfeedcost=1,mountlocation='all',mountdkcost=0)
+                pal=fixture('companions',name='Seed Pal',category='Fixture',description='d',attack=1,attackperlevel=1,defense=1,defenseperlevel=1,maxhitpoints=10,maxhitpointsperlevel=1,abilities=ser({'fight':'1','heal':'0','magic':'0','defend':False}),companionactive=1,jointext='',dyingtext='')
+                editor=[('mounts.php',None),('mounts.php?op=add',None),(f'mounts.php?op=edit&id={seed}',None),(f'mounts.php?op=xml&id={seed}',None),('mounts.php?op=save&id=',{'x':'1'}),(f'mounts.php?op=save&id={seed}',{'x':'1'}),
+                        *[(f'mounts.php?op={op}&id={seed}',{'x':'1'}) for op in ['del','give','activate','deactivate']],
+                        ('companions.php',None),('companions.php?op=add',None),(f'companions.php?op=edit&id={pal}',None),('companions.php?op=save&id=',{'x':'1'}),
+                        *[(f'companions.php?op={op}&id={pal}',{'x':'1'}) for op in ['save','del','take','activate','deactivate']],
+                        (f'companions.php?op=save&subop=module&id={pal}&module=darkhorse',{'x':'1'})]
+                f['matrix'](2,editor);before=(mounts(),companions(),prefs(),me('hashorse','bufflist','companions'))
+                # GET only displays; malformed requests are 400 and unknown IDs 404, before anything is written.
+                for url,data in editor:
+                    if data is not None and 'subop' not in url: self.assertEqual(405,request(url)[0],url)
+                for page in ['mounts','companions']:
+                    for url in [f'{page}.php?op=other',f'{page}.php?op=edit&id=abc',f'{page}.php?op=edit&id=0',f'{page}.php?op=edit&id=-1',f'{page}.php?op=del',f'{page}.php?op=activate&id=1e2']: self.assertEqual(400,request(url)[0],url)
+                for url in ['mounts.php?op=xml&id=abc','mounts.php?op=xml&id=0','mounts.php?op=xml']: self.assertEqual(400,request(url)[0],url)
+                fields=self._security_fields(request('mounts.php')[1],f'mounts.php?op=give&id={seed}')
+                for url in [f'mounts.php?op={op}&id=4294967295' for op in ['del','give','activate','deactivate']]+[f'companions.php?op={op}&id=4294967295' for op in ['del','take','activate','deactivate']]:
+                    self.assertEqual(404,request(url,fields)[0],url)
+                # Object preferences go through the shared typed editor: none of the shipped modules declares companion preferences.
+                module=f'companions.php?op=save&subop=module&id={pal}&module=darkhorse'
+                for url,data in [(module,{'evil':'1'}),(module.replace('darkhorse','nosuchmodule'),{'evil':'1'}),(module.replace('op=save','op=edit'),None),(module+'&objtype=mounts',{'evil':'1'})]:
+                    self.assertEqual(400,request(url,data)[0],url)
+                self.assertEqual(before,(mounts(),companions(),prefs(),me('hashorse','bufflist','companions')))
+
+                # Mount add: only the form's declared fields, each checked; the buff built as 1.1.2 built it and checked as New Day reads it.
+                save='mounts.php?op=save&id=';fields=form('mounts.php?op=add',save)
+                buffkeys=['name','roundmsg','wearoff','effectmsg','effectnodmgmsg','effectfailmsg','rounds','atkmod','defmod','invulnerable','regen','minioncount','minbadguydamage','maxbadguydamage','mingoodguydamage','maxgoodguydamage','lifetap','damageshield','badguydmgmod','badguyatkmod','badguydefmod']
+                self.assertEqual(sorted(['action_token','csrf_token',*[f'mount[{k}]' for k in ['mountactive','mountname','mountdesc','mountcategory','mountlocation','mountdkcost','mountcostgems','mountcostgold','mountfeedcost','mountforestfights','newday','recharge','partrecharge']],*[f'mount[mountbuff][{k}]' for k in buffkeys]]),sorted(fields))
+                self.assertEqual(('0','all'),(fields['mount[mountactive]'],fields['mount[mountlocation]']))
+                good={'mount[mountname]':"Probe O'Reilly 雪 <b>x</b>",'mount[mountdesc]':'A "probe" \\ <i>雪</i>','mount[mountcategory]':'Probes','mount[mountlocation]':'all','mount[mountdkcost]':'1',
+                      'mount[mountcostgems]':'3','mount[mountcostgold]':'250','mount[mountfeedcost]':'7','mount[mountforestfights]':'-2','mount[newday]':'Off you go, {weapon}.','mount[recharge]':'Rested.','mount[partrecharge]':'Partly.',
+                      **{f'mount[mountbuff][{k}]':'' for k in buffkeys},'mount[mountbuff][name]':'`&Probe Attack','mount[mountbuff][roundmsg]':'Your probe fights 100% "hard" 雪','mount[mountbuff][rounds]':'15','mount[mountbuff][atkmod]':'1.3'}
+                self.assertEqual(403,post(save,fields,**good,csrf_token='0'*64)[0]);self.assertEqual(409,request(save,[(k,v) for k,v in {**fields,**good}.items() if k!='action_token'])[0])
+                for bad in [{'mount[mountid]':str(seed)},{'mount[hashorse]':'1'},{'hashorse':'1'},{'mount[mountbuff][evil]':'1'},{'mount[mountbuff][tempstat-attack]':'5'},{'mount[mountname]':'n'*51},
+                            {'mount[mountname]':b'\xff'},{'mount[mountcostgems]':'-1'},{'mount[mountcostgold]':'2147483648'},{'mount[mountfeedcost]':'x'},{'mount[mountactive]':'2'},{'mount[mountforestfights]':'1.5'},
+                            {'mount[mountlocation]':'Nowhere'},{'mount[mountbuff][rounds]':''},{'mount[mountbuff][rounds]':'0'},{'mount[mountbuff][atkmod]':'abc'},{'mount[mountbuff][atkmod]':'<charm>'},
+                            {'mount[mountbuff][invulnerable]':'2'},{'mount[mountbuff][name]':'n'*4097},
+                            # New Day's accepted mount buff consumer refuses a minion count stored as text (a separate schema item).
+                            {'mount[mountbuff][minioncount]':'1'}]:
+                    self.assertEqual(400,post(save,fields,**{**good,**bad})[0],bad)
+                self.assertEqual(400,request(save,[(k,v) for k,v in {**fields,**good}.items() if k!='mount[mountname]'])[0]);self.assertEqual(before[0],mounts())
+                status,body=post(save,fields,**good);self.assertEqual(200,status,body[:2000]);self.assertIn('Mount saved!',body);self.assertNotIn('<b>x</b>',body);self.assertNotIn('INSERT',body)
+                added=[r for r in mounts() if r not in before[0]];self.assertEqual(1,len(added));mount=int(added[0]['mountid'])
+                expected={k[6:-1]:v for k,v in good.items() if not k.startswith('mount[mountbuff]')}
+                self.assertEqual({**expected,'mountactive':'0','mountbuff':ser({'name':'`&Probe Attack','roundmsg':'Your probe fights 100% "hard" 雪','rounds':'15','atkmod':'1.3','schema':'mounts'})},{k:added[0][k] for k in [*expected,'mountactive','mountbuff']})
+                self.assertEqual(409,post(save,fields,**good)[0]);self.assertEqual(len(before[0])+1,len(mounts()))
+                row=lambda:q('SELECT * FROM mounts WHERE mountid=?',[mount])[0]
+                # Edit: the stored mount in the form; a second copy, a changed row and a repeat do not write; no SQL on the page.
+                edit,save=f'mounts.php?op=edit&id={mount}',f'mounts.php?op=save&id={mount}';fields,second=form(edit,save),form(edit,save)
+                self.assertEqual((good['mount[mountname]'],good['mount[mountbuff][roundmsg]'],'15',''),(fields['mount[mountname]'],fields['mount[mountbuff][roundmsg]'],fields['mount[mountbuff][rounds]'],fields['mount[mountbuff][defmod]']))
+                status,body=post(save,fields,**{**good,'mount[mountcostgold]':'260'});self.assertEqual(200,status,body[:2000]);self.assertEqual('260',row()['mountcostgold']);self.assertEqual(409,post(save,second,**good)[0])
+                fields=form(edit,save);status,body=post(save,fields,**{**good,'mount[mountcostgold]':'260'});self.assertIn('Mount not saved!',text(body));self.assertNotIn('UPDATE',body)
+                fields=form(edit,save);q("UPDATE mounts SET mountfeedcost=8 WHERE mountid=?",[mount]);self.assertEqual(409,post(save,fields,**good)[0]);self.assertEqual(('8','260'),(row()['mountfeedcost'],row()['mountcostgold']))
+                self.assertEqual(404,post('mounts.php?op=save&id=4294967295',form(edit,save),**good)[0])
+                # A malformed stored buff is shown empty for repair rather than a fatal page.
+                status,body=request(f'mounts.php?op=edit&id={broken}');self.assertEqual(200,status,body[:2000])
+
+                # Activate, deactivate and give: the list's protected forms, bound to the mount as listed.
+                listed=lambda op,ident:self._security_fields(request('mounts.php')[1],f'mounts.php?op={op}&id={ident}')
+                fields=listed('activate',mount);q("UPDATE mounts SET mountfeedcost=9 WHERE mountid=?",[mount]);self.assertEqual(409,request(f'mounts.php?op=activate&id={mount}',fields)[0]);self.assertEqual('0',row()['mountactive'])
+                fields=listed('activate',mount);self.assertEqual(200,request(f'mounts.php?op=activate&id={mount}',fields)[0]);self.assertEqual('1',row()['mountactive']);self.assertEqual(409,request(f'mounts.php?op=activate&id={mount}',fields)[0])
+                # A stables purchase of the saved mount: its price and its buff (atkmod 1.3, 15 rounds).
+                q("UPDATE accounts SET dragonkills=2,dragonpoints=?,race='Human',specialty='DA',alive=1,gold=1000,gems=10,goldinbank=0,hashorse=0,fedmount=0,level=5,location=?,bufflist='a:0:{}',companions='',lasthit=NOW() WHERE acctid=?",
+                  ['a:2:{i:0;s:2:"ff";i:1;s:2:"ff";}',village,player])
+                buy=f'stables.php?op=confirmbuy&id={mount}';status,body=request(f'stables.php?op=buymount&id={mount}');self.assertEqual(200,status,body[:2000])
+                status,body=request(buy,self._security_fields(body,buy));self.assertEqual(200,status,body[:2000])
+                self.assertEqual(('740','7',str(mount)),me('gold','gems','hashorse'));mine=unser(me('bufflist')[0])['mount'];self.assertEqual(('`&Probe Attack','1.3'),(mine['name'],mine['atkmod']))
+                # Give: the acting superuser's own mount and buff; a malformed stored buff stops it before anything changes.
+                q("UPDATE accounts SET hashorse=0,bufflist='a:0:{}' WHERE acctid=?",[player]);fields=listed('give',mount)
+                status,body=request(f'mounts.php?op=give&id={mount}',fields);self.assertEqual(200,status,body[:2000]);self.assertEqual((str(mount),'740','7'),me('hashorse','gold','gems'))
+                self.assertEqual('`&Probe Attack',unser(me('bufflist')[0])['mount']['name']);self.assertEqual(409,request(f'mounts.php?op=give&id={mount}',fields)[0])
+                mine=me('hashorse','bufflist');fields=listed('give',broken);self.assertEqual(500,request(f'mounts.php?op=give&id={broken}',fields)[0]);self.assertEqual(mine,me('hashorse','bufflist'))
+                # The give form is bound to the acting superuser's mount and buffs as shown.
+                fields=listed('give',seed);q("UPDATE accounts SET bufflist='a:0:{}' WHERE acctid=?",[player]);self.assertEqual(409,request(f'mounts.php?op=give&id={seed}',fields)[0])
+                self.assertEqual((str(mount),'a:0:{}'),me('hashorse','bufflist'))
+
+                # Owners: one online, one offline. The list's delete form names them; the cache entry is dropped after a change.
+                online=self._security_target('MountOwnerOnline');offline=self._security_target('MountOwnerOffline');created+=[online,offline]
+                for who in [online,offline]: q("UPDATE accounts SET gold=11,gems=5,goldinbank=100,hashorse=?,bufflist='a:0:{}',companions='',alive=1,hitpoints=10,race='Human',specialty='DA',dragonpoints='a:0:{}',lastnewday=? WHERE acctid=?",[mount,self._current_game_day(),who])
+                peer=self._security_client(login='MountOwnerOnline',password='Synthetic administrator password')
+                def visit(url='list.php'):
+                    q('UPDATE accounts SET lastnewday=? WHERE acctid=?',[self._current_game_day(),online]);self._security_allow(online,url);return peer(url)
+                self.assertEqual(200,visit()[0]);status,body=request(f'mounts.php?op=xml&id={mount}');self.assertEqual(200,status);self.assertEqual(3,body.count('<name name='))
+                state=f['state'];calls=(state['call'],peer)
+                with self._datacache_server(*calls) as (cache,state['call'],peer):
+                    try:
+                        entry=cache/f'datacache_mountdata-{mount}'
+                        status,body=visit(f'bio.php?char={offline}');self.assertIn("Probe O'Reilly 雪 <b>x</b>",text(body));self.assertTrue(entry.exists())
+                        fields=form(f'mounts.php?op=edit&id={mount}',f'mounts.php?op=save&id={mount}');self.assertEqual(200,post(f'mounts.php?op=save&id={mount}',fields,**{**good,'mount[mountname]':'Renamed Probe','mount[mountcostgold]':'260','mount[mountactive]':'1'})[0])
+                        self.assertIn('Creature: Renamed Probe',text(visit(f'bio.php?char={offline}')[1]))
+                        fields=listed('deactivate',mount);self.assertTrue(entry.exists());self.assertEqual(200,request(f'mounts.php?op=deactivate&id={mount}',fields)[0]);self.assertFalse(entry.exists())
+                    finally: state['call'],peer=calls
+                self.assertEqual('0',row()['mountactive'])
+                q("INSERT INTO module_objprefs (modulename,objtype,setting,objid,value) VALUES ('darkhorse','mounts','fixture',?,'1')",[mount])
+                status,body=request('mounts.php');self.assertIn('There are 3 user(s) who own this mount',html.unescape(body))
+                remove=f'mounts.php?op=del&id={mount}';fields=self._security_fields(body,remove);self.assertEqual(405,request(remove)[0])
+                owners=lambda:[tuple(q('SELECT gold,gems,goldinbank,hashorse FROM accounts WHERE acctid=?',[who])[0].values()) for who in [player,online,offline]]
+                start=owners();self.assertEqual([('740','7','0',str(mount)),('11','5','100',str(mount)),('11','5','100',str(mount))],start)
+                # The form is bound to the owners it named: one selling the mount meanwhile makes it stale.
+                q('UPDATE accounts SET hashorse=0 WHERE acctid=?',[offline]);self.assertEqual(409,request(remove,fields)[0]);q('UPDATE accounts SET hashorse=? WHERE acctid=?',[mount,offline])
+                # Refunds, delete and preference cleanup are one transaction: a failure on the last write (the acting superuser's own
+                # refund) leaves every owner, the mount and its preferences as they were; the spent form stays spent and a fresh one deletes.
+                fields=self._security_fields(request('mounts.php')[1],remove)
+                q("ALTER TABLE accounts ADD CONSTRAINT fixture_mount_refund CHECK (login <> 'WebPlayer' OR hashorse <> 0)")
+                try:
+                    self.assertEqual(500,request(remove,fields)[0]);self.assertEqual(start,owners());self.assertEqual(1,len(q('SELECT * FROM mounts WHERE mountid=?',[mount])))
+                    self.assertEqual(1,len(q("SELECT * FROM module_objprefs WHERE objtype='mounts' AND objid=?",[mount])))
+                finally: q('ALTER TABLE accounts DROP CONSTRAINT fixture_mount_refund')
+                self.assertEqual(409,request(remove,fields)[0]);self.assertEqual(start,owners())
+                fields=self._security_fields(request('mounts.php')[1],remove);status,body=request(remove,fields);self.assertEqual(200,status,body[:2000])
+                # 1.1.2's full refund at the time of deletion: gems + 3, bank gold + 260; the mount is gone, with its preferences.
+                self.assertEqual([('740','10','260','0'),('11','8','360','0'),('11','8','360','0')],owners())
+                self.assertEqual([],q('SELECT * FROM mounts WHERE mountid=?',[mount]));self.assertEqual([],q("SELECT * FROM module_objprefs WHERE objtype='mounts' AND objid=?",[mount]))
+                # A repeated or replayed delete refunds nobody twice.
+                self.assertEqual(404,request(remove,fields)[0]);self.assertEqual([('740','10','260','0'),('11','8','360','0'),('11','8','360','0')],owners())
+                # The online owner's next page shows the refund and its save keeps it; the mount's buff stays until it wears off, as in 1.1.2.
+                status,body=visit();self.assertEqual(200,status);self.assertEqual(('11','8','360','0'),owners()[1])
+
+                # Companion add: only the form's declared fields; abilities checked against their keys and types, stored as 1.1.2 stored them.
+                save='companions.php?op=save&id=';fields=form('companions.php?op=add',save)
+                self.assertEqual(sorted(['action_token','csrf_token',*[f'companion[{k}]' for k in ['companionactive','name','dyingtext','description','jointext','category','companionlocation','maxhitpoints','maxhitpointsperlevel',
+                    'attack','attackperlevel','defense','defenseperlevel','companioncostdks','companioncostgems','companioncostgold','cannotbehealed']],'companion[abilities][heal]','companion[abilities][magic]']),sorted(fields))
+                good={'companion[name]':"Pal O'Reilly 雪 <b>x</b>",'companion[dyingtext]':'Gone "now"','companion[description]':'A <i>pal</i> \\ 雪','companion[jointext]':'Hello','companion[category]':'Pals','companion[companionlocation]':'all',
+                      'companion[maxhitpoints]':'20','companion[maxhitpointsperlevel]':'3','companion[attack]':'4','companion[attackperlevel]':'2','companion[defense]':'5','companion[defenseperlevel]':'1',
+                      'companion[abilities][fight]':'1','companion[abilities][heal]':'3','companion[abilities][magic]':'0','companion[companioncostdks]':'0','companion[companioncostgems]':'2','companion[companioncostgold]':'90','companion[allowinpvp]':'1'}
+                self.assertEqual(403,post(save,fields,**good,csrf_token='0'*64)[0])
+                for bad in [{'companion[companionid]':str(pal)},{'companion[hitpoints]':'99'},{'companion[abilities][evil]':'1'},{'companion[abilities][heal]':'31'},{'companion[abilities][magic]':'-1'},
+                            {'companion[abilities][fight]':'2'},{'companion[name]':''},{'companion[name]':'雪'*86},{'companion[description]':'d'*8193},{'companion[companioncostdks]':'128'},
+                            {'companion[companioncostgems]':'-1'},{'companion[attack]':''},{'companion[maxhitpoints]':'2147483648'},{'companion[cannotdie]':'yes'},{'companion[companionlocation]':'Nowhere'},{'abilities':'1'}]:
+                    self.assertEqual(400,post(save,fields,**{**good,**bad})[0],bad)
+                self.assertEqual(before[1],companions())
+                status,body=post(save,fields,**good);self.assertEqual(200,status,body[:2000]);self.assertIn('Companion saved!',body);self.assertNotIn('<b>x</b>',body);self.assertNotIn('INSERT',body)
+                added=[r for r in companions() if r not in before[1]];self.assertEqual(1,len(added));pid=int(added[0]['companionid'])
+                expected={k[10:-1]:v for k,v in good.items() if '[abilities]' not in k}
+                self.assertEqual({**expected,'companionactive':'0','cannotdie':'0','cannotbehealed':'1','allowinshades':'0','allowintrain':'0','abilities':ser({'fight':'1','heal':'3','magic':'0','defend':False})},
+                                 {k:added[0][k] for k in [*expected,'companionactive','cannotdie','cannotbehealed','allowinshades','allowintrain','abilities']})
+                self.assertEqual(409,post(save,fields,**good)[0])
+                crow=lambda:q('SELECT * FROM companions WHERE companionid=?',[pid])[0]
+                # The list works with an inactive companion (1.1.2 counted into the acting superuser's own companion list).
+                q("UPDATE accounts SET companions='a:0:{}' WHERE acctid=?",[player])
+                status,body=request('companions.php');self.assertEqual(200,status,body[:2000]);self.assertEqual(('a:0:{}',),me('companions'))
+                edit,save=f'companions.php?op=edit&id={pid}',f'companions.php?op=save&id={pid}';fields,second=form(edit,save),form(edit,save)
+                self.assertEqual(('1','3',"Pal O'Reilly 雪 <b>x</b>"),(fields['companion[abilities][fight]'],fields['companion[abilities][heal]'],fields['companion[name]']))
+                self.assertEqual(200,post(save,fields,**{**good,'companion[attack]':'6'})[0]);self.assertEqual('6',crow()['attack']);self.assertEqual(409,post(save,second,**good)[0])
+                fields=form(edit,save);q('UPDATE companions SET jointext=? WHERE companionid=?',['Underneath',pid]);self.assertEqual(409,post(save,fields,**good)[0]);self.assertEqual('Underneath',crow()['jointext'])
+                listed=lambda op,ident:self._security_fields(request('companions.php')[1],f'companions.php?op={op}&id={ident}')
+                # Take: the acting superuser gets the companion scaled to level 5 by 1.1.2's formulas.
+                fields=listed('take',pid);status,body=request(f'companions.php?op=take&id={pid}',fields);self.assertEqual(200,status,body[:2000]);self.assertIn("Succesfully taken Pal O'Reilly 雪 <b>x</b> as companion.",text(body))
+                pals=unser(me('companions')[0]);taken=pals["Pal O'Reilly 雪 <b>x</b>"]
+                self.assertEqual((16,10,35,35,{'fight':'1','heal':'3','magic':'0','defend':False}),(taken['attack'],taken['defense'],taken['maxhitpoints'],taken['hitpoints'],taken['abilities']))
+                self.assertEqual(409,request(f'companions.php?op=take&id={pid}',fields)[0]);self.assertEqual(pals,unser(me('companions')[0]))
+                # Activate, then deactivate with the edit page's cache entry: 1.1.2 dropped "companionsdata-<id>", leaving the edit page stale.
+                fields=listed('activate',pid);self.assertEqual(200,request(f'companions.php?op=activate&id={pid}',fields)[0]);self.assertEqual('1',crow()['companionactive'])
+                calls=state['call']
+                with self._datacache_server(calls) as (cache,state['call']):
+                    try:
+                        entry=cache/f'datacache_companiondata-{pid}';fields=listed('deactivate',pid);self.assertEqual(200,request(edit)[0]);self.assertTrue(entry.exists())
+                        self.assertEqual(200,request(f'companions.php?op=deactivate&id={pid}',fields)[0]);self.assertFalse(entry.exists());self.assertEqual('0',crow()['companionactive'])
+                        self.assertEqual('0',form(edit,save)['companion[companionactive]'])
+                    finally: state['call']=calls
+                # Delete: inactive only, with the companion's preferences; a replay is 404.
+                q("INSERT INTO module_objprefs (modulename,objtype,setting,objid,value) VALUES ('darkhorse','companions','fixture',?,'1')",[pid])
+                remove=f'companions.php?op=del&id={pid}';fields=listed('del',pid);self.assertEqual(405,request(remove)[0])
+                q('UPDATE companions SET companionactive=1 WHERE companionid=?',[pid]);self.assertEqual(409,request(remove,fields)[0]);q('UPDATE companions SET companionactive=0 WHERE companionid=?',[pid])
+                fields=listed('del',pid);self.assertEqual(200,request(remove,fields)[0])
+                self.assertEqual([],q('SELECT * FROM companions WHERE companionid=?',[pid]));self.assertEqual([],q("SELECT * FROM module_objprefs WHERE objtype='companions' AND objid=?",[pid]))
+                self.assertEqual(404,request(remove,fields)[0])
+        finally:
+            for who in created: q('DELETE FROM accounts_output WHERE acctid=?',[who]);q('DELETE FROM accounts WHERE acctid=?',[who])
+            restore=lambda table,key,rows:[q(f'DELETE FROM {table} WHERE {key}=?',[r[key]]) for r in q(f'SELECT {key} FROM {table}') if r[key] not in {s[key] for s in rows}]
+            restore('mounts','mountid',saved['mounts']);restore('companions','companionid',saved['companions'])
+            q("DELETE FROM module_objprefs WHERE objtype IN ('mounts','companions')")
+            for r in prefs_before: q('INSERT INTO module_objprefs ('+','.join(r)+') VALUES ('+','.join('?' for _ in r)+')',list(r.values()))
+
+    def test_mount_owner_lookup_and_bio_page_http(self):
+        q=self.query;player=int(q('SELECT acctid FROM accounts WHERE login=?',['WebPlayer'])[0]['acctid'])
+        original=q('SELECT superuser FROM accounts WHERE acctid=?',[player])[0]['superuser'];created=[]
+        text=lambda body:re.sub(r'\s+',' ',html.unescape(re.sub(r'<[^>]+>','',body)))
+        try:
+            mount=int(q('SELECT MIN(mountid) AS id FROM mounts')[0]['id']);name=q('SELECT mountname FROM mounts WHERE mountid=?',[mount])[0]['mountname']
+            plain=self._security_target('BioPlain');quoted=self._security_target("Bio O'Brien");rider=self._security_target('BioRider');created+=[plain,quoted,rider]
+            q('UPDATE accounts SET hashorse=0,name=? WHERE acctid=?',['BioPlainName',plain]);q('UPDATE accounts SET hashorse=0,name=? WHERE acctid=?',['BioQuotedName',quoted])
+            q('UPDATE accounts SET hashorse=?,name=? WHERE acctid=?',[mount,'BioRiderName',rider])
+            def call(url,role=0):
+                q('UPDATE accounts SET superuser=?,lastnewday=? WHERE acctid=?',[role,self._current_game_day(),player]);self._security_allow(player,url);return self._security_client()(url)
+            # bio.php: anonymous visitors are sent to log in, as in 1.1.2; a player sees any character.
+            self.assertIn(self._security_client(login=None)(f'bio.php?char={plain}')[0],[302,303])
+            # A character without a mount shows 1.1.2's "None" (PHP 8 failed on the missing mount row).
+            status,body=call(f'bio.php?char={plain}');self.assertEqual(200,status,body[:2000]);self.assertIn('Biography for BioPlainName',text(body));self.assertIn('Creature: None',text(body))
+            status,body=call('bio.php?char=BioRider');self.assertEqual(200,status,body[:2000]);self.assertIn('Biography for BioRiderName',text(body));self.assertIn(f'Creature: {name}',text(body))
+            # The login is plain text: a quote is part of it, not SQL.
+            status,body=call('bio.php?char='+urllib.parse.quote("Bio O'Brien"));self.assertEqual(200,status,body[:2000]);self.assertIn('Biography for BioQuotedName',text(body))
+            for probe in ["x' OR '1'='1","x' OR acctid='"+str(rider),'BioRider%']:
+                status,body=call('bio.php?char='+urllib.parse.quote(probe));self.assertEqual(200,status,body[:2000]);self.assertIn('This character is already deleted.',text(body),probe)
+            status,body=call('bio.php?char[]=BioRider');self.assertEqual(200,status,body[:2000]);self.assertIn('This character is already deleted.',text(body))
+            # The mount editor's owner lookup needs SU_EDIT_MOUNTS (1.1.2 answered it before the editor's check) and a mount ID.
+            for role in [0,0xFFFFFFFF&~3]: self.assertEqual(403,call(f'mounts.php?op=xml&id={mount}',role)[0],role)
+            status,body=call(f'mounts.php?op=xml&id={mount}',2);self.assertEqual(200,status,body[:2000]);self.assertIn('BioRiderName',urllib.parse.unquote_plus(body))
+            for url in [f'mounts.php?op=xml&id={mount}%20OR%201=1','mounts.php?op=xml&id=0','mounts.php?op=xml']: self.assertEqual(400,call(url,2)[0],url)
+        finally:
+            for who in created: q('DELETE FROM accounts_output WHERE acctid=?',[who]);q('DELETE FROM accounts WHERE acctid=?',[who])
+            q('UPDATE accounts SET superuser=? WHERE acctid=?',[original,player])
+
+    def test_module_manager_authority_http(self):
+        q=self.query;text=lambda body:re.sub(r'\s+',' ',html.unescape(re.sub(r'<[^>]+>','',body)))
+        saved={t:q(f'SELECT * FROM {t}') for t in ['modules','module_settings','module_userprefs','module_objprefs','module_hooks','module_event_hooks']}
+        village=q("SELECT value FROM settings WHERE setting='villagename'");village=village[0]['value'] if village else 'Degolburg'
+        # A file in modules/ that is not a bundled module (archive-only code): listing it must not run it.
+        stray='resurrectionarchive'+os.urandom(4).hex();path=ROOT/'modules'/f'{stray}.php';signal=ROOT/'tests'/'fixtures'/f'{stray}.ran'
+        path.write_text("<?php file_put_contents(%r, 'ran');\nfunction STRAY_getmoduleinfo(){return ['name'=>'Archive','author'=>'x','version'=>'1.0','category'=>'Archive'];}\nfunction STRAY_install(){return true;}\nfunction STRAY_uninstall(){return true;}\n".replace('STRAY',stray)%str(signal))
+        renamed=False
+        try:
+            with self._content_editor_fixture() as f:
+                q,player,request,login,form=(f[k] for k in ['q','player','request','login','form'])
+                post=lambda url,fields,**values:request(url,list({**fields,**values}.items()))
+                cat='Forest%20Specials';url=lambda op,module='crazyaudrey',c=cat:f'modules.php?op={op}&module={module}&cat={c}'
+                mass=f'modules.php?op=mass&cat={cat}';uninstalled='modules.php?op=mass&cat='
+                row=lambda:(q("SELECT active FROM modules WHERE modulename='crazyaudrey'") or [None])[0]
+                settings=lambda:q("SELECT setting,value FROM module_settings WHERE modulename='crazyaudrey' ORDER BY setting")
+                prefs=lambda:(q("SELECT setting,userid,value FROM module_userprefs WHERE modulename='crazyaudrey' ORDER BY setting,userid"),
+                              q("SELECT objtype,setting,objid,value FROM module_objprefs WHERE modulename='crazyaudrey' ORDER BY objtype,setting,objid"))
+                hooks=lambda:(q("SELECT location,`function`,whenactive,priority FROM module_hooks WHERE modulename='crazyaudrey' ORDER BY location"),
+                              q("SELECT event_type,event_chance FROM module_event_hooks WHERE modulename='crazyaudrey' ORDER BY event_type"))
+                q("UPDATE modules SET active=0 WHERE modulename='crazyaudrey'")
+                q("UPDATE module_settings SET value='100' WHERE modulename='crazyaudrey' AND setting='villagepercent'")
+                q("INSERT INTO module_userprefs (modulename,setting,userid,value) VALUES ('crazyaudrey','played',?,'1') ON DUPLICATE KEY UPDATE value='1'",[player])
+                q("INSERT INTO module_objprefs (modulename,objtype,setting,objid,value) VALUES ('crazyaudrey','mounts','fixture',1,'x')")
+                q("UPDATE accounts SET alive=1,hitpoints=10,location=?,specialinc='',specialmisc='' WHERE acctid=?",[village,player])
+                # An installed module that is not bundled, with markup in every listed field.
+                fixturecat="Fixture <i>Cat</i> & 'q'";fixturecaturl=urllib.parse.quote(fixturecat,safe='')
+                q("INSERT INTO modules (modulename,formalname,description,moduleauthor,active,filename,installdate,installedby,filemoddate,category,infokeys,version,download) VALUES "
+                  "('resurrectionmanagerfixture','<b>Fixture</b>','\"><img src=x onerror=1>','<script>alert(1)</script><br>Second Author',1,'resurrectionmanagerfixture.php',NOW(),'<u>Admin</u>',NOW(),?,'||','1.0','')",[fixturecat])
+                start=(settings(),prefs(),hooks())
+                ops=['install','uninstall','activate','deactivate','reinstall']
+                f['matrix'](65536,[('modules.php',None),(f'modules.php?cat={cat}',None),(url('activate'),None),*[(url(op),{'x':'1'}) for op in ops],(mass,{'x':'1'})])
+                self.assertEqual('0',row()['active']);self.assertEqual(start,(settings(),prefs(),hooks()))
+                login(65536)
+                # Every listed field is escaped; a module that is not bundled offers only Deactivate.
+                status,body=request(f'modules.php?cat={fixturecaturl}');self.assertEqual(200,status,body[:2000])
+                for raw in ['<script>','<img src=x','<i>Cat</i>','<u>Admin</u>','<b>Fixture</b>']: self.assertNotIn(raw,body)
+                self.assertIn('Second Author',text(body));self.assertIn('<script>alert(1)</script>',text(body))
+                self.assertIn('op=deactivate&amp;module=resurrectionmanagerfixture',body)
+                for op in ['activate','uninstall','reinstall']: self.assertNotIn(f'op={op}&amp;module=resurrectionmanagerfixture',body)
+                # The uninstalled list names the stray file as not installable and never runs it.
+                status,body=request('modules.php');self.assertEqual(200,status);self.assertFalse(signal.exists())
+                self.assertIn(f'{stray}.php',body);self.assertIn('Not a bundled module',text(body));self.assertNotIn(f'value=\'{stray}\'',body)
+                # GET shows only the confirmation, bound to the state; unknown, stray, wrong-state and extra-parameter requests are refused.
+                for bad in [url('activate','nosuchmodule'),url('install',stray),url('activate',stray),url('uninstall','resurrectionmanagerfixture'),url('activate','x.y'),
+                            url('activate',''),'modules.php?op=other&module=crazyaudrey',url('activate')+'&sortby=active',url('activate')+'&module[]=x']:
+                    self.assertEqual(400,request(bad)[0],bad)
+                self.assertEqual(409,request(url('install'))[0]);self.assertEqual(405,request(mass)[0])
+                fields=form(url('activate'),url('activate'));self.assertEqual(['action_token','csrf_token'],sorted(fields))
+                self.assertEqual('0',row()['active']);self.assertFalse(signal.exists())
+                self.assertEqual(403,post(url('activate'),fields,csrf_token='0'*64)[0])
+                self.assertEqual(409,request(url('activate'),[('csrf_token',fields['csrf_token'])])[0])
+                self.assertEqual(400,post(url('activate'),fields,extra='1')[0]);self.assertEqual('0',row()['active'])
+                # A form for another module or operation does not carry over.
+                self.assertEqual(409,post(url('deactivate','resurrectionmanagerfixture',fixturecaturl),fields)[0])
+                calls=f['state']['call']
+                with self._datacache_server(calls) as (cache,f['state']['call']):
+                    try:
+                        def village_shows():
+                            status,body=request('village.php');self.assertEqual(200,status,body[:2000]);return 'Crazy Audrey is here' in text(body)
+                        def cached():
+                            return {p.name:p.stat().st_mtime_ns for p in cache.iterdir() if re.match(r'datacache_(hook-|event-|moduleprepare)',p.name)}
+                        def act(op,target,fields,expect=200):
+                            # Each operation drops every cached hook, event and preload row the earlier pages read.
+                            before=cached();self.assertTrue(before)
+                            time.sleep(.01);status,body=request(target,fields if isinstance(fields,list) else list(fields.items()));self.assertEqual(expect,status,body[:3000])
+                            after=cached()
+                            for name,mtime in before.items(): self.assertNotEqual(mtime,after.get(name),(op,name))
+                            return body
+                        self.assertFalse(village_shows())
+                        body=act('activate',url('activate'),fields);self.assertIn('Performing activate on crazyaudrey',text(body))
+                        self.assertEqual('1',row()['active']);self.assertTrue(village_shows())
+                        self.assertEqual(409,post(url('activate'),fields)[0])
+                        # Mass: the list's own buttons only, every box a module the list showed, all checked before any change.
+                        fields=form(f'modules.php?cat={cat}',mass);self.assertEqual(['action_token','csrf_token'],sorted(fields))
+                        for extra in [[('deactivate','Deactivate'),('module[]','crazyaudrey'),('uninstall','Uninstall')],[('install','Install'),('module[]','crazyaudrey')],
+                                      [('deactivate','Deactivate'),('module[]','crazyaudrey'),('module[]','crazyaudrey')],[('deactivate','Deactivate'),('module[]','x.y')],
+                                      [('deactivate','Deactivate'),('module[x]','crazyaudrey')],[('deactivate','Deactivate'),('module[]','crazyaudrey'),('other','1')]]:
+                            self.assertEqual(400,request(mass,[*fields.items(),*extra])[0],extra)
+                        for bad in ['nosuchmodule',stray,'resurrectionmanagerfixture']:
+                            fields=form(f'modules.php?cat={cat}',mass)
+                            self.assertEqual(400,request(mass,[*fields.items(),('deactivate','Deactivate'),('module[]','crazyaudrey'),('module[]',bad)])[0],bad)
+                            self.assertEqual('1',row()['active'])
+                        # A list that changed since its form was shown is stale.
+                        fields=form(f'modules.php?cat={cat}',mass);q("UPDATE modules SET active=1-active WHERE modulename='fairy'")
+                        self.assertEqual(409,request(mass,[*fields.items(),('deactivate','Deactivate'),('module[]','crazyaudrey')])[0])
+                        q("UPDATE modules SET active=1-active WHERE modulename='fairy'");self.assertEqual('1',row()['active'])
+                        fields=form(f'modules.php?cat={cat}',mass);body=act('deactivate',mass,[*fields.items(),('deactivate','Deactivate'),('module[]','crazyaudrey')])
+                        self.assertIn('Performing deactivate on crazyaudrey',text(body));self.assertEqual('0',row()['active']);self.assertFalse(village_shows())
+                        self.assertEqual(409,request(mass,[*fields.items(),('deactivate','Deactivate'),('module[]','crazyaudrey')])[0])
+                        fields=form(f'modules.php?cat={cat}',mass);act('activate',mass,[*fields.items(),('activate','Activate'),('module[]','crazyaudrey')]);self.assertTrue(village_shows())
+                        # Reinstall keeps settings and preferences, re-registers the same hooks and leaves the module inactive.
+                        fields=form(f'modules.php?cat={cat}',mass);body=act('reinstall',mass,[*fields.items(),('reinstall','Reinstall'),('module[]','crazyaudrey')])
+                        self.assertIn('Performing reinstall on crazyaudrey',text(body));self.assertEqual('0',row()['active']);self.assertEqual(start,(settings(),prefs(),hooks()))
+                        self.assertFalse(village_shows())
+                        fields=form(url('activate'),url('activate'));act('activate',url('activate'),fields);self.assertTrue(village_shows())
+                        # Uninstall: the module's script, then its entry, hooks, settings and preferences together. A failure on the
+                        # last delete keeps all of them, deactivates the module and says so; uninstalling again finishes.
+                        fields=form(url('uninstall'),url('uninstall'))
+                        q('RENAME TABLE module_objprefs TO module_objprefs_fixture');renamed=True
+                        status,body=post(url('uninstall'),fields);self.assertEqual(500,status,body[:3000])
+                        q('RENAME TABLE module_objprefs_fixture TO module_objprefs');renamed=False
+                        self.assertIn('Running module uninstall script',text(body));self.assertIn('none of them were deleted',text(body));self.assertIn('Uninstall it again to finish',text(body))
+                        self.assertNotIn('Deleting module entry',text(body))
+                        self.assertEqual('0',row()['active']);self.assertEqual(start,(settings(),prefs(),hooks()));self.assertFalse(village_shows())
+                        self.assertEqual(409,post(url('uninstall'),fields)[0])
+                        fields=form(url('uninstall'),url('uninstall'));body=act('uninstall',url('uninstall'),fields);t=text(body)
+                        steps=['Running module uninstall script','Deleting module entry','Deleting module hooks','Deleting module settings','Deleting module user prefs','Deleting module object prefs']
+                        self.assertEqual(sorted(t.index(s) for s in steps),[t.index(s) for s in steps])
+                        self.assertIsNone(row());self.assertEqual(([],([],[]),([],[])),(settings(),prefs(),hooks()));self.assertFalse(village_shows())
+                        self.assertEqual(409,post(url('uninstall'),fields)[0])
+                        # Install: only from the uninstalled list's bundled modules; one stray name refuses the whole request.
+                        fields=form('modules.php',uninstalled)
+                        self.assertEqual(400,request(uninstalled,[*fields.items(),('install','Install'),('module[]','crazyaudrey'),('module[]',stray)])[0]);self.assertIsNone(row())
+                        self.assertFalse(signal.exists())
+                        fields=form(url('install'),url('install'));self.assertEqual(400,post(url('install',stray),fields)[0])
+                        body=act('install',url('install'),fields);self.assertIn('Module installed. It is not yet active.',text(body))
+                        defaults=[{'setting':k,'value':v} for k,v in sorted({'cost':'5','animal':'Kitten','animals':'Kittens','lanimal':'kitten','lanimals':'kittens','sound':'mew',
+                            'buffname':'Warm Fuzzies','gamedaysremaining':'-1','defaultanimal':'Kitten','defaultanimals':'Kittens','defaultsound':'mew','defaultbuffname':'Warm Fuzzies',
+                            'profit':'5','villagepercent':'20'}.items())]
+                        self.assertEqual('0',row()['active']);self.assertEqual((defaults,([],[]),start[2]),(settings(),prefs(),hooks()))
+                        self.assertEqual(409,post(url('install'),fields)[0]);self.assertFalse(village_shows())
+                    finally: f['state']['call']=calls
+                self.assertFalse(signal.exists())
+        finally:
+            if renamed: q('RENAME TABLE module_objprefs_fixture TO module_objprefs')
+            path.unlink(missing_ok=True);signal.unlink(missing_ok=True)
+            for table,rows in saved.items():
+                q(f'DELETE FROM {table}')
+                for chunk in [rows[i:i+200] for i in range(0,len(rows),200)]:
+                    q(f'INSERT INTO {table} ('+','.join('`'+k+'`' for k in chunk[0])+') VALUES '+','.join('('+','.join('?' for _ in r)+')' for r in chunk),[v for r in chunk for v in r.values()])
+
+    def test_news_and_bio_format_stored_stray_percent_http(self):
+        # A defeat news row stores its taunt as a sub-format. One stored before the taunt editor refused a stray %, or with
+        # a % PHP 5 skipped, made news.php and bio.php fatal on PHP 8; they now get PHP 5's sprintf result.
+        q=self.query;player=int(q('SELECT acctid FROM accounts WHERE login=?',['WebPlayer'])[0]['acctid']);created=[]
+        serialize=lambda value:subprocess.run([shutil.which('php'),'-r','echo serialize(json_decode(stream_get_contents(STDIN),true));'],input=json.dumps(value),text=True,capture_output=True,cwd=ROOT,check=True).stdout
+        today=subprocess.run([shutil.which('php'),'-r',"echo date('Y-m-d');"],text=True,capture_output=True,check=True).stdout
+        try:
+            # Written when bio.php failed for a character without a mount (closed in content editors part 3); the mount stays.
+            target=int(self._security_target('NewsTarget'));created.append(target)
+            q('UPDATE accounts SET hashorse=(SELECT MIN(mountid) FROM mounts) WHERE acctid=?',[target])
+            rows=[('Stray',[True,'taunts','"100% sure, %s", sneers the Rat.','`^Bob`^']),('Unknown',[True,'taunts','"a %y b %s", says the Rat.','`^Bob`^','Al']),
+                  ('Clean',[True,'taunts','"%s again", says the Rat.','`^Bob`^'])]
+            for who,taunt in rows:
+                q("INSERT INTO news (newstext,newsdate,accountid,arguments,tlschema) VALUES (?,?,?,?,'news')",
+                  ['`%%s`5 has been slain %s by %s.`n%s',today,target,serialize([f'NewsVictim{who}','in the forest',f'Rat{who}',taunt])])
+            call=self._security_client()
+            def text(url):
+                q('UPDATE accounts SET lastnewday=? WHERE acctid=?',[self._current_game_day(),player]);self._security_allow(player,url)
+                status,body=call(url);self.assertEqual(200,status,body[:2000]);return re.sub(r'\s+',' ',html.unescape(re.sub(r'<[^>]+>','',body)))
+            for url in ['news.php',f'bio.php?char={target}']:
+                page=text(url)
+                # PHP 5 returned false for the stray % (the taunt is empty), dropped the unknown %y, and formats the clean one as before.
+                self.assertIn('NewsVictimStray has been slain in the forest by RatStray.',page,url)
+                self.assertRegex(page,r'NewsVictimStray has been slain in the forest by RatStray\. (?!")',url)
+                self.assertIn('NewsVictimUnknown has been slain in the forest by RatUnknown. "a b Al", says the Rat.',page,url)
+                self.assertIn('NewsVictimClean has been slain in the forest by RatClean. "Bob again", says the Rat.',page,url)
+        finally:
+            for who in created: q('DELETE FROM news WHERE accountid=?',[who]);q('DELETE FROM accounts_output WHERE acctid=?',[who]);q('DELETE FROM accounts WHERE acctid=?',[who])
+
+    @contextmanager
+    def _deletion_fixture(self):
+        # A delete_character hook that counts its runs inside the deletion transaction and can veto; dag active with an
+        # open bounty on each account; an optional foreign key that makes the account row's DELETE fail last.
+        q=self.query;module='resurrectiondeletefixture';path=ROOT/'modules'/f'{module}.php'
+        path.write_text("""<?php
+function MODULE_getmoduleinfo() { return ['name'=>'Deletion fixture','version'=>'1.0','author'=>'Tests','category'=>'Tests']; }
+function MODULE_dohook($hook,$args) {
+    db_query("UPDATE settings SET value=value+1 WHERE setting='fixture_delete_count'");
+    $mode=getsetting('fixture_delete_mode','ok');
+    if ($mode==='veto' || (string)$args['acctid']===getsetting('fixture_delete_veto','')) $args['dodel']=false;
+    if ($mode==='slow') { file_put_contents('tests/fixtures/deletion-running','running'); usleep(2000000); }
+    return $args;
+}
+""".replace('MODULE',module))
+        setting=lambda k,v:q('INSERT INTO settings(setting,value) VALUES (?,?) ON DUPLICATE KEY UPDATE value=VALUES(value)',[k,str(v)])
+        saved=q("SELECT setting,value FROM settings WHERE setting IN ('selfdelete','fixture_delete_count','fixture_delete_mode','fixture_delete_veto')")
+        dag=q("SELECT active FROM modules WHERE modulename='dag'");made=[];clans=[]
+        try:
+            q("INSERT INTO modules(modulename,active,version,infokeys) VALUES (?,1,'1.0','|name|version|author|category|')",[module])
+            q("INSERT INTO module_hooks(modulename,location,`function`,whenactive,priority) VALUES (?,'delete_character',?,'',60)",[module,module+'_dohook'])
+            q("UPDATE modules SET active=1 WHERE modulename='dag'");setting('fixture_delete_count',0);setting('fixture_delete_mode','ok')
+            def make(login,**values):
+                who=int(self._security_target(login));made.append(who)
+                values={'name':f'`2{login} <b>x</b>','clanid':0,'clanrank':0,'clanjoindate':None,'alive':1,'loggedin':0,**values}
+                q('UPDATE accounts SET '+','.join('`'+k+'`=?' for k in values)+' WHERE acctid=?',[*values.values(),who])
+                q("INSERT INTO mail(msgfrom,msgto,subject,body,sent) VALUES (?,1,'from','x',NOW()),('0',?,'to','x',NOW())",[str(who),who])
+                q("INSERT INTO news(newstext,newsdate,accountid,arguments,tlschema) VALUES ('fixture news',CURDATE(),?,'','')",[who])
+                q("INSERT INTO commentary(section,author,comment,postdate) VALUES ('fixture-delete',?,'hello',NOW())",[who])
+                q("INSERT INTO module_userprefs(modulename,setting,userid,value) VALUES (?,'x',?,'1')",[module,who])
+                q("INSERT INTO bounty(amount,target,setter,status) VALUES (5,?,1,0)",[who])
+                return who
+            def traces(who):
+                n=lambda sql,*a:int(q(sql,list(a))[0]['n'])
+                return {'account':n('SELECT COUNT(*) n FROM accounts WHERE acctid=?',who),'output':n('SELECT COUNT(*) n FROM accounts_output WHERE acctid=?',who),
+                        'mail':n('SELECT COUNT(*) n FROM mail WHERE msgto=? OR msgfrom=?',who,str(who)),'news':n("SELECT COUNT(*) n FROM news WHERE accountid=? AND newstext='fixture news'",who),
+                        'commentary':n('SELECT COUNT(*) n FROM commentary WHERE author=?',who),'prefs':n('SELECT COUNT(*) n FROM module_userprefs WHERE userid=?',who),
+                        'openbounty':n('SELECT COUNT(*) n FROM bounty WHERE target=? AND status=0',who)}
+            whole={'account':1,'output':1,'mail':2,'news':1,'commentary':1,'prefs':1,'openbounty':1}
+            gone={'account':0,'output':0,'mail':0,'news':0,'commentary':0,'prefs':0,'openbounty':0}
+            def block(who=None):
+                q('DROP TABLE IF EXISTS fixture_delete_block')
+                if who is not None:
+                    q('CREATE TABLE fixture_delete_block (acctid INT UNSIGNED NOT NULL, FOREIGN KEY (acctid) REFERENCES accounts(acctid)) ENGINE=InnoDB')
+                    q('INSERT INTO fixture_delete_block VALUES (?)',[who])
+            def clan(name,short,*members):
+                q('INSERT INTO clans(clanname,clanshort,customsay) VALUES (?,?,?)',[name,short,''])
+                cid=int(q('SELECT clanid FROM clans WHERE clanname=?',[name])[0]['clanid']);clans.append(cid)
+                for who,rank,joined in members: q('UPDATE accounts SET clanid=?,clanrank=?,clanjoindate=? WHERE acctid=?',[cid,rank,joined,who])
+                return cid
+            count=lambda:int(q("SELECT value FROM settings WHERE setting='fixture_delete_count'")[0]['value'])
+            yield dict(make=make,traces=traces,whole=whole,gone=gone,block=block,clan=clan,count=count,setting=setting,made=made)
+        finally:
+            path.unlink(missing_ok=True);q('DROP TABLE IF EXISTS fixture_delete_block')
+            q('DELETE FROM module_hooks WHERE modulename=?',[module]);q('DELETE FROM modules WHERE modulename=?',[module]);q('DELETE FROM module_userprefs WHERE modulename=?',[module])
+            if dag: q("UPDATE modules SET active=? WHERE modulename='dag'",[dag[0]['active']])
+            q("DELETE FROM settings WHERE setting IN ('selfdelete','fixture_delete_count','fixture_delete_mode','fixture_delete_veto')")
+            (ROOT/'tests'/'fixtures'/'deletion-running').unlink(missing_ok=True)
+            for row in saved: setting(row['setting'],row['value'])
+            for who in made:
+                q('DELETE FROM mail WHERE msgto=? OR msgfrom=?',[who,str(who)]);q('DELETE FROM news WHERE accountid=?',[who])
+                q('DELETE FROM commentary WHERE author=?',[who]);q('DELETE FROM bounty WHERE target=?',[who])
+                q('DELETE FROM debuglog WHERE target=? OR actor=?',[who,who]);q('DELETE FROM accounts_output WHERE acctid=?',[who]);q('DELETE FROM accounts WHERE acctid=?',[who])
+            q("DELETE FROM news WHERE newstext IN ('`#%s was unmade by the gods.','`#%s quietly passed from this world.') AND arguments LIKE '%DelFixture%'")
+            q("DELETE FROM debuglog WHERE message LIKE 'deleted user%DelFixture%'")
+            for cid in clans: q('DELETE FROM clans WHERE clanid=?',[cid])
+
+    def test_account_deletion_authority_http(self):
+        with self._user_editor_fixture() as f, self._deletion_fixture() as d:
+            q,player,request,login=(f[k] for k in ['q','player','request','login'])
+            make,traces,whole,gone,block,clan,count=(d[k] for k in ['make','traces','whole','gone','block','clan','count'])
+            delete=lambda who:f'user.php?op=del&userid={who}'
+            def listed(who,name):
+                status,body=request('user.php?q='+name);self.assertEqual(200,status,body[:2000])
+                self.assertNotIn("href='user.php?op=del",body);return self._security_fields(body,delete(who))
+            news=lambda who:q("SELECT accountid FROM news WHERE newstext='`#%s was unmade by the gods.' AND arguments LIKE ?",[f'%DelFixtureOne{who}%'])
+            one=make('DelFixtureOne',name='DelFixtureOne')
+            q('UPDATE accounts SET name=? WHERE acctid=?',[f'DelFixtureOne{one}',one])
+            # Only an editor with user rights, only POST, only with CSRF and the one-use intent shown for this account.
+            anonymous=self._security_client(login=None)
+            self.assertIn(anonymous(delete(one),{'csrf_token':'x'})[0],[302,303,403])
+            for role in [0,0xFFFFFFFF&~(64|1)]:
+                login(role);self.assertEqual(403,request(delete(one),[('csrf_token','x')])[0],role)
+            login(64);fields=listed(one,'DelFixtureOne')
+            self.assertEqual(403,request(delete(one))[0])
+            self.assertEqual(403,request(delete(one),[('action_token',fields['action_token'])])[0])
+            self.assertEqual(409,request(delete(one),[('csrf_token',fields['csrf_token'])])[0])
+            self.assertEqual(400,request(delete(one),list(fields.items())+[('extra','1')])[0])
+            self.assertEqual(400,request('user.php?op=del&userid=abc',list(fields.items()))[0])
+            self.assertEqual(whole,traces(one));self.assertEqual(0,count())
+            status,body=request(delete(one),list(fields.items()));self.assertEqual(200,status,body[:2000]);self.assertIn('1 user deleted.',body)
+            self.assertEqual(gone,traces(one));self.assertEqual(1,count())
+            self.assertEqual([{'accountid':'0'}],news(one))
+            self.assertEqual(1,len(q("SELECT * FROM debuglog WHERE actor=? AND message=?",[player,f"deleted userDelFixtureOne{one}'0"])))
+            closed=q('SELECT status,winner,windate FROM bounty WHERE target=?',[one])[0];self.assertEqual(('1','0'),(closed['status'],closed['winner']));self.assertIsNotNone(closed['windate'])
+            # A repeated form, or an account that is already gone, is 1.1.2's "0 user deleted." and changes nothing.
+            status,body=request(delete(one),list(fields.items()));self.assertEqual(200,status);self.assertIn('0 user deleted.',body);self.assertEqual(1,count())
+            status,body=request(delete(4294967294),list(fields.items()));self.assertEqual(200,status);self.assertIn('0 user deleted.',body)
+            # A form shown for a different account state is refused.
+            two=make('DelFixtureTwo');fields=listed(two,'DelFixtureTwo');q("UPDATE accounts SET login='DelFixtureTwoX' WHERE acctid=?",[two])
+            self.assertEqual(409,request(delete(two),list(fields.items()))[0]);self.assertEqual(whole,traces(two));q("UPDATE accounts SET login='DelFixtureTwo' WHERE acctid=?",[two])
+            # A hook veto deletes nothing, and its own writes (and dag's bounty closing) are rolled back with the rest.
+            d['setting']('fixture_delete_mode','veto');fields=listed(two,'DelFixtureTwo')
+            status,body=request(delete(two),list(fields.items()));self.assertEqual(200,status);self.assertIn('0 user deleted.',body)
+            self.assertEqual(whole,traces(two));self.assertEqual(1,count());d['setting']('fixture_delete_mode','ok')
+            # A failure at the last step (the account row) leaves everything intact; a fresh form then completes.
+            block(two);fields=listed(two,'DelFixtureTwo')
+            status,body=request(delete(two),list(fields.items()));self.assertEqual(500,status);self.assertIn('Nothing was changed',body)
+            self.assertEqual(whole,traces(two));self.assertEqual(1,count())
+            block();fields=listed(two,'DelFixtureTwo');status,body=request(delete(two),list(fields.items()))
+            self.assertEqual(200,status);self.assertIn('1 user deleted.',body);self.assertEqual(gone,traces(two));self.assertEqual(2,count())
+            # Clan leader: the highest-ranked remaining member, earliest join date first, becomes leader.
+            lead,m,o1,o2,app=(make(n) for n in ['DelFixtureLead','DelFixtureMember','DelFixtureOfficerA','DelFixtureOfficerB','DelFixtureApplicant'])
+            cid=clan('DelFixture Clan','DFCa',(lead,30,'2026-01-01 00:00:00'),(m,10,'2026-01-01 00:00:00'),(o1,20,'2026-01-03 00:00:00'),(o2,20,'2026-01-02 00:00:00'),(app,0,'2026-01-01 00:00:00'))
+            fields=listed(lead,'DelFixtureLead');self.assertIn('1 user deleted.',request(delete(lead),list(fields.items()))[1])
+            ranks={int(r['acctid']):(int(r['clanid']),int(r['clanrank'])) for r in q('SELECT acctid,clanid,clanrank FROM accounts WHERE acctid IN (?,?,?,?)',[m,o1,o2,app])}
+            self.assertEqual({m:(cid,10),o1:(cid,20),o2:(cid,30),app:(cid,0)},ranks);self.assertEqual(1,len(q('SELECT * FROM clans WHERE clanid=?',[cid])))
+            # A leader with nobody above applicant left: the clan is deleted and its applicants leave it with no join date.
+            solo,app2=make('DelFixtureSolo'),make('DelFixtureApplicantB')
+            cid2=clan('DelFixture Solo','DFCb',(solo,30,'2026-01-01 00:00:00'),(app2,0,'2026-01-02 00:00:00'))
+            fields=listed(solo,'DelFixtureSolo');status,body=request(delete(solo),list(fields.items()));self.assertEqual(200,status,body[:2000]);self.assertIn('1 user deleted.',body)
+            self.assertEqual([],q('SELECT * FROM clans WHERE clanid=?',[cid2]))
+            self.assertEqual([{'clanid':'0','clanrank':'0','clanjoindate':None}],q('SELECT clanid,clanrank,clanjoindate FROM accounts WHERE acctid=?',[app2]))
+            # 1.1.2 let any user editor delete a megauser, and their own account; the next request then ends the session.
+            mega=make('DelFixtureMega',superuser=1);fields=listed(mega,'DelFixtureMega')
+            self.assertIn('1 user deleted.',request(delete(mega),list(fields.items()))[1]);self.assertEqual(gone,traces(mega))
+            me=make('DelFixtureSelf',superuser=64);client=self._security_client(login='DelFixtureSelf',password='Synthetic administrator password')
+            def mine(url,data=None):
+                q('UPDATE accounts SET lastnewday=? WHERE acctid=?',[self._current_game_day(),me]);self._security_allow(me,url);return client(url,data)
+            status,body=mine('user.php?q=DelFixtureSelf');self.assertEqual(200,status,body[:2000]);fields=self._security_fields(body,delete(me))
+            status,body=mine(delete(me),fields);self.assertEqual(200,status,body[:2000]);self.assertIn('1 user deleted.',body)
+            self.assertEqual(gone,traces(me))
+            self.assertIn(client('village.php')[0],[302,303])
+
+    def test_self_deletion_authority_http(self):
+        with self._deletion_fixture() as d:
+            q=self.query;make,traces,whole,gone,block,count,setting=(d[k] for k in ['make','traces','whole','gone','block','count','setting'])
+            me=make('DelFixtureSuicide',race='Human',specialty='DA',dragonkills=0,dragonpoints='a:0:{}',restorepage='village.php');q('UPDATE accounts SET name=? WHERE acctid=?',[f'DelFixtureSuicide{me}',me])
+            client=self._security_client(login='DelFixtureSuicide',password='Synthetic administrator password')
+            def call(url,data=None):
+                q('UPDATE accounts SET lastnewday=?,alive=1 WHERE acctid=?',[self._current_game_day(),me]);self._security_allow(me,url);return client(url,data)
+            suicide=f'prefs.php?op=suicide&userid={me}'
+            # Self-deletion off (the default): no form, and a POST changes nothing.
+            setting('selfdelete',0);status,body=call('prefs.php');self.assertEqual(200,status,body[:2000]);self.assertNotIn('op=suicide',body)
+            csrf=re.search(r'name=[\'"]csrf_token[\'"] value=[\'"]([a-f0-9]{64})',body).group(1)
+            self.assertEqual(200,call(suicide,{'csrf_token':csrf})[0]);self.assertEqual(whole,traces(me))
+            setting('selfdelete',1);status,body=call('prefs.php');fields=self._security_fields(body,suicide)
+            self.assertEqual(403,call(suicide)[0]);self.assertEqual(409,call(suicide,{'csrf_token':fields['csrf_token']})[0])
+            self.assertEqual(400,call(suicide,{**fields,'extra':'1'})[0]);self.assertEqual(whole,traces(me))
+            # A veto and a failure at the last step each leave the account and everything it owns intact.
+            setting('fixture_delete_mode','veto');status,body=call('prefs.php');fields=self._security_fields(body,suicide)
+            status,body=call(suicide,fields);self.assertEqual(409,status);self.assertIn('not deleted',body);self.assertEqual(whole,traces(me));self.assertEqual(0,count())
+            setting('fixture_delete_mode','ok');block(me);status,body=call('prefs.php');fields=self._security_fields(body,suicide)
+            status,body=call(suicide,fields);self.assertEqual(500,status);self.assertIn('Nothing was changed',body);self.assertEqual(whole,traces(me));self.assertEqual(0,count())
+            block();status,body=call('prefs.php');fields=self._security_fields(body,suicide)
+            status,body=call(suicide,fields);self.assertEqual(303,status,body[:2000]);self.assertEqual(gone,traces(me));self.assertEqual(1,count())
+            self.assertEqual(1,len(q("SELECT * FROM news WHERE newstext='`#%s quietly passed from this world.' AND accountid=? AND arguments LIKE ?",[me,f'%DelFixtureSuicide{me}%'])))
+            # The session ended with the account: a replay is not a logged-in request.
+            self.assertIn(client(suicide,fields)[0],[302,303,403])
+
+    def test_character_expiration_authority_cli(self):
+        # Every account that is not this test's own is exempt for the duration, so only the fixtures can expire.
+        q=self.query;keys=['last_char_expire','expireoldacct','expirenewacct','expiretrashacct']
+        saved=q('SELECT setting,value FROM settings WHERE setting IN (?,?,?,?)',keys);protected=q('SELECT acctid,superuser FROM accounts')
+        transport=tempfile.TemporaryDirectory(prefix='resurrection-expire-mail-');capture=Path(transport.name)/'capture.txt';program=Path(transport.name)/'sendmail'
+        program.write_text('#!'+sys.executable+"\nimport sys\nfrom pathlib import Path\npayload=sys.stdin.read()\nwith Path(__file__).with_name('capture.txt').open('a') as f:f.write(payload+'\\n=====\\n')\nsys.exit(1 if 'fail@example.invalid' in payload else 0)\n")
+        program.chmod(0o700);signal=ROOT/'tests'/'fixtures'/'deletion-running'
+        setting=lambda k,v:q('INSERT INTO settings(setting,value) VALUES (?,?) ON DUPLICATE KEY UPDATE value=VALUES(value)',[k,str(v)])
+        def cron():
+            q('DELETE FROM settings WHERE setting=? OR setting LIKE ?',['maintenance_day','mh:%'])
+            return [shutil.which('php'),'-d','sendmail_path='+str(program),'cron.php']
+        run=lambda:subprocess.run(cron(),cwd=ROOT,capture_output=True,text=True,timeout=120)
+        expiry=lambda:q("SELECT value FROM settings WHERE setting='last_char_expire'")[0]['value']
+        logs=lambda:[r['message'] for r in q("SELECT message FROM gamelog WHERE category='char expiration' ORDER BY logid")]
+        try:
+            with self._deletion_fixture() as d:
+                make,traces,whole,gone,block,count=(d[k] for k in ['make','traces','whole','gone','block','count'])
+                q('UPDATE accounts SET superuser=superuser|2097152')
+                for key,value in zip(keys,['2000-01-01 00:00:00',45,10,1]): setting(key,value)
+                def aged(login,laston,level=5,dragonkills=2,regdays=400,email='',superuser=0):
+                    who=make(login,level=level,dragonkills=dragonkills,emailaddress=email,sentnotice=0,superuser=superuser)
+                    q(f'UPDATE accounts SET regdate=DATE_SUB(NOW(),INTERVAL {regdays} DAY) WHERE acctid=?',[who])
+                    q(f'UPDATE accounts SET laston={laston} WHERE acctid=?',[who]);return who
+                days=lambda n:f'DATE_SUB(NOW(),INTERVAL {n} DAY)'
+                old=aged('ExpFixtureOld',days(46));new=aged('ExpFixtureNew',days(11),level=1,dragonkills=0)
+                # Never logged on: account creation writes laston equal to regdate.
+                trash=aged('ExpFixtureTrash','regdate',level=1,dragonkills=0,regdays=2)
+                kept={'old':aged('ExpFixtureOldKept',days(44),email='kept@example.invalid'),'new':aged('ExpFixtureNewKept',days(11),level=2,dragonkills=0),
+                      'trash':aged('ExpFixtureTrashKept','DATE_ADD(regdate,INTERVAL 1 HOUR)',level=1,dragonkills=0,regdays=2),
+                      'exempt':aged('ExpFixtureExempt',days(100),email='exempt@example.invalid',superuser=2097152),
+                      'warnfail':aged('ExpFixtureWarnFail',days(42),email='fail@example.invalid')}
+                veto,fail=aged('ExpFixtureVeto',days(50)),aged('ExpFixtureFail',days(50))
+                d['setting']('fixture_delete_veto',veto);block(fail);before=len(logs())
+                # One run: a vetoed and a failed account are kept whole and counted; the rest are deleted; the run is
+                # not recorded, so it is retried. Warning email: sentnotice only where the transport accepted it.
+                result=run();self.assertEqual(0,result.returncode,result.stderr);self.assertEqual('complete',json.loads(result.stdout)['maintenance'])
+                for who in [old,new,trash]: self.assertEqual(gone,traces(who),who)
+                for who in [*kept.values(),veto,fail]: self.assertEqual(whole,traces(who),who)
+                self.assertEqual(3,count());self.assertEqual('2000-01-01 00:00:00',expiry())
+                entries=logs()[before:];self.assertEqual(2,len(entries),entries)
+                self.assertTrue(entries[0].startswith('Deleted 3 accounts:'),entries[0])
+                for text in ['Accounts: ExpFixtureOld:dk2-lv5, ExpFixtureNew:dk0-lv1, ExpFixtureTrash:dk0-lv1','Kept by a module: 1 (ExpFixtureVeto)','Failed, left unchanged: 1 (ExpFixtureFail)']:
+                    self.assertIn(text,entries[0])
+                self.assertEqual('Sent 1 expiration warning emails. 1 could not be sent and will be retried.',entries[1])
+                sent={int(r['acctid']):r['sentnotice'] for r in q('SELECT acctid,sentnotice FROM accounts WHERE acctid IN (?,?,?)',[kept['old'],kept['warnfail'],kept['exempt']])}
+                self.assertEqual({kept['old']:'1',kept['warnfail']:'0',kept['exempt']:'0'},sent)
+                mails=capture.read_text().split('\n=====\n')[:-1];self.assertEqual(2,len(mails))
+                for mail in mails:
+                    self.assertIn('Subject: LoGD Character Expiration',mail);self.assertIn('is about to expire.  If you wish to keep this character, you should log on to him or her soon!',mail)
+                    self.assertIn('From: postmaster@localhost.com',mail)
+                # The retry: the failed account and the no-longer-vetoed one complete, the run is recorded, and only the
+                # unsent warning is sent again.
+                block();d['setting']('fixture_delete_veto','');q("UPDATE accounts SET emailaddress='retry@example.invalid' WHERE acctid=?",[kept['warnfail']])
+                result=run();self.assertEqual(0,result.returncode,result.stderr)
+                for who in [veto,fail]: self.assertEqual(gone,traces(who),who)
+                for who in kept.values(): self.assertEqual(whole,traces(who),who)
+                self.assertEqual(5,count());self.assertNotEqual('2000-01-01 00:00:00',expiry())
+                entries=logs()[before+2:];self.assertEqual(2,len(entries),entries);self.assertTrue(entries[0].startswith('Deleted 2 accounts:'),entries[0])
+                self.assertNotIn('Failed',entries[0]);self.assertEqual('Sent 1 expiration warning emails.',entries[1])
+                self.assertEqual('1',q('SELECT sentnotice FROM accounts WHERE acctid=?',[kept['warnfail']])[0]['sentnotice'])
+                self.assertEqual(3,len(capture.read_text().split('\n=====\n')[:-1]))
+                # Within 23 hours of a recorded run nothing more is expired.
+                late=aged('ExpFixtureLate',days(60));result=run();self.assertEqual(0,result.returncode,result.stderr)
+                self.assertEqual(whole,traces(late));self.assertEqual(before+4,len(logs()))
+                # Only under the maintenance lock: run directly, expiration refuses and changes nothing.
+                setting('last_char_expire','2000-01-01 00:00:00')
+                code="$_SERVER+=['SCRIPT_NAME'=>'cron.php','REQUEST_URI'=>'cron.php','SERVER_NAME'=>'localhost','SERVER_PORT'=>'80','REMOTE_ADDR'=>'','REQUEST_METHOD'=>''];define('ALLOW_ANONYMOUS',true);ob_start();require 'common.php';try{require 'lib/expire_chars.php';$r='ran';}catch(LogicException $e){$r='refused';}while(ob_get_level())ob_end_clean();echo $r;"
+                direct=subprocess.run([shutil.which('php'),'-r',code],cwd=ROOT,capture_output=True,text=True,timeout=60)
+                self.assertEqual('refused',direct.stdout.strip(),direct.stdout[-500:]+direct.stderr[-500:])
+                self.assertEqual(whole,traces(late));self.assertEqual('2000-01-01 00:00:00',expiry())
+                # A second scheduler run while the first is deleting is refused; the account is deleted once.
+                d['setting']('fixture_delete_mode','slow');first=subprocess.Popen(cron(),cwd=ROOT,stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True)
+                try:
+                    for _ in range(200):
+                        if signal.exists() or first.poll() is not None: break
+                        time.sleep(.05)
+                    self.assertTrue(signal.exists(),'First scheduler did not reach the deletion hook')
+                    second=run();self.assertEqual(1,second.returncode);self.assertIn('Maintenance',second.stderr)
+                    out,err=first.communicate(timeout=120);self.assertEqual(0,first.returncode,err)
+                finally:
+                    if first.poll() is None: first.terminate();first.wait(timeout=5)
+                self.assertEqual(gone,traces(late));self.assertEqual(6,count())
+                self.assertEqual(1,sum(1 for m in logs()[before+4:] if m.startswith('Deleted 1 accounts:')))
+        finally:
+            transport.cleanup();signal.unlink(missing_ok=True)
+            for row in protected: q('UPDATE accounts SET superuser=? WHERE acctid=?',[row['superuser'],row['acctid']])
+            q('DELETE FROM settings WHERE setting IN (?,?,?,?) OR setting=? OR setting LIKE ?',[*keys,'maintenance_day','mh:%'])
+            for row in saved: setting(row['setting'],row['value'])
+
+    def test_table_optimization_reporting_cli(self):
+        # OPTIMIZE TABLE answers a failure with result rows, not an exception: a view fails on both servers, and a table
+        # name db_identifier() refuses fails before any SQL. The run continues, reports each table, and is recorded in
+        # lastdboptimize only when nothing failed.
+        q=self.query;saved=q("SELECT value FROM settings WHERE setting='lastdboptimize'")
+        setting=lambda k,v:q('INSERT INTO settings(setting,value) VALUES (?,?) ON DUPLICATE KEY UPDATE value=VALUES(value)',[k,str(v)])
+        marker=lambda:q("SELECT value FROM settings WHERE setting='lastdboptimize'")[0]['value']
+        logs=lambda:[r['message'] for r in q("SELECT message FROM gamelog WHERE category='maintenance' AND message LIKE 'Optimized tables:%' ORDER BY logid")]
+        def cron():
+            q('DELETE FROM settings WHERE setting=? OR setting LIKE ?',['maintenance_day','mh:%'])
+            return [shutil.which('php'),'cron.php']
+        run=lambda:subprocess.run(cron(),cwd=ROOT,capture_output=True,text=True,timeout=300)
+        innodb='Completed with the note "Table does not support optimize, doing recreate + analyze instead": '
+        hold='aaa_fixture_optimize_hold'
+        try:
+            q(f'CREATE TABLE {hold} (id INT PRIMARY KEY) ENGINE=InnoDB');q(f'INSERT INTO {hold} VALUES (1)')
+            q('CREATE VIEW fixture_optimize_view AS SELECT id FROM '+hold);q('CREATE TABLE `fixture-optimize-name` (id INT) ENGINE=InnoDB')
+            tables=len(q('SHOW TABLES'));setting('lastdboptimize','2000-01-01 00:00:00');before=len(logs())
+            result=run();self.assertEqual(0,result.returncode,result.stderr);self.assertEqual('complete',json.loads(result.stdout)['maintenance'])
+            entries=logs()[before:];self.assertEqual(1,len(entries),entries);entry=entries[0]
+            self.assertTrue(entry.startswith(f'Optimized tables: {tables-2} of {tables} completed in '),entry)
+            self.assertIn(innodb,entry);self.assertRegex(entry,r'": [^\n]*\baccounts\b')
+            self.assertIn('\nFailed: 2\n',entry);self.assertIn('fixture-optimize-name (The table name is not supported.)',entry)
+            self.assertRegex(entry,r"fixture_optimize_view \('resurrection_test\.fixture_optimize_view' is not (of type 'BASE TABLE'|BASE TABLE); Operation failed\)")
+            self.assertTrue(entry.endswith('The optimization was not recorded as run, so the next maintenance run tries again.'),entry)
+            self.assertEqual('2000-01-01 00:00:00',marker())
+            # Without the failing tables the retry completes every table and records the run's start time.
+            q('DROP VIEW fixture_optimize_view');q('DROP TABLE `fixture-optimize-name`')
+            result=run();self.assertEqual(0,result.returncode,result.stderr)
+            entries=logs()[before+1:];self.assertEqual(1,len(entries),entries)
+            self.assertTrue(entries[0].startswith(f'Optimized tables: {tables-2} of {tables-2} completed in '),entries[0])
+            self.assertNotIn('Failed',entries[0]);self.assertNotEqual('2000-01-01 00:00:00',marker())
+            # 1.1.2's schedule: not again within a day of the recorded run.
+            result=run();self.assertEqual(0,result.returncode,result.stderr);self.assertEqual(before+2,len(logs()))
+            # Only under the maintenance lock: run directly, it refuses before any table and logs nothing.
+            setting('lastdboptimize','2000-01-01 00:00:00')
+            code="$_SERVER+=['SCRIPT_NAME'=>'cron.php','REQUEST_URI'=>'cron.php','SERVER_NAME'=>'localhost','SERVER_PORT'=>'80','REMOTE_ADDR'=>'','REQUEST_METHOD'=>''];define('ALLOW_ANONYMOUS',true);ob_start();require 'common.php';try{require 'lib/newday/dbcleanup.php';$r='ran';}catch(LogicException $e){$r='refused';}while(ob_get_level())ob_end_clean();echo $r;"
+            direct=subprocess.run([shutil.which('php'),'-r',code],cwd=ROOT,capture_output=True,text=True,timeout=300)
+            self.assertEqual('refused',direct.stdout.strip(),direct.stdout[-500:]+direct.stderr[-500:])
+            self.assertEqual(before+2,len(logs()));self.assertEqual('2000-01-01 00:00:00',marker())
+            # A second scheduler while the first is optimizing is refused: an open transaction on the first table holds
+            # the first run inside OPTIMIZE TABLE until it is released; the tables are optimized and logged once.
+            holder=subprocess.Popen([shutil.which('php'),'-r',"require 'dbconnect.php';require 'lib/dbwrapper_pdo.php';db_connect($DB_HOST,$DB_USER,$DB_PASS);db_select_db($DB_NAME);$GLOBALS['dbinfo']['connection']->beginTransaction();db_query('SELECT * FROM "+hold+"');echo \"held\\n\";stream_get_contents(STDIN);$GLOBALS['dbinfo']['connection']->rollBack();"],
+                cwd=ROOT,stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True)
+            first=None
+            try:
+                self.assertEqual('held',holder.stdout.readline().strip())
+                first=subprocess.Popen(cron(),cwd=ROOT,stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True)
+                for _ in range(600):
+                    if first.poll() is not None or q("SELECT ID FROM information_schema.PROCESSLIST WHERE INFO LIKE ? AND STATE LIKE '%metadata lock%'",[f'OPTIMIZE TABLE `{hold}`%']): break
+                    time.sleep(.05)
+                self.assertIsNone(first.poll(),'First scheduler finished before reaching the held table')
+                second=run();self.assertEqual(1,second.returncode);self.assertIn('Maintenance',second.stderr)
+                holder.stdin.close();holder.wait(timeout=30)
+                out,err=first.communicate(timeout=300);self.assertEqual(0,first.returncode,err)
+            finally:
+                if holder.poll() is None: holder.kill();holder.wait(timeout=5)
+                holder.stdout.close();holder.stderr.close()
+                if first is not None and first.poll() is None: first.terminate();first.communicate(timeout=5)
+            entries=logs()[before+2:];self.assertEqual(1,len(entries),entries);self.assertNotIn('Failed',entries[0])
+            self.assertNotEqual('2000-01-01 00:00:00',marker())
+        finally:
+            q('DROP VIEW IF EXISTS fixture_optimize_view');q('DROP TABLE IF EXISTS `fixture-optimize-name`');q(f'DROP TABLE IF EXISTS {hold}')
+            q('DELETE FROM settings WHERE setting=? OR setting LIKE ?',['maintenance_day','mh:%'])
+            if saved: setting('lastdboptimize',saved[0]['value'])
+
+    @contextmanager
+    def _petition_mail_server(self):
+        # A second fixture server whose mail transport accepts every message except one to fail-admin@example.invalid,
+        # and that takes SERVER_NAME from the Host header on request, as Apache does with UseCanonicalName Off.
+        transport=tempfile.TemporaryDirectory(prefix='resurrection-petition-mail-');capture=Path(transport.name)/'capture.txt'
+        program=Path(transport.name)/'sendmail';prepend=tempfile.NamedTemporaryFile(mode='w',suffix='.php')
+        program.write_text('#!'+sys.executable+"\nimport sys\nfrom pathlib import Path\npayload=sys.stdin.read()\nwith Path(__file__).with_name('capture.txt').open('a') as f:f.write(payload+'\\n=====\\n')\nsys.exit(1 if 'fail-admin@example.invalid' in payload else 0)\n")
+        program.chmod(0o700)
+        prepend.write("<?php if (($_SERVER['HTTP_X_RESURRECTION_FIXTURE'] ?? '') === 'forged-host') $_SERVER['SERVER_NAME'] = explode(':', $_SERVER['HTTP_HOST'])[0];\n");prepend.flush()
+        with socket.socket() as sock:sock.bind(('127.0.0.1',0));port=sock.getsockname()[1]
+        server=subprocess.Popen([shutil.which('php'),'-d','display_errors=1','-d','error_reporting=-1','-d','zend.exception_ignore_args=1','-d','sendmail_path='+str(program),
+                                 '-d','auto_prepend_file='+prepend.name,'-S',f'127.0.0.1:{port}','-t',str(ROOT)],cwd=ROOT,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
+        try:
+            for _ in range(100):
+                try:
+                    with socket.create_connection(('127.0.0.1',port),timeout=.1):break
+                except OSError:time.sleep(.02)
+            yield port,lambda:capture.read_text().split('\n=====\n')[:-1] if capture.exists() else []
+        finally:
+            server.terminate();server.wait(timeout=20);prepend.close();transport.cleanup()
+
+    def test_petition_notice_email_and_server_url_http(self):
+        # The petition row is the record and the email a notice: the player sees 1.1.2's text and the row is kept
+        # whether or not the transport accepts the notice; a refused notice is logged for the admin. serverurl is
+        # never saved from a request.
+        q=self.query;keys=['emailpetitions','gameadminemail','serverurl'];saved=q('SELECT setting,value FROM settings WHERE setting IN (?,?,?)',keys)
+        setting=lambda k,v:q('INSERT INTO settings(setting,value) VALUES (?,?) ON DUPLICATE KEY UPDATE value=VALUES(value)',[k,str(v)])
+        stored=lambda:[r['value'] for r in q("SELECT value FROM settings WHERE setting='serverurl'")]
+        recent=q('SELECT petitionid,date FROM petitions WHERE date>DATE_SUB(NOW(),INTERVAL 2 DAY)');created=[]
+        notices=lambda:[r['message'] for r in q("SELECT message FROM gamelog WHERE category='petition' ORDER BY logid")]
+        text=lambda body:re.sub(r'\s+',' ',html.unescape(re.sub(r'<[^>]+>','',body)))
+        try:
+            # The network limit counts petitions from 127.0.0.* in the last day; earlier tests' petitions are moved out.
+            for row in recent: q('UPDATE petitions SET date=DATE_SUB(date,INTERVAL 3 DAY) WHERE petitionid=?',[row['petitionid']])
+            setting('emailpetitions',1)
+            with self._petition_mail_server() as (port,mails):
+                def petition(description,host=None):
+                    request=self._security_client(login=None,port=port)
+                    status,body=request('petition.php',host=host,fixture='forged-host' if host else None);self.assertEqual(200,status,body[:2000])
+                    token=re.search(r'name=[\'"]csrf_token[\'"] value=[\'"]([a-f0-9]{64})',body).group(1)
+                    status,body=request('petition.php?op=submit',{'csrf_token':token,'charname':'Petitioner','email':'p@example.invalid','description':description},
+                                        host=host,fixture='forged-host' if host else None)
+                    self.assertEqual(200,status,body[:3000]);self.assertIn('Your petition has been sent to the server admin.',text(body))
+                    rows=q('SELECT petitionid,body FROM petitions WHERE body LIKE ? ORDER BY petitionid',['%'+description+'%']);self.assertEqual(1,len(rows),rows)
+                    created.append(rows[0]['petitionid']);return int(rows[0]['petitionid'])
+                # Accepted: one notice to the admin address, from it, naming the configured URL. A configured URL without
+                # its trailing slash is saved with one, as 1.1.2 did.
+                setting('gameadminemail','admin@example.invalid');setting('serverurl',f'http://127.0.0.1:{port}/game');before=len(notices())
+                petition('Petition notice accepted')
+                self.assertEqual([f'http://127.0.0.1:{port}/game/'],stored());self.assertEqual(before,len(notices()))
+                self.assertEqual(1,len(mails()));mail=mails()[0]
+                for part in ['To: admin@example.invalid',f'Subject: New LoGD Petition at http://127.0.0.1:{port}/game/','From: admin@example.invalid',
+                             f'Server: http://127.0.0.1:{port}/game/','Petition notice accepted']:
+                    self.assertIn(part,mail)
+                # Refused: the same player text and the row, and a log line naming the petition.
+                setting('gameadminemail','fail-admin@example.invalid');pid=petition('Petition notice refused')
+                self.assertEqual(2,len(mails()));self.assertEqual([f'Petition {pid} was filed, but its email notice to the admin address could not be sent.'],notices()[before:])
+                # serverurl unset and a forged Host: nothing is saved, and the notice says the URL is not configured.
+                setting('gameadminemail','admin@example.invalid');q("DELETE FROM settings WHERE setting='serverurl'")
+                petition('Petition forged host',host=f'evil.example:{port}')
+                self.assertEqual([],stored());self.assertEqual(3,len(mails()));mail=mails()[2]
+                self.assertIn('Subject: New LoGD Petition at (Server URL not set or not valid)',mail);self.assertNotIn('evil.example',mail)
+                self.assertEqual(before+1,len(notices()))
+                # The referral page shows that player a link but no longer saves the request's URL either.
+                player=q('SELECT acctid FROM accounts WHERE login=?',['WebPlayer'])[0]['acctid']
+                request=self._security_client(port=port);self._security_allow(player,'referral.php')
+                status,body=request('referral.php',host=f'evil.example:{port}',fixture='forged-host');self.assertEqual(200,status,body[:2000])
+                self.assertIn(f'http://evil.example:{port}/referral.php?r=WebPlayer',text(body));self.assertEqual([],stored())
+        finally:
+            for pid in created: q('DELETE FROM petitions WHERE petitionid=?',[pid])
+            for row in recent: q('UPDATE petitions SET date=? WHERE petitionid=?',[row['date'],row['petitionid']])
+            q('DELETE FROM settings WHERE setting IN (?,?,?)',keys)
+            for row in saved: setting(row['setting'],row['value'])
+
+    def test_navigation_and_preference_state_http(self):
+        q=self.query
+        player=q('SELECT acctid FROM accounts WHERE login=?',['WebPlayer'])[0]['acctid']
+        saved=q('SELECT prefs,allowednavs,restorepage FROM accounts WHERE acctid=?',[player])[0]
+        snapshot=lambda: (q('SELECT * FROM accounts WHERE acctid=?',[player]),q('SELECT * FROM accounts_output WHERE acctid=?',[player]),
+            q('SELECT * FROM module_userprefs WHERE userid=? ORDER BY modulename,setting',[player]))
+        def stored(column,value): q('UPDATE accounts SET '+column+'=? WHERE acctid=?',[value,player])
+        # Preferences as 1.1.2's prefs.php, commentary.php and the client-side tab script left them.
+        legacy=('a:6:{s:8:"language";s:2:"en";s:9:"tabconfig";s:1:"1";s:9:"timestamp";s:1:"0";s:10:"timeformat";'
+            's:10:"[m/d h:ia]";s:10:"timeoffset";d:-5.5;s:16:"showFormTabIndex";s:1:"0";}')
+        valid={'prefs':legacy,'allowednavs':'a:1:{s:11:"village.php";b:1;}','restorepage':'village.php'}
+        def reset():
+            for column,value in valid.items(): stored(column,value)
+        password="Synthetic web O'Reilly \\ password"
+        malformed=[('prefs','Invalid stored preference state',['garbage','O:8:"stdClass":0:{}','s:3:"abc";','a:1:{s:9:"tabconfig";s:3:"yes";}',
+                'a:1:{i:5;s:1:"x";}','a:1:{s:8:"language";s:13:"en\' OR 1=1 --";}','a:1:{s:9:"timestamp";a:0:{}}']),
+            ('allowednavs','Invalid stored navigation state',['garbage','O:8:"stdClass":0:{}','s:11:"village.php";','a:1:{s:11:"village.php";i:1;}',
+                'a:1:{i:1;s:11:"village.php";}']),
+            ('restorepage','Invalid stored navigation state',["village.php?x='><script>",'javascript:alert(1)','village.php?a b','village.php?a="b"','/village.php'])]
+        try:
+            reset(); request=self._security_client()
+            # Malformed stored state stops an ordinary page and writes nothing.
+            for column,message,values in malformed:
+                for value in values:
+                    with self.subTest(page=column,value=value):
+                        reset(); stored(column,value); before=snapshot()
+                        status,body=request('village.php'); self.assertEqual(409,status,body[:2000]); self.assertIn(message,body)
+                        self.assertEqual(before,snapshot())
+            # ... and stops a login before it is recorded.
+            for column,message,values in malformed:
+                for value in values:
+                    with self.subTest(login=column,value=value):
+                        reset(); stored(column,value); before=snapshot()
+                        fresh=self._security_client(login=None)
+                        _,body=fresh('home.php')
+                        token=re.search(r'name=[\'"]csrf_token[\'"] value=[\'"]([a-f0-9]{64})',body).group(1)
+                        status,body=fresh('login.php',{'csrf_token':token,'name':'WebPlayer','password':password})
+                        self.assertEqual(409,status,body[:2000]); self.assertIn(message,body); self.assertIn('You were not logged in',body)
+                        self.assertEqual(before,snapshot())
+            with self.subTest('a blank time offset from 1.1.2 reads as 0'):
+                # 1.1.2 stored a cleared int field as ""; PHP 8 throws a TypeError on "" * 3600.
+                reset(); stored('prefs',legacy.replace('d:-5.5;','s:0:"";')); request=self._security_client(); self._security_allow(player,'prefs.php')
+                status,body=request('prefs.php'); self.assertEqual(200,status,body[:2000])
+                self.assertIn('s:10:"timeoffset";i:0;',q('SELECT prefs FROM accounts WHERE acctid=?',[player])[0]['prefs'])
+            with self.subTest('the preference writer checks every value before anything is changed'):
+                reset(); request=self._security_client(); self._security_allow(player,'prefs.php')
+                status,body=request('prefs.php'); self.assertEqual(200,status,body[:2000]); self.assertNotIn('oldvalues',body)
+                csrf=re.search(r'name=[\'"]csrf_token[\'"] value=[\'"]([a-f0-9]{64})',body).group(1)
+                for field,value in [('timestamp','9'),('tabconfig','yes'),('timeoffset','soon'),('language',"en' OR 1=1 -- "),('5','x'),('bad[]','x')]:
+                    with self.subTest(field=field,value=value):
+                        before=snapshot()
+                        status,body=request('prefs.php?op=save',{'csrf_token':csrf,field:value,'currentpassword':password,
+                            'pass1':'Synthetic new password 1','pass2':'Synthetic new password 1'})
+                        # prefs.php already refused a posted array as 'Invalid preference.'
+                        self.assertEqual(400,status,body[:2000]); self.assertIn('Invalid preference.' if field=='bad[]' else 'Your preferences were not saved',body)
+                        self.assertEqual(before,snapshot())
+                status,body=request('prefs.php?op=save',{'csrf_token':csrf,'timestamp':'1','timeoffset':''})
+                self.assertEqual(200,status,body[:2000]); self.assertIn('Settings Saved',body)
+                prefs=q('SELECT prefs FROM accounts WHERE acctid=?',[player])[0]['prefs']
+                self.assertIn('s:9:"timestamp";s:1:"1";',prefs); self.assertIn('s:10:"timeoffset";i:0;',prefs)
+            with self.subTest('a request the restorepage column cannot hold keeps the previous page'):
+                reset(); request=self._security_client(); long='village.php?x='+'a'*120; self._security_allow(player,long)
+                status,body=request(long); self.assertEqual(200,status,body[:2000])
+                self.assertEqual('village.php',q('SELECT restorepage FROM accounts WHERE acctid=?',[player])[0]['restorepage'])
+            with self.subTest("Fix Navs' empty value still leads to the corrupted-navs page, as in 1.1.2"):
+                reset(); request=self._security_client(); stored('allowednavs','')
+                status,body=request('village.php'); self.assertEqual(302,status,body[:2000])
+                status,body=request('badnav.php'); self.assertEqual(200,status,body[:2000]); self.assertIn('Your Navs Are Corrupted',body)
+            with self.subTest('1.1.2 saved a wrapped non-array value back as entry 0; it is dropped'):
+                reset(); request=self._security_client(); stored('allowednavs','a:2:{i:0;s:0:"";s:11:"village.php";b:1;}')
+                status,body=request('village.php'); self.assertEqual(200,status,body[:2000])
+        finally:
+            for column in ['prefs','allowednavs','restorepage']: stored(column,saved[column])
+
+    def _security_client(self, login='WebPlayer', password="Synthetic web O'Reilly \\ password", port=None):
+        class NoRedirect(urllib.request.HTTPRedirectHandler):
+            def redirect_request(self, *args): return None
+        jar=http.cookiejar.CookieJar()
+        client=urllib.request.build_opener(urllib.request.HTTPCookieProcessor(jar),NoRedirect)
+        client_port=self.port if port is None else port
+        def request(url, data=None, fixture=None, host=None):
+            headers={} if fixture is None else {'X-Resurrection-Fixture':fixture}
+            if host is not None: headers['Host']=host
+            req=urllib.request.Request(f'http://127.0.0.1:{client_port}/'+url,
+                data=None if data is None else urllib.parse.urlencode(data).encode(),headers=headers)
+            try: response=client.open(req,timeout=20)
+            except urllib.error.HTTPError as error: response=error
+            body=response.read().decode('utf-8',errors='replace')
+            self.assertNotRegex(body,r'(?i)(fatal error|warning:|deprecated:|notice:)',body[:2000])
+            if response.status == 500:
+                self.server_log.seek(0)
+                body += '\n'.join(self.server_log.read().splitlines()[-8:])
+            return response.status,body
+        request.cookiejar=jar
+        if login:
+            _,body=request('home.php')
+            csrf=re.search(r'name=[\'"]csrf_token[\'"] value=[\'"]([a-f0-9]{64})',body).group(1)
+            self.assertEqual(303,request('login.php',{'csrf_token':csrf,'name':login,'password':password})[0])
+        return request
+
+    def _security_allow(self, player, url):
+        value='a:1:{s:'+str(len(url))+':"'+url+'";b:1;}'
+        self.query('UPDATE accounts SET allowednavs=? WHERE acctid=?',[value,player])
+
+    def _security_fields(self, body, action=None):
+        if action:
+            forms=re.findall(r'<form\b[^>]*action=[\'"]([^\'"]+)[\'"][^>]*>(.*?)</form>',body,re.S|re.I)
+            matches=[part for url,part in forms if html.unescape(url)==action]
+            self.assertEqual(1,len(matches),action+' '+body[:2000]); body=matches[0]
+        result={}
+        for key in ['csrf_token','action_token']:
+            match=re.search(r'name=[\'"]'+key+r'[\'"] value=[\'"]([a-f0-9]{64})',body)
+            self.assertIsNotNone(match,body[:2000]); result[key]=match.group(1)
+        return result
+
+    def _security_target(self, login):
+        source=self.query('SELECT * FROM accounts WHERE login=?',['FixtureAdmin'])[0]
+        source.pop('acctid'); source.update(login=login,name="`2O'Reilly \\ 雪 %_! <img src=x>",superuser='0',loggedin='0')
+        columns=list(source)
+        self.query('INSERT INTO accounts ('+','.join('`'+key+'`' for key in columns)+') VALUES ('+','.join('?' for _ in columns)+')',list(source.values()))
+        ident=self.query('SELECT acctid FROM accounts WHERE login=?',[login])[0]['acctid']
+        self.query("INSERT INTO accounts_output(acctid,output) VALUES (?,'')",[ident])
+        return ident
+
+    @contextmanager
+    def _pvp_fixture(self):
+        with self._specialty_accounting_fixture('pvp') as f:
+            player=f['player']; target=self._security_target('BroaderPvpVictim'); entry=f'pvp.php?act=attack&name={target}'
+            settings={'pvp':'1','pvpattgain':'10','pvpdeflose':'5','pvpdefgain':'10','pvpattlose':'15','maxattacks':'4','autofight':'1','autofightfull':'1'}
+            saved_settings=self.query('SELECT * FROM settings WHERE setting IN ('+','.join('?' for _ in settings)+')',list(settings))
+            for key,value in settings.items(): self.query('INSERT INTO settings(setting,value) VALUES (?,?) ON DUPLICATE KEY UPDATE value=VALUES(value)',[key,value])
+            def patch(who,**values):
+                self.query('UPDATE accounts SET '+','.join('`'+k+'`=?' for k in values)+' WHERE acctid=?',[*values.values(),who])
+            def prepare(inn=0,**values):
+                f['prepare']('TS',badguy='',level=5,gold=1000,gems=10,experience=5000,attack=40,defense=20,hitpoints=500,maxhitpoints=500,playerfights=10,location='Degolburg',age=20,pk=0)
+                if values: patch(player,**values)
+                patch(target,name='PvP Victim',level=5,gold=100,experience=1000,maxhitpoints=10000,hitpoints=250,attack=40,defense=20,alive=1,loggedin=0,locked=0,slaydragon=0,age=20,dragonkills=0,pk=0,pvpflag='2000-01-01 00:00:00',location='The Boar\'s Head Inn' if inn else 'Degolburg',boughtroomtoday=inn,race='Human',badguy='')
+                if inn:
+                    name=self.query("SELECT value FROM settings WHERE setting='innname'")
+                    patch(target,location=name[0]['value'] if name else "The Boar's Head Inn")
+            def snap():
+                rows=self.query('SELECT * FROM accounts WHERE acctid IN (?,?) ORDER BY acctid',[player,target])
+                for row in rows:
+                    for key in ['laston','gentime','gentimecount','gensize','allowednavs','restorepage','lastip','uniqueid','lastmotd','lastnews']: row.pop(key,None)
+                return rows+[self.query('SELECT * FROM bounty WHERE target=? ORDER BY bountyid',[target]),self.query('SELECT * FROM mail WHERE msgto=? ORDER BY messageid',[target]),self.query('SELECT COUNT(*) n FROM news'),self.query('SELECT COUNT(*) n FROM debuglog')]
+            def form(path='pvp.php?op=fight'):
+                status,body=f['request'](path); self.assertEqual(200,status,body[:3000]); return self._security_fields(body)
+            def reject(data,path='pvp.php?op=fight',status=409):
+                before=snap(); code,body=f['request'](path,data); self.assertEqual(status,code,body[:3500]); self.assertEqual(before,snap())
+            def enter(inn=0):
+                path=entry+('&inn=1' if inn else ''); before=snap(); data=form(path); self.assertEqual(before,snap())
+                status,body=f['request'](path,data); self.assertEqual(200,status,body[:3500]); self.assertNotEqual('',snap()[0]['badguy']); return body,data
+            try: yield f|dict(target=target,entry=entry,pvp_prepare=prepare,patch=patch,pvp_snapshot=snap,pvp_form=form,pvp_reject=reject,enter=enter)
+            finally:
+                self.query('DELETE FROM settings WHERE setting IN ('+','.join('?' for _ in settings)+')',list(settings))
+                for row in saved_settings: self.query('INSERT INTO settings(setting,value) VALUES (?,?)',[row['setting'],row['value']])
+                self.query('DELETE FROM bounty WHERE target=?',[target]); self.query('DELETE FROM mail WHERE msgto=?',[target])
+                self.query('DELETE FROM accounts_output WHERE acctid=?',[target]); self.query('DELETE FROM accounts WHERE acctid=?',[target])
+
+    def test_pvp_round_stale_reservation_and_victim_authority(self):
+        with self._pvp_fixture() as f:
+            f['pvp_prepare'](attack=100,defense=50,hitpoints=5000,maxhitpoints=5000); f['patch'](f['target'],attack=1000,defense=80); f['enter'](); before=f['pvp_snapshot'](); stale=f['pvp_form'](); data=f['pvp_form']()
+            code,body=f['request']('pvp.php?op=fight',data|{'victory':1,'payout':99999,'name':99999,'hitpoints':99999}); self.assertEqual(200,code,body[:3000])
+            after=f['pvp_snapshot'](); enemy=f['decode'](after[0]['badguy'])['enemies'][0]
+            self.assertEqual(('5000','10000','4823',9960),(before[0]['hitpoints'],f['decode'](before[0]['badguy'])['enemies'][0]['creaturehealth'],after[0]['hitpoints'],enemy['creaturehealth']))
+            self.assertEqual('9',after[0]['playerfights']); self.assertEqual(before[1],after[1]); self.assertEqual(before[2:],after[2:])
+            self.assertEqual(200,f['request']('pvp.php')[0]); self.assertEqual(after,f['pvp_snapshot']())
+            f['pvp_reject'](stale); f['pvp_reject'](data)
+            for key,value in [('location','Elsewhere'),('pk','1'),('hitpoints','249'),('alive','0'),('locked','1'),('pvpflag','2099-01-01 00:00:00'),('gold','90'),('experience','999'),('boughtroomtoday','1')]:
+                data=f['pvp_form'](); prior=f['pvp_snapshot']()[1][key]; f['patch'](f['target'],**{key:value}); f['pvp_reject'](data)
+                # Even a newly issued form cannot reinterpret the original encounter.
+                fresh=f['pvp_form'](); f['pvp_reject'](fresh)
+                f['patch'](f['target'],**{key:prior})
+            # Explicit repair restores continuation. Request-selected enemy/result cannot bypass it.
+            data=f['pvp_form'](); self.assertEqual(200,f['request']('pvp.php?op=fight',data)[0])
+            for path in ['pvp.php?op=fight&victory=1','pvp.php?op=fight&newtarget=2','pvp.php?op=fight&skill=godmode','pvp.php?op=result']:
+                before=f['pvp_snapshot'](); self.assertEqual(400,f['request'](path)[0]); self.assertEqual(before,f['pvp_snapshot']())
+
+    def test_pvp_eligibility_and_entry_rollback(self):
+        with self._pvp_fixture() as f:
+            for who,changes in [('player',dict(alive=0,hitpoints=0)),('player',dict(playerfights=0)),('player',dict(specialinc='fixture.php')),('player',dict(badguy='a:0:{}')),
+                ('target',dict(alive=0)),('target',dict(locked=1)),('target',dict(slaydragon=1)),('target',dict(age=0)),('target',dict(location='Elsewhere')),('target',dict(level=2)),('target',dict(level=8)),('target',dict(loggedin=1,laston='2099-01-01 00:00:00')),('target',dict(pvpflag='2099-01-01 00:00:00'))]:
+                f['pvp_prepare'](); f['patch'](f[who],**changes); data=f['pvp_form'](f['entry']); f['pvp_reject'](data,f['entry'])
+            # Listing range [-1,+2] and setup range +/-2 differ historically; do not rebalance.
+            for changes in [dict(level=3),dict(level=7),dict(age=0,dragonkills=100),dict(age=0,pk=1),dict(age=0,experience=1501),dict(loggedin=1,laston='2000-01-01 00:00:00')]:
+                f['pvp_prepare'](); f['patch'](f['target'],**changes); f['enter']()
+            f['pvp_prepare'](age=0,experience=0); data=f['pvp_form'](f['entry']); before=f['pvp_snapshot']()
+            self.query("ALTER TABLE accounts ADD CONSTRAINT fixture_pvp_entry CHECK (login <> 'WebPlayer' OR playerfights=10)")
+            try: f['pvp_reject'](data,f['entry'],500)
+            finally: self.query('ALTER TABLE accounts DROP CONSTRAINT fixture_pvp_entry')
+            f['pvp_reject'](data,f['entry']); f['enter'](); self.assertEqual('1',f['pvp_snapshot']()[0]['pk']); self.assertEqual('9',f['pvp_snapshot']()[0]['playerfights'])
+            # Another attack cannot replace the active encounter or steal the reserved victim.
+            f['pvp_reject'](f['pvp_form'](f['entry']),f['entry'])
+
+    def test_pvp_victory_zero_negative_rewards_replay_and_rollback(self):
+        with self._pvp_fixture() as f, self._specialty_terminal_capture() as terminal:
+            for hp in [10,9]:
+                f['pvp_prepare'](attack=0,defense=1000); f['enter']()
+                state=f['decode'](f['pvp_snapshot']()[0]['badguy']); state['enemies'][0]['creaturehealth']=hp
+                buff={'proof':dict(name='Proof',schema='pvp',effectmsg='',effectnodmgmsg='',effectfailmsg='',rounds=3,allowinpvp=1,minioncount=1,minbadguydamage=10,maxbadguydamage=10)}
+                f['patch'](f['player'],badguy=f['encode'](state),bufflist=f['encode'](buff)); self.query('DELETE FROM fixture_specialty_terminal')
+                data=f['pvp_form'](); stale=f['pvp_form'](); before=f['pvp_snapshot']()
+                self.query("ALTER TABLE accounts ADD CONSTRAINT fixture_pvp_end CHECK (login <> 'WebPlayer' OR badguy <> '')")
+                try: f['pvp_reject'](data,status=500); self.assertEqual([],terminal())
+                finally: self.query('ALTER TABLE accounts DROP CONSTRAINT fixture_pvp_end')
+                f['pvp_reject'](data); data=f['pvp_form'](); code,body=f['request']('pvp.php?op=fight',data|{'gold':999999,'experience':999999,'winner':999}); self.assertEqual(200,code,body[:3000])
+                after=f['pvp_snapshot'](); self.assertEqual(hp-10,terminal()[0]['enemy']['creaturehealth']); self.assertEqual('battle-victory',terminal()[0]['hook'])
+                self.assertEqual(['1','500','1230','5100','9','', 'Degolburg'],[after[0][k] for k in ['alive','hitpoints','gold','experience','playerfights','badguy','location']])
+                self.assertEqual(['0','250','0','950',before[1]['pvpflag'],'Degolburg'],[after[1][k] for k in ['alive','hitpoints','gold','experience','pvpflag','location']])
+                self.assertEqual(str(f['target']),after[3][-1]['msgto']); self.assertEqual('0',after[3][-1]['msgfrom']); self.assertEqual(str(f['player']),after[3][-1]['originator']); self.assertIn(before[0]['name'],after[3][-1]['body'])
+                news=self.query('SELECT newstext,arguments,accountid FROM news ORDER BY newsid DESC LIMIT 1')[0]; self.assertEqual([before[0]['name'],before[1]['name']],f['decode'](news['arguments'])[:2]); self.assertEqual(str(f['player']),news['accountid'])
+                self.assertEqual(len(before[3])+1,len(after[3])); self.assertEqual(int(before[4][0]['n'])+1,int(after[4][0]['n'])); self.assertEqual(int(before[5][0]['n'])+2,int(after[5][0]['n']))
+                f['pvp_reject'](data); f['pvp_reject'](stale); f['pvp_reject'](data,f['entry'])
+                self.assertEqual(409,f['request']('pvp.php?op=fight')[0]); self.assertEqual(after,f['pvp_snapshot']())
+
+    def test_pvp_defeat_inn_bodyguard_settlement_and_rollback(self):
+        with self._pvp_fixture() as f, self._specialty_terminal_capture() as terminal:
+            for inn in [0,1,2,3,4,5]:
+                f['pvp_prepare'](inn=inn,attack=0,defense=1000); f['enter'](inn); row=f['pvp_snapshot']()[0]
+                buffs=f['decode'](row['bufflist']) or {}
+                if inn:
+                    self.assertEqual([1.05,1.1,1.2,1.3,1.4][inn-1],buffs['bodyguard']['badguyatkmod']); self.assertEqual([.95,.9,.8,.7,.6][inn-1],buffs['bodyguard']['defmod'])
+                    self.assertEqual(-1,buffs['bodyguard']['rounds']); self.assertEqual(1,len(f['decode'](row['badguy'])['enemies']))
+                # Attacker-side fixed adverse effect reaches actual engine defeat.
+                buffs['adverse']=dict(name='Adverse',schema='pvp',effectmsg='',effectnodmgmsg='',effectfailmsg='',rounds=3,allowinpvp=1,minioncount=1,mingoodguydamage=10,maxgoodguydamage=10)
+                f['patch'](f['player'],hitpoints=10,bufflist=f['encode'](buffs)); self.query('DELETE FROM fixture_specialty_terminal')
+                before=f['pvp_snapshot'](); data=f['pvp_form'](); stale=f['pvp_form']()
+                self.query("ALTER TABLE accounts ADD CONSTRAINT fixture_pvp_loss CHECK (login <> 'WebPlayer' OR alive=1)")
+                try: f['pvp_reject'](data,status=500); self.assertEqual([],terminal())
+                finally: self.query('ALTER TABLE accounts DROP CONSTRAINT fixture_pvp_loss')
+                f['pvp_reject'](data); data=f['pvp_form'](); code,body=f['request']('pvp.php?op=fight',data); self.assertEqual(200,code,body[:3000]); after=f['pvp_snapshot']()
+                self.assertEqual(['0','0','0','4250','9','','Degolburg'],[after[0][k] for k in ['alive','hitpoints','gold','experience','playerfights','badguy','location']])
+                self.assertEqual(['1','250','445','1500',before[1]['pvpflag']],[after[1][k] for k in ['alive','hitpoints','gold','experience','pvpflag']])
+                self.assertNotIn('bodyguard',f['decode'](after[0]['bufflist'])); self.assertEqual('battle-defeat',terminal()[0]['hook']); self.assertIn('You have been slain',body)
+                self.assertEqual(str(f['target']),after[3][-1]['msgto']); self.assertEqual('0',after[3][-1]['msgfrom']); self.assertEqual(str(f['player']),after[3][-1]['originator']); self.assertIn(before[0]['name'],after[3][-1]['body'])
+                news=self.query('SELECT newstext,arguments,accountid FROM news ORDER BY newsid DESC LIMIT 1')[0]; self.assertEqual([before[0]['name'],before[1]['name']],f['decode'](news['arguments'])[:2]); self.assertEqual(str(f['player']),news['accountid'])
+                self.assertEqual(len(before[3])+1,len(after[3])); self.assertEqual(int(before[4][0]['n'])+1,int(after[4][0]['n']))
+                f['pvp_reject'](data); f['pvp_reject'](stale); f['pvp_reject'](data,f['entry'])
+
+            # Actual victim retaliation, with Dag enabled, is independently terminal.
+            self.query("UPDATE modules SET active=1 WHERE modulename='dag'")
+            self.query("INSERT INTO bounty(amount,target,setter,setdate,status) VALUES (250,?,0,'2020-01-01 00:00:00',0)",[f['target']])
+            f['pvp_prepare'](attack=100,defense=50,hitpoints=5000,maxhitpoints=5000); f['patch'](f['target'],attack=1000,defense=80); f['enter'](); f['patch'](f['player'],hitpoints=1)
+            before=f['pvp_snapshot'](); data=f['pvp_form'](); code,body=f['request']('pvp.php?op=fight',data); self.assertEqual(200,code,body[:3000]); after=f['pvp_snapshot']()
+            self.assertEqual(['0','0','0','4250','9',''],[after[0][k] for k in ['alive','hitpoints','gold','experience','playerfights','badguy']]); self.assertEqual(before[2],after[2]); self.assertEqual('445',after[1]['gold']); self.assertIn('177',body); f['pvp_reject'](data)
+
+    def test_pvp_malformed_state_preserved_and_repaired(self):
+        with self._pvp_fixture() as f:
+            f['pvp_prepare'](); f['enter'](); good=f['pvp_snapshot']()[0]['badguy']; base=f['decode'](good)
+            invalid=['broken','O:8:"stdClass":0:{}','s:4:"oops";','a:0:{}']
+            for key,value in [('owner',999),('target',999),('type','forest'),('reservation','bad'),('encounter','bad'),('victimhash','bad'),('maxattacks',0),('didsurprise',[]),('experience',[999])]:
+                state=f['decode'](good); state['options'][key]=value; invalid.append(f['encode'](state))
+            for key,value in [('acctid',999),('creaturehealth',0),('creaturehealth',-1),('creaturehealth','1e3'),('creaturehealth',[]),('creatureattack',-1),('creaturedefense','bad'),('creaturegold',99999),('dead',True),('istarget',False),('diddamage',[]),('bodyguardlevel',5),('creatureaiscript','return true;')]:
+                state=f['decode'](good); state['enemies'][0][key]=value; invalid.append(f['encode'](state))
+            state=f['decode'](good); state['enemies'].append(state['enemies'][0]); invalid.append(f['encode'](state))
+            for encoded in invalid:
+                data=f['pvp_form'](); f['patch'](f['player'],badguy=encoded); f['pvp_reject'](data); f['patch'](f['player'],badguy=good)
+            for column,encoded,status in [('bufflist','s:4:"oops";',409),('bufflist','O:8:"stdClass":0:{}',409),('bufflist',f['encode']({'bad':{'rounds':2,'atkmod':[]}}),409),('companions','s:4:"oops";',409),('companions',f['encode']({'bad':{'hitpoints':1}}),409)]:
+                data=f['pvp_form'](); f['patch'](f['player'],**{column:encoded}); before=f['pvp_snapshot']()
+                code,body=f['request']('pvp.php?op=fight',data); self.assertEqual(status,code,body[:2000]); self.assertEqual(before,f['pvp_snapshot']()); self.assertEqual(409,f['request']('pvp.php?op=fight')[0]); self.assertEqual(before,f['pvp_snapshot']()); f['patch'](f['player'],**{column:'a:0:{}'})
+            self.assertEqual(200,f['request']('pvp.php?op=fight',f['pvp_form']())[0])
+
+    def test_pvp_buffs_companions_run_and_bodyguard_authority(self):
+        with self._pvp_fixture() as f:
+            f['pvp_prepare'](attack=0,defense=1000); f['enter']()
+            skeleton=dict(name='`4Skeleton Warrior',hitpoints=20,maxhitpoints=43,attack=26.5,defense=14.5,dyingtext='`$Your skeleton warrior crumbles to dust.`n',abilities=dict(fight=True),ignorelimit=True)
+            buffs={'suspended':dict(name='Suspended',schema='fixture',rounds=4,atkmod=99), 'allowed':dict(name='Allowed',schema='fixture',rounds=4,allowinpvp=1,minioncount=1,minbadguydamage=10,maxbadguydamage=10,effectmsg='',effectnodmgmsg='',effectfailmsg='')}
+            f['patch'](f['player'],companions=f['encode']({'skeleton_warrior':skeleton}),bufflist=f['encode'](buffs))
+            before=f['pvp_snapshot'](); data=f['pvp_form']('pvp.php?op=run'); code,body=f['request']('pvp.php?op=run',data); self.assertEqual(200,code,body[:3000]); after=f['pvp_snapshot']()[0]
+            self.assertIn('Your pride prevents you from running',body); self.assertEqual('9',after['playerfights']); self.assertEqual(before[1],f['pvp_snapshot']()[1])
+            self.assertEqual(9959,f['decode'](after['badguy'])['enemies'][0]['creaturehealth'])
+            self.assertEqual(skeleton|dict(suspended=True,used=False),f['decode'](after['companions'])['skeleton_warrior']); b=f['decode'](after['bufflist']); self.assertEqual(4,b['suspended']['rounds']); self.assertEqual(3,b['allowed']['rounds']); f['pvp_reject'](data,'pvp.php?op=run')
+            for level in [1,5]:
+                f['pvp_prepare'](inn=level); f['enter'](level); before=f['pvp_snapshot'](); data=f['pvp_form'](); code,body=f['request']('pvp.php?op=fight&inn=0',data); self.assertEqual(400,code); self.assertEqual(before,f['pvp_snapshot']())
+                data=f['pvp_form'](); code,body=f['request']('pvp.php?op=fight',data|dict(bodyguardlevel=0,bodyguardhealth=0,victory=1)); self.assertEqual(200,code,body[:3000]); after=f['pvp_snapshot']()[0]
+                self.assertEqual(('500',9981) if level==1 else ('497',9983),(after['hitpoints'],f['decode'](after['badguy'])['enemies'][0]['creaturehealth']))
+                self.assertEqual(level,int(f['decode'](after['badguy'])['enemies'][0]['bodyguardlevel'])); self.assertIn('bodyguard',f['decode'](after['bufflist']))
+                data=f['pvp_form'](); b=f['decode'](after['bufflist']); b['bodyguard']['badguyatkmod']=999; f['patch'](f['player'],bufflist=f['encode'](b)); f['pvp_reject'](data); f['pvp_reject'](f['pvp_form']())
+
+    def test_pvp_cross_player_reservation_and_tokens(self):
+        with self._pvp_fixture() as f:
+            other=self._security_target('OtherPvpAttacker')
+            try:
+                f['pvp_prepare'](); f['patch'](other,level=5,alive=1,hitpoints=500,attack=40,defense=20,playerfights=10,badguy='',specialinc='',location='Degolburg',bufflist='a:0:{}',companions='a:0:{}')
+                othercall=self._security_client('OtherPvpAttacker','Synthetic administrator password')
+                def request(path,data=None): self._security_allow(other,path); return othercall(path,data,fixture='specialty-accounting')
+                first=f['pvp_form'](f['entry']); _,body=request(f['entry']); second=self._security_fields(body)
+                before=f['pvp_snapshot'](); self.assertEqual(403,request(f['entry'],first)[0]); self.assertEqual(before,f['pvp_snapshot']())
+                f['enter'](); before=f['pvp_snapshot'](); self.assertEqual(409,request(f['entry'],second)[0]); self.assertEqual(before,f['pvp_snapshot']())
+                _,body=request(f['entry']); self.assertEqual(409,request(f['entry'],self._security_fields(body))[0]); self.assertEqual(before,f['pvp_snapshot']())
+                # Copying an encounter to another account fails the persisted owner binding.
+                data=f['pvp_form'](); f['patch'](other,badguy=before[0]['badguy']); self.assertEqual(409,request('pvp.php?op=fight',data)[0]); self.assertEqual(before,f['pvp_snapshot']())
+            finally:
+                self.query('DELETE FROM accounts_output WHERE acctid=?',[other]); self.query('DELETE FROM accounts WHERE acctid=?',[other])
+
+    def test_pvp_reward_rounding_level15_and_inn_victory(self):
+        with self._pvp_fixture() as f, self._specialty_terminal_capture() as terminal:
+            for level,targetlevel,inn,exp,gold,expectedgold,expectedexp,lost in [(5,3,0,1005,1,0,81,50),(5,7,0,1005,100,322,121,50),(15,15,0,1005,100,0,0,50),(5,5,1,1005,100,230,101,50)]:
+                f['pvp_prepare'](inn=inn,level=level,attack=0,defense=1000); f['patch'](f['target'],level=targetlevel,experience=exp,gold=gold); f['enter'](inn)
+                row=f['pvp_snapshot']()[0]; state=f['decode'](row['badguy']); state['enemies'][0]['creaturehealth']=10
+                buffs=f['decode'](row['bufflist']) or {}; buffs['proof']=dict(name='Proof',schema='pvp',effectmsg='',effectnodmgmsg='',effectfailmsg='',rounds=3,allowinpvp=1,minioncount=1,minbadguydamage=10,maxbadguydamage=10)
+                f['patch'](f['player'],badguy=f['encode'](state),bufflist=f['encode'](buffs)); before=f['pvp_snapshot'](); data=f['pvp_form'](); code,body=f['request']('pvp.php?op=fight',data); self.assertEqual(200,code,body[:3000]); after=f['pvp_snapshot']()
+                self.assertEqual(str(1000+expectedgold),after[0]['gold']); self.assertEqual(str(5000+expectedexp),after[0]['experience']); self.assertEqual(str(exp-lost),after[1]['experience']); self.assertEqual('0',after[1]['gold']); self.assertNotIn('bodyguard',f['decode'](after[0]['bufflist'])); f['pvp_reject'](data)
+            # Historical level-15 defender receives zero experience but still gold:
+            # $wonamount typo never zeroed $winamount. Preserve actual shipped behavior.
+            f['pvp_prepare'](level=15,attack=0,defense=1000); f['patch'](f['target'],level=15); f['enter']()
+            buffs={'adverse':dict(name='Adverse',schema='pvp',effectmsg='',effectnodmgmsg='',effectfailmsg='',rounds=3,allowinpvp=1,minioncount=1,mingoodguydamage=10,maxgoodguydamage=10)}
+            f['patch'](f['player'],hitpoints=10,bufflist=f['encode'](buffs)); code,body=f['request']('pvp.php?op=fight',f['pvp_form']()); self.assertEqual(200,code,body[:3000]); self.assertEqual('1136',f['pvp_snapshot']()[1]['gold']); self.assertEqual('1000',f['pvp_snapshot']()[1]['experience'])
+
+    def test_pvp_autorounds_overflow_and_permitted_companion(self):
+        with self._pvp_fixture() as f:
+            proof=dict(name='Proof',schema='pvp',effectmsg='',effectnodmgmsg='',effectfailmsg='',rounds=30,allowinpvp=1,minioncount=1,minbadguydamage=10,maxbadguydamage=10)
+            f['pvp_prepare'](attack=0,defense=0); f['patch'](f['target'],attack=0,defense=0); f['enter'](); f['pvp_reject'](f['pvp_form']())
+            f['pvp_prepare'](attack=1,defense=0,hitpoints=1000000,maxhitpoints=1000000); f['patch'](f['target'],attack=1,defense=0,maxhitpoints=1000000); f['enter'](); f['pvp_reject'](f['pvp_form']('pvp.php?op=fight&auto=full'),'pvp.php?op=fight&auto=full')
+            for rounds,count in [('five',5),('ten',10),('full',1)]:
+                f['pvp_prepare'](attack=0,defense=0,hitpoints=50000,maxhitpoints=50000); f['patch'](f['target'],attack=1000,defense=80); f['enter']()
+                if rounds=='full':
+                    state=f['decode'](f['pvp_snapshot']()[0]['badguy']); state['enemies'][0]['creaturehealth']=10; f['patch'](f['player'],badguy=f['encode'](state))
+                f['patch'](f['player'],bufflist=f['encode']({'proof':proof})); url='pvp.php?op=fight&auto='+rounds; data=f['pvp_form'](url)
+                code,body=f['request'](url,data); self.assertEqual(200,code,body[:3000]); row=f['pvp_snapshot']()[0]
+                self.assertEqual('9',row['playerfights'])
+                if rounds=='full': self.assertEqual('',row['badguy']); self.assertEqual('0',f['pvp_snapshot']()[1]['alive'])
+                else: self.assertEqual(10000-count*10,f['decode'](row['badguy'])['enemies'][0]['creaturehealth']); self.assertEqual(30-count,f['decode'](row['bufflist'])['proof']['rounds'])
+                f['pvp_reject'](data,url)
+            for key in ['gold','experience']:
+                f['pvp_prepare'](attack=0,defense=0,hitpoints=50000,maxhitpoints=50000); f['patch'](f['target'],attack=1000,defense=80); f['enter']()
+                state=f['decode'](f['pvp_snapshot']()[0]['badguy']); state['enemies'][0]['creaturehealth']=10
+                f['patch'](f['player'],badguy=f['encode'](state),bufflist=f['encode']({'proof':proof}),**{key:2147483647})
+                f['pvp_reject'](f['pvp_form']())
+            f['pvp_prepare'](attack=100,defense=50,hitpoints=5000,maxhitpoints=5000); f['patch'](f['target'],attack=120,defense=80); f['enter']()
+            companion=dict(name='PvP Helper',hitpoints=1000,maxhitpoints=1000,attack=100,defense=50,allowinpvp=True,abilities=dict(fight=True),dyingtext='Helper falls',schema='fixture')
+            f['patch'](f['player'],companions=f['encode']({'helper':companion})); before=f['pvp_snapshot'](); code,body=f['request']('pvp.php?op=fight',f['pvp_form']()); self.assertEqual(200,code,body[:3000]); after=f['pvp_snapshot']()[0]
+            self.assertEqual(('5000',9946,923),(after['hitpoints'],f['decode'](after['badguy'])['enemies'][0]['creaturehealth'],f['decode'](after['companions'])['helper']['hitpoints']))
+            text=re.sub('<[^>]+>','',body); self.assertLess(text.index('You hit PvP Victim'),text.index('PvP Helper hits PvP Victim')); self.assertLess(text.index('tries to hit you'),text.index('PvP Helper hits PvP Victim'))
+
+    def test_dag_funded_pvp_and_failure_rollback(self):
+        player=self.query('SELECT acctid FROM accounts WHERE login=?',['WebPlayer'])[0]['acctid']
+        original=self.query('SELECT * FROM accounts WHERE acctid=?',[player])[0]
+        target=self._security_target('PvpVictimFixture')
+        modules=self.query('SELECT modulename,active FROM modules')
+        self.query('UPDATE modules SET active=1')
+        request=self._security_client()
+        def call(url,fields=None):
+            self._security_allow(player,url); return request(url,fields)
+        def prepare():
+            self.query("UPDATE accounts SET gold=1000,level=5,age=20,experience=5000,attack=10000,defense=10000,hitpoints=10000,maxhitpoints=10000,playerfights=10,alive=1,badguy='',bufflist='a:0:{}',companions='a:0:{}',specialinc='',location='Degolburg',superuser=0 WHERE acctid=?",[player])
+            self.query("UPDATE accounts SET gold=0,level=5,age=20,experience=0,dragonkills=0,pk=0,attack=1,defense=1,maxhitpoints=1,hitpoints=1,alive=1,loggedin=0,locked=0,slaydragon=0,pvpflag='2000-01-01 00:00:00',location='Degolburg' WHERE acctid=?",[target])
+        def snapshot():
+            return [self.query('SELECT acctid,gold,experience,alive,hitpoints,playerfights,badguy,pvpflag FROM accounts WHERE acctid IN (?,?) ORDER BY acctid',[player,target]),
+                self.query('SELECT * FROM bounty WHERE target=? ORDER BY bountyid',[target]),
+                self.query('SELECT COUNT(*) n FROM news'),self.query('SELECT COUNT(*) n FROM debuglog'),self.query('SELECT COUNT(*) n FROM mail')]
+        entry=f'pvp.php?act=attack&name={target}'
+        try:
+            prepare()
+            # Funded eligible, own, future and already-closed rows are independent.
+            for amount,setter,date,status in [(250,0,'2020-01-01 00:00:00',0),(125,player,'2020-01-01 00:00:00',0),(75,0,'2099-01-01 00:00:00',0),(50,0,'2020-01-01 00:00:00',1)]:
+                self.query('INSERT INTO bounty(amount,target,setter,setdate,status) VALUES (?,?,?,?,?)',[amount,target,setter,date,status])
+            before=snapshot(); status,body=call(entry); self.assertEqual(200,status); form=self._security_fields(body)
+            self.assertEqual(before,snapshot())  # confirmation GET never starts a fight
+            self.assertEqual(403,call(entry,{})[0]); self.assertEqual(before,snapshot())
+            # Every failure is fixture DDL outside the application transaction.
+            for table,condition in [('bounty','status=0 OR amount<>250'),('news',"newstext NOT LIKE '%collected%gold bounty%'"),('mail','msgto<>'+str(target)),('accounts','gold<>1250')]:
+                self.query(f'ALTER TABLE {table} ADD CONSTRAINT fixture_dag_failure CHECK ({condition})')
+                try:
+                    status,body=call(entry); form=self._security_fields(body)
+                    status,body=call(entry,form)
+                    # Surprise and misses can leave combat nonterminal. Reach the real
+                    # settlement failure without weakening its rollback assertions.
+                    for _ in range(8):
+                        if status!=200 or self.query('SELECT alive FROM accounts WHERE acctid=?',[target])[0]['alive']=='0': break
+                        before=snapshot(); fight='pvp.php?op=fight'; form=self._security_fields(body,fight)
+                        status,body=call(fight,form)
+                    self.assertEqual(500,status,body[:2000]); self.assertEqual(before,snapshot())
+                    self.assertEqual(409,call(entry,form)[0])
+                finally:
+                    self.query(f'ALTER TABLE {table} DROP CONSTRAINT fixture_dag_failure')
+                if table != 'accounts': prepare(); before=snapshot()
+            # Retry the failed final write using actual preserved state, without resetting accounts.
+            retry=entry if self.query('SELECT badguy FROM accounts WHERE acctid=?',[player])[0]['badguy']=='' else 'pvp.php?op=fight'
+            status,body=call(retry); form=self._security_fields(body)
+            status,body=call(retry,{**form,'amount':'999999','target':'999999','winner':'999999'})
+            self.assertEqual(200,status,body[:2000])
+            for _ in range(8):
+                if self.query('SELECT alive FROM accounts WHERE acctid=?',[target])[0]['alive']=='0': break
+                fight='pvp.php?op=fight'; form=self._security_fields(body,fight)
+                status,body=call(fight,form); self.assertEqual(200,status,body[:2000])
+            self.assertNotIn('<img src=x>',body)
+            self.assertEqual('0',self.query('SELECT alive FROM accounts WHERE acctid=?',[target])[0]['alive'])
+            self.assertEqual('1250',self.query('SELECT gold FROM accounts WHERE acctid=?',[player])[0]['gold'])
+            self.assertEqual('9',self.query('SELECT playerfights FROM accounts WHERE acctid=?',[player])[0]['playerfights'])
+            bounties=self.query('SELECT amount,status,winner FROM bounty WHERE target=? ORDER BY amount',[target])
+            self.assertEqual([('50','1'),('75','0'),('125','0'),('250','1')],[(r['amount'],r['status']) for r in bounties])
+            self.assertEqual(str(player),bounties[-1]['winner'])
+            after=snapshot(); self.assertEqual(409,call('pvp.php?op=fight',form)[0]); self.assertEqual(after,snapshot())
+            status,body=call(entry); self.assertEqual(200,status)
+            self.assertEqual(409,call(entry,self._security_fields(body))[0]); self.assertEqual(after,snapshot())
+            # Actor/target authority survives bypass of issued navigation.
+            # common.php derives actor alive from HP; use a consistent dead account.
+            for changes in ["alive=0,hitpoints=0", "playerfights=0"]:
+                prepare(); self.query('UPDATE accounts SET '+changes+' WHERE acctid=?',[player])
+                _,body=call(entry); before=snapshot(); self.assertEqual(409,call(entry,self._security_fields(body))[0],changes); self.assertEqual(before,snapshot())
+            for changes in ["alive=0","locked=1","age=0","location='Elsewhere'","level=15","loggedin=1,laston=NOW()","pvpflag='2099-01-01 00:00:00'"]:
+                prepare(); self.query('UPDATE accounts SET '+changes+' WHERE acctid=?',[target])
+                _,body=call(entry); before=snapshot(); self.assertEqual(409,call(entry,self._security_fields(body))[0],changes); self.assertEqual(before,snapshot())
+            prepare()
+            for ident in ['-1','0','1e2','999999999999999999999','1%20OR%201=1']:
+                self.assertEqual(400,call('pvp.php?act=attack&name='+ident)[0])
+            for ident in [player,999999]:
+                url=f'pvp.php?act=attack&name={ident}'; _,body=call(url); before=snapshot()
+                self.assertEqual(409,call(url,self._security_fields(body))[0]); self.assertEqual(before,snapshot())
+        finally:
+            self.query('DELETE FROM bounty WHERE target=?',[target])
+            self.query('DELETE FROM accounts_output WHERE acctid=?',[target])
+            self.query('DELETE FROM accounts WHERE acctid=?',[target])
+            for row in [original]:
+                keys=[k for k in row if k not in ['acctid','allowednavs','restorepage']]
+                self.query('UPDATE accounts SET '+','.join('`'+k+'`=?' for k in keys)+' WHERE acctid=?',[*[row[k] for k in keys],row['acctid']])
+            for row in modules: self.query('UPDATE modules SET active=? WHERE modulename=?',[row['active'],row['modulename']])
+
+    def test_dag_administrator_http_matrix(self):
+        player=self.query('SELECT acctid FROM accounts WHERE login=?',['WebPlayer'])[0]['acctid']
+        original=self.query('SELECT superuser,gold FROM accounts WHERE acctid=?',[player])[0]
+        self.query('UPDATE modules SET active=1')
+        request=self._security_client()
+        base='runmodule.php?module=dag&manage=true'
+        place=base+'&op=addbounty&admin=true'
+        listing=base+'&op=viewbounties&type=1&sort=1&dir=1&admin=true'
+        cleanup=base+'&op=cleanup'
+        def call(url,fields=None): self._security_allow(player,url); return request(url,fields)
+        ident=self._security_target('DagAdminTargetFixture')
+        target=self.query('SELECT acctid,name FROM accounts WHERE acctid=?',[ident])[0]
+        try:
+            anon=self._security_client(None)
+            for url in [base,place,cleanup,base+'&op=closebounty&id=1']:
+                self.assertIn(anon(url,{})[0],[302,303,403])
+            for role in [0,16]:
+                self.query('UPDATE accounts SET superuser=? WHERE acctid=?',[role,player])
+                for url in [base,listing,place,cleanup,base+'&op=closebounty&id=1']:
+                    self.assertEqual(403,call(url)[0]); self.assertEqual(403,call(url,{})[0])
+            self.query('UPDATE accounts SET superuser=64 WHERE acctid=?',[player])
+            status,body=call(base); self.assertEqual(200,status,body[:2000])
+            form=self._security_fields(body,place)
+            self.assertEqual(403,call(place)[0]); self.assertEqual(403,call(place,{})[0])
+            for amount in ['0','-1','1e3','2147483648']:
+                _,body=call(base); form=self._security_fields(body,place)
+                self.assertEqual(400,call(place,{**form,'amount':amount,'contractname':target['name']})[0])
+            for name in ['MissingFixture',"' OR 1=1 --",'x'*101]:
+                _,body=call(base); form=self._security_fields(body,place)
+                before=self.query('SELECT COUNT(*) n FROM bounty')
+                status,_=call(place,{**form,'amount':'250','contractname':name})
+                self.assertIn(status,[200,400]); self.assertEqual(before,self.query('SELECT COUNT(*) n FROM bounty'))
+            _,body=call(base); form={**self._security_fields(body,place),'amount':'250','contractname':target['name']}
+            self.assertEqual(200,call(place,form)[0]); self.assertEqual(409,call(place,form)[0])
+            self.assertEqual(original['gold'],self.query('SELECT gold FROM accounts WHERE acctid=?',[player])[0]['gold'])
+            bounty=self.query('SELECT bountyid,status,setter FROM bounty WHERE target=? ORDER BY bountyid DESC LIMIT 1',[target['acctid']])[0]
+            self.assertEqual('0',bounty['setter'])
+            _,body=call(base)  # actual funded overview, including location and duplicate-name grouping
+            status,body=call(listing); self.assertEqual(200,status)
+            self.assertNotIn('<img src=x>',body)
+            search=base+'&op=viewbounties&type=search&admin=true'
+            status,body=call(search,{'target':target['name'],'s':'1','d':'1'})
+            self.assertEqual(200,status); self.assertNotIn('<img src=x>',body)
+            for invalid in [{'target[]':'x'},{'s':'9'},{'target':'x'*101}]: self.assertEqual(400,call(search,invalid)[0])
+            close=base+'&op=closebounty&id='+bounty['bountyid']+'&admin=true'
+            form=self._security_fields(body,close)
+            self.assertEqual(403,call(close)[0]); self.assertEqual(403,call(close,{})[0])
+            self.assertEqual(200,call(close,form)[0]); after=self.query('SELECT * FROM bounty WHERE bountyid=?',[bounty['bountyid']])
+            self.assertEqual('1',after[0]['status']); self.assertEqual(409,call(close,form)[0]); self.assertEqual(after,self.query('SELECT * FROM bounty WHERE bountyid=?',[bounty['bountyid']]))
+            for ident in ['0','-1','1e2','2147483648','1%20OR%201=1']:
+                self.assertEqual(400,call(base+'&op=closebounty&id='+ident,form)[0])
+            self.assertEqual(409,call(base+'&op=closebounty&id=999999',form)[0])
+            # Issue a legitimate close form, then remove its record before submission.
+            self.query('UPDATE bounty SET status=0 WHERE bountyid=?',[bounty['bountyid']]); _,body=call(listing); form=self._security_fields(body,close)
+            self.query('DELETE FROM bounty WHERE bountyid=?',[bounty['bountyid']]); self.assertEqual(404,call(close,form)[0])
+            self.query("INSERT INTO bounty(amount,target,setter,setdate,status,windate) VALUES (250,?,0,'2020-01-01 00:00:00',1,'2020-01-01 00:00:00')",[target['acctid']])
+            _,body=call(base); form=self._security_fields(body,cleanup)
+            self.assertEqual(403,call(cleanup)[0]); self.assertEqual(403,call(cleanup,{})[0])
+            self.assertEqual(200,call(cleanup,form)[0]); self.assertEqual(409,call(cleanup,form)[0])
+            self.assertEqual([],self.query('SELECT * FROM bounty WHERE target=?',[target['acctid']]))
+        finally:
+            self.query('DELETE FROM bounty WHERE target=?',[target['acctid']])
+            self.query('DELETE FROM accounts_output WHERE acctid=?',[target['acctid']])
+            self.query('DELETE FROM accounts WHERE acctid=?',[target['acctid']])
+            self.query('UPDATE accounts SET superuser=? WHERE acctid=?',[original['superuser'],player])
+            self.query('UPDATE modules SET active=0')
+
+    def test_drinks_editor_delegation_create_activation_delete(self):
+        player=self.query('SELECT acctid FROM accounts WHERE login=?',['WebPlayer'])[0]['acctid']
+        original=self.query('SELECT superuser FROM accounts WHERE acctid=?',[player])[0]
+        prefs=self.query('SELECT setting,value FROM module_userprefs WHERE modulename=? AND userid=?',['drinks',player])
+        self.query('UPDATE modules SET active=1')
+        request=self._security_client()
+        base='runmodule.php?module=drinks&act=editor&admin=true'
+        add='runmodule.php?module=drinks&act=editor&op=add&admin=true'
+        save='runmodule.php?module=drinks&act=editor&op=save&admin=true'
+        created=[]
+        def call(url,fields=None): self._security_allow(player,url); return request(url,fields)
+        def grant(value):
+            self.query('INSERT INTO module_userprefs(modulename,setting,userid,value) VALUES (?,?,?,?) ON DUPLICATE KEY UPDATE value=VALUES(value)',['drinks','canedit',player,str(value)])
+        try:
+            anon=self._security_client(None)
+            for url in [base,add,save]: self.assertIn(anon(url,{})[0],[302,303,403])
+            grant(0)
+            for role in [0,16]:
+                self.query('UPDATE accounts SET superuser=? WHERE acctid=?',[role,player])
+                for url in [base,add,save]:
+                    self.assertEqual(403,call(url)[0]); self.assertEqual(403,call(url,{'canedit':'1'})[0])
+            # Both legitimate delegation and SU_EDIT_USERS perform the actual create and CRUD routes.
+            for role,delegated in [(0,1),(64,0)]:
+                self.query('UPDATE accounts SET superuser=? WHERE acctid=?',[role,player]); grant(delegated)
+                status,body=call(add); self.assertEqual(200,status,body[:1800])
+                form=self._security_fields(body,save)
+                values={**form,'drinkid':'0','name':"`2O'Reilly 🐉",'remarks':"UTF-8 雪 \\ <img src=x> apostrophe's",'costperlevel':'2147483647','drunkeness':'100','buffrounds':'127','hpmin':'-20','hpmax':'20','turnmin':'-5','turnmax':'5','hppercent':'25','buffatkmod':'999999.999999'}
+                self.assertEqual(403,call(save)[0]); self.assertEqual(403,call(save,{**values,'csrf_token':''})[0])
+                count=self.query('SELECT COUNT(*) n FROM drinks')
+                self.assertEqual(200,call(save,values)[0]); self.assertEqual(409,call(save,values)[0])
+                self.assertEqual(int(count[0]['n'])+1,int(self.query('SELECT COUNT(*) n FROM drinks')[0]['n']))
+                drink=self.query('SELECT * FROM drinks ORDER BY drinkid DESC LIMIT 1')[0]; ident=drink['drinkid']; created.append(ident)
+                for key in ['name','remarks','costperlevel','drunkeness','buffrounds','hpmin','hpmax','turnmin','turnmax','hppercent','buffatkmod']:
+                    self.assertEqual(values[key],drink[key])
+                edit=f'runmodule.php?module=drinks&act=editor&op=edit&drinkid={ident}&admin=true'
+                for invalid in [{'costperlevel':'2147483648'},{'drunkeness':'101'},{'buffrounds':'128'},{'hpmin':'-21'},{'turnmax':'6'},{'active':'1'},{'name[]':'array'},{'buffatkmod':'INF'}]:
+                    _,body=call(edit); bad={k:v for k,v in drink.items() if k!='active'}; bad.update(self._security_fields(body,save)); bad.update(invalid)
+                    self.assertEqual(400,call(save,bad)[0]); self.assertEqual(drink,self.query('SELECT * FROM drinks WHERE drinkid=?',[ident])[0])
+                for op,active in [('activate','1'),('deactivate','0')]:
+                    url=f'runmodule.php?module=drinks&act=editor&op={op}&drinkid={ident}&admin=true'
+                    _,body=call(base); form=self._security_fields(body,url)
+                    self.assertEqual(403,call(url)[0]); self.assertEqual(403,call(url,{})[0])
+                    self.assertEqual(200,call(url,form)[0]); self.assertEqual(409,call(url,form)[0])
+                    self.assertEqual(active,self.query('SELECT active FROM drinks WHERE drinkid=?',[ident])[0]['active'])
+                delete=f'runmodule.php?module=drinks&act=editor&op=del&drinkid={ident}&admin=true'
+                _,body=call(base); form=self._security_fields(body,delete)
+                self.assertEqual(403,call(delete)[0]); self.assertEqual(403,call(delete,{})[0])
+                if delegated:
+                    grant(0); self.assertEqual(403,call(delete,form)[0]); self.assertEqual(drink,self.query('SELECT * FROM drinks WHERE drinkid=?',[ident])[0]); grant(1)
+                self.assertEqual(200,call(delete,form)[0]); self.assertEqual(409,call(delete,form)[0]); self.assertEqual([],self.query('SELECT * FROM drinks WHERE drinkid=?',[ident]))
+            for ident in ['0','-1','1e2','32768','1%20OR%201=1']:
+                self.assertEqual(400,call(f'runmodule.php?module=drinks&act=editor&op=edit&drinkid={ident}&admin=true')[0])
+            self.assertEqual(404,call('runmodule.php?module=drinks&act=editor&op=edit&drinkid=32767&admin=true')[0])
+        finally:
+            for ident in created: self.query('DELETE FROM drinks WHERE drinkid=?',[ident])
+            self.query('DELETE FROM module_userprefs WHERE modulename=? AND userid=?',['drinks',player])
+            for row in prefs: self.query('INSERT INTO module_userprefs(modulename,setting,userid,value) VALUES (?,?,?,?)',['drinks',row['setting'],player,row['value']])
+            self.query('UPDATE accounts SET superuser=? WHERE acctid=?',[original['superuser'],player])
+            self.query('UPDATE modules SET active=0')
+
+    def test_potions_configured_prices_and_random_bounds(self):
+        player=self.query('SELECT acctid FROM accounts WHERE login=?',['WebPlayer'])[0]['acctid']
+        original=self.query('SELECT gold,gems,charm,maxhitpoints,hitpoints,race,specialty,bufflist FROM accounts WHERE acctid=?',[player])[0]
+        settings=self.query('SELECT setting,value FROM module_settings WHERE modulename=?',['cedrikspotions'])
+        prefs=self.query('SELECT setting,value FROM module_userprefs WHERE modulename=? AND userid=?',['cedrikspotions',player])
+        self.query('UPDATE modules SET active=1')
+        request=self._security_client()
+        url='runmodule.php?module=cedrikspotions&op=gems'
+        action='runmodule.php?module=cedrikspotions&op=gems'
+        def setting(key,value):
+            self.query('INSERT INTO module_settings(modulename,setting,value) VALUES (?,?,?) ON DUPLICATE KEY UPDATE value=VALUES(value)',['cedrikspotions',key,str(value)])
+        def buy(wish,quantity):
+            self._security_allow(player,url); status,body=request(url); self.assertEqual(200,status,body[:1000])
+            form=self._security_fields(body)
+            match=re.search(r'<form action=[\'"]([^\'"]+)[\'"] method=[\'"]POST',body)
+            actual=html.unescape(match.group(1))
+            self._security_allow(player,actual)
+            post={**form,'wish':str(wish),'gemcount':str(quantity),'cost':'0','randcost':'0'}
+            status,body=request(actual,post)
+            saved=self.query('SELECT gems,charm,maxhitpoints,hitpoints,race,specialty,bufflist FROM accounts WHERE acctid=?',[player])
+            self._security_allow(player,actual); self.assertEqual(409,request(actual,post)[0]); self.assertEqual(saved,self.query('SELECT gems,charm,maxhitpoints,hitpoints,race,specialty,bufflist FROM accounts WHERE acctid=?',[player]))
+            return status,body
+        try:
+            setting('random',0)
+            for wish,key in enumerate(['charmcost','maxcost','tempcost','forgcost','transcost'],1):
+                setting(key,wish+1)
+                self.query("UPDATE accounts SET gems=100,charm=10,maxhitpoints=10,hitpoints=10,race='Human',specialty='DA',bufflist='a:0:{}' WHERE acctid=?",[player])
+                status,body=buy(wish,3*(wish+1)+1); self.assertEqual(200,status,body[:1000])
+                self.assertEqual(str(100-((wish+1) if wish>=4 else 3*(wish+1))),self.query('SELECT gems FROM accounts WHERE acctid=?',[player])[0]['gems'])
+            setting('random',1); setting('minrand',1); setting('maxrand',10)
+            for cost in [1,10]:
+                setting('randcost',cost); self.query('UPDATE accounts SET gems=100 WHERE acctid=?',[player])
+                self.assertEqual(200,buy(1,3*cost)[0]); self.assertEqual(str(100-3*cost),self.query('SELECT gems FROM accounts WHERE acctid=?',[player])[0]['gems'])
+            for low,high,cost in [(9,2,5),(0,10,5),(1,11,5),(1,10,0),(1,10,'1e1')]:
+                setting('minrand',low); setting('maxrand',high); setting('randcost',cost)
+                before=self.query('SELECT gems,charm FROM accounts WHERE acctid=?',[player])
+                self.assertEqual(400,buy(1,10)[0]); self.assertEqual(before,self.query('SELECT gems,charm FROM accounts WHERE acctid=?',[player]))
+            setting('random',0); setting('charmcost',2)
+            self.query('UPDATE accounts SET gems=1 WHERE acctid=?',[player]); before=self.query('SELECT gems,charm FROM accounts WHERE acctid=?',[player])
+            self.assertEqual(200,buy(1,2)[0]); self.assertEqual(before,self.query('SELECT gems,charm FROM accounts WHERE acctid=?',[player]))
+            for quantity in ['0','-1','1e2','2147483648','bad']:
+                self.assertEqual(400,buy(1,quantity)[0]); self.assertEqual(before,self.query('SELECT gems,charm FROM accounts WHERE acctid=?',[player]))
+            # Max valid offered amount, single-dose reset retains historical charge.
+            setting('forgcost',10); self.query('UPDATE accounts SET gems=2147483647 WHERE acctid=?',[player])
+            self.assertEqual(200,buy(4,2147483647)[0]); self.assertEqual('2147483637',self.query('SELECT gems FROM accounts WHERE acctid=?',[player])[0]['gems'])
+        finally:
+            self.query('UPDATE accounts SET '+','.join(k+'=?' for k in original)+' WHERE acctid=?',[*original.values(),player])
+            self.query('DELETE FROM module_settings WHERE modulename=?',['cedrikspotions'])
+            for row in settings: self.query('INSERT INTO module_settings(modulename,setting,value) VALUES (?,?,?)',['cedrikspotions',row['setting'],row['value']])
+            self.query('DELETE FROM module_userprefs WHERE modulename=? AND userid=?',['cedrikspotions',player])
+            for row in prefs: self.query('INSERT INTO module_userprefs(modulename,setting,userid,value) VALUES (?,?,?,?)',['cedrikspotions',row['setting'],player,row['value']])
+            self.query('UPDATE modules SET active=0')
+
+    def test_darkhorse_shared_jackpot_concurrency(self):
+        from concurrent.futures import ThreadPoolExecutor
+        import threading
+        class NoRedirect(urllib.request.HTTPRedirectHandler):
+            def redirect_request(self, *args): return None
+        with socket.socket() as sock:
+            sock.bind(('127.0.0.1',0)); second_port=sock.getsockname()[1]
+        server=subprocess.Popen([shutil.which('php'),'-d','display_errors=1','-S',f'127.0.0.1:{second_port}','-t',str(ROOT)],
+            cwd=ROOT,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
+        def client(port):
+            opener=urllib.request.build_opener(urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar()),NoRedirect)
+            def request(url,fields=None):
+                req=urllib.request.Request(f'http://127.0.0.1:{port}/'+url,data=None if fields is None else urllib.parse.urlencode(fields).encode())
+                try: response=opener.open(req,timeout=20)
+                except urllib.error.HTTPError as error: response=error
+                body=response.read().decode('utf-8',errors='replace')
+                self.assertNotRegex(body,r'(?i)(fatal error|warning:|deprecated:|notice:)',body[:1000])
+                return response.status,body
+            return request
+        def token(body,key):
+            match=re.search(r'name=[\'"]'+key+r'[\'"] value=[\'"]([a-f0-9]{64})',body)
+            self.assertIsNotNone(match,body[:1000]); return match.group(1)
+        players=self.query('SELECT acctid,gold,specialinc,specialmisc,lasthit FROM accounts WHERE login IN (?,?) ORDER BY login',['FixtureAdmin','WebPlayer'])
+        settings=self.query('SELECT setting,value FROM module_settings WHERE modulename=?',['game_fivesix'])
+        prefs=self.query('SELECT userid,value FROM module_userprefs WHERE modulename=? AND setting=?',['game_fivesix','playstoday'])
+        url='runmodule.php?module=game_fivesix'
+        requests=[client(second_port),client(self.port)]
+        try:
+            for _ in range(100):
+                try:
+                    with socket.create_connection(('127.0.0.1',second_port),timeout=.1): break
+                except OSError: time.sleep(.05)
+            else: self.fail('Second loopback server did not start')
+            self.query('UPDATE modules SET active=1')
+            forms=[]
+            for row,request,login,password in zip(players,requests,['FixtureAdmin','WebPlayer'],['Synthetic administrator password',"Synthetic web O'Reilly \\ password"]):
+                status,body=request('home.php'); self.assertEqual(200,status)
+                status,_=request('login.php',{'csrf_token':token(body,'csrf_token'),'name':login,'password':password}); self.assertEqual(303,status)
+                event='forest.php?op=oldman'; allowed='a:1:{s:'+str(len(event))+':"'+event+'";b:1;}'
+                self.query('UPDATE accounts SET gold=2000,lasthit=UTC_TIMESTAMP(),specialinc=?,specialmisc=?,allowednavs=? WHERE acctid=?',['module:darkhorse','',allowed,row['acctid']])
+                status,body=request(event); self.assertEqual(200,status)
+                links=[html.unescape(x) for x in re.findall(r'href=[\'"]([^\'"]+)',body)]
+                link=next(x for x in links if x.startswith(url))
+                status,body=request(link); self.assertEqual(200,status)
+                forms.append({'csrf_token':token(body,'csrf_token'),'action_token':token(body,'action_token'),'action':'roll'})
+                self.query('INSERT INTO module_userprefs (modulename,setting,userid,value) VALUES (?,?,?,?) ON DUPLICATE KEY UPDATE value=VALUES(value)',['game_fivesix','playstoday',row['acctid'],'0'])
+            for key,value in [('cost','5'),('dailyuses','0'),('jackpot','1000'),('maxjackpot','5000')]:
+                self.query('INSERT INTO module_settings (modulename,setting,value) VALUES (?,?,?) ON DUPLICATE KEY UPDATE value=VALUES(value)',['game_fivesix',key,value])
+            gate=threading.Barrier(2)
+            def roll(i): gate.wait(timeout=5); return requests[i](url,forms[i])
+            with ThreadPoolExecutor(max_workers=2) as pool:
+                futures=[pool.submit(roll,i) for i in range(2)]
+                for future in futures: self.assertEqual(200,future.result()[0])
+            results=[self.query('SELECT gold,specialmisc FROM accounts WHERE acctid=?',[row['acctid']])[0] for row in players]
+            actual=[int(row['gold'])-1995 for row in results]
+            states=[json.loads(row['specialmisc']) for row in results]
+            sixes=[json.loads(state['data']).count(6) for state in states]
+            jackpot=int(self.query('SELECT value FROM module_settings WHERE modulename=? AND setting=?',['game_fivesix','jackpot'])[0]['value'])
+            possible=[]
+            for order in [(0,1),(1,0)]:
+                pot=1000; paid=[0,0]
+                for i in order:
+                    pot=min(5000,pot+5)
+                    paid[i]=pot if sixes[i]==5 else ((pot+5)//10 if sixes[i]==4 else ((pot+10)//20 if sixes[i]==3 else 0))
+                    pot=100 if sixes[i]==5 else pot-paid[i]
+                possible.append((paid,pot))
+            self.assertIn((actual,jackpot),possible,'Concurrent results must equal one serial execution, with no lost update')
+            for i,row in enumerate(players):
+                self.assertEqual(int(row['acctid']),states[i]['owner']); self.assertTrue(states[i]['settled'])
+                self.assertEqual('1',self.query('SELECT value FROM module_userprefs WHERE modulename=? AND setting=? AND userid=?',['game_fivesix','playstoday',row['acctid']])[0]['value'])
+                status,_=requests[i](url,forms[i]); self.assertEqual(409,status)
+                self.assertEqual(results[i],self.query('SELECT gold,specialmisc FROM accounts WHERE acctid=?',[row['acctid']])[0])
+            self.assertEqual(str(jackpot),self.query('SELECT value FROM module_settings WHERE modulename=? AND setting=?',['game_fivesix','jackpot'])[0]['value'])
+        finally:
+            server.terminate(); server.wait(timeout=5)
+            for row in players:
+                self.query('UPDATE accounts SET gold=?,specialinc=?,specialmisc=?,lasthit=? WHERE acctid=?',[row['gold'],row['specialinc'],row['specialmisc'],row['lasthit'],row['acctid']])
+            self.query('DELETE FROM module_settings WHERE modulename=?',['game_fivesix'])
+            for row in settings: self.query('INSERT INTO module_settings (modulename,setting,value) VALUES (?,?,?)',['game_fivesix',row['setting'],row['value']])
+            self.query('DELETE FROM module_userprefs WHERE modulename=? AND setting=?',['game_fivesix','playstoday'])
+            for row in prefs: self.query('INSERT INTO module_userprefs (modulename,setting,userid,value) VALUES (?,?,?,?)',['game_fivesix','playstoday',row['userid'],row['value']])
+            self.query('UPDATE modules SET active=0')
+
+    def test_darkhorse_wagers_abandonment_and_information(self):
+        class NoRedirect(urllib.request.HTTPRedirectHandler):
+            def redirect_request(self, *args): return None
+        client=urllib.request.build_opener(urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar()),NoRedirect)
+        def request(url, data=None):
+            req=urllib.request.Request(f'http://127.0.0.1:{self.port}/'+url,
+                data=None if data is None else urllib.parse.urlencode(data).encode())
+            try: response=client.open(req,timeout=15)
+            except urllib.error.HTTPError as error: response=error
+            body=response.read().decode('utf-8',errors='replace')
+            self.assertNotRegex(body,r'(?i)(fatal error|warning:|deprecated:|notice:)',body[:1800])
+            return response.status,body
+        def fields(body, **extra):
+            result={}
+            for key in ['csrf_token','action_token']:
+                match=re.search(r'name=[\'"]'+key+r'[\'"] value=[\'"]([a-f0-9]{64})',body)
+                self.assertIsNotNone(match,body[:1800]); result[key]=match.group(1)
+            return {**result,**extra}
+        def allow(url):
+            value='a:1:{s:'+str(len(url))+':"'+url+'";b:1;}'
+            self.query('UPDATE accounts SET allowednavs=? WHERE acctid=?',[value,player])
+        def snapshot():
+            return self.query('SELECT gold,specialmisc FROM accounts WHERE acctid=?',[player])[0]
+        def state(): return json.loads(snapshot()['specialmisc'])
+        def page(url):
+            self.query('UPDATE accounts SET lasthit=UTC_TIMESTAMP() WHERE acctid=?',[player])
+            allow(url); status,body=request(url); self.assertEqual(200,status,body[:1000]); return body
+        status,body=request('home.php')
+        csrf=re.search(r'name=[\'"]csrf_token[\'"] value=[\'"]([a-f0-9]{64})',body).group(1)
+        status,_=request('login.php',{'csrf_token':csrf,'name':'WebPlayer','password':"Synthetic web O'Reilly \\ password"})
+        self.assertEqual(303,status)
+        player=self.query('SELECT acctid FROM accounts WHERE login=?',['WebPlayer'])[0]['acctid']
+        prior=self.query('SELECT gold,specialmisc,specialinc FROM accounts WHERE acctid=?',[player])[0]
+        settings=self.query('SELECT setting,value FROM module_settings WHERE modulename=?',['game_fivesix'])
+        self.query('UPDATE modules SET active=1')
+        oldman='forest.php?op=oldman'
+        try:
+            self.query('UPDATE accounts SET specialinc=?,specialmisc=?,gold=1000 WHERE acctid=?',['module:darkhorse','',player])
+            body=page(oldman)  # issues server-owned return for all three games
+            self.assertEqual('',snapshot()['specialmisc'])
+            # No active state cannot authorize an abandonment, even with correct CSRF.
+            empty_form=fields(page('runmodule.php?module=game_dice'))
+            allow(oldman); status,_=request(oldman,{**empty_form,'game':'game_dice'})
+            self.assertEqual(409,status)
+            for module in ['game_stones','game_dice']:
+                url='runmodule.php?module='+module
+                body=page(url)
+                if module=='game_stones':
+                    status,body=request(url,fields(body,action='choose',side='likepair')); self.assertEqual(200,status)
+                before=int(snapshot()['gold'])
+                post=fields(body,action='bet',bet='10')
+                status,_=request(url,{'action':'bet','bet':'10'}); self.assertEqual(403,status)
+                status,body=request(url,post); self.assertEqual(200,status)
+                self.assertEqual(before-10,int(snapshot()['gold']))
+                saved=snapshot()
+                body=page(oldman)
+                self.assertEqual(saved,snapshot())  # GET oldman cannot erase risk
+                self.assertIn('Resume game',re.sub('<[^>]+>','',body))
+                other='runmodule.php?module='+('game_dice' if module=='game_stones' else 'game_stones')
+                allow(other); status,_=request(other); self.assertEqual(409,status); self.assertEqual(saved,snapshot())
+                body=page(oldman)
+                wrong=fields(body,game='game_fivesix')
+                status,_=request(oldman,wrong); self.assertEqual(409,status); self.assertEqual(saved,snapshot())
+                body=page(oldman); post=fields(body,game=module)
+                status,_=request(oldman,{'game':module}); self.assertEqual(403,status)
+                status,body=request(oldman,post); self.assertEqual(200,status)
+                self.assertEqual(before-10,int(snapshot()['gold'])); self.assertEqual('abandoned',state()['stage'])
+                saved=snapshot(); allow(oldman)
+                status,_=request(oldman,post); self.assertEqual(409,status); self.assertEqual(saved,snapshot())
+                body=page(oldman); self.assertEqual(saved,snapshot())
+            # Dice finite progression, request-carried state rejected, payout once.
+            url='runmodule.php?module=game_dice'; body=page(url); before=int(snapshot()['gold'])
+            for bet in ['-1','0','100000000000000000000','100000']:
+                status,_=request(url,fields(body,action='bet',bet=bet)); self.assertEqual(400,status)
+                self.assertEqual(before,int(snapshot()['gold'])); body=page(url)
+            status,body=request(url,fields(body,action='bet',bet='10')); self.assertEqual(200,status)
+            for attempt in [2,3]:
+                status,body=request(url,fields(body,action='pass')); self.assertEqual(200,status)
+                self.assertEqual(attempt,json.loads(state()['data'])['tries']); self.assertEqual(before-10,int(snapshot()['gold']))
+            saved=snapshot()
+            status,_=request(url,fields(body,action='pass')); self.assertEqual(400,status); self.assertEqual(saved,snapshot())
+            body=page(url)
+            for extra in [{'bet':'20'},{'try':'1'},{'what':'keep'},{'result':'win'}]:
+                status,_=request(url,fields(body,action='keep',**extra)); self.assertEqual(400,status); self.assertEqual(saved,snapshot()); body=page(url)
+            # Actual DML failure at final account write rolls settlement back.
+            self.wager_failure('game_dice',player)
+            post=fields(body,action='keep'); status,_=request(url,post); self.assertGreaterEqual(status,500)
+            self.assertEqual(saved,snapshot()); self.remove_wager_failure()
+            body=page(url); post=fields(body,action='keep'); status,body=request(url,post); self.assertEqual(200,status)
+            dice=json.loads(state()['data']); comparison=(dice['roll']>dice['opponent'])-(dice['roll']<dice['opponent'])
+            self.assertEqual(before+comparison*10,int(snapshot()['gold'])); self.assertTrue(state()['settled'])
+            saved=snapshot(); status,_=request(url,post); self.assertEqual(409,status); self.assertEqual(saved,snapshot())
+            body=page(oldman); self.assertEqual(saved,snapshot())
+            # Five/Six shared jackpot and daily counter commit with the actor.
+            for key,value in [('cost','5'),('dailyuses','1'),('jackpot','100'),('maxjackpot','5000')]:
+                self.query('INSERT INTO module_settings (modulename,setting,value) VALUES (?,?,?) ON DUPLICATE KEY UPDATE value=VALUES(value)',['game_fivesix',key,value])
+            self.query('INSERT INTO module_userprefs (modulename,setting,userid,value) VALUES (?,?,?,?) ON DUPLICATE KEY UPDATE value=VALUES(value)',['game_fivesix','playstoday',player,'0'])
+            url='runmodule.php?module=game_fivesix'; body=page(url); before=snapshot()
+            self.wager_failure('game_fivesix',player)
+            status,_=request(url,fields(body,action='roll')); self.assertGreaterEqual(status,500)
+            self.assertEqual(before,snapshot())
+            self.assertEqual('100',self.query('SELECT value FROM module_settings WHERE modulename=? AND setting=?',['game_fivesix','jackpot'])[0]['value'])
+            self.assertEqual('0',self.query('SELECT value FROM module_userprefs WHERE modulename=? AND setting=? AND userid=?',['game_fivesix','playstoday',player])[0]['value'])
+            self.remove_wager_failure()
+            body=page(url); post=fields(body,action='roll'); status,body=request(url,post); self.assertEqual(200,status)
+            sixes=json.loads(state()['data']).count(6)
+            payout={5:105,4:11,3:5}.get(sixes,0)
+            self.assertEqual(int(before['gold'])-5+payout,int(snapshot()['gold']))
+            self.assertEqual(str(100 if sixes==5 else 105-payout),self.query('SELECT value FROM module_settings WHERE modulename=? AND setting=?',['game_fivesix','jackpot'])[0]['value'])
+            saved=snapshot(); status,_=request(url,post); self.assertEqual(409,status); self.assertEqual(saved,snapshot())
+            body=page(url); status,_=request(url,fields(body,action='roll')); self.assertEqual(400,status); self.assertEqual(saved,snapshot())
+            # Every game rejects GET value operations even with issued navigation.
+            for suffix in ['game_dice&bet=10','game_dice&what=keep','game_fivesix&what=roll','game_stones&action=draw']:
+                attack='runmodule.php?module='+suffix; allow(attack)
+                status,_=request(attack); self.assertEqual(403,status); self.assertEqual(saved,snapshot())
+            # Bartender search binds quote/backslash/UTF-8; paid GET only confirms.
+            url='forest.php?op=bartender&what=enemies'; page(url); url+='&subop=search'
+            status,body=request(url,{'name':"O'Reilly \\ 雪"}); self.assertEqual(200,status); self.assertEqual(saved,snapshot())
+            url='forest.php?op=bartender&what=enemies&who=WebPlayer'; body=page(url)
+            self.assertEqual(saved,snapshot()); post=fields(body)
+            status,_=request(url,{}); self.assertEqual(403,status); self.assertEqual(saved,snapshot())
+            status,body=request(url,post); self.assertEqual(200,status)
+            self.assertEqual(int(saved['gold'])-100,int(snapshot()['gold']))
+            after=snapshot(); allow(url); status,_=request(url,post); self.assertEqual(409,status); self.assertEqual(after,snapshot())
+            for who in ['Nonexistent',"O'Reilly\\"]:
+                url='forest.php?op=bartender&what=enemies&who='+urllib.parse.quote(who)
+                body=page(url); status,_=request(url,fields(body)); self.assertEqual(200,status); self.assertEqual(after,snapshot())
+            url='forest.php?op=bartender&what=enemies&who=WebPlayer'
+            body=page(url); status,_=request(url,{**fields(body),'cost':'0'}); self.assertEqual(400,status); self.assertEqual(after,snapshot())
+            self.query('UPDATE accounts SET gold=99 WHERE acctid=?',[player]); body=page(url)
+            status,_=request(url,fields(body)); self.assertEqual(200,status); self.assertEqual('99',snapshot()['gold'])
+            # Persisted malformed/foreign-owner state never silently becomes a new wager.
+            for value in ['O:8:"stdClass":0:{}','{}',json.dumps({**state(),'owner':int(player)+999})]:
+                self.query('UPDATE accounts SET specialmisc=? WHERE acctid=?',[value,player]); allow(oldman)
+                status,_=request(oldman); self.assertEqual(409,status); self.assertEqual(value,snapshot()['specialmisc'])
+        finally:
+            self.remove_wager_failure()
+            self.query('UPDATE accounts SET gold=?,specialmisc=?,specialinc=? WHERE acctid=?',[prior['gold'],prior['specialmisc'],prior['specialinc'],player])
+            self.query('DELETE FROM module_settings WHERE modulename=?',['game_fivesix'])
+            for row in settings:
+                self.query('INSERT INTO module_settings (modulename,setting,value) VALUES (?,?,?)',['game_fivesix',row['setting'],row['value']])
+            self.query('DELETE FROM module_userprefs WHERE modulename=? AND userid=?',['game_fivesix',player])
+            self.query('UPDATE modules SET active=0')
+
+    def test_module_audrey_village_authority(self):
+        class NoRedirect(urllib.request.HTTPRedirectHandler):
+            def redirect_request(self, *args): return None
+        jar=http.cookiejar.CookieJar()
+        client=urllib.request.build_opener(urllib.request.HTTPCookieProcessor(jar),NoRedirect)
+        def request(path, fields=None):
+            req=urllib.request.Request(f'http://127.0.0.1:{self.port}/'+path,
+                data=None if fields is None else urllib.parse.urlencode(fields).encode())
+            try: response=client.open(req,timeout=15)
+            except urllib.error.HTTPError as error: response=error
+            body=response.read().decode('utf-8',errors='replace')
+            self.assertNotRegex(body,r'(?i)(fatal error|warning:|deprecated:|notice:)',body[:1500])
+            return response.status,body
+        def fields(body):
+            return {key:re.search(r'name=[\'"]'+key+r'[\'"] value=[\'"]([a-f0-9]{64})',body).group(1)
+                    for key in ['csrf_token','action_token']}
+        def allow(url):
+            value='a:1:{s:'+str(len(url))+':"'+url+'";b:1;}'
+            self.query('UPDATE accounts SET allowednavs=? WHERE acctid=?',[value,player])
+        def snapshot():
+            return self.query('SELECT gold,gems,charm,hitpoints,maxhitpoints,turns,bufflist FROM accounts WHERE acctid=?',[player])[0]
+        status,body=request('home.php')
+        csrf=re.search(r'name=[\'"]csrf_token[\'"] value=[\'"]([a-f0-9]{64})',body).group(1)
+        status,_=request('login.php',{'csrf_token':csrf,'name':'WebPlayer','password':"Synthetic web O'Reilly \\ password"})
+        self.assertEqual(303,status)
+        player=self.query('SELECT acctid FROM accounts WHERE login=?',['WebPlayer'])[0]['acctid']
+        self.query('UPDATE modules SET active=1')
+        prior=self.query('SELECT * FROM accounts WHERE acctid=?',[player])[0]
+        saved=self.query('SELECT setting,value FROM module_settings WHERE modulename=?',['crazyaudrey'])
+        savedprefs=self.query('SELECT setting,value FROM module_userprefs WHERE modulename=? AND userid=?',['crazyaudrey',player])
+        def pref(key,value):
+            self.query('INSERT INTO module_userprefs (modulename,setting,userid,value) VALUES (?,?,?,?) ON DUPLICATE KEY UPDATE value=?',['crazyaudrey',key,player,str(value),str(value)])
+        def setting(key,value):
+            self.query('INSERT INTO module_settings (modulename,setting,value) VALUES (?,?,?) ON DUPLICATE KEY UPDATE value=?',['crazyaudrey',key,str(value),str(value)])
+        def state():
+            return (snapshot(),self.query('SELECT setting,value FROM module_userprefs WHERE modulename=? AND userid=? ORDER BY setting',['crazyaudrey',player]),self.query('SELECT value FROM module_settings WHERE modulename=? AND setting=?',['crazyaudrey','profit']))
+        def get(op):
+            url='runmodule.php?module=crazyaudrey&op='+op
+            allow(url); before=state(); status,body=request(url)
+            self.assertEqual(200,status,body[-1000:]); self.assertEqual(before,state())
+            return url,fields(body)
+        try:
+            self.query('UPDATE accounts SET gold=100,turns=30,alive=1,specialinc=? WHERE acctid=?',['',player])
+            pref('played',0); pref('paidvisit',0)
+            setting('cost',7); setting('profit',11)
+            for key in ['animal','animals','lanimal','lanimals','sound','buffname']:
+                setting(key,"O'Reilly \\ chat é <img src=x onerror=alert(1)>")
+            # Bypassing allowed navigation cannot authorize a free Village basket reward.
+            url,post=get('play'); before=state()
+            self.assertEqual(409,request(url,post)[0]); self.assertEqual(before,state())
+            url,post=get('pet'); before=state()
+            self.assertEqual(403,request(url,{'action_token':post['action_token']})[0]); self.assertEqual(before,state())
+            status,body=request(url,{**post,'cost':'0','profit':'999999','played':'0'})
+            self.assertEqual(200,status); self.assertNotIn('<img src=x',body)
+            after=state(); self.assertEqual(93,int(after[0]['gold'])); self.assertEqual('18',after[2][0]['value'])
+            self.assertIn('crazyaudrey',after[0]['bufflist'])
+            allow(url); self.assertEqual(409,request(url,post)[0]); self.assertEqual(after,state())
+            url,post=get('play'); self.assertEqual(200,request(url,post)[0]); after=state()
+            self.assertEqual('1',dict((r['setting'],r['value']) for r in after[1])['played'])
+            self.assertEqual('0',dict((r['setting'],r['value']) for r in after[1])['paidvisit'])
+            allow(url); self.assertEqual(409,request(url,post)[0]); self.assertEqual(after,state())
+            url,post=get('play'); self.assertEqual(409,request(url,post)[0]); self.assertEqual(after,state())
+            # Historical repeated petting is allowed, but never a second daily basket game.
+            url,post=get('pet'); self.assertEqual(200,request(url,post)[0]); after=state()
+            url,post=get('play'); self.assertEqual(409,request(url,post)[0]); self.assertEqual(after,state())
+            self.query('UPDATE accounts SET gold=6 WHERE acctid=?',[player])
+            url,post=get('pet'); before=state(); self.assertEqual(409,request(url,post)[0]); self.assertEqual(before,state())
+            self.query('UPDATE accounts SET gold=100 WHERE acctid=?',[player])
+            for bad in ['-1','no','2147483648']:
+                setting('cost',bad); url,post=get('pet'); before=state()
+                self.assertEqual(409,request(url,post)[0]); self.assertEqual(before,state())
+            setting('cost',7)
+            # A failed final player write rolls back the earlier preference/profit/debug writes.
+            self.query('ALTER TABLE accounts ADD CONSTRAINT fixture_audrey_failure CHECK (gold <> 93)')
+            url,post=get('pet'); before=state()
+            audit=self.query('SELECT COUNT(*) AS n FROM debuglog WHERE actor=?',[player])
+            try:
+                self.assertEqual(500,request(url,post)[0]); self.assertEqual(before,state())
+                self.assertEqual(audit,self.query('SELECT COUNT(*) AS n FROM debuglog WHERE actor=?',[player]))
+            finally:
+                self.query('ALTER TABLE accounts DROP CONSTRAINT fixture_audrey_failure')
+            url,post=get('pet'); self.assertEqual(200,request(url,post)[0])
+            # Active module and authentication remain mandatory even with an issued intent.
+            url,post=get('pet'); before=state()
+            self.query('UPDATE modules SET active=0 WHERE modulename=?',['crazyaudrey'])
+            allow(url); request(url,post); self.assertEqual(before,state())
+            self.query('UPDATE modules SET active=1 WHERE modulename=?',['crazyaudrey'])
+            anonymous=urllib.request.build_opener(NoRedirect)
+            try: response=anonymous.open(urllib.request.Request(f'http://127.0.0.1:{self.port}/'+url,data=urllib.parse.urlencode(post).encode()))
+            except urllib.error.HTTPError as error: response=error
+            self.assertIn(response.status,[302,303,403]); response.close(); self.assertEqual(before,state())
+            url,old_day_post=get('pet')
+            # The actual New Day route resets both daily played and the pending paid visit.
+            pref('played',1); pref('paidvisit',1)
+            self.query('UPDATE accounts SET lasthit=?,race=?,specialty=? WHERE acctid=?',['2000-01-01 00:00:00','Human','DA',player])
+            allow('newday.php?continue=1')
+            self.assertEqual(200,self._advance_normal_day(request,player)[0])
+            current=dict((r['setting'],r['value']) for r in state()[1])
+            self.assertEqual('0',current['played']); self.assertEqual('0',current['paidvisit'])
+            before=state(); allow(url); self.assertEqual(409,request(url,old_day_post)[0]); self.assertEqual(before,state())
+            url,post=get('play'); before=state(); self.assertEqual(409,request(url,post)[0]); self.assertEqual(before,state())
+        finally:
+            self.query('UPDATE accounts SET '+','.join(k+'=?' for k in prior)+' WHERE acctid=?',list(prior.values())+[player])
+            self.query('DELETE FROM module_settings WHERE modulename=?',['crazyaudrey'])
+            for row in saved: setting(row['setting'],row['value'])
+            self.query('DELETE FROM module_userprefs WHERE modulename=? AND userid=?',['crazyaudrey',player])
+            for row in savedprefs: pref(row['setting'],row['value'])
+            self.query('UPDATE modules SET active=0')
+
+    def test_module_purchases_post_csrf_replay_and_effects(self):
+        class NoRedirect(urllib.request.HTTPRedirectHandler):
+            def redirect_request(self, *args): return None
+        jar=http.cookiejar.CookieJar()
+        client=urllib.request.build_opener(urllib.request.HTTPCookieProcessor(jar),NoRedirect)
+        def request(path, fields=None):
+            req=urllib.request.Request(f'http://127.0.0.1:{self.port}/'+path,
+                data=None if fields is None else urllib.parse.urlencode(fields).encode())
+            try: response=client.open(req,timeout=15)
+            except urllib.error.HTTPError as error: response=error
+            body=response.read().decode('utf-8',errors='replace')
+            self.assertNotRegex(body,r'(?i)(fatal error|warning:|deprecated:|notice:)',body[:1500])
+            return response.status,body
+        def fields(body):
+            return {key:re.search(r'name=[\'"]'+key+r'[\'"] value=[\'"]([a-f0-9]{64})',body).group(1)
+                    for key in ['csrf_token','action_token']}
+        def allow(url):
+            value='a:1:{s:'+str(len(url))+':"'+url+'";b:1;}'
+            self.query('UPDATE accounts SET allowednavs=? WHERE acctid=?',[value,player])
+        def snapshot():
+            return self.query('SELECT gold,gems,charm,hitpoints,maxhitpoints,specialty,race,bufflist FROM accounts WHERE acctid=?',[player])[0]
+        status,body=request('home.php')
+        csrf=re.search(r'name=[\'"]csrf_token[\'"] value=[\'"]([a-f0-9]{64})',body).group(1)
+        status,_=request('login.php',{'csrf_token':csrf,'name':'WebPlayer','password':"Synthetic web O'Reilly \\ password"})
+        self.assertEqual(303,status)
+        player=self.query('SELECT acctid FROM accounts WHERE login=?',['WebPlayer'])[0]['acctid']
+        self.query('UPDATE modules SET active=1')
+        original=snapshot()
+        self.query('UPDATE accounts SET gold=10000,gems=100,charm=10,hitpoints=10,maxhitpoints=10,race=?,specialty=? WHERE acctid=?',['Human','DA',player])
+        try:
+            url='runmodule.php?module=cedrikspotions&op=gems'
+            for wish in range(1,6):
+                allow(url); before=snapshot()
+                status,body=request(url)
+                self.assertEqual(200,status)
+                post=fields(body)
+                action=html.unescape(re.search(r'<form action=[\'"]([^\'"]+)[\'"] method=[\'"]POST',body).group(1))
+                self.assertEqual(before,snapshot())
+                status,_=request(action,{'wish':str(wish),'gemcount':'2'})
+                self.assertEqual(403,status)
+                status,body=request(action,{**post,'wish':str(wish),'gemcount':'2'})
+                self.assertEqual(200,status)
+                after=snapshot()
+                self.assertEqual(int(before['gems'])-2,int(after['gems']))
+                if wish==1: self.assertEqual(int(before['charm'])+1,int(after['charm']))
+                if wish==2: self.assertEqual(int(before['maxhitpoints'])+1,int(after['maxhitpoints']))
+                if wish==3: self.assertEqual(max(int(before['hitpoints']),int(before['maxhitpoints']))+20,int(after['hitpoints']))
+                if wish==4: self.assertEqual('',after['specialty'])
+                if wish==5:
+                    self.assertEqual('Horrible Gelatinous Blob',after['race'])
+                    self.assertIn('transmute',after['bufflist'])
+                    self.assertIn('survivenewday',after['bufflist'])
+                allow(action)
+                status,_=request(action,{**post,'wish':str(wish),'gemcount':'2'})
+                self.assertEqual(409,status)
+                self.assertEqual(after,snapshot())
+            for invalid in ['-2','0','2e1','99999999999999999999999']:
+                allow(url); status,body=request(url); post=fields(body)
+                action=html.unescape(re.search(r'<form action=[\'"]([^\'"]+)[\'"] method=[\'"]POST',body).group(1))
+                before=snapshot(); status,_=request(action,{**post,'wish':'1','gemcount':invalid})
+                self.assertEqual(400,status); self.assertEqual(before,snapshot())
+            # Shared real Forest dispatcher: pending event, POST, consumed reward, replay.
+            for module,choice in [('findgem',''),('findgold',''),('foilwench','give'),('fairy','give'),
+                                  ('glowingstream','drink'),('goldmine','mine'),('crazyaudrey','play')]:
+                self.query('UPDATE accounts SET specialinc=?,specialmisc=?,gems=20,gold=1000,hitpoints=100,maxhitpoints=100,turns=30,alive=1,race=?,specialty=? WHERE acctid=?',
+                           ['module:'+module,'','Human','DA',player])
+                skill_before=self.query('SELECT setting,value FROM module_userprefs WHERE modulename=? AND userid=? ORDER BY setting',['specialtydarkarts',player])
+                event_url='forest.php?op='
+                allow(event_url); before=snapshot(); status,body=request(event_url)
+                self.assertEqual(200,status); self.assertEqual(before,snapshot())
+                event_post=fields(body)
+                status,_=request(event_url,{})
+                self.assertEqual(403,status); self.assertEqual(before,snapshot())
+                status,body=request(event_url,event_post)
+                self.assertEqual(200,status)
+                if choice:
+                    event_url='forest.php?op='+choice
+                    allow(event_url); status,body=request(event_url)
+                    self.assertEqual(200,status)
+                    event_post=fields(body)
+                    before=snapshot()
+                    status,body=request(event_url,event_post)
+                    self.assertEqual(200,status)
+                after=snapshot()
+                if module=='findgem': self.assertEqual(int(before['gems'])+1,int(after['gems']))
+                if module=='findgold':
+                    level=int(self.query('SELECT level FROM accounts WHERE acctid=?',[player])[0]['level'])
+                    self.assertGreaterEqual(int(after['gold'])-int(before['gold']),10*level)
+                    self.assertLessEqual(int(after['gold'])-int(before['gold']),50*level)
+                if module=='foilwench':
+                    self.assertEqual(int(before['gems'])-1,int(after['gems']))
+                    prior_skill=int(next((r['value'] for r in skill_before if r['setting']=='skill'),'0'))
+                    skill_after=self.query('SELECT setting,value FROM module_userprefs WHERE modulename=? AND userid=? ORDER BY setting',['specialtydarkarts',player])
+                    self.assertEqual(prior_skill+1,int(next(r['value'] for r in skill_after if r['setting']=='skill')))
+                if module=='fairy': self.assertIn(int(after['gems'])-int(before['gems']),[-1,1])
+                self.assertEqual('',self.query('SELECT specialinc FROM accounts WHERE acctid=?',[player])[0]['specialinc'])
+                # A replay after completion cannot re-enter the consumed event.
+                allow(event_url); status,_=request(event_url,event_post)
+                self.assertIn(status,(200,302,303,403,409))
+                self.assertEqual(after,snapshot())
+                if module=='foilwench':
+                    self.assertEqual(skill_after,self.query('SELECT setting,value FROM module_userprefs WHERE modulename=? AND userid=? ORDER BY setting',['specialtydarkarts',player]))
+            # Current Foil Wench encounter still requires a real gem, not merely a valid form.
+            self.query('UPDATE accounts SET specialinc=?,gems=0,specialty=? WHERE acctid=?',['module:foilwench','DA',player])
+            event_url='forest.php?op=give'
+            allow(event_url); status,body=request(event_url)
+            self.assertEqual(200,status); post=fields(body); before=snapshot()
+            skill_before=self.query('SELECT setting,value FROM module_userprefs WHERE modulename=? AND userid=? ORDER BY setting',['specialtydarkarts',player])
+            invalid_url='forest.php?op[]=give'
+            allow(invalid_url); status,_=request(invalid_url)
+            self.assertEqual(400,status); self.assertEqual(before,snapshot())
+            allow(event_url); status,_=request(event_url,post)
+            self.assertEqual(200,status); self.assertEqual(before,snapshot())
+            self.assertEqual(skill_before,self.query('SELECT setting,value FROM module_userprefs WHERE modulename=? AND userid=? ORDER BY setting',['specialtydarkarts',player]))
+            self.query('UPDATE accounts SET alive=1,hitpoints=100,turns=30,specialinc=? WHERE acctid=?',['',player])
+            # Server availability applies even when a forged form selects a hidden potion.
+            self.query('UPDATE module_settings SET value=? WHERE modulename=? AND setting=?',['0','cedrikspotions','ischarm'])
+            allow(url); status,body=request(url); post=fields(body)
+            action=html.unescape(re.search(r'<form action=[\'"]([^\'"]+)[\'"] method=[\'"]POST',body).group(1))
+            before=snapshot(); status,_=request(action,{**post,'wish':'1','gemcount':'2'})
+            self.assertEqual(400,status); self.assertEqual(before,snapshot())
+            self.query('UPDATE module_settings SET value=? WHERE modulename=? AND setting=?',['1','cedrikspotions','ischarm'])
+            drink=self.query('SELECT drinkid,costperlevel FROM drinks WHERE harddrink=1 ORDER BY drinkid LIMIT 1')[0]
+            url='runmodule.php?module=drinks&act=buy&id='+drink['drinkid']
+            allow(url); before=snapshot(); status,body=request(url)
+            self.assertEqual(200,status); self.assertEqual(before,snapshot()); post=fields(body)
+            status,_=request(url,{})
+            self.assertEqual(403,status)
+            status,body=request(url,post)
+            self.assertEqual(200,status)
+            after=snapshot(); level=int(self.query('SELECT level FROM accounts WHERE acctid=?',[player])[0]['level'])
+            self.assertEqual(int(before['gold'])-level*int(drink['costperlevel']),int(after['gold']))
+            allow(url); status,_=request(url,post)
+            self.assertEqual(409,status); self.assertEqual(after,snapshot())
+            self.query('UPDATE module_userprefs SET value=? WHERE modulename=? AND setting=? AND userid=?',['3','drinks','harddrinks',player])
+            allow(url); status,body=request(url); post=fields(body)
+            status,_=request(url,post)
+            self.assertEqual(400,status); self.assertEqual(after,snapshot())
+            url='runmodule.php?module=sethsong'
+            allow(url); before=snapshot(); status,body=request(url)
+            self.assertEqual(200,status); self.assertEqual(before,snapshot()); post=fields(body)
+            status,_=request(url,{})
+            self.assertEqual(403,status)
+            status,_=request(url,post)
+            self.assertEqual(200,status)
+            after=snapshot()
+            self.assertEqual('1',self.query('SELECT value FROM module_userprefs WHERE modulename=? AND setting=? AND userid=?',['sethsong','been',player])[0]['value'])
+            allow(url); status,_=request(url,post)
+            self.assertEqual(409,status); self.assertEqual(after,snapshot())
+            for visit in ['pay','free']:
+                for setting in ['usedouthouse','stage']:
+                    self.query('INSERT INTO module_userprefs (modulename,setting,userid,value) VALUES (?,?,?,?) ON DUPLICATE KEY UPDATE value=?',['outhouse',setting,player,'0','0'])
+                url='runmodule.php?module=outhouse&op='+visit
+                allow(url); before=snapshot(); status,body=request(url)
+                self.assertEqual(200,status); self.assertEqual(before,snapshot()); post=fields(body)
+                status,_=request(url,{})
+                self.assertEqual(403,status)
+                status,_=request(url,post)
+                self.assertEqual(200,status)
+                used=snapshot()
+                cost=int(self.query('SELECT value FROM module_settings WHERE modulename=? AND setting=?',['outhouse','cost'])[0]['value']) if visit=='pay' else 0
+                self.assertEqual(int(before['gold'])-cost,int(used['gold']))
+                allow(url); status,_=request(url,post)
+                self.assertEqual(409,status); self.assertEqual(used,snapshot())
+                url='runmodule.php?module=outhouse&op=wash'+visit
+                allow(url); status,body=request(url); post=fields(body)
+                status,_=request(url,post)
+                self.assertEqual(200,status)
+                washed=snapshot()
+                self.assertEqual('0',self.query('SELECT value FROM module_userprefs WHERE modulename=? AND setting=? AND userid=?',['outhouse','stage',player])[0]['value'])
+                allow(url); status,_=request(url,post)
+                self.assertEqual(409,status); self.assertEqual(washed,snapshot())
+                # Even a freshly obtained CSRF/intent cannot repeat a completed visit.
+                allow(url); status,body=request(url); post=fields(body)
+                status,_=request(url,post)
+                self.assertEqual(409,status); self.assertEqual(washed,snapshot())
+            # A player cannot smuggle an internal module preference through a suffix.
+            pref_before=self.query('SELECT modulename,setting,value FROM module_userprefs WHERE userid=? ORDER BY modulename,setting',[player])
+            csrf=fields(body)['csrf_token']
+            for forged in ['drinks___canedit___user_','specialtydarkarts___skill___check_',
+                           'drinks___user_forged','absentmodule___user_forged']:
+                pref_url='prefs.php?op=save'; allow(pref_url)
+                status,_=request(pref_url,{'csrf_token':csrf,forged:'1'})
+                self.assertIn(status,(400,403))
+                self.assertEqual(pref_before,self.query('SELECT modulename,setting,value FROM module_userprefs WHERE userid=? ORDER BY modulename,setting',[player]))
+            # Editor authorization is checked even with an issued route fixture.
+            editor='runmodule.php?module=drinks&act=editor&op=edit&drinkid='+drink['drinkid']+'&admin=true'
+            self.query('UPDATE accounts SET superuser=0 WHERE acctid=?',[player])
+            allow(editor); status,_=request(editor)
+            self.assertEqual(403,status)
+            self.query('UPDATE accounts SET superuser=64 WHERE acctid=?',[player])
+            allow(editor); status,body=request(editor)
+            self.assertEqual(200,status); post=fields(body)
+            original_drink=self.query('SELECT * FROM drinks WHERE drinkid=?',[drink['drinkid']])[0]
+            values={key:value for key,value in original_drink.items() if key!='active'}
+            values.update(post); values['name']="`2O'Reilly <img>"; values['remarks']="UTF-8 🐉 \\ apostrophe's"
+            save='runmodule.php?module=drinks&act=editor&op=save&admin=true'
+            status,_=request(save)
+            self.assertEqual(403,status)
+            status,_=request(save,{**values,'csrf_token':''})
+            self.assertEqual(403,status)
+            status,body=request(save,values)
+            self.assertEqual(200,status)
+            self.assertNotIn("O'Reilly <img>",body)
+            saved=self.query('SELECT name,remarks FROM drinks WHERE drinkid=?',[drink['drinkid']])[0]
+            self.assertEqual(values['name'],saved['name']); self.assertEqual(values['remarks'],saved['remarks'])
+            allow(save); status,_=request(save,values)
+            self.assertEqual(409,status)
+            self.query('UPDATE drinks SET name=?,remarks=? WHERE drinkid=?',[original_drink['name'],original_drink['remarks'],drink['drinkid']])
+        finally:
+            self.query('UPDATE accounts SET superuser=0 WHERE acctid=?',[player])
+            self.query('UPDATE modules SET active=0')
+            self.query('UPDATE module_settings SET value=? WHERE modulename=? AND setting=?',['1','cedrikspotions','ischarm'])
+            self.query('UPDATE accounts SET '+','.join(key+'=?' for key in original)+' WHERE acctid=?', [*original.values(),player])
+
+    def test_create_login_rotate_render_logout(self):
+        class NoRedirect(urllib.request.HTTPRedirectHandler):
+            def redirect_request(self, *args):
+                return None
+        jar = http.cookiejar.CookieJar()
+        client = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(jar), NoRedirect)
+        def request(path, fields=None, extra_headers=None):
+            data = None if fields is None else urllib.parse.urlencode(fields).encode()
+            req = urllib.request.Request(f'http://127.0.0.1:{self.port}/' + path, data=data, headers=extra_headers or {})
+            try:
+                response = client.open(req, timeout=15)
+            except urllib.error.HTTPError as response_error:
+                response = response_error
+            body = response.read().decode('utf-8', errors='replace')
+            self.assertNotRegex(body, r'(?i)(fatal error|warning:|deprecated:|notice:|runtime error in)', body[:2500])
+            return response.status, response.headers, body
+        def token(body):
+            match = re.search(r'name=[\'"]csrf_token[\'"] value=[\'"]([a-f0-9]{64})', body)
+            self.assertIsNotNone(match, body[:500])
+            return match.group(1)
+        def comment_form(body):
+            class Forms(HTMLParser):
+                def __init__(self):
+                    super().__init__()
+                    self.forms = []
+                    self.current = None
+                def handle_starttag(self, tag, attrs):
+                    attributes = dict(attrs)
+                    if tag == 'form':
+                        self.current = [attributes.get('action', ''), {}]
+                    elif tag == 'input' and self.current is not None and 'name' in attributes:
+                        self.current[1][attributes['name']] = attributes.get('value', '')
+                def handle_endtag(self, tag):
+                    if tag == 'form' and self.current is not None:
+                        self.forms.append(self.current)
+                        self.current = None
+            forms = Forms()
+            forms.feed(body)
+            return next(form for form in forms.forms if 'insertcommentary' in form[1])
+        def issued_link(body, prefix):
+            links = re.findall(r'href=[\'"]([^\'"]+)', body)
+            found = next((html.unescape(link) for link in links if html.unescape(link).startswith(prefix)), None)
+            self.assertIsNotNone(found, 'Missing issued navigation: ' + prefix)
+            return found
+        def session_id():
+            return next(c.value for c in jar if c.name == 'PHPSESSID')
+
+        status, headers, body = request('home.php', extra_headers={'Cookie': 'PHPSESSID=attackerchosenid1234567890123456'})
+        self.assertEqual(200, status, headers.get('Location', 'Unexpected HTTP status'))
+        initial_id = session_id()
+        self.assertNotEqual('attackerchosenid1234567890123456', initial_id)
+        self.assertIn('HttpOnly', headers.get('Set-Cookie', ''))
+        self.assertIn('SameSite=Lax', headers.get('Set-Cookie', ''))
+        status, _, body = request('create.php')
+        self.assertEqual(200, status, headers.get('Location', 'Unexpected HTTP status'))
+        csrf = token(body)
+        password = "Synthetic web O'Reilly \\ password"
+        status, _, body = request('create.php?op=create', {'csrf_token': csrf, 'name': 'WebPlayer',
+                                    'pass1': password, 'pass2': password, 'email': 'web@example.invalid', 'sex': '0'})
+        self.assertEqual(200, status, headers.get('Location', 'Unexpected HTTP status'))
+        self.assertIn('Your account was created', body)
+        self.assertNotIn(password, body)
+        stored_hash = self.query('SELECT password FROM accounts WHERE login=?', ['WebPlayer'])[0]['password']
+        for rejected in ['wrong password', stored_hash]:
+            status, headers, _ = request('login.php', {'csrf_token': csrf, 'name': 'WebPlayer', 'password': rejected})
+            self.assertEqual(303, status)
+            self.assertEqual('index.php', headers['Location'])
+            self.assertEqual(initial_id, session_id())
+        status, _, _ = request('login.php', {'csrf_token': csrf, 'name': 'WebPlayer', 'password[]': password})
+        self.assertEqual(400, status)
+        logs = self.query('SELECT post,id FROM faillog')
+        self.assertTrue(logs)
+        for record in logs:
+            self.assertEqual('invalid_credentials', record['post'])
+            self.assertEqual('', record['id'])
+        for secret in [password, stored_hash, initial_id, csrf]:
+            self.assertNotIn(secret, json.dumps(logs))
+        status, headers, _ = request('login.php', {'csrf_token': csrf, 'name': 'WebPlayer', 'password': password})
+        self.assertEqual(303, status)
+        self.assertEqual('village.php', headers['Location'])
+        self.assertNotEqual(initial_id, session_id())
+        authenticated_id = session_id()
+        self.query('UPDATE modules SET active=1 WHERE modulename IN (?,?)',['racehuman','specialtymysticpower'])
+        status, headers, body = request('village.php')
+        # First login follows the game's existing character onboarding, including
+        # active Human and Mystical Powers POST selection.
+        if status in (302, 303) and headers['Location'] == 'newday.php':
+            status, _, body = request('newday.php')
+            self.assertEqual(200, status, headers.get('Location', 'Unexpected HTTP status'))
+            race_form=self._security_fields(body) | {'onboarding':'race','setrace':'Human'}
+            status, _, body=request('newday.php?continue=1',race_form)
+            self.assertEqual(200,status)
+            status, _, body=request(issued_link(body,'newday.php?continue=1'))
+            self.assertEqual(200,status)
+            specialty_form=self._security_fields(body) | {'onboarding':'specialty','setspecialty':'MP'}
+            status, _, body=request('newday.php?continue=1',specialty_form)
+            self.assertEqual(200,status)
+            status, _, body=request(issued_link(body,'newday.php?continue=1'))
+            self.assertEqual(200,status)
+            status, _, body = request('newday.php?continue=1', self._security_fields(body) | {'newday':'normal'})
+            self.assertEqual(200,status,body[:2000])
+            status, headers, body = request(issued_link(body, 'village.php'))
+        self.assertEqual(200, status, headers.get('Location', 'Unexpected HTTP status'))
+        self.assertIn('WebPlayer', body)
+        # A new account has no stored preferences. prefs.php renders a missing boolean as 1.1.2 did
+        # (an undefined key compared equal to 0, so "No" is selected) and saves what the browser posts.
+        self.assertNotIn('emailonmail', self.query('SELECT prefs FROM accounts WHERE login=?', ['WebPlayer'])[0]['prefs'])
+        def browser_form(page, action):
+            part = re.search(r"<form action='" + re.escape(action) + r"' method='POST'>(.*?)</form>", page, re.S).group(1)
+            values = {}
+            for tag in re.findall(r'<input\b[^>]*>', part):
+                name = re.search(r'name=[\'"]([^\'"]+)', tag)
+                if not name or re.search(r'type=[\'"](?:submit|button)', tag): continue
+                value = re.search(r'value=([\'"])(.*?)\1', tag, re.S)
+                values[name.group(1)] = html.unescape(value.group(2)) if value else ''
+            for name, options in re.findall(r"<select name='([^']+)'>(.*?)</select>", part, re.S):
+                chosen = re.search(r"<option value='([^']*)' selected", options) or re.search(r"<option value='([^']*)'", options)
+                values[name] = html.unescape(chosen.group(1))
+            return values
+        status, _, prefs_body = request(issued_link(body, 'prefs.php'))
+        self.assertEqual(200, status)
+        for key in ['emailonmail', 'systemmail', 'dirtyemail', 'nojump']:
+            self.assertRegex(prefs_body, r"<select name='" + key + r"'>\s*<option value='0' selected>", prefs_body[prefs_body.find("name='" + key + "'"):][:300])
+        status, _, prefs_body = request('prefs.php?op=save', browser_form(prefs_body, 'prefs.php?op=save'))
+        self.assertEqual(200, status)
+        self.assertIn('Settings Saved', prefs_body)
+        saved = self.query('SELECT prefs FROM accounts WHERE login=?', ['WebPlayer'])[0]['prefs']
+        for key in ['emailonmail', 'systemmail', 'dirtyemail', 'nojump']:
+            self.assertIn('s:%d:"%s";s:1:"0";' % (len(key), key), saved)
+        status, headers, body = request(issued_link(prefs_body, 'village.php'))
+        self.assertEqual(200, status, headers.get('Location', 'Unexpected HTTP status'))
+        action, fields = comment_form(body)
+        comment = "O'Reilly \\ <script>alert(8675309)</script>"
+        fields['insertcommentary'] = comment
+        status, _, body = request(action, fields)
+        self.assertEqual(200, status)
+        self.assertNotIn('<script>alert(8675309)</script>', body)
+        rows = self.query('SELECT commentid,comment FROM commentary WHERE author=(SELECT acctid FROM accounts WHERE login=?) ORDER BY commentid DESC LIMIT 1', ['WebPlayer'])
+        self.assertEqual(comment, rows[0]['comment'])
+        action, fields = comment_form(body)
+        status, _, _ = request(action, {'csrf_token': fields['csrf_token'], 'removecomment': rows[0]['commentid']})
+        self.assertEqual(403, status)
+        self.assertEqual(1, len(self.query('SELECT commentid FROM commentary WHERE commentid=?', [rows[0]['commentid']])))
+        # Grant only the documented moderator bit in this disposable fixture.
+        self.query('UPDATE accounts SET superuser=16 WHERE login=?', ['WebPlayer'])
+        before_privilege_change = session_id()
+        status, _, _ = request(action, {'csrf_token': fields['csrf_token'], 'removecomment': rows[0]['commentid']})
+        self.assertEqual(403, status)  # privilege refresh rotated the old CSRF token
+        self.assertNotEqual(before_privilege_change, session_id())
+        status, _, body = request(action)
+        self.assertEqual(200, status)
+        action, fields = comment_form(body)
+        status, _, body = request(action, {'csrf_token': fields['csrf_token'], 'removecomment': rows[0]['commentid']})
+        self.assertEqual(200, status)
+        self.assertEqual([], self.query('SELECT commentid FROM commentary WHERE commentid=?', [rows[0]['commentid']]))
+        authenticated_id = session_id()
+
+        # All bundled modules active in one real authenticated HTTP session.
+        # Lifecycle/cache transitions are tested through the real API in PHPUnit.
+        self.query('UPDATE modules SET active=1')
+        try:
+            village_action, _ = comment_form(body)
+            status, headers, body = request(village_action)
+            self.assertEqual(200, status, headers.get('Location', 'Village render failed'))
+            status, _, body = request(issued_link(body, 'inn.php'))
+            self.assertEqual(200, status)
+            for module in ['dag', 'lovers', 'sethsong']:
+                status, _, body = request(issued_link(body, 'runmodule.php?module=' + module))
+                self.assertEqual(200, status)
+                self.assertIn('WebPlayer', body)
+                if module == 'dag':
+                    player_id = self.query('SELECT acctid FROM accounts WHERE login=?', ['WebPlayer'])[0]['acctid']
+                    target = self.query('SELECT acctid,name,level,age FROM accounts WHERE login=?', ['FixtureAdmin'])[0]
+                    gold = self.query('SELECT gold FROM accounts WHERE acctid=?', [player_id])[0]['gold']
+                    self.query('UPDATE accounts SET gold=1000 WHERE acctid=?', [player_id])
+                    self.query('UPDATE accounts SET level=5,age=10 WHERE acctid=?', [target['acctid']])
+                    try:
+                        status, _, body = request(issued_link(body, 'runmodule.php?module=dag&op=addbounty'))
+                        self.assertEqual(200, status)
+                        nonce = re.search(r'name="action_token" value="([a-f0-9]{64})"', body).group(1)
+                        fields = {'csrf_token':token(body),'action_token':nonce,'contractname':'FixtureAdmin','amount':'250'}
+                        url = 'runmodule.php?module=dag&op=finalize'
+                        status, _, _ = request(url)
+                        self.assertEqual(403,status)
+                        status, _, _ = request(url, {'contractname':'FixtureAdmin','amount':'250'})
+                        self.assertEqual(403,status)
+                        self.assertEqual('1000',self.query('SELECT gold FROM accounts WHERE acctid=?',[player_id])[0]['gold'])
+                        status, _, body = request(url,fields)
+                        self.assertEqual(200,status)
+                        self.assertEqual('725',self.query('SELECT gold FROM accounts WHERE acctid=?',[player_id])[0]['gold'])
+                        bounties = self.query('SELECT bountyid,amount FROM bounty WHERE setter=? AND target=?',[player_id,target['acctid']])
+                        self.assertEqual(1,len(bounties))
+                        status, _, _ = request(url,fields)
+                        self.assertIn(status,(302,303,409))
+                        self.assertEqual(bounties,self.query('SELECT bountyid,amount FROM bounty WHERE setter=? AND target=?',[player_id,target['acctid']]))
+                        self.assertEqual('725',self.query('SELECT gold FROM accounts WHERE acctid=?',[player_id])[0]['gold'])
+                        status, _, body = request('runmodule.php?module=dag')
+                        # Force a valid navigation fixture to prove the capability boundary itself.
+                        admin_url = 'runmodule.php?module=dag&manage=true'
+                        allowed = 'a:1:{s:'+str(len(admin_url))+':"'+admin_url+'";b:1;}'
+                        self.query('UPDATE accounts SET allowednavs=? WHERE acctid=?',[allowed,player_id])
+                        status, _, _ = request(admin_url)
+                        self.assertEqual(403,status)
+                        allowed = 'a:1:{s:7:"inn.php";b:1;}'
+                        self.query('UPDATE accounts SET allowednavs=? WHERE acctid=?',[allowed,player_id])
+                        status, _, body = request('inn.php')
+                        status, _, body = request(issued_link(body,'runmodule.php?module=dag'))
+                    finally:
+                        self.query('DELETE FROM bounty WHERE setter=? AND target=?',[player_id,target['acctid']])
+                        self.query('UPDATE accounts SET gold=? WHERE acctid=?',[gold,player_id])
+                        self.query('UPDATE accounts SET level=?,age=? WHERE acctid=?',[target['level'],target['age'],target['acctid']])
+                status, _, body = request(issued_link(body, 'inn.php'))
+                self.assertEqual(200, status)
+            status, _, body = request(issued_link(body, 'village.php'))
+            self.assertEqual(200, status)
+            status, _, body = request(issued_link(body, 'forest.php'))
+            self.assertEqual(200, status)
+            self.assertIsNotNone(issued_link(body, 'runmodule.php?module=outhouse'))
+            # Actual Dark Horse event -> Stones forms. Only fixture setup writes SQL.
+            player_id = self.query('SELECT acctid FROM accounts WHERE login=?', ['WebPlayer'])[0]['acctid']
+            prior_gold = self.query('SELECT gold FROM accounts WHERE acctid=?', [player_id])[0]['gold']
+            event_url = 'forest.php?op=oldman'
+            allowed = 'a:1:{s:' + str(len(event_url)) + ':"' + event_url + '";b:1;}'
+            self.query('UPDATE accounts SET specialinc=?,specialmisc=?,gold=100,allowednavs=? WHERE acctid=?',
+                       ['module:darkhorse', '', allowed, player_id])
+            status, _, body = request(event_url)
+            self.assertEqual(200, status)
+            status, _, body = request(issued_link(body, 'runmodule.php?module=game_stones'))
+            self.assertEqual(200, status)
+            game_url = 'runmodule.php?module=game_stones'
+            def game_fields(body, **extra):
+                nonce = re.search(r'name="action_token" value="([a-f0-9]{64})"', body)
+                self.assertIsNotNone(nonce, body[:1000])
+                return {'csrf_token': token(body), 'action_token': nonce.group(1), **extra}
+            fields = game_fields(body, action='choose', side='likepair')
+            status, _, _ = request(game_url, {'action':'choose', 'side':'likepair'})
+            self.assertEqual(403, status)
+            self.assertEqual('', self.query('SELECT specialmisc FROM accounts WHERE acctid=?', [player_id])[0]['specialmisc'])
+            status, _, body = request(game_url, fields)
+            self.assertEqual(200, status)
+            status, _, _ = request(game_url, fields)
+            self.assertEqual(409, status)
+            status, _, body = request(game_url)
+            fields = game_fields(body, action='bet', bet='-10')
+            status, _, _ = request(game_url, fields)
+            self.assertEqual(400, status)
+            self.assertEqual('100', self.query('SELECT gold FROM accounts WHERE acctid=?', [player_id])[0]['gold'])
+            status, _, body = request(game_url)
+            fields = game_fields(body, action='bet', bet='10')
+            status, _, body = request(game_url, fields)
+            self.assertEqual(200, status)
+            self.assertEqual('90', self.query('SELECT gold FROM accounts WHERE acctid=?', [player_id])[0]['gold'])
+            for _ in range(9):
+                wager = json.loads(self.query('SELECT specialmisc FROM accounts WHERE acctid=?', [player_id])[0]['specialmisc'])
+                state = json.loads(wager['data'])
+                action = 'settle' if state['red']+state['blue']==0 or state['player']>8 or state['oldman']>8 else 'draw'
+                fields = game_fields(body, action=action)
+                if action == 'settle':
+                    before_failure=self.query('SELECT gold,specialmisc FROM accounts WHERE acctid=?',[player_id])[0]
+                    self.wager_failure('game_stones',player_id)
+                    try:
+                        status,_,_=request(game_url,fields); self.assertEqual(503,status)
+                        self.assertEqual(before_failure,self.query('SELECT gold,specialmisc FROM accounts WHERE acctid=?',[player_id])[0])
+                    finally: self.remove_wager_failure()
+                    status,_,body=request(game_url); self.assertEqual(200,status)
+                    fields=game_fields(body,action=action)
+                status, _, body = request(game_url, fields)
+                self.assertEqual(200, status)
+                saved = self.query('SELECT gold,specialmisc FROM accounts WHERE acctid=?', [player_id])[0]
+                status, _, _ = request(game_url, fields)
+                self.assertEqual(409, status)
+                self.assertEqual(saved, self.query('SELECT gold,specialmisc FROM accounts WHERE acctid=?', [player_id])[0])
+                status, _, body = request(game_url)
+                self.assertEqual(200, status)
+                if action == 'settle':
+                    self.assertTrue(json.loads(saved['specialmisc'])['settled'])
+                    self.assertFalse(json.loads(saved['specialmisc'])['active'])
+                    self.assertIn(saved['gold'], ['90','100','110'])
+                    break
+            else:
+                self.fail('Stones did not complete within its finite draw limit')
+            self.query('UPDATE accounts SET specialmisc=? WHERE acctid=?', ['O:8:"stdClass":0:{}', player_id])
+            status, _, _ = request(game_url)
+            self.assertEqual(409, status)
+            self.query('UPDATE accounts SET specialmisc=?,gold=? WHERE acctid=?', ['[]', prior_gold, player_id])
+            status, _, body = request(game_url)
+            status, _, body = request(issued_link(body, 'forest.php?op=tavern'))
+            self.assertEqual(200, status)
+            status, _, body = request(issued_link(body, 'forest.php?op=leave'))
+            self.assertEqual(200, status)
+            status, _, body = request('forest.php?op=leave', self._security_fields(body,'forest.php?op=leave'))
+            self.assertEqual(200, status)
+            status, _, body = request(issued_link(body, 'village.php'))
+            self.assertEqual(200, status)
+        finally:
+            self.query('UPDATE modules SET active=0')
+
+
+        # Actual mailbox UI: stored subject HTML, HTTP methods, CSRF and ownership.
+        player_id = self.query('SELECT acctid FROM accounts WHERE login=?', ['WebPlayer'])[0]['acctid']
+        subject = '<img src=x onerror=alert(8675309)>'
+        self.query('INSERT INTO mail (msgfrom,msgto,subject,body,sent) VALUES (1,?,?,?,NOW())', [player_id, subject, 'Synthetic message'])
+        message_id = self.query('SELECT messageid FROM mail WHERE msgto=? ORDER BY messageid DESC LIMIT 1', [player_id])[0]['messageid']
+        status, _, body = request('mail.php')
+        self.assertEqual(200, status)
+        self.assertNotIn(subject, body)
+        csrf = token(body)
+        status, _, _ = request('mail.php?op=del&id=' + message_id)
+        self.assertEqual(403, status)
+        status, _, _ = request('mail.php?op=del', {'id':message_id})
+        self.assertEqual(403, status)
+        status, _, _ = request('mail.php?op=process', {'csrf_token':csrf, 'msg[]':"1') OR 1=1 --"})
+        self.assertEqual(400, status)
+        self.assertEqual(1, len(self.query('SELECT messageid FROM mail WHERE messageid=?', [message_id])))
+        status, _, _ = request('mail.php?op=del', {'csrf_token':csrf, 'id':message_id})
+        self.assertEqual(303, status)
+        self.assertEqual([], self.query('SELECT messageid FROM mail WHERE messageid=?', [message_id]))
+
+        status, _, body = request('petition.php')
+        self.assertEqual(200, status)
+        petition_token = token(body)
+        status, _, _ = request('petition.php?op=submit')
+        self.assertEqual(403, status)
+        status, _, _ = request('petition.php?op=submit', {'description':'missing token'})
+        self.assertEqual(403, status)
+        description = "Petition O'Reilly \\ <script>synthetic</script>"
+        status, _, body = request('petition.php?op=submit', {'csrf_token':petition_token, 'description':description,
+            'password':'SYNTHETIC-UNEXPECTED-FIELD', 'charname':'Forged identity'})
+        self.assertEqual(200, status)
+        self.assertIn('Your petition has been sent', body)
+        saved = self.query('SELECT body,pageinfo,id FROM petitions WHERE author=? ORDER BY petitionid DESC LIMIT 1', [player_id])[0]
+        self.assertIn(description, saved['body'])
+        self.assertNotIn('Forged identity', saved['body'])
+        self.assertEqual('Session diagnostics intentionally omitted.', saved['pageinfo'])
+        self.assertEqual('', saved['id'])
+        for secret in [password, stored_hash, session_id(), petition_token, 'SYNTHETIC-UNEXPECTED-FIELD']:
+            self.assertNotIn(secret, json.dumps(saved))
+
+        status, _, body = request('login.php?op=logout')
+        self.assertEqual(200, status, headers.get('Location', 'Unexpected HTTP status'))
+        status, headers, _ = request('login.php?op=logout', {'csrf_token': token(body)})
+        self.assertEqual(303, status)
+        self.assertFalse(any(c.name == 'PHPSESSID' for c in jar))
+        status, headers, _ = request('village.php')
+        self.assertIn(status, (302, 303))
+        self.assertIn('index.php', headers['Location'])
+        status, headers, _ = request('village.php', extra_headers={'Cookie': 'PHPSESSID=' + authenticated_id})
+        self.assertIn(status, (302, 303))
+        self.assertIn('index.php', headers['Location'])
+        status, _, _ = request('create.php?op=forgot')
+        self.assertEqual(410, status)
+        status, _, _ = request('runmodule.php?module[]=drinks&admin=true')
+        self.assertEqual(400, status)
+        status, _, _ = request('installer.php?stage=9')
+        self.assertEqual(403, status)

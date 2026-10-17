@@ -1,7 +1,7 @@
 <?php
-function lovers_violet(){
+function lovers_violet(?int $choice = null){
 	global $session;
-	$seenlover = get_module_pref("seenlover");
+	$seenlover = 0; // Entry and locked daily authority are checked by lovers_run().
 	$partner = get_partner();
 
 	if ($seenlover==0){
@@ -31,21 +31,21 @@ function lovers_violet(){
 				output("`n`n`^You gain a charm point!");
 			}
 			$seenlover = 1;
-		}elseif (httpget('flirt')==""){
+		}elseif ($choice === null){
 			output("You stare dreamily across the room at %s`0, who leans across a table to serve a patron a drink.",$partner);
 			output("In doing so, she shows perhaps a bit more skin than is necessary, but you don't feel the need to object.");
 			addnav("Flirt");
-			addnav("Wink","runmodule.php?module=lovers&op=flirt&flirt=1");
-			addnav("Kiss her hand","runmodule.php?module=lovers&op=flirt&flirt=2");
-			addnav("Peck her on the lips","runmodule.php?module=lovers&op=flirt&flirt=3");
-			addnav("Sit her on your lap","runmodule.php?module=lovers&op=flirt&flirt=4");
-			addnav("Grab her backside","runmodule.php?module=lovers&op=flirt&flirt=5");
-			addnav("Carry her upstairs","runmodule.php?module=lovers&op=flirt&flirt=6");
-			addnav("Marry her","runmodule.php?module=lovers&op=flirt&flirt=7");
+			lovers_form("Wink", 1);
+			lovers_form("Kiss her hand", 2);
+			lovers_form("Peck her on the lips", 3);
+			lovers_form("Sit her on your lap", 4);
+			lovers_form("Grab her backside", 5);
+			lovers_form("Carry her upstairs", 6);
+			lovers_form("Marry her", 7);
 		}else{
 			$c = $session['user']['charm'];
 			$seenlover = 1;
-			switch(httpget('flirt')){
+			switch($choice){
 				case 1:
 					if (e_rand($c,2)>=2){
 						output("You wink at %s`0, and she gives you a warm smile in return.",$partner);
@@ -145,6 +145,6 @@ function lovers_violet(){
 	}else{
 		output("You think you had better not push your luck with %s`0 today.",$partner);
 	}
-	set_module_pref("seenlover",$seenlover);
+	if ($seenlover === 1) set_module_pref("seenlover", 1, "lovers");
 }
 ?>

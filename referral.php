@@ -18,14 +18,9 @@ if ($session['user']['loggedin']){
 	}
 	output("You will automatically receive %s points for each person that you refer to this website who makes it to level %s.`n`n", getsetting("refereraward", 25), getsetting("referminlevel", 4));
 
-	$url = getsetting("serverurl",
-			"http://".$_SERVER['SERVER_NAME'] .
-			($_SERVER['SERVER_PORT']==80?"":":".$_SERVER['SERVER_PORT']) .
-			dirname($_SERVER['REQUEST_URI']));
-	if (!preg_match("/\\/$/", $url)) {
-		$url = $url . "/";
-		savesetting("serverurl", $url);
-	}
+	// The configured URL; when it is unset, 1.1.2's request-built URL is shown to this player but never saved.
+	require_once("lib/server_url.php");
+	$url = resurrection_server_url() ?? resurrection_request_server_url() ?? "";
 
 	output("How does the site know that I referred a person?`n");
 	output("Easy!  When you tell your friends about this site, give out the following link:`n`n");

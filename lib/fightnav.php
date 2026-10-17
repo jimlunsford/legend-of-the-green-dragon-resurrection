@@ -4,9 +4,14 @@
 // mail ready
 function fightnav($allowspecial=true, $allowflee=true,$script=false){
 	global $PHP_SELF,$session,$newenemies,$companions;
+    if (basename($_SERVER['SCRIPT_NAME'] ?? '') === 'forest.php' && ($script === false || str_starts_with($script,'forest.php'))) {
+        require_once __DIR__ . '/forest_combat.php';
+        resurrection_forest_forms();
+        return;
+    }
 	tlschema("fightnav");
 	if ($script===false){
-		$script = substr($PHP_SELF,strrpos($PHP_SELF,"/")+1)."?";
+		$script = basename($_SERVER['SCRIPT_NAME'] ?? 'forest.php')."?";
 	}else{
 		if (!strpos($script,"?")) {
 			$script.="?";
@@ -43,7 +48,12 @@ function fightnav($allowspecial=true, $allowflee=true,$script=false){
 
 	if ($allowspecial) {
 		addnav("Special Abilities");
-		modulehook("fightnav-specialties", array("script"=>$script));
+		if (basename($_SERVER['SCRIPT_NAME'] ?? '') === 'forest.php') {
+            require_once __DIR__ . '/specialty_combat.php';
+            resurrection_combat_forms();
+        } else {
+            modulehook("fightnav-specialties", array("script"=>$script));
+        }
 
 		if ($session['user']['superuser'] & SU_DEVELOPER) {
 			addnav("`&Super user`0","");

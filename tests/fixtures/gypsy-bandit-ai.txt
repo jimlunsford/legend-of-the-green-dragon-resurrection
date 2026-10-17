@@ -1,0 +1,13 @@
+global $badguy, $session;
+
+if (!isset($badguy['spellpoints'])) {
+	$badguy['spellpoints'] = 1;
+}
+
+$gold = round($session['user']['gold'] * 0.2);
+if (e_rand(0,7) == 0 && $gold > 200 && $badguy['spellpoints'] == 1) {
+	rawoutput("<br /><b><span style='color: white'>The pickpocket takes <span style='color: gold'>$gold gold</span>!</span></b><br /><br />");
+	$session['user']['gold'] -= $gold;
+	$badguy['creaturegold'] += $gold;
+	$badguy['spellpoints']--;
+}

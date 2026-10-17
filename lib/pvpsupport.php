@@ -12,16 +12,18 @@ require_once("lib/datetime.php");
 // This contains functions to support pvp
 function setup_target($name) {
 	global $pvptimeout, $session;
-	//Legacy support
-	if (is_numeric($name)) {
-		$where = "acctid=$name";
-	}else{
-		$where = "login='$name'";
-	}
-	$sql = "SELECT name AS creaturename, level AS creaturelevel, weapon AS creatureweapon, gold AS creaturegold, experience AS creatureexp, maxhitpoints AS creaturehealth, attack AS creatureattack, defense AS creaturedefense, loggedin, location, laston, alive, acctid, pvpflag, boughtroomtoday, race FROM " . db_prefix("accounts") . " WHERE $where";
-	$result = db_query($sql);
+    if (!is_int($name) || $name < 1 || $name > 2147483647 || $name === (int)$session['user']['acctid'] ||
+        empty($session['user']['alive']) || $session['user']['hitpoints'] <= 0 || !getsetting('pvp',1)) {
+        throw new DomainException('Invalid PvP actor or target.');
+    }
+    $result = db_query('SELECT name AS creaturename, level AS creaturelevel, weapon AS creatureweapon, gold AS creaturegold, experience AS creatureexp, maxhitpoints AS creaturehealth, attack AS creatureattack, defense AS creaturedefense, loggedin, location, laston, alive, acctid, pvpflag, boughtroomtoday, race, locked, age, dragonkills, pk, slaydragon FROM '.db_prefix('accounts').' WHERE acctid=? FOR UPDATE',true,[$name]);
 	if (db_num_rows($result)>0){
 		$row = db_fetch_assoc($result);
+        $location = httpget('inn') === '1' ? getsetting('innname', LOCATION_INN) : $session['user']['location'];
+        if ($row['locked'] || $row['slaydragon'] || $row['location'] !== $location ||
+            ($row['age'] <= getsetting('pvpimmunity',5) && $row['dragonkills'] == 0 && $row['pk'] == 0 && $row['creatureexp'] <= getsetting('pvpminexp',1500))) {
+            throw new DomainException('Ineligible PvP target.');
+        }
 		if (abs($session['user']['level']-$row['creaturelevel'])>2){
 			output("`\$Error:`4 That user is out of your level range!");
 			return false;
@@ -37,8 +39,8 @@ function setup_target($name) {
 			output("`\$Error:`4 That user is not alive.");
 			return false;
 		}elseif ($session['user']['playerfights']>0){
-			$sql = "UPDATE " . db_prefix("accounts") . " SET pvpflag='".date("Y-m-d H:i:s")."' WHERE acctid={$row['acctid']}";
-			db_query($sql);
+			$row['pvpflag'] = date('Y-m-d H:i:s');
+            db_query('UPDATE '.db_prefix('accounts').' SET pvpflag=? WHERE acctid=?',true,[$row['pvpflag'],(int)$row['acctid']]);
 			$row['creatureexp'] = round($row['creatureexp'],0);
 			$row['playerstarthp'] = $session['user']['hitpoints'];
 			$row['fightstartdate'] = strtotime("now");
@@ -61,8 +63,7 @@ function pvpvictory($badguy, $killedloc, $options)
 	global $session;
 	// If the victim has logged on and banked some, give the lessor of
 	// the gold amounts.
-	$sql = "SELECT gold FROM " . db_prefix("accounts") . " WHERE acctid='".(int)$badguy['acctid']."'";
-	$result = db_query($sql);
+	$result = db_query('SELECT gold FROM '.db_prefix('accounts').' WHERE acctid=? FOR UPDATE',true,[(int)$badguy['acctid']]);
 	$row = db_fetch_assoc($result);
 	$badguy['creaturegold'] =
 		((int)$row['gold']>(int)$badguy['creaturegold']?
@@ -127,8 +128,7 @@ function pvpvictory($badguy, $killedloc, $options)
 			$mailmessage);
 	// /\- Gunnar Kreitz
 
-	$sql = "UPDATE " . db_prefix("accounts") . " SET alive=0, goldinbank=(goldinbank+IF(gold<{$badguy['creaturegold']},gold-{$badguy['creaturegold']},0)),gold=IF(gold<{$badguy['creaturegold']},0,gold-{$badguy['creaturegold']}), experience=experience-$lostexp WHERE acctid=".(int)$badguy['acctid']."";
-	db_query($sql);
+	db_query('UPDATE '.db_prefix('accounts').' SET alive=0,gold=gold-?,experience=experience-? WHERE acctid=?',true,[(int)$badguy['creaturegold'],(int)$lostexp,(int)$badguy['acctid']]);
 	return $args['handled'];
 }
 
@@ -177,7 +177,7 @@ function pvpdefeat($badguy, $killedloc, $taunt, $options)
 	systemmail($badguy['acctid'],
 			array("`2You were successful while you were in %s`2", $killedloc),
 			array($msg, $session['user']['name'], $killedloc, $wonexp,
-				$winamount, $args['pvpmsgadd']));
+				$winamount, $args['pvpmessageadd']));
 
 	if ($row['level'] >= $badguy['creaturelevel']) {
 		// Only give the reward if the person didn't level down

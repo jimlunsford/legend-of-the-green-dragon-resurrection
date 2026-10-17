@@ -20,5 +20,6 @@ addnav(array("Restore Your Soul (%s favor)",$favortoheal),"graveyard.php?op=rest
 addnav("Places");
 addnav("S?Land of the Shades","shades.php");
 addnav("G?Return to the Graveyard","graveyard.php");
-modulehook("ramiusfavors");
+// No bundled ramiusfavors hooks. Protected presentation cannot invoke extension DML.
+if (!defined('RESURRECTION_RAMIUS_PRESENTATION')) modulehook("ramiusfavors");
 ?>

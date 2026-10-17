@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/../src/Compatibility/array_cursor.php';
 // addnews ready
 // translator ready
 // mail ready
@@ -599,7 +600,7 @@ function bell_rand($min=false,$max=false){
 	$r = mt_rand(0,100000);
 	//echo $r." = ";
 	reset($bell_curve);
-	while (list($key,$val)=each($bell_curve)){
+	while (list($key,$val)=resurrection_array_next($bell_curve)){
 		if ($key>=$r) {
 			return $min + $val * ($max-$min);
 		}

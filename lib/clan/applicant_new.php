@@ -1,18 +1,19 @@
 <?php
 		$apply = httpget('apply');
-		if ($apply==1){
-			$ocn = httppost('clanname');
-			$ocs = httppost('clanshort');
-			$clanname = stripslashes($ocn);
-			$clanname = full_sanitize($clanname);
+		if ($apply==1 && ($_SERVER['REQUEST_METHOD'] ?? '') === 'POST'){
+			require_once("lib/clan_authority.php");
+			try {
+				resurrection_clan_fields(['clanname','clanshort']);
+				$ocn = \Resurrection\Http\Input::string($_POST, 'clanname');
+				$ocs = \Resurrection\Http\Input::string($_POST, 'clanshort');
+			} catch (InvalidArgumentException $error) { http_response_code(400); exit('Invalid clan request.'); }
+			// 1.1.2 compared an addslashes() copy with magic-quoted input; names are compared and bound raw now.
+			$clanname = full_sanitize($ocn);
 			$clanname = preg_replace("'[^[:alpha:] \\'-]'","",$clanname);
-			$clanname = addslashes($clanname);
 			httppostset('clanname', $clanname);
 			$clanshort = full_sanitize($ocs);
 			$clanshort = preg_replace("'[^[:alpha:]]'","",$clanshort);
 			httppostset('clanshort', $clanshort);
-			$sql = "SELECT * FROM " . db_prefix("clans") . " WHERE clanname='$clanname'";
-			$result = db_query($sql);
 			$e = array (translate_inline("%s`7 looks over your form but informs you that your clan name must consist only of letters, spaces, apostrophes, or dashes.  Also, your short name can consist only of letters. She hands you a blank form."),
 				translate_inline("%s`7 looks over your form but informs you that you must have at least 5 and no more than 50 characters in your clan's name (and they must consist only of letters, spaces, apostrophes, or dashes), then hands you a blank form."),
 				translate_inline("%s`7 looks over your form but informs you that you must have at least 2 and no more than 5 characters in your clan's short name (and they must all be letters), then hands you a blank form."),
@@ -35,46 +36,49 @@
 				output_notl($e[2],$registrar);
 				clanform();
 				addnav("Return to the Lobby","clan.php");
-			}elseif (db_num_rows($result)>0){
-				output_notl($e[3],$registrar,stripslashes($clanname));
-				clanform();
-				addnav("Return to the Lobby","clan.php");
 			}else{
-				$sql = "SELECT * FROM " . db_prefix("clans") . " WHERE clanshort='$clanshort'";
-				$result = db_query($sql);
-				if (db_num_rows($result)>0){
-					output_notl($e[4],$registrar,stripslashes($clanshort));
+				// Uniqueness, the fees, the clan row and the founder's membership are one locked transaction.
+				try {
+					resurrection_consume_action('clan-new', resurrection_clan_new_context());
+					$created = resurrection_clan_mutation(function () use ($ocn, $ocs, $clanname, $clanshort, $gold, $gems) {
+						global $session;
+						if ((int)$session['user']['clanid'] !== 0 || (int)$session['user']['clanrank'] !== CLAN_APPLICANT) throw new DomainException('Already in a clan.');
+						if (db_query("SELECT clanid FROM " . db_prefix("clans") . " WHERE clanname=? FOR UPDATE", true, [$clanname])) return ['error'=>3];
+						if (db_query("SELECT clanid FROM " . db_prefix("clans") . " WHERE clanshort=? FOR UPDATE", true, [$clanshort])) return ['error'=>4];
+						if ($session['user']['gold']<$gold || $session['user']['gems']<$gems) return ['error'=>'fees'];
+/*//*/					$args = array("ocn"=>$ocn, "ocs"=>$ocs, "clanname"=>$clanname, "clanshort"=>$clanshort);
+/*//*/					$args = modulehook("process-createclan", $args);
+/*//*/					if (isset($args['blocked']) && $args['blocked']) return ['blocked'=>$args['blockmsg']];
+						db_query("INSERT INTO " . db_prefix("clans") . " (clanname,clanshort) VALUES (?,?)", true, [$clanname, $clanshort]);
+						$id = db_insert_id();
+						$session['user']['clanid'] = $id;
+						$session['user']['clanrank']=CLAN_LEADER+1; //+1 because he is the founder
+						$session['user']['clanjoindate']=date("Y-m-d H:i:s");
+						$session['user']['gold']-=$gold;
+						$session['user']['gems']-=$gems;
+						debuglog("has started a new clan (<$clanshort> $clanname) for $gold gold and $gems gems.");
+						return ['created'=>$id];
+					});
+				} catch (Throwable $error) { resurrection_clan_failure($error); }
+				if (isset($created['created'])) {
+					invalidatedatacache("clandata-{$created['created']}");
+					output("%s`7 looks over your form, and finding that everything seems to be in order, she takes your fees, stamps the form \"`\$APPROVED`7\" and files it in a drawer.`n`n",$registrar);
+					output("Congratulations, you've created a new clan named %s!",$clanname);
+					addnav("Enter your clan hall","clan.php");
+				} elseif (isset($created['blocked'])) {
+/*//*/				output_notl(sprintf_translate($created['blocked']));
+/*//*/				clanform();
+/*//*/				addnav("Return to the Lobby","clan.php");
+				} elseif ($created['error'] === 'fees') {
+					if ($gold>0 && $gems<=0) output_notl($e[5],$registrar,$gold);
+					elseif ($gems>0 && $gold<=0) output_notl($e[7],$registrar,$gems);
+					else output_notl($e[6],$registrar,$gold,$gems);
+					output_notl($e[8],$registrar);
+					addnav("Return to the Lobby","clan.php");
+				} else {
+					output_notl($e[$created['error']],$registrar,$created['error'] === 3 ? $clanname : $clanshort);
 					clanform();
 					addnav("Return to the Lobby","clan.php");
-				}else{
-					if ($session['user']['gold']<$gold || $session['user']['gems']<$gems){
-						if ($gold>0 && $gems<=0) output_notl($e[5],$registrar,$gold);
-						elseif ($gems>0 && $gold<=0) output_notl($e[7],$registrar,$gems);
-						else output_notl($e[6],$registrar,$gold,$gems);
-						output_notl($e[8],$registrar);
-						addnav("Return to the Lobby","clan.php");
-					}else{
-/*//*/						$args = array("ocn"=>$ocn, "ocs"=>$ocs, "clanname"=>$clanname, "clanshort"=>$clanshort);
-/*//*/						$args = modulehook("process-createclan", $args);
-/*//*/						if (isset($args['blocked']) && $args['blocked']){
-/*//*/							output_notl(sprintf_translate($args['blockmsg']));
-/*//*/							clanform();
-/*//*/							addnav("Return to the Lobby","clan.php");
-/*//*/						} else {
-							$sql = "INSERT INTO " . db_prefix("clans") . " (clanname,clanshort) VALUES ('$clanname','$clanshort')";
-							db_query($sql);
-							$id = db_insert_id();
-							$session['user']['clanid'] = $id;
-							$session['user']['clanrank']=CLAN_LEADER+1; //+1 because he is the founder
-							$session['user']['clanjoindate']=date("Y-m-d H:i:s");
-							$session['user']['gold']-=$gold;
-							$session['user']['gems']-=$gems;
-							debuglog("has started a new clan (<$clanshort> $clanname) for $gold gold and $gems gems.");
-							output("%s`7 looks over your form, and finding that everything seems to be in order, she takes your fees, stamps the form \"`\$APPROVED`7\" and files it in a drawer.`n`n",$registrar);
-							output("Congratulations, you've created a new clan named %s!",stripslashes($clanname));
-							addnav("Enter your clan hall","clan.php");
-/*//*/						}
-					}
 				}
 			}
 		}else{

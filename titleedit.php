@@ -3,14 +3,18 @@
 //Heavily modified by JT Traub
 require_once("common.php");
 require_once("lib/http.php");
+require_once("lib/content_editor.php");
 
 check_su_access(SU_EDIT_USERS);
 
 tlschema("retitle");
 
+try {
+	$op = \Resurrection\Http\Input::choice($_GET, 'op', ['', 'add', 'edit', 'save', 'delete', 'reset'], '');
+	// A save without an ID (1.1.2's add form posts id=0) adds a title.
+	$id = in_array($op, ['edit', 'delete'], true) ? resurrection_content_id($_GET, 'id') : ($op == 'save' ? resurrection_content_id($_GET, 'id', true) : 0);
+} catch (InvalidArgumentException $error) { resurrection_content_failure($error, 'the title editor'); }
 page_header("Title Editor");
-$op = httpget('op');
-$id = httpget('id');
 $editarray=array(
 	"Titles,title",
 	//"titleid"=>"Title Id,hidden",
@@ -25,33 +29,23 @@ superusernav();
 addnav("Functions");
 
 if ($op=="save") {
-	$male = httppost('male');
-	$female = httppost('female');
-	$dk = httppost('dk');
-	// Ref is currently unused
-	// $ref = httppost('ref');
-	$ref = '';
-
-	if ((int)$id == 0) {
-		$sql = "INSERT INTO ".db_prefix("titles")." (titleid,dk,ref,male,female) VALUES ($id,$dk,'$ref','$male','$female')";
+	// Ref is currently unused; it is saved as ''.
+	if ($id == 0) {
 		$note = "`^New title added.`0";
 		$errnote = "`\$Unable to add title.`0";
 	}else {
-		$sql = "UPDATE " . db_prefix("titles") . " SET dk=$dk,ref='$ref',male='$male',female='$female' WHERE titleid=$id";
 		$note = "`^Title modified.`0";
 		$errnote = "`\$Unable to modify title.`0";
 	}
-	db_query($sql);
-	if (db_affected_rows() == 0) {
+	// 1.1.2 reported the affected row count, so saving a title unchanged shows the error note.
+	if (resurrection_title_save($id) == 0) {
 		output($errnote);
-		rawoutput(db_error());
 	} else {
 		output($note);
 	}
 	$op = "";
 } elseif ($op == "delete") {
-	$sql = "DELETE FROM ".db_prefix("titles")." WHERE titleid='$id'";
-	db_query($sql);
+	resurrection_content_delete("titles", "titleid", "id", "title", "the title editor");
 	output("`^Title deleted.`0");
 	$op = "";
 }
@@ -81,11 +75,11 @@ if ($op == ""){
 	$result = db_query($sql);
 	$i = 0;
 	while($row = db_fetch_assoc($result)) {
-		$id = $row['titleid'];
+		$id = (int)$row['titleid'];
 		rawoutput("<tr class='".($i%2?"trlight":"trdark")."'>");
-		rawoutput("<td>[<a href='titleedit.php?op=edit&id=$id'>$edit</a>|<a href='titleedit.php?op=delete&id=$id' onClick='return confirm(\"$delconfirm\");'>$del</a>]</td>");
+		rawoutput("<td>[<a href='titleedit.php?op=edit&id=$id'>$edit</a>|" .
+			resurrection_content_delete_form("titleedit.php?op=delete&id=$id", "title-del-$id", resurrection_content_context('del', $row), $del, $delconfirm) . "]</td>");
 		addnav("","titleedit.php?op=edit&id=$id");
-		addnav("","titleedit.php?op=delete&id=$id");
 		rawoutput("<td>");
 		output_notl("`&%s`0",$row['dk']);
 		rawoutput("</td><td>");
@@ -108,66 +102,46 @@ if ($op == ""){
 } elseif ($op=="edit" || $op=="add") {
 	require_once("lib/showform.php");
 	if ($op=="edit"){
-		$sql = "SELECT * FROM ".db_prefix("titles")." WHERE titleid='$id'";
-		$result = db_query($sql);
-		$row = db_fetch_assoc($result);
-	} elseif ($op=="add") {
+		$row = resurrection_content_row("titles", "titleid", $id);
+		if ($row === null) resurrection_content_failure(new OutOfBoundsException('Title not found.'), 'the title editor');
+		$context = resurrection_content_context('edit', $row);
+	} else {
 		$row = array('titleid'=>0, 'male'=>'', 'female'=>'', 'dk'=>0);
 		$id = 0;
+		$context = resurrection_content_context('add', []);
 	}
-	rawoutput("<form action='titleedit.php?op=save&id=$id' method='POST'>");
-	addnav("","titleedit.php?op=save&id=$id");
+	rawoutput(resurrection_content_form("titleedit.php?op=save&id=$id", "title-edit-$id", $context));
 	showform($editarray,$row);
 	rawoutput("</form>");
 	addnav("Functions");
 	addnav("Main Title Editor", "titleedit.php");
 	title_help();
 } elseif ($op == "reset") {
-	require_once("lib/titles.php");
-	require_once("lib/names.php");
-
-	output("`^Rebuilding all titles.`0`n`n");
-	$sql = "SELECT name,title,dragonkills,acctid,sex,ctitle FROM " . db_prefix("accounts");
-	$result = db_query($sql);
-	$number=db_num_rows($result);
-	for ($i=0;$i<$number;$i++){
-		$row = db_fetch_assoc($result);
-		$oname = $row['name'];
-		$dk = $row['dragonkills'];
-		$otitle = $row['title'];
-		$dk = (int)($row['dragonkills']);
-		if (!valid_dk_title($otitle, $dk, $row['sex'])) {
-			$sex = translate_inline($row['sex']?"female":"male");
-			$newtitle = get_dk_title($dk, (int)$row['sex']);
-			$newname = change_player_title($newtitle, $row);
-			$id = $row['acctid'];
-			if ($oname != $newname) {
-				output("`@Changing `^%s`@ to `^%s `@(%s`@ [%s,%s])`n",
-						$oname,$newname,$newtitle,$dk,$sex);
-				if ($session['user']['acctid']==$row['acctid']){
-					$session['user']['title']=$newtitle;
-					$session['user']['name']=$newname;
-				}else{
-					$sql = "UPDATE " . db_prefix("accounts") . " SET name='" .
-						addslashes($newname)."', title='".
-						addslashes($newtitle)."' WHERE acctid='$id'";
-					db_query($sql);
-				}
-			}elseif ($otitle != $newtitle){
-				output("`@Changing only the title (not the name) of `^%s`@ `@(%s`@ [%s,%s])`n",
-						$oname,$newtitle,$dk,$sex);
-				if ($session['user']['acctid']==$row['acctid']){
-					$session['user']['title']=$newtitle;
-				}else{
-					$sql = "UPDATE " . db_prefix("accounts") .
-						" SET title='".addslashes($newtitle) .
-						"' WHERE acctid='$id'";
-					db_query($sql);
-				}
-			}
+	// 1.1.2 rebuilt every title on this GET link, in one unguarded pass. The link now shows the protected form;
+	// the rebuild runs on its POST (resurrection_title_rebuild()).
+	if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
+		try { resurrection_content_fields([]); }
+		catch (InvalidArgumentException $error) { resurrection_content_failure($error, 'the title editor'); }
+		resurrection_consume_action('title-rebuild', resurrection_title_rebuild_context());
+		output("`^Rebuilding all titles.`0`n`n");
+		$rebuild = resurrection_title_rebuild();
+		foreach ($rebuild['skipped'] as $name) {
+			output("`\$Not changing `^%s`\$: the new name would be too long.`0`n", $name);
 		}
+		if ($rebuild['failed']) {
+			output("`n`n`\$The rebuild stopped on a failure. %s of %s accounts were checked and %s changed; the rest were not changed.`0`n", $rebuild['checked'], $rebuild['total'], $rebuild['changed']);
+			output("`\$Reset the titles again to finish.`0");
+		} else {
+			output("`n`n`^Done.`0");
+		}
+	} else {
+		output("`^Every account whose title does not match its dragon kills will get a title for its rank.`0`n`n");
 	}
-	output("`n`n`^Done.`0");
+	if (!isset($rebuild) || $rebuild['failed']) {
+		rawoutput(resurrection_content_form("titleedit.php?op=reset", "title-rebuild", resurrection_title_rebuild_context()));
+		$reset = translate_inline("Reset Users Titles");
+		rawoutput("<input type='submit' class='button' value='" . htmlspecialchars($reset, ENT_QUOTES, 'UTF-8') . "'></form>");
+	}
 	addnav("Main Title Editor", "titleedit.php");
 }
 

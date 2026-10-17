@@ -3,15 +3,14 @@
 		output("Having pressed the secret levers and turned the secret knobs on the lock of the door to your clan's hall, you gain entrance and chat with your clan mates.`n`n");
 		modulehook("}collapse");
 
-		$sql = "SELECT name FROM " . db_prefix("accounts")  . " WHERE acctid={$claninfo['motdauthor']}";
-		$result = db_query($sql);
+		require_once("lib/clan_authority.php");
+		$result = db_query("SELECT name FROM " . db_prefix("accounts")  . " WHERE acctid=?", true, [(int)$claninfo['motdauthor']]);
 		$row = db_fetch_assoc($result);
-		$motdauthname = $row['name'];
+		$motdauthname = $row['name'] ?? '';
 
-		$sql = "SELECT name FROM " . db_prefix("accounts") . " WHERE acctid={$claninfo['descauthor']}";
-		$result = db_query($sql);
+		$result = db_query("SELECT name FROM " . db_prefix("accounts") . " WHERE acctid=?", true, [(int)$claninfo['descauthor']]);
 		$row = db_fetch_assoc($result);
-		$descauthname = $row['name'];
+		$descauthname = $row['name'] ?? '';
 
 		if ($claninfo['clanmotd'] != '') {
 			rawoutput("<div style='margin-left: 15px; padding-left: 15px;'>");
@@ -31,8 +30,7 @@
 			output_notl(nltoappon($claninfo['clandesc']));
 			modulehook("}collapse");
 		}
-		$sql = "SELECT count(*) AS c, clanrank FROM " . db_prefix("accounts") . " WHERE clanid={$claninfo['clanid']} GROUP BY clanrank DESC";
-		$result = db_query($sql);
+		$result = db_query("SELECT count(*) AS c, clanrank FROM " . db_prefix("accounts") . " WHERE clanid=? GROUP BY clanrank ORDER BY clanrank DESC", true, [(int)$claninfo['clanid']]);
 		// begin collapse
 		modulehook("collapse{", array("name"=>"clanmemberdet"));
 		output("`n`n`bMembership Details:`b`n");
@@ -46,21 +44,32 @@
 		if ($leaders==0){
 			//There's no leader here, probably because the leader's account
 			//expired.
-			$sql = "SELECT name,acctid,clanrank FROM " . db_prefix("accounts") . " WHERE clanid={$session['user']['clanid']} AND clanrank > " . CLAN_APPLICANT . " ORDER BY clanrank DESC, clanjoindate";
-			$result = db_query($sql);
-			if (db_num_rows($result)) {
-				$row = db_fetch_assoc($result);
-				$sql = "UPDATE " . db_prefix("accounts") . " SET clanrank=".CLAN_LEADER." WHERE acctid={$row['acctid']}";
-				db_query($sql);
-				output_notl($noleader,$row['name']);
-				if ($row['acctid']==$session['user']['acctid']){
-					//if it's the current user, we'll need to update their
-					//session in order for the db write to take effect.
-					$session['user']['clanrank']=CLAN_LEADER;
-				}
-			} else {
-				// There are no viable leaders.  But we cannot disband the clan
-				// here.
+			// Historical housekeeping on view: it takes no request input and is idempotent. The clan is
+			// locked and rechecked so two viewers promote at most one member.
+			try {
+				resurrection_clan_mutation(function () use ($noleader) {
+					global $session;
+					$clanid = (int)$session['user']['clanid'];
+					$members = db_query("SELECT name,acctid,clanrank FROM " . db_prefix("accounts") . " WHERE clanid=? ORDER BY acctid FOR UPDATE", true, [$clanid]);
+					foreach ($members as $member) if ($member['clanrank'] > CLAN_OFFICER) return;
+					$rows = db_query("SELECT name,acctid,clanrank FROM " . db_prefix("accounts") . " WHERE clanid=? AND clanrank > ? ORDER BY clanrank DESC, clanjoindate, acctid LIMIT 1", true, [$clanid, CLAN_APPLICANT]);
+					if ($rows) {
+						$row = $rows[0];
+						if ($row['acctid']==$session['user']['acctid']){
+							//if it's the current user, we'll need to update their
+							//session in order for the db write to take effect.
+							$session['user']['clanrank']=CLAN_LEADER;
+						} else {
+							db_query("UPDATE " . db_prefix("accounts") . " SET clanrank=? WHERE acctid=? AND clanid=?", true, [CLAN_LEADER, (int)$row['acctid'], $clanid]);
+						}
+						output_notl($noleader,$row['name']);
+					} else {
+						// There are no viable leaders.  But we cannot disband the clan
+						// here.
+					}
+				});
+			} catch (DomainException $error) {
+				// Another request changed this account first; the next view repeats the check.
 			}
 		}
 		// end collapse

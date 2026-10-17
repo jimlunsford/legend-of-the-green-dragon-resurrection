@@ -3,17 +3,17 @@
 // addnews ready
 // mail ready
 
-if (isset($_POST['template'])){
-	$skin = $_POST['template'];
-	if ($skin > "") {
-		setcookie("template",$skin ,strtotime("+45 days"));
-		$_COOKIE['template']=$skin;
-	}
-}
-
 define("ALLOW_ANONYMOUS",true);
 require_once("common.php");
 require_once("lib/http.php");
+if (isset($_POST['template'])) {
+    resurrection_require_post();
+    $skin = \Resurrection\Http\Input::string($_POST, 'template');
+    if (!preg_match('/\A[A-Za-z0-9_-]+\.htm\z/', $skin) || !is_file('templates/' . $skin)) { http_response_code(400); exit('Invalid skin.'); }
+    setcookie('template', $skin, ['expires' => time() + 3888000, 'httponly' => true, 'samesite' => 'Lax']);
+    $_COOKIE['template'] = $skin;
+}
+
 
 
 if (!isset($session['loggedin'])) $session['loggedin']=false;
@@ -41,12 +41,12 @@ if (getsetting("homenewdaytime", 1)) {
 
 if (getsetting("homenewestplayer", 1)) {
 	$name = "";
-	$newplayer = getsetting("newestplayer", "");
+	$newplayer = (int)getsetting("newestplayer", 0);
 	if ($newplayer != 0) {
 		$sql = "SELECT name FROM " . db_prefix("accounts") . " WHERE acctid='$newplayer'";
 		$result = db_query_cached($sql, "newest");
 		$row = db_fetch_assoc($result);
-		$name = $row['name'];
+		$name = $row['name'] ?? '';
 	} else {
 		$name = $newplayer;
 	}
@@ -90,22 +90,10 @@ if ($onlinecount<getsetting("maxonline",0) || getsetting("maxonline",0)==0){
 	}
 	if (isset($session['message']) && $session['message']>"")
 		output_notl("`b`\$%s`b`n", $session['message'],true);
-	rawoutput("<script language='JavaScript' src='lib/md5.js'></script>");
-	rawoutput("<script language='JavaScript'>
-	<!--
-	function md5pass(){
-		//encode passwords before submission to protect them even from network sniffing attacks.
-		var passbox = document.getElementById('password');
-		if (passbox.value.substring(0, 5) != '!md5!') {
-			passbox.value = '!md5!' + hex_md5(passbox.value);
-		}
-	}
-	//-->
-	</script>");
 	$uname = translate_inline("<u>U</u>sername");
 	$pass = translate_inline("<u>P</u>assword");
 	$butt = translate_inline("Log in");
-	rawoutput("<form action='login.php' method='POST' onSubmit=\"md5pass();\">".templatereplace("login",array("username"=>$uname,"password"=>$pass,"button"=>$butt))."</form>");
+	rawoutput("<form action='login.php' method='POST'>".resurrection_csrf_field().templatereplace("login",array("username"=>$uname,"password"=>$pass,"button"=>$butt))."</form>");
 	output_notl("`c");
 	addnav("","login.php");
 } else {
@@ -128,10 +116,10 @@ $session['message']="";
 output("`c`2Game server running version: `@%s`0`c", $logd_version);
 
 if (getsetting("homeskinselect", 1)) {
-	rawoutput("<form action='home.php' method='POST'>");
+	rawoutput("<form action='home.php' method='POST'>" . resurrection_csrf_field());
 	rawoutput("<table align='center'><tr><td>");
 	$form = array("template"=>"Choose a different display skin:,theme");
-	$prefs['template'] = $_COOKIE['template'];
+	$prefs['template'] = $_COOKIE['template'] ?? '';
 	if ($prefs['template'] == "")
 		$prefs['template'] = getsetting("defaultskin", "jade.htm");
 	require_once("lib/showform.php");

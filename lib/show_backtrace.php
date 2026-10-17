@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/../src/Compatibility/array_cursor.php';
 function show_no_backtrace() {
 	return "";
 }
@@ -29,13 +30,13 @@ function show_backtrace(){
 	$return .= "<div class='stacktrace'><b>Call Stack:</b><br>";
 	reset($bt);
 	$x=0;
-	while(list($key,$val)=each($bt)){
+	while(list($key,$val)=resurrection_array_next($bt)){
 		if ($x > 0 && $val['function'] != 'logd_error_handler'){
 			$return .= "<b>$x:</b> <span class='function'>{$val['function']}(";
 			$y=0;
 			if ($val['args'] && is_array($val['args'])) {
 				reset($val['args']);
-				while (list($k,$v) = each($val['args'])){
+				while (list($k,$v) = resurrection_array_next($val['args'])){
 					if ($y > 0) $return.=", ";
 					$return.=backtrace_getType($v);
 					$y++;
@@ -76,7 +77,7 @@ function backtrace_getType($in){
 			$return.="<span class='array'>Array(<blockquote>";
 			reset($in);
 			$x=0;
-			while (list($key,$val)=each($in)){
+			while (list($key,$val)=resurrection_array_next($in)){
 				if ($x>0) $return.=", ";
 				$return.=backtrace_getType($key)."=>".backtrace_getType($val);
 				$x++;

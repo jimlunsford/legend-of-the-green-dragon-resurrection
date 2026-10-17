@@ -5,13 +5,19 @@
 require_once("common.php");
 require_once("lib/showform.php");
 require_once("lib/http.php");
+require_once("lib/content_editor.php");
 
 check_su_access(SU_EDIT_EQUIPMENT);
 
 tlschema("weapon");
 
+$shop = resurrection_equipment_shop('weapon');
+try {
+	$op = \Resurrection\Http\Input::choice($_GET, 'op', ['', 'add', 'edit', 'save', 'del'], '');
+	$weaponlevel = resurrection_content_level();
+	$id = $op == "edit" || $op == "del" ? resurrection_content_id($_GET, 'id') : 0;
+} catch (InvalidArgumentException $error) { resurrection_content_failure($error, 'the weapon editor'); }
 page_header("Weapon Editor");
-$weaponlevel = (int)httpget("level");
 require_once("lib/superusernav.php");
 superusernav();
 
@@ -33,38 +39,27 @@ $weaponarray=array(
 	"weaponid"=>"Weapon ID,hidden",
 	"weaponname"=>"Weapon Name",
 	"damage"=>"Damage,range,1,15,1");
-$op = httpget('op');
-$id = httpget('id');
 if($op=="edit" || $op=="add"){
 	if ($op=="edit"){
-		$sql = "SELECT * FROM " . db_prefix("weapons") . " WHERE weaponid='$id'";
-		$result = db_query($sql);
-		$row = db_fetch_assoc($result);
+		$row = resurrection_content_row("weapons", "weaponid", $id);
+		if ($row === null) resurrection_content_failure(new OutOfBoundsException('Weapon not found.'), 'the weapon editor');
+		$context = resurrection_content_context('edit', $row);
 	}else{
-		$sql = "SELECT max(damage+1) AS damage FROM " . db_prefix("weapons") . " WHERE level=$weaponlevel";
-		$result = db_query($sql);
-		$row = db_fetch_assoc($result);
+		$rows = db_query("SELECT max(damage+1) AS damage FROM " . db_prefix("weapons") . " WHERE level=?", true, [$weaponlevel]);
+		$row = $rows[0];
+		$context = resurrection_content_context('add', [$weaponlevel]);
 	}
-	rawoutput("<form action='weaponeditor.php?op=save&level=$weaponlevel' method='POST'>");
-	addnav("","weaponeditor.php?op=save&level=$weaponlevel");
+	// 1.1.2 posted to this URL with the hidden weapon ID (none for an add); the form now carries the intent for
+	// that row as shown, or for an add at this level.
+	rawoutput(resurrection_content_form("weaponeditor.php?op=save&level=$weaponlevel", 'weapon-edit-' . $id, $context));
 	showform($weaponarray,$row);
 	rawoutput("</form>");
 }else if($op=="del"){
-	$sql = "DELETE FROM " . db_prefix("weapons") . " WHERE weaponid='$id'";
-	db_query($sql);
+	resurrection_content_delete("weapons", "weaponid", "id", "weapon", "the weapon editor");
 	$op = "";
 	httpset("op", $op);
 }else if($op=="save"){
-	$weaponid = (int)httppost("weaponid");
-	$damage = httppost("damage");
-	$weaponname = httppost("weaponname");
-	if ($weaponid>0){
-		$sql = "UPDATE " . db_prefix("weapons") . " SET weaponname=\"$weaponname\",damage=\"$damage\",value=" .  $values[$damage]." WHERE weaponid='$weaponid'";
-	}else{
-		$sql = "INSERT INTO " . db_prefix("weapons") . " (level,damage,weaponname,value) VALUES ($weaponlevel,\"$damage\",\"$weaponname\",".$values[$damage].")";
-	}
-	db_query($sql);
-	//output($sql);
+	resurrection_equipment_editor_save($shop, $weaponlevel, $values);
 	$op = "";
 	httpset("op", $op);
 }
@@ -79,8 +74,7 @@ if ($op==""){
 		else
 			addnav(array("Weapons for %s DKs",$i),"weaponeditor.php?level=$i");
 	}
-	$sql = "SELECT * FROM " . db_prefix("weapons") . " WHERE level=$weaponlevel ORDER BY damage";
-	$result= db_query($sql);
+	$result = db_query("SELECT * FROM " . db_prefix("weapons") . " WHERE level=? ORDER BY damage", true, [$weaponlevel]);
 	$ops = translate_inline("Ops");
 	$name = translate_inline("Name");
 	$cost = translate_inline("Cost");
@@ -96,9 +90,10 @@ if ($op==""){
 	for ($i=0;$i<$number;$i++){
 		$row = db_fetch_assoc($result);
 		rawoutput("<tr class='".($i%2?"trdark":"trlight")."'>");
-		rawoutput("<td>[<a href='weaponeditor.php?op=edit&id={$row['weaponid']}&level=$weaponlevel'>$edit</a>|<a href='weaponeditor.php?op=del&id={$row['weaponid']}&level=$weaponlevel' onClick='return confirm(\"Are you sure you wish to delete this weapon?\");'>$del</a>]</td>");
-		addnav("","weaponeditor.php?op=edit&id={$row['weaponid']}&level=$weaponlevel");
-		addnav("","weaponeditor.php?op=del&id={$row['weaponid']}&level=$weaponlevel");
+		$rowid = (int)$row['weaponid'];
+		rawoutput("<td>[<a href='weaponeditor.php?op=edit&id=$rowid&level=$weaponlevel'>$edit</a>|" .
+			resurrection_content_delete_form("weaponeditor.php?op=del&id=$rowid&level=$weaponlevel", "weapon-del-$rowid", resurrection_content_context('del', $row), $del, "Are you sure you wish to delete this weapon?") . "]</td>");
+		addnav("","weaponeditor.php?op=edit&id=$rowid&level=$weaponlevel");
 		rawoutput("<td>");
 		output_notl($row['weaponname']);
 		rawoutput("</td><td>");

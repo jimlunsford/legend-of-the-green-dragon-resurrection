@@ -17,8 +17,8 @@ if (DB_CHOSEN){
 		$version = getsetting("installer_version","-1");
 		if ($version == "-1") {
 			// Passwords weren't encrypted in these versions
-			$sql = "SELECT * FROM ".db_prefix("accounts")." WHERE login='".mysql_real_escape_string(httppost("username"))."' AND password='".mysql_real_escape_string(httppost("password"))."' AND superuser & ".SU_MEGAUSER;
-		}else $sql = "SELECT * FROM ".db_prefix("accounts")." WHERE login='".mysql_real_escape_string(httppost("username"))."' AND password='".md5(md5(stripslashes(httppost("password"))))."' AND superuser & ".SU_MEGAUSER;
+			$sql = "SELECT * FROM ".db_prefix("accounts")." WHERE login='".db_escape(httppost("username"))."' AND password='".db_escape(httppost("password"))."' AND superuser & ".SU_MEGAUSER;
+		}else $sql = "SELECT * FROM ".db_prefix("accounts")." WHERE login='".db_escape(httppost("username"))."' AND password='".md5(md5(stripslashes(httppost("password"))))."' AND superuser & ".SU_MEGAUSER;
 		$result = db_query($sql);
 		if (db_num_rows($result) > 0){
 			$row = db_fetch_assoc($result);

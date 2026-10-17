@@ -1,4 +1,6 @@
 <?php
+require_once __DIR__ . '/../src/Security/ScalarState.php';
+require_once __DIR__ . '/../src/Compatibility/array_cursor.php';
 // addnews ready
 // translator ready
 // mail ready
@@ -43,7 +45,7 @@ function pollitem($id,$subject,$body,$author,$date,$showpoll=true){
 	$result = db_query($sql);
 	$row = db_fetch_assoc($result);
 	$choice = $row['choice'];
-	$body = unserialize($body);
+	$body = \Resurrection\Security\ScalarState::read($body);
 
 	$poll = translate_inline("Poll:");
 	if ($session['user']['loggedin'] && $showpoll) {
@@ -64,7 +66,7 @@ function pollitem($id,$subject,$body,$author,$date,$showpoll=true){
 		$totalanswers+=$row['c'];
 		if ($row['c']>$maxitem) $maxitem = $row['c'];
 	}
-	while (list($key,$val)=each($body['opt'])){
+	while (list($key,$val)=resurrection_array_next($body['opt'])){
 		if (trim($val)!=""){
 			if ($totalanswers<=0) $totalanswers=1;
 			$percent = 0;
