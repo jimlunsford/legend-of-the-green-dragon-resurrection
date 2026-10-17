@@ -399,3 +399,28 @@ SHA-256 of a JSON encoding, not a PHP serialization. Candidate inventory: **107 
 49 files / 39 serialize writers-checks / 67 ScalarState reads / one centralized
 unserialize**. ScalarState limits are unchanged. See
 [user editor authority](USER-EDITOR-AUTHORITY-20261016.md).
+
+## Content editors part 3 candidate, 2026-10-17
+
+Content editors part 1 (`6820b80`) and part 2 (`82a48fb`) added no call: recounted with the
+same token method (which again reproduces 112 / 53 / 42 / 69 / 1 at `4478c06` and 108 /
+50 / 40 / 67 / 1 at `8257aed`), `82a48fb` is **107 / 49 / 39 / 67 / 1**.
+
+The mount and companion editors (`mounts.php`, `companions.php`, new
+`lib/mount_companion_editor.php`) change it:
+
+- `mounts.php` give no longer reads `mounts.mountbuff` itself (ScalarState read removed);
+  it uses the stables' checked reader `resurrection_stables_buff()`. The edit form's read
+  stays.
+- `companions.php` save no longer serializes every posted array (writer removed), and
+  take no longer reads `companions.abilities` there (read removed). The edit form's read
+  stays.
+- `lib/mount_companion_editor.php` adds two writers, the mount buff
+  (`resurrection_mount_buff()`, which 1.1.2 serialized through the shared `postparse()`
+  in `lib/http.php`) and the companion abilities, both built from the declared fields
+  only and checked against their consumers before they are stored, and one read, take's
+  abilities, which must be an array and pass combat's companion check.
+
+Candidate inventory: **107 sites / 50 files / 40 serialize writers-checks / 66
+ScalarState reads / one centralized unserialize**. ScalarState limits are unchanged. See
+[content editors part 3](CONTENT-EDITORS-PART3-AUTHORITY-20261017.md).

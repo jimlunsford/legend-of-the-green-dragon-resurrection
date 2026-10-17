@@ -167,3 +167,12 @@ Local, PHP 8.5.11 / MySQL 8.4 (supporting evidence only; CI is the acceptance):
 - Two open edit forms for the same row share one intent; the second save is 409 and must
   be reloaded. Each listed row has its own delete intent, kept in the session until used.
 - Deleting a weapon, armor or title does not change accounts that hold it, as in 1.1.2.
+
+## Acceptance, 2026-10-17
+
+`6820b80a7c2b1e806fbfe0a871d72a2a9177e898` is accepted on its own run. Confirmed through the
+GitHub Actions run and job API: Modern core **38958259938 SUCCESS**, all 12 jobs, with both
+`result` jobs SUCCESS (PHP 8.4 / MariaDB 11.4 at 20:09:37Z, PHP 8.5 / MySQL 8.4 at
+20:10:39Z, 2026-10-16). Baseline integrity **38958259926 SUCCESS** (19:53:56Z). Content
+editors part 1 is Done in `ROADMAP.md`. Recorded with content editors part 3
+([content editors part 3](CONTENT-EDITORS-PART3-AUTHORITY-20261017.md)).

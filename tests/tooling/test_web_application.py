@@ -6387,7 +6387,7 @@ function MODULE_dohook($hook,$args) {
             for ident in now.keys()-saved.keys(): q(f'DELETE FROM {table} WHERE {key}=?',[ident])
             for ident,row in saved.items():
                 if now.get(ident)!=row: q(f'REPLACE INTO {table} ('+','.join(row)+') VALUES ('+','.join('?' for _ in row)+')',list(row.values()))
-        try: yield dict(q=q,player=player,request=request,login=login,form=form,matrix=matrix,restore=restore)
+        try: yield dict(q=q,player=player,request=request,login=login,form=form,matrix=matrix,restore=restore,state=state)
         finally: q('UPDATE accounts SET '+','.join('`'+k+'`=?' for k in original if k!='acctid')+' WHERE acctid=?',[*[v for k,v in original.items() if k!='acctid'],player])
 
     def test_weapon_and_armor_editor_authority_http(self):
@@ -6730,6 +6730,250 @@ function MODULE_dohook($hook,$args) {
                     if now.get(ident)!=row: self.query(f'REPLACE INTO {table} ('+','.join(row)+') VALUES ('+','.join('?' for _ in row)+')',list(row.values()))
             self.query("DELETE FROM module_objprefs WHERE objtype='creatures'")
 
+    @contextmanager
+    def _datacache_server(self, *clients):
+        # A second fixture server with the data cache on, sharing the sessions of the given clients. Its settings are fixed
+        # before it starts (they win over dbconnect.php's, EXTR_SKIP), so no cached copy of a rewritten file can serve a request.
+        cache=tempfile.TemporaryDirectory(prefix='resurrection-cache-');prepend=tempfile.NamedTemporaryFile(mode='w',suffix='.php')
+        prepend.write("<?php $DB_USEDATACACHE=1; $DB_DATACACHEPATH='"+cache.name+"';\n");prepend.flush()
+        with socket.socket() as sock:sock.bind(('127.0.0.1',0));port=sock.getsockname()[1]
+        server=subprocess.Popen([shutil.which('php'),'-d','display_errors=1','-d','error_reporting=-1','-d','zend.exception_ignore_args=1',
+                                 '-d','auto_prepend_file='+prepend.name,'-S',f'127.0.0.1:{port}','-t',str(ROOT)],cwd=ROOT,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
+        try:
+            for _ in range(100):
+                try:
+                    with socket.create_connection(('127.0.0.1',port),timeout=.1):break
+                except OSError:time.sleep(.02)
+            seconds=[]
+            for client in clients:
+                second=self._security_client(login=None,port=port)
+                for cookie in client.cookiejar: second.cookiejar.set_cookie(cookie)
+                seconds.append(second)
+            yield (Path(cache.name),*seconds)
+        finally:
+            server.terminate();server.wait(timeout=20);prepend.close();cache.cleanup()
+
+    def test_mount_and_companion_editor_authority_http(self):
+        q=self.query;php=lambda code,value:subprocess.run([shutil.which('php'),'-r',code],input=json.dumps(value),text=True,capture_output=True,cwd=ROOT,check=True).stdout
+        ser=lambda value:php('echo serialize(json_decode(stream_get_contents(STDIN),true));',value)
+        unser=lambda value:json.loads(php("require 'vendor/autoload.php'; echo json_encode(\\Resurrection\\Security\\ScalarState::read(json_decode(stream_get_contents(STDIN))));",value))
+        text=lambda body:re.sub(r'\s+',' ',html.unescape(re.sub(r'<[^>]+>','',body)))
+        saved={t:q(f'SELECT * FROM {t}') for t in ['mounts','companions']};prefs_before=q("SELECT * FROM module_objprefs WHERE objtype IN ('mounts','companions')");created=[]
+        village=q("SELECT value FROM settings WHERE setting='villagename'");village=village[0]['value'] if village else 'Degolburg'
+        try:
+            with self._content_editor_fixture() as f:
+                q,player,request,login,form,restore=(f[k] for k in ['q','player','request','login','form','restore'])
+                post=lambda url,fields,**values:request(url,list({**fields,**values}.items()))
+                mounts=lambda:q('SELECT * FROM mounts ORDER BY mountid');companions=lambda:q('SELECT * FROM companions ORDER BY companionid')
+                prefs=lambda:q("SELECT * FROM module_objprefs WHERE objtype IN ('mounts','companions') ORDER BY objtype,objid,modulename,setting")
+                me=lambda *keys:tuple(q('SELECT '+','.join(keys)+' FROM accounts WHERE acctid=?',[player])[0].values())
+                def fixture(table,**values):
+                    q(f'INSERT INTO {table} ('+','.join(values)+') VALUES ('+','.join('?' for _ in values)+')',list(values.values()))
+                    return int(q(f"SELECT MAX({'mountid' if table=='mounts' else 'companionid'}) AS id FROM {table}")[0]['id'])
+                buff=ser({'name':'Fixture Buff','rounds':'20','atkmod':'1.1','schema':'mounts'})
+                seed=fixture('mounts',mountname='Seed Mount',mountdesc='d',mountcategory='Fixture',mountbuff=buff,mountcostgems=1,mountcostgold=2,mountactive=1,mountforestfights=0,newday='',recharge='',partrecharge='',mountfeedcost=1,mountlocation='all',mountdkcost=0)
+                broken=fixture('mounts',mountname='Broken Mount',mountdesc='d',mountcategory='Fixture',mountbuff='not serialized',mountcostgems=1,mountcostgold=2,mountactive=1,mountforestfights=0,newday='',recharge='',partrecharge='',mountfeedcost=1,mountlocation='all',mountdkcost=0)
+                pal=fixture('companions',name='Seed Pal',category='Fixture',description='d',attack=1,attackperlevel=1,defense=1,defenseperlevel=1,maxhitpoints=10,maxhitpointsperlevel=1,abilities=ser({'fight':'1','heal':'0','magic':'0','defend':False}),companionactive=1,jointext='',dyingtext='')
+                editor=[('mounts.php',None),('mounts.php?op=add',None),(f'mounts.php?op=edit&id={seed}',None),(f'mounts.php?op=xml&id={seed}',None),('mounts.php?op=save&id=',{'x':'1'}),(f'mounts.php?op=save&id={seed}',{'x':'1'}),
+                        *[(f'mounts.php?op={op}&id={seed}',{'x':'1'}) for op in ['del','give','activate','deactivate']],
+                        ('companions.php',None),('companions.php?op=add',None),(f'companions.php?op=edit&id={pal}',None),('companions.php?op=save&id=',{'x':'1'}),
+                        *[(f'companions.php?op={op}&id={pal}',{'x':'1'}) for op in ['save','del','take','activate','deactivate']],
+                        (f'companions.php?op=save&subop=module&id={pal}&module=darkhorse',{'x':'1'})]
+                f['matrix'](2,editor);before=(mounts(),companions(),prefs(),me('hashorse','bufflist','companions'))
+                # GET only displays; malformed requests are 400 and unknown IDs 404, before anything is written.
+                for url,data in editor:
+                    if data is not None and 'subop' not in url: self.assertEqual(405,request(url)[0],url)
+                for page in ['mounts','companions']:
+                    for url in [f'{page}.php?op=other',f'{page}.php?op=edit&id=abc',f'{page}.php?op=edit&id=0',f'{page}.php?op=edit&id=-1',f'{page}.php?op=del',f'{page}.php?op=activate&id=1e2']: self.assertEqual(400,request(url)[0],url)
+                for url in ['mounts.php?op=xml&id=abc','mounts.php?op=xml&id=0','mounts.php?op=xml']: self.assertEqual(400,request(url)[0],url)
+                fields=self._security_fields(request('mounts.php')[1],f'mounts.php?op=give&id={seed}')
+                for url in [f'mounts.php?op={op}&id=4294967295' for op in ['del','give','activate','deactivate']]+[f'companions.php?op={op}&id=4294967295' for op in ['del','take','activate','deactivate']]:
+                    self.assertEqual(404,request(url,fields)[0],url)
+                # Object preferences go through the shared typed editor: none of the shipped modules declares companion preferences.
+                module=f'companions.php?op=save&subop=module&id={pal}&module=darkhorse'
+                for url,data in [(module,{'evil':'1'}),(module.replace('darkhorse','nosuchmodule'),{'evil':'1'}),(module.replace('op=save','op=edit'),None),(module+'&objtype=mounts',{'evil':'1'})]:
+                    self.assertEqual(400,request(url,data)[0],url)
+                self.assertEqual(before,(mounts(),companions(),prefs(),me('hashorse','bufflist','companions')))
+
+                # Mount add: only the form's declared fields, each checked; the buff built as 1.1.2 built it and checked as New Day reads it.
+                save='mounts.php?op=save&id=';fields=form('mounts.php?op=add',save)
+                buffkeys=['name','roundmsg','wearoff','effectmsg','effectnodmgmsg','effectfailmsg','rounds','atkmod','defmod','invulnerable','regen','minioncount','minbadguydamage','maxbadguydamage','mingoodguydamage','maxgoodguydamage','lifetap','damageshield','badguydmgmod','badguyatkmod','badguydefmod']
+                self.assertEqual(sorted(['action_token','csrf_token',*[f'mount[{k}]' for k in ['mountactive','mountname','mountdesc','mountcategory','mountlocation','mountdkcost','mountcostgems','mountcostgold','mountfeedcost','mountforestfights','newday','recharge','partrecharge']],*[f'mount[mountbuff][{k}]' for k in buffkeys]]),sorted(fields))
+                self.assertEqual(('0','all'),(fields['mount[mountactive]'],fields['mount[mountlocation]']))
+                good={'mount[mountname]':"Probe O'Reilly 雪 <b>x</b>",'mount[mountdesc]':'A "probe" \\ <i>雪</i>','mount[mountcategory]':'Probes','mount[mountlocation]':'all','mount[mountdkcost]':'1',
+                      'mount[mountcostgems]':'3','mount[mountcostgold]':'250','mount[mountfeedcost]':'7','mount[mountforestfights]':'-2','mount[newday]':'Off you go, {weapon}.','mount[recharge]':'Rested.','mount[partrecharge]':'Partly.',
+                      **{f'mount[mountbuff][{k}]':'' for k in buffkeys},'mount[mountbuff][name]':'`&Probe Attack','mount[mountbuff][roundmsg]':'Your probe fights 100% "hard" 雪','mount[mountbuff][rounds]':'15','mount[mountbuff][atkmod]':'1.3'}
+                self.assertEqual(403,post(save,fields,**good,csrf_token='0'*64)[0]);self.assertEqual(409,request(save,[(k,v) for k,v in {**fields,**good}.items() if k!='action_token'])[0])
+                for bad in [{'mount[mountid]':str(seed)},{'mount[hashorse]':'1'},{'hashorse':'1'},{'mount[mountbuff][evil]':'1'},{'mount[mountbuff][tempstat-attack]':'5'},{'mount[mountname]':'n'*51},
+                            {'mount[mountname]':b'\xff'},{'mount[mountcostgems]':'-1'},{'mount[mountcostgold]':'2147483648'},{'mount[mountfeedcost]':'x'},{'mount[mountactive]':'2'},{'mount[mountforestfights]':'1.5'},
+                            {'mount[mountlocation]':'Nowhere'},{'mount[mountbuff][rounds]':''},{'mount[mountbuff][rounds]':'0'},{'mount[mountbuff][atkmod]':'abc'},{'mount[mountbuff][atkmod]':'<charm>'},
+                            {'mount[mountbuff][invulnerable]':'2'},{'mount[mountbuff][name]':'n'*4097},
+                            # New Day's accepted mount buff consumer refuses a minion count stored as text (a separate schema item).
+                            {'mount[mountbuff][minioncount]':'1'}]:
+                    self.assertEqual(400,post(save,fields,**{**good,**bad})[0],bad)
+                self.assertEqual(400,request(save,[(k,v) for k,v in {**fields,**good}.items() if k!='mount[mountname]'])[0]);self.assertEqual(before[0],mounts())
+                status,body=post(save,fields,**good);self.assertEqual(200,status,body[:2000]);self.assertIn('Mount saved!',body);self.assertNotIn('<b>x</b>',body);self.assertNotIn('INSERT',body)
+                added=[r for r in mounts() if r not in before[0]];self.assertEqual(1,len(added));mount=int(added[0]['mountid'])
+                expected={k[6:-1]:v for k,v in good.items() if not k.startswith('mount[mountbuff]')}
+                self.assertEqual({**expected,'mountactive':'0','mountbuff':ser({'name':'`&Probe Attack','roundmsg':'Your probe fights 100% "hard" 雪','rounds':'15','atkmod':'1.3','schema':'mounts'})},{k:added[0][k] for k in [*expected,'mountactive','mountbuff']})
+                self.assertEqual(409,post(save,fields,**good)[0]);self.assertEqual(len(before[0])+1,len(mounts()))
+                row=lambda:q('SELECT * FROM mounts WHERE mountid=?',[mount])[0]
+                # Edit: the stored mount in the form; a second copy, a changed row and a repeat do not write; no SQL on the page.
+                edit,save=f'mounts.php?op=edit&id={mount}',f'mounts.php?op=save&id={mount}';fields,second=form(edit,save),form(edit,save)
+                self.assertEqual((good['mount[mountname]'],good['mount[mountbuff][roundmsg]'],'15',''),(fields['mount[mountname]'],fields['mount[mountbuff][roundmsg]'],fields['mount[mountbuff][rounds]'],fields['mount[mountbuff][defmod]']))
+                status,body=post(save,fields,**{**good,'mount[mountcostgold]':'260'});self.assertEqual(200,status,body[:2000]);self.assertEqual('260',row()['mountcostgold']);self.assertEqual(409,post(save,second,**good)[0])
+                fields=form(edit,save);status,body=post(save,fields,**{**good,'mount[mountcostgold]':'260'});self.assertIn('Mount not saved!',text(body));self.assertNotIn('UPDATE',body)
+                fields=form(edit,save);q("UPDATE mounts SET mountfeedcost=8 WHERE mountid=?",[mount]);self.assertEqual(409,post(save,fields,**good)[0]);self.assertEqual(('8','260'),(row()['mountfeedcost'],row()['mountcostgold']))
+                self.assertEqual(404,post('mounts.php?op=save&id=4294967295',form(edit,save),**good)[0])
+                # A malformed stored buff is shown empty for repair rather than a fatal page.
+                status,body=request(f'mounts.php?op=edit&id={broken}');self.assertEqual(200,status,body[:2000])
+
+                # Activate, deactivate and give: the list's protected forms, bound to the mount as listed.
+                listed=lambda op,ident:self._security_fields(request('mounts.php')[1],f'mounts.php?op={op}&id={ident}')
+                fields=listed('activate',mount);q("UPDATE mounts SET mountfeedcost=9 WHERE mountid=?",[mount]);self.assertEqual(409,request(f'mounts.php?op=activate&id={mount}',fields)[0]);self.assertEqual('0',row()['mountactive'])
+                fields=listed('activate',mount);self.assertEqual(200,request(f'mounts.php?op=activate&id={mount}',fields)[0]);self.assertEqual('1',row()['mountactive']);self.assertEqual(409,request(f'mounts.php?op=activate&id={mount}',fields)[0])
+                # A stables purchase of the saved mount: its price and its buff (atkmod 1.3, 15 rounds).
+                q("UPDATE accounts SET dragonkills=2,dragonpoints=?,race='Human',specialty='DA',alive=1,gold=1000,gems=10,goldinbank=0,hashorse=0,fedmount=0,level=5,location=?,bufflist='a:0:{}',companions='',lasthit=NOW() WHERE acctid=?",
+                  ['a:2:{i:0;s:2:"ff";i:1;s:2:"ff";}',village,player])
+                buy=f'stables.php?op=confirmbuy&id={mount}';status,body=request(f'stables.php?op=buymount&id={mount}');self.assertEqual(200,status,body[:2000])
+                status,body=request(buy,self._security_fields(body,buy));self.assertEqual(200,status,body[:2000])
+                self.assertEqual(('740','7',str(mount)),me('gold','gems','hashorse'));mine=unser(me('bufflist')[0])['mount'];self.assertEqual(('`&Probe Attack','1.3'),(mine['name'],mine['atkmod']))
+                # Give: the acting superuser's own mount and buff; a malformed stored buff stops it before anything changes.
+                q("UPDATE accounts SET hashorse=0,bufflist='a:0:{}' WHERE acctid=?",[player]);fields=listed('give',mount)
+                status,body=request(f'mounts.php?op=give&id={mount}',fields);self.assertEqual(200,status,body[:2000]);self.assertEqual((str(mount),'740','7'),me('hashorse','gold','gems'))
+                self.assertEqual('`&Probe Attack',unser(me('bufflist')[0])['mount']['name']);self.assertEqual(409,request(f'mounts.php?op=give&id={mount}',fields)[0])
+                mine=me('hashorse','bufflist');fields=listed('give',broken);self.assertEqual(500,request(f'mounts.php?op=give&id={broken}',fields)[0]);self.assertEqual(mine,me('hashorse','bufflist'))
+                # The give form is bound to the acting superuser's mount and buffs as shown.
+                fields=listed('give',seed);q("UPDATE accounts SET bufflist='a:0:{}' WHERE acctid=?",[player]);self.assertEqual(409,request(f'mounts.php?op=give&id={seed}',fields)[0])
+                self.assertEqual((str(mount),'a:0:{}'),me('hashorse','bufflist'))
+
+                # Owners: one online, one offline. The list's delete form names them; the cache entry is dropped after a change.
+                online=self._security_target('MountOwnerOnline');offline=self._security_target('MountOwnerOffline');created+=[online,offline]
+                for who in [online,offline]: q("UPDATE accounts SET gold=11,gems=5,goldinbank=100,hashorse=?,bufflist='a:0:{}',companions='',alive=1,hitpoints=10,race='Human',specialty='DA',dragonpoints='a:0:{}',lastnewday=? WHERE acctid=?",[mount,self._current_game_day(),who])
+                peer=self._security_client(login='MountOwnerOnline',password='Synthetic administrator password')
+                def visit(url='list.php'):
+                    q('UPDATE accounts SET lastnewday=? WHERE acctid=?',[self._current_game_day(),online]);self._security_allow(online,url);return peer(url)
+                self.assertEqual(200,visit()[0]);status,body=request(f'mounts.php?op=xml&id={mount}');self.assertEqual(200,status);self.assertEqual(3,body.count('<name name='))
+                state=f['state'];calls=(state['call'],peer)
+                with self._datacache_server(*calls) as (cache,state['call'],peer):
+                    try:
+                        entry=cache/f'datacache_mountdata-{mount}'
+                        status,body=visit(f'bio.php?char={offline}');self.assertIn("Probe O'Reilly 雪 <b>x</b>",text(body));self.assertTrue(entry.exists())
+                        fields=form(f'mounts.php?op=edit&id={mount}',f'mounts.php?op=save&id={mount}');self.assertEqual(200,post(f'mounts.php?op=save&id={mount}',fields,**{**good,'mount[mountname]':'Renamed Probe','mount[mountcostgold]':'260','mount[mountactive]':'1'})[0])
+                        self.assertIn('Creature: Renamed Probe',text(visit(f'bio.php?char={offline}')[1]))
+                        fields=listed('deactivate',mount);self.assertTrue(entry.exists());self.assertEqual(200,request(f'mounts.php?op=deactivate&id={mount}',fields)[0]);self.assertFalse(entry.exists())
+                    finally: state['call'],peer=calls
+                self.assertEqual('0',row()['mountactive'])
+                q("INSERT INTO module_objprefs (modulename,objtype,setting,objid,value) VALUES ('darkhorse','mounts','fixture',?,'1')",[mount])
+                status,body=request('mounts.php');self.assertIn('There are 3 user(s) who own this mount',html.unescape(body))
+                remove=f'mounts.php?op=del&id={mount}';fields=self._security_fields(body,remove);self.assertEqual(405,request(remove)[0])
+                owners=lambda:[tuple(q('SELECT gold,gems,goldinbank,hashorse FROM accounts WHERE acctid=?',[who])[0].values()) for who in [player,online,offline]]
+                start=owners();self.assertEqual([('740','7','0',str(mount)),('11','5','100',str(mount)),('11','5','100',str(mount))],start)
+                # The form is bound to the owners it named: one selling the mount meanwhile makes it stale.
+                q('UPDATE accounts SET hashorse=0 WHERE acctid=?',[offline]);self.assertEqual(409,request(remove,fields)[0]);q('UPDATE accounts SET hashorse=? WHERE acctid=?',[mount,offline])
+                # Refunds, delete and preference cleanup are one transaction: a failure on the last write (the acting superuser's own
+                # refund) leaves every owner, the mount and its preferences as they were; the spent form stays spent and a fresh one deletes.
+                fields=self._security_fields(request('mounts.php')[1],remove)
+                q("ALTER TABLE accounts ADD CONSTRAINT fixture_mount_refund CHECK (login <> 'WebPlayer' OR hashorse <> 0)")
+                try:
+                    self.assertEqual(500,request(remove,fields)[0]);self.assertEqual(start,owners());self.assertEqual(1,len(q('SELECT * FROM mounts WHERE mountid=?',[mount])))
+                    self.assertEqual(1,len(q("SELECT * FROM module_objprefs WHERE objtype='mounts' AND objid=?",[mount])))
+                finally: q('ALTER TABLE accounts DROP CONSTRAINT fixture_mount_refund')
+                self.assertEqual(409,request(remove,fields)[0]);self.assertEqual(start,owners())
+                fields=self._security_fields(request('mounts.php')[1],remove);status,body=request(remove,fields);self.assertEqual(200,status,body[:2000])
+                # 1.1.2's full refund at the time of deletion: gems + 3, bank gold + 260; the mount is gone, with its preferences.
+                self.assertEqual([('740','10','260','0'),('11','8','360','0'),('11','8','360','0')],owners())
+                self.assertEqual([],q('SELECT * FROM mounts WHERE mountid=?',[mount]));self.assertEqual([],q("SELECT * FROM module_objprefs WHERE objtype='mounts' AND objid=?",[mount]))
+                # A repeated or replayed delete refunds nobody twice.
+                self.assertEqual(404,request(remove,fields)[0]);self.assertEqual([('740','10','260','0'),('11','8','360','0'),('11','8','360','0')],owners())
+                # The online owner's next page shows the refund and its save keeps it; the mount's buff stays until it wears off, as in 1.1.2.
+                status,body=visit();self.assertEqual(200,status);self.assertEqual(('11','8','360','0'),owners()[1])
+
+                # Companion add: only the form's declared fields; abilities checked against their keys and types, stored as 1.1.2 stored them.
+                save='companions.php?op=save&id=';fields=form('companions.php?op=add',save)
+                self.assertEqual(sorted(['action_token','csrf_token',*[f'companion[{k}]' for k in ['companionactive','name','dyingtext','description','jointext','category','companionlocation','maxhitpoints','maxhitpointsperlevel',
+                    'attack','attackperlevel','defense','defenseperlevel','companioncostdks','companioncostgems','companioncostgold','cannotbehealed']],'companion[abilities][heal]','companion[abilities][magic]']),sorted(fields))
+                good={'companion[name]':"Pal O'Reilly 雪 <b>x</b>",'companion[dyingtext]':'Gone "now"','companion[description]':'A <i>pal</i> \\ 雪','companion[jointext]':'Hello','companion[category]':'Pals','companion[companionlocation]':'all',
+                      'companion[maxhitpoints]':'20','companion[maxhitpointsperlevel]':'3','companion[attack]':'4','companion[attackperlevel]':'2','companion[defense]':'5','companion[defenseperlevel]':'1',
+                      'companion[abilities][fight]':'1','companion[abilities][heal]':'3','companion[abilities][magic]':'0','companion[companioncostdks]':'0','companion[companioncostgems]':'2','companion[companioncostgold]':'90','companion[allowinpvp]':'1'}
+                self.assertEqual(403,post(save,fields,**good,csrf_token='0'*64)[0])
+                for bad in [{'companion[companionid]':str(pal)},{'companion[hitpoints]':'99'},{'companion[abilities][evil]':'1'},{'companion[abilities][heal]':'31'},{'companion[abilities][magic]':'-1'},
+                            {'companion[abilities][fight]':'2'},{'companion[name]':''},{'companion[name]':'雪'*86},{'companion[description]':'d'*8193},{'companion[companioncostdks]':'128'},
+                            {'companion[companioncostgems]':'-1'},{'companion[attack]':''},{'companion[maxhitpoints]':'2147483648'},{'companion[cannotdie]':'yes'},{'companion[companionlocation]':'Nowhere'},{'abilities':'1'}]:
+                    self.assertEqual(400,post(save,fields,**{**good,**bad})[0],bad)
+                self.assertEqual(before[1],companions())
+                status,body=post(save,fields,**good);self.assertEqual(200,status,body[:2000]);self.assertIn('Companion saved!',body);self.assertNotIn('<b>x</b>',body);self.assertNotIn('INSERT',body)
+                added=[r for r in companions() if r not in before[1]];self.assertEqual(1,len(added));pid=int(added[0]['companionid'])
+                expected={k[10:-1]:v for k,v in good.items() if '[abilities]' not in k}
+                self.assertEqual({**expected,'companionactive':'0','cannotdie':'0','cannotbehealed':'1','allowinshades':'0','allowintrain':'0','abilities':ser({'fight':'1','heal':'3','magic':'0','defend':False})},
+                                 {k:added[0][k] for k in [*expected,'companionactive','cannotdie','cannotbehealed','allowinshades','allowintrain','abilities']})
+                self.assertEqual(409,post(save,fields,**good)[0])
+                crow=lambda:q('SELECT * FROM companions WHERE companionid=?',[pid])[0]
+                # The list works with an inactive companion (1.1.2 counted into the acting superuser's own companion list).
+                q("UPDATE accounts SET companions='a:0:{}' WHERE acctid=?",[player])
+                status,body=request('companions.php');self.assertEqual(200,status,body[:2000]);self.assertEqual(('a:0:{}',),me('companions'))
+                edit,save=f'companions.php?op=edit&id={pid}',f'companions.php?op=save&id={pid}';fields,second=form(edit,save),form(edit,save)
+                self.assertEqual(('1','3',"Pal O'Reilly 雪 <b>x</b>"),(fields['companion[abilities][fight]'],fields['companion[abilities][heal]'],fields['companion[name]']))
+                self.assertEqual(200,post(save,fields,**{**good,'companion[attack]':'6'})[0]);self.assertEqual('6',crow()['attack']);self.assertEqual(409,post(save,second,**good)[0])
+                fields=form(edit,save);q('UPDATE companions SET jointext=? WHERE companionid=?',['Underneath',pid]);self.assertEqual(409,post(save,fields,**good)[0]);self.assertEqual('Underneath',crow()['jointext'])
+                listed=lambda op,ident:self._security_fields(request('companions.php')[1],f'companions.php?op={op}&id={ident}')
+                # Take: the acting superuser gets the companion scaled to level 5 by 1.1.2's formulas.
+                fields=listed('take',pid);status,body=request(f'companions.php?op=take&id={pid}',fields);self.assertEqual(200,status,body[:2000]);self.assertIn("Succesfully taken Pal O'Reilly 雪 <b>x</b> as companion.",text(body))
+                pals=unser(me('companions')[0]);taken=pals["Pal O'Reilly 雪 <b>x</b>"]
+                self.assertEqual((16,10,35,35,{'fight':'1','heal':'3','magic':'0','defend':False}),(taken['attack'],taken['defense'],taken['maxhitpoints'],taken['hitpoints'],taken['abilities']))
+                self.assertEqual(409,request(f'companions.php?op=take&id={pid}',fields)[0]);self.assertEqual(pals,unser(me('companions')[0]))
+                # Activate, then deactivate with the edit page's cache entry: 1.1.2 dropped "companionsdata-<id>", leaving the edit page stale.
+                fields=listed('activate',pid);self.assertEqual(200,request(f'companions.php?op=activate&id={pid}',fields)[0]);self.assertEqual('1',crow()['companionactive'])
+                calls=state['call']
+                with self._datacache_server(calls) as (cache,state['call']):
+                    try:
+                        entry=cache/f'datacache_companiondata-{pid}';fields=listed('deactivate',pid);self.assertEqual(200,request(edit)[0]);self.assertTrue(entry.exists())
+                        self.assertEqual(200,request(f'companions.php?op=deactivate&id={pid}',fields)[0]);self.assertFalse(entry.exists());self.assertEqual('0',crow()['companionactive'])
+                        self.assertEqual('0',form(edit,save)['companion[companionactive]'])
+                    finally: state['call']=calls
+                # Delete: inactive only, with the companion's preferences; a replay is 404.
+                q("INSERT INTO module_objprefs (modulename,objtype,setting,objid,value) VALUES ('darkhorse','companions','fixture',?,'1')",[pid])
+                remove=f'companions.php?op=del&id={pid}';fields=listed('del',pid);self.assertEqual(405,request(remove)[0])
+                q('UPDATE companions SET companionactive=1 WHERE companionid=?',[pid]);self.assertEqual(409,request(remove,fields)[0]);q('UPDATE companions SET companionactive=0 WHERE companionid=?',[pid])
+                fields=listed('del',pid);self.assertEqual(200,request(remove,fields)[0])
+                self.assertEqual([],q('SELECT * FROM companions WHERE companionid=?',[pid]));self.assertEqual([],q("SELECT * FROM module_objprefs WHERE objtype='companions' AND objid=?",[pid]))
+                self.assertEqual(404,request(remove,fields)[0])
+        finally:
+            for who in created: q('DELETE FROM accounts_output WHERE acctid=?',[who]);q('DELETE FROM accounts WHERE acctid=?',[who])
+            restore=lambda table,key,rows:[q(f'DELETE FROM {table} WHERE {key}=?',[r[key]]) for r in q(f'SELECT {key} FROM {table}') if r[key] not in {s[key] for s in rows}]
+            restore('mounts','mountid',saved['mounts']);restore('companions','companionid',saved['companions'])
+            q("DELETE FROM module_objprefs WHERE objtype IN ('mounts','companions')")
+            for r in prefs_before: q('INSERT INTO module_objprefs ('+','.join(r)+') VALUES ('+','.join('?' for _ in r)+')',list(r.values()))
+
+    def test_mount_owner_lookup_and_bio_page_http(self):
+        q=self.query;player=int(q('SELECT acctid FROM accounts WHERE login=?',['WebPlayer'])[0]['acctid'])
+        original=q('SELECT superuser FROM accounts WHERE acctid=?',[player])[0]['superuser'];created=[]
+        text=lambda body:re.sub(r'\s+',' ',html.unescape(re.sub(r'<[^>]+>','',body)))
+        try:
+            mount=int(q('SELECT MIN(mountid) AS id FROM mounts')[0]['id']);name=q('SELECT mountname FROM mounts WHERE mountid=?',[mount])[0]['mountname']
+            plain=self._security_target('BioPlain');quoted=self._security_target("Bio O'Brien");rider=self._security_target('BioRider');created+=[plain,quoted,rider]
+            q('UPDATE accounts SET hashorse=0,name=? WHERE acctid=?',['BioPlainName',plain]);q('UPDATE accounts SET hashorse=0,name=? WHERE acctid=?',['BioQuotedName',quoted])
+            q('UPDATE accounts SET hashorse=?,name=? WHERE acctid=?',[mount,'BioRiderName',rider])
+            def call(url,role=0):
+                q('UPDATE accounts SET superuser=?,lastnewday=? WHERE acctid=?',[role,self._current_game_day(),player]);self._security_allow(player,url);return self._security_client()(url)
+            # bio.php: anonymous visitors are sent to log in, as in 1.1.2; a player sees any character.
+            self.assertIn(self._security_client(login=None)(f'bio.php?char={plain}')[0],[302,303])
+            # A character without a mount shows 1.1.2's "None" (PHP 8 failed on the missing mount row).
+            status,body=call(f'bio.php?char={plain}');self.assertEqual(200,status,body[:2000]);self.assertIn('Biography for BioPlainName',text(body));self.assertIn('Creature: None',text(body))
+            status,body=call('bio.php?char=BioRider');self.assertEqual(200,status,body[:2000]);self.assertIn('Biography for BioRiderName',text(body));self.assertIn(f'Creature: {name}',text(body))
+            # The login is plain text: a quote is part of it, not SQL.
+            status,body=call('bio.php?char='+urllib.parse.quote("Bio O'Brien"));self.assertEqual(200,status,body[:2000]);self.assertIn('Biography for BioQuotedName',text(body))
+            for probe in ["x' OR '1'='1","x' OR acctid='"+str(rider),'BioRider%']:
+                status,body=call('bio.php?char='+urllib.parse.quote(probe));self.assertEqual(200,status,body[:2000]);self.assertIn('This character is already deleted.',text(body),probe)
+            status,body=call('bio.php?char[]=BioRider');self.assertEqual(200,status,body[:2000]);self.assertIn('This character is already deleted.',text(body))
+            # The mount editor's owner lookup needs SU_EDIT_MOUNTS (1.1.2 answered it before the editor's check) and a mount ID.
+            for role in [0,0xFFFFFFFF&~3]: self.assertEqual(403,call(f'mounts.php?op=xml&id={mount}',role)[0],role)
+            status,body=call(f'mounts.php?op=xml&id={mount}',2);self.assertEqual(200,status,body[:2000]);self.assertIn('BioRiderName',urllib.parse.unquote_plus(body))
+            for url in [f'mounts.php?op=xml&id={mount}%20OR%201=1','mounts.php?op=xml&id=0','mounts.php?op=xml']: self.assertEqual(400,call(url,2)[0],url)
+        finally:
+            for who in created: q('DELETE FROM accounts_output WHERE acctid=?',[who]);q('DELETE FROM accounts WHERE acctid=?',[who])
+            q('UPDATE accounts SET superuser=? WHERE acctid=?',[original,player])
+
     def test_news_and_bio_format_stored_stray_percent_http(self):
         # A defeat news row stores its taunt as a sub-format. One stored before the taunt editor refused a stray %, or with
         # a % PHP 5 skipped, made news.php and bio.php fatal on PHP 8; they now get PHP 5's sprintf result.
@@ -6737,7 +6981,7 @@ function MODULE_dohook($hook,$args) {
         serialize=lambda value:subprocess.run([shutil.which('php'),'-r','echo serialize(json_decode(stream_get_contents(STDIN),true));'],input=json.dumps(value),text=True,capture_output=True,cwd=ROOT,check=True).stdout
         today=subprocess.run([shutil.which('php'),'-r',"echo date('Y-m-d');"],text=True,capture_output=True,check=True).stdout
         try:
-            # bio.php needs a mount for now: without one it fails earlier, on PHP 8's false-to-array deprecation (a separate ROADMAP item).
+            # Written when bio.php failed for a character without a mount (closed in content editors part 3); the mount stays.
             target=int(self._security_target('NewsTarget'));created.append(target)
             q('UPDATE accounts SET hashorse=(SELECT MIN(mountid) FROM mounts) WHERE acctid=?',[target])
             rows=[('Stray',[True,'taunts','"100% sure, %s", sneers the Rat.','`^Bob`^']),('Unknown',[True,'taunts','"a %y b %s", says the Rat.','`^Bob`^','Al']),

@@ -244,3 +244,13 @@ Local, PHP 8.5.11 / MySQL 8.4 (supporting evidence only; CI is the acceptance):
   unchanged.
 - The format warnings PHP 5 printed are not logged.
 - Bad translation rows can still break the formats listed above.
+
+## Acceptance, 2026-10-17
+
+`82a48fb83f32f39543c8c09b97a4942e88fc98f9` is accepted on its own run. Confirmed through the
+GitHub Actions run and job API: Modern core **38971089072 SUCCESS**, all 12 jobs, with both
+`result` jobs SUCCESS (PHP 8.4 / MariaDB 11.4 at 21:58:18Z, PHP 8.5 / MySQL 8.4 at
+21:59:46Z, 2026-10-16). Baseline integrity **38971089075 SUCCESS** (21:42:00Z). Content
+editors part 2 and the news formatting fatal are Done in `ROADMAP.md`. The two `bio.php`
+gaps listed above are closed as candidates in
+[content editors part 3](CONTENT-EDITORS-PART3-AUTHORITY-20261017.md).

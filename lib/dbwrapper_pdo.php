@@ -97,7 +97,8 @@ function db_query($sql, $die = true, array $parameters = []) {
     }
 }
 
-function &db_query_cached($sql, $name, $duration = 900) {
+/** @param array<int|string, mixed> $parameters bound as in db_query() */
+function &db_query_cached($sql, $name, $duration = 900, array $parameters = []) {
     global $dbinfo;
     $data = datacache($name, $duration);
     if (is_array($data)) {
@@ -105,7 +106,7 @@ function &db_query_cached($sql, $name, $duration = 900) {
         $dbinfo['affected_rows'] = -1;
         return $data;
     }
-    $data = db_query($sql);
+    $data = db_query($sql, true, $parameters);
     if (!is_array($data)) { throw new LogicException('Only row queries may be cached.'); }
     updatedatacache($name, $data);
     reset($data);

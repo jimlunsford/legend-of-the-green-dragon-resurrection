@@ -779,3 +779,28 @@ progress, Baseline integrity 38958259926 success) and stays a candidate.
   line (`%i`) no longer breaks pack encounters.
 
 See [content editors part 2](CONTENT-EDITORS-PART2-AUTHORITY-20261016.md).
+
+2026-10-17 content editors part 3 (`mounts.php`, `companions.php`) and the bio page
+(`bio.php`): candidate pending CI. Content editors part 1 (`6820b80`, Modern core
+38958259938, Baseline integrity 38958259926) and part 2 with the news formatting fatal
+(`82a48fb`, Modern core 38971089072, Baseline integrity 38971089075) are accepted.
+
+- The mount editor's owner lookup (`mounts.php?op=xml`) ran before the editor's
+  `SU_EDIT_MOUNTS` check with its ID pasted into SQL; it now needs the flag, a positive
+  integer ID, and is bound.
+- `bio.php` binds the character lookup (1.1.2 pasted a login into SQL) and shows "None"
+  for a character without a mount instead of PHP 8's fatal page.
+- Every mount and companion write (save, delete, give, take, activate, deactivate,
+  companion object preferences) is a POST with CSRF and a one-use intent bound to the row
+  as shown (and, for give and take, the acting superuser's state; for a mount delete, the
+  owner count); GET is 405; replay, a second copy or a changed row is 409; unknown IDs are
+  404 before any write.
+- Saves write only the forms' declared fields, each checked; the mount buff is checked as
+  the stables and New Day check a stored one, the companion abilities by key and type.
+- A mount delete refunds every owner by 1.1.2's rule, clears their mount and deletes the
+  mount and its preferences in one locked transaction; cache entries are dropped after the
+  commit. Companion deactivate drops the right cache entry (1.1.2's key had a typo).
+- The companion list no longer writes into the acting superuser's own companion list.
+- All SQL bound; no SQL or driver text printed; output escaped.
+
+See [content editors part 3](CONTENT-EDITORS-PART3-AUTHORITY-20261017.md).

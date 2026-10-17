@@ -19,14 +19,17 @@ if ($ret==""){
 }
 
 $char = httpget('char');
+// The value is bound as plain text: 1.1.2 pasted it into the SQL. A missing or non-text char finds nobody, as 1.1.2's
+// empty login did; a numeric one is compared with acctid, as 1.1.2's unquoted number was.
+if (!is_string($char)) $char = "";
 //Legacy support
 if (is_numeric($char)){
-	$where = "acctid = $char";
+	$where = "acctid = ?";
 } else {
-	$where = "login = '$char'";
+	$where = "login = ?";
 }
 $sql = "SELECT login, name, level, sex, title, specialty, hashorse, acctid, resurrections, bio, dragonkills, race, clanname, clanshort, clanrank, ".db_prefix("accounts").".clanid, laston, loggedin FROM " . db_prefix("accounts") . " LEFT JOIN " . db_prefix("clans") . " ON " . db_prefix("accounts") . ".clanid = " . db_prefix("clans") . ".clanid WHERE $where";
-$result = db_query($sql);
+$result = db_query($sql, true, [$char]);
 if ($target = db_fetch_assoc($result)) {
   $target['login'] = rawurlencode($target['login']);
   $id = $target['acctid'];
@@ -90,9 +93,11 @@ if ($target = db_fetch_assoc($result)) {
   if (isset($specialties[$target['specialty']])) {
 		output("`^Specialty: `@%s`n",$specialties[$target['specialty']]);
   }
-  $sql = "SELECT * FROM " . db_prefix("mounts") . " WHERE mountid='{$target['hashorse']}'";
-  $result = db_query_cached($sql, "mountdata-{$target['hashorse']}", 3600);
+  $sql = "SELECT * FROM " . db_prefix("mounts") . " WHERE mountid=?";
+  $result = db_query_cached($sql, "mountdata-{$target['hashorse']}", 3600, [(int)$target['hashorse']]);
   $mount = db_fetch_assoc($result);
+  // Without a mount there is no row. PHP 5 turned the false into an array on the next line; PHP 8 refuses to.
+  if (!is_array($mount)) $mount = array();
 
   $mount['acctid']=$target['acctid'];
   $mount = modulehook("bio-mount",$mount);
@@ -112,7 +117,7 @@ if ($target = db_fetch_assoc($result)) {
   modulehook("bioinfo", $target);
 
   output("`n`^Recent accomplishments (and defeats) of %s`^",$target['name']);
-  $result = db_query("SELECT * FROM " . db_prefix("news") . " WHERE accountid={$target['acctid']} ORDER BY newsdate DESC,newsid ASC LIMIT 100");
+  $result = db_query("SELECT * FROM " . db_prefix("news") . " WHERE accountid=? ORDER BY newsdate DESC,newsid ASC LIMIT 100", true, [(int)$target['acctid']]);
 
   $odate="";
   tlschema("news");

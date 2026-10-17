@@ -139,6 +139,7 @@ function resurrection_object_types(): array {
     return [
         'mounts'=>['id'=>'mountid','access'=>SU_EDIT_MOUNTS,'url'=>'mounts.php?op=save&subop=module&id='],
         'creatures'=>['id'=>'creatureid','access'=>SU_EDIT_CREATURES,'url'=>'creatures.php?op=save&subop=module&creatureid='],
+        'companions'=>['id'=>'companionid','access'=>SU_EDIT_MOUNTS,'url'=>'companions.php?op=save&subop=module&id='],
     ];
 }
 
