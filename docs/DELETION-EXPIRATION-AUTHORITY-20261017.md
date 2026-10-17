@@ -248,3 +248,11 @@ Local, PHP 8.5.11 / MySQL 8.4 (supporting evidence only; CI is the acceptance):
   the run) is not separately tested.
 - `OPTIMIZE TABLE` reporting and the petition notice email stay in the roadmap's
   "truthful completion reporting" item.
+
+## Acceptance, 2026-10-17
+
+`4182281afcb9cf25d1b07c13154fa69014555cb6` is accepted on its own run. Confirmed through the
+GitHub Actions run and job API: Modern core **39029578747 SUCCESS**, all 12 jobs, with both
+`result` jobs SUCCESS (PHP 8.4 / MariaDB 11.4 at 11:55:49Z, PHP 8.5 / MySQL 8.4 at
+11:58:04Z, 2026-10-17; run started 11:40:09Z). Baseline integrity **39029578850 SUCCESS**
+(11:40:21Z). Expiration cleanup and account deletion are Done in `ROADMAP.md`.

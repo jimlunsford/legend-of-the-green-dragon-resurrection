@@ -857,3 +857,28 @@ stays open.
   fails the maintenance run.
 
 See [account deletion and expiration](DELETION-EXPIRATION-AUTHORITY-20261017.md).
+
+2026-10-17 truthful completion reporting (`lib/newday/dbcleanup.php`,
+`lib/petition/petition_default.php`, `referral.php`): candidate pending CI. Account deletion and
+expiration cleanup (`4182281`, Modern core 39029578747, Baseline integrity 39029578850) are
+accepted. This closes the `OPTIMIZE TABLE` point of "Maintenance classification" above.
+
+- `OPTIMIZE TABLE` failures arrive as result rows (`Error`, then status "Operation failed"),
+  not exceptions. Each table's rows are classified; the game log line gives counts, the
+  server's notes and each failed table's messages. `lastdboptimize` records the start time
+  only when no table failed. A table name `db_identifier()` refuses is reported failed
+  instead of failing the whole maintenance run. The step refuses to run without the
+  maintenance lock.
+- The petition notice goes through `resurrection_send_email()` after the row is written. A
+  refused notice keeps the player text and the row and writes a game log line; before, the
+  refused `mail()` warning became a fatal page after the row was saved.
+- `serverurl` is no longer saved from a request. 1.1.2's petition and referral pages saved a
+  URL built from `SERVER_NAME` (the client's `Host` under Apache's default) and `REQUEST_URI`
+  when it was unset. It now comes from installation and the settings editor only, and is
+  used only when it is a valid base URL.
+- Every live external email send (mail notifications, the expiration warning, the petition
+  notice) uses `resurrection_send_email()` and checks its result. The 1.1.2 sends in
+  recovery, account verification, error notification and payments stay disabled or removed.
+- Gap: the mail notification body still links to the sender's `HTTP_HOST`, as 1.1.2 did.
+
+See [completion reporting](COMPLETION-REPORTING-20261017.md).

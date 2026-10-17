@@ -71,11 +71,12 @@ Each family is DONE only when its acceptance evidence passes on both supported C
 - [x] Mount owner lookup (`mounts.php?op=xml`) answered before the editor's `SU_EDIT_MOUNTS` check, with its ID pasted into SQL, found during content editors part 3 (`CONTENT-EDITORS-PART3-AUTHORITY-20261017.md`). Accepted at `19cbb4e`, Modern core 38991243831, Baseline integrity 38991243814.
 - [x] Module manager and remaining preference editors: every lifecycle op is POST + CSRF + a one-use intent bound to the module and its state; only bundled modules install; uninstall reports what it removed; the preference-editor inventory found no open request writer (`modules.php`) (`MODULE-MANAGER-AUTHORITY-20261017.md`). Accepted at `43bcdc4`, Modern core 39026254697, Baseline integrity 39026254784.
 - [x] Stables purchase reads the mount under a lock, so a mount deactivated and deleted meanwhile cannot be bought (`stables.php`), found during content editors part 3 (`MODULE-MANAGER-AUTHORITY-20261017.md`). Accepted at `43bcdc4`, Modern core 39026254697, Baseline integrity 39026254784.
+- [x] Expiration cleanup: lock-guarded, each account deleted all or nothing, `last_char_expire` recorded only when no account failed, the warning email marks `sentnotice` only when sent (`lib/expire_chars.php`) (`DELETION-EXPIRATION-AUTHORITY-20261017.md`). Accepted at `4182281`, Modern core 39029578747, Baseline integrity 39029578850.
+- [x] Account deletion failure and retry semantics: one locked transaction per account for the hook, cleanup, clan succession and account row, with the veto honored by all three callers; the user editor's delete and self-deletion take a one-use intent (`lib/charcleanup.php`, `user.php?op=del`, `prefs.php?op=suicide`) (`DELETION-EXPIRATION-AUTHORITY-20261017.md`). Accepted at `4182281`, Modern core 39029578747, Baseline integrity 39029578850.
 
 ### Current
 
-- [ ] Expiration cleanup: lock-guarded, each account deleted all or nothing, `last_char_expire` recorded only when no account failed, the warning email marks `sentnotice` only when sent (`lib/expire_chars.php`; candidate in `DELETION-EXPIRATION-AUTHORITY-20261017.md`)
-- [ ] Account deletion failure and retry semantics: one locked transaction per account for the hook, cleanup, clan succession and account row, with the veto honored by all three callers; the user editor's delete and self-deletion take a one-use intent (`lib/charcleanup.php`, `user.php?op=del`, `prefs.php?op=suicide`; candidate in `DELETION-EXPIRATION-AUTHORITY-20261017.md`)
+- [ ] Truthful completion reporting: `OPTIMIZE TABLE` reads each table's result rows, logs counts and failures, and records `lastdboptimize` only when no table failed, under the maintenance lock (`lib/newday/dbcleanup.php`); the petition notice goes through the shared mail helper and a refused notice is logged; `serverurl` is never saved from a request (`lib/petition/petition_default.php`, `referral.php`); every live external email send uses one helper (candidate in `COMPLETION-REPORTING-20261017.md`)
 
 ### Remaining
 
@@ -86,7 +87,6 @@ Infrastructure and records:
 State and maintenance:
 
 - [ ] Remaining serialized business schemas: general combat, mounts, companions, buffs, translation arrays, preferences, editor old values, navigation (`SERIALIZED-STATE-AUDIT.md`)
-- [ ] Truthful completion reporting for `OPTIMIZE TABLE` (`lib/newday/dbcleanup.php`) and external email other than the expiration warning (the petition notice in `lib/petition/petition_default.php`). The expiration warning is covered by the expiration item above.
 
 ### Merge gate
 

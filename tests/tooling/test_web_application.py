@@ -7409,16 +7409,157 @@ function MODULE_dohook($hook,$args) {
             q('DELETE FROM settings WHERE setting IN (?,?,?,?) OR setting=? OR setting LIKE ?',[*keys,'maintenance_day','mh:%'])
             for row in saved: setting(row['setting'],row['value'])
 
+    def test_table_optimization_reporting_cli(self):
+        # OPTIMIZE TABLE answers a failure with result rows, not an exception: a view fails on both servers, and a table
+        # name db_identifier() refuses fails before any SQL. The run continues, reports each table, and is recorded in
+        # lastdboptimize only when nothing failed.
+        q=self.query;saved=q("SELECT value FROM settings WHERE setting='lastdboptimize'")
+        setting=lambda k,v:q('INSERT INTO settings(setting,value) VALUES (?,?) ON DUPLICATE KEY UPDATE value=VALUES(value)',[k,str(v)])
+        marker=lambda:q("SELECT value FROM settings WHERE setting='lastdboptimize'")[0]['value']
+        logs=lambda:[r['message'] for r in q("SELECT message FROM gamelog WHERE category='maintenance' AND message LIKE 'Optimized tables:%' ORDER BY logid")]
+        def cron():
+            q('DELETE FROM settings WHERE setting=? OR setting LIKE ?',['maintenance_day','mh:%'])
+            return [shutil.which('php'),'cron.php']
+        run=lambda:subprocess.run(cron(),cwd=ROOT,capture_output=True,text=True,timeout=300)
+        innodb='Completed with the note "Table does not support optimize, doing recreate + analyze instead": '
+        hold='aaa_fixture_optimize_hold'
+        try:
+            q(f'CREATE TABLE {hold} (id INT PRIMARY KEY) ENGINE=InnoDB');q(f'INSERT INTO {hold} VALUES (1)')
+            q('CREATE VIEW fixture_optimize_view AS SELECT id FROM '+hold);q('CREATE TABLE `fixture-optimize-name` (id INT) ENGINE=InnoDB')
+            tables=len(q('SHOW TABLES'));setting('lastdboptimize','2000-01-01 00:00:00');before=len(logs())
+            result=run();self.assertEqual(0,result.returncode,result.stderr);self.assertEqual('complete',json.loads(result.stdout)['maintenance'])
+            entries=logs()[before:];self.assertEqual(1,len(entries),entries);entry=entries[0]
+            self.assertTrue(entry.startswith(f'Optimized tables: {tables-2} of {tables} completed in '),entry)
+            self.assertIn(innodb,entry);self.assertRegex(entry,r'": [^\n]*\baccounts\b')
+            self.assertIn('\nFailed: 2\n',entry);self.assertIn('fixture-optimize-name (The table name is not supported.)',entry)
+            self.assertRegex(entry,r"fixture_optimize_view \('resurrection_test\.fixture_optimize_view' is not (of type 'BASE TABLE'|BASE TABLE); Operation failed\)")
+            self.assertTrue(entry.endswith('The optimization was not recorded as run, so the next maintenance run tries again.'),entry)
+            self.assertEqual('2000-01-01 00:00:00',marker())
+            # Without the failing tables the retry completes every table and records the run's start time.
+            q('DROP VIEW fixture_optimize_view');q('DROP TABLE `fixture-optimize-name`')
+            result=run();self.assertEqual(0,result.returncode,result.stderr)
+            entries=logs()[before+1:];self.assertEqual(1,len(entries),entries)
+            self.assertTrue(entries[0].startswith(f'Optimized tables: {tables-2} of {tables-2} completed in '),entries[0])
+            self.assertNotIn('Failed',entries[0]);self.assertNotEqual('2000-01-01 00:00:00',marker())
+            # 1.1.2's schedule: not again within a day of the recorded run.
+            result=run();self.assertEqual(0,result.returncode,result.stderr);self.assertEqual(before+2,len(logs()))
+            # Only under the maintenance lock: run directly, it refuses before any table and logs nothing.
+            setting('lastdboptimize','2000-01-01 00:00:00')
+            code="$_SERVER+=['SCRIPT_NAME'=>'cron.php','REQUEST_URI'=>'cron.php','SERVER_NAME'=>'localhost','SERVER_PORT'=>'80','REMOTE_ADDR'=>'','REQUEST_METHOD'=>''];define('ALLOW_ANONYMOUS',true);ob_start();require 'common.php';try{require 'lib/newday/dbcleanup.php';$r='ran';}catch(LogicException $e){$r='refused';}while(ob_get_level())ob_end_clean();echo $r;"
+            direct=subprocess.run([shutil.which('php'),'-r',code],cwd=ROOT,capture_output=True,text=True,timeout=300)
+            self.assertEqual('refused',direct.stdout.strip(),direct.stdout[-500:]+direct.stderr[-500:])
+            self.assertEqual(before+2,len(logs()));self.assertEqual('2000-01-01 00:00:00',marker())
+            # A second scheduler while the first is optimizing is refused: an open transaction on the first table holds
+            # the first run inside OPTIMIZE TABLE until it is released; the tables are optimized and logged once.
+            holder=subprocess.Popen([shutil.which('php'),'-r',"require 'dbconnect.php';require 'lib/dbwrapper_pdo.php';db_connect($DB_HOST,$DB_USER,$DB_PASS);db_select_db($DB_NAME);$GLOBALS['dbinfo']['connection']->beginTransaction();db_query('SELECT * FROM "+hold+"');echo \"held\\n\";stream_get_contents(STDIN);$GLOBALS['dbinfo']['connection']->rollBack();"],
+                cwd=ROOT,stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True)
+            first=None
+            try:
+                self.assertEqual('held',holder.stdout.readline().strip())
+                first=subprocess.Popen(cron(),cwd=ROOT,stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True)
+                for _ in range(600):
+                    if first.poll() is not None or q("SELECT ID FROM information_schema.PROCESSLIST WHERE INFO LIKE ? AND STATE LIKE '%metadata lock%'",[f'OPTIMIZE TABLE `{hold}`%']): break
+                    time.sleep(.05)
+                self.assertIsNone(first.poll(),'First scheduler finished before reaching the held table')
+                second=run();self.assertEqual(1,second.returncode);self.assertIn('Maintenance',second.stderr)
+                holder.stdin.close();holder.wait(timeout=30)
+                out,err=first.communicate(timeout=300);self.assertEqual(0,first.returncode,err)
+            finally:
+                if holder.poll() is None: holder.kill();holder.wait(timeout=5)
+                holder.stdout.close();holder.stderr.close()
+                if first is not None and first.poll() is None: first.terminate();first.communicate(timeout=5)
+            entries=logs()[before+2:];self.assertEqual(1,len(entries),entries);self.assertNotIn('Failed',entries[0])
+            self.assertNotEqual('2000-01-01 00:00:00',marker())
+        finally:
+            q('DROP VIEW IF EXISTS fixture_optimize_view');q('DROP TABLE IF EXISTS `fixture-optimize-name`');q(f'DROP TABLE IF EXISTS {hold}')
+            q('DELETE FROM settings WHERE setting=? OR setting LIKE ?',['maintenance_day','mh:%'])
+            if saved: setting('lastdboptimize',saved[0]['value'])
+
+    @contextmanager
+    def _petition_mail_server(self):
+        # A second fixture server whose mail transport accepts every message except one to fail-admin@example.invalid,
+        # and that takes SERVER_NAME from the Host header on request, as Apache does with UseCanonicalName Off.
+        transport=tempfile.TemporaryDirectory(prefix='resurrection-petition-mail-');capture=Path(transport.name)/'capture.txt'
+        program=Path(transport.name)/'sendmail';prepend=tempfile.NamedTemporaryFile(mode='w',suffix='.php')
+        program.write_text('#!'+sys.executable+"\nimport sys\nfrom pathlib import Path\npayload=sys.stdin.read()\nwith Path(__file__).with_name('capture.txt').open('a') as f:f.write(payload+'\\n=====\\n')\nsys.exit(1 if 'fail-admin@example.invalid' in payload else 0)\n")
+        program.chmod(0o700)
+        prepend.write("<?php if (($_SERVER['HTTP_X_RESURRECTION_FIXTURE'] ?? '') === 'forged-host') $_SERVER['SERVER_NAME'] = explode(':', $_SERVER['HTTP_HOST'])[0];\n");prepend.flush()
+        with socket.socket() as sock:sock.bind(('127.0.0.1',0));port=sock.getsockname()[1]
+        server=subprocess.Popen([shutil.which('php'),'-d','display_errors=1','-d','error_reporting=-1','-d','zend.exception_ignore_args=1','-d','sendmail_path='+str(program),
+                                 '-d','auto_prepend_file='+prepend.name,'-S',f'127.0.0.1:{port}','-t',str(ROOT)],cwd=ROOT,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
+        try:
+            for _ in range(100):
+                try:
+                    with socket.create_connection(('127.0.0.1',port),timeout=.1):break
+                except OSError:time.sleep(.02)
+            yield port,lambda:capture.read_text().split('\n=====\n')[:-1] if capture.exists() else []
+        finally:
+            server.terminate();server.wait(timeout=20);prepend.close();transport.cleanup()
+
+    def test_petition_notice_email_and_server_url_http(self):
+        # The petition row is the record and the email a notice: the player sees 1.1.2's text and the row is kept
+        # whether or not the transport accepts the notice; a refused notice is logged for the admin. serverurl is
+        # never saved from a request.
+        q=self.query;keys=['emailpetitions','gameadminemail','serverurl'];saved=q('SELECT setting,value FROM settings WHERE setting IN (?,?,?)',keys)
+        setting=lambda k,v:q('INSERT INTO settings(setting,value) VALUES (?,?) ON DUPLICATE KEY UPDATE value=VALUES(value)',[k,str(v)])
+        stored=lambda:[r['value'] for r in q("SELECT value FROM settings WHERE setting='serverurl'")]
+        recent=q('SELECT petitionid,date FROM petitions WHERE date>DATE_SUB(NOW(),INTERVAL 2 DAY)');created=[]
+        notices=lambda:[r['message'] for r in q("SELECT message FROM gamelog WHERE category='petition' ORDER BY logid")]
+        text=lambda body:re.sub(r'\s+',' ',html.unescape(re.sub(r'<[^>]+>','',body)))
+        try:
+            # The network limit counts petitions from 127.0.0.* in the last day; earlier tests' petitions are moved out.
+            for row in recent: q('UPDATE petitions SET date=DATE_SUB(date,INTERVAL 3 DAY) WHERE petitionid=?',[row['petitionid']])
+            setting('emailpetitions',1)
+            with self._petition_mail_server() as (port,mails):
+                def petition(description,host=None):
+                    request=self._security_client(login=None,port=port)
+                    status,body=request('petition.php',host=host,fixture='forged-host' if host else None);self.assertEqual(200,status,body[:2000])
+                    token=re.search(r'name=[\'"]csrf_token[\'"] value=[\'"]([a-f0-9]{64})',body).group(1)
+                    status,body=request('petition.php?op=submit',{'csrf_token':token,'charname':'Petitioner','email':'p@example.invalid','description':description},
+                                        host=host,fixture='forged-host' if host else None)
+                    self.assertEqual(200,status,body[:3000]);self.assertIn('Your petition has been sent to the server admin.',text(body))
+                    rows=q('SELECT petitionid,body FROM petitions WHERE body LIKE ? ORDER BY petitionid',['%'+description+'%']);self.assertEqual(1,len(rows),rows)
+                    created.append(rows[0]['petitionid']);return int(rows[0]['petitionid'])
+                # Accepted: one notice to the admin address, from it, naming the configured URL. A configured URL without
+                # its trailing slash is saved with one, as 1.1.2 did.
+                setting('gameadminemail','admin@example.invalid');setting('serverurl',f'http://127.0.0.1:{port}/game');before=len(notices())
+                petition('Petition notice accepted')
+                self.assertEqual([f'http://127.0.0.1:{port}/game/'],stored());self.assertEqual(before,len(notices()))
+                self.assertEqual(1,len(mails()));mail=mails()[0]
+                for part in ['To: admin@example.invalid',f'Subject: New LoGD Petition at http://127.0.0.1:{port}/game/','From: admin@example.invalid',
+                             f'Server: http://127.0.0.1:{port}/game/','Petition notice accepted']:
+                    self.assertIn(part,mail)
+                # Refused: the same player text and the row, and a log line naming the petition.
+                setting('gameadminemail','fail-admin@example.invalid');pid=petition('Petition notice refused')
+                self.assertEqual(2,len(mails()));self.assertEqual([f'Petition {pid} was filed, but its email notice to the admin address could not be sent.'],notices()[before:])
+                # serverurl unset and a forged Host: nothing is saved, and the notice says the URL is not configured.
+                setting('gameadminemail','admin@example.invalid');q("DELETE FROM settings WHERE setting='serverurl'")
+                petition('Petition forged host',host=f'evil.example:{port}')
+                self.assertEqual([],stored());self.assertEqual(3,len(mails()));mail=mails()[2]
+                self.assertIn('Subject: New LoGD Petition at (Server URL not set or not valid)',mail);self.assertNotIn('evil.example',mail)
+                self.assertEqual(before+1,len(notices()))
+                # The referral page shows that player a link but no longer saves the request's URL either.
+                player=q('SELECT acctid FROM accounts WHERE login=?',['WebPlayer'])[0]['acctid']
+                request=self._security_client(port=port);self._security_allow(player,'referral.php')
+                status,body=request('referral.php',host=f'evil.example:{port}',fixture='forged-host');self.assertEqual(200,status,body[:2000])
+                self.assertIn(f'http://evil.example:{port}/referral.php?r=WebPlayer',text(body));self.assertEqual([],stored())
+        finally:
+            for pid in created: q('DELETE FROM petitions WHERE petitionid=?',[pid])
+            for row in recent: q('UPDATE petitions SET date=? WHERE petitionid=?',[row['date'],row['petitionid']])
+            q('DELETE FROM settings WHERE setting IN (?,?,?)',keys)
+            for row in saved: setting(row['setting'],row['value'])
+
     def _security_client(self, login='WebPlayer', password="Synthetic web O'Reilly \\ password", port=None):
         class NoRedirect(urllib.request.HTTPRedirectHandler):
             def redirect_request(self, *args): return None
         jar=http.cookiejar.CookieJar()
         client=urllib.request.build_opener(urllib.request.HTTPCookieProcessor(jar),NoRedirect)
         client_port=self.port if port is None else port
-        def request(url, data=None, fixture=None):
+        def request(url, data=None, fixture=None, host=None):
+            headers={} if fixture is None else {'X-Resurrection-Fixture':fixture}
+            if host is not None: headers['Host']=host
             req=urllib.request.Request(f'http://127.0.0.1:{client_port}/'+url,
-                data=None if data is None else urllib.parse.urlencode(data).encode(),
-                headers={} if fixture is None else {'X-Resurrection-Fixture':fixture})
+                data=None if data is None else urllib.parse.urlencode(data).encode(),headers=headers)
             try: response=client.open(req,timeout=20)
             except urllib.error.HTTPError as error: response=error
             body=response.read().decode('utf-8',errors='replace')

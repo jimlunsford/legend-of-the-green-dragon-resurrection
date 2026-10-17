@@ -34,19 +34,16 @@ if ($op === 'submit' || count($post)>0){
                 [(int)$session['user']['acctid'], $date, output_array($post), 'Session diagnostics intentionally omitted.', $address, '']);
 			// Fix the counter
 			invalidatedatacache("petition_counts");
-			// If the admin wants it, email the petitions to them.
+			$petitionid = (int)db_insert_id();
+			// If the admin wants it, email the petitions to them. The petition row above is the record; the email is a
+			// notice sent after the row is committed, through the shared transport, and a refused send is logged.
 			if (getsetting("emailpetitions", 0)) {
 				// Yeah, the format of this is ugly.
 				require_once("lib/sanitize.php");
+				require_once("lib/server_url.php");
 				$name = color_sanitize($session['user']['name']);
-				$url = getsetting("serverurl",
-					"http://".$_SERVER['SERVER_NAME'] .
-					($_SERVER['SERVER_PORT']==80?"":":".$_SERVER['SERVER_PORT']) .
-					dirname($_SERVER['REQUEST_URI']));
-				if (!preg_match("/\\/$/", $url)) {
-					$url = $url . "/";
-					savesetting("serverurl", $url);
-				}
+				// Never built from this request: see resurrection_server_url().
+				$url = resurrection_server_url() ?? translate_inline("(Server URL not set or not valid)");
 				$tl_server = translate_inline("Server");
 				$tl_author = translate_inline("Author");
 				$tl_date = translate_inline("Date");
@@ -57,7 +54,11 @@ if ($op === 'submit' || count($post)>0){
 				$msg .= "$tl_author: $name\n";
 				$msg .= "$tl_date : $date\n";
 				$msg .= "$tl_body :\n".output_array($post)."\n";
-				mail(getsetting("gameadminemail","postmaster@localhost.com"),$tl_subject, $msg);
+				$admin = getsetting("gameadminemail","postmaster@localhost.com");
+				if (!resurrection_send_email((string)$admin, (string)$tl_subject, $msg, (string)$admin)) {
+					require_once("lib/gamelog.php");
+					gamelog("Petition $petitionid was filed, but its email notice to the admin address could not be sent.", "petition");
+				}
 			}
 			output("Your petition has been sent to the server admin.");
 			output("Please be patient, most server admins have jobs and obligations beyond their game, so sometimes responses will take a while to be received.");

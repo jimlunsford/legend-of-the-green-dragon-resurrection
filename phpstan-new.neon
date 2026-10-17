@@ -42,6 +42,8 @@ parameters:
         - lib/charcleanup.php
         - lib/char_expiration.php
         - lib/maintenance.php
+        - lib/db_optimize.php
+        - lib/server_url.php
         - lib/installer/fresh_install.php
         - lib/installer/bundled_modules.php
         - scripts/install.php
