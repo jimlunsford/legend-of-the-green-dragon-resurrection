@@ -2,6 +2,7 @@
 require_once __DIR__ . '/../src/Security/ScalarState.php';
 require_once __DIR__ . '/../src/Game/Expression.php';
 require_once __DIR__ . '/../src/Game/SpecialtyBuffState.php';
+require_once __DIR__ . '/../src/Game/BuffState.php';
 require_once __DIR__ . '/../src/Compatibility/array_cursor.php';
 // addnews ready
 // translator ready
@@ -88,8 +89,8 @@ function apply_buff($name,$buff){
 		restore_buff_fields();
 	}
 	$buff = modulehook("modify-buff", array("name"=>$name, "buff"=>$buff));
-	\Resurrection\Game\SpecialtyBuffState::collection([$name=>$buff['buff']]);
-	$session['bufflist'][$name] = $buff['buff'];
+	// Only a valid buff is applied, normalized into the types combat uses.
+	$session['bufflist'][$name] = \Resurrection\Game\BuffState::buff($name, $buff['buff'], $session['user']);
 	calculate_buff_fields();
 }
 

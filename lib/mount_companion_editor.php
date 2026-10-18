@@ -3,9 +3,8 @@ require_once __DIR__ . '/content_editor.php';
 require_once __DIR__ . '/stables_authority.php';
 require_once __DIR__ . '/buffs.php';
 require_once __DIR__ . '/../src/Game/Expression.php';
-require_once __DIR__ . '/../src/Game/SpecialtyBuffState.php';
 require_once __DIR__ . '/../src/Game/TransmutationState.php';
-require_once __DIR__ . '/../src/Game/ForestBuffState.php';
+require_once __DIR__ . '/../src/Game/BuffState.php';
 require_once __DIR__ . '/../src/Game/NewDayState.php';
 require_once __DIR__ . '/../src/Game/SkeletonCompanionState.php';
 require_once __DIR__ . '/../src/Game/ForestCompanionState.php';
@@ -115,13 +114,11 @@ function resurrection_object_location(array $posted, string $key, string $hook):
 /**
  * The serialized mount buff from mount[mountbuff], built as 1.1.2 built it: every non-empty field of the form, as
  * text, and the "mounts" schema (1.1.2 also stripped slashes, a magic-quotes leftover that would now eat backslashes).
- * It must pass the checks the game applies to a stored mount buff: the stables' (it reads back as an array) and New
- * Day's mount buff consumer (lib/newday_daily.php), which every owner's New Day runs; a buff it refuses would stop
- * every owner's New Day.
+ * It must pass the mount buff schema (BuffState::mount()) that the stables, Give and every owner's New Day apply; a
+ * buff it refuses would stop every owner's New Day.
  * @param array<string, mixed> $posted
  */
 function resurrection_mount_buff(array $posted): string {
-    global $session;
     $fields = $posted['mountbuff'] ?? null;
     if (!is_array($fields) || array_diff(RESURRECTION_MOUNT_BUFF, array_keys($fields)) !== [] ||
         array_diff(array_keys($fields), RESURRECTION_MOUNT_BUFF) !== []) throw new InvalidArgumentException('Unexpected buff fields.');
@@ -133,9 +130,8 @@ function resurrection_mount_buff(array $posted): string {
     $buff['schema'] = 'mounts';
     $encoded = serialize($buff);
     try {
-        $stored = resurrection_stables_buff(['mountbuff' => $encoded]);
-        \Resurrection\Game\NewDayState::buffs(['mount' => $stored], $session['user']);
-    } catch (DomainException | UnexpectedValueException $error) {
+        resurrection_stables_buff(['mountbuff' => $encoded]);
+    } catch (UnexpectedValueException $error) {
         throw new InvalidArgumentException('Invalid mount buff.');
     }
     return $encoded;

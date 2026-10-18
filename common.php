@@ -254,16 +254,19 @@ if ($session['user']['hitpoints']>0){
 	$session['user']['alive']=false;
 }
 
-if (isset($session['user']['bufflist']))
-	$session['bufflist']=\Resurrection\Security\ScalarState::read($session['user']['bufflist']);
-else
-	$session['bufflist'] = array();
-if (!is_array($session['bufflist'])) $session['bufflist']=array();
-if (array_key_exists('transmute',$session['bufflist'])) {
+// The buff list, checked and normalized (src/Game/BuffState.php). 1.1.2 turned any stored value that was not an array
+// into no buffs; its only such value was the empty column (create.php, newday.php), which still reads as none.
+// Anything else stops the page: a reset would silently drop a player's buffs.
+require_once 'src/Game/BuffState.php';
+$storedbuffs = $session['user']['bufflist'] ?? null;
+$session['bufflist'] = in_array($storedbuffs, [null, ''], true) ? [] : \Resurrection\Security\ScalarState::read($storedbuffs);
+if (is_array($session['bufflist']) && array_key_exists('transmute',$session['bufflist'])) {
     require_once 'src/Game/TransmutationState.php';
-    try { $session['bufflist']['transmute']=\Resurrection\Game\TransmutationState::read($session['bufflist']['transmute']); }
+    try { \Resurrection\Game\TransmutationState::read($session['bufflist']['transmute']); }
     catch (DomainException $error) { http_response_code(400); exit('Invalid stored potion state.'); }
 }
+try { $session['bufflist'] = \Resurrection\Game\BuffState::read($storedbuffs, $session['user']); }
+catch (DomainException $error) { http_response_code(409); exit('Invalid stored buff state. No game action was completed.'); }
 
 $session['user']['lastip']=$REMOTE_ADDR;
 [$session['user']['uniqueid'], $sendid] = resurrection_player_id($_COOKIE['lgi'] ?? null, $session['user']['uniqueid']);

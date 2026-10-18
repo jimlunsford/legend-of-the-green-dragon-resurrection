@@ -74,10 +74,11 @@ Each family is DONE only when its acceptance evidence passes on both supported C
 - [x] Expiration cleanup: lock-guarded, each account deleted all or nothing, `last_char_expire` recorded only when no account failed, the warning email marks `sentnotice` only when sent (`lib/expire_chars.php`) (`DELETION-EXPIRATION-AUTHORITY-20261017.md`). Accepted at `4182281`, Modern core 39029578747, Baseline integrity 39029578850.
 - [x] Account deletion failure and retry semantics: one locked transaction per account for the hook, cleanup, clan succession and account row, with the veto honored by all three callers; the user editor's delete and self-deletion take a one-use intent (`lib/charcleanup.php`, `user.php?op=del`, `prefs.php?op=suicide`) (`DELETION-EXPIRATION-AUTHORITY-20261017.md`). Accepted at `4182281`, Modern core 39029578747, Baseline integrity 39029578850.
 - [x] Truthful completion reporting: `OPTIMIZE TABLE` reads each table's result rows, logs counts and failures, and records `lastdboptimize` only when no table failed, under the maintenance lock (`lib/newday/dbcleanup.php`); the petition notice goes through the shared mail helper and a refused notice is logged; `serverurl` is never saved from a request (`lib/petition/petition_default.php`, `referral.php`); every live external email send uses one helper (`COMPLETION-REPORTING-20261017.md`). Accepted at `05485ec`, Modern core 39044082958, Baseline integrity 39044082762.
+- [x] Serialized business schemas part 1: per-site inventory with category and status, the definition of done, navigation (`allowednavs`, `restorepage`), preferences and editor old values closed at every read and writer (`lib/forcednavigation.php`, `login.php`, `prefs.php`, `lib/saveuser.php`, `lib/player_mutation.php`, `lib/systemmail.php`), and the badnav.php fatal found while testing (`SERIALIZED-SCHEMAS-PART1-20261017.md`). Accepted at `fd548a3`, Modern core 39054238252, Baseline integrity 39054238222.
 
 ### Current
 
-- [ ] Serialized business schemas part 1: per-site inventory with category and status, the definition of done, navigation (`allowednavs`, `restorepage`), preferences and editor old values closed at every read and writer (`lib/forcednavigation.php`, `login.php`, `prefs.php`, `lib/saveuser.php`, `lib/player_mutation.php`, `lib/systemmail.php`), and the badnav.php fatal found while testing (candidate in `SERIALIZED-SCHEMAS-PART1-20261017.md`)
+- [ ] Serialized business schemas part 2: combat buff compatibility (the installer Pony, the drinks buzz, the lover, Crazy Audrey and the mount editor's text fields no longer stop combat or New Day), one buff schema at hydration, login, combat and every buff writer, and the mount buff schema for the stables, the mount editor and New Day (`src/Game/BuffState.php`) (candidate in `SERIALIZED-SCHEMAS-PART2-20261018.md`)
 
 ### Remaining
 
@@ -91,9 +92,6 @@ Route families:
 
 State and maintenance (remaining serialized business schemas, split in `SERIALIZED-SCHEMAS-PART1-20261017.md`; per-site status in `SERIALIZED-STATE-AUDIT.md`):
 
-- [ ] Combat buff compatibility: the combat buff check accepts the buff shapes 1.1.2 and the shipped modules write (installer mount buffs, lover, Crazy Audrey, drinks)
-- [ ] Buffs: a full buff-list schema at hydration and in every buff writer
-- [ ] Mounts: a mount buff schema for the stables, the mount editor and New Day
 - [ ] Companions: the full companion schema at hydration and in every companion writer
 - [ ] Companion abilities: one schema for the mercenary camp, the companion editor and take
 - [ ] General combat: the Forest contract on the Forest-specialty route, and the post-round re-check on Dragon and Forest specialty

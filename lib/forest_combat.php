@@ -5,14 +5,14 @@ require_once __DIR__ . '/inn_economy.php';
 require_once __DIR__ . '/battle-skills.php';
 require_once __DIR__ . '/../src/Game/ForestCompanionState.php';
 require_once __DIR__ . '/../src/Game/ForestCombatState.php';
-require_once __DIR__ . '/../src/Game/ForestBuffState.php';
+require_once __DIR__ . '/../src/Game/BuffState.php';
 
 /** @return array<string,mixed> */
 function resurrection_forest_state(bool $entry = false): array {
     global $session, $companions;
     if (empty($session['loggedin']) || empty($session['user']['alive']) || $session['user']['hitpoints'] <= 0 ||
         $session['user']['specialinc'] !== '') throw new DomainException('Forest unavailable.');
-    \Resurrection\Game\ForestBuffState::validate($session['bufflist'],$session['user']);
+    \Resurrection\Game\BuffState::collection($session['bufflist'],$session['user']);
     \Resurrection\Game\ForestCompanionState::validate($companions);
     if ($entry) {
         if ($session['user']['badguy'] !== '') throw new DomainException('Encounter already active.');

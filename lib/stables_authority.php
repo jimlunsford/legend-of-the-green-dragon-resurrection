@@ -1,6 +1,7 @@
 <?php
 require_once __DIR__ . '/player_mutation.php';
 require_once __DIR__ . '/../src/Security/ScalarState.php';
+require_once __DIR__ . '/../src/Game/BuffState.php';
 
 /**
  * A mount row, bound by id. Inside a purchase it is read under lock ($lock), so a mount the editor deactivates or
@@ -26,14 +27,18 @@ function resurrection_stables_offered(array $mount): bool {
 }
 
 /**
- * A mount's stored buff; a malformed one stops the action before anything is charged.
+ * A mount's stored buff, checked and normalized by the mount buff schema (BuffState::mount()); a malformed one stops
+ * the action before anything is charged.
  * @param array<string, mixed> $mount
- * @return array<mixed>
+ * @return array<string, mixed>
  */
 function resurrection_stables_buff(array $mount): array {
-    $buff = \Resurrection\Security\ScalarState::read($mount['mountbuff']);
-    if (!is_array($buff)) throw new UnexpectedValueException('Invalid stored mount buff.');
-    return $buff;
+    global $session;
+    try {
+        return \Resurrection\Game\BuffState::mount(\Resurrection\Security\ScalarState::read($mount['mountbuff']), $session['user']);
+    } catch (DomainException $error) {
+        throw new UnexpectedValueException('Invalid stored mount buff.');
+    }
 }
 
 /** A stables form is bound to its action, the mount, and the player's mount, purse, place, feeding and mount buff. */

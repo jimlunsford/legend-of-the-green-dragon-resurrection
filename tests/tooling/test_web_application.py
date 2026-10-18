@@ -2038,6 +2038,81 @@ echo "locked\\n";fflush(STDOUT);$change=json_decode(fgets(STDIN),true,512,JSON_T
                 f['prepare']('TS',specialty='',**{field:value}); before=f['snapshot'](); code,body=f['request']('forest.php?op=fight')
                 self.assertEqual(409,code,body[:2000]); self.assertEqual(before,f['snapshot']())
 
+    def test_shipped_buff_shapes_fight_and_malformed_buff_list_http(self):
+        # Buffs as the 1.1.2 installer and the shipped modules write them: text numbers, legacy "activate", a message tuple.
+        q=self.query
+        installer=q('SELECT * FROM mounts WHERE mountid=1')[0]
+        self.assertEqual('Pony',installer['mountname']); self.assertIn('s:6:"rounds";s:2:"20";s:6:"atkmod";s:3:"1.2";s:8:"activate";s:7:"offense";',installer['mountbuff'])
+        village=q("SELECT value FROM settings WHERE setting='villagename'"); village=village[0]['value'] if village else 'Degolburg'
+        with self._ordinary_forest_fixture() as f:
+            e,d,player=f['encode'],f['decode'],f['player']
+            def request(url,data=None):
+                # Read the authoritative game day for every request; the stables run checkday().
+                q('UPDATE accounts SET lastnewday=? WHERE acctid=?',[self._current_game_day(),player]); return f['request'](url,data)
+            encounter=e({'enemies':[f['enemy']],'options':{'type':'forest','didsurprise':1}})
+            def fight(buffs=None):
+                values={'badguy':encounter,'hitpoints':500}
+                if buffs is not None: values['bufflist']=e(buffs)
+                q('UPDATE accounts SET '+','.join(k+'=?' for k in values)+' WHERE acctid=?',[*values.values(),player])
+                q('UPDATE accounts SET lastnewday=? WHERE acctid=?',[self._current_game_day(),player])
+                code,body=f['action'](f['ordinary_form']()); self.assertEqual(200,code,body[:2000])
+                return body,d(f['snapshot']()[0]['bufflist'])
+            # The installer Pony, bought at the stables, fights in the forest.
+            f['prepare']('TS',badguy='',hashorse=0,fedmount=0,gold=10000,gems=100,location=village)
+            buy='stables.php?op=confirmbuy&id=1'
+            status,body=request('stables.php?op=buymount&id=1'); self.assertEqual(200,status,body[:2000])
+            status,body=request(buy,self._security_fields(body,buy)); self.assertEqual(200,status,body[:2000]); self.assertIn('leads out a fine',body)
+            self.assertEqual('1',q('SELECT hashorse FROM accounts WHERE acctid=?',[player])[0]['hashorse'])
+            # A mount buff the schema refuses (the Pony's with an unknown key) stops a purchase before anything is charged.
+            q("INSERT INTO mounts (mountname,mountdesc,mountcategory,mountbuff,mountcostgems,mountcostgold,mountactive,mountforestfights,newday,recharge,partrecharge,mountfeedcost,mountlocation,mountdkcost) VALUES ('Fixture Odd','Fixture','Fixture',?,0,10,1,0,'','','',5,'all',0)",
+              [installer['mountbuff'].replace('a:5:{','a:6:{s:4:"evil";s:1:"1";',1)])
+            odd=int(q('SELECT MAX(mountid) AS id FROM mounts')[0]['id'])
+            try:
+                url=f'stables.php?op=confirmbuy&id={odd}'; status,body=request(f'stables.php?op=buymount&id={odd}'); fields=self._security_fields(body,url); before=f['snapshot']()
+                status,body=request(url,fields); self.assertEqual(500,status,body[:500]); self.assertEqual(before,f['snapshot']())
+                self.assertEqual('1',q('SELECT hashorse FROM accounts WHERE acctid=?',[player])[0]['hashorse'])
+            finally: q('DELETE FROM mounts WHERE mountid=?',[odd])
+            body,after=fight()
+            self.assertIn('Your pony fights with you!',body)
+            # Normalized once, at the purchase, into the types combat uses.
+            self.assertEqual({'name':'`&Pony Attack','roundmsg':'Your pony fights with you!','rounds':19,'atkmod':1.2,'activate':'offense','schema':'mounts'},
+                {k:v for k,v in after['mount'].items() if k not in ['used','fields_calculated']})
+            # Other shipped shapes, as their writers store them.
+            shapes=[
+                # modules/lovers.php lovers_getbuff(): a translated wearoff tuple.
+                ('lover',{'name':"`!Lover's Protection",'rounds':60,'wearoff':['`!You miss %s`!.`0','`%Violet`0'],'defmod':1.2,'roundmsg':'Your lover inspires you to keep safe!','schema':'module-lovers'}),
+                # modules/drinks/security.php from the install rows: text rounds and modifiers, ".9" included.
+                ('buzz',{'name':'`#Buzz','rounds':'10','roundmsg':"You've got a nice buzz going.",'wearoff':'Your buzz fades.','atkmod':'1.25','schema':'module-drinks'}),
+                ('buzz',{'name':'`$Hot Hands','rounds':'12','roundmsg':'You feel like your hands are about to burn off.','wearoff':'Finally, your hands are no longer burning.','atkmod':'1.1','defmod':'.9','dmgmod':'1.5','schema':'module-drinks'}),
+                ('buzz',{'name':'`#Mulekick','rounds':'15','roundmsg':'You hear a donkey braying in the distance','wearoff':'That donkey finally shuts up.','dmgmod':'1.3','damageshield':'1.3',
+                    'effectfailmsg':'Your head rings as the donkey kicks you instead.','effectnodmgmsg':'That mule would have kicked {badguy} to the moon, but it missed!','effectmsg':'{badguy} sees`$ {damage}`) stars as the mule kicks him over the moon.','schema':'module-drinks'}),
+                # modules/crazyaudrey.php: legacy "activate".
+                ('crazyaudrey',{'name':'Warm Fuzzies','rounds':5,'activate':'defense','defmod':1.05,'schema':'module-crazyaudrey'}),
+                # The mount editor's save: every field as text, minions included.
+                ('mount',{'name':'`&Probe Attack','roundmsg':'Your probe fights!','effectmsg':'A minion hits for {damage}.','effectnodmgmsg':'A minion misses.','rounds':'15','atkmod':'1.3','invulnerable':'1',
+                    'minioncount':'1','minbadguydamage':'1','maxbadguydamage':'2','schema':'mounts'})]
+            for name,buff in shapes:
+                with self.subTest(buff=buff['name']):
+                    body,after=fight({name:buff})
+                    self.assertEqual(int(buff['rounds'])-1,after[name]['rounds']); self.assertIs(type(after[name]['rounds']),int)
+            # A malformed stored buff list stops the page and writes nothing; 1.1.2's empty value is no buffs.
+            mount=dict(after['mount'])
+            for stored in ['broken','b:0;','i:5;','O:8:"stdClass":0:{}',e({'mount':dict(mount,rounds='abc')}),e({'mount':dict(mount,rounds=0)}),e({'x':{'name':'x','rounds':1,'evil':'1','schema':''}}),
+                    e({'x':{'name':'x','rounds':1,'atkmod':'<charm>','schema':''}}),e({'x':{'name':'x','rounds':1,'atkmod':'1e999','schema':''}}),e({'x':{'name':'x'*4097,'rounds':1,'schema':''}}),
+                    e({'buzz':{'name':'b','rounds':1,'wearoff':['`!You miss %s`!.`0','x'],'schema':''}}),e({'x':{'name':'x','rounds':1,'aura':'yes','schema':''}})]:
+                with self.subTest(stored=stored):
+                    q('UPDATE accounts SET bufflist=?,badguy=? WHERE acctid=?',[stored,encounter,player]); before=f['snapshot']()
+                    for url in ['village.php','forest.php?op=fight']:
+                        status,body=request(url); self.assertEqual(409,status,(url,body[:500])); self.assertIn('Invalid stored buff state',body); self.assertEqual(before,f['snapshot']())
+            q("UPDATE accounts SET bufflist='',badguy='' WHERE acctid=?",[player]); status,body=request('village.php'); self.assertEqual(200,status,body[:2000])
+            self.assertEqual([],d(f['snapshot']()[0]['bufflist']))
+            # ... and stops a login before it is recorded.
+            q('UPDATE accounts SET bufflist=? WHERE acctid=?',[e({'x':{'name':'x','rounds':1,'evil':'1','schema':''}}),player]); before=f['snapshot']()
+            fresh=self._security_client(login=None); _,body=fresh('home.php')
+            token=re.search(r'name=[\'"]csrf_token[\'"] value=[\'"]([a-f0-9]{64})',body).group(1)
+            status,body=fresh('login.php',{'csrf_token':token,'name':'WebPlayer','password':"Synthetic web O'Reilly \\ password"})
+            self.assertEqual(409,status,body[:2000]); self.assertIn('Invalid stored buff state. You were not logged in.',body); self.assertEqual(before,f['snapshot']())
+
     def test_ordinary_forest_search_escape_and_event_handoff(self):
         with self._ordinary_forest_fixture() as f:
             saved=self.query("SELECT * FROM settings WHERE setting IN ('forestchance','autofight','autofightfull')")
@@ -3905,6 +3980,20 @@ function resurrectionspecialtyobserver_dohook($hook,$args) {
             finally:
                 self.query('UPDATE mounts SET '+','.join(k+'=?' for k in mount if k!='mountid')+' WHERE mountid=?',[*[v for k,v in mount.items() if k!='mountid'],mount['mountid']])
 
+    def test_normal_newday_keeps_installer_mount_buff_http(self):
+        with self._normal_day_fixture() as f:
+            pony=self.query('SELECT * FROM mounts WHERE mountid=1')[0]
+            self.assertEqual('Pony',pony['mountname'])
+            # The installer Pony's buff as 1.1.2's stables stored it (text numbers, "activate"), part used, and a drinks buzz with text rounds.
+            mount={'name':'`&Pony Attack','roundmsg':'Your pony fights with you!','rounds':'7','atkmod':'1.2','activate':'offense','schema':'mounts'}
+            buzz={'name':'`#Buzz','rounds':'10','roundmsg':"You've got a nice buzz going.",'wearoff':'Your buzz fades.','atkmod':'1.25','schema':'module-drinks'}
+            self.query('UPDATE accounts SET hashorse=1,bufflist=? WHERE acctid=?',[f['encode']({'mount':mount,'buzz':buzz}),f['player']])
+            status,body=f['request'](data=f['form']()); self.assertEqual(200,status,body[:2500])
+            decoded=self._normal_day_decode(f['state']()[0]['bufflist'])
+            # New Day restores the mount buff from the installer row, in the types combat uses; the buzz does not survive it.
+            self.assertEqual({'mount':{'name':'`&Pony Attack','roundmsg':'Your pony fights with you!','rounds':20,'atkmod':1.2,'activate':'offense','schema':'mounts'}},
+                {k:{key:value for key,value in v.items() if key not in ['fields_calculated','tempstats_calculated']} for k,v in decoded.items()})
+
     def _normal_day_decode(self, value):
         return json.loads(subprocess.check_output([shutil.which('php'),'-r','echo json_encode(unserialize(stream_get_contents(STDIN),["allowed_classes"=>false]));'],input=value,text=True))
 
@@ -4030,7 +4119,7 @@ function resurrectiondailyfixture_dohook($hook,$args){
                     self.query('UPDATE mounts SET mountforestfights=mountforestfights+1 WHERE mountid=?',[mount['mountid']]);before=f['state']()
                     self.assertEqual(409,f['request'](data=form)[0]);self.assertEqual(before,f['state']())
                     form=f['form']();self.assertEqual(200,f['request'](data=form)[0])
-                    self.assertEqual('20',self._normal_day_decode(f['state']()[0]['bufflist'])['mount']['rounds'])
+                    self.assertEqual(20,self._normal_day_decode(f['state']()[0]['bufflist'])['mount']['rounds'])
                 finally:self.query('UPDATE mounts SET mountforestfights=? WHERE mountid=?',[mount['mountforestfights'],mount['mountid']])
             finally:
                 self.query('DELETE FROM module_hooks WHERE modulename=?',[name]);self.query('DELETE FROM modules WHERE modulename=?',[name]);path.unlink()
@@ -6833,8 +6922,8 @@ function MODULE_dohook($hook,$args) {
                             {'mount[mountname]':b'\xff'},{'mount[mountcostgems]':'-1'},{'mount[mountcostgold]':'2147483648'},{'mount[mountfeedcost]':'x'},{'mount[mountactive]':'2'},{'mount[mountforestfights]':'1.5'},
                             {'mount[mountlocation]':'Nowhere'},{'mount[mountbuff][rounds]':''},{'mount[mountbuff][rounds]':'0'},{'mount[mountbuff][atkmod]':'abc'},{'mount[mountbuff][atkmod]':'<charm>'},
                             {'mount[mountbuff][invulnerable]':'2'},{'mount[mountbuff][name]':'n'*4097},
-                            # New Day's accepted mount buff consumer refuses a minion count stored as text (a separate schema item).
-                            {'mount[mountbuff][minioncount]':'1'}]:
+                            # The mount buff schema reads 1.1.2's text minion count ("1") as a number, but not a part or negative minion.
+                            {'mount[mountbuff][minioncount]':'1.5'},{'mount[mountbuff][minioncount]':'-1'}]:
                     self.assertEqual(400,post(save,fields,**{**good,**bad})[0],bad)
                 self.assertEqual(400,request(save,[(k,v) for k,v in {**fields,**good}.items() if k!='mount[mountname]'])[0]);self.assertEqual(before[0],mounts())
                 status,body=post(save,fields,**good);self.assertEqual(200,status,body[:2000]);self.assertIn('Mount saved!',body);self.assertNotIn('<b>x</b>',body);self.assertNotIn('INSERT',body)
@@ -6862,7 +6951,7 @@ function MODULE_dohook($hook,$args) {
                   ['a:2:{i:0;s:2:"ff";i:1;s:2:"ff";}',village,player])
                 buy=f'stables.php?op=confirmbuy&id={mount}';status,body=request(f'stables.php?op=buymount&id={mount}');self.assertEqual(200,status,body[:2000])
                 status,body=request(buy,self._security_fields(body,buy));self.assertEqual(200,status,body[:2000])
-                self.assertEqual(('740','7',str(mount)),me('gold','gems','hashorse'));mine=unser(me('bufflist')[0])['mount'];self.assertEqual(('`&Probe Attack','1.3'),(mine['name'],mine['atkmod']))
+                self.assertEqual(('740','7',str(mount)),me('gold','gems','hashorse'));mine=unser(me('bufflist')[0])['mount'];self.assertEqual(('`&Probe Attack',1.3,15),(mine['name'],mine['atkmod'],mine['rounds']))
                 # Give: the acting superuser's own mount and buff; a malformed stored buff stops it before anything changes.
                 q("UPDATE accounts SET hashorse=0,bufflist='a:0:{}' WHERE acctid=?",[player]);fields=listed('give',mount)
                 status,body=request(f'mounts.php?op=give&id={mount}',fields);self.assertEqual(200,status,body[:2000]);self.assertEqual((str(mount),'740','7'),me('hashorse','gold','gems'))

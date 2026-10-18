@@ -90,7 +90,7 @@ function resurrection_ramius(string $stage): never {
                 require __DIR__.'/ramius_outcomes.php';
                 restore_buff_fields();
                 resurrection_newday_validate();
-                NewDayState::buffs($session['bufflist'], $session['user']);
+                \Resurrection\Game\BuffState::collection($session['bufflist'], $session['user']);
                 NewDayState::integer($session['user']['deathpower']);
                 if ($session['user']['deathpower'] !== (int)$before['deathpower'] - 100 ||
                     (int)$session['user']['resurrections'] !== (int)$before['resurrections'] + 1 ||

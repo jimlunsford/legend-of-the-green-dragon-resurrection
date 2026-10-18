@@ -2,7 +2,7 @@
 require_once __DIR__ . '/player_mutation.php';
 require_once __DIR__ . '/datetime.php';
 require_once __DIR__ . '/../src/Game/NewDayState.php';
-require_once __DIR__ . '/../src/Game/ForestBuffState.php';
+require_once __DIR__ . '/../src/Game/BuffState.php';
 require_once __DIR__ . '/../src/Game/ForestCompanionState.php';
 require_once __DIR__ . '/../src/Game/TransmutationState.php';
 require_once __DIR__ . '/../src/Game/Expression.php';
@@ -57,8 +57,7 @@ function resurrection_newday_sources(bool $lock = false): array {
         if (count($mounts) !== 1) throw new DomainException('Missing owned mount.');
         $playermount = $mounts[0];
         NewDayState::integer($playermount['mountforestfights'], -2147483648, 2147483647);
-        $buff = \Resurrection\Security\ScalarState::read($playermount['mountbuff']);
-        NewDayState::buffs(['mount'=>$buff], $session['user']);
+        \Resurrection\Game\BuffState::mount(\Resurrection\Security\ScalarState::read($playermount['mountbuff']), $session['user']);
     }
     $mountContext = $playermount;
     if ($mountId) $mountContext['mountbuff'] = \Resurrection\Security\ScalarState::read($playermount['mountbuff']);
@@ -86,7 +85,7 @@ function resurrection_newday_validate(): void {
         [$year,$month,$day] = array_map('intval', explode('-', $baseaccount['lastnewday']));
         if (!checkdate($month,$day,$year)) throw new DomainException('Invalid daily marker date.');
     }
-    NewDayState::buffs(\Resurrection\Security\ScalarState::read($baseaccount['bufflist']), $session['user']);
+    \Resurrection\Game\BuffState::read($baseaccount['bufflist'], $session['user']);
     \Resurrection\Game\ForestCompanionState::validate($companions);
 }
 

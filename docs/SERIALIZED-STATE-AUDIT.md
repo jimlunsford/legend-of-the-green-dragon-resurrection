@@ -562,3 +562,47 @@ from three to two (dragonpoints, bufflist), `lib/systemmail.php:37` and `lib/tra
 are gone, and `prefs.php` no longer serializes `oldvalues`; `src/Security/NavigationState.php`
 adds one read and `src/Security/PreferenceState.php` one read and one serialize. ScalarState
 limits are unchanged.
+
+## Buffs and mount buffs, part 2 candidate, 2026-10-18
+
+Status of the 12 buff and 7 mount sites of the 2026-10-17 inventory after the serialized
+business schemas part 2 candidate (`SERIALIZED-SCHEMAS-PART2-20261018.md`), against the same
+definition of done. The first column is the site at `05485ec`, as in the table above; the
+second gives where it is now.
+
+| Site at `05485ec` | Now | Category | Status | Evidence |
+|---|---|---|---|---|
+| `common.php:256` | `common.php:262` read, `:268` `BuffState::read` | buffs | CLOSED | Page load: one schema read after the transmute check; NULL or `''` is no buffs (1.1.2's empty column), anything else that fails gives 409 with nothing written; `test_shipped_buff_shapes_fight_and_malformed_buff_list_http` (12 malformed lists) |
+| `lib/accounts.php:27` | unchanged | buffs | CLOSED | Constant `[]` |
+| `lib/forcednavigation.php:23` | `:27` read (transmute 400), `:34` `BuffState::read` | buffs | CLOSED | Session start: the full schema replaces the specialty-only collection, 409 |
+| `lib/graveyard_combat.php:13` | removed, `BuffState::read` | buffs | CLOSED | The 1.1.2 and shipped shapes pass (criterion 4, `BuffStateTest`); the route's 409 is unchanged |
+| `lib/player_mutation.php:66` | removed, `BuffState::encode` | buffs | CLOSED | Only a valid list is stored; a failure throws inside the transaction |
+| `lib/pvp_combat.php:46` | removed, `BuffState::read` | buffs | CLOSED | As graveyard |
+| `lib/saveuser.php:19` | removed, `BuffState::encode` | buffs | CLOSED | Only a valid list is stored; the graveyard read-only branch keeps the stored value |
+| `lib/specialty_combat.php:39` | removed, `BuffState::encode` | buffs | CLOSED | The specialty route's stored list goes through the full schema |
+| `lib/training_combat.php:37` | removed, `BuffState::read` | buffs | CLOSED | As graveyard |
+| `login.php:57` | removed, `BuffState::read` | buffs | CLOSED | Checked before the login is recorded, 409; the HTTP test's login case |
+| `lib/newday_daily.php:89` | removed, `BuffState::read` | buffs | CLOSED | One rule for combat and New Day (`NewDayState::buffs()` is gone); `test_normal_newday_keeps_installer_mount_buff_http`, `NewDayStateTest` |
+| `lib/newday_daily.php:98` | `:97` | buffs | CLOSED | Hash input; the value is checked at the `BuffState::read` above |
+| `lib/mount_companion_editor.php:134` | `:131` | mounts | CLOSED | The built buff must pass `BuffState::mount()` (through `resurrection_stables_buff()`), 400 and nothing saved; the editor's text fields pass |
+| `lib/newday_daily.php:60` | `:60` | mounts | CLOSED | `BuffState::mount()`, New Day's 409 |
+| `lib/newday_daily.php:64` | `:63` | mounts | CLOSED | Hash input, same bytes as `:60` |
+| `lib/newday_daily_outcomes.php:76` | `:76` | mounts | CLOSED | Checked at `newday_daily.php:60` in the same transaction; applied through `apply_buff()`, which runs the buff schema |
+| `lib/ramius_outcomes.php:76` | `:76` | mounts | CLOSED | Checked under lock as before; applied through `apply_buff()` |
+| `lib/stables_authority.php:34` | `:38` | mounts | CLOSED | `BuffState::mount()`; a refused buff stops the purchase or feed with 500 before anything is charged (HTTP test) |
+| `mounts.php:234` | `:237` | mounts | CLOSED | Editor display: a buff `BuffState::mount()` refuses is shown empty for repair; display only |
+
+New sites: `src/Game/BuffState.php:60` (read, the schema itself) and `:147` (serialize, the
+writer's encoder), both CLOSED by `BuffStateTest`.
+
+Summary after this candidate: buffs 12 of 12 closed, mounts 7 of 7. The remaining categories
+are unchanged.
+
+Recount (working tree, same token method; it reproduces 103 / 50 / 40 / 62 / 1 at `fd548a3`):
+**97 sites / 50 files / 38 serialize writers-checks / 58 ScalarState reads / one centralized
+unserialize**. Removed: the second raw buff read in `lib/graveyard_combat.php`,
+`lib/pvp_combat.php`, `lib/training_combat.php`, `lib/newday_daily.php` and `login.php`
+(each now inside `BuffState::read`), and the buff serializes in `lib/saveuser.php`,
+`lib/player_mutation.php` and `lib/specialty_combat.php` (now `BuffState::encode`). Added: one
+read and one serialize in `src/Game/BuffState.php`. `lib/specialty_combat.php` leaves the file
+count and `src/Game/BuffState.php` joins it. ScalarState limits are unchanged.

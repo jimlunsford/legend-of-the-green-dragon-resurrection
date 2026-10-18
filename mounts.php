@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/src/Security/ScalarState.php';
+require_once __DIR__ . '/src/Game/BuffState.php';
 require_once __DIR__ . '/src/Compatibility/array_cursor.php';
 // addnews ready
 // mail ready
@@ -231,9 +232,12 @@ if ($op==""){
 		output("Mount Editor:`n");
 		$row = db_fetch_assoc($result);
 		$context = resurrection_content_context('edit', $row);
-		$row['mountbuff']=\Resurrection\Security\ScalarState::read($row['mountbuff']);
-		// A malformed stored buff is shown empty for repair; PHP 8 refused to turn its false into the form's array.
-		if (!is_array($row['mountbuff'])) $row['mountbuff'] = array();
+		// A stored buff the mount buff schema refuses is shown empty for repair: PHP 8 refused to turn a malformed
+		// value into the form's array, and the form's fields are text.
+		$buff=\Resurrection\Security\ScalarState::read($row['mountbuff']);
+		try { \Resurrection\Game\BuffState::mount($buff, $session['user']); }
+		catch (DomainException $error) { $buff = array(); }
+		$row['mountbuff']=$buff;
 		mountform($row, $context);
 	}
 }

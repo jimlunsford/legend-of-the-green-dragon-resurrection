@@ -2,6 +2,7 @@
 require_once __DIR__ . '/../src/Compatibility/array_cursor.php';
 require_once __DIR__ . '/../src/Security/NavigationState.php';
 require_once __DIR__ . '/../src/Security/PreferenceState.php';
+require_once __DIR__ . '/../src/Game/BuffState.php';
 // translator ready
 // addnews ready
 // mail ready
@@ -19,9 +20,9 @@ function saveuser(){
 		$session['user']['allowednavs']=serialize(\Resurrection\Security\NavigationState::map($session['allowednavs']));
 		if (array_key_exists('restorepage', $session['user'])) \Resurrection\Security\NavigationState::restorePage($session['user']['restorepage']);
 		if (array_key_exists('prefs', $session['user'])) $session['user']['prefs']=\Resurrection\Security\PreferenceState::encode($session['user']['prefs']);
-		// Torment presentation may calculate display fields but cannot persist buff changes.
+		// Torment presentation may calculate display fields but cannot persist buff changes. Only a valid list is stored.
         $session['user']['bufflist']=defined('RESURRECTION_GRAVEYARD_READ_ONLY')
-            ? $baseaccount['bufflist'] : serialize($session['bufflist']);
+            ? $baseaccount['bufflist'] : \Resurrection\Game\BuffState::encode($session['bufflist'], $session['user']);
 		if (isset($companions) && is_array($companions)) $session['user']['companions']=serialize($companions);
         $assignments = [];
         $parameters = [];

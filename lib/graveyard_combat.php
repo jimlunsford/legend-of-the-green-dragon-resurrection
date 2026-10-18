@@ -10,8 +10,8 @@ function resurrection_graveyard_state(): array {
     if (empty($session['loggedin']) || $session['user']['specialinc']!=='') throw new DomainException('Torment unavailable.');
     \Resurrection\Game\GraveyardCombatState::player($baseaccount);
     \Resurrection\Game\GraveyardCombatState::player($session['user']);
-    \Resurrection\Game\ForestBuffState::validate(\Resurrection\Security\ScalarState::read($baseaccount['bufflist']),$session['user']);
-    \Resurrection\Game\ForestBuffState::validate($session['bufflist'],$session['user']);
+    \Resurrection\Game\BuffState::read($baseaccount['bufflist'],$session['user']);
+    \Resurrection\Game\BuffState::collection($session['bufflist'],$session['user']);
     \Resurrection\Game\ForestCompanionState::validate(\Resurrection\Security\ScalarState::read($baseaccount['companions']));
     \Resurrection\Game\ForestCompanionState::validate($companions);
     if ($session['user']['badguy']==='') return [];

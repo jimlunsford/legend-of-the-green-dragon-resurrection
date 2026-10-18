@@ -3,6 +3,7 @@ require_once __DIR__ . '/specialty_onboarding.php';
 require_once __DIR__ . '/../src/Game/SpecialtyCombatState.php';
 require_once __DIR__ . '/../src/Game/DragonCombatState.php';
 require_once __DIR__ . '/../src/Game/TransmutationState.php';
+require_once __DIR__ . '/../src/Game/BuffState.php';
 
 /** @return array{module:string,skill:int,uses:int} */
 function resurrection_combat_specialty(bool $lock = false, string $type = 'forest'): array {
@@ -36,7 +37,7 @@ function resurrection_combat_context(array $specialty): string {
     if (array_key_exists('transmute', $session['bufflist'])) {
         $session['bufflist']['transmute'] = \Resurrection\Game\TransmutationState::read($session['bufflist']['transmute']);
     }
-    $session['user']['bufflist'] = serialize($session['bufflist']);
+    $session['user']['bufflist'] = \Resurrection\Game\BuffState::encode($session['bufflist'], $session['user']);
     $state = [];
     foreach (['acctid','specialty','badguy','companions','bufflist','hitpoints','maxhitpoints','attack','defense','level','alive','lasthit','specialinc','location'] as $key) $state[$key]=(string)$session['user'][$key];
     $context = hash('sha256',json_encode([$state,$specialty,(bool)getsetting('enablecompanions',true)], JSON_THROW_ON_ERROR));

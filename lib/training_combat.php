@@ -34,9 +34,8 @@ function resurrection_training_state(): array {
         $session['user']['hitpoints']<=0 || $session['user']['level']<1 || $session['user']['level']>14 ||
         $session['user']['specialinc']!=='') throw new DomainException('Training unavailable.');
     // Check persisted roots before bootstrap normalization can conceal a corrupt collection.
-    $raw=\Resurrection\Security\ScalarState::read($baseaccount['bufflist']);
-    \Resurrection\Game\ForestBuffState::validate($raw,$session['user']);
-    \Resurrection\Game\ForestBuffState::validate($session['bufflist'],$session['user']);
+    \Resurrection\Game\BuffState::read($baseaccount['bufflist'],$session['user']);
+    \Resurrection\Game\BuffState::collection($session['bufflist'],$session['user']);
     foreach ($session['bufflist'] as $buff) {
         foreach (['regen','minioncount','lifetap','damageshield'] as $effect) {
             if (isset($buff[$effect])) foreach (['effectmsg','effectnodmgmsg'] as $key) if (!is_string($buff[$key] ?? null)) throw new DomainException('Invalid training effect message.');

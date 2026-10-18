@@ -1,7 +1,7 @@
 <?php
 require_once __DIR__ . '/../src/Security/PvpState.php';
 require_once __DIR__ . '/player_mutation.php';
-require_once __DIR__ . '/../src/Game/ForestBuffState.php';
+require_once __DIR__ . '/../src/Game/BuffState.php';
 require_once __DIR__ . '/../src/Game/ForestCompanionState.php';
 require_once __DIR__ . '/../src/Game/Expression.php';
 
@@ -43,9 +43,8 @@ function resurrection_pvp_context(int $target=0): string {
 function resurrection_pvp_participants(bool $requireActor=true): void {
     global $session,$baseaccount,$companions;
     if ($requireActor && (empty($baseaccount['alive']) || $session['user']['specialinc']!=='')) throw new DomainException('PvP actor unavailable.');
-    $raw=\Resurrection\Security\ScalarState::read($baseaccount['bufflist']);
-    \Resurrection\Game\ForestBuffState::validate($raw,$session['user']);
-    \Resurrection\Game\ForestBuffState::validate($session['bufflist'],$session['user']);
+    \Resurrection\Game\BuffState::read($baseaccount['bufflist'],$session['user']);
+    \Resurrection\Game\BuffState::collection($session['bufflist'],$session['user']);
     \Resurrection\Game\ForestCompanionState::validate($companions);
     foreach ($session['bufflist'] as $buff) {
         if (!is_string($buff['name'] ?? null) || !is_string($buff['schema'] ?? null)) throw new DomainException('Invalid PvP buff.');

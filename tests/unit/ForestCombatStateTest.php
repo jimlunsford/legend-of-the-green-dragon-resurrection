@@ -3,7 +3,7 @@ declare(strict_types=1);
 namespace Resurrection\Tests;
 use PHPUnit\Framework\TestCase;
 use Resurrection\Game\ForestCombatState;
-use Resurrection\Game\ForestBuffState;
+use Resurrection\Game\BuffState;
 use Resurrection\Game\ForestCompanionState;
 
 final class ForestCombatStateTest extends TestCase
@@ -60,7 +60,7 @@ final class ForestCombatStateTest extends TestCase
     public function testBuffConsumerTypesAndExistingProducerOwnership(): void
     {
         $good=['racialbenefit'=>['name'=>'Elven benefit','rounds'=>-1,'atkmod'=>1.1,'schema'=>'module-raceelf']];
-        ForestBuffState::validate($good,[]); self::assertTrue(true);
+        BuffState::collection($good,[]); self::assertTrue(true);
         $companion=['name'=>'Guard','hitpoints'=>10,'maxhitpoints'=>20,'attack'=>2,'defense'=>3,'abilities'=>['fight'=>true]];
         ForestCompanionState::validate(['guard'=>$companion]); self::assertTrue(true);
         foreach (['hitpoints'=>-1,'maxhitpoints'=>0,'attack'=>[],'abilities'=>['fight'=>[]],'unknown'=>true] as $key=>$value) {
@@ -70,7 +70,7 @@ final class ForestCombatStateTest extends TestCase
 
         foreach ([['rounds'=>1,'atkmod'=>[]],['rounds'=>1,'atkmod'=>'1e2'],['rounds'=>0],
             ['rounds'=>1,'terminal'=>true],['rounds'=>1,'aura'=>[]],['rounds'=>1,'name'=>[]]] as $buff) {
-            try { ForestBuffState::validate(['bad'=>$buff],[]);self::fail('Accepted malformed buff'); }
+            try { BuffState::collection(['bad'=>$buff],[]);self::fail('Accepted malformed buff'); }
             catch (\DomainException) { self::assertTrue(true); }
         }
     }

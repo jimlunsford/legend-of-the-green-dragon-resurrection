@@ -156,14 +156,18 @@ final class SpecialtyBuffState
         if (!is_array($state)) throw new \DomainException('Invalid buff collection.');
         foreach ($state as $id=>$buff) {
             if (!is_array($buff)) throw new \DomainException('Invalid buff entry.');
-            $source = $buff['schema'] ?? null;
-            if (isset(self::SHAPES[$id]) ||
-                (is_string($id) && preg_match('/^(da|mp|ts)[0-9]/D',$id)) ||
-                in_array($source,['module-specialtydarkarts','module-specialtymysticpower','module-specialtythiefskills'],true)) {
-                self::validate($id,$buff);
-            }
+            if (self::covers($id,$buff)) self::validate($id,$buff);
         }
         return $state;
+    }
+
+    /** A buff this schema owns: a bundled specialty buff by name, by a specialty-like name, or by its source.
+     * @param array<mixed> $buff
+     */
+    public static function covers(int|string $id, array $buff): bool
+    {
+        return isset(self::SHAPES[$id]) || (is_string($id) && preg_match('/^(da|mp|ts)[0-9]/D',$id)) ||
+            in_array($buff['schema'] ?? null,['module-specialtydarkarts','module-specialtymysticpower','module-specialtythiefskills'],true);
     }
 
     public static function validate(int|string $id, mixed $buff): void

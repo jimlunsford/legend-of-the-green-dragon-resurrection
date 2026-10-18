@@ -37,33 +37,6 @@ final class NewDayState
         return (int)round($result, 0, PHP_ROUND_HALF_UP);
     }
 
-    /** Daily consumer accepts the actual shipped mount/Audrey legacy metadata.
-     * The validation copy never changes the stored or carried raw effect.
-     * @param array<string,mixed> $player
-     */
-    public static function buffs(mixed $value, array $player): void
-    {
-        $copy = SpecialtyBuffState::collection($value);
-        foreach ($copy as $id => &$buff) {
-            if ($id === 'lover' && is_array($buff['wearoff'] ?? null)) {
-                $message = $buff['wearoff'];
-                if (!array_is_list($message) || count($message) !== 2 || $message[0] !== '`!You miss %s`!.`0' ||
-                    !is_string($message[1]) || strlen($message[1]) > 4096) throw new \DomainException('Invalid lover message.');
-                $buff['wearoff'] = $message[0]; // Validate the translated message tuple, retain raw state.
-            }
-            if (array_key_exists('activate', $buff)) {
-                $expected = ['mount'=>'offense', 'crazyaudrey'=>'defense'][$id] ?? null;
-                if ($expected === null || $buff['activate'] !== $expected) throw new \DomainException('Invalid legacy buff activation.');
-                unset($buff['activate']); // Legacy metadata is not used by the modern battle engine.
-            }
-            if ($id === 'mount' && is_string($buff['rounds'] ?? null)) {
-                $buff['rounds'] = self::integer($buff['rounds'], -1, 100000);
-            }
-        }
-        unset($buff);
-        ForestBuffState::validate($copy, $player);
-    }
-
     /** Canonicalize equivalent associative records while retaining ordered lists.
      * @return mixed
      */

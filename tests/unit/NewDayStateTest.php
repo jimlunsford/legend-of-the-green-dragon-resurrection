@@ -2,6 +2,7 @@
 declare(strict_types=1);
 namespace Resurrection\Tests;
 use PHPUnit\Framework\TestCase;
+use Resurrection\Game\BuffState;
 use Resurrection\Game\NewDayState;
 
 final class NewDayStateTest extends TestCase
@@ -24,10 +25,11 @@ final class NewDayStateTest extends TestCase
         $buff = ['name'=>"`!Lover's Protection",'rounds'=>60,'wearoff'=>['`!You miss %s`!.`0','Violet'],
             'defmod'=>1.2,'roundmsg'=>'Your lover inspires you to keep safe!','schema'=>'module-lovers'];
         $original = $buff;
-        NewDayState::buffs(['lover'=>$buff], []);
+        // The New Day buff check is the buff schema (BuffState), which keeps the message tuple as written.
+        self::assertSame(['lover'=>$original], BuffState::collection(['lover'=>$buff], []));
         self::assertSame($original, $buff);
         foreach ([[], ['wrong','Violet'], ['`!You miss %s`!.`0',[]], ['`!You miss %s`!.`0','Violet','extra']] as $message) {
-            try { NewDayState::buffs(['lover'=>array_replace($buff,['wearoff'=>$message])],[]);self::fail('Accepted malformed message tuple'); }
+            try { BuffState::collection(['lover'=>array_replace($buff,['wearoff'=>$message])],[]);self::fail('Accepted malformed message tuple'); }
             catch (\DomainException) { self::assertTrue(true); }
         }
     }

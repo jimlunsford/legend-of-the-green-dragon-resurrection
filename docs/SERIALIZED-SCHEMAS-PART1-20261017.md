@@ -277,3 +277,16 @@ navigation label keys, hash inputs, `ScalarState` itself.
 - `ScalarState::read()` requires canonical serialization, so a 1.1.2 float serialized by PHP 5
   with 17 digits (for example a `timeoffset` of 0.1) does not read; that bar is older than this
   part and unchanged.
+
+## Acceptance, 2026-10-18
+
+Inspected once on 2026-10-18 for `fd548a31bc5adeb53a1c22b145d9bf9ab95e8be1`:
+
+- Modern core 39054238252: SUCCESS, all 12 jobs (per leg one `checks`, four `http` shards
+  and one `result`, on PHP 8.4 / MariaDB 11.4 and PHP 8.5 / MySQL 8.4). The run started at
+  17:32:51Z on 2026-10-17; the two `result` jobs finished at 17:48:26Z and 17:50:32Z.
+- Baseline integrity 39054238222: SUCCESS.
+
+The navigation, preferences and editor old values categories are Done at `fd548a3`. The
+remaining categories stay as split above; buffs and mounts are taken up by
+[serialized schemas part 2](SERIALIZED-SCHEMAS-PART2-20261018.md).
