@@ -42,7 +42,7 @@ function resurrection_training_state(): array {
         }
         if (!is_string($buff['name'] ?? null) || !is_string($buff['schema'] ?? null)) throw new DomainException('Invalid training buff presentation.');
     }
-    \Resurrection\Game\ForestCompanionState::validate($companions);
+    \Resurrection\Game\CompanionState::collection($companions);
     \Resurrection\Game\TrainingCombatState::budget($session['user']);
     $masters=resurrection_training_masters();
     if ($masters===[]) throw new DomainException('No master.');

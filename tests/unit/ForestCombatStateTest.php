@@ -4,7 +4,7 @@ namespace Resurrection\Tests;
 use PHPUnit\Framework\TestCase;
 use Resurrection\Game\ForestCombatState;
 use Resurrection\Game\BuffState;
-use Resurrection\Game\ForestCompanionState;
+use Resurrection\Game\CompanionState;
 
 final class ForestCombatStateTest extends TestCase
 {
@@ -62,9 +62,9 @@ final class ForestCombatStateTest extends TestCase
         $good=['racialbenefit'=>['name'=>'Elven benefit','rounds'=>-1,'atkmod'=>1.1,'schema'=>'module-raceelf']];
         BuffState::collection($good,[]); self::assertTrue(true);
         $companion=['name'=>'Guard','hitpoints'=>10,'maxhitpoints'=>20,'attack'=>2,'defense'=>3,'abilities'=>['fight'=>true]];
-        ForestCompanionState::validate(['guard'=>$companion]); self::assertTrue(true);
+        CompanionState::collection(['guard'=>$companion]); self::assertTrue(true);
         foreach (['hitpoints'=>-1,'maxhitpoints'=>0,'attack'=>[],'abilities'=>['fight'=>[]],'unknown'=>true] as $key=>$value) {
-            try { ForestCompanionState::validate(['guard'=>array_replace($companion,[$key=>$value])]);self::fail('Accepted malformed companion'); }
+            try { CompanionState::collection(['guard'=>array_replace($companion,[$key=>$value])]);self::fail('Accepted malformed companion'); }
             catch (\DomainException) { self::assertTrue(true); }
         }
 

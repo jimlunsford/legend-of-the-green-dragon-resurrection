@@ -3,6 +3,7 @@ require_once __DIR__ . '/../src/Security/ScalarState.php';
 require_once __DIR__ . '/../src/Game/Expression.php';
 require_once __DIR__ . '/../src/Game/SpecialtyBuffState.php';
 require_once __DIR__ . '/../src/Game/BuffState.php';
+require_once __DIR__ . '/../src/Game/CompanionState.php';
 require_once __DIR__ . '/../src/Compatibility/array_cursor.php';
 // addnews ready
 // translator ready
@@ -12,7 +13,8 @@ $buffreplacements = array();
 $debuggedbuffs = array();
 function calculate_buff_fields(){
 	global $session, $badguy, $buffreplacements, $debuggedbuffs;
-	\Resurrection\Game\SpecialtyBuffState::collection($session['bufflist']);
+	// The whole list must pass the buff schema before any field is evaluated (a check; the list is not rewritten here).
+	\Resurrection\Game\BuffState::collection($session['bufflist'], $session['user']);
 	if (!$session['bufflist']) return;
 
 	//run temp stats
@@ -94,12 +96,17 @@ function apply_buff($name,$buff){
 	calculate_buff_fields();
 }
 
+/**
+ * Add a companion, as 1.1.2 did. The companion and the resulting list must pass the companion schema
+ * (src/Game/CompanionState.php): a refused companion throws DomainException before anything changes, and the
+ * caller's transaction (or page) writes nothing.
+ */
 function apply_companion($name,$companion,$ignorelimit=false){
-    require_once __DIR__ . '/../src/Game/SkeletonCompanionState.php';
-    if ($name === 'skeleton_warrior') { \Resurrection\Game\SkeletonCompanionState::validate($companion); }
 	global $session, $companions;
+	if (!is_string($name) && !is_int($name)) throw new DomainException('Invalid companion name.');
+	\Resurrection\Game\CompanionState::companion((string)$name, $companion);
 	if (!is_array($companions)) {
-		$companions = \Resurrection\Game\SkeletonCompanionState::companions(\Resurrection\Security\ScalarState::read($session['user']['companions']));
+		$companions = \Resurrection\Game\CompanionState::read($session['user']['companions']);
 	}
 	$companionsallowed = getsetting("companionsallowed", 1);
 	$args = modulehook("companionsallowed", array("maxallowed"=>$companionsallowed));
@@ -113,14 +120,17 @@ function apply_companion($name,$companion,$ignorelimit=false){
 		}
 	}
 	if ($current < $companionsallowed || $ignorelimit == true) {
-		if (isset($companions[$name])) {
-			unset($companions[$name]);
+		$added = $companions;
+		if (isset($added[$name])) {
+			unset($added[$name]);
 		}
 		if (!isset($companion['ignorelimit']) && $ignorelimit == true) {
 			$companion['ignorelimit'] = true;
 		}
-		$companions[$name] = $companion;
-		$session['user']['companions'] = createstring($companions);
+		$added[$name] = $companion;
+		$encoded = \Resurrection\Game\CompanionState::encode($added);
+		$companions = \Resurrection\Game\CompanionState::collection($added);
+		$session['user']['companions'] = $encoded;
 		return true; // success!
 	} else {
 		debug("Failed to add companion due to restrictions regarding the maximum amount of companions allowed.");

@@ -3,6 +3,7 @@ require_once __DIR__ . '/../src/Compatibility/array_cursor.php';
 require_once __DIR__ . '/../src/Security/NavigationState.php';
 require_once __DIR__ . '/../src/Security/PreferenceState.php';
 require_once __DIR__ . '/../src/Game/BuffState.php';
+require_once __DIR__ . '/../src/Game/CompanionState.php';
 // translator ready
 // addnews ready
 // mail ready
@@ -23,7 +24,8 @@ function saveuser(){
 		// Torment presentation may calculate display fields but cannot persist buff changes. Only a valid list is stored.
         $session['user']['bufflist']=defined('RESURRECTION_GRAVEYARD_READ_ONLY')
             ? $baseaccount['bufflist'] : \Resurrection\Game\BuffState::encode($session['bufflist'], $session['user']);
-		if (isset($companions) && is_array($companions)) $session['user']['companions']=serialize($companions);
+		// Only a valid companion list is stored; a refused one throws and nothing is written.
+		if (isset($companions) && is_array($companions)) $session['user']['companions']=\Resurrection\Game\CompanionState::encode($companions);
         $assignments = [];
         $parameters = [];
         foreach ($session['user'] as $key => $value) {

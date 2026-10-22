@@ -606,3 +606,47 @@ unserialize**. Removed: the second raw buff read in `lib/graveyard_combat.php`,
 `lib/player_mutation.php` and `lib/specialty_combat.php` (now `BuffState::encode`). Added: one
 read and one serialize in `src/Game/BuffState.php`. `lib/specialty_combat.php` leaves the file
 count and `src/Game/BuffState.php` joins it. ScalarState limits are unchanged.
+
+## Companions and companion abilities, part 3 candidate, 2026-10-22
+
+Status of the 11 companion sites of the 2026-10-17 inventory after the serialized business
+schemas part 3 candidate (`SERIALIZED-SCHEMAS-PART3-20261022.md`), against the same definition
+of done. The first column is the site at `05485ec`, as in the table above; the second gives
+where it is now. `src/Game/CompanionState.php` is the one schema for the list, each companion
+and the abilities; `ForestCompanionState` is removed.
+
+| Site at `05485ec` | Now | Category | Status | Evidence |
+|---|---|---|---|---|
+| `common.php:342` | removed, `common.php:349` `CompanionState::read` | companions | CLOSED | Page load: NULL or `''` is no companions (1.1.2's empty column), any other value that fails gives 409 with nothing written; `test_mercenary_companions_fight_and_malformed_companions_http` (18 malformed lists on village, forest and the camp, account row and output unchanged) |
+| `companions.php:159` | `:161` | companions | CLOSED | Editor display: stored abilities go through `CompanionState::abilities()`; a refused value is shown empty for repair; display only (the editor test's malformed Take cases render the edit page) |
+| `lib/accounts.php:28` | unchanged | companions | CLOSED | Constant `[]` |
+| `lib/buffs.php:101` | removed, `CompanionState::read` | companions | CLOSED | `apply_companion()` checks the new companion and the whole resulting list and stores only `CompanionState::encode()`; a refused companion throws before anything changes |
+| `lib/graveyard_combat.php:15` | removed, `CompanionState::read` | companions | CLOSED | Full schema on the stored row and the hydrated list, 409 as before; `test_graveyard_malformed_state_and_explicit_repair` |
+| `lib/mount_companion_editor.php:158` | `:157` | companions | CLOSED | Built from typed fields only, and the built abilities must pass `CompanionState::abilities()` (400, nothing saved); the stored shape stays 1.1.2's |
+| `lib/mount_companion_editor.php:385` | `:388` | companions | CLOSED | Take: `CompanionState::abilities()`, then `apply_companion()`; refused gives 500 and rollback; 4 malformed stored-abilities cases in `test_mount_and_companion_editor_authority_http` |
+| `lib/player_mutation.php:67` | removed, `CompanionState::encode` | companions | CLOSED | Only a valid list is stored; a failure throws inside the transaction |
+| `lib/ramius_resurrection.php:48` | removed, `CompanionState::read` | companions | CLOSED | As graveyard; `test_ramius_stale_state_settings_and_malformed_authority` |
+| `lib/saveuser.php:20` | removed, `CompanionState::encode` | companions | CLOSED | Only a valid list is stored |
+| `mercenarycamp.php:216` | `:220` | companions | CLOSED | Hire: `CompanionState::abilities()` and `apply_companion()`; refused gives 500 "This companion cannot be hired. Nothing was changed."; 8 malformed abilities cases, gold, gems and list unchanged |
+
+Also changed, outside the counted sites: the battle round's companion writer (`battle.php:523`,
+which used the shared `createstring()` encoder) stores `CompanionState::encode()`, so
+`lib/arrayutil.php:32` now writes only the badguy; session start (`lib/forcednavigation.php:41`)
+checks the stored list (409); every combat route (forest, training, PvP, graveyard, Ramius,
+Dragon, the specialty routes) and New Day check the hydrated list with
+`CompanionState::collection()`.
+
+New sites: `src/Game/CompanionState.php:58` (read, the schema itself) and `:134` (serialize,
+the writer's encoder), both CLOSED by `CompanionStateTest`.
+
+Summary after this candidate: companions 11 of 11 closed. The remaining categories are
+unchanged (general combat, news arguments, mail, other).
+
+Recount (working tree, same token method; it reproduces 97 / 50 / 38 / 58 / 1 at `1dfb7c5`):
+**93 sites / 49 files / 37 serialize writers-checks / 55 ScalarState reads / one centralized
+unserialize**. Removed: the companion reads in `common.php`, `lib/buffs.php`,
+`lib/graveyard_combat.php` and `lib/ramius_resurrection.php` (each now inside
+`CompanionState::read`), and the companion serializes in `lib/saveuser.php` and
+`lib/player_mutation.php` (now `CompanionState::encode`). Added: one read and one serialize in
+`src/Game/CompanionState.php`. `lib/buffs.php` and `lib/ramius_resurrection.php` leave the file
+count and `src/Game/CompanionState.php` joins it. ScalarState limits are unchanged.

@@ -69,7 +69,7 @@ function resurrection_player_mutation(callable $action, array $participants = []
         $values['bufflist'] = \Resurrection\Game\BuffState::encode($session['bufflist'], $session['user']);
         if (array_key_exists('prefs', $values)) { $values['prefs'] = \Resurrection\Security\PreferenceState::encode($values['prefs']); }
         if (array_key_exists('restorepage', $values)) { \Resurrection\Security\NavigationState::restorePage($values['restorepage']); }
-        if (is_array($companions)) { $values['companions'] = serialize($companions); }
+        if (is_array($companions)) { $values['companions'] = \Resurrection\Game\CompanionState::encode($companions); }
         $sets = []; $parameters = [];
         foreach ($values as $key => $value) {
             if (!array_key_exists($key, $baseaccount) || in_array($key, ['acctid','password','allowednavs'], true)) { continue; }

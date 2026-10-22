@@ -4,12 +4,15 @@ require_once __DIR__ . '/../src/Game/SpecialtyCombatState.php';
 require_once __DIR__ . '/../src/Game/DragonCombatState.php';
 require_once __DIR__ . '/../src/Game/TransmutationState.php';
 require_once __DIR__ . '/../src/Game/BuffState.php';
+require_once __DIR__ . '/../src/Game/CompanionState.php';
 
 /** @return array{module:string,skill:int,uses:int} */
 function resurrection_combat_specialty(bool $lock = false, string $type = 'forest'): array {
-    global $session;
+    global $session, $companions;
     if (empty($session['loggedin']) || empty($session['user']['alive']) || $session['user']['hitpoints'] <= 0 ||
         $session['user']['specialinc'] !== '') throw new DomainException('Specialty unavailable.');
+    // The companions this round reads, as every other combat route checks them.
+    \Resurrection\Game\CompanionState::collection($companions);
     if ($type === 'dragon') \Resurrection\Game\DragonCombatState::read($session['user']['badguy']);
     else \Resurrection\Game\SpecialtyCombatState::read($session['user']['badguy']);
     $choices = resurrection_specialty_choices($lock);

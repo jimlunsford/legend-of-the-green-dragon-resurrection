@@ -341,16 +341,16 @@ prepare_template();
 
 if (!isset($session['user']['hashorse'])) $session['user']['hashorse']=0;
 $playermount = getmount($session['user']['hashorse']);
-require_once __DIR__ . '/src/Game/SkeletonCompanionState.php';
+// The companion list, checked and normalized (src/Game/CompanionState.php). 1.1.2 turned any stored value that was
+// not an array into no companions and dropped entries that were not arrays; its only such value was the empty column
+// (create.php), which still reads as none. Anything else stops the page: a reset would silently drop the companions.
+require_once __DIR__ . '/src/Game/CompanionState.php';
 try {
-    $temp_comp = $session['user']['companions'] === '' ? [] :
-        \Resurrection\Security\ScalarState::read($session['user']['companions']);
-    $companions = \Resurrection\Game\SkeletonCompanionState::companions($temp_comp);
+    $companions = \Resurrection\Game\CompanionState::read($session['user']['companions'] ?? null);
 } catch (DomainException $error) {
     http_response_code(409);
     exit('Invalid stored companion state. No game action was completed.');
 }
-unset($temp_comp);
 
 $beta = getsetting("beta", 0);
 if (!$beta && getsetting("betaperplayer", 1) == 1)

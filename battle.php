@@ -519,7 +519,8 @@ if ($victory || $defeat){
 }
 $attackstack = array('enemies'=>$newenemies, 'options'=>$options);
 $session['user']['badguy']=createstring($attackstack);
-$session['user']['companions']=createstring($companions);
+// Only a valid companion list leaves the round (src/Game/CompanionState.php); a refused one stops the route's transaction.
+$session['user']['companions']=\Resurrection\Game\CompanionState::encode($companions);
 tlschema();
 
 function battle_player_attacks() {

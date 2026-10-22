@@ -7,7 +7,7 @@ require_once __DIR__ . '/../src/Game/TransmutationState.php';
 require_once __DIR__ . '/../src/Game/BuffState.php';
 require_once __DIR__ . '/../src/Game/NewDayState.php';
 require_once __DIR__ . '/../src/Game/SkeletonCompanionState.php';
-require_once __DIR__ . '/../src/Game/ForestCompanionState.php';
+require_once __DIR__ . '/../src/Game/CompanionState.php';
 
 /*
  * The mount and companion editors (SU_EDIT_MOUNTS). 1.1.2 ran activate, deactivate, delete, give and take on GET
@@ -31,8 +31,8 @@ const RESURRECTION_MOUNT_BUFF = ['name', 'roundmsg', 'wearoff', 'effectmsg', 'ef
     'atkmod', 'defmod', 'invulnerable', 'regen', 'minioncount', 'minbadguydamage', 'maxbadguydamage', 'mingoodguydamage',
     'maxgoodguydamage', 'lifetap', 'damageshield', 'badguydmgmod', 'badguyatkmod', 'badguydefmod'];
 /**
- * The companion form's text columns. A taken or hired companion is checked by the combat consumer
- * (ForestCompanionState), which holds its texts to 8192 bytes and its name, the key it is stored under, to 255 bytes.
+ * The companion form's text columns. A taken or hired companion is checked by the companion schema
+ * (CompanionState), which holds its texts to 8192 bytes and its name, the key it is stored under, to 255 bytes.
  */
 const RESURRECTION_COMPANION_TEXT = ['name' => 255, 'dyingtext' => 255, 'description' => 8192, 'jointext' => 8192, 'category' => 255];
 /** The companion form's whole numbers, held to the combat consumer's range (0 to 2147483647). */
@@ -151,6 +151,9 @@ function resurrection_companion_abilities(array $posted): string {
     foreach (['fight', 'defend'] as $flag) if (resurrection_object_flag($fields, $flag)) $abilities[$flag] = '1';
     foreach (['heal', 'magic'] as $level) $abilities[$level] = (string)resurrection_object_integer($fields, $level, 0, 30);
     foreach (['fight', 'defend'] as $flag) if (!isset($abilities[$flag])) $abilities[$flag] = false;
+    // Stored in 1.1.2's shape; it must pass the abilities schema the camps and Take apply.
+    try { \Resurrection\Game\CompanionState::abilities($abilities); }
+    catch (DomainException $error) { throw new InvalidArgumentException('Unexpected abilities.'); }
     return serialize($abilities);
 }
 
@@ -366,7 +369,8 @@ function resurrection_mount_give(int $id): void {
 
 /**
  * "Take": the acting superuser gets this companion scaled to their level by 1.1.2's formulas, through the
- * alter-companion hook and apply_companion(). The companion list is checked as combat checks it before it is stored.
+ * alter-companion hook and apply_companion(). The abilities and the companion list are checked by the companion schema
+ * before anything is stored.
  * Returns the companion's name for 1.1.2's message.
  */
 function resurrection_companion_take(int $id): string {
@@ -378,11 +382,11 @@ function resurrection_companion_take(int $id): string {
             $row['maxhitpoints'] = $row['maxhitpoints'] + $row['maxhitpointsperlevel'] * $session['user']['level'];
             $row['hitpoints'] = $row['maxhitpoints'];
             $row = modulehook("alter-companion", $row);
-            $row['abilities'] = \Resurrection\Security\ScalarState::read($row['abilities']);
             try {
-                if (!is_array($row['abilities'])) throw new DomainException('Invalid stored abilities.');
+                // The stored abilities must pass the abilities schema; the companion and the list pass the companion
+                // schema in apply_companion() before anything is stored.
+                $row['abilities'] = \Resurrection\Game\CompanionState::abilities(\Resurrection\Security\ScalarState::read($row['abilities']));
                 apply_companion($row['name'], $row);
-                \Resurrection\Game\ForestCompanionState::validate($companions);
             } catch (DomainException $error) {
                 // A stored companion combat would refuse: nothing is taken (500), not a stale form (409).
                 throw new UnexpectedValueException('Invalid companion.');

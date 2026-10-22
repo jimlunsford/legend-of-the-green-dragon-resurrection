@@ -75,10 +75,13 @@ Each family is DONE only when its acceptance evidence passes on both supported C
 - [x] Account deletion failure and retry semantics: one locked transaction per account for the hook, cleanup, clan succession and account row, with the veto honored by all three callers; the user editor's delete and self-deletion take a one-use intent (`lib/charcleanup.php`, `user.php?op=del`, `prefs.php?op=suicide`) (`DELETION-EXPIRATION-AUTHORITY-20261017.md`). Accepted at `4182281`, Modern core 39029578747, Baseline integrity 39029578850.
 - [x] Truthful completion reporting: `OPTIMIZE TABLE` reads each table's result rows, logs counts and failures, and records `lastdboptimize` only when no table failed, under the maintenance lock (`lib/newday/dbcleanup.php`); the petition notice goes through the shared mail helper and a refused notice is logged; `serverurl` is never saved from a request (`lib/petition/petition_default.php`, `referral.php`); every live external email send uses one helper (`COMPLETION-REPORTING-20261017.md`). Accepted at `05485ec`, Modern core 39044082958, Baseline integrity 39044082762.
 - [x] Serialized business schemas part 1: per-site inventory with category and status, the definition of done, navigation (`allowednavs`, `restorepage`), preferences and editor old values closed at every read and writer (`lib/forcednavigation.php`, `login.php`, `prefs.php`, `lib/saveuser.php`, `lib/player_mutation.php`, `lib/systemmail.php`), and the badnav.php fatal found while testing (`SERIALIZED-SCHEMAS-PART1-20261017.md`). Accepted at `fd548a3`, Modern core 39054238252, Baseline integrity 39054238222.
+- [x] Combat buff compatibility: the installer Pony, the drinks buzz, the lover, Crazy Audrey and the mount editor's text fields no longer stop combat or New Day (`SERIALIZED-SCHEMAS-PART2-20261018.md`). Accepted at `1dfb7c5`, Modern core 39099465964, Baseline integrity 39099465985.
+- [x] Serialized business schemas part 2: one buff-list schema at hydration, login, combat and every buff writer (`src/Game/BuffState.php`) (`SERIALIZED-SCHEMAS-PART2-20261018.md`). Accepted at `1dfb7c5`, Modern core 39099465964, Baseline integrity 39099465985.
+- [x] Mount buff schema for the stables, the mount editor and New Day (`SERIALIZED-SCHEMAS-PART2-20261018.md`). Accepted at `1dfb7c5`, Modern core 39099465964, Baseline integrity 39099465985.
 
 ### Current
 
-- [ ] Serialized business schemas part 2: combat buff compatibility (the installer Pony, the drinks buzz, the lover, Crazy Audrey and the mount editor's text fields no longer stop combat or New Day), one buff schema at hydration, login, combat and every buff writer, and the mount buff schema for the stables, the mount editor and New Day (`src/Game/BuffState.php`) (candidate in `SERIALIZED-SCHEMAS-PART2-20261018.md`)
+- [ ] Serialized business schemas part 3: suspended buffs and companions. Suspended specialty buffs no longer stop training and PvP; one companion schema at hydration, `apply_companion()`, every companion writer and every combat route; one abilities schema for the mercenary camp, the companion editor and take (`src/Game/CompanionState.php`) (candidate in `SERIALIZED-SCHEMAS-PART3-20261022.md`)
 
 ### Remaining
 
@@ -86,18 +89,40 @@ Infrastructure and records:
 
 - [ ] Replace the PR #1 body with a short current summary that links here.
 
-Route families:
-
-- [ ] Mail notification link: the in-game mail notification email links to the sender's `Host` header, as in 1.1.2 (`lib/systemmail.php`; gap from `COMPLETION-REPORTING-20261017.md`). Goes with the final rescan.
-
 State and maintenance (remaining serialized business schemas, split in `SERIALIZED-SCHEMAS-PART1-20261017.md`; per-site status in `SERIALIZED-STATE-AUDIT.md`):
 
-- [ ] Companions: the full companion schema at hydration and in every companion writer
-- [ ] Companion abilities: one schema for the mercenary camp, the companion editor and take
 - [ ] General combat: the Forest contract on the Forest-specialty route, and the post-round re-check on Dragon and Forest specialty
 - [ ] General combat: 1.1.2 in-flight Training and Graveyard states, upgraded or recorded as fail-closed exceptions
 - [ ] Translation arrays: a news arguments schema for `news.php`, `bio.php` and `addnews()`; `lib/mail.php` switched or recorded as excluded
 - [ ] Other business state: dragon points at session load, the moderated comment snapshot, the payment log, the MOTD poll
+
+Final rescan (each line checked against the source at `1dfb7c5`; evidence doc in brackets):
+
+To fix:
+
+- [ ] Request values reaching SQL unbound: a full sweep of every shipped PHP file (`bio.php` and `mounts.php?op=xml` were found late, in `CONTENT-EDITORS-PART3-AUTHORITY-20261017.md`)
+- [ ] Mail notification link: the in-game mail notification email links to the sender's `Host` header, as in 1.1.2 (`lib/systemmail.php`) (`COMPLETION-REPORTING-20261017.md`)
+- [ ] Admin repair path for a player locked out by stored state that fails the new schemas: preferences, buff list, companions, a 1.1.2 `restorepage` with a quote. Fix Navs repairs navigation only (`SERIALIZED-SCHEMAS-PART1-20261017.md`, `SERIALIZED-SCHEMAS-PART2-20261018.md`, `SERIALIZED-SCHEMAS-PART3-20261022.md`)
+- [ ] `paylog.php` runs an unbound `processdate` UPDATE on GET (`BIO-DONATION-ADMIN-AUTHORITY-20261016.md`)
+- [ ] `getmount()` puts the stored mount ID into a cached query (`lib/mounts.php`) (`STABLES-AUTHORITY-20261016.md`)
+- [ ] `moderate.php` skips 1.1.2's check for a longer existing ban (`BAN-ADMIN-AUTHORITY-20261016.md`)
+- [ ] The name rebuilt after a dragon kill has no length check (`lib/dragon_outcomes.php`, `lib/names.php`) (`CONTENT-EDITORS-PART1-AUTHORITY-20261016.md`)
+- [ ] `bio.php`'s `ret` return link is not checked; `cmd_sanitize()` only strips the comment-scroll parameter (`BIO-DONATION-ADMIN-AUTHORITY-20261016.md`)
+- [ ] No test races account deletion against a clan action (`DELETION-EXPIRATION-AUTHORITY-20261017.md`)
+- [ ] Mercenary camp: hire and heal are GET mutations guarded only by allowed navigation; hire pastes `id` into SQL, the list query pastes the session location and dragon kills, and heal takes `cost` from the URL (`mercenarycamp.php`), found in part 3 (`SERIALIZED-SCHEMAS-PART3-20261022.md`)
+
+Recorded, not changed (kept as 1.1.2 behavior):
+
+- A ban reason is shown to the banned visitor as raw HTML; staff write it (`BAN-MESSAGE-AND-ID-COOKIE-20261016.md`)
+- Weapon, armor and title text allows color and format codes (`CONTENT-EDITORS-PART1-AUTHORITY-20261016.md`)
+- Clearing the `lgi` cookie evades an ID ban (`BAN-MESSAGE-AND-ID-COOKIE-20261016.md`)
+- The clan-delete hook is not called on disband (`DELETION-EXPIRATION-AUTHORITY-20261017.md`)
+- In the user editor, when the player's page changes the same field the admin changed, the player's value wins (`USER-EDITOR-AUTHORITY-20261016.md`)
+- The unreachable `badnav.php` branch would still fail in `saveuser()` (`SERIALIZED-SCHEMAS-PART1-20261017.md`)
+
+The unused `lib/mail.php` stays with the translation arrays item above.
+
+- [ ] Final rescan: Done only when every "to fix" line above is Done or proven not reachable.
 
 ### Merge gate
 

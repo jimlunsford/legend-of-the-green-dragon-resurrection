@@ -2,23 +2,10 @@
 declare(strict_types=1);
 namespace Resurrection\Game;
 
-/** Business state of the one companion created by bundled Dark Arts. */
+/** Business state of the one companion created by bundled Dark Arts (src/Game/CompanionState.php uses it for that key). */
 final class SkeletonCompanionState
 {
-    /** Validate a ScalarState-decoded companion map without filtering invalid entries.
-     * Other named companions retain their existing array representation, not certification.
-     * @return array<int|string, array<mixed>>
-     */
-    public static function companions(mixed $state): array
-    {
-        if (!is_array($state)) { throw new \DomainException('Invalid companion state.'); }
-        foreach ($state as $name => $companion) {
-            if (!is_array($companion)) { throw new \DomainException('Invalid companion state.'); }
-            if ($name === 'skeleton_warrior') { self::validate($companion); }
-        }
-        return $state;
-    }
-
+    /** The exact producer schema; the companion list and every other companion are CompanionState's. */
     public static function validate(mixed $state): void
     {
         $required = ['name','hitpoints','maxhitpoints','attack','defense','dyingtext','abilities','ignorelimit'];

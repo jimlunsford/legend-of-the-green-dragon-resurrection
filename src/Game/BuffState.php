@@ -86,7 +86,13 @@ final class BuffState
     {
         if (!is_array($buff)) throw new \DomainException('Invalid buff.');
         // Producer-exact schemas: the bundled specialties and the transmutation potion.
-        if (SpecialtyBuffState::covers($id, $buff)) { SpecialtyBuffState::validate($id, $buff); return $buff; }
+        if (SpecialtyBuffState::covers($id, $buff)) {
+            // suspend_buffs() and unsuspend_buffs() (PvP, training) write `suspended` as 1 or 0, as 1.1.2's did; the
+            // producer schema's type is bool. Normalized once here, before the exact check.
+            if (array_key_exists('suspended', $buff) && in_array($buff['suspended'], [0, 1], true)) $buff['suspended'] = (bool)$buff['suspended'];
+            SpecialtyBuffState::validate($id, $buff);
+            return $buff;
+        }
         if ($id === 'transmute') return TransmutationState::read($buff);
         foreach (array_keys($buff) as $key) {
             if (!is_string($key) || !(in_array($key, self::NUMBERS, true) || in_array($key, self::FLAGS, true) ||

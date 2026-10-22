@@ -3,6 +3,7 @@ declare(strict_types=1);
 namespace Resurrection\Tests;
 
 use PHPUnit\Framework\TestCase;
+use Resurrection\Game\CompanionState;
 use Resurrection\Game\SkeletonCompanionState;
 use Resurrection\Security\ScalarState;
 
@@ -19,14 +20,14 @@ final class SkeletonCompanionStateTest extends TestCase
     {
         foreach ([$this->skeleton(), array_replace($this->skeleton(), ['hitpoints'=>1,'used'=>true,'suspended'=>false])] as $state) {
             $map = ['skeleton_warrior'=>$state];
-            self::assertSame($map, SkeletonCompanionState::companions(ScalarState::read(serialize($map))));
+            self::assertSame($map, CompanionState::collection(ScalarState::read(serialize($map))));
         }
         foreach ([[13,5.5,2.5],[17,10.5,2.5],[20,10.5,5.5],[27,13.5,5.5],[60,43.5,27.5]] as [$hp,$attack,$defense]) {
             $state = array_replace($this->skeleton(), ['hitpoints'=>$hp,'maxhitpoints'=>$hp,'attack'=>$attack,'defense'=>$defense]);
             $map = ['skeleton_warrior'=>$state];
-            self::assertSame($map, SkeletonCompanionState::companions(ScalarState::read(serialize($map))));
+            self::assertSame($map, CompanionState::collection(ScalarState::read(serialize($map))));
         }
-        self::assertSame([], SkeletonCompanionState::companions([]));
+        self::assertSame([], CompanionState::collection([]));
     }
 
     public function testRejectsEveryMissingFieldAndUnsupportedStructure(): void
@@ -63,7 +64,7 @@ final class SkeletonCompanionStateTest extends TestCase
             serialize(['skeleton_warrior'=>array_replace($this->skeleton(), ['abilities'=>new \stdClass()])]),
             serialize(str_repeat('x',1048577))] as $encoded) {
             try {
-                SkeletonCompanionState::companions(ScalarState::read($encoded));
+                CompanionState::collection(ScalarState::read($encoded));
                 self::fail('Accepted invalid companion map');
             } catch (\DomainException) { self::assertTrue(true); }
         }

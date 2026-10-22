@@ -242,3 +242,16 @@ Supporting evidence only; CI is the acceptance.
 - **Lockout bar.** As in part 1, a stored list that fails the schema stops every page for that
   player until it is repaired; the user editor shows `bufflist` view-only. All shipped writers
   now store only valid lists, so such a value can only come from the database itself.
+
+## Acceptance, 2026-10-22
+
+Inspected once on 2026-10-22 for `1dfb7c50999eb988369c26199e948dbf29695d2d`:
+
+- Modern core 39099465964: SUCCESS, all 12 jobs (per leg one `checks`, four `http` shards
+  and one `result`, on PHP 8.4 / MariaDB 11.4 and PHP 8.5 / MySQL 8.4). The run started at
+  05:07:31Z on 2026-10-18; the two `result` jobs finished at 05:25:58Z and 05:26:49Z.
+- Baseline integrity 39099465985: SUCCESS.
+
+Combat buff compatibility, the buff-list schema and the mount buff schema are Done at
+`1dfb7c5`. The suspended specialty buffs and the companions are taken up by
+[serialized schemas part 3](SERIALIZED-SCHEMAS-PART3-20261022.md).

@@ -1,6 +1,7 @@
 <?php
 require_once __DIR__ . '/../src/Security/ScalarState.php';
 require_once __DIR__ . '/../src/Game/BuffState.php';
+require_once __DIR__ . '/../src/Game/CompanionState.php';
 require_once __DIR__ . '/../src/Security/NavigationState.php';
 require_once __DIR__ . '/../src/Security/PreferenceState.php';
 // translator ready
@@ -34,6 +35,12 @@ function do_forced_nav($anonymous,$overrideforced){
                 $session['bufflist']=\Resurrection\Game\BuffState::read($session['user']['bufflist'], $session['user']);
             } catch (DomainException $error) {
                 http_response_code(409); exit('Invalid stored buff state. No game action was completed.');
+            }
+            // Checked at session start as the buffs are; common.php hydrates the normalized list.
+            try {
+                \Resurrection\Game\CompanionState::read($session['user']['companions']);
+            } catch (DomainException $error) {
+                http_response_code(409); exit('Invalid stored companion state. No game action was completed.');
             }
 			$session['user']['dragonpoints']=\Resurrection\Security\ScalarState::read($session['user']['dragonpoints']);
 			if (!is_array($session['user']['dragonpoints'])) $session['user']['dragonpoints']=array();

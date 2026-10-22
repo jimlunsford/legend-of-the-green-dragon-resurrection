@@ -45,8 +45,8 @@ function resurrection_ramius_validate(bool $favor = true): void {
     resurrection_newday_validate();
     RamiusState::eligible($baseaccount, gmdate('Y-m-d', gametime()), $favor);
     RamiusState::eligible($session['user'], gmdate('Y-m-d', gametime()), $favor);
-    \Resurrection\Game\ForestCompanionState::validate(\Resurrection\Security\ScalarState::read($baseaccount['companions']));
-    \Resurrection\Game\ForestCompanionState::validate($companions);
+    \Resurrection\Game\CompanionState::read($baseaccount['companions']);
+    \Resurrection\Game\CompanionState::collection($companions);
 }
 
 function resurrection_ramius_form(string $context): void {

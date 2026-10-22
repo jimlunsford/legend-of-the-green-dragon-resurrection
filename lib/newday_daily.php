@@ -3,7 +3,7 @@ require_once __DIR__ . '/player_mutation.php';
 require_once __DIR__ . '/datetime.php';
 require_once __DIR__ . '/../src/Game/NewDayState.php';
 require_once __DIR__ . '/../src/Game/BuffState.php';
-require_once __DIR__ . '/../src/Game/ForestCompanionState.php';
+require_once __DIR__ . '/../src/Game/CompanionState.php';
 require_once __DIR__ . '/../src/Game/TransmutationState.php';
 require_once __DIR__ . '/../src/Game/Expression.php';
 use Resurrection\Game\NewDayState;
@@ -86,7 +86,7 @@ function resurrection_newday_validate(): void {
         if (!checkdate($month,$day,$year)) throw new DomainException('Invalid daily marker date.');
     }
     \Resurrection\Game\BuffState::read($baseaccount['bufflist'], $session['user']);
-    \Resurrection\Game\ForestCompanionState::validate($companions);
+    \Resurrection\Game\CompanionState::collection($companions);
 }
 
 /** @param array<string,mixed> $sources */

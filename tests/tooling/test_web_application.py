@@ -1559,7 +1559,8 @@ echo "locked\\n";fflush(STDOUT);$change=json_decode(fgets(STDIN),true,512,JSON_T
     def test_graveyard_companion_suspension_and_skeleton_exclusion(self):
         with self._graveyard_fixture() as f:
             skeleton=dict(name='`4Skeleton Warrior',hitpoints=43,maxhitpoints=43,attack=26.5,defense=14.5,dyingtext='`$Your skeleton warrior crumbles to dust.`n',abilities=dict(fight=True),ignorelimit=True)
-            helper=dict(name='Shade Helper',hitpoints=100,maxhitpoints=100,attack=20,defense=10,abilities=dict(fight=True),allowinshades=True,dyingtext='Helper falls',schema='fixture')
+            # Stored as the companion schema stores it (the three battle messages default to empty), so a page view keeps the bytes.
+            helper=dict(name='Shade Helper',hitpoints=100,maxhitpoints=100,attack=20,defense=10,abilities=dict(fight=True),allowinshades=True,dyingtext='Helper falls',schema='fixture',healmsg='',healcompanionmsg='',magicfailmsg='')
             excluded=helper|dict(name='Excluded Helper',allowinshades=False)
             self.query("UPDATE modules SET active=1 WHERE modulename='drinks'")
             self.query("INSERT INTO module_userprefs(modulename,setting,userid,value) VALUES ('drinks','drunkeness',?,'75') ON DUPLICATE KEY UPDATE value='75'",[f['player']])
@@ -2112,6 +2113,123 @@ echo "locked\\n";fflush(STDOUT);$change=json_decode(fgets(STDIN),true,512,JSON_T
             token=re.search(r'name=[\'"]csrf_token[\'"] value=[\'"]([a-f0-9]{64})',body).group(1)
             status,body=fresh('login.php',{'csrf_token':token,'name':'WebPlayer','password':"Synthetic web O'Reilly \\ password"})
             self.assertEqual(409,status,body[:2000]); self.assertIn('Invalid stored buff state. You were not logged in.',body); self.assertEqual(before,f['snapshot']())
+
+    def test_suspended_specialty_buff_training_and_pvp_http(self):
+        # suspend_buffs() and unsuspend_buffs() write `suspended` 1 or 0 on a specialty buff still active from the forest.
+        finish=dict(name='Fixture',schema='train',effectmsg='',effectnodmgmsg='',effectfailmsg='',rounds=2,minioncount=1,minbadguydamage=10,maxbadguydamage=10)
+        with self._training_fixture() as f:
+            d,e,player,snap=f['decode'],f['encode'],f['player'],f['training_snapshot']
+            f['training_master']()
+            # A real Thieving Skills Insult, cast in the forest and still active with 4 rounds.
+            f['prepare']('TS',hitpoints=5000,maxhitpoints=10000)
+            code,body=f['request'](data=f['form'](1)); self.assertEqual(200,code,body[:2000])
+            insult=d(snap()[0]['bufflist'])['ts1']; self.assertEqual(4,insult['rounds']); self.assertNotIn('suspended',insult)
+            # Training: entry, a round and the victory each succeed. The buff is suspended (stored as true), unused, then restored.
+            f['prepare_training'](hitpoints=5000,bufflist=e({'ts1':insult}))
+            code,body=f['training_action'](f['training_form']('challenge'),'challenge'); self.assertEqual(200,code,body[:2000])
+            suspended=d(snap()[0]['bufflist'])['ts1']; self.assertEqual(dict(insult,suspended=True),suspended)
+            code,body=f['training_action'](f['training_form']()); self.assertEqual(200,code,body[:2000]); self.assertNotIn('feels dejected',body)
+            self.assertEqual(suspended,d(snap()[0]['bufflist'])['ts1'])
+            state=d(snap()[0]['badguy']); state['enemies'][0]['creaturehealth']=1
+            self.query('UPDATE accounts SET badguy=?,bufflist=? WHERE acctid=?',[e(state),e({'ts1':suspended,'finish':dict(finish,allowintrain=1)}),player])
+            code,body=f['training_action'](f['training_form']()); self.assertEqual(200,code,body[:2000]); self.assertEqual('',snap()[0]['badguy'])
+            self.assertEqual(dict(insult,suspended=False),d(snap()[0]['bufflist'])['ts1'])
+            # The next ordinary page, then a forest round in which the restored Insult acts and counts down.
+            self._security_allow(player,'village.php'); code,body=f['request']('village.php'); self.assertEqual(200,code,body[:2000])
+            self.query('UPDATE accounts SET badguy=?,bufflist=? WHERE acctid=?',[e({'enemies':[f['enemy']],'options':{'type':'forest','didsurprise':1}}),e({'ts1':dict(insult,suspended=False)}),player])
+            code,body=f['request']('forest.php?op=fight'); self.assertEqual(200,code,body[:2000])
+            forms=[part for url,part in re.findall(r'<form[^>]*action="([^"]+)"[^>]*>(.*?)</form>',body,re.S) if html.unescape(url)=='forest.php?op=fight']
+            code,body=f['request']('forest.php?op=fight',self._security_fields(forms[0])); self.assertEqual(200,code,body[:2000]); self.assertIn('feels dejected',body)
+            self.assertEqual(3,d(snap()[0]['bufflist'])['ts1']['rounds'])
+            # 1.1.2's own stored form (an int flag, written mid-fight) reads, and is stored normalized by the next save.
+            for flag,expected in [(1,True),(0,False)]:
+                self.query("UPDATE accounts SET badguy='',bufflist=? WHERE acctid=?",[e({'ts1':dict(insult,suspended=flag)}),player])
+                self.assertIn(':"suspended";i:%d;'%flag,snap()[0]['bufflist'])
+                self._security_allow(player,'village.php'); code,body=f['request']('village.php'); self.assertEqual(200,code,body[:2000])
+                self.assertIs(d(snap()[0]['bufflist'])['ts1']['suspended'],expected)
+        with self._pvp_fixture() as f:
+            d,e,player,snap=f['decode'],f['encode'],f['player'],f['pvp_snapshot']
+            f['pvp_prepare'](); f['patch'](player,bufflist=e({'ts1':insult}))
+            body,_=f['enter'](); suspended=d(snap()[0]['bufflist'])['ts1']; self.assertEqual(dict(insult,suspended=True),suspended)
+            code,body=f['request']('pvp.php?op=fight',f['pvp_form']()); self.assertEqual(200,code,body[:3000]); self.assertEqual(suspended,d(snap()[0]['bufflist'])['ts1'])
+            state=d(snap()[0]['badguy']); state['enemies'][0]['creaturehealth']=1
+            f['patch'](player,badguy=e(state),bufflist=e({'ts1':suspended,'finish':dict(finish,allowinpvp=1)}))
+            code,body=f['request']('pvp.php?op=fight',f['pvp_form']()); self.assertEqual(200,code,body[:3000]); self.assertEqual('',snap()[0]['badguy'])
+            self.assertEqual(dict(insult,suspended=False),d(snap()[0]['bufflist'])['ts1'])
+            # The victory's experience would send the village on to the master (automaster); the fixture has seen him.
+            f['patch'](player,lastnewday=self._current_game_day(),seenmaster=1)
+            self._security_allow(player,'village.php'); code,body=f['request']('village.php'); self.assertEqual(200,code,body[:2000])
+            self.assertEqual(dict(insult,suspended=False),d(snap()[0]['bufflist'])['ts1'])
+
+    def test_mercenary_companions_fight_and_malformed_companions_http(self):
+        # Companions as the 1.1.2 installer and the shipped code write them: the mercenary camp's rows (text columns),
+        # the healer, the fighter, and the Dark Arts skeleton; a malformed list or row stops the request and writes nothing.
+        q=self.query
+        village=q("SELECT value FROM settings WHERE setting='villagename'"); village=village[0]['value'] if village else 'Degolburg'
+        rows=q('SELECT companionid,abilities FROM companions ORDER BY companionid')
+        self.assertEqual(['1','2'],[r['companionid'] for r in rows[:2]])
+        with self._ordinary_forest_fixture() as f:
+            e,d,player=f['encode'],f['decode'],f['player']
+            def snap():
+                row=q('SELECT * FROM accounts WHERE acctid=?',[player])[0]
+                for key in ['laston','gentime','gentimecount','gensize','allowednavs','restorepage','lastip','uniqueid']: row.pop(key,None)
+                return [row,q('SELECT output FROM accounts_output WHERE acctid=?',[player])]
+            def request(url,data=None):
+                q('UPDATE accounts SET lastnewday=? WHERE acctid=?',[self._current_game_day(),player]); return f['request'](url,data)
+            def camp(**values):
+                f['prepare']('TS',specialty='TS',badguy='',gold=5000,gems=20,location=village,hitpoints=300,maxhitpoints=1000,**values)
+                status,body=request('mercenarycamp.php'); self.assertEqual(200,status,body[:2000])
+            def hire(cid):
+                camp(); before=snap(); status,body=request(f'mercenarycamp.php?op=buy&id={cid}'); return status,body,before
+            def fight():
+                q('UPDATE accounts SET badguy=?,hitpoints=300 WHERE acctid=?',[e({'enemies':[f['enemy']],'options':{'type':'forest','didsurprise':1}}),player])
+                code,body=f['action'](f['ordinary_form']()); self.assertEqual(200,code,body[:2000])
+                return html.unescape(re.sub(r'<[^>]*>','',body)),d(snap()[0]['companions'])
+            try:
+                # The installer healer, hired at level 10: charged, stored normalized; with a hurt player, it heals in the fight.
+                status,body,before=hire(2); self.assertEqual(200,status,body[:2000]); self.assertIn('Thank ye for thy faith in my skills.',body)
+                self.assertEqual(['4000','17'],[snap()[0]['gold'],snap()[0]['gems']])
+                florenz=d(snap()[0]['companions'])['Florenz']
+                self.assertEqual({'companionid':2,'name':'Florenz','attack':11,'defense':55,'maxhitpoints':115,'hitpoints':115,'attackperlevel':1,'cannotdie':0,
+                    'allowinshades':1,'abilities':{'heal':2,'magic':0,'fight':False,'defend':False},'healmsg':'','healcompanionmsg':'','magicfailmsg':''},
+                    {k:florenz[k] for k in ['companionid','name','attack','defense','maxhitpoints','hitpoints','attackperlevel','cannotdie','allowinshades','abilities','healmsg','healcompanionmsg','magicfailmsg']})
+                plain,after=fight(); self.assertIn('Florenz heals your wounds. You regenerate 2 hitpoints.',plain); self.assertIs(after['Florenz']['used'],True)
+                # The installer fighter fights.
+                status,body,before=hire(1); self.assertEqual(200,status,body[:2000]); self.assertEqual(['Mortimer teh javelin man'],list(d(snap()[0]['companions'])))
+                plain,after=fight(); self.assertRegex(plain,r'Mortimer teh javelin man (?:hits|tries to hit) Accounting Target')
+                mortimer=after['Mortimer teh javelin man']; self.assertEqual({'fight':1,'heal':0,'magic':0,'defend':False},mortimer['abilities'])
+                # 1.1.2's stored form of a hired companion (text columns, text abilities) reads, and the next save stores it normalized.
+                legacy='a:1:{s:7:"Florenz";a:24:{s:11:"companionid";s:1:"2";s:4:"name";s:7:"Florenz";s:8:"category";s:6:"Healer";s:11:"description";s:73:"With a slight build, Florenz is better suited as a healer than a fighter.";s:6:"attack";i:11;s:14:"attackperlevel";s:1:"1";s:7:"defense";i:55;s:15:"defenseperlevel";s:1:"5";s:12:"maxhitpoints";i:115;s:20:"maxhitpointsperlevel";s:2:"10";s:9:"abilities";a:4:{s:4:"heal";s:1:"2";s:5:"magic";s:1:"0";s:5:"fight";b:0;s:6:"defend";b:0;}s:9:"cannotdie";s:1:"0";s:14:"cannotbehealed";s:1:"0";s:17:"companionlocation";s:9:"Degolburg";s:15:"companionactive";s:1:"1";s:16:"companioncostdks";s:1:"0";s:17:"companioncostgems";s:1:"3";s:17:"companioncostgold";s:4:"1000";s:8:"jointext";s:91:"Thank ye for thy faith in my skills.  I shall endeavour to keep ye away from Ramius\' claws.";s:9:"dyingtext";s:12:"O Discordia!";s:13:"allowinshades";s:1:"1";s:10:"allowinpvp";s:1:"0";s:12:"allowintrain";s:1:"0";s:9:"hitpoints";i:115;}}'
+                q("UPDATE accounts SET companions=?,badguy='' WHERE acctid=?",[legacy,player]); self.assertEqual('2',d(snap()[0]['companions'])['Florenz']['companionid'])
+                status,body=request('village.php'); self.assertEqual(200,status,body[:2000]); self.assertEqual(florenz,d(snap()[0]['companions'])['Florenz'])
+                # Stored abilities the abilities schema refuses: the hire stops (500) before anything is charged or stored.
+                for abilities in ['broken','',e('fight'),e({'fight':'2','heal':'0','magic':'0','defend':False}),e({'fight':'1','heal':'31','magic':'0','defend':False}),
+                        e({'fight':'1','heal':'1.5','magic':'0','defend':False}),e({'evil':'1'}),e({'fight':'1','magic':'-1'})]:
+                    with self.subTest(abilities=abilities):
+                        q('UPDATE companions SET abilities=? WHERE companionid=1',[abilities])
+                        status,body,before=hire(1); self.assertEqual(500,status,body[:500]); self.assertIn('Nothing was changed',body); self.assertEqual(before,snap())
+                q('UPDATE companions SET abilities=? WHERE companionid=1',[rows[0]['abilities']])
+                # The Dark Arts skeleton warrior, raised in the forest, fights in an ordinary round and keeps its exact form.
+                weak=e({'enemies':[dict(f['enemy'],creatureattack=1,creaturedefense=0)],'options':{'type':'forest','didsurprise':1}})
+                f['prepare']('DA',hitpoints=5000,maxhitpoints=10000,companions='a:0:{}',badguy=weak)
+                code,body=f['request'](data=f['form'](1)); self.assertEqual(200,code,body[:2000]); skeleton=d(snap()[0]['companions'])['skeleton_warrior']
+                code,body=f['action'](f['ordinary_form']()); self.assertEqual(200,code,body[:2000])
+                self.assertRegex(html.unescape(re.sub(r'<[^>]*>','',body)),r'Skeleton Warrior (?:hits|tries to hit) Accounting Target')
+                fought=d(snap()[0]['companions'])['skeleton_warrior']; self.assertEqual({k:v for k,v in skeleton.items() if k not in ['hitpoints','used']},{k:v for k,v in fought.items() if k not in ['hitpoints','used']})
+                # A malformed stored companion list stops every page and writes nothing; 1.1.2's empty value is no companions.
+                m=mortimer
+                for stored in ['broken','b:0;','i:5;','O:8:"stdClass":0:{}',e('x'),e({'M':'x'}),e({'M':dict(m,evil=1)}),e({'M':dict(m,hitpoints=-1)}),
+                        e({'M':dict(m,hitpoints=m['maxhitpoints']+1)}),e({'M':dict(m,hitpoints=0)}),e({'M':dict(m,attack='1e3')}),e({'M':dict(m,abilities={'heal':31})}),
+                        e({'M':dict(m,abilities={'fight':'yes'})}),e({'M':dict(m,name=[])}),e({'M':{k:v for k,v in m.items() if k!='abilities'}}),e({'':m}),
+                        e({f'c{i}':{'name':'x','hitpoints':1,'maxhitpoints':1,'attack':1,'defense':1,'abilities':{}} for i in range(101)}),e({'skeleton_warrior':dict(skeleton,used=1)})]:
+                    with self.subTest(stored=stored[:100]):
+                        q('UPDATE accounts SET companions=?,badguy=? WHERE acctid=?',[stored,e({'enemies':[f['enemy']],'options':{'type':'forest','didsurprise':1}}),player]); before=snap()
+                        for url in ['village.php','forest.php?op=fight','mercenarycamp.php']:
+                            status,body=request(url); self.assertEqual(409,status,(url,body[:500])); self.assertIn('Invalid stored companion state',body); self.assertEqual(before,snap())
+                q("UPDATE accounts SET companions='',badguy='' WHERE acctid=?",[player]); status,body=request('village.php'); self.assertEqual(200,status,body[:2000])
+                self.assertEqual([],d(snap()[0]['companions']))
+            finally:
+                for row in rows: q('UPDATE companions SET abilities=? WHERE companionid=?',[row['abilities'],row['companionid']])
 
     def test_ordinary_forest_search_escape_and_event_handoff(self):
         with self._ordinary_forest_fixture() as f:
@@ -7034,8 +7152,16 @@ function MODULE_dohook($hook,$args) {
                 # Take: the acting superuser gets the companion scaled to level 5 by 1.1.2's formulas.
                 fields=listed('take',pid);status,body=request(f'companions.php?op=take&id={pid}',fields);self.assertEqual(200,status,body[:2000]);self.assertIn("Succesfully taken Pal O'Reilly 雪 <b>x</b> as companion.",text(body))
                 pals=unser(me('companions')[0]);taken=pals["Pal O'Reilly 雪 <b>x</b>"]
-                self.assertEqual((16,10,35,35,{'fight':'1','heal':'3','magic':'0','defend':False}),(taken['attack'],taken['defense'],taken['maxhitpoints'],taken['hitpoints'],taken['abilities']))
+                # Stored in the companion list normalized by the companion schema (text abilities become int).
+                self.assertEqual((16,10,35,35,{'fight':1,'heal':3,'magic':0,'defend':False}),(taken['attack'],taken['defense'],taken['maxhitpoints'],taken['hitpoints'],taken['abilities']))
                 self.assertEqual(409,request(f'companions.php?op=take&id={pid}',fields)[0]);self.assertEqual(pals,unser(me('companions')[0]))
+                # Stored abilities the abilities schema refuses: Take stops (500) and stores nothing; the edit page shows them empty for repair.
+                stored_abilities=crow()['abilities']
+                for bad in ['broken',ser({'fight':'2','heal':'0','magic':'0','defend':False}),ser({'fight':'1','heal':'31','magic':'0','defend':False}),ser({'evil':'1'})]:
+                    q('UPDATE companions SET abilities=? WHERE companionid=?',[bad,pid]);fields=listed('take',pid)
+                    status,body=request(f'companions.php?op=take&id={pid}',fields);self.assertEqual(500,status,body[:500]);self.assertEqual(pals,unser(me('companions')[0]))
+                    status,body=request(edit);self.assertEqual(200,status,body[:2000]);self.assertNotRegex(body,r"name='companion\[abilities\]\[fight\]' value='1' checked")
+                q('UPDATE companions SET abilities=? WHERE companionid=?',[stored_abilities,pid])
                 # Activate, then deactivate with the edit page's cache entry: 1.1.2 dropped "companionsdata-<id>", leaving the edit page stale.
                 fields=listed('activate',pid);self.assertEqual(200,request(f'companions.php?op=activate&id={pid}',fields)[0]);self.assertEqual('1',crow()['companionactive'])
                 calls=state['call']

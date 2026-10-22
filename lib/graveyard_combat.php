@@ -12,8 +12,8 @@ function resurrection_graveyard_state(): array {
     \Resurrection\Game\GraveyardCombatState::player($session['user']);
     \Resurrection\Game\BuffState::read($baseaccount['bufflist'],$session['user']);
     \Resurrection\Game\BuffState::collection($session['bufflist'],$session['user']);
-    \Resurrection\Game\ForestCompanionState::validate(\Resurrection\Security\ScalarState::read($baseaccount['companions']));
-    \Resurrection\Game\ForestCompanionState::validate($companions);
+    \Resurrection\Game\CompanionState::read($baseaccount['companions']);
+    \Resurrection\Game\CompanionState::collection($companions);
     if ($session['user']['badguy']==='') return [];
     $state=\Resurrection\Game\GraveyardCombatState::read($session['user']['badguy'],$session['user']);
     $rows=db_query('SELECT creatureid,creaturename,creatureweapon,creaturelose,creaturewin,creatureaiscript FROM '.db_prefix('creatures').' WHERE graveyard=1 AND creatureid=?',true,[$state['enemies'][0]['creatureid']]);
@@ -121,7 +121,7 @@ function resurrection_graveyard_combat(): never {
                 }
                 \Resurrection\Game\GraveyardCombatState::player($session['user']);
                 if ($session['user']['badguy']!=='') \Resurrection\Game\GraveyardCombatState::read($session['user']['badguy'],$session['user']);
-                \Resurrection\Game\ForestCompanionState::validate($companions);
+                \Resurrection\Game\CompanionState::collection($companions);
             });
             if ($session['user']['specialinc']!=='') { page_footer(); exit; }
             $context=resurrection_graveyard_context();

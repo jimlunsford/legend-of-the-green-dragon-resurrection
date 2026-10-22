@@ -107,6 +107,26 @@ final class BuffStateTest extends TestCase
         }
     }
 
+    public function testSuspendedSpecialtyBuffsPassAndNormalize(): void
+    {
+        // lib/battle-skills.php suspend_buffs() and unsuspend_buffs() (PvP, training) write `suspended` 1 or 0, as 1.1.2's did,
+        // on a specialty buff cast before the fight (docs/SERIALIZED-SCHEMAS-PART3-20261022.md).
+        $insult = ['name' => '`^Insult', 'rounds' => 4, 'wearoff' => 'Your victim stops crying and wipes its nose.',
+            'roundmsg' => '{badguy} feels dejected and cannot attack as well.', 'badguyatkmod' => 0.5, 'schema' => 'module-specialtythiefskills',
+            'fields_calculated' => true, 'used' => 0];
+        foreach ([1 => true, 0 => false] as $written => $normalized) {
+            foreach ([$written, (bool)$written] as $value) {
+                $buff = BuffState::buff('ts1', ['suspended' => $value] + $insult, self::PLAYER);
+                self::assertSame(['suspended' => $normalized] + $insult, $buff);
+                self::assertSame($buff, BuffState::buff('ts1', $buff, self::PLAYER));
+            }
+        }
+        $stored = serialize(['ts1' => $insult + ['suspended' => 1]]);
+        self::assertSame(['ts1' => $insult + ['suspended' => true]], BuffState::read($stored, self::PLAYER));
+        self::assertSame(serialize(['ts1' => $insult + ['suspended' => false]]), BuffState::encode(['ts1' => $insult + ['suspended' => 0]], self::PLAYER));
+        foreach (['1', '0', 2, -1, 'yes', null, 1.0, []] as $bad) $this->reject(['ts1' => ['suspended' => $bad] + $insult]);
+    }
+
     public function testEmptyStoredListIsNoBuffs(): void
     {
         self::assertSame([], BuffState::read('', []));

@@ -14,9 +14,11 @@ function resurrection_dragon_context(?array $specialty = null): string {
 }
 
 function resurrection_dragon_authority(string $op): void {
-    global $session;
+    global $session, $companions;
     if (empty($session['loggedin']) ||
         $session['user']['level'] < 15 || $session['user']['specialinc'] !== '') throw new DomainException();
+    // The companions the Dragon rounds read, as every other combat route checks them.
+    \Resurrection\Game\CompanionState::collection($companions);
     if (in_array($op,['restart','godmode'],true) && !($session['user']['superuser'] & SU_DEVELOPER)) throw new DomainException();
     if ($op === 'prologue1') {
         \Resurrection\Game\DragonCombatState::victory($session['user']['badguy'], (int)$session['user']['dragonkills']);

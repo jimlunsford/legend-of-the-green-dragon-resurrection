@@ -156,9 +156,10 @@ if ($op==""){
 		output("Companion Editor:`n");
 		$row = db_fetch_assoc($result);
 		$context = resurrection_content_context('edit', $row);
-		$row['abilities'] = \Resurrection\Security\ScalarState::read($row['abilities']);
-		// Malformed stored abilities are shown empty for repair; PHP 8 refused to turn their false into the form's array.
-		if (!is_array($row['abilities'])) $row['abilities'] = array();
+		// Stored abilities the abilities schema refuses are shown empty for repair; PHP 8 refused to turn their false into
+		// the form's array.
+		try { $row['abilities'] = \Resurrection\Game\CompanionState::abilities(\Resurrection\Security\ScalarState::read($row['abilities'])); }
+		catch (DomainException $error) { $row['abilities'] = array(); }
 		companionform($row, $context);
 	}
 }

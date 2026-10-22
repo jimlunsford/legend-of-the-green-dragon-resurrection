@@ -2,7 +2,7 @@
 require_once __DIR__ . '/../src/Security/PvpState.php';
 require_once __DIR__ . '/player_mutation.php';
 require_once __DIR__ . '/../src/Game/BuffState.php';
-require_once __DIR__ . '/../src/Game/ForestCompanionState.php';
+require_once __DIR__ . '/../src/Game/CompanionState.php';
 require_once __DIR__ . '/../src/Game/Expression.php';
 
 /** Stable gameplay snapshot, excluding navigation, transport and performance bookkeeping. */
@@ -45,7 +45,7 @@ function resurrection_pvp_participants(bool $requireActor=true): void {
     if ($requireActor && (empty($baseaccount['alive']) || $session['user']['specialinc']!=='')) throw new DomainException('PvP actor unavailable.');
     \Resurrection\Game\BuffState::read($baseaccount['bufflist'],$session['user']);
     \Resurrection\Game\BuffState::collection($session['bufflist'],$session['user']);
-    \Resurrection\Game\ForestCompanionState::validate($companions);
+    \Resurrection\Game\CompanionState::collection($companions);
     foreach ($session['bufflist'] as $buff) {
         if (!is_string($buff['name'] ?? null) || !is_string($buff['schema'] ?? null)) throw new DomainException('Invalid PvP buff.');
         foreach (['regen','minioncount','lifetap','damageshield'] as $effect) {

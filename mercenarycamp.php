@@ -213,9 +213,17 @@ if ($op==""){
 		$row['maxhitpoints'] = $row['maxhitpoints'] + $row['maxhitpointsperlevel'] * $session['user']['level'];
 		$row['hitpoints'] = $row['maxhitpoints'];
 		$row = modulehook("alter-companion", $row);
-		$row['abilities'] = \Resurrection\Security\ScalarState::read($row['abilities']);
 		require_once("lib/buffs.php");
-		if (apply_companion($row['name'], $row)) {
+		// The stored abilities and the hired companion must pass the companion schema (src/Game/CompanionState.php)
+		// before anything is charged or stored. 1.1.2 applied and saved whatever the row held.
+		try {
+			$row['abilities'] = \Resurrection\Game\CompanionState::abilities(\Resurrection\Security\ScalarState::read($row['abilities']));
+			$hired = apply_companion($row['name'], $row);
+		} catch (DomainException $error) {
+			http_response_code(500);
+			exit('This companion cannot be hired. Nothing was changed.');
+		}
+		if ($hired) {
 			output("`QYou hand over `^%s gold`Q and `%%s %s`Q.`n`n", (int)$row['companioncostgold'], (int)$row['companioncostgems'],translate_inline($row['companioncostgems'] == 1?"gem":"gems"));
 			if (isset($row['jointext']) && $row['jointext'] > "") {
 				output($row['jointext']);
