@@ -1,7 +1,8 @@
 # Route inventory, 2026-10-22
 
 The backbone of the final rescan: every request entry point the shipped code serves, who can reach it, whether it
-changes state, and its status. Built at `c00f2d1` and updated by the candidate that adds this file (final rescan task 1).
+changes state, and its status. Built at `c00f2d1` and updated by the candidate that adds this file (final rescan task 1);
+final rescan task 2 updated the admin rows and `bio.php` (`RESCAN-TASK2-20261022.md`).
 
 Several route families (the mercenary camp, the MOTD, the news delete link) turned up only by accident late in Phase 3.
 A sweep for unbound SQL alone would not have found all of them, so this list starts from the routes, not from the SQL.
@@ -33,10 +34,10 @@ with `check_su_access()`. Short names in the evidence column: `CRS` is `CORE-ROU
 
 | Status | Entries |
 |---|---|
-| CLOSED | 82 |
+| CLOSED | 87 |
 | DISABLED | 9 |
-| READ-ONLY | 62 |
-| OPEN | 12 |
+| READ-ONLY | 69 |
+| OPEN | 0 |
 | Total | 165 |
 
 ## Top-level pages
@@ -51,13 +52,13 @@ with `check_su_access()`. Short names in the evidence column: `CRS` is `CORE-ROU
 | `armoreditor.php?op=add\|edit\|save\|del` | admin SU_EDIT_EQUIPMENT | armor rows | CLOSED | `CONTENT-EDITORS-PART1-AUTHORITY-20261016.md`; `test_weapon_and_armor_editor_authority_http`. |
 | `badnav.php` | player | navigation only | READ-ONLY | Rebuilds the allowed navigation from the stored page; the query takes no request input. |
 | `badword.php` | admin SU_EDIT_COMMENTS | no | READ-ONLY | The word lists; no request input in SQL. |
-| `badword.php?op=test` | admin SU_EDIT_COMMENTS | no | READ-ONLY | Shows the censor's result for a posted word; writes nothing. |
-| `badword.php?op=add\|remove\|addgood\|removegood` | admin SU_EDIT_COMMENTS | nastywords | OPEN | POST without CSRF or intent; the word lists are rewritten with `addslashes()` instead of bound values; no transaction around the delete and insert. |
+| `badword.php?op=test` | admin SU_EDIT_COMMENTS | no | READ-ONLY | Shows the censor's result for a posted word; writes nothing; a POST with CSRF since rescan task 2 (`RESCAN-TASK2-20261022.md`). |
+| `badword.php?op=add\|remove\|addgood\|removegood` | admin SU_EDIT_COMMENTS | nastywords | CLOSED | `RESCAN-TASK2-20261022.md`: POST with CSRF and a one-use intent bound to the list as shown; locked, checked and rewritten in one transaction, bound; 1.1.2's stored word format; `test_badword_editor_authority_http`. |
 | `bank.php` | player | no | READ-ONLY | `BANK-AUTHORITY-20261015.md`. |
 | `bank.php?op=deposit\|depositfinish\|withdraw\|withdrawfinish\|borrow\|transfer\|transfer2\|transfer3` | player | gold, bank, transfers | CLOSED | `BANK-AUTHORITY-20261015.md`; `test_bank_deposit_withdraw_and_borrow_authority_http`, `test_bank_transfer_authority_http`. |
 | `battle.php` | none | no | CLOSED | A direct request is refused (404); combat is a caller-owned include (`CRS`, "Direct battle.php include bypass blocked"); `test_forest_specialty_post_authority_and_rollback`. |
 | `battle.php?op=fight\|run\|newtarget` | none (through Forest, PvP, training, graveyard, Dragon) | combat | CLOSED | Each caller's own route: `ORDINARY-FOREST-COMBAT-20260927.md`, `PVP-COMBAT-AUTHORITY-20260927.md`, `TRAINING-MASTER-AUTHORITY-20260927.md`, `GRAVEYARD-COMBAT-AUTHORITY-20260927.md`, `DRAGON-AUTHORITY-20260926.md`. |
-| `bio.php` | anyone | no | OPEN | Queries bound (`CONTENT-EDITORS-PART3-AUTHORITY-20261017.md`), but the `ret` return link is not checked: any URL becomes an allowed navigation (`BIO-DONATION-ADMIN-AUTHORITY-20261016.md`). |
+| `bio.php` | anyone | no | READ-ONLY | Queries bound (`CONTENT-EDITORS-PART3-AUTHORITY-20261017.md`); `ret` returns only to a known on-site page, else the warrior list (`RESCAN-TASK2-20261022.md`); `RescanTask2Test` (PHPUnit), `test_bio_return_link_stays_on_known_pages_http`. |
 | `bios.php` | admin SU_EDIT_COMMENTS | no | READ-ONLY | `BIO-DONATION-ADMIN-AUTHORITY-20261016.md`. |
 | `bios.php?op=block\|unblock` | admin SU_EDIT_COMMENTS | bio | CLOSED | `BIO-DONATION-ADMIN-AUTHORITY-20261016.md`; `test_bio_moderation_authority_http`. |
 | `clan.php` | player | clan housekeeping | CLOSED | `CLAN-MEMBERSHIP-AUTHORITY-20261015.md`, `CLAN-TEXT-MODERATION-AUTHORITY-20261015.md`; `test_clan_housekeeping_on_view_http`, `test_clan_detail_rename_and_block_authority_http`. |
@@ -79,7 +80,7 @@ with `check_su_access()`. Short names in the evidence column: `CRS` is `CORE-ROU
 | `dragon.php?op=prologue1` | player | Dragon kill outcome | CLOSED | `DRAGON-AUTHORITY-20260926.md`; `test_dragon_transitions_rewards_and_rollback`. |
 | `forest.php` | player | events | CLOSED | `ORDINARY-FOREST-COMBAT-20260927.md`; `test_ordinary_forest_search_escape_and_event_handoff`. |
 | `forest.php?op=search\|fight\|run\|newtarget\|dragon\|specialty` | player | combat | CLOSED | `ORDINARY-FOREST-COMBAT-20260927.md`, `SERIALIZED-SCHEMAS-PART4-20261022.md`; `test_ordinary_forest_http_authority_and_context`, `test_forest_specialty_post_authority_and_rollback`. |
-| `gamelog.php` | admin SU_EDIT_CONFIG | no | OPEN | Read-only, but `cat` is pasted into SQL and `start` into the LIMIT; output of the category link unchecked. |
+| `gamelog.php` | admin SU_EDIT_CONFIG | no | READ-ONLY | `RESCAN-TASK2-20261022.md`: `cat` and `start` checked and bound; the category links encoded and escaped; `test_gamelog_and_referers_authority_http`. |
 | `gardens.php` | player | commentary | CLOSED | Commentary through the shared helper (`MODERN-CORE-CHECKPOINT-20260913-PHASE2.md`); `SecurityIntegrationTest::testCommentaryAuthorizationAndRawStorage`. No bundled gardens event. |
 | `graveyard.php` | player (dead) | no | READ-ONLY | `GRAVEYARD-COMBAT-AUTHORITY-20260927.md`. |
 | `graveyard.php?op=search\|fight\|run` | player (dead) | torment combat | CLOSED | `GRAVEYARD-COMBAT-AUTHORITY-20260927.md`; `test_graveyard_search_round_authority_and_replay`, `test_graveyard_victory_defeat_and_late_rollback`. |
@@ -140,8 +141,8 @@ with `check_su_access()`. Short names in the evidence column: `CRS` is `CORE-ROU
 | `pvp.php` | player | no | READ-ONLY | The target list (`PVP-COMBAT-AUTHORITY-20260927.md`). |
 | `pvp.php?op=fight\|run` | player | PvP combat | CLOSED | `PVP-COMBAT-AUTHORITY-20260927.md`; `test_pvp_eligibility_and_entry_rollback`, `test_pvp_round_stale_reservation_and_victim_authority`. |
 | `rawsql.php` | anyone | no | DISABLED | 410 (`test_disabled_endpoints.py`). |
-| `referers.php` | admin SU_EDIT_CONFIG | referers | OPEN | Every view deletes expired referers (a GET write); `sort` is pasted into `ORDER BY`. |
-| `referers.php?op=rebuild` | admin SU_EDIT_CONFIG | referers | OPEN | GET mutation without CSRF or intent; the site is written with `addslashes()`, not bound. |
+| `referers.php` | admin SU_EDIT_CONFIG | expired referers | READ-ONLY | `RESCAN-TASK2-20261022.md`: the 1.1.2 expiry on view kept, from server values only, bound; `sort` from an allow-list (400 otherwise); output escaped, only http(s) links; `test_gamelog_and_referers_authority_http`. |
+| `referers.php?op=rebuild` | admin SU_EDIT_CONFIG | referers | CLOSED | `RESCAN-TASK2-20261022.md`: GET asks; POST with CSRF and a one-use intent; every row locked and rewritten in one transaction, bound; `test_gamelog_and_referers_authority_http`. |
 | `referral.php` | anyone | no | READ-ONLY | The referral link and list; the query takes no request input; `serverurl` never saved (`COMPLETION-REPORTING-20261017.md`). |
 | `rock.php` | player (veteran) | commentary | CLOSED | Commentary through the shared helper. |
 | `runmodule.php` | player | dispatch | CLOSED | Active install and dependency checks (`CRS`, runmodule row); `test_dispatcher_enforces_module_state`. Module routes are below. |
@@ -152,19 +153,19 @@ with `check_su_access()`. Short names in the evidence column: `CRS` is `CORE-ROU
 | `stats.php` | admin SU_EDIT_CONFIG | no | READ-ONLY | No query takes request input. |
 | `stats.php?op=stats\|referers\|graph` | admin SU_EDIT_CONFIG | no | READ-ONLY | Same. |
 | `superuser.php` | admin (any grotto flag) | no | READ-ONLY | The grotto menu. |
-| `superuser.php?op=keepalive` | admin (any grotto flag) | own `laston` | OPEN | A GET write without CSRF (low impact: the admin's own `laston`, a server value). |
-| `superuser.php?op=newsdelete` | admin (any grotto flag) | news | OPEN | Already on the Final rescan list: GET delete with `newsid` pasted into SQL, no CSRF or intent, open to any staff flag rather than comment moderators. |
+| `superuser.php?op=keepalive` | admin (any grotto flag) | own `laston` | READ-ONLY | `RESCAN-TASK2-20261022.md`: stays a GET (it writes only the admin's own `laston`, as every page view does); bound; the raw request URI no longer echoed; `test_news_delete_and_keepalive_authority_http`. |
+| `superuser.php?op=newsdelete` | admin SU_EDIT_COMMENTS | news | CLOSED | `RESCAN-TASK2-20261022.md`: comment moderators only; POST with CSRF and a one-use intent bound to the news line; locked and rechecked in one transaction, bound; returns only to the news page; `test_news_delete_and_keepalive_authority_http`. |
 | `taunt.php` | admin SU_EDIT_CREATURES | no | READ-ONLY | `CONTENT-EDITORS-PART1-AUTHORITY-20261016.md`. |
 | `taunt.php?op=edit\|save\|del` | admin SU_EDIT_CREATURES | taunts | CLOSED | `CONTENT-EDITORS-PART1-AUTHORITY-20261016.md`; `test_taunt_and_title_editor_authority_http`. |
 | `titleedit.php` | admin SU_EDIT_USERS | no | READ-ONLY | `CONTENT-EDITORS-PART1-AUTHORITY-20261016.md`. |
 | `titleedit.php?op=add\|edit\|save\|delete\|reset` | admin SU_EDIT_USERS | titles, players' titles | CLOSED | `CONTENT-EDITORS-PART1-AUTHORITY-20261016.md`; `test_taunt_and_title_editor_authority_http`. |
 | `train.php` | player | no | READ-ONLY | `TRAINING-MASTER-AUTHORITY-20260927.md`. |
 | `train.php?op=challenge\|autochallenge\|question` | player | training combat, levels | CLOSED | `TRAINING-MASTER-AUTHORITY-20260927.md`; `test_training_entry_authority_and_stale_round`, `test_training_victory_zero_negative_replay_and_next_level`. |
-| `translatortool.php` | admin SU_IS_TRANSLATOR | no | OPEN | The popup form; `u` and `t` reach the page unchecked. |
-| `translatortool.php?op=save` | admin SU_IS_TRANSLATOR | translations | OPEN | POST without CSRF or intent; `uri`, `text` and `trans` pasted into SQL; the redirect carries the request's page. |
-| `translatortool.php?op=list` | admin SU_IS_TRANSLATOR | no | OPEN | `u` pasted into SQL. |
-| `untranslated.php` | admin SU_IS_TRANSLATOR | translations | OPEN | The player's language preference is pasted into SQL. |
-| `untranslated.php?op=list\|step2` | admin SU_IS_TRANSLATOR | translations | OPEN | Translation INSERT and DELETE from posted values pasted into SQL, without CSRF or intent; `ns` and `intext` reach SQL unbound. |
+| `translatortool.php` | admin SU_IS_TRANSLATOR | no | READ-ONLY | `RESCAN-TASK2-20261022.md`: `u` and `t` checked text, read once, escaped; the namespace lookup bound; `test_translator_tools_authority_http`. |
+| `translatortool.php?op=save` | admin SU_IS_TRANSLATOR | translations | CLOSED | `RESCAN-TASK2-20261022.md`: POST with CSRF and a one-use intent bound to the namespace, text and rows shown; one transaction, bound; Save No Close goes only to this tool's list; `test_translator_tools_authority_http`. |
+| `translatortool.php?op=list` | admin SU_IS_TRANSLATOR | no | READ-ONLY | `RESCAN-TASK2-20261022.md`: `u` bound; output escaped; `test_translator_tools_authority_http`. |
+| `untranslated.php` | admin SU_IS_TRANSLATOR | no | READ-ONLY | `RESCAN-TASK2-20261022.md`: the language preference and the random pick bound; the text escaped and read-only; `test_translator_tools_authority_http`. |
+| `untranslated.php?op=list\|step2` | admin SU_IS_TRANSLATOR | translations | CLOSED | `RESCAN-TASK2-20261022.md`: POST with CSRF and a one-use intent bound to the collected text; the insert and delete in one transaction, only while the text is untranslated; bound; `test_translator_tools_authority_http`. |
 | `user.php` | admin SU_EDIT_USERS | no | READ-ONLY | `USER-EDITOR-AUTHORITY-20261016.md`. |
 | `user.php?op=search\|edit\|save\|special\|savemodule\|lasthit\|debuglog&subop=module\|xml` | admin SU_EDIT_USERS | accounts, module preferences | CLOSED | `USER-EDITOR-AUTHORITY-20261016.md`; `test_user_editor_account_save_authority_http`, `test_user_editor_special_module_and_log_authority_http`. |
 | `user.php?op=setupban\|saveban\|delban\|removeban` | admin SU_EDIT_USERS | bans | CLOSED | `BAN-ADMIN-AUTHORITY-20261016.md`; `test_user_editor_ban_authority_http`. |
@@ -338,3 +339,47 @@ Local result with the fix (supporting evidence only): the probe ran 1000 Backsta
 passed on MySQL 8.4 (46 tests, 878 s) and on MariaDB 11.4 (46 tests, 864 s), each after PHPUnit OK (205 tests).
 Static: `test_route_inventory`, `test_tooling_shards`, the historical verifier, the project validator and
 `git diff --check` pass.
+
+## Rescan task 1 accepted through `aea4608`, 2026-10-22
+
+Rescan task 1 (`593578e`) is accepted through `aea4608`, its first accepted descendant, which changes only the forest
+specialty fixture described above. `593578e`'s own run, Modern core 39822309470, failed (engineering (8.5, mysql:8.4) /
+http (4)) and stays on record as a failure; it is not acceptance.
+
+On `aea4608` (`aea46084430feb92d432cc99b3ccc8bbf0b1ac03`), checked through the GitHub API job by job:
+
+| Run | Job | Conclusion |
+| --- | --- | --- |
+| Modern core 39841362118 | engineering (8.4, mariadb:11.4) / checks | success |
+| | engineering (8.4, mariadb:11.4) / http (1) | success |
+| | engineering (8.4, mariadb:11.4) / http (2) | success |
+| | engineering (8.4, mariadb:11.4) / http (3) | success |
+| | engineering (8.4, mariadb:11.4) / http (4) | success |
+| | engineering (8.4, mariadb:11.4) / result | success |
+| | engineering (8.5, mysql:8.4) / checks | success |
+| | engineering (8.5, mysql:8.4) / http (1) | success |
+| | engineering (8.5, mysql:8.4) / http (2) | success |
+| | engineering (8.5, mysql:8.4) / http (3) | success |
+| | engineering (8.5, mysql:8.4) / http (4) | success |
+| | engineering (8.5, mysql:8.4) / result | success |
+| Baseline integrity 39841362038 | provenance | success |
+
+This closes what task 1 closed: the mercenary camp hire and heal (its Final rescan line), the healer's potions and
+companion healing, the gypsy's paid seance, and the bound read-only pages (`list.php`, `hof.php`, `news.php`, the mail
+read page).
+
+## Final rescan task 2, 2026-10-22 (candidate)
+
+The twelve OPEN entries handed over above are closed in `RESCAN-TASK2-20261022.md`: five state-changing routes are
+CLOSED (`badword.php` writes, `referers.php?op=rebuild`, `superuser.php?op=newsdelete`, `translatortool.php?op=save`,
+`untranslated.php?op=list|step2`) and seven are READ-ONLY with their request values bound and output escaped (`bio.php`,
+`gamelog.php`, `referers.php`, `superuser.php?op=keepalive`, `translatortool.php` and its list, `untranslated.php`). The
+keepalive stays a GET and the referer expiry stays on view; both write server values only (decisions in the evidence
+document). Counts: CLOSED 87, DISABLED 9, READ-ONLY 69, OPEN 0, total 165.
+
+`test_rescan_task2_entries_have_their_evidence` (static) checks that each of the twelve has its status, cites the
+evidence document and names an HTTP test that exists. Against the task 1 inventory it fails: every entry is OPEN.
+
+New gap found (on the Final rescan list): `common.php`'s referer tracking writes the visitor's `Referer` host and the
+request path into `referers.site` (50 characters) and `referers.dest` (255) unchecked; under strict SQL a longer value
+fails the page. Not a route of its own; it runs on every page.

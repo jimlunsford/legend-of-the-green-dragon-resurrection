@@ -69,9 +69,12 @@ while ($row = db_fetch_assoc($result)) {
 	if ($base_arguments === null && !($session['user']['superuser'] & SU_EDIT_COMMENTS)) continue;
 	output_notl("`c`2-=-`@=-=`2-=-`@=-=`2-=-`@=-=`2-=-`0`c");
 	if ($session['user']['superuser'] & SU_EDIT_COMMENTS){
-		$del = translate_inline("Del");
-		rawoutput("[ <a href='superuser.php?op=newsdelete&newsid=".$row['newsid']."&return=".URLEncode($_SERVER['REQUEST_URI'])."'>$del</a> ]&nbsp;");
-		addnav("","superuser.php?op=newsdelete&newsid={$row['newsid']}&return=".URLEncode($_SERVER['REQUEST_URI']));
+		// 1.1.2's Del link deleted on a GET. It is now a protected POST bound to this news line (superuser.php).
+		require_once("lib/admin_tools.php");
+		$del = htmlspecialchars(translate_inline("Del"), ENT_QUOTES, 'UTF-8');
+		$delurl = "superuser.php?op=newsdelete&newsid=".(int)$row['newsid']."&return=".URLEncode($_SERVER['REQUEST_URI']);
+		rawoutput("[ <form method='POST' action='$delurl' style='display:inline'>".resurrection_action_fields('news-delete-'.(int)$row['newsid'], resurrection_news_delete_context($row))."<button type='submit' class='button'>$del</button></form> ]&nbsp;");
+		addnav("",$delurl);
 	}
 	if ($base_arguments === null) continue;
 	tlschema($row['tlschema']);

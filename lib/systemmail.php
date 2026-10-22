@@ -128,7 +128,12 @@ function resurrection_systemmail_deliver($to,$subject,$body,$from,$noemail,$row,
 		$body = full_sanitize($body);
 		$subject = htmlentities($subject, ENT_COMPAT, getsetting("charset", "ISO-8859-1"));
 		$mailsubj = translate_mail(array("New LoGD Mail (%s)", $subject),$to);
-		$mailbody = translate_mail(array("You have received new mail on LoGD at http://%s`n`n"
+		// The game's configured `serverurl`, never the request: 1.1.2 linked to the sender's Host header, so a forged
+		// Host put any address into the recipient's email. Without a valid serverurl the email says so, as the
+		// petition notice does, and is still sent: the game mail itself is already delivered.
+		require_once __DIR__ . '/server_url.php';
+		$serverurl = resurrection_server_url() ?? array("(Server URL not set or not valid)");
+		$mailbody = translate_mail(array("You have received new mail on LoGD at %s`n`n"
 			."-=-=-=-=-=-=-=-=-=-=-=-=-=-`n"
 			."From: %s`n"
 			."To: %s`n"
@@ -136,14 +141,14 @@ function resurrection_systemmail_deliver($to,$subject,$body,$from,$noemail,$row,
 			."Body: `n%s`n"
 			."-=-=-=-=-=-=-=-=-=-=-=-=-=-"
 			."`nDo not respond directly to this email, it was sent from the game email address, and not the email address of the person who sent you the "
-			."message.  If you wish to respond, log into Legend of the Green Dragon at http://%s .`n`n"
+			."message.  If you wish to respond, log into Legend of the Green Dragon at %s .`n`n"
 			."You may turn off these alerts in your preferences page, available from the village square.",
-			$_SERVER['HTTP_HOST'].dirname($_SERVER['SCRIPT_NAME']),
+			$serverurl,
 			$fromline,
 			$toline,
 			full_sanitize($subject),
 			$body,
-			$_SERVER['HTTP_HOST'].dirname($_SERVER['SCRIPT_NAME'])
+			$serverurl
 		),$to);
 		$delivered = resurrection_send_email((string)$row['emailaddress'],$mailsubj,str_replace("`n","\n",$mailbody),getsetting("gameadminemail","postmaster@localhost"));
         if (!$delivered) error_log('Mail notification failed after game mail commit.');

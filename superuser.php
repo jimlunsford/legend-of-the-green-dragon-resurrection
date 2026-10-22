@@ -16,18 +16,31 @@ superusernav();
 
 $op = httpget('op');
 if ($op=="keepalive"){
-	$sql = "UPDATE " . db_prefix("accounts") . " SET laston='".date("Y-m-d H:i:s")."' WHERE acctid='{$session['user']['acctid']}'";
-	db_query($sql);
-	global $REQUEST_URI;
-	echo '<html><meta http-equiv="Refresh" content="30;url='.$REQUEST_URI.'"></html><body>'.date("Y-m-d H:i:s")."</body></html>";
+	// A session keepalive. It writes only the admin's own laston, a server value that every page view writes in
+	// saveuser() (1.1.2 too), so it stays a GET without CSRF. The query is bound, and the page refreshes itself:
+	// 1.1.2 echoed the raw request URI into the refresh tag.
+	db_query("UPDATE " . db_prefix("accounts") . " SET laston=? WHERE acctid=?", true, [date("Y-m-d H:i:s"), (int)$session['user']['acctid']]);
+	echo '<html><meta http-equiv="Refresh" content="30;url=superuser.php?op=keepalive"></html><body>'.date("Y-m-d H:i:s")."</body></html>";
 	exit();
 }elseif ($op=="newsdelete"){
-	$sql = "DELETE FROM " . db_prefix("news") . " WHERE newsid='".httpget('newsid')."'";
-	db_query($sql);
-	$return = httpget('return');
-	$return = cmd_sanitize($return);
-	$return = substr($return,strrpos($return,"/")+1);
-	redirect($return);
+	// 1.1.2 deleted on a GET link with newsid pasted into SQL, for any staff flag that enters the grotto. news.php shows
+	// the Del button only to comment moderators, so that flag guards the delete. It is a POST with CSRF and a one-use
+	// intent bound to the news line as it was shown, and it returns only to the news page.
+	require_once("lib/admin_tools.php");
+	require_once("lib/return_links.php");
+	check_su_access(SU_EDIT_COMMENTS);
+	resurrection_tool_post();
+	$newsid = filter_var(httpget('newsid'), FILTER_VALIDATE_INT, ['options'=>['min_range'=>1, 'max_range'=>4294967295]]);
+	if ($newsid === false) { http_response_code(400); exit('Invalid request.'); }
+	$rows = db_query("SELECT * FROM " . db_prefix("news") . " WHERE newsid=?", true, [$newsid]);
+	if (count($rows) !== 1) { http_response_code(404); exit('This news line no longer exists.'); }
+	resurrection_consume_action('news-delete-' . $newsid, resurrection_news_delete_context($rows[0]));
+	resurrection_tool_transaction(function () use ($newsid, $rows) {
+		$locked = db_query("SELECT * FROM " . db_prefix("news") . " WHERE newsid=? FOR UPDATE", true, [$newsid]);
+		if (count($locked) !== 1 || resurrection_news_delete_context($locked[0]) !== resurrection_news_delete_context($rows[0])) throw new DomainException('News changed.');
+		db_query("DELETE FROM " . db_prefix("news") . " WHERE newsid=?", true, [$newsid]);
+	}, 'the news');
+	redirect(resurrection_news_return(httpget('return')));
 }
 
 page_header("Superuser Grotto");

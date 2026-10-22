@@ -198,10 +198,13 @@ function resurrection_dragon_complete(bool $flawless): void {
 		throw new DomainException('Invalid post-Dragon health.');
 	}
 
-	// Set the new title.
+	// Set the new title. A name that would not fit accounts.name keeps the old name and title, the title editor's
+	// rule: 1.1.2's non-strict MySQL cut the name short, and strict SQL refused the whole dragon kill.
 	$newname = change_player_title($newtitle);
-	$session['user']['title'] = $newtitle;
-	$session['user']['name'] = $newname;
+	if (resurrection_name_fits($newname, $newtitle)) {
+		$session['user']['title'] = $newtitle;
+		$session['user']['name'] = $newname;
+	}
 
 	reset($session['user']['dragonpoints']);
 	while(list($key,$val)=resurrection_array_next($session['user']['dragonpoints'])){

@@ -4,6 +4,7 @@ from contextlib import contextmanager
 import hashlib
 import html
 from html.parser import HTMLParser
+import http.client
 import http.cookiejar
 import json
 import os
@@ -8005,6 +8006,427 @@ function MODULE_dohook($hook,$args) {
             self.assertIn('TXN-PAYLOG-1',body);self.assertNotIn('<b>memo',body);self.assertNotIn('Joe:x<i>',body);self.assertIn('web_accept',body)
         finally:
             q('UPDATE accounts SET superuser=? WHERE acctid=?',[original,player]);q("DELETE FROM paylog WHERE txnid LIKE 'TXN-PAYLOG-%'")
+
+    @contextmanager
+    def _admin_tool_session(self):
+        # WebPlayer with the superuser bits a test logs in with; request() allows the URL and keeps the day current.
+        q=self.query;player=int(q('SELECT acctid FROM accounts WHERE login=?',['WebPlayer'])[0]['acctid'])
+        original=q('SELECT superuser,laston,prefs FROM accounts WHERE acctid=?',[player])[0];day=self._current_game_day();state={}
+        def login(bits):
+            q('UPDATE accounts SET superuser=? WHERE acctid=?',[bits,player]);state['call']=self._security_client()
+        def request(url,data=None):
+            q('UPDATE accounts SET lastnewday=? WHERE acctid=?',[day,player]);self._security_allow(player,url);return state['call'](url,data)
+        def csrf(body): return re.search(r'name=[\'"]csrf_token[\'"] value=[\'"]([a-f0-9]{64})',body).group(1)
+        navs=lambda:q('SELECT allowednavs FROM accounts WHERE acctid=?',[player])[0]['allowednavs']
+        def located(url,data):
+            # A POST whose Location header the test reads (the shared client does not follow or show redirects).
+            q('UPDATE accounts SET lastnewday=? WHERE acctid=?',[day,player]);self._security_allow(player,url)
+            connection=http.client.HTTPConnection('127.0.0.1',self.port,timeout=20)
+            try:
+                connection.request('POST','/'+url,body=urllib.parse.urlencode(data),headers={'Content-Type':'application/x-www-form-urlencoded',
+                    'Cookie':'; '.join(f'{c.name}={c.value}' for c in state['call'].cookiejar)})
+                response=connection.getresponse();response.read();return response.status,response.getheader('Location')
+            finally: connection.close()
+        try:
+            yield dict(q=q,player=player,login=login,request=request,csrf=csrf,navs=navs,located=located,client=lambda:state['call'],day=day,anonymous=self._security_client(login=None))
+        finally:
+            q('UPDATE accounts SET superuser=?,laston=?,prefs=? WHERE acctid=?',[original['superuser'],original['laston'],original['prefs'],player])
+
+    def test_news_delete_and_keepalive_authority_http(self):
+        # 1.1.2's Del link was a GET to superuser.php?op=newsdelete that deleted with newsid pasted into SQL, for any staff
+        # flag that enters the grotto. Only comment moderators delete, by a protected POST bound to the line, and the
+        # delete returns only to the news page. The keepalive stays a GET: it writes only the admin's own laston.
+        with self._admin_tool_session() as s:
+            q,login,request,csrf,navs=(s[k] for k in ['q','login','request','csrf','navs'])
+            today=subprocess.run([shutil.which('php'),'-r',"echo date('Y-m-d');"],text=True,capture_output=True,check=True).stdout
+            def add(text):
+                q("INSERT INTO news (newstext,newsdate,accountid,arguments,tlschema) VALUES (?,?,0,'','news')",[text,today])
+                return int(q('SELECT MAX(newsid) AS n FROM news')[0]['n'])
+            lines=lambda:[r['newstext'] for r in q("SELECT newstext FROM news WHERE newstext LIKE 'Fixture news delete%' ORDER BY newsid")]
+            delete=lambda news,ret='/news.php':f'superuser.php?op=newsdelete&newsid={news}&return='+urllib.parse.quote_plus(ret)
+            try:
+                first=add("Fixture news delete O'Reilly \\ 雪 <b>one</b>");second=add('Fixture news delete two');state=lines()
+                for data in [None,{'x':'1'}]: self.assertIn(s['anonymous'](delete(first),data)[0],[302,303,403])
+                # A player, and staff without comment moderation: no Del button, and the delete is refused.
+                for bits in [0,64|128|4096]:
+                    login(bits);status,body=request('news.php');self.assertEqual(200,status,body[:2000]);self.assertNotIn('newsdelete',body)
+                    for data in [None,{'csrf_token':'0'*64}]: self.assertEqual(403,request(delete(first),data)[0],bits)
+                self.assertEqual(state,lines())
+                login(16);status,body=request('news.php');self.assertEqual(200,status,body[:2000])
+                self.assertNotIn("<a href='superuser.php?op=newsdelete",body);self.assertNotIn('<b>one</b>',body)
+                fields=self._security_fields(body,delete(first))
+                self.assertEqual(405,request(delete(first))[0]);self.assertEqual(403,request(delete(first),{'action_token':fields['action_token']})[0])
+                self.assertEqual(400,request(delete(first),{**fields,'newsid':str(first)})[0])
+                for bad in ["1' OR '1",'0','-1','x','1e3']: self.assertEqual(400,request(delete(urllib.parse.quote(bad)),fields)[0],bad)
+                self.assertEqual(404,request(delete(4294967295),fields)[0]);self.assertEqual(409,request(delete(second),fields)[0])
+                q('UPDATE news SET tlschema=? WHERE newsid=?',['changed',first]);self.assertEqual(409,request(delete(first),fields)[0])
+                self.assertEqual(state,lines());q('UPDATE news SET tlschema=? WHERE newsid=?',['news',first])
+                fields=self._security_fields(request('news.php')[1],delete(first))
+                self.assertIn(request(delete(first,'/news.php?offset=1&page=2'),fields)[0],[302,303]);self.assertEqual(state[1:],lines())
+                self.assertIn('s:24:"news.php?offset=1&page=2";',navs());self.assertEqual(404,request(delete(first),fields)[0])
+                # Any other return target: the news page.
+                for ret in ['http://evil.example/','//evil.example/news.php','javascript:alert(1)','/village.php','/news.php?offset=1&op=x',"/news.php?offset=1'"]:
+                    news=add('Fixture news delete return');fields=self._security_fields(request('news.php')[1],delete(news))
+                    self.assertIn(request(delete(news,ret),fields)[0],[302,303],ret);self.assertEqual('a:1:{s:8:"news.php";b:1;}',navs(),ret)
+                self.assertEqual(state[1:],lines())
+                # Keepalive: any grotto flag; only the admin's own laston; the refresh never echoes the request.
+                for bits in [0,8192]:
+                    login(bits);self.assertEqual(403,request('superuser.php?op=keepalive')[0],bits)
+                login(64);q("UPDATE accounts SET laston=NOW()-INTERVAL 5 MINUTE WHERE acctid=?",[s['player']])
+                status,body=request('superuser.php?op=keepalive&x=%22%3E%3Cscript%3Ealert(1)%3C/script%3E');self.assertEqual(200,status,body[:2000])
+                self.assertNotIn('script',body);self.assertIn('content="30;url=superuser.php?op=keepalive"',body)
+                self.assertEqual('1',q('SELECT laston>NOW()-INTERVAL 1 MINUTE AS n FROM accounts WHERE acctid=?',[s['player']])[0]['n'])
+            finally:
+                q("DELETE FROM news WHERE newstext LIKE 'Fixture news delete%'")
+
+    def test_badword_editor_authority_http(self):
+        # 1.1.2 rewrote a word list on any request to an add or remove op, without CSRF, with addslashes() and as two
+        # statements. Each change is now a POST with CSRF and a one-use intent bound to the list, locked and committed
+        # once; the stored words and the censor's use of them are 1.1.2's.
+        with self._admin_tool_session() as s:
+            q,login,request,csrf=(s[k] for k in ['q','login','request','csrf'])
+            saved=q('SELECT words,type FROM nastywords');ops=['add','remove','addgood','removegood']
+            state=lambda:sorted((r['type'],r['words']) for r in q('SELECT type,words FROM nastywords'))
+            try:
+                q('DELETE FROM nastywords');q("INSERT INTO nastywords (words,type) VALUES ('alpha beta','good'),('*darn* heck','nasty')");before=state()
+                for op in ops+['test']: self.assertIn(s['anonymous'](f'badword.php?op={op}',{'word':'x'})[0],[302,303,403])
+                for bits in [0,64|128]:
+                    login(bits);self.assertEqual(403,request('badword.php')[0])
+                    for op in ops+['test']: self.assertEqual(403,request(f'badword.php?op={op}',{'word':'x'})[0],(bits,op))
+                login(16);status,body=request('badword.php');self.assertEqual(200,status,body[:2000])
+                form=lambda op,body=None:self._security_fields(body or request('badword.php')[1],f'badword.php?op={op}')
+                add=form('add',body)
+                for op in ops: self.assertEqual(405,request(f'badword.php?op={op}')[0],op)
+                self.assertEqual(403,request('badword.php?op=add',{'action_token':add['action_token'],'word':'x'})[0])
+                for bad in [{'word[]':'x'},{'word':b'\xff'},{'word':'x','extra':'1'}]: self.assertEqual(400,request('badword.php?op=add',{**add,**bad})[0],bad)
+                self.assertEqual(409,request('badword.php?op=remove',{**add,'word':'heck'})[0]);self.assertEqual(before,state())
+                # Quotes, a backslash and UTF-8: the nasty list escapes single quotes, as 1.1.2 stored them.
+                status,body=request('badword.php?op=add',{**add,'word':"o'reilly\\x 雪"});self.assertEqual(200,status,body[:2000])
+                self.assertEqual([('good','alpha beta'),('nasty',"*darn* heck o\\'reilly\\x 雪")],state());self.assertIn("o\\'reilly\\x",html.unescape(body));self.assertIn('雪',body)
+                self.assertEqual(409,request('badword.php?op=add',{**add,'word':'again'})[0])
+                # A form shown before the list changed is stale.
+                good=form('addgood');q("UPDATE nastywords SET words='alpha beta gamma' WHERE type='good'");self.assertEqual(409,request('badword.php?op=addgood',{**good,'word':'x'})[0])
+                self.assertIn(request('badword.php?op=addgood',{**form('addgood'),'word':"it's\r\n"})[0],[200])
+                self.assertIn(request('badword.php?op=removegood',{**form('removegood'),'word':'alpha'})[0],[200])
+                # Words are space separated: each is removed by its stored form.
+                for word in ["o\\'reilly\\x",'雪']: self.assertIn(request('badword.php?op=remove',{**form('remove'),'word':word})[0],[200])
+                self.assertEqual([('good',"beta gamma it's"),('nasty','*darn* heck')],state())
+                # The censor reads the changed list; the test op writes nothing and needs CSRF.
+                self.assertIn(request('badword.php?op=add',{**form('add'),'word':'fixtureword'})[0],[200]);changed=state()
+                self.assertEqual(403,request('badword.php?op=test',{'word':'fixtureword'})[0])
+                body=request('badword.php')[1];status,body=request('badword.php?op=test',{'csrf_token':csrf(body),'word':'a fixtureword'})
+                self.assertEqual(200,status);self.assertIn('This word is not ok',html.unescape(body));self.assertEqual(changed,state())
+                # A late failure rolls back the delete with the insert (1.1.2 lost the list).
+                q("ALTER TABLE nastywords ADD CONSTRAINT fixture_badword_failure CHECK (words NOT LIKE '%fixturefail%')")
+                try:
+                    status,body=request('badword.php?op=add',{**form('add'),'word':'fixturefail'});self.assertEqual(500,status,body[:2000])
+                    self.assertIn('Nothing was changed',body);self.assertEqual(changed,state())
+                finally: q('ALTER TABLE nastywords DROP CONSTRAINT fixture_badword_failure')
+            finally:
+                q('DELETE FROM nastywords')
+                for row in saved: q('INSERT INTO nastywords (words,type) VALUES (?,?)',[row['words'],row['type']])
+
+    def test_gamelog_and_referers_authority_http(self):
+        # gamelog.php binds the category and the page start; referers.php keeps 1.1.2's expiry on view (server values only,
+        # bound), takes the order only from its sort links, and rebuilds sites only by a protected POST.
+        with self._admin_tool_session() as s:
+            q,login,request=(s[k] for k in ['q','login','request'])
+            quoted="fixture' OR '1";plain='fixture-plain <b>'
+            refs=lambda:sorted((r['uri'],r['site']) for r in q("SELECT uri,site FROM referers WHERE uri LIKE 'http://%fixture%'"))
+            saved=q("SELECT value FROM settings WHERE setting='expirecontent'")
+            try:
+                q("INSERT INTO settings(setting,value) VALUES ('expirecontent','180') ON DUPLICATE KEY UPDATE value='180'")
+                for cat,message in [(quoted,'Fixture gamelog quoted'),(plain,'Fixture gamelog plain <i>')]:
+                    q('INSERT INTO gamelog (message,category,filed,date,who) VALUES (?,?,0,NOW(),?)',[message,cat,s['player']])
+                for uri,site,last in [("http://ref.fixture.example/path'<x>",'ref.fixture.example','NOW()'),('http://other.fixture.example/a','stale','NOW()'),
+                                      ('http://'+'a'*60+'.fixture.example/x','x','NOW()'),('http://old.fixture.example/','old.fixture.example',"'2000-01-01 00:00:00'")]:
+                    q(f"INSERT INTO referers (uri,count,last,site,dest,ip) VALUES (?,2,{last},?,'here/village.php','127.0.0.1')",[uri,site])
+                for url in ['gamelog.php','referers.php','referers.php?op=rebuild']:
+                    self.assertIn(s['anonymous'](url)[0],[302,303,403])
+                    for bits in [0,16|64]:
+                        login(bits);self.assertEqual(403,request(url)[0],(url,bits));self.assertEqual(403,request(url,{'x':'1'})[0],(url,bits))
+                login(128);status,body=request('gamelog.php');self.assertEqual(200,status,body[:2000])
+                self.assertIn('Fixture gamelog quoted',body);self.assertNotIn('Fixture gamelog plain <i>',body);self.assertIn('gamelog.php?cat='+urllib.parse.quote(quoted,safe=''),body)
+                status,body=request('gamelog.php?cat='+urllib.parse.quote(quoted,safe=''));self.assertEqual(200,status,body[:2000])
+                self.assertIn('Fixture gamelog quoted',body);self.assertNotIn('Fixture gamelog plain',body)
+                for bad in ['start=-1','start=abc','start=1e3','cat[]=x','start[]=1','cat=%FF']: self.assertEqual(400,request('gamelog.php?'+bad)[0],bad)
+                self.assertEqual(200,request('gamelog.php?start=999999')[0])
+                # referers.php: the expired referer is removed on view, as in 1.1.2; the current ones are escaped.
+                status,body=request('referers.php');self.assertEqual(200,status,body[:2000]);self.assertNotIn("path'<x>",body)
+                self.assertIn("href='http://ref.fixture.example/path&#039;&lt;x&gt;'",body)
+                self.assertEqual(3,len(refs()));before=refs()
+                for sort in ['count','count+DESC','uri','uri+DESC','last','last+DESC','']:
+                    status,body=request('referers.php?sort='+sort);self.assertEqual(200,status,(sort,body[:2000]))
+                for bad in ['count%3B+DROP','site','count+DESC%2C+(SELECT+1)','sort[]=x']: self.assertEqual(400,request('referers.php?sort='+bad)[0],bad)
+                # Rebuild: GET asks and writes nothing; the POST needs CSRF and its intent.
+                status,body=request('referers.php?op=rebuild');self.assertEqual(200,status,body[:2000]);self.assertEqual(before,refs())
+                fields=self._security_fields(body,'referers.php?op=rebuild')
+                self.assertEqual(403,request('referers.php?op=rebuild',{'action_token':fields['action_token']})[0]);self.assertEqual(400,request('referers.php?op=rebuild',{**fields,'x':'1'})[0])
+                q("ALTER TABLE referers ADD CONSTRAINT fixture_referer_failure CHECK (site <> 'other.fixture.example')")
+                try:
+                    status,body=request('referers.php?op=rebuild',fields);self.assertEqual(500,status,body[:2000]);self.assertEqual(before,refs())
+                finally: q('ALTER TABLE referers DROP CONSTRAINT fixture_referer_failure')
+                fields=self._security_fields(request('referers.php?op=rebuild')[1],'referers.php?op=rebuild')
+                status,body=request('referers.php?op=rebuild',fields);self.assertEqual(200,status,body[:2000])
+                self.assertEqual(sorted([('http://'+'a'*60+'.fixture.example/x','a'*50),('http://other.fixture.example/a','other.fixture.example'),
+                                         ("http://ref.fixture.example/path'<x>",'ref.fixture.example')]),refs())
+                self.assertEqual(409,request('referers.php?op=rebuild',fields)[0])
+            finally:
+                q("DELETE FROM gamelog WHERE message LIKE 'Fixture gamelog%'");q("DELETE FROM referers WHERE uri LIKE 'http://%fixture%'")
+                q("DELETE FROM settings WHERE setting='expirecontent'")
+                for row in saved: q("INSERT INTO settings(setting,value) VALUES ('expirecontent',?)",[row['value']])
+
+    def test_translator_tools_authority_http(self):
+        # translatortool.php and untranslated.php: translators only. 1.1.2 saved from any request, without CSRF, with the
+        # namespace, the texts and the language preference pasted into SQL. Each save is now a protected POST bound to the
+        # text its form showed, the stored texts are escaped, and save-and-continue returns only to this tool's list.
+        with self._admin_tool_session() as s:
+            q,player,login,request,located=(s[k] for k in ['q','player','login','request','located'])
+            prefs=q('SELECT prefs FROM accounts WHERE acctid=?',[player])[0]['prefs'];self.assertIn('s:8:"language";s:2:"en";',prefs)
+            # A fixture language keeps the rows apart from the install's own.
+            q('UPDATE accounts SET prefs=? WHERE acctid=?',[prefs.replace('s:8:"language";s:2:"en";','s:8:"language";s:2:"fx";'),player])
+            ns="fixture-tool.php?op=x'\"<b>";page='fixture-tool.php';text="Fixture text O'Reilly \\ 雪 <b>bold</b>";version='1.1.2 Dragonprime Edition'
+            quote=lambda value:urllib.parse.quote(value,safe='')
+            tool=lambda u=ns,t=text:f'translatortool.php?u={quote(u)}&t={quote(t)}'
+            rows=lambda:sorted((r['uri'],r['intext'],r['outtext'],r['author'],r['version']) for r in q("SELECT * FROM translations WHERE language='fx'"))
+            waiting=lambda:sorted((r['namespace'],r['intext']) for r in q("SELECT namespace,intext FROM untranslated WHERE language='fx'"))
+            def form(url,action):
+                status,body=request(url);self.assertEqual(200,status,body[:2000]);return body,self._security_fields(body,action)
+            save='translatortool.php?op=save'
+            try:
+                q("INSERT INTO untranslated (intext,language,namespace) VALUES (?,'fx',?),('Fixture other','fx',?)",[text,ns,ns])
+                before=(rows(),waiting())
+                urls=[tool(),save,'translatortool.php?op=list','untranslated.php','untranslated.php?op=list','untranslated.php?op=step2',
+                      'untranslated.php?op=list&mode=save&ns='+quote(ns)]
+                for url in urls:
+                    for data in [None,{'uri':ns,'text':text,'trans':'x','intext':text,'outtext':'x'}]: self.assertIn(s['anonymous'](url,data)[0],[302,303,403],url)
+                for bits in [0,0xFFFFFFFF&~(262144|1)]:
+                    login(bits)
+                    for url in urls:
+                        for data in [None,{'uri':ns,'text':text,'trans':'x','csrf_token':'0'*64}]: self.assertEqual(403,request(url,data)[0],(bits,url))
+                self.assertEqual(before,(rows(),waiting()))
+                login(262144)
+                # The form escapes the namespace and the text, and reads them once (1.1.2 decoded them twice).
+                body,fields=form(tool(),save);self.assertNotIn('<b>bold',body);self.assertNotIn('"<b>',body)
+                self.assertIn('Fixture text O&#039;Reilly \\ 雪 &lt;b&gt;bold&lt;/b&gt;',body);self.assertIn('fixture-tool.php?op=x&#039;&quot;&lt;b&gt;',body)
+                for bad in ['u[]=x','t[]=x','u='+'a'*256,'u=%FF']: self.assertEqual(400,request('translatortool.php?'+bad)[0],bad)
+                self.assertEqual(400,request('translatortool.php?op=fixture')[0])
+                # Save: POST only, CSRF, the intent for this namespace and text, no other fields.
+                post=lambda fields,**values:{**fields,'uri':ns,'text':text,'trans':"Übersetzt O'Reilly \\ <i>",**values}
+                self.assertEqual(405,request(save)[0]);self.assertEqual(403,request(save,{**post(fields),'csrf_token':'0'*64})[0])
+                self.assertEqual(400,request(save,{**post(fields),'extra':'1'})[0]);self.assertEqual(400,request(save,{**post(fields),'trans[]':'x'})[0])
+                self.assertEqual(409,request(save,post(fields,text='Fixture other'))[0]);self.assertEqual(before,(rows(),waiting()))
+                status,body=request(save,post(fields));self.assertEqual(200,status,body[:2000]);self.assertIn('window.close()',body)
+                # 1.1.2's insert stored its version with a trailing space; the namespace's untranslated copy is removed.
+                self.assertEqual([(ns,text,"Übersetzt O'Reilly \\ <i>",'WebPlayer',version+' ')],rows());self.assertEqual([(ns,'Fixture other')],waiting())
+                self.assertEqual(409,request(save,post(fields))[0])
+                # A form shown before the translation changed is stale.
+                body,fields=form(tool(),save);self.assertIn('bersetzt O&#039;Reilly \\ &lt;i&gt;',body)
+                q("UPDATE translations SET outtext='Changed elsewhere' WHERE language='fx'");self.assertEqual(409,request(save,post(fields,trans='x'))[0])
+                # Save No Close updates the one exact row and goes to this tool's own list for the page.
+                body,fields=form(tool(),save);status,location=located(save,post(fields,trans='Second',savenotclose='1'))
+                self.assertIn(status,[302,303]);self.assertEqual('translatortool.php?op=list&u='+quote(page),location)
+                self.assertEqual([(ns,text,'Second','WebPlayer',version)],rows())
+                # Any namespace: the Location stays on this site.
+                for other in ['http://evil.example/x?y','//evil.example/','fixture\r\nX-Injected: 1']:
+                    body,fields=form(tool(other),save);status,location=located(save,post(fields,uri=other,trans='Off',savenotclose='1'))
+                    self.assertIn(status,[302,303],other);self.assertEqual('translatortool.php?op=list&u='+quote(other.split('?')[0]),location)
+                q("DELETE FROM translations WHERE language='fx' AND uri<>?",[ns])
+                # Several rows for the page and the namespace: every exact match is updated, under the page as in 1.1.2 (which
+                # kept only the last match).
+                q("INSERT INTO translations (language,uri,intext,outtext,author,version) VALUES ('fx',?,?,'Page copy','x','v')",[page,text])
+                body,fields=form(tool(),save);self.assertEqual(200,request(save,post(fields,trans='Both'))[0])
+                self.assertEqual([(page,text,'Both','WebPlayer',version)]*2,rows())
+                # An empty translation deletes them.
+                body,fields=form(tool(),save);self.assertEqual(200,request(save,post(fields,trans=''))[0]);self.assertEqual([],rows())
+                # The list binds the namespace and escapes what it shows.
+                q("INSERT INTO translations (language,uri,intext,outtext,author,version) VALUES ('fx',?,?,'<i>out</i>','<b>who</b>','<s>v</s>')",[ns,text])
+                status,body=request('translatortool.php?op=list&u='+quote(ns));self.assertEqual(200,status,body[:2000])
+                for raw in ['<i>out','<b>who','<s>v','<b>bold','"<b>']: self.assertNotIn(raw,body)
+                self.assertIn(f"translatortool.php?u={quote(ns)}&t={quote(text)}",html.unescape(body))
+                status,body=request('translatortool.php?op=list&u='+quote("x' OR '1"));self.assertEqual(200,status);self.assertIn('No rows found',body)
+                q("DELETE FROM translations WHERE language='fx'")
+                # untranslated.php by namespace: the edit form is for a collected text; its save is protected and bound to it.
+                listing='untranslated.php?op=list&ns='+quote(ns);action='untranslated.php?op=list&mode=save&ns='+quote(ns)
+                status,body=request(listing);self.assertEqual(200,status,body[:2000]);self.assertIn('Fixture other',body);self.assertNotIn('"<b>',body)
+                edit=f'untranslated.php?op=list&mode=edit&ns={quote(ns)}&intext='
+                self.assertIn(edit+quote('Fixture other'),html.unescape(body))
+                self.assertEqual(404,request(edit+quote('Never collected'))[0])
+                body,fields=form(edit+quote('Fixture other'),action)
+                entry=lambda fields,**values:{**fields,'op':'list','ns':ns,'intext':'Fixture other','outtext':"Ein <b>Text</b> O'Reilly",**values}
+                self.assertEqual(405,request(action)[0]);self.assertEqual(403,request(action,{**entry(fields),'csrf_token':'0'*64})[0])
+                self.assertEqual(400,request(action,{**entry(fields),'extra':'1'})[0]);self.assertEqual(409,request(action,entry(fields,intext='Other text'))[0])
+                self.assertEqual([(ns,'Fixture other')],waiting())
+                status,body=request(action,entry(fields));self.assertEqual(200,status,body[:2000])
+                self.assertEqual([(ns,'Fixture other',"Ein <b>Text</b> O'Reilly",'WebPlayer',version)],rows());self.assertEqual([],waiting())
+                self.assertEqual(409,request(action,entry(fields))[0]);self.assertEqual(1,len(rows()))
+                for bad in ['&mode[]=x','&ns[]=x','&mode='+'a'*11]: self.assertEqual(400,request('untranslated.php?op=list'+bad)[0],bad)
+                # The random text: shown escaped and read-only, saved only as shown, once.
+                q("DELETE FROM translations WHERE language='fx'");q("INSERT INTO untranslated (intext,language,namespace) VALUES ('Fixture <script>x</script> step','fx',?)",[ns])
+                body,fields=form('untranslated.php','untranslated.php?op=step2');self.assertNotIn('<script>x',body);self.assertIn('&lt;script&gt;x',body)
+                self.assertNotIn("name='id'",body)
+                step=lambda fields,**values:{**fields,'intext':'Fixture <script>x</script> step','outtext':'Schritt','language':'fx','namespace':ns,**values}
+                self.assertEqual(405,request('untranslated.php?op=step2')[0]);self.assertEqual(403,request('untranslated.php?op=step2',{**step(fields),'csrf_token':'0'*64})[0])
+                self.assertEqual(400,request('untranslated.php?op=step2',{**step(fields),'id':'1'})[0])
+                for changed in [{'language':'en'},{'namespace':'village.php'},{'intext':'Another'}]:
+                    self.assertEqual(409,request('untranslated.php?op=step2',step(fields,**changed))[0],changed)
+                self.assertEqual([],rows())
+                status,body=request('untranslated.php?op=step2',step(fields));self.assertEqual(200,status,body[:2000])
+                self.assertEqual([(ns,'Fixture <script>x</script> step','Schritt','WebPlayer',version)],rows());self.assertEqual([],waiting())
+                self.assertEqual(409,request('untranslated.php?op=step2',step(fields))[0])
+            finally:
+                q("DELETE FROM translations WHERE language='fx'");q("DELETE FROM untranslated WHERE language='fx'")
+
+    def test_mail_notification_links_the_configured_server_url(self):
+        # 1.1.2's email notice linked to "http://" plus the request's Host header and script folder, so a sender's forged
+        # Host put any address into the recipient's email. It links to the configured serverurl; without a valid one the
+        # notice says so and is still sent, as the petition notice does.
+        with self._mail_fixture() as f:
+            q=self.query;target=f['targets'][0];saved=q("SELECT value FROM settings WHERE setting='serverurl'")
+            captures=lambda:[json.loads(x) for x in self.mail_capture.read_text().splitlines()] if self.mail_capture.exists() else []
+            code="""require 'dbconnect.php';require 'lib/dbwrapper_pdo.php';db_connect($DB_HOST,$DB_USER,$DB_PASS);db_select_db($DB_NAME);
+require 'lib/constants.php';require 'lib/datacache.php';require 'lib/settings.php';require 'lib/output.php';require 'lib/translator.php';require 'lib/systemmail.php';
+$session=['user'=>['acctid'=>1,'superuser'=>0,'prefs'=>[]]];$output='';$translation_is_enabled=false;translator_setup();
+$REQUEST_URI='mail.php';$_SERVER['HTTP_HOST']='evil.example';$_SERVER['SERVER_NAME']='evil.example';$_SERVER['SCRIPT_NAME']='/attack/mail.php';
+echo json_encode(systemmail((int)$argv[1],['Trusted %s','notice'],['Hello %s','Jim'],0,false));"""
+            q('UPDATE accounts SET prefs=?,emailaddress=? WHERE acctid=?',['a:2:{s:11:"emailonmail";b:1;s:10:"systemmail";b:1;}','recipient@example.invalid',target])
+            unset='(Server URL not set or not valid)'
+            try:
+                for stored,expected in [('http://game.example/logd/','http://game.example/logd/'),('https://game.example:8443/','https://game.example:8443/'),
+                                        ('http://game.example/logd','http://game.example/logd/'),(None,unset),('javascript:alert(1)',unset),
+                                        ('http://evil.example"/x',unset),('http://user@evil.example/',unset)]:
+                    with self.subTest(stored=stored):
+                        if stored is None: q("DELETE FROM settings WHERE setting='serverurl'")
+                        else: q("INSERT INTO settings (setting,value) VALUES ('serverurl',?) ON DUPLICATE KEY UPDATE value=VALUES(value)",[stored])
+                        before=len(captures())
+                        result=subprocess.run([shutil.which('php'),'-d','sendmail_path='+str(self.mail_program),'-r',code,str(target)],cwd=ROOT,capture_output=True,text=True,timeout=15)
+                        self.assertEqual(0,result.returncode,result.stderr);self.assertNotRegex(result.stdout+result.stderr,r'(?i)(warning:|notice:|fatal error|deprecated:)')
+                        self.assertTrue(json.loads(result.stdout));after=captures();self.assertEqual(before+1,len(after))
+                        payload=after[-1]['payload'].replace('=\r\n','').replace('=\n','')
+                        self.assertIn('You have received new mail on LoGD at '+expected,payload);self.assertIn('log into Legend of the Green Dragon at '+expected+' .',payload)
+                        self.assertNotIn('evil.example',payload);self.assertIn('Hello Jim',payload)
+                        # An unset serverurl is never saved from the request.
+                        self.assertEqual([] if stored is None else [stored if expected==unset else expected],[r['value'] for r in q("SELECT value FROM settings WHERE setting='serverurl'")])
+            finally:
+                q("DELETE FROM settings WHERE setting='serverurl'")
+                for row in saved: q("INSERT INTO settings (setting,value) VALUES ('serverurl',?)",[row['value']])
+
+    def test_dragon_kill_keeps_a_name_that_would_not_fit_http(self):
+        # accounts.name holds 60 characters. 1.1.2's MySQL cut a titled name that grew past it; strict SQL refused the
+        # whole dragon kill. The kill completes and keeps the old name and title, the title editor's rule.
+        with self._specialty_accounting_fixture('dragon') as f:
+            player=f['player'];request=f['request']
+            account=lambda:self.query('SELECT name,title,ctitle,dragonkills,badguy FROM accounts WHERE acctid=?',[player])[0]
+            def kill(name,title,ctitle=''):
+                f['prepare']('DA',badguy=f['encode']({'dragonVictory':False,'dragonkills':0,'dragonEncounter':'a'*32}),hitpoints=10,maxhitpoints=150,name=name,title=title,ctitle=ctitle)
+                status,body=request('dragon.php?op=prologue1');self.assertEqual(200,status,body[:2000])
+                status,body=request('dragon.php?op=prologue1',self._security_fields(body,'dragon.php?op=prologue1'));self.assertEqual(200,status,body[:2000])
+                return account()
+            short=kill('Fixture Short','')
+            self.assertEqual(['1',''],[short['dragonkills'],short['badguy']]);self.assertTrue(short['title'])
+            self.assertEqual(short['title']+' Fixture Short`0',short['name']);title=short['title']
+            # 58 characters, counted as characters: with the new title it would not fit.
+            base='雪'+'X'*57
+            long=kill(base,'');self.assertEqual(['1','',base,''],[long[k] for k in ['dragonkills','title','name','badguy']])
+            # A name that comes to exactly 60 characters still takes the title.
+            fits='Y'*(60-len(title)-1-2)
+            self.assertEqual(['1',title,f'{title} {fits}`0'],[kill(fits,'')[k] for k in ['dragonkills','title','name']])
+            # A custom title is kept in the name; the new dragon title is stored when the name fits.
+            custom=kill('`%Lord`0 Fixture Custom','Farmboy','`%Lord`0')
+            self.assertEqual(['1',title,'`%Lord`0 Fixture Custom`0'],[custom[k] for k in ['dragonkills','title','name']])
+
+    def test_bio_return_link_stays_on_known_pages_http(self):
+        # 1.1.2 used whatever followed the last "/" of ret as the Return nav and allowed it, so a link to
+        # bio.php?ret=/motd.php?x=/forest.php?op=fight let a player into the forest fight. Only known on-site pages return.
+        q=self.query;player=int(q('SELECT acctid FROM accounts WHERE login=?',['WebPlayer'])[0]['acctid']);target=None
+        call=self._security_client();day=self._current_game_day()
+        def bio(ret,char):
+            url=f'bio.php?char={char}&ret='+urllib.parse.quote(ret,safe='')
+            q('UPDATE accounts SET lastnewday=? WHERE acctid=?',[day,player]);self._security_allow(player,url)
+            status,body=call(url);self.assertEqual(200,status,body[:2000])
+            stored=q('SELECT allowednavs FROM accounts WHERE acctid=?',[player])[0]['allowednavs']
+            return body,{re.sub(r'[?&]c=[0-9]+-[0-9]+\Z','',link) for link in re.findall(r's:[0-9]+:"([^"]*)";b:1;',stored)}
+        try:
+            target=int(self._security_target('BioReturnTarget'))
+            for ret,expected in [('','list.php'),('/list.php','list.php'),('/village.php','village.php'),('/logd/inn.php?c=3-1','inn.php'),
+                                 ('/motd.php?x=/forest.php?op=fight','motd.php'),('/user.php?op=edit&userid=5','user.php?op=edit&userid=5'),
+                                 ('javascript:alert(1)','list.php'),('http://evil.example/village.php','list.php'),('//evil.example/village.php','list.php'),
+                                 ('/runmodule.php?module=darkhorse&op=x','list.php'),('/forest.php?op=fight','list.php'),("/village.php'><script>",'list.php')]:
+                for char in [target,4294967295]:
+                    with self.subTest(ret=ret,char=char):
+                        body,navs=bio(ret,char);self.assertIn(expected,navs)
+                        self.assertFalse([link for link in navs if 'forest' in link or 'evil' in link or 'javascript' in link or 'runmodule' in link or "'" in link],navs)
+                        self.assertIn('Return to the warrior list' if expected=='list.php' else 'Return whence you came',re.sub(r'<[^>]+>','',body))
+                        if char!=target: self.assertIn('This character is already deleted.',body)
+        finally:
+            if target is not None: q('DELETE FROM accounts_output WHERE acctid=?',[target]);q('DELETE FROM accounts WHERE acctid=?',[target])
+
+    def test_clan_leader_deletion_races_member_withdrawal_http(self):
+        # A user editor deletes a clan's leader while a member withdraws from the clan, in both orders. Both lock the
+        # members in account order and then the clan row, so the second waits for the first to commit and works on its
+        # result: the officer succeeds the leader, the member is out, the clan stays, and nothing is left half done.
+        import threading
+        with self._admin_tool_session() as s, self._deletion_fixture() as d:
+            q,login,request,player=(s[k] for k in ['q','login','request','player'])
+            module='resurrectiondeletefixture';running=ROOT/'tests'/'fixtures'/'deletion-running'
+            # The fixture hook (the slow mode sleeps two seconds inside its transaction) also runs on clan-withdraw.
+            q("INSERT INTO module_hooks(modulename,location,`function`,whenactive,priority) VALUES (?,'clan-withdraw',?,'',60)",[module,module+'_dohook'])
+            with socket.socket() as sock:sock.bind(('127.0.0.1',0));port=sock.getsockname()[1]
+            log=tempfile.TemporaryFile(mode='w+t')
+            server=subprocess.Popen([shutil.which('php'),'-d','display_errors=1','-d','error_reporting=-1','-S',f'127.0.0.1:{port}','-t',str(ROOT)],cwd=ROOT,stdout=subprocess.DEVNULL,stderr=log)
+            try:
+                for _ in range(100):
+                    try:
+                        with socket.create_connection(('127.0.0.1',port),timeout=.1):break
+                    except OSError:time.sleep(.02)
+                login(64)
+                def twin(client):
+                    other=self._security_client(login=None,port=port)
+                    for cookie in client.cookiejar: other.cookiejar.set_cookie(cookie)
+                    return other
+                for order in ['deletion first','withdrawal first']:
+                    with self.subTest(order=order):
+                        suffix='A' if order=='deletion first' else 'B';d['setting']('fixture_delete_mode','ok')
+                        lead,member,officer=(d['make'](f'RaceFixture{role}{suffix}',race='Human',specialty='DA',dragonpoints='a:0:{}',lastnewday=s['day']) for role in ['Lead','Member','Officer'])
+                        self.assertTrue(lead<member<officer)
+                        cid=d['clan'](f'RaceFixture Clan {suffix}',f'RF{suffix}',(lead,30,'2026-01-01 00:00:00'),(member,10,'2026-01-02 00:00:00'),(officer,20,'2026-01-03 00:00:00'))
+                        mc=self._security_client(login=f'RaceFixtureMember{suffix}',password='Synthetic administrator password')
+                        def as_member(url,data=None,client=mc):
+                            q('UPDATE accounts SET lastnewday=? WHERE acctid=?',[s['day'],member]);self._security_allow(member,url);return client(url,data)
+                        status,body=as_member('clan.php?op=withdrawconfirm');self.assertEqual(200,status,body[:2000])
+                        withdraw=self._security_fields(body,'clan.php?op=withdraw')
+                        status,body=request('user.php?q='+f'RaceFixtureLead{suffix}');self.assertEqual(200,status,body[:2000])
+                        delete=f'user.php?op=del&userid={lead}';fields=self._security_fields(body,delete)
+                        count=d['count']();d['setting']('fixture_delete_mode','slow');running.unlink(missing_ok=True);results={}
+                        # Both accounts are prepared first: once the first request holds its locks, the fixture cannot write them.
+                        for who,url in [(player,delete),(member,'clan.php?op=withdraw')]:
+                            q('UPDATE accounts SET lastnewday=? WHERE acctid=?',[s['day'],who]);self._security_allow(who,url)
+                        def admin(client=None): results['delete']=(client or s['client']())(delete,fields)
+                        def leave(client=None): results['withdraw']=(client or mc)('clan.php?op=withdraw',withdraw)
+                        # The first request runs on a second server and holds its locks while its hook sleeps.
+                        first=threading.Thread(target=(lambda:admin(twin(s['client']()))) if suffix=='A' else (lambda:leave(twin(mc))))
+                        first.start()
+                        for _ in range(200):
+                            if running.exists():break
+                            time.sleep(.025)
+                        self.assertTrue(running.exists(),'The first request did not reach its hook')
+                        running.unlink()
+                        second=threading.Thread(target=leave if suffix=='A' else admin);second.start()
+                        waiting=False
+                        for _ in range(60):
+                            rows=q("SELECT INFO FROM information_schema.PROCESSLIST WHERE DB=DATABASE() AND INFO LIKE '%FOR UPDATE%' AND INFO NOT LIKE '%PROCESSLIST%'")
+                            if rows:waiting=True;break
+                            time.sleep(.025)
+                        self.assertTrue(waiting,'The second request did not wait at a row lock')
+                        first.join(timeout=30);second.join(timeout=30);self.assertFalse(first.is_alive() or second.is_alive())
+                        self.assertEqual(200,results['delete'][0],results['delete'][1][:2000]);self.assertIn('1 user deleted.',results['delete'][1])
+                        self.assertEqual(200,results['withdraw'][0],results['withdraw'][1][:2000]);self.assertIn('You have withdrawn from your clan.',results['withdraw'][1])
+                        self.assertEqual(d['gone'],d['traces'](lead));self.assertEqual(count+2,d['count']())
+                        ranks={int(r['acctid']):(int(r['clanid']),int(r['clanrank']),r['clanjoindate']) for r in q('SELECT acctid,clanid,clanrank,clanjoindate FROM accounts WHERE acctid IN (?,?)',[member,officer])}
+                        self.assertEqual({member:(0,0,None),officer:(cid,30,'2026-01-03 00:00:00')},ranks)
+                        self.assertEqual(1,len(q('SELECT clanid FROM clans WHERE clanid=?',[cid])))
+            finally:
+                d['setting']('fixture_delete_mode','ok');server.terminate();server.wait(timeout=5);log.close()
 
     def test_comment_ban_respects_longer_existing_ban_http(self):
         # 1.1.2 added no comment ban, and left the author logged in, when a ban lasting at least as long already existed for the

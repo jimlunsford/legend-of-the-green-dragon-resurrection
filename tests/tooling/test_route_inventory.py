@@ -156,6 +156,28 @@ class RouteInventoryTests(unittest.TestCase):
         self.assertIsNotNone(total)
         self.assertEqual(len(rows), int(total.group(1)))
 
+    def test_rescan_task2_entries_have_their_evidence(self):
+        # The admin tools and the bio return link closed by final rescan task 2 cite its evidence document and an HTTP
+        # test. A route that changes state must be CLOSED; one that only reads (or, like the keepalive and the referer
+        # expiry, writes server values only) READ-ONLY.
+        rows = {cells[0].strip('`'): cells for cells in inventory()}
+        expected = {
+            'badword.php?op=add|remove|addgood|removegood': 'CLOSED', 'referers.php?op=rebuild': 'CLOSED',
+            'superuser.php?op=newsdelete': 'CLOSED', 'translatortool.php?op=save': 'CLOSED', 'untranslated.php?op=list|step2': 'CLOSED',
+            'bio.php': 'READ-ONLY', 'gamelog.php': 'READ-ONLY', 'referers.php': 'READ-ONLY', 'superuser.php?op=keepalive': 'READ-ONLY',
+            'translatortool.php': 'READ-ONLY', 'translatortool.php?op=list': 'READ-ONLY', 'untranslated.php': 'READ-ONLY',
+        }
+        for entry, status in expected.items():
+            with self.subTest(entry=entry):
+                cells = rows[entry]
+                self.assertEqual(status, cells[3])
+                self.assertIn('`RESCAN-TASK2-20261022.md`', cells[4])
+                self.assertRegex(cells[4], r'`test_[a-z0-9_]+_http`')
+                self.assertTrue((ROOT / 'docs' / 'RESCAN-TASK2-20261022.md').is_file())
+        tests = (ROOT / 'tests' / 'tooling' / 'test_web_application.py').read_text()
+        for name in sorted({name for cells in rows.values() if 'RESCAN-TASK2' in cells[4] for name in re.findall(r'`(test_[a-z0-9_]+_http)`', cells[4])}):
+            self.assertIn('def ' + name + '(self', tests, name)
+
     def test_scan_finds_known_ops(self):
         # The scan itself must keep working: these are dispatched in four different ways.
         pages, modules = scan()

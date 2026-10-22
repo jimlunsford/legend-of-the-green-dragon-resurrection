@@ -51,6 +51,21 @@ function change_player_name($newname, $old=false) {
 	return $newname;
 }
 
+/**
+ * Whether a name and title fit accounts.name and accounts.title, measured in characters as the user editor and the
+ * title editor's rebuild measure them (the column sizes are read from the schema: 60 and 25 in a fresh install).
+ */
+function resurrection_name_fits(string $name, string $title): bool {
+	static $limits = null;
+	if ($limits === null) {
+		$limits = ['name'=>60, 'title'=>25];
+		$rows = db_query('SELECT COLUMN_NAME AS col, CHARACTER_MAXIMUM_LENGTH AS length FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME=? AND COLUMN_NAME IN (?,?)',
+			true, [db_prefix('accounts'), 'name', 'title']);
+		foreach ($rows as $row) $limits[strtolower((string)$row['col'])] = (int)$row['length'];
+	}
+	return mb_strlen($name, 'UTF-8') <= $limits['name'] && mb_strlen($title, 'UTF-8') <= $limits['title'];
+}
+
 function change_player_ctitle($nctitle,$old=false) {
 	global $session;
 	if ($nctitle == "") {

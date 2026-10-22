@@ -938,3 +938,25 @@ Prices, formulas, texts and hooks are unchanged. Read-only player pages bound in
 same task: `list.php` (search, paging, clan list), `hof.php`, `news.php` and the
 mail read page's previous and next lookups. See the
 [route inventory](ROUTE-INVENTORY-20261022.md).
+
+2026-10-22 admin tools and small leftovers (final rescan task 2): candidate pending
+CI. The twelve OPEN entries of the route inventory are closed. News delete
+(`superuser.php?op=newsdelete`) is for comment moderators only, a POST with CSRF and
+a one-use intent bound to the news row, locked and re-checked, and returns only to
+`news.php`. The word filter editor (`badword.php`), the referer rebuild, the
+translator tool's save and `untranslated.php`'s two saves follow the same pattern
+(`lib/admin_tools.php`): POST, CSRF, an intent bound to the state shown, one
+transaction, bound SQL, 1.1.2's stored formats. `gamelog.php`, the referer list (sort
+from an allow-list), the translator form and list and the untranslated view bind
+their request values and escape stored text. Decisions: the keepalive stays a GET
+(it writes only the admin's own `laston`, as every page view does) but is bound and
+no longer echoes the request URI; the referer expiry stays on view (the only 1.1.2
+cleanup), from server values only. Leftovers: the mail notification email links the
+configured `serverurl` (or says it is not set) instead of the request's Host;
+`getmount()` binds a checked ID with the same cache key; a name that would not fit
+after a dragon kill keeps the old name and title (the kill was a 500 under strict
+SQL); `bio.php`'s return link goes only to known on-site pages. Also fixed: the 500s
+on `referers.php` (PHP 8 float modulo in `dhms()`, and the URL sort on MySQL 8.4).
+A new test races a clan leader's deletion against a member's withdrawal in both
+orders. New gap recorded: `common.php`'s referer tracking can fail a page on a long
+`Referer` host. See [rescan task 2](RESCAN-TASK2-20261022.md).

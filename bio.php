@@ -11,12 +11,9 @@ tlschema("bio");
 
 checkday();
 
+require_once("lib/return_links.php");
 $ret = httpget('ret');
-if ($ret==""){
-	$return = "/list.php";
-}else{
-	$return = cmd_sanitize($ret);
-}
+$return = resurrection_bio_return($ret);
 
 $char = httpget('char');
 // The value is bound as plain text: 1.1.2 pasted it into the SQL. A missing or non-text char finds nobody, as 1.1.2's
@@ -148,46 +145,28 @@ if ($target = db_fetch_assoc($result)) {
   }
   tlschema();
 
-  if ($ret==""){
-	  $return = substr($return,strrpos($return,"/")+1);
-	  tlschema("nav");
-	  addnav("Return");
+  tlschema("nav");
+  addnav("Return");
+  if ($return=="list.php") {
 	  addnav("Return to the warrior list",$return);
-	  tlschema();
-  }else{
-	  $return = substr($return,strrpos($return,"/")+1);
-	  tlschema("nav");
-	  addnav("Return");
-	  if ($return=="list.php") {
-		  addnav("Return to the warrior list",$return);
-	  } else {
-		  addnav("Return whence you came",$return);
-	  }
-	  tlschema();
+  } else {
+	  addnav("Return whence you came",$return);
   }
+  tlschema();
 
   modulehook("bioend", $target);
   page_footer();
 } else {
 	page_header("Character has been deleted");
 	output("This character is already deleted.");
-  if ($ret==""){
-	  $return = substr($return,strrpos($return,"/")+1);
-	  tlschema("nav");
-	  addnav("Return");
+  tlschema("nav");
+  addnav("Return");
+  if ($return=="list.php") {
 	  addnav("Return to the warrior list",$return);
-	  tlschema();
-  }else{
-	  $return = substr($return,strrpos($return,"/")+1);
-	  tlschema("nav");
-	  addnav("Return");
-	  if ($return=="list.php") {
-		  addnav("Return to the warrior list",$return);
-	  } else {
-		  addnav("Return whence you came",$return);
-	  }
-	  tlschema();
+  } else {
+	  addnav("Return whence you came",$return);
   }
+  tlschema();
 	page_footer();
 }
 ?>

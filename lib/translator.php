@@ -69,8 +69,9 @@ function translate($indata,$namespace=FALSE){
 				}
 				*/
 			} elseif (getsetting("collecttexts", false)) {
-				$sql = "INSERT IGNORE INTO " .  db_prefix("untranslated") .  " (intext,language,namespace) VALUES ('" .  addslashes($indata) . "', '" . LANGUAGE . "', " .  "'$namespace')";
-				db_query($sql,false);
+				// Bound: the namespace can be the request URI. A failed collection still never stops the page, as in 1.1.2.
+				$sql = "INSERT IGNORE INTO " .  db_prefix("untranslated") .  " (intext,language,namespace) VALUES (?,?,?)";
+				db_query($sql,false,[(string)$indata, LANGUAGE, (string)$namespace]);
 			}
 			tlbutton_push($indata,!$foundtranslation,$namespace);
 		} else {
@@ -133,7 +134,7 @@ function translate_mail($in,$to=0){
 	//this is done by sprintf_translate.
 	//$in[0] = str_replace("`%","`%%",$in[0]);
 	if ($to>0){
-		$languageResult = db_query("SELECT prefs FROM ".db_prefix("accounts")." WHERE acctid=$to");
+		$languageResult = db_query("SELECT prefs FROM ".db_prefix("accounts")." WHERE acctid=?", true, [(int)$to]);
 		$language = db_fetch_assoc($languageResult);
 		$language['prefs'] = \Resurrection\Security\PreferenceState::read($language['prefs'] ?? '');
 		$session['tlanguage'] = !empty($language['prefs']['language']) ? $language['prefs']['language'] : getsetting("defaultlanguage","en");
@@ -160,20 +161,24 @@ function translate_loadnamespace($namespace,$language=false){
 	if ($language===false) $language = LANGUAGE;
 	$page = translator_page($namespace);
 	$uri = translator_uri($namespace);
+	// Bound: the namespace is often the request URI (tlschema()'s default) or the translator tool's `u`.
+	$parameters = [(string)$language, (string)$page];
 	if ($page==$uri)
-		$where = "uri = '$page'";
-	else
-		$where = "(uri='$page' OR uri='$uri')";
+		$where = "uri = ?";
+	else {
+		$where = "(uri=? OR uri=?)";
+		$parameters[] = (string)$uri;
+	}
 	$sql = "
 		SELECT intext,outtext
 		FROM ".db_prefix("translations")."
-		WHERE language='$language'
+		WHERE language=?
 			AND $where";
 /*	debug(nl2br(htmlentities($sql, ENT_COMPAT, getsetting("charset", "ISO-8859-1")))); */
 	if (!getsetting("cachetranslations",0)) {
-		$result = db_query($sql);
+		$result = db_query($sql, true, $parameters);
 	} else {
-		$result = db_query_cached($sql,"translations-".$namespace."-".$language,600);
+		$result = db_query_cached($sql,"translations-".$namespace."-".$language,600,$parameters);
 		//store it for 10 Minutes, normally you don't need to refresh this often
 	}
 	$out = array();
