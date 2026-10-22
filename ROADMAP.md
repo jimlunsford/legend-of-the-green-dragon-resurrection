@@ -78,10 +78,13 @@ Each family is DONE only when its acceptance evidence passes on both supported C
 - [x] Combat buff compatibility: the installer Pony, the drinks buzz, the lover, Crazy Audrey and the mount editor's text fields no longer stop combat or New Day (`SERIALIZED-SCHEMAS-PART2-20261018.md`). Accepted at `1dfb7c5`, Modern core 39099465964, Baseline integrity 39099465985.
 - [x] Serialized business schemas part 2: one buff-list schema at hydration, login, combat and every buff writer (`src/Game/BuffState.php`) (`SERIALIZED-SCHEMAS-PART2-20261018.md`). Accepted at `1dfb7c5`, Modern core 39099465964, Baseline integrity 39099465985.
 - [x] Mount buff schema for the stables, the mount editor and New Day (`SERIALIZED-SCHEMAS-PART2-20261018.md`). Accepted at `1dfb7c5`, Modern core 39099465964, Baseline integrity 39099465985.
+- [x] Suspended specialty buffs: training and PvP no longer stop while a specialty buff is active (`suspend_buffs()` writes 1/0; the buff schema normalizes it), and a hired healer companion no longer makes the fight a 500 (`src/Game/BuffState.php`, `lib/buffs.php`) (`SERIALIZED-SCHEMAS-PART3-20261022.md`). Accepted at `49baab9`, Modern core 39704754364, Baseline integrity 39704754291.
+- [x] Serialized business schemas part 3: one companion schema at hydration, `apply_companion()`, every companion writer and every combat route (`src/Game/CompanionState.php`) (`SERIALIZED-SCHEMAS-PART3-20261022.md`). Accepted at `49baab9`, Modern core 39704754364, Baseline integrity 39704754291.
+- [x] Companion abilities: one schema for the mercenary camp, the companion editor and take (`SERIALIZED-SCHEMAS-PART3-20261022.md`). Accepted at `49baab9`, Modern core 39704754364, Baseline integrity 39704754291.
 
 ### Current
 
-- [ ] Serialized business schemas part 3: suspended buffs and companions. Suspended specialty buffs no longer stop training and PvP; one companion schema at hydration, `apply_companion()`, every companion writer and every combat route; one abilities schema for the mercenary camp, the companion editor and take (`src/Game/CompanionState.php`) (candidate in `SERIALIZED-SCHEMAS-PART3-20261022.md`)
+- [ ] Serialized business schemas part 4: general combat state. The Forest contract on the Forest-specialty route (1.1.2's doppleganger and the Gypsy Bandit's ability state now pass), the post-round re-check on Dragon and Forest specialty, and the 1.1.2 in-flight Training and Graveyard fights upgraded on first read; also fixes the 500 when a Forest search picked the Gypsy Bandit (candidate in `SERIALIZED-SCHEMAS-PART4-20261022.md`)
 
 ### Remaining
 
@@ -91,8 +94,6 @@ Infrastructure and records:
 
 State and maintenance (remaining serialized business schemas, split in `SERIALIZED-SCHEMAS-PART1-20261017.md`; per-site status in `SERIALIZED-STATE-AUDIT.md`):
 
-- [ ] General combat: the Forest contract on the Forest-specialty route, and the post-round re-check on Dragon and Forest specialty
-- [ ] General combat: 1.1.2 in-flight Training and Graveyard states, upgraded or recorded as fail-closed exceptions
 - [ ] Translation arrays: a news arguments schema for `news.php`, `bio.php` and `addnews()`; `lib/mail.php` switched or recorded as excluded
 - [ ] Other business state: dragon points at session load, the moderated comment snapshot, the payment log, the MOTD poll
 
@@ -102,7 +103,7 @@ To fix:
 
 - [ ] Request values reaching SQL unbound: a full sweep of every shipped PHP file (`bio.php` and `mounts.php?op=xml` were found late, in `CONTENT-EDITORS-PART3-AUTHORITY-20261017.md`)
 - [ ] Mail notification link: the in-game mail notification email links to the sender's `Host` header, as in 1.1.2 (`lib/systemmail.php`) (`COMPLETION-REPORTING-20261017.md`)
-- [ ] Admin repair path for a player locked out by stored state that fails the new schemas: preferences, buff list, companions, a 1.1.2 `restorepage` with a quote. Fix Navs repairs navigation only (`SERIALIZED-SCHEMAS-PART1-20261017.md`, `SERIALIZED-SCHEMAS-PART2-20261018.md`, `SERIALIZED-SCHEMAS-PART3-20261022.md`)
+- [ ] Admin repair path for a player locked out by stored state that fails the new schemas: preferences, buff list, companions, a 1.1.2 `restorepage` with a quote, a stored fight that fails its route's schema (including a 1.1.2 Training or Graveyard fight the upgrade cannot accept). Fix Navs repairs navigation only; the user editor shows the stored fight read-only (`SERIALIZED-SCHEMAS-PART1-20261017.md`, `SERIALIZED-SCHEMAS-PART2-20261018.md`, `SERIALIZED-SCHEMAS-PART3-20261022.md`, `SERIALIZED-SCHEMAS-PART4-20261022.md`)
 - [ ] `paylog.php` runs an unbound `processdate` UPDATE on GET (`BIO-DONATION-ADMIN-AUTHORITY-20261016.md`)
 - [ ] `getmount()` puts the stored mount ID into a cached query (`lib/mounts.php`) (`STABLES-AUTHORITY-20261016.md`)
 - [ ] `moderate.php` skips 1.1.2's check for a longer existing ban (`BAN-ADMIN-AUTHORITY-20261016.md`)

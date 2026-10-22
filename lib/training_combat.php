@@ -138,6 +138,8 @@ function resurrection_training(): never {
                             $session['user']['badguy']=serialize(['enemies'=>[$master],'options'=>['type'=>'train',
                                 'traininglevel'=>(int)$session['user']['level'],'encounter'=>bin2hex(random_bytes(16))]]);
                         } elseif ($state['combat']===[]) throw new DomainException('No master combat.');
+                        // The round continues the fight as read: a 1.1.2 fight is upgraded once here (the same bytes otherwise).
+                        else $session['user']['badguy']=serialize($state['combat']);
                         $_GET=['op'=>in_array($op,['challenge','autochallenge'],true)?'challenge':'fight','auto'=>$rounds];
                         if ($op==='run') output('Your pride prevents you from running from this conflict!');
                         suspend_buffs('allowintrain'); suspend_companions('allowintrain');

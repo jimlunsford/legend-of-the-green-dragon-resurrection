@@ -97,6 +97,8 @@ function resurrection_graveyard_combat(): never {
                     $session['user']['badguy']='';
                     return;
                 } elseif ($op==='run') output('As you try to flee, you are summoned back to the fight!');
+                // The round continues the torment as read: a 1.1.2 torment is upgraded once here (the same bytes otherwise).
+                if ($op!=='search') $session['user']['badguy']=serialize($state);
                 $original=[]; foreach (['hitpoints','attack','defense'] as $key) $original[$key]=$session['user'][$key];
                 $session['user']['hitpoints']=$session['user']['soulpoints'];
                 $session['user']['attack']=$session['user']['defense']=10+round(($session['user']['level']-1)*1.5);

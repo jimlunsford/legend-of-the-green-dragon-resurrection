@@ -22,6 +22,7 @@ final class GraveyardCombatState
     {
         self::player($player);
         $s=ScalarState::read($encoded);
+        if (is_array($s) && is_string($encoded)) $s=self::legacy($s,$encoded,$player);
         if (!is_array($s) || array_diff(array_keys($s),['enemies','options'])!==[] ||
             !is_array($s['enemies'] ?? null) || array_keys($s['enemies'])!==[0] ||
             !is_array($s['enemies'][0]) || !is_array($s['options'] ?? null)) throw new \DomainException('Invalid torment.');
@@ -45,6 +46,36 @@ final class GraveyardCombatState
         if (!empty($e['dead']) || empty($e['istarget']) || $player['soulpoints']<=0) throw new \DomainException('Terminal combat cannot continue.');
         return $s;
     }
+    /**
+     * A torment 1.1.2's graveyard search stored ({type:'graveyard'} and the whole creatures row with the torment
+     * statistics), upgraded on read into the current shape, deterministically: the creature-row columns no torment
+     * reads are dropped (gold, the old experience, author, the Forest and Graveyard flags, an empty AI script), the
+     * encounter identity is derived from the stored bytes, the level copied as text becomes a number, the starting soul
+     * points are the player's (an integer, as the search writes them), and the flags battle.php adds on a first round
+     * default as autosettarget() set them.
+     * Nothing is relaxed: the result must pass read() as any other torment, so a non-empty AI script still fails. Any
+     * other shape is returned unchanged.
+     * @param array<mixed> $s
+     * @param array<string,mixed> $player
+     * @return array<mixed>
+     */
+    private static function legacy(array $s,string $encoded,array $player): array
+    {
+        $o=$s['options'] ?? null; $e=$s['enemies'][0] ?? null;
+        if (array_diff(array_keys($s),['enemies','options'])!==[] || !is_array($o) || ($o['type'] ?? null)!=='graveyard' ||
+            array_diff(array_keys($o),['type','maxattacks','didsurprise'])!==[] || !is_array($s['enemies']) ||
+            array_keys($s['enemies'])!==[0] || !is_array($e) || array_key_exists('playerstarthp',$e)) return $s;
+        foreach (['creaturegold','oldcreatureexp','createdby','forest','graveyard'] as $key) unset($e[$key]);
+        if (array_key_exists('creatureaiscript',$e) && ($e['creatureaiscript']==='' || $e['creatureaiscript']===null)) unset($e['creatureaiscript']);
+        // 1.1.2 copied the session's level, which PHP 5 read from the database as text.
+        if (is_string($e['creaturelevel'] ?? null) && preg_match('/^[1-9][0-9]{0,2}$/D',$e['creaturelevel'])) $e['creaturelevel']=(int)$e['creaturelevel'];
+        $e+=['dead'=>false,'istarget'=>true,'diddamage'=>0];
+        // 1.1.2 recorded no starting soul points; nothing in the torment reads them.
+        $e['playerstarthp']=(int)$player['soulpoints'];
+        $o['encounter']=md5($encoded);
+        return ['enemies'=>[$e],'options'=>$o];
+    }
+
     public static function integer(mixed $v,int $min,int $max): void
     {
         if ((!is_int($v) && !is_string($v) && !(is_float($v) && is_finite($v) && floor($v)===$v)) || (is_string($v) && !preg_match('/^(0|[1-9][0-9]*)$/D',$v)) || $v<$min || $v>$max) throw new \DomainException('Invalid torment statistic.');

@@ -1,6 +1,6 @@
 <?php
 require_once __DIR__ . '/specialty_onboarding.php';
-require_once __DIR__ . '/../src/Game/SpecialtyCombatState.php';
+require_once __DIR__ . '/../src/Game/ForestCombatState.php';
 require_once __DIR__ . '/../src/Game/DragonCombatState.php';
 require_once __DIR__ . '/../src/Game/TransmutationState.php';
 require_once __DIR__ . '/../src/Game/BuffState.php';
@@ -13,8 +13,9 @@ function resurrection_combat_specialty(bool $lock = false, string $type = 'fores
         $session['user']['specialinc'] !== '') throw new DomainException('Specialty unavailable.');
     // The companions this round reads, as every other combat route checks them.
     \Resurrection\Game\CompanionState::collection($companions);
+    // The same contract as the route that owns the value: a Forest fight is one Forest value whichever action reads it.
     if ($type === 'dragon') \Resurrection\Game\DragonCombatState::read($session['user']['badguy']);
-    else \Resurrection\Game\SpecialtyCombatState::read($session['user']['badguy']);
+    else \Resurrection\Game\ForestCombatState::read($session['user']['badguy']);
     $choices = resurrection_specialty_choices($lock);
     $selected = $session['user']['specialty'];
     if (!isset($choices[$selected])) throw new DomainException('Specialty unavailable.');
@@ -102,6 +103,10 @@ function resurrection_forest_specialty(): never {
             } elseif ($defeat) {
                 forestdefeat($newenemies,'in the forest',false);
                 $session['user']['badguy']='';
+            } else {
+                // As the ordinary Forest round, with its helper: the state battle.php wrote must pass before it is committed.
+                require_once __DIR__ . '/forest_combat.php';
+                resurrection_forest_state();
             }
             restore_buff_fields();
         });

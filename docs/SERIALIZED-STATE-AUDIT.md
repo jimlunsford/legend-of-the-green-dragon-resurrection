@@ -650,3 +650,32 @@ unserialize**. Removed: the companion reads in `common.php`, `lib/buffs.php`,
 `lib/player_mutation.php` (now `CompanionState::encode`). Added: one read and one serialize in
 `src/Game/CompanionState.php`. `lib/buffs.php` and `lib/ramius_resurrection.php` leave the file
 count and `src/Game/CompanionState.php` joins it. ScalarState limits are unchanged.
+
+## General combat state, part 4 candidate, 2026-10-22
+
+Status of the 7 general combat sites still OPEN in the 2026-10-17 inventory after the
+serialized business schemas part 4 candidate (`SERIALIZED-SCHEMAS-PART4-20261022.md`), against
+the same definition of done. The first column is the site at `05485ec`, as in the table above;
+the second gives where it is now.
+
+| Site at `05485ec` | Now | Category | Status | Evidence |
+|---|---|---|---|---|
+| `battle.php:28` | unchanged | general combat | CLOSED | Every caller (`lib/forest_combat.php`, `lib/specialty_combat.php`, `lib/dragon_combat.php`, `lib/training_combat.php`, `lib/graveyard_combat.php`, `pvp.php`) runs its route schema on the stored fight before the round and on the value the round wrote before the commit; the Forest-specialty route now uses `ForestCombatState`, and Dragon and Forest specialty gained the post-round check (409, nothing written); `test_forest_specialty_reads_forest_contract_and_rechecks_round`, `test_dragon_rounds_recheck_stored_state` |
+| `lib/graveyard_combat.php:91` | unchanged | general combat | CLOSED | Writes the encounter the search built, which `GraveyardCombatState::read` checks after the round; a 1.1.2 in-flight torment is now upgraded on read (no exception needed); `GraveyardCombatStateTest`, `test_graveyard_112_inflight_torment_is_upgraded_and_continues` |
+| `lib/training_combat.php:52` | `:51` | general combat | CLOSED | Pre-read for the master id only, then `TrainingCombatState::read`, which upgrades the 1.1.2 `{type:train}` fight; `TrainingCombatStateTest`, `test_training_112_inflight_fight_is_upgraded_and_continues` |
+| `lib/training_combat.php:139` | `:138` | general combat | CLOSED | Writes the new master fight, re-read after the round; as `:51` |
+| `src/Game/GraveyardCombatState.php:24` | unchanged | general combat | CLOSED | As `lib/graveyard_combat.php:91` |
+| `src/Game/SpecialtyCombatState.php:13` | removed, `ForestCombatState::read` | general combat | CLOSED | The Forest-specialty route reads the one Forest contract; 1.1.2's doppleganger and the Gypsy Bandit's `spellpoints` pass; `SpecialtyCombatStateTest` (now against the Forest contract) |
+| `src/Game/TrainingCombatState.php:46` | unchanged | general combat | CLOSED | As `lib/training_combat.php:51` |
+
+New sites: `lib/training_combat.php:142` and `lib/graveyard_combat.php:101` (serialize, the
+round writes the state it read, so a 1.1.2 fight is upgraded once inside the round's
+transaction), both CLOSED by the two HTTP tests above.
+
+Summary after this candidate: general combat 16 of 16 closed (PvP's old encounters still fail
+closed by design). The remaining categories are unchanged (news arguments, mail, other).
+
+Recount (working tree, same token method; it reproduces 93 / 49 / 37 / 55 / 1 at `49baab9`):
+**94 sites / 48 files / 39 serialize writers-checks / 54 ScalarState reads / one centralized
+unserialize**. Removed: the read in `src/Game/SpecialtyCombatState.php` (file removed). Added:
+the two write-backs above. ScalarState limits are unchanged.

@@ -1,6 +1,7 @@
 """Real loopback application requests against the preceding clean CI install."""
 import base64
 from contextlib import contextmanager
+import hashlib
 import html
 from html.parser import HTMLParser
 import http.cookiejar
@@ -1371,6 +1372,102 @@ echo "locked\\n";fflush(STDOUT);$change=json_decode(fgets(STDIN),true,512,JSON_T
             for row in registry: self.query('UPDATE modules SET active=? WHERE modulename=?',[row['active'],row['modulename']])
 
     @contextmanager
+    def _fightoptions_injection(self):
+        # A module's fightoptions hook (prepare_fight) can add any option, and battle.php stores it with the round.
+        name='resurrectionfightopt'+os.urandom(4).hex(); path=ROOT/'modules'/f'{name}.php'
+        with path.open('x') as file:
+            file.write("""<?php
+function fixturefightoptions_getmoduleinfo() { return ['name'=>'Fight options test fixture','version'=>'1.0','author'=>'Tests','category'=>'Tests']; }
+function fixturefightoptions_dohook($hook,$args) { $args['fixture_injected']=1; return $args; }
+""".replace('fixturefightoptions',name))
+        try:
+            self.query('INSERT INTO modules(modulename,active,version) VALUES (?,1,?)',[name,'1.0'])
+            self.query('INSERT INTO module_hooks(modulename,location,`function`,priority,whenactive) VALUES (?,?,?,100,?)',[name,'fightoptions',name+'_dohook',''])
+            yield
+        finally:
+            self.query('DELETE FROM module_hooks WHERE modulename=?',[name])
+            self.query('DELETE FROM modules WHERE modulename=?',[name])
+            path.unlink()
+
+    def test_forest_specialty_reads_forest_contract_and_rechecks_round(self):
+        with self._ordinary_forest_fixture() as f:
+            encode=f['encode']; decode=f['decode']; snapshot=f['snapshot']; request=f['request']; url='forest.php?op=specialty'
+            def combat(*enemies): return encode({'enemies':list(enemies),'options':{'type':'forest','didsurprise':1}})
+            def specialty(level='1'):
+                data=f['form'](level); before=snapshot(); code,body=request(data=data); self.assertEqual(200,code,body[:2000])
+                after=snapshot(); self.assertNotEqual(before,after); return data,after
+            # A Forest-specialty fight that completes: the creature falls to the round the specialty starts.
+            with self.subTest(case='completes'):
+                f['prepare']('TS',badguy=combat(dict(f['enemy'],creaturehealth=1,creatureexp=100,creaturegold=40)),gold=1000,experience=1000)
+                data,after=specialty(); row=after[0]
+                self.assertEqual('',row['badguy']); self.assertGreater(int(row['experience']),1000)
+                self.assertEqual('8',self.query("SELECT value FROM module_userprefs WHERE userid=? AND modulename='specialtythiefskills' AND setting='uses'",[f['player']])[0]['value'])
+                f['rejected'](data)
+            @contextmanager
+            def forest_only(idents):
+                # The real Forest search, with only these creatures in the Forest and no Forest event.
+                forest=[row['creatureid'] for row in self.query('SELECT creatureid FROM creatures WHERE forest=1')]
+                chance=self.query("SELECT value FROM settings WHERE setting='forestchance'")
+                self.query("INSERT INTO settings(setting,value) VALUES ('forestchance','0') ON DUPLICATE KEY UPDATE value='0'")
+                self.query('UPDATE creatures SET forest=0 WHERE forest=1')
+                for ident in idents: self.query('UPDATE creatures SET forest=1 WHERE creatureid=?',[ident])
+                try: yield
+                finally:
+                    self.query('UPDATE creatures SET forest=0 WHERE forest=1')
+                    for ident in forest: self.query('UPDATE creatures SET forest=1 WHERE creatureid=?',[ident])
+                    self.query("DELETE FROM settings WHERE setting='forestchance'")
+                    for row in chance: self.query("INSERT INTO settings(setting,value) VALUES ('forestchance',?)",[row['value']])
+            def search():
+                code,body=request('forest.php?op=search'); self.assertEqual(200,code,body[:2000])
+                code,body=request('forest.php?op=search',self._security_fields(body,'forest.php?op=search')); self.assertEqual(200,code,body[:2000])
+                return decode(snapshot()[0]['badguy'])['enemies'][0]
+            # 1.1.2's doppleganger, from the real Forest search when no creature matches: no creature ID.
+            with self.subTest(case='doppleganger'), forest_only([]):
+                f['prepare']('TS',badguy='',turns=10)
+                double=search(); self.assertNotIn('creatureid',double); self.assertTrue(double['creaturename'].startswith('An evil doppleganger of '))
+                before=snapshot(); code,body=request(url); self.assertEqual(200,code,body[:2000]); self.assertEqual(before,snapshot())
+                data,after=specialty(); state=decode(after[0]['badguy'])
+                self.assertNotIn('creatureid',state['enemies'][0]); self.assertEqual(double['creaturename'],state['enemies'][0]['creaturename'])
+                self.assertEqual(4,decode(after[0]['bufflist'])['ts1']['rounds']); f['rejected'](data)
+            # The Gypsy Bandit from the real Forest search, with the ability state its creature AI adds in an ordinary round.
+            bandit=self.query("SELECT creatureid,creaturelevel,creaturehealth FROM creatures WHERE creatureaiscript<>'' ORDER BY creatureid LIMIT 1")[0]
+            with self.subTest(case='spellpoints'), forest_only([bandit['creatureid']]):
+                # Enough health that the rounds below cannot end the fight.
+                self.query('UPDATE creatures SET creaturehealth=100000 WHERE creatureid=?',[bandit['creatureid']])
+                try:
+                    f['prepare']('TS',badguy='',turns=10,gold=100,level=int(bandit['creaturelevel']),attack=1,defense=1000)
+                    enemy=search(); self.assertEqual(str(bandit['creatureid']),str(enemy['creatureid'])); self.assertEqual(1,enemy['spellpoints'])
+                    before=snapshot(); code,body=request(url); self.assertEqual(200,code,body[:2000]); self.assertEqual(before,snapshot())
+                    data,after=specialty(); self.assertEqual(1,decode(after[0]['badguy'])['enemies'][0]['spellpoints']); f['rejected'](data)
+                    # The ordinary round reads the same value.
+                    code,body=self._ordinary_attack(request); self.assertEqual(200,code,body[:2000])
+                finally: self.query('UPDATE creatures SET creaturehealth=? WHERE creatureid=?',[bandit['creaturehealth'],bandit['creatureid']])
+            # The state battle.php writes must pass the Forest contract before it is committed: 409, nothing written.
+            for path in [url,'forest.php?op=fight']:
+                with self.subTest(path=path):
+                    f['prepare']('TS'); data=f['form']('1') if path==url else f['ordinary_form']()
+                    with self._fightoptions_injection():
+                        before=snapshot(); code,body=request(path,data); self.assertEqual(409,code,body[:2000]); self.assertEqual(before,snapshot())
+                        self.assertNotIn('fixture_injected',body)
+                    # The player continues with a fresh form once the value would pass.
+                    data=f['form']('1') if path==url else f['ordinary_form']()
+                    self.assertEqual(200,request(path,data)[0]); self.assertNotIn('fixture_injected',decode(snapshot()[0]['badguy'])['options'])
+
+    def test_dragon_rounds_recheck_stored_state(self):
+        with self._specialty_accounting_fixture('dragon') as f:
+            def fields(op):
+                path='dragon.php?op='+op; code,body=f['request'](path); self.assertEqual(200,code,body[:2000])
+                return self._security_fields(body,path)
+            for op in ['fight','specialty']:
+                with self.subTest(op=op):
+                    f['prepare']('TS'); data=f['form']('1') if op=='specialty' else fields(op)
+                    with self._fightoptions_injection():
+                        before=f['snapshot'](); code,body=f['request']('dragon.php?op='+op,data)
+                        self.assertEqual(409,code,body[:2000]); self.assertEqual(before,f['snapshot']())
+                    data=f['form']('1') if op=='specialty' else fields(op); before=f['snapshot'](); code,body=f['request']('dragon.php?op='+op,data); self.assertEqual(200,code,body[:2000])
+                    after=f['snapshot'](); self.assertNotEqual(before,after); self.assertNotIn('fixture_injected',f['decode'](after[0]['badguy'])['options'])
+
+    @contextmanager
     def _specialty_accounting_fixture(self, route='forest'):
         player=self.query('SELECT acctid FROM accounts WHERE login=?',['WebPlayer'])[0]['acctid']
         original=self.query('SELECT * FROM accounts WHERE acctid=?',[player])[0]
@@ -1795,6 +1892,81 @@ echo "locked\\n";fflush(STDOUT);$change=json_decode(fgets(STDIN),true,512,JSON_T
                 self.query('UPDATE accounts SET '+column+'=? WHERE acctid=?',[value,f['player']]); before=f['training_snapshot'](); code,body=f['request']('train.php?op=fight'); self.assertIn(code,[400,409]); self.assertEqual(before,f['training_snapshot']()); self.assertNotRegex(body,r'Warning:|Fatal error:|SQLSTATE')
                 self.query('UPDATE accounts SET '+column+'=? WHERE acctid=?',[base[column],f['player']])
             self.assertEqual(200,f['training_action'](f['training_form']())[0])
+
+    def test_training_112_inflight_fight_is_upgraded_and_continues(self):
+        with self._training_fixture() as f:
+            snap=f['training_snapshot']; form=f['training_form']; action=f['training_action']; reject=f['training_reject']
+            def legacy(**changes):
+                # As 1.1.2's train.php stored it after the challenge's first round: the boosted master row read as PHP 5 text,
+                # {type:'train'}, prepare_fight's maxattacks and autosettarget's flags. No level, encounter, maximum or start HP.
+                master=self.query('SELECT * FROM masters WHERE creaturelevel=10')[0]
+                enemy={k:(None if v is None else str(v)) for k,v in master.items()}|dict(creaturehealth=str(int(master['creaturehealth'])-40),dead=False,istarget=True,diddamage=1)
+                return f['encode']({'enemies':[enemy|changes],'options':{'type':'train','maxattacks':'4','didsurprise':1}})
+            # Reading it writes nothing; the fight page offers the round as for any fight.
+            with self.subTest(case='continues'):
+                f['training_master'](); encoded=legacy(); f['prepare_training'](seenmaster=1,badguy=encoded)
+                before=snap()
+                for path in ['train.php','train.php?op=fight']:
+                    code,body=f['request'](path); self.assertEqual(200,code,body[:2500]); self.assertEqual(before,snap())
+                stale=form(); data=form(); code,body=action(data); self.assertEqual(200,code,body[:3000])
+                state=f['decode'](snap()[0]['badguy']); enemy=state['enemies'][0]
+                self.assertEqual(10,state['options']['traininglevel']); self.assertEqual(hashlib.md5(encoded.encode()).hexdigest(),state['options']['encounter'])
+                self.assertEqual(100000,int(enemy['trainingmaxhp'])); self.assertEqual('500',str(enemy['playerstarthp'])); self.assertLess(int(enemy['creaturehealth']),99960)
+                reject(data); reject(stale)
+                # The next round reads the upgraded fight unchanged.
+                code,body=action(form()); self.assertEqual(200,code,body[:3000])
+                self.assertEqual(state['options']['encounter'],f['decode'](snap()[0]['badguy'])['options']['encounter'])
+            # The same fight ends as any training fight: the player advances.
+            with self.subTest(case='completes'):
+                f['training_master'](attack=0,defense=0); f['prepare_training'](seenmaster=1,badguy=legacy(creaturehealth='1'))
+                code,body=action(form()); self.assertEqual(200,code,body[:3000]); row=snap()[0]
+                self.assertEqual(('11','','0'),(row['level'],row['badguy'],row['seenmaster']))
+            # A 1.1.2 value that fails the training contract once upgraded is refused as any other: 409, nothing written.
+            with self.subTest(case='refused'):
+                f['training_master']()
+                for changes in [dict(creatureattack='121'),dict(creaturehealth='100001'),dict(creaturename='Another'),dict(reward='1')]:
+                    with self.subTest(changes=changes):
+                        f['prepare_training'](seenmaster=1,badguy=legacy(**changes)); before=snap()
+                        for data in [None,{'csrf_token':'bad'}]:
+                            code,body=f['request']('train.php?op=fight',data); self.assertEqual(409,code,body[:2500]); self.assertEqual(before,snap())
+
+    def test_graveyard_112_inflight_torment_is_upgraded_and_continues(self):
+        with self._graveyard_fixture() as f:
+            row=self.query('SELECT * FROM creatures WHERE creatureid=?',[f['enemyid']])[0]
+            columns=['creatureid','creaturename','creaturelevel','creatureweapon','creaturelose','creaturewin','creaturegold','creatureexp',
+                'oldcreatureexp','creaturehealth','creatureattack','creaturedefense','creatureaiscript','createdby','forest','graveyard']
+            def legacy(**changes):
+                # As 1.1.2's graveyard search stored it after the first round: the whole creatures row read as PHP 5 text, the
+                # torment statistics, the session's level as text, {type:'graveyard'}. No encounter or starting soul points.
+                enemy={k:('' if row.get(k) is None else str(row[k])) for k in columns}
+                enemy.update(creaturelevel='10',creatureattack=22,creaturedefense=22*.7,creaturehealth=96,creatureexp=13,dead=False,istarget=True,diddamage=1)
+                return f['encode']({'enemies':[enemy|changes],'options':{'type':'graveyard','maxattacks':'4','didsurprise':1}})
+            # Reading it writes nothing; the torment page offers the round as for any torment.
+            with self.subTest(case='continues'):
+                encoded=legacy(); f['gprepare'](badguy=encoded); before=f['gsnapshot']()
+                for op in ['','fight']:
+                    code,body=f['request']('graveyard.php'+('?op='+op if op else '')); self.assertEqual(200,code,body[:2500]); self.assertEqual(before,f['gsnapshot']())
+                stale=f['gform'](); data=f['gform'](); code,body=f['request'](data=data); self.assertEqual(200,code,body[:3000])
+                after=f['gsnapshot'](); state=f['decode'](after['badguy']); enemy=state['enemies'][0]
+                self.assertEqual(hashlib.md5(encoded.encode()).hexdigest(),state['options']['encounter']); self.assertEqual('graveyard',state['options']['type'])
+                self.assertEqual(10,enemy['creaturelevel']); self.assertEqual(100,enemy['playerstarthp']); self.assertLess(enemy['creaturehealth'],96)
+                for key in ['creaturegold','oldcreatureexp','createdby','forest','graveyard','creatureaiscript']: self.assertNotIn(key,enemy)
+                self.assertLess(int(after['soulpoints']),100); self.assertEqual('5',after['gravefights'])
+                f['greject'](data); f['greject'](stale)
+                code,body=f['request'](data=f['gform']()); self.assertEqual(200,code,body[:3000])
+                self.assertEqual(state['options']['encounter'],f['decode'](f['gsnapshot']()['badguy'])['options']['encounter'])
+            # The same torment ends as any torment: Ramius's favor is earned.
+            with self.subTest(case='completes'):
+                f['gprepare'](badguy=legacy(creaturehealth=1)); code,body=f['request'](data=f['gform']()); self.assertEqual(200,code,body[:3000])
+                after=f['gsnapshot'](); self.assertEqual('',after['badguy']); self.assertGreater(int(after['deathpower']),100)
+            # A 1.1.2 value that fails the torment contract once upgraded is refused as any other: 409, nothing written.
+            with self.subTest(case='refused'):
+                for changes in [dict(creatureattack=23),dict(creaturehealth=101),dict(creatureaiscript='bundled:gypsy-bandit'),dict(creaturelevel='11'),dict(reward='1')]:
+                    with self.subTest(changes=changes):
+                        f['gprepare'](badguy=legacy(**changes)); before=f['gsnapshot']()
+                        self.assertEqual(409,f['request']()[0]); self.assertEqual(before,f['gsnapshot']())
+                        # A form taken on a live torment cannot carry the refused value either.
+                        f['gprepare'](); f['enter'](); data=f['gform'](); f['patch'](badguy=legacy(**changes)); f['greject'](data)
 
     def test_training_buffs_companions_and_context_canonicalization(self):
         with self._training_fixture() as f:

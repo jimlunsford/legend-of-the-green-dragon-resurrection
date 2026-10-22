@@ -267,3 +267,16 @@ Supporting evidence only; CI is the acceptance.
   module does.
 - Healer and magician levels are capped at 30, the editor's range. A module that writes a
   higher level is refused.
+
+## Acceptance, 2026-10-22
+
+Inspected once on 2026-10-22 for `49baab9cc6493117b3eb10da0a4a94062bfece97`:
+
+- Modern core 39704754364: SUCCESS, all 12 jobs (per leg one `checks`, four `http` shards
+  and one `result`, on PHP 8.4 / MariaDB 11.4 and PHP 8.5 / MySQL 8.4). The run started at
+  01:16:47Z on 2026-10-22; the two `result` jobs finished at 01:33:33Z and 01:35:35Z.
+- Baseline integrity 39704754291: SUCCESS.
+
+The suspended specialty buffs, the companion schema and the companion abilities schema are Done
+at `49baab9`. General combat state is taken up by
+[serialized schemas part 4](SERIALIZED-SCHEMAS-PART4-20261022.md).

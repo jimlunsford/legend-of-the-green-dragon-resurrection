@@ -44,6 +44,7 @@ final class TrainingCombatState
     {
         self::master($master);
         $state=ScalarState::read($encoded);
+        if (is_array($state) && is_string($encoded)) $state=self::legacy($state,$encoded,$player,$master);
         if (!is_array($state) || array_diff(array_keys($state),['enemies','options'])!==[] ||
             !is_array($state['enemies'] ?? null) || array_keys($state['enemies'])!==[0] ||
             !is_array($state['enemies'][0]) || !is_array($state['options'] ?? null)) throw new \DomainException('Invalid training combat.');
@@ -67,6 +68,34 @@ final class TrainingCombatState
         foreach (['dead','istarget','diddamage'] as $key) self::flag($e[$key] ?? null);
         if (!empty($e['dead']) || empty($e['istarget'])) throw new \DomainException('Training is already terminal.');
         return $state;
+    }
+
+    /**
+     * A fight 1.1.2's train.php stored ({type:'train'} and the boosted master row, after its first round), upgraded on
+     * read into the current shape, deterministically, so every read of the same stored value gives the same state:
+     * the training level is the player's, the encounter identity is derived from the stored bytes, the master's full
+     * health is recomputed from the stored boosts with 1.1.2's own formula, and the flags battle.php adds on a first
+     * round default as autosettarget() set them. Nothing is relaxed: the result must pass read() as any other fight.
+     * Any other shape is returned unchanged.
+     * @param array<mixed> $state
+     * @param array<string,mixed> $player
+     * @param array<string,mixed> $master
+     * @return array<mixed>
+     */
+    private static function legacy(array $state,string $encoded,array $player,array $master): array
+    {
+        $o=$state['options'] ?? null; $e=$state['enemies'][0] ?? null;
+        if (array_diff(array_keys($state),['enemies','options'])!==[] || !is_array($o) || ($o['type'] ?? null)!=='train' ||
+            array_diff(array_keys($o),['type','maxattacks','didsurprise'])!==[] || !is_array($state['enemies']) ||
+            array_keys($state['enemies'])!==[0] || !is_array($e) || array_key_exists('trainingmaxhp',$e) || array_key_exists('playerstarthp',$e)) return $state;
+        foreach (['creatureattack','creaturedefense'] as $key) self::number($e[$key] ?? null);
+        $budget=self::budget($player);
+        $e+=['dead'=>false,'istarget'=>true,'diddamage'=>0];
+        $e['trainingmaxhp']=$master['creaturehealth']+($budget-($e['creatureattack']-$master['creatureattack'])-($e['creaturedefense']-$master['creaturedefense']))*5;
+        // 1.1.2 recorded no starting hit points; nothing in training reads them.
+        $e['playerstarthp']=$player['hitpoints'] ?? null;
+        $o['traininglevel']=(int)$player['level']; $o['encounter']=md5($encoded);
+        return ['enemies'=>[$e],'options'=>$o];
     }
 
     private static function number(mixed $value,int $min=0,int $max=2147483647): void

@@ -2,8 +2,11 @@
 declare(strict_types=1);
 namespace Resurrection\Tests;
 use PHPUnit\Framework\TestCase;
-use Resurrection\Game\SpecialtyCombatState;
+use Resurrection\Game\ForestCombatState;
 
+/**
+ * The Forest-specialty route reads the Forest contract (ForestCombatState); these are its original Specialty cases.
+ */
 final class SpecialtyCombatStateTest extends TestCase
 {
     private function state(): array
@@ -16,10 +19,12 @@ final class SpecialtyCombatStateTest extends TestCase
     public function testLiveStateRoundTripsWithoutReinterpretation(): void
     {
         $state=$this->state();
-        self::assertSame($state,SpecialtyCombatState::read(serialize($state)));
+        self::assertSame($state,ForestCombatState::read(serialize($state)));
         $state['enemies'][0]['istarget']=true;
+        self::assertSame($state,ForestCombatState::read(serialize($state)));
+        // The retired Specialty schema accepted a reward ledger for a live enemy; the Forest contract does not.
         $state['options']['experience']=[0=>10];
-        self::assertSame($state,SpecialtyCombatState::read(serialize($state)));
+        $this->reject(serialize($state));
     }
     public function testMissingMalformedAndTerminalFieldsFailClosed(): void
     {
@@ -53,7 +58,7 @@ final class SpecialtyCombatStateTest extends TestCase
             $state['enemies'][0]['dead']=true;
             $state['enemies'][0]['istarget']=false;
             $state['options']['experience']=[0=>10];
-            self::assertSame($state,SpecialtyCombatState::read(serialize($state)));
+            self::assertSame($state,ForestCombatState::read(serialize($state)));
             $bad=$state; $bad['enemies'][0]['istarget']=true; $this->reject(serialize($bad));
             $bad=$state; $bad['enemies'][0]['dead']=false; $this->reject(serialize($bad));
             $bad=$state; unset($bad['enemies'][0]['dead']); $this->reject(serialize($bad));
@@ -64,7 +69,7 @@ final class SpecialtyCombatStateTest extends TestCase
     }
     private function reject(string $encoded): void
     {
-        try { SpecialtyCombatState::read($encoded); self::fail('Invalid combat accepted'); }
+        try { ForestCombatState::read($encoded); self::fail('Invalid combat accepted'); }
         catch (\DomainException) { self::assertTrue(true); }
     }
 }

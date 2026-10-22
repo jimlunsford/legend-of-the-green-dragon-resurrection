@@ -102,6 +102,9 @@ function resurrection_dragon_round(string $op, string $level, string $auto): voi
         output('`b`&You have been slain by `@The Green Dragon`&!!!`n');
         output('`4All gold on hand has been lost!`n');
         output('You may begin fighting again tomorrow.');
+    } else {
+        // As the Forest, Training, Graveyard and PvP rounds: the state battle.php wrote must pass before it is committed.
+        resurrection_dragon_authority('fight');
     }
     restore_buff_fields();
 }

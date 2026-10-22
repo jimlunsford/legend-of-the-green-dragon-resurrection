@@ -4,7 +4,14 @@ namespace Resurrection\Game;
 
 use Resurrection\Security\ScalarState;
 
-/** Ordinary Forest business state. Other callers keep their own schemas. */
+// The ordinary Forest and the Forest-specialty route read this schema, the second before battle loads the AI.
+require_once __DIR__ . '/../Security/ScalarState.php';
+require_once __DIR__ . '/CreatureAi.php';
+
+/**
+ * Forest business state: one schema for one Forest value, read by the ordinary Forest route and the
+ * Forest-specialty route (`forest.php?op=specialty`). Other callers keep their own schemas.
+ */
 final class ForestCombatState
 {
     /** @return array<string,mixed> */
