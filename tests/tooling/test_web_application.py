@@ -1268,7 +1268,11 @@ echo "locked\\n";fflush(STDOUT);$change=json_decode(fgets(STDIN),true,512,JSON_T
         enemy.update(creaturehealth=1000000,creatureattack=1,creaturedefense=1,creaturelevel=10,playerstarthp=10000,diddamage=0)
         combat={'enemies':[enemy],'options':{'type':'forest'}}
         def prepare(spec='DA',uses='9',skill='15',state=None):
-            self.query("UPDATE accounts SET level=10,alive=1,race='Human',specialty=?,dragonkills=0,dragonpoints='a:0:{}',badguy=?,companions='a:0:{}',bufflist='a:0:{}',hitpoints=10000,maxhitpoints=10000,attack=10,defense=10000,specialinc='' WHERE acctid=?",[spec,encode(combat if state is None else state),player])
+            # 1.1.2's bell_rand() tail reaches -0.716599 of its range, and rolldamage() turns a negative defense roll into
+            # a hit, so a defense roll can deal up to 0.716599 x defense x defmod. Backstab (TS 5) triples defense: with
+            # defense 10000 a round could deal over 20000 and kill the 10000 hit point player (then village.php sends the
+            # player to shades.php). Defense 1000 keeps that bound (about 2150) far below the hit points.
+            self.query("UPDATE accounts SET level=10,alive=1,race='Human',specialty=?,dragonkills=0,dragonpoints='a:0:{}',badguy=?,companions='a:0:{}',bufflist='a:0:{}',hitpoints=10000,maxhitpoints=10000,attack=10,defense=1000,specialinc='' WHERE acctid=?",[spec,encode(combat if state is None else state),player])
             for module in ['specialtydarkarts','specialtymysticpower','specialtythiefskills']:
                 for key,value in [('uses',uses),('skill',skill)]:
                     self.query('INSERT INTO module_userprefs(modulename,setting,userid,value) VALUES (?,?,?,?) ON DUPLICATE KEY UPDATE value=VALUES(value)',[module,key,player,value])

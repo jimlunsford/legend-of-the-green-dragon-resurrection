@@ -297,3 +297,44 @@ Supporting evidence only; CI is the acceptance. PHP 8.4 (the setup-php build) wi
 - PHP lint of every changed file; PHPStan `phpstan.neon` and `phpstan-new.neon`: no errors.
 - `composer validate --strict`, `composer audit`: valid, no advisories.
 - Historical verifier PASS (417 files, 11 commits); project validator PASS; `git diff --check` clean.
+
+## CI failure on `593578e`, 2026-10-22 (kept on record)
+
+Modern core 39822309470 on `593578e`: every job passed except engineering (8.5, mysql:8.4) / http (4), which ran 15
+tests in 318 s and failed `test_forest_specialty_post_authority_and_rollback` (spec `TS`, level `5`) at
+`self.assertEqual(200,request('village.php')[0])`: `AssertionError: 200 != 302`. Baseline integrity 39822309107
+passed. The run (17:24 to 17:30Z) was not near a game-day boundary. This run is not acceptance for rescan task 1.
+
+Reproduction on PHP 8.5 / MySQL 8.4 (supporting evidence only):
+
+- Shard 4 through `scripts/tooling-shards.py` twice, and the shard 4 order up to the failing test three times: all
+  passed. The player entered the test at level 1, experience 0, `seenmaster` 0, alive, with the day current.
+- A probe that repeats the test's own `prepare()`, specialty POST and `village.php` visit hit the failure: 3 of 800
+  Backstab (TS 5) rounds, none of 300 rounds at DA 1, MP 5 and TS 3. The 302's `Location` was `shades.php`. At that
+  moment WebPlayer had `alive` 0, `hitpoints` 0, level 10, experience 0, `seenmaster` 0, `badguy` empty, and the round's
+  page read: "Thieving Kender hits you for 15425 points of damage! ... You may begin fighting again tomorrow."
+
+Root cause: a fixture gap, not a product defect and not MySQL-specific. `rolldamage()` takes the player's defense roll
+from `bell_rand(0, defense x defmod)`, whose 1.1.2 curve runs from -0.716599 to 1.712549 of the range, and the
+creature's hit is its attack roll minus that defense roll. A negative defense roll therefore becomes a hit of up to
+0.716599 x defense x defmod. The fixture gave the player defense 10000 and 10000 hit points; Backstab sets defmod 3,
+so a round can deal up to about 21500 (roughly 3 rounds in 1000 deal 10000 or more). The player dies, the round is
+an ordinary forest defeat, and `village.php` correctly redirects a dead player to `shades.php`. Only TS 5 raises
+defmod in this test, which is why its earlier subtests passed. The failure is random: it is not tied to the shard
+order, the experience, `seenmaster` or the database; the commit's new tests only changed which run drew it.
+`lib/bell_rand.php` and `rolldamage()` match the historical tag except for the PHP 8 iterator and the PvP loop cap.
+
+Fix: the test's `prepare()` now pins defense 1000, which keeps the largest possible inverted hit at about 2150, far
+under the 10000 hit points, with the reason in a comment. The assertion is unchanged: `village.php` must answer 200
+and the state must not change. No product code changed; the 1.1.2 combat math is kept.
+
+Other fixtures that visit `village.php` after combat were checked against the same bound. The skeleton companion
+case (`test_darkarts_companion_business_state_http`: defense 10000, 10000 hit points, Dark Arts level 1, defmod 1)
+can lose at most about 7170 in its one round and stays alive. The other high-defense fixtures (the dragon, Fairy
+and PvP bounty cases) do not visit `village.php` after the fight, use a seeded roll, or expect a defeat. None
+shares the gap.
+
+Local result with the fix (supporting evidence only): the probe ran 1000 Backstab rounds with no death; shard 4
+passed on MySQL 8.4 (46 tests, 878 s) and on MariaDB 11.4 (46 tests, 864 s), each after PHPUnit OK (205 tests).
+Static: `test_route_inventory`, `test_tooling_shards`, the historical verifier, the project validator and
+`git diff --check` pass.
