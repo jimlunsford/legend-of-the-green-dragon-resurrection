@@ -1,5 +1,5 @@
 <?php
-require_once __DIR__ . '/src/Security/ScalarState.php';
+require_once __DIR__ . '/src/Security/NewsArguments.php';
 require_once __DIR__ . '/src/Compatibility/array_cursor.php';
 // addnews ready
 // translator ready
@@ -122,10 +122,12 @@ if ($target = db_fetch_assoc($result)) {
   $odate="";
   tlschema("news");
   while ($row = db_fetch_assoc($result)) {
+	  // A stored line whose arguments fail the schema is skipped.
+	  try { $base_arguments = \Resurrection\Security\NewsArguments::read($row['arguments']); }
+	  catch (DomainException $error) { continue; }
 	  tlschema($row['tlschema']);
 	  if ($row['arguments'] > "") {
 		  $arguments = array();
-		  $base_arguments = \Resurrection\Security\ScalarState::read($row['arguments']);
 		  array_push($arguments, $row['newstext']);
 		  while(list($key, $val) = resurrection_array_next($base_arguments)) {
 			  array_push($arguments, $val);

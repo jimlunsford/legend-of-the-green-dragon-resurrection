@@ -1,5 +1,5 @@
 <?php
-require_once __DIR__ . '/src/Security/ScalarState.php';
+require_once __DIR__ . '/src/Security/CommentSnapshot.php';
 // translator ready
 // addnews ready
 // mail ready
@@ -35,23 +35,13 @@ if ($op=="commentdelete"){
     resurrection_require_post();
     try {
         $ids = resurrection_comment_ids($_POST['comment'] ?? []);
+        $reason = null;
         if (!empty($_POST['delnban'])) {
             check_su_access(SU_EDIT_USERS);
             $reason = \Resurrection\Http\Input::string($_POST, 'reason', 'Banned for comments you posted.');
             if (strlen($reason) > 255) { throw new InvalidArgumentException('Invalid reason.'); }
-            foreach ($ids as $id) {
-                $rows = db_query('SELECT a.uniqueid,a.acctid FROM ' . db_prefix('commentary') . ' c JOIN ' . db_prefix('accounts') . ' a ON a.acctid=c.author WHERE c.commentid=?', true, [$id]);
-                $account = db_fetch_assoc($rows);
-                if ($account && $account['uniqueid'] !== '') {
-                    db_query('INSERT INTO ' . db_prefix('bans') . ' (uniqueid,banexpire,banreason,banner) VALUES (?,?,?,?)', true,
-                        [$account['uniqueid'], date('Y-m-d H:i:s', strtotime('+3 days')), $reason, $session['user']['name']]);
-                    db_query('UPDATE ' . db_prefix('accounts') . ' SET loggedin=0 WHERE acctid=?', true, [(int)$account['acctid']]);
-                }
-            }
         }
-        foreach ($ids as $id) {
-            resurrection_delete_comment($session, $_SESSION, 'POST', ['removecomment' => (string)$id, 'csrf_token' => $_POST['csrf_token']]);
-        }
+        resurrection_moderate_comments($session, $ids, $reason);
     } catch (InvalidArgumentException | DomainException $error) { http_response_code(400); exit('Invalid moderation request.'); }
     redirect('moderate.php');
 }
@@ -126,7 +116,10 @@ if ($op==""){
 	while ($row = db_fetch_assoc($result)){
 		$i++;
 		rawoutput("<tr class='".($i%2?'trlight':'trdark')."'>");
-		rawoutput("<td><input type='checkbox' name='mod[{$row['modid']}]' value='1'></td>");
+		// A snapshot that fails its schema is listed without its comment and cannot be restored.
+		try { $comment = \Resurrection\Security\CommentSnapshot::read($row['comment']); }
+		catch (DomainException $error) { $comment = null; }
+		rawoutput("<td>".($comment === null ? "" : "<input type='checkbox' name='mod[{$row['modid']}]' value='1'>")."</td>");
 		rawoutput("<td>");
 		output_notl("%s", $row['name']);
 		rawoutput("</td>");
@@ -134,16 +127,18 @@ if ($op==""){
 		output_notl("%s", $row['moddate']);
 		rawoutput("</td>");
 		rawoutput("<td>");
-		$comment = \Resurrection\Security\ScalarState::read($row['comment']);
+		if ($comment !== null) {
 		output_notl("`0(%s)", $comment['section']);
 
+		// PHP 5 showed nothing for the founder's rank (31), which has no colour here.
 		if (($comment['clanrank'] ?? 0)>0)
-			output_notl("%s<%s%s>`0", $clanrankcolors[ceil($comment['clanrank']/10)],
-					$comment['clanshort'],
-					$clanrankcolors[ceil($comment['clanrank']/10)]);
+			output_notl("%s<%s%s>`0", $clanrankcolors[ceil($comment['clanrank']/10)] ?? '',
+					$comment['clanshort'] ?? '',
+					$clanrankcolors[ceil($comment['clanrank']/10)] ?? '');
 		output_notl("%s", $comment['name'] ?? 'Unknown');
 		output_notl("-");
 		output_notl("%s", comment_sanitize($comment['comment']));
+		}
 		rawoutput("</td>");
 		rawoutput("</tr>");
 	}

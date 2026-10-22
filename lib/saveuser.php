@@ -4,6 +4,7 @@ require_once __DIR__ . '/../src/Security/NavigationState.php';
 require_once __DIR__ . '/../src/Security/PreferenceState.php';
 require_once __DIR__ . '/../src/Game/BuffState.php';
 require_once __DIR__ . '/../src/Game/CompanionState.php';
+require_once __DIR__ . '/../src/Game/DragonPointState.php';
 // translator ready
 // addnews ready
 // mail ready
@@ -31,7 +32,9 @@ function saveuser(){
         foreach ($session['user'] as $key => $value) {
             if (defined('RESURRECTION_NEWDAY_PRESENTATION') && !in_array($key, ['allowednavs','restorepage','gentime','gentimecount','gensize'], true)) { continue; }
             if ($key === 'password' || !array_key_exists($key, $baseaccount)) { continue; }
-            if (is_array($value)) { $value = serialize($value); }
+            // Every stored collection is encoded by its schema; any other array is refused, never stored unchecked.
+            if ($key === 'dragonpoints') { $value = \Resurrection\Game\DragonPointState::encode($value); }
+            elseif (is_array($value)) { throw new DomainException('Unencoded stored collection.'); }
             if ($baseaccount[$key] != $value) {
                 $assignments[] = db_identifier($key) . '=?';
                 $parameters[] = $value;

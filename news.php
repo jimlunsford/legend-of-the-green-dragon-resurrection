@@ -1,5 +1,5 @@
 <?php
-require_once __DIR__ . '/src/Security/ScalarState.php';
+require_once __DIR__ . '/src/Security/NewsArguments.php';
 require_once __DIR__ . '/src/Compatibility/array_cursor.php';
 // translator ready
 // addnews ready
@@ -61,16 +61,20 @@ output_notl("`n");
 output("`c`b`!News for %s %s`0`b`c", $date, $pagestr);
 
 while ($row = db_fetch_assoc($result)) {
+	// A stored line whose arguments fail the schema is skipped; a comment moderator still gets its Del link.
+	try { $base_arguments = \Resurrection\Security\NewsArguments::read($row['arguments']); }
+	catch (DomainException $error) { $base_arguments = null; }
+	if ($base_arguments === null && !($session['user']['superuser'] & SU_EDIT_COMMENTS)) continue;
 	output_notl("`c`2-=-`@=-=`2-=-`@=-=`2-=-`@=-=`2-=-`0`c");
 	if ($session['user']['superuser'] & SU_EDIT_COMMENTS){
 		$del = translate_inline("Del");
 		rawoutput("[ <a href='superuser.php?op=newsdelete&newsid=".$row['newsid']."&return=".URLEncode($_SERVER['REQUEST_URI'])."'>$del</a> ]&nbsp;");
 		addnav("","superuser.php?op=newsdelete&newsid={$row['newsid']}&return=".URLEncode($_SERVER['REQUEST_URI']));
 	}
+	if ($base_arguments === null) continue;
 	tlschema($row['tlschema']);
 	if ($row['arguments']>""){
 		$arguments = array();
-		$base_arguments = \Resurrection\Security\ScalarState::read($row['arguments']);
 		array_push($arguments,$row['newstext']);
 		while (list($key,$val)=resurrection_array_next($base_arguments)){
 			array_push($arguments,$val);

@@ -5,6 +5,7 @@ require_once __DIR__ . '/../src/Security/ActionToken.php';
 require_once __DIR__ . '/../src/Security/NavigationState.php';
 require_once __DIR__ . '/../src/Security/PreferenceState.php';
 require_once __DIR__ . '/../src/Game/BuffState.php';
+require_once __DIR__ . '/../src/Game/DragonPointState.php';
 
 /** Issue an intent for an explicitly named action and authoritative state. */
 function resurrection_action_fields(string $scope, string $context): string {
@@ -70,10 +71,12 @@ function resurrection_player_mutation(callable $action, array $participants = []
         if (array_key_exists('prefs', $values)) { $values['prefs'] = \Resurrection\Security\PreferenceState::encode($values['prefs']); }
         if (array_key_exists('restorepage', $values)) { \Resurrection\Security\NavigationState::restorePage($values['restorepage']); }
         if (is_array($companions)) { $values['companions'] = \Resurrection\Game\CompanionState::encode($companions); }
+        if (array_key_exists('dragonpoints', $values)) { $values['dragonpoints'] = \Resurrection\Game\DragonPointState::encode($values['dragonpoints']); }
         $sets = []; $parameters = [];
         foreach ($values as $key => $value) {
             if (!array_key_exists($key, $baseaccount) || in_array($key, ['acctid','password','allowednavs'], true)) { continue; }
-            if (is_array($value)) { $value = serialize($value); }
+            // Every stored collection is encoded by its schema above; any other array is refused, never stored unchecked.
+            if (is_array($value)) { throw new DomainException('Unencoded stored collection.'); }
             if ($value != $baseaccount[$key]) {
                 $sets[] = db_identifier($key) . '=?'; $parameters[] = $value;
             }

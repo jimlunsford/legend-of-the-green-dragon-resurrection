@@ -1,4 +1,6 @@
 <?php
+// Inert duplicate of the pre-split mail page; mail.php and lib/mail/ are the live code. Nothing includes this file.
+if (realpath($_SERVER['SCRIPT_FILENAME'] ?? '')===__FILE__) { http_response_code(404); exit('Not an application endpoint.'); }
 require_once __DIR__ . '/../src/Security/ScalarState.php';
 require_once __DIR__ . '/../src/Compatibility/array_cursor.php';
 // translator ready

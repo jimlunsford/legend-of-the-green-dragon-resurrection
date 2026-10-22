@@ -679,3 +679,56 @@ Recount (working tree, same token method; it reproduces 93 / 49 / 37 / 55 / 1 at
 **94 sites / 48 files / 39 serialize writers-checks / 54 ScalarState reads / one centralized
 unserialize**. Removed: the read in `src/Game/SpecialtyCombatState.php` (file removed). Added:
 the two write-backs above. ScalarState limits are unchanged.
+
+## News arguments, mail and other business state, part 5 candidate, 2026-10-22
+
+Status of the 24 sites still OPEN in the 2026-10-17 inventory after the serialized business
+schemas part 5 candidate (`SERIALIZED-SCHEMAS-PART5-20261022.md`), against the same definition
+of done: 3 news arguments, 10 mail (all in `lib/mail.php`) and 11 other. The first column is
+the site at `05485ec`, as in the table above; the second gives where it is now.
+
+| Site at `05485ec` | Now | Category | Status | Evidence |
+|---|---|---|---|---|
+| `bio.php:128` | removed, `NewsArguments::read` at `:126` | news arguments | CLOSED | A line whose arguments fail is skipped; `NewsArgumentsTest`, `test_news_and_bio_skip_malformed_arguments_http`; the stray-% taunt still renders (`test_news_and_bio_format_stored_stray_percent_http`) |
+| `lib/addnews.php:75` | removed, `NewsArguments::encode` at `:77` | news arguments | CLOSED | Refused arguments throw and the caller's transaction rolls back; `SecurityIntegrationTest::testNewsWriterRefusesUnrenderableArgumentsAndTheTransactionRollsBack` |
+| `news.php:73` | removed, `NewsArguments::read` at `:65` | news arguments | CLOSED | As `bio.php`; a comment moderator keeps the line's Del link |
+| `lib/mail.php:137`, `:138`, `:179`, `:180`, `:185`, `:186`, `:289`, `:290`, `:296`, `:297` | `:139`, `:140`, `:181`, `:182`, `:187`, `:188`, `:291`, `:292`, `:298`, `:299` | mail | EXCLUDED | Inert duplicate of the pre-split mail page: no tracked PHP file includes it at this head or at `historical-source-1.1.2` (`git grep "lib/mail\.php"`); the live mail readers use `MailContent::stored()`. Kept as a historical file, now with the direct-request guard (404 "Not an application endpoint.") |
+| `lib/commentary_security.php:28` | removed, `CommentSnapshot::encode` at `:45` | other: commentary snapshot | CLOSED | The one snapshot writer (`resurrection_archive_comment()`); `CommentSnapshotTest` |
+| `lib/commentary_security.php:71` | removed, `CommentSnapshot::read` at `:127` | other: commentary snapshot | CLOSED | A refused snapshot is 400 and nothing is restored; `CommentSnapshotTest` |
+| `lib/forcednavigation.php:36` | removed, `DragonPointState::history` at `:48` | other: dragon points | CLOSED | 409, nothing written; `DragonPointStateTest::testSessionLoadHistory`, `test_dragon_point_history_checked_at_load_http` |
+| `lib/motd.php:48` | removed, `MotdPoll::read` at `:117` and `:180` | other: motd poll | CLOSED | A refused poll shows its subject and author only and refuses votes (409); `MotdPollTest`, `test_motd_route_authority_http` |
+| `lib/motd.php:222` | removed, `MotdPoll::encode` at `:383` | other: motd poll | CLOSED | Bound INSERT of the encoded poll; `MotdPollTest`, `test_motd_route_authority_http` |
+| `lib/player_mutation.php:71` | removed, `DragonPointState::encode` at `:74` | other: generic save | CLOSED | Dragon points are encoded by their schema; any other array field is refused (`Unencoded stored collection.`), never serialized unchecked |
+| `lib/saveuser.php:26` | removed, `DragonPointState::encode` at `:36` | other: generic save | CLOSED | As `lib/player_mutation.php` |
+| `login.php:54` | removed, `DragonPointState::history` at `:60` | other: dragon points | CLOSED | 409 before the login is recorded; `test_dragon_point_history_checked_at_load_http` |
+| `moderate.php:137` | removed, `CommentSnapshot::read` at `:120` | other: commentary snapshot | CLOSED | A refused snapshot is listed with its moderator and date only, without a checkbox |
+| `paylog.php:37` | removed, `PaymentInfo::read` at `:43` | other: payment log | CLOSED | The GET write is gone; `op=process` is a protected POST, and a record that fails stays pending; `PaymentInfoTest`, `test_paylog_process_dates_post_only_http` |
+| `paylog.php:65` | removed, `PaymentInfo::read` at `:108` | other: payment log | CLOSED | A record that fails is listed with blank payment fields; `PaymentInfoTest`, `test_paylog_process_dates_post_only_http` |
+
+The sites that stay in place and were already CLOSED: `lib/saveuser.php:22` (navigation, was
+`:16`) and `lib/player_mutation.php:92` (in-memory `$baseaccount` bookkeeping, was `:84`; arrays
+can no longer reach it, since the loop above refuses them).
+
+New sites, all CLOSED by their PHPUnit tests: `src/Security/NewsArguments.php:27`, `:34` (read)
+and `:33` (serialize); `src/Security/CommentSnapshot.php:23`, `:33` (read) and `:22`
+(serialize); `src/Security/MotdPoll.php:21`, `:28` (read) and `:27` (serialize);
+`src/Security/PaymentInfo.php:21` (read, no writer: payment intake stays disabled); and
+`src/Game/DragonPointState.php:61` (serialize, the save encoder). `DragonPointState`'s read
+moves into `history()` (`:41`).
+
+Closing status when this candidate is accepted: navigation 5/5, preferences 4/4, editor old
+values 1/1, general combat 16/16, buffs 12/12, companions 11/11, mounts 7/7, news arguments
+3/3, navigation labels 3/3 closed; mail 8 closed and 10 excluded with evidence; other every
+site closed or n/a. **No site of the 2026-10-17 inventory is OPEN.** The gaps found while
+closing them are on the `ROADMAP.md` Final rescan list.
+
+Recount (working tree, same token method; it reproduces 94 / 48 / 39 / 54 / 1 at `5bdba80`):
+**91 sites / 44 files / 38 serialize writers-checks / 52 ScalarState reads / one centralized
+unserialize**. Removed: the reads in `bio.php`, `news.php`, `login.php`, `moderate.php`,
+`lib/commentary_security.php`, `lib/motd.php`, the dragon point read in
+`lib/forcednavigation.php` and both in `paylog.php`; the serializes in `lib/addnews.php`,
+`lib/commentary_security.php`, `lib/motd.php`, and the generic save in `lib/saveuser.php` and
+`lib/player_mutation.php`. Added: the eleven schema sites above. `bio.php`, `news.php`,
+`login.php`, `moderate.php`, `paylog.php`, `lib/addnews.php`, `lib/commentary_security.php` and
+`lib/motd.php` leave the file count; the four new schema files join it. ScalarState limits are
+unchanged.

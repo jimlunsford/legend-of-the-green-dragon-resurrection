@@ -29,6 +29,32 @@ final class DragonPointStateTest extends TestCase
         }
     }
 
+    public function testSessionLoadHistory(): void {
+        // 1.1.2 accounts never set the column; the kill-count limit applies when spending, not at load.
+        self::assertSame([], DP::history(''));
+        self::assertSame([], DP::history(null));
+        self::assertSame([], DP::history('a:0:{}'));
+        self::assertSame(['hp','at','retired_module'], DP::history(serialize(['hp','at','retired_module'])));
+        self::assertSame(['hp','at'], DP::history(serialize(['hp','at'])));
+        try { DP::read(serialize(['hp','at']),1); self::fail('Over-limit spend history accepted for spending'); } catch (\DomainException) { self::assertTrue(true); }
+        try { DP::read('',1); self::fail('Empty history accepted for spending'); } catch (\DomainException) { self::assertTrue(true); }
+        // The save writers store only a history history() accepts.
+        self::assertSame('a:0:{}', DP::encode([]));
+        self::assertSame('a:0:{}', DP::encode(''));
+        self::assertSame(serialize(['hp','retired_module']), DP::encode(['hp','retired_module']));
+        self::assertSame(serialize(['hp']), DP::encode(serialize(['hp'])));
+        foreach ([['hp',null],[1=>'hp'],['<script>'],['HP'],[['hp']],'broken',5,null] as $bad) {
+            if ($bad === null) { self::assertSame('a:0:{}', DP::encode($bad)); continue; }
+            try { DP::encode($bad); self::fail('Invalid history stored: '.var_export($bad,true)); } catch (\DomainException) { self::assertTrue(true); }
+        }
+        foreach (['broken','b:0;','s:2:"hp";',serialize(['hp',null]),serialize(['hp',1]),serialize(['hp',[]]),serialize([1=>'hp']),
+            serialize(['<script>']),serialize(['']),serialize(['a'=>'hp']),'O:8:"stdClass":0:{}','a:1:{i:0;s:2:"hp";',5,false,[],
+            serialize(array_fill(0,7000,'hp'))] as $encoded) {
+            try { DP::history($encoded); self::fail('Corrupt history loaded: '.var_export(is_string($encoded)?substr($encoded,0,40):$encoded,true)); }
+            catch (\DomainException) { self::assertTrue(true); }
+        }
+    }
+
     public function testExactTotalsAndInputVocabulary(): void {
         $buy=DP::schema($this->schema())['buy']; $base=['hp'=>'2','at'=>'1','de'=>'1','ff'=>'1'];
         foreach ([-1,'-1',1.5,[],true,null,'','+2','02','2.0','2e0','2junk','4294967296','999999999999999999999','0','3'] as $value) {

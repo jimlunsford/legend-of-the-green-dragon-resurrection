@@ -243,3 +243,18 @@ acceptance.
 - The general combat category is closed by this candidate except where the audit says
   otherwise (see `SERIALIZED-STATE-AUDIT.md`). News arguments, mail and the other business
   state remain, as in `ROADMAP.md`.
+
+## Acceptance, 2026-10-22
+
+Inspected on 2026-10-22 for `5bdba8026380d6bc9cded02e342903547f024acc` (once at 10:49Z,
+while the shards were still running, and once more after they finished):
+
+- Modern core 39764211865: SUCCESS, all 12 jobs (per leg one `checks`, four `http` shards
+  and one `result`, on PHP 8.4 / MariaDB 11.4 and PHP 8.5 / MySQL 8.4). The run started at
+  10:35:15Z; the two `result` jobs finished at 10:52:52Z and 10:53:36Z.
+- Baseline integrity 39764211576: SUCCESS.
+
+General combat state, the Forest contract on the Forest-specialty route, the post-round
+re-check, the 1.1.2 in-flight upgrade and the Gypsy Bandit search fix are Done at `5bdba80`.
+News arguments and the other business state are taken up by
+[serialized schemas part 5](SERIALIZED-SCHEMAS-PART5-20261022.md).

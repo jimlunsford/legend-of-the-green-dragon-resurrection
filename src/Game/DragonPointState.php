@@ -23,9 +23,23 @@ final class DragonPointState
     public static function read(mixed $encoded, mixed $kills): array
     {
         $limit = self::integer($kills);
+        if (!is_string($encoded) || $encoded === '') throw new \DomainException('Invalid Dragon Point history.');
+        $points = self::history($encoded);
+        if (count($points) > $limit) throw new \DomainException('Invalid Dragon Point history.');
+        return $points;
+    }
+
+    /**
+     * The stored history at session load. 1.1.2 accounts never had it set, so NULL and '' are an empty history.
+     * The kill-count limit applies when points are spent (read()), not here: the user editor can lower the
+     * dragon kills below the points already spent, and 1.1.2 kept such an account playable.
+     * @return list<string>
+     */
+    public static function history(mixed $encoded): array
+    {
+        if ($encoded === null || $encoded === '') return [];
         $points = ScalarState::read($encoded);
-        if (!is_string($encoded) || strlen($encoded) > 65535 || !is_array($points) ||
-            !array_is_list($points) || count($points) > $limit) {
+        if (!is_string($encoded) || strlen($encoded) > 65535 || !is_array($points) || !array_is_list($points)) {
             throw new \DomainException('Invalid Dragon Point history.');
         }
         // Removed module identifiers remain readable, never implicitly buyable.
@@ -35,6 +49,18 @@ final class DragonPointState
             }
         }
         return $points;
+    }
+
+    /**
+     * The stored form of the session history, for the page save and the player transaction: only a history that
+     * history() accepts is stored. A value the session never hydrated is checked as stored.
+     */
+    public static function encode(mixed $points): string
+    {
+        if (!is_array($points)) $points = self::history($points);
+        $encoded = serialize($points);
+        if (self::history($encoded) !== $points) throw new \DomainException('Invalid Dragon Point history.');
+        return $encoded;
     }
 
     /** @return array{desc:array<string,string>,buy:array<string,bool>} */

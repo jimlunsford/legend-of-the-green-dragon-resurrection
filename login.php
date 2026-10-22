@@ -3,6 +3,7 @@ require_once __DIR__ . '/src/Security/ScalarState.php';
 require_once __DIR__ . '/src/Security/NavigationState.php';
 require_once __DIR__ . '/src/Security/PreferenceState.php';
 require_once __DIR__ . '/src/Game/BuffState.php';
+require_once __DIR__ . '/src/Game/DragonPointState.php';
 // Authentication boundary; game hooks and navigation remain procedural.
 define('ALLOW_ANONYMOUS', true);
 define('OVERRIDE_FORCED_NAV', true);
@@ -56,6 +57,8 @@ try {
     } catch (DomainException $error) { http_response_code(409); exit('Invalid stored navigation state. You were not logged in.'); }
     try { $bufflist = \Resurrection\Game\BuffState::read($account['bufflist'], $account); }
     catch (DomainException $error) { http_response_code(409); exit('Invalid stored buff state. You were not logged in.'); }
+    try { $dragonpoints = \Resurrection\Game\DragonPointState::history($account['dragonpoints']); }
+    catch (DomainException $error) { http_response_code(409); exit('Invalid stored Dragon Point state. You were not logged in.'); }
     $version = resurrection_begin_login((int)$account['acctid'], $account['password']);
     resurrection_rotate_session();
     $_SESSION['auth_version'] = $version;
@@ -63,8 +66,7 @@ try {
     $session['user'] = $account;
     $baseaccount = $account;
     $session['user']['prefs'] = $prefs;
-    $dragonpoints = \Resurrection\Security\ScalarState::read($account['dragonpoints']);
-    $session['user']['dragonpoints'] = is_array($dragonpoints) ? $dragonpoints : [];
+    $session['user']['dragonpoints'] = $dragonpoints;
     $session['bufflist'] = $bufflist;
     $session['allowednavs'] = $allowednavs;
     modulehook('check-login');

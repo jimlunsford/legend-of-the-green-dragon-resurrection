@@ -7547,6 +7547,286 @@ function MODULE_dohook($hook,$args) {
         finally:
             for who in created: q('DELETE FROM news WHERE accountid=?',[who]);q('DELETE FROM accounts_output WHERE acctid=?',[who]);q('DELETE FROM accounts WHERE acctid=?',[who])
 
+    def _php_serialize(self, value):
+        # JSON objects become PHP maps; LF only, so a stored length is never folded.
+        return subprocess.run([shutil.which('php'),'-r','echo serialize(json_decode(stream_get_contents(STDIN),true));'],
+            input=json.dumps(value),text=True,capture_output=True,cwd=ROOT,check=True).stdout
+
+    def test_news_and_bio_skip_malformed_arguments_http(self):
+        # news.arguments is a list of scalars or one-level taunt envelopes. A stored row that fails is skipped on both pages
+        # (a comment moderator keeps its Del link on news.php); the rows around it, and a 1.1.2 stray-% taunt, still render.
+        q=self.query;player=int(q('SELECT acctid FROM accounts WHERE login=?',['WebPlayer'])[0]['acctid']);created=[]
+        original=q('SELECT superuser FROM accounts WHERE acctid=?',[player])[0]['superuser'];serialize=self._php_serialize
+        today=subprocess.run([shutil.which('php'),'-r',"echo date('Y-m-d');"],text=True,capture_output=True,check=True).stdout
+        try:
+            target=int(self._security_target('NewsArgumentTarget'));created.append(target)
+            q('UPDATE accounts SET hashorse=(SELECT MIN(mountid) FROM mounts) WHERE acctid=?',[target])
+            good=lambda who,taunt:('`%%s`5 has been slain %s by %s.`n%s',serialize([f'ArgVictim{who}','in the forest',f'Rat{who}',taunt]))
+            rows=[good('Before',[True,'taunts','"%s again", says the Rat.','`^Bob`^']),
+                  good('Stray',[True,'taunts','"100% sure, %s", sneers the Rat.','`^Bob`^']),
+                  ('`%%s MalformedTruncated %s.','a:1:{i:0;s:3:"abc"'),('`%%s MalformedNested %s.',serialize([['x',['deeper']]])),
+                  ('`%%s MalformedMap %s.',serialize({'a':'x'})),('`%%s MalformedSchema %s.',serialize([[False,'taunts','x']])),
+                  ('`%%s MalformedEmpty %s.',serialize([[]])),good('After',[True,'taunts','"%s, finally", says the Rat.','`^Bob`^'])]
+            ids=[]
+            for text,arguments in rows:
+                q("INSERT INTO news (newstext,newsdate,accountid,arguments,tlschema) VALUES (?,?,?,?,'news')",[text,today,target,arguments])
+                ids.append(int(q('SELECT MAX(newsid) AS n FROM news WHERE accountid=?',[target])[0]['n']))
+            stored=lambda:[r['arguments'] for r in q('SELECT arguments FROM news WHERE accountid=? ORDER BY newsid',[target])]
+            q('UPDATE accounts SET superuser=0 WHERE acctid=?',[player]);before=stored();call=self._security_client()
+            def page(url):
+                q('UPDATE accounts SET lastnewday=? WHERE acctid=?',[self._current_game_day(),player]);self._security_allow(player,url)
+                status,body=call(url);self.assertEqual(200,status,body[:2000])
+                return html.unescape(body),re.sub(r'\s+',' ',html.unescape(re.sub(r'<[^>]+>','',body)))
+            for url in ['news.php',f'bio.php?char={target}']:
+                body,text=page(url)
+                self.assertIn('ArgVictimBefore has been slain in the forest by RatBefore. "Bob again", says the Rat.',text,url)
+                self.assertIn('ArgVictimAfter has been slain in the forest by RatAfter. "Bob, finally", says the Rat.',text,url)
+                self.assertRegex(text,r'ArgVictimStray has been slain in the forest by RatStray\. (?!")',url)
+                self.assertNotIn('Malformed',text,url);self.assertNotIn('newsdelete',body,url)
+            # A comment moderator sees every row's Del link, never a skipped row's text.
+            q('UPDATE accounts SET superuser=? WHERE acctid=?',[16,player]);call=self._security_client()
+            body,text=page('news.php');self.assertNotIn('Malformed',text)
+            for news in ids: self.assertIn(f'superuser.php?op=newsdelete&newsid={news}&',body)
+            self.assertEqual(before,stored())
+        finally:
+            q('UPDATE accounts SET superuser=? WHERE acctid=?',[original,player])
+            for who in created: q('DELETE FROM news WHERE accountid=?',[who]);q('DELETE FROM accounts_output WHERE acctid=?',[who]);q('DELETE FROM accounts WHERE acctid=?',[who])
+
+    def test_dragon_point_history_checked_at_load_http(self):
+        # 1.1.2 replaced a history it could not read with an empty one, handing the spent points back. A corrupt history
+        # now stops login and every page with a 409 and nothing written; a 1.1.2 empty column and a history beyond the
+        # current dragon kills (the user editor can lower them) still load.
+        q=self.query;player=int(q('SELECT acctid FROM accounts WHERE login=?',['WebPlayer'])[0]['acctid'])
+        saved=q('SELECT dragonpoints,dragonkills FROM accounts WHERE acctid=?',[player])[0]
+        row=lambda:tuple(q('SELECT dragonpoints,dragonkills,loggedin,laston FROM accounts WHERE acctid=?',[player])[0].values())
+        def stored(value,kills): q('UPDATE accounts SET dragonpoints=?,dragonkills=? WHERE acctid=?',[value,kills,player])
+        def login():
+            call=self._security_client(login=None);_,body=call('home.php')
+            csrf=re.search(r'name=[\'"]csrf_token[\'"] value=[\'"]([a-f0-9]{64})',body).group(1)
+            return call,call('login.php',{'csrf_token':csrf,'name':'WebPlayer','password':"Synthetic web O'Reilly \\ password"})
+        try:
+            for value,kills in [('',0),('a:2:{i:0;s:2:"hp";i:1;s:2:"at";}',1),('a:1:{i:0;s:14:"retired_module";}',1)]:
+                stored(value,kills);call,(status,body)=login();self.assertEqual(303,status,(value,body[:500]))
+                status,body=call('motd.php');self.assertEqual(200,status,(value,body[:2000]))
+            for value in ['a:1:{i:0;i:5;}','a:1:{i:0;s:3:"hp"','a:1:{s:1:"a";s:2:"hp";}','a:1:{i:0;s:8:"<script>";}','s:2:"hp";','b:0;']:
+                with self.subTest(value=value):
+                    stored(value,3);before=row();_,(status,body)=login()
+                    self.assertEqual(409,status,body[:500]);self.assertIn('Invalid stored Dragon Point state. You were not logged in.',body);self.assertEqual(before,row())
+                    stored('a:0:{}',3);call,(status,body)=login();self.assertEqual(303,status)
+                    stored(value,3);before=row();status,body=call('motd.php')
+                    self.assertEqual(409,status,body[:500]);self.assertIn('Invalid stored Dragon Point state. No game action was completed.',body);self.assertEqual(before,row())
+        finally:
+            q('UPDATE accounts SET dragonpoints=?,dragonkills=? WHERE acctid=?',[saved['dragonpoints'],saved['dragonkills'],player])
+
+    def test_motd_route_authority_http(self):
+        q=self.query;player=int(q('SELECT acctid FROM accounts WHERE login=?',['WebPlayer'])[0]['acctid'])
+        original=q('SELECT superuser,experience FROM accounts WHERE acctid=?',[player])[0];serialize=self._php_serialize
+        first=int(q('SELECT COALESCE(MAX(motditem),0) AS m FROM motd')[0]['m']);news=int(q('SELECT COALESCE(MAX(newsid),0) AS m FROM news')[0]['m'])
+        call=None
+        def login(bits):
+            nonlocal call;q('UPDATE accounts SET superuser=?,experience=1000 WHERE acctid=?',[bits,player]);call=self._security_client()
+        request=lambda url,data=None:call(url,data)
+        motds=lambda:[tuple(r.values()) for r in q('SELECT motditem,motdtitle,motdbody,motdtype,motdauthor FROM motd WHERE motditem>? ORDER BY motditem',[first])]
+        votes=lambda item:[tuple(r.values()) for r in q('SELECT account,choice FROM pollresults WHERE motditem=? ORDER BY resultid',[item])]
+        exp=lambda:int(q('SELECT experience FROM accounts WHERE acctid=?',[player])[0]['experience'])
+        def add(title,body,kind=0):
+            q('INSERT INTO motd (motdtitle,motdbody,motddate,motdtype,motdauthor) VALUES (?,?,NOW(),?,?)',[title,body,kind,player])
+            return int(q('SELECT MAX(motditem) AS m FROM motd')[0]['m'])
+        try:
+            # A MoTD with HTML and colour codes, a 1.1.2 poll (stored with magic quotes' slashes, blank options included), a poll
+            # whose body fails its schema.
+            item=add('Fixture MoTD <i>title</i>',"`@Green <img src=x onerror=alert(1)> O'Reilly \\ 雪")
+            poll=add('Fixture MoTD poll',serialize({'body':"Pick one, it\\'s <b>fun</b>",'opt':['Red','  ',"O\\'Reilly",'','Blue']}),1)
+            broken=add('Fixture MoTD broken poll','a:2:{s:4:"body";s:1:"x";s:3:"opt";b:0;}',1)
+            state=motds()
+            # Anonymous: reads, escaped, colour codes kept; no ballot; every write refused.
+            anonymous=self._security_client(login=None);status,body=anonymous('motd.php');self.assertEqual(200,status,body[:2000])
+            self.assertNotIn('<img src=x',body);self.assertIn("<span class='colLtGreen'>Green &lt;img src=x",body);self.assertIn("O'Reilly \\ 雪",html.unescape(body))
+            self.assertNotIn('<i>title</i>',body);self.assertIn('Fixture MoTD broken poll',body);self.assertNotIn('op=vote',body);self.assertNotIn('op=del',body)
+            csrf=re.search(r'name=[\'"]csrf_token[\'"] value=[\'"]([a-f0-9]{64})',anonymous('home.php')[1]).group(1)
+            for url,data in [('motd.php?op=vote',{'csrf_token':csrf,'motditem':str(poll),'choice':'0'}),('motd.php?op=add',None),('motd.php?op=addpoll',None),
+                             ('motd.php?op=add',{'csrf_token':csrf,'subject':'S','body':'B'}),(f'motd.php?op=del&id={item}',None),(f'motd.php?op=del&id={item}',{'csrf_token':csrf})]:
+                self.assertEqual(403,anonymous(url,data)[0],url)
+            self.assertEqual(state,motds());self.assertEqual([],votes(poll))
+            # The archive month is bound: a 30-day month works (strict SQL refused 1.1.2's "-31"), anything else is 400.
+            self.assertEqual(200,anonymous('motd.php?month=2026-09')[0])
+            for bad in ["2026-10' OR '1","2026-13",'x']: self.assertEqual(400,anonymous('motd.php?month='+urllib.parse.quote(bad))[0],bad)
+            # A player, and an admin without the MoTD flag: no admin controls; a GET of an admin op is refused and changes
+            # nothing (1.1.2 took experience on any request, so a link elsewhere could cost a player).
+            for bits in [16|64|1024|65536,0]:
+                login(bits);status,body=request('motd.php');self.assertEqual(200,status,body[:2000])
+                self.assertNotIn('op=add',body);self.assertNotIn('op=del',body);self.assertEqual(1,len(re.findall(r"action='motd\.php\?op=vote'",body)),bits)
+                for url in ['motd.php?op=add','motd.php?op=addpoll',f'motd.php?op=del&id={item}',f'motd.php?op=add&id={item}&subject=x&body=y']:
+                    self.assertEqual(403,request(url)[0],url)
+                self.assertEqual(403,request(f'motd.php?op=del&id={item}',{'csrf_token':'0'*64})[0]);self.assertEqual(1000,exp());self.assertEqual(state,motds())
+            # The player's own protected POST to an admin op: 1.1.2's penalty and texts; the item is untouched.
+            fields=self._security_fields(request('motd.php')[1],'motd.php?op=vote')
+            status,body=request(f'motd.php?op=del&id={item}',{'csrf_token':fields['csrf_token']});self.assertEqual(200,status,body[:2000])
+            self.assertIn("You've attempted to defile the gods.  You are struck with a wand of forgetfulness.",html.unescape(body))
+            self.assertEqual(900,exp());self.assertEqual(state,motds())
+            self.assertEqual(['%s was penalized for attempting to defile the gods.'],[r['newstext'] for r in q('SELECT newstext FROM news WHERE newsid>? AND accountid=?',[news,player])])
+            # Votes: bound to an existing poll and one of the choices it lists.
+            vote=lambda fields,**data:request('motd.php?op=vote',{**fields,'motditem':str(poll),**data})
+            fields=self._security_fields(request('motd.php')[1],'motd.php?op=vote')
+            for bad,code in [({'choice':'1'},400),({'choice':'3'},400),({'choice':'5'},400),({'choice':'4294967296'},400),({'choice':"0' OR '1"},400),({'choice':'-1'},400),
+                             ({'choice[]':'0'},400),({},400),({'choice':'0','motditem':"1' OR '1"},400),({'choice':'0','motditem':str(item)},404),
+                             ({'choice':'0','motditem':'999999'},404),({'choice':'0','motditem':str(broken)},409),({'choice':'0','extra':'1'},400)]:
+                self.assertEqual(code,vote(fields,**bad)[0],bad)
+            self.assertEqual(403,vote({'action_token':fields['action_token']},choice='0')[0]);self.assertEqual([],votes(poll))
+            status,_=vote(fields,choice='2');self.assertIn(status,[302,303]);self.assertEqual([(str(player),'2')],votes(poll))
+            self.assertEqual(409,vote(fields,choice='4')[0]);self.assertEqual([(str(player),'2')],votes(poll))
+            # A fresh form changes the vote, as in 1.1.2: one vote per player per poll.
+            fields=self._security_fields(request('motd.php')[1],'motd.php?op=vote');self.assertIn(vote(fields,choice='4')[0],[302,303])
+            self.assertEqual([(str(player),'4')],votes(poll))
+            body=request('motd.php')[1];self.assertIn("name='choice' value='4' checked",body)
+            self.assertIn("it's &lt;b&gt;fun&lt;/b&gt;",body);self.assertIn("O'Reilly (0 - 0%)",body);self.assertIn('Blue (1 - 100%)',body)
+            # The MoTD flag: GET never writes (1.1.2 deleted on GET).
+            login(4096);status,body=request('motd.php');self.assertEqual(200,status)
+            self.assertIn(f'motd.php?op=add&id={item}',body);self.assertNotIn(f'motd.php?op=add&id={poll}',body)
+            for target in [item,poll,broken]: self.assertIn(f"action='motd.php?op=del&id={target}'",body)
+            self.assertEqual(405,request(f'motd.php?op=del&id={item}')[0]);self.assertEqual(200,request(f'motd.php?op=add&id={item}&subject=x&body=y')[0])
+            self.assertEqual(400,request(f'motd.php?op=add&id={poll}')[0]);self.assertEqual(400,request("motd.php?op=add&id=1'")[0]);self.assertEqual(state,motds())
+            # Add: CSRF, the intent, bound values as typed; preview writes nothing; a replay is refused.
+            form=lambda url,action=None:self._security_fields(request(url)[1],action or url)
+            fields=form('motd.php?op=add','motd.php?op=add&id=0')
+            self.assertEqual(403,request('motd.php?op=add&id=0',{'action_token':fields['action_token'],'subject':'S','body':'B'})[0])
+            for bad in [{'subject[]':'S','body':'B'},{'subject':'x'*201,'body':'B'},{'subject':'S','body':b'\xff'},{'subject':'S','body':'B','motdauthor':'1'}]:
+                self.assertEqual(400,request('motd.php?op=add&id=0',{**fields,**bad})[0],bad)
+            subject="Fixture MoTD new O'Reilly \\ 雪 <b>";text="`^Bound body' OR '1 \\ <script>x</script>"
+            status,body=request('motd.php?op=add&id=0',{**fields,'subject':subject,'body':text,'preview':'Preview'});self.assertEqual(200,status)
+            self.assertEqual(state,motds());self.assertNotIn('<script>x',body)
+            status,_=request('motd.php?op=add&id=0',{**fields,'subject':subject,'body':text});self.assertIn(status,[302,303])
+            added=motds()[-1];self.assertEqual((subject,text,'0',str(player)),added[1:])
+            self.assertEqual(409,request('motd.php?op=add&id=0',{**fields,'subject':subject,'body':text})[0]);self.assertEqual(len(state)+1,len(motds()))
+            # Edit: bound to the item as the form showed it.
+            url=f'motd.php?op=add&id={item}';fields=form(url);q('UPDATE motd SET motdbody=? WHERE motditem=?',['Edited meanwhile',item])
+            self.assertEqual(409,request(url,{**fields,'subject':'Fixture MoTD edited','body':'Edited body'})[0])
+            self.assertEqual('Edited meanwhile',q('SELECT motdbody FROM motd WHERE motditem=?',[item])[0]['motdbody'])
+            fields=form(url);status,_=request(url,{**fields,'subject':'Fixture MoTD edited','body':'Edited body','changedate':'1'});self.assertIn(status,[302,303])
+            self.assertEqual(('Fixture MoTD edited','Edited body'),tuple(q('SELECT motdtitle,motdbody FROM motd WHERE motditem=?',[item])[0].values()))
+            self.assertEqual(409,request(url,{**fields,'subject':'Fixture MoTD replay','body':'Replay'})[0])
+            # Polls: the 1.1.2 stored form, bound; a replay is refused.
+            fields=form('motd.php?op=addpoll');url='motd.php?op=addpoll'
+            for bad in [[('subject','P'),('body','B'),('opt','scalar')],[('subject','P'),('body','B'),('opt[x]','A')],[('subject','P'),('body','B'),('opt[]',b'\xff')],
+                        [('subject','P'),('body','B'),*[('opt[]','x')]*101]]:
+                self.assertEqual(400,request(url,[*fields.items(),*bad])[0],bad[2:4])
+            count=len(motds());data=[*fields.items(),('subject','Fixture MoTD new poll'),('body',"Vote O'Reilly"),('opt[]','Yes'),('opt[]',"It's"),('opt[]','')]
+            status,_=request(url,data);self.assertIn(status,[302,303]);created=motds()[-1]
+            self.assertEqual(('Fixture MoTD new poll',serialize({'body':"Vote O\\'Reilly",'opt':['Yes',"It\\'s",'']}),'1',str(player)),created[1:])
+            self.assertEqual(409,request(url,data)[0]);self.assertEqual(count+1,len(motds()))
+            body=request('motd.php')[1];self.assertIn("Vote O'Reilly",html.unescape(body));self.assertIn("It's (0 - 0%)",html.unescape(body))
+            # Delete: a protected POST bound to the item.
+            fields=self._security_fields(body,f'motd.php?op=del&id={broken}');stale=self._security_fields(body,f'motd.php?op=del&id={poll}')
+            self.assertIn(request(f'motd.php?op=del&id={broken}',fields)[0],[302,303]);self.assertNotIn(broken,[r[0] for r in [(int(m[0]),) for m in motds()]])
+            self.assertEqual(404,request(f'motd.php?op=del&id={broken}',fields)[0])
+            q("UPDATE motd SET motdtitle='Fixture MoTD poll renamed' WHERE motditem=?",[poll]);self.assertEqual(409,request(f'motd.php?op=del&id={poll}',stale)[0])
+            self.assertIn(poll,[int(m[0]) for m in motds()]);self.assertEqual([(str(player),'4')],votes(poll))
+        finally:
+            q('UPDATE accounts SET superuser=?,experience=? WHERE acctid=?',[original['superuser'],original['experience'],player])
+            q('DELETE FROM pollresults WHERE motditem>?',[first]);q('DELETE FROM motd WHERE motditem>?',[first]);q('DELETE FROM news WHERE newsid>? AND accountid=?',[news,player])
+
+    def test_paylog_process_dates_post_only_http(self):
+        # 1.1.2 stamped every payment without a process date on each view of the payment log. That write is now a protected
+        # POST for SU_EDIT_PAYLOG; a record whose info fails its schema is shown with blank payment fields and never dated.
+        q=self.query;player=int(q('SELECT acctid FROM accounts WHERE login=?',['WebPlayer'])[0]['acctid'])
+        original=q('SELECT superuser FROM accounts WHERE acctid=?',[player])[0]['superuser'];serialize=self._php_serialize;call=None
+        def login(bits):
+            nonlocal call;q('UPDATE accounts SET superuser=? WHERE acctid=?',[bits,player]);call=self._security_client()
+        def request(url,data=None):
+            q('UPDATE accounts SET lastnewday=? WHERE acctid=?',[self._current_game_day(),player]);self._security_allow(player,url);return call(url,data)
+        info=lambda **extra:serialize({'payment_date':'10:00:00 Oct 22, 2026 PDT','txn_type':'web_accept','mc_gross':'5.00','mc_fee':'0.45','mc_currency':'USD',
+                                       'memo':"O\\'Reilly <b>memo</b>",'item_number':'Joe:x<i>',**extra})
+        def payment(txn,data,date=None):
+            q("INSERT INTO paylog(info,response,txnid,amount,name,acctid,processed,filed,txfee,processdate) VALUES (?,'',?,5.00,'',0,0,0,0.45,?)",[data,txn,date])
+        dates=lambda:{r['txnid']:r['processdate'] for r in q("SELECT txnid,processdate FROM paylog WHERE txnid LIKE 'TXN-PAYLOG-%'")}
+        expected=subprocess.run([shutil.which('php'),'-r',"echo date('Y-m-d H:i:s', strtotime('10:00:00 Oct 22, 2026 PDT'));"],text=True,capture_output=True,check=True).stdout
+        try:
+            payment('TXN-PAYLOG-1',info());payment('TXN-PAYLOG-2','a:1:{s:1:"a";');payment('TXN-PAYLOG-3',serialize({'txn_type':'web_accept'}))
+            payment('TXN-PAYLOG-4',serialize({'payment_date':['nested']}),'2026-10-05 00:00:00')
+            before=dates();self.assertEqual(None,before['TXN-PAYLOG-1'])
+            for bits in [0,16|32|64|4096]:
+                login(bits)
+                for url,data in [('paylog.php',None),('paylog.php?op=process',{'x':'1'})]: self.assertEqual(403,request(url,data)[0],(bits,url))
+            login(1024);status,body=request('paylog.php?month=2026-10');self.assertEqual(200,status,body[:2000]);self.assertEqual(before,dates())
+            self.assertIn('TXN-PAYLOG-4',body);self.assertIn('1 payments have no process date yet.',html.unescape(body))
+            fields=self._security_fields(body,'paylog.php?op=process')
+            for bad in ["2026-10' OR '1",'2026-13','x']: self.assertEqual(400,request('paylog.php?month='+urllib.parse.quote(bad))[0],bad)
+            self.assertEqual(405,request('paylog.php?op=process')[0]);self.assertEqual(403,request('paylog.php?op=process',{'action_token':fields['action_token']})[0])
+            self.assertEqual(400,request('paylog.php?op=process',{**fields,'payid':'1'})[0]);self.assertEqual(before,dates())
+            # A payment added after the form was shown: the form is stale.
+            payment('TXN-PAYLOG-5',info());self.assertEqual(409,request('paylog.php?op=process',fields)[0]);self.assertEqual(None,dates()['TXN-PAYLOG-5'])
+            q("DELETE FROM paylog WHERE txnid='TXN-PAYLOG-5'")
+            fields=self._security_fields(request('paylog.php')[1],'paylog.php?op=process')
+            self.assertIn(request('paylog.php?op=process',fields)[0],[302,303])
+            self.assertEqual({**before,'TXN-PAYLOG-1':expected},dates())
+            self.assertEqual(409,request('paylog.php?op=process',fields)[0])
+            status,body=request('paylog.php?month=2026-10');self.assertEqual(200,status);self.assertNotIn('op=process',body)
+            self.assertIn('TXN-PAYLOG-1',body);self.assertNotIn('<b>memo',body);self.assertNotIn('Joe:x<i>',body);self.assertIn('web_accept',body)
+        finally:
+            q('UPDATE accounts SET superuser=? WHERE acctid=?',[original,player]);q("DELETE FROM paylog WHERE txnid LIKE 'TXN-PAYLOG-%'")
+
+    def test_comment_ban_respects_longer_existing_ban_http(self):
+        # 1.1.2 added no comment ban, and left the author logged in, when a ban lasting at least as long already existed for the
+        # author's ID. The bans, logouts, audit snapshots and deletes now commit together.
+        q=self.query;player=int(q('SELECT acctid FROM accounts WHERE login=?',['WebPlayer'])[0]['acctid'])
+        original=q('SELECT superuser FROM accounts WHERE acctid=?',[player])[0]['superuser'];serialize=self._php_serialize;targets=[];call=None
+        audit=int(q('SELECT COALESCE(MAX(modid),0) AS m FROM moderatedcomments')[0]['m'])
+        def login(bits):
+            nonlocal call;q('UPDATE accounts SET superuser=? WHERE acctid=?',[bits,player]);call=self._security_client()
+        def request(url,data=None):
+            q('UPDATE accounts SET lastnewday=? WHERE acctid=?',[self._current_game_day(),player]);self._security_allow(player,url);return call(url,data)
+        ids={}
+        def comment(who,text):
+            q("INSERT INTO commentary (section,author,comment,postdate) VALUES ('village',?,?,NOW())",[who,text])
+            return int(q('SELECT MAX(commentid) AS m FROM commentary')[0]['m'])
+        bans=lambda uid:[r['banexpire'] for r in q('SELECT banexpire FROM bans WHERE uniqueid=? ORDER BY banexpire IS NULL,banexpire',[uid])]
+        try:
+            for name,uid in [('Longer','a'*32),('Shorter','b'*32),('Permanent','c'*32),('Unbanned','d'*32)]:
+                who=int(self._security_target('BanAuthor'+name));targets.append(who);ids[name]=(who,uid)
+                q('UPDATE accounts SET uniqueid=?,loggedin=1 WHERE acctid=?',[uid,who])
+            q("INSERT INTO bans (uniqueid,banexpire,banreason,banner) VALUES (?,DATE_ADD(NOW(),INTERVAL 10 DAY),'Older','Staff')",['a'*32])
+            q("INSERT INTO bans (uniqueid,banexpire,banreason,banner) VALUES (?,DATE_ADD(NOW(),INTERVAL 1 DAY),'Older','Staff')",['b'*32])
+            q("INSERT INTO bans (uniqueid,banexpire,banreason,banner) VALUES (?,NULL,'Older','Staff')",['c'*32])
+            longer,shorter,permanent=bans('a'*32),bans('b'*32),bans('c'*32)
+            comments=[comment(ids[n][0],f'Ban fixture {n}') for n in ['Longer','Shorter','Permanent','Unbanned','Unbanned']]
+            login(16|64);status,body=request('moderate.php');self.assertEqual(200,status,body[:2000])
+            csrf=re.search(r'name=[\'"]csrf_token[\'"] value=[\'"]([a-f0-9]{64})',body).group(1)
+            data={'csrf_token':csrf,'delnban':'Delete Checked & Ban (3 days)','reason':'Fixture reason',**{f'comment[{c}]':'on' for c in comments}}
+            self.assertIn(request('moderate.php?op=commentdelete',data)[0],[302,303])
+            loggedin=lambda name:q('SELECT loggedin FROM accounts WHERE acctid=?',[ids[name][0]])[0]['loggedin']
+            self.assertEqual(longer,bans('a'*32));self.assertEqual('1',loggedin('Longer'))
+            self.assertEqual(permanent,bans('c'*32));self.assertEqual('1',loggedin('Permanent'))
+            self.assertEqual(2,len(bans('b'*32)));self.assertEqual(shorter[0],bans('b'*32)[0]);self.assertEqual('0',loggedin('Shorter'))
+            # Two comments by one author: one ban, as 1.1.2's DISTINCT gave.
+            self.assertEqual(1,len(bans('d'*32)));self.assertEqual('0',loggedin('Unbanned'))
+            self.assertEqual([],q('SELECT commentid FROM commentary WHERE commentid IN ('+','.join('?'*len(comments))+')',comments))
+            snapshots=[r['comment'] for r in q('SELECT comment FROM moderatedcomments WHERE modid>? ORDER BY modid',[audit])];self.assertEqual(5,len(snapshots))
+            # Delete without ban: no ban, author stays logged in.
+            q('UPDATE accounts SET loggedin=1 WHERE acctid=?',[ids['Unbanned'][0]]);extra=comment(ids['Unbanned'][0],'Ban fixture plain')
+            csrf=re.search(r'name=[\'"]csrf_token[\'"] value=[\'"]([a-f0-9]{64})',request('moderate.php')[1]).group(1)
+            self.assertIn(request('moderate.php?op=commentdelete',{'csrf_token':csrf,f'comment[{extra}]':'on'})[0],[302,303])
+            self.assertEqual(1,len(bans('d'*32)));self.assertEqual('1',loggedin('Unbanned'))
+            # The audit: a founder's comment (rank 31) and a malformed snapshot list safely; the malformed one cannot be restored.
+            founder={'commentid':str(extra+100),'section':'village','author':str(ids['Longer'][0]),'comment':'Founder fixture','postdate':'2026-10-22 10:00:00',
+                     'name':'`2Founder','login':'Founder','clanrank':'31','clanshort':'ABC'}
+            for value in [serialize(founder),'a:1:{s:9:"commentid";']:
+                q('INSERT INTO moderatedcomments (moderator,moddate,comment) VALUES (?,NOW(),?)',[player,value])
+            bad=int(q('SELECT MAX(modid) AS m FROM moderatedcomments')[0]['m'])
+            login(16|131072);status,body=request('moderate.php?op=audit');self.assertEqual(200,status,body[:2000])
+            self.assertIn('Founder fixture',body);self.assertIn('&lt;ABC',body);self.assertNotIn(f"name='mod[{bad}]'",body);self.assertIn(f"name='mod[{bad-1}]'",body)
+            csrf=re.search(r'name=[\'"]csrf_token[\'"] value=[\'"]([a-f0-9]{64})',body).group(1)
+            self.assertEqual(400,request('moderate.php?op=audit&subop=undelete',{'csrf_token':csrf,f'mod[{bad}]':'1'})[0])
+            self.assertEqual(1,len(q('SELECT modid FROM moderatedcomments WHERE modid=?',[bad])))
+            # A valid snapshot restores the comment.
+            restore=int(q('SELECT MIN(modid) AS m FROM moderatedcomments WHERE modid>?',[audit])[0]['m'])
+            self.assertEqual(200,request('moderate.php?op=audit&subop=undelete',{'csrf_token':csrf,f'mod[{restore}]':'1'})[0])
+            self.assertEqual(['Ban fixture Longer'],[r['comment'] for r in q('SELECT comment FROM commentary WHERE commentid=?',[comments[0]])])
+        finally:
+            q('UPDATE accounts SET superuser=? WHERE acctid=?',[original,player])
+            q("DELETE FROM commentary WHERE comment LIKE 'Ban fixture%' OR comment='Founder fixture'");q('DELETE FROM moderatedcomments WHERE modid>?',[audit])
+            for uid in ['a'*32,'b'*32,'c'*32,'d'*32]: q('DELETE FROM bans WHERE uniqueid=?',[uid])
+            for who in targets: q('DELETE FROM accounts_output WHERE acctid=?',[who]);q('DELETE FROM accounts WHERE acctid=?',[who])
+
     @contextmanager
     def _deletion_fixture(self):
         # A delete_character hook that counts its runs inside the deletion transaction and can veto; dag active with an

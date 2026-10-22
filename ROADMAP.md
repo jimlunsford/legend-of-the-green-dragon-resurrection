@@ -81,10 +81,13 @@ Each family is DONE only when its acceptance evidence passes on both supported C
 - [x] Suspended specialty buffs: training and PvP no longer stop while a specialty buff is active (`suspend_buffs()` writes 1/0; the buff schema normalizes it), and a hired healer companion no longer makes the fight a 500 (`src/Game/BuffState.php`, `lib/buffs.php`) (`SERIALIZED-SCHEMAS-PART3-20261022.md`). Accepted at `49baab9`, Modern core 39704754364, Baseline integrity 39704754291.
 - [x] Serialized business schemas part 3: one companion schema at hydration, `apply_companion()`, every companion writer and every combat route (`src/Game/CompanionState.php`) (`SERIALIZED-SCHEMAS-PART3-20261022.md`). Accepted at `49baab9`, Modern core 39704754364, Baseline integrity 39704754291.
 - [x] Companion abilities: one schema for the mercenary camp, the companion editor and take (`SERIALIZED-SCHEMAS-PART3-20261022.md`). Accepted at `49baab9`, Modern core 39704754364, Baseline integrity 39704754291.
+- [x] Serialized business schemas part 4: general combat state. The Forest contract on the Forest-specialty route (1.1.2's doppleganger and the Gypsy Bandit's ability state now pass), the post-round re-check on Dragon and Forest specialty, and the 1.1.2 in-flight Training and Graveyard fights upgraded on first read (`SERIALIZED-SCHEMAS-PART4-20261022.md`). Accepted at `5bdba80`, Modern core 39764211865, Baseline integrity 39764211576.
+- [x] Forest search that picked the Gypsy Bandit gave a 500 and rolled back (`ForestCombatState` loads its dependencies) (`SERIALIZED-SCHEMAS-PART4-20261022.md`). Accepted at `5bdba80`, Modern core 39764211865, Baseline integrity 39764211576.
 
 ### Current
 
-- [ ] Serialized business schemas part 4: general combat state. The Forest contract on the Forest-specialty route (1.1.2's doppleganger and the Gypsy Bandit's ability state now pass), the post-round re-check on Dragon and Forest specialty, and the 1.1.2 in-flight Training and Graveyard fights upgraded on first read; also fixes the 500 when a Forest search picked the Gypsy Bandit (candidate in `SERIALIZED-SCHEMAS-PART4-20261022.md`)
+- [ ] Serialized business schemas part 5: news arguments and other business state. One news arguments schema for `addnews()`, `news.php` and `bio.php` (structure and size only; a bad row is skipped, a refused writer rolls back); `lib/mail.php` recorded as excluded; Dragon Point history checked at session load and stored only through its schema; the moderated comment snapshot, the payment log and the MOTD poll read and written through schemas. No serialized-state site of the audit is left OPEN. Also fixes the moderation audit page's 500 for a clan founder's comment (candidate in `SERIALIZED-SCHEMAS-PART5-20261022.md`)
+- [ ] `motd.php` route family: role matrix, every mutation a POST with CSRF and a one-use intent, a vote bound to an existing poll and one of its options, all SQL bound, the MOTD body escaped with colour codes kept; also fixes the 500 with no MOTD and the 500 in the archive for a 30-day month on MySQL 8.4 (candidate in `SERIALIZED-SCHEMAS-PART5-20261022.md`)
 
 ### Remaining
 
@@ -94,8 +97,7 @@ Infrastructure and records:
 
 State and maintenance (remaining serialized business schemas, split in `SERIALIZED-SCHEMAS-PART1-20261017.md`; per-site status in `SERIALIZED-STATE-AUDIT.md`):
 
-- [ ] Translation arrays: a news arguments schema for `news.php`, `bio.php` and `addnews()`; `lib/mail.php` switched or recorded as excluded
-- [ ] Other business state: dragon points at session load, the moderated comment snapshot, the payment log, the MOTD poll
+- None left: the last two items (translation arrays, other business state) are the part 5 candidate under Current.
 
 Final rescan (each line checked against the source at `1dfb7c5`; evidence doc in brackets):
 
@@ -103,14 +105,15 @@ To fix:
 
 - [ ] Request values reaching SQL unbound: a full sweep of every shipped PHP file (`bio.php` and `mounts.php?op=xml` were found late, in `CONTENT-EDITORS-PART3-AUTHORITY-20261017.md`)
 - [ ] Mail notification link: the in-game mail notification email links to the sender's `Host` header, as in 1.1.2 (`lib/systemmail.php`) (`COMPLETION-REPORTING-20261017.md`)
-- [ ] Admin repair path for a player locked out by stored state that fails the new schemas: preferences, buff list, companions, a 1.1.2 `restorepage` with a quote, a stored fight that fails its route's schema (including a 1.1.2 Training or Graveyard fight the upgrade cannot accept). Fix Navs repairs navigation only; the user editor shows the stored fight read-only (`SERIALIZED-SCHEMAS-PART1-20261017.md`, `SERIALIZED-SCHEMAS-PART2-20261018.md`, `SERIALIZED-SCHEMAS-PART3-20261022.md`, `SERIALIZED-SCHEMAS-PART4-20261022.md`)
-- [ ] `paylog.php` runs an unbound `processdate` UPDATE on GET (`BIO-DONATION-ADMIN-AUTHORITY-20261016.md`)
+- [ ] Admin repair path for a player locked out by stored state that fails the new schemas: preferences, buff list, companions, a 1.1.2 `restorepage` with a quote, a stored fight that fails its route's schema (including a 1.1.2 Training or Graveyard fight the upgrade cannot accept), a corrupt Dragon Point history. Fix Navs repairs navigation only; the user editor shows the stored fight and the Dragon Point history read-only (`SERIALIZED-SCHEMAS-PART1-20261017.md`, `SERIALIZED-SCHEMAS-PART2-20261018.md`, `SERIALIZED-SCHEMAS-PART3-20261022.md`, `SERIALIZED-SCHEMAS-PART4-20261022.md`, `SERIALIZED-SCHEMAS-PART5-20261022.md`)
+- [ ] `paylog.php` runs an unbound `processdate` UPDATE on GET (`BIO-DONATION-ADMIN-AUTHORITY-20261016.md`). Candidate: a POST with CSRF and a one-use intent, bound; GET writes nothing; also fixes the 500 on MySQL 8.4 (`SERIALIZED-SCHEMAS-PART5-20261022.md`)
 - [ ] `getmount()` puts the stored mount ID into a cached query (`lib/mounts.php`) (`STABLES-AUTHORITY-20261016.md`)
-- [ ] `moderate.php` skips 1.1.2's check for a longer existing ban (`BAN-ADMIN-AUTHORITY-20261016.md`)
+- [ ] `moderate.php` skips 1.1.2's check for a longer existing ban (`BAN-ADMIN-AUTHORITY-20261016.md`). Candidate: the rule restored, bound, inside the moderation transaction (`SERIALIZED-SCHEMAS-PART5-20261022.md`)
 - [ ] The name rebuilt after a dragon kill has no length check (`lib/dragon_outcomes.php`, `lib/names.php`) (`CONTENT-EDITORS-PART1-AUTHORITY-20261016.md`)
 - [ ] `bio.php`'s `ret` return link is not checked; `cmd_sanitize()` only strips the comment-scroll parameter (`BIO-DONATION-ADMIN-AUTHORITY-20261016.md`)
 - [ ] No test races account deletion against a clan action (`DELETION-EXPIRATION-AUTHORITY-20261017.md`)
 - [ ] Mercenary camp: hire and heal are GET mutations guarded only by allowed navigation; hire pastes `id` into SQL, the list query pastes the session location and dragon kills, and heal takes `cost` from the URL (`mercenarycamp.php`), found in part 3 (`SERIALIZED-SCHEMAS-PART3-20261022.md`)
+- [ ] News delete: the news page's Del link is a GET to `superuser.php?op=newsdelete` that deletes with `newsid` pasted into SQL, open to any staff member who can enter the grotto, not only comment moderators, with no CSRF or intent (`superuser.php`), found in part 5 (`SERIALIZED-SCHEMAS-PART5-20261022.md`)
 
 Recorded, not changed (kept as 1.1.2 behavior):
 
@@ -120,8 +123,9 @@ Recorded, not changed (kept as 1.1.2 behavior):
 - The clan-delete hook is not called on disband (`DELETION-EXPIRATION-AUTHORITY-20261017.md`)
 - In the user editor, when the player's page changes the same field the admin changed, the player's value wins (`USER-EDITOR-AUTHORITY-20261016.md`)
 - The unreachable `badnav.php` branch would still fail in `saveuser()` (`SERIALIZED-SCHEMAS-PART1-20261017.md`)
+- `motd.php`: a signed-in player's own protected POST to an admin op still costs 10% experience with a news line; `newcount` paging never worked and still does not; the archive list skips its first month row (`SERIALIZED-SCHEMAS-PART5-20261022.md`)
 
-The unused `lib/mail.php` stays with the translation arrays item above.
+The unused `lib/mail.php` is recorded as excluded: nothing includes it, and a direct request gets 404 (`SERIALIZED-SCHEMAS-PART5-20261022.md`).
 
 - [ ] Final rescan: Done only when every "to fix" line above is Done or proven not reachable.
 

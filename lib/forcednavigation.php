@@ -2,6 +2,7 @@
 require_once __DIR__ . '/../src/Security/ScalarState.php';
 require_once __DIR__ . '/../src/Game/BuffState.php';
 require_once __DIR__ . '/../src/Game/CompanionState.php';
+require_once __DIR__ . '/../src/Game/DragonPointState.php';
 require_once __DIR__ . '/../src/Security/NavigationState.php';
 require_once __DIR__ . '/../src/Security/PreferenceState.php';
 // translator ready
@@ -42,8 +43,12 @@ function do_forced_nav($anonymous,$overrideforced){
             } catch (DomainException $error) {
                 http_response_code(409); exit('Invalid stored companion state. No game action was completed.');
             }
-			$session['user']['dragonpoints']=\Resurrection\Security\ScalarState::read($session['user']['dragonpoints']);
-			if (!is_array($session['user']['dragonpoints'])) $session['user']['dragonpoints']=array();
+            // 1.1.2 reset a history it could not read to an empty one, handing the spent points back.
+            try {
+                $session['user']['dragonpoints']=\Resurrection\Game\DragonPointState::history($session['user']['dragonpoints']);
+            } catch (DomainException $error) {
+                http_response_code(409); exit('Invalid stored Dragon Point state. No game action was completed.');
+            }
             try {
                 $session['user']['prefs']=\Resurrection\Security\PreferenceState::read($session['user']['prefs']);
             } catch (DomainException $error) {

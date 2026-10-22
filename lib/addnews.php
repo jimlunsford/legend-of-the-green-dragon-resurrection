@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/../src/Security/NewsArguments.php';
 // addnews ready (duh ;))
 // translator ready
 // mail ready
@@ -72,7 +73,8 @@ function addnews_for_user()
 				array_push($arguments,$val);
 			}
 		}
-		$arguments = serialize($arguments);
+		// Only arguments news.php can render are stored; a refusal throws, so the caller's transaction rolls back.
+		$arguments = \Resurrection\Security\NewsArguments::encode($arguments);
 	}else{
 		$arguments="";
 	}

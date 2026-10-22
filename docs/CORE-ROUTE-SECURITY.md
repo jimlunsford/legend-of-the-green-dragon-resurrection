@@ -882,3 +882,28 @@ accepted. This closes the `OPTIMIZE TABLE` point of "Maintenance classification"
 - Gap: the mail notification body still links to the sender's `HTTP_HOST`, as 1.1.2 did.
 
 See [completion reporting](COMPLETION-REPORTING-20261017.md).
+
+2026-10-22 MOTD (`motd.php`, `lib/motd.php`): candidate pending CI. Role matrix
+proven for anonymous, player, admin without `SU_POST_MOTD` and admin with it.
+Voting is POST + CSRF + a one-use intent bound to the poll as shown, signed-in
+players only, for an existing poll and one of the options it lists; one vote per
+player per poll, replaced on a new vote as in 1.1.2, in a transaction under the
+poll's row lock. Add, edit, poll creation and delete are POST + CSRF + a one-use
+intent, edit and delete bound to the item as shown; delete by GET is 405; editing a
+poll is refused. Every query is bound; `month` is `YYYY-MM`. The poll body is read
+and written through `MotdPoll`; the MOTD body and poll author are escaped with LoGD
+colour codes kept. A player who requests an admin op by GET (or anonymously) gets
+403 and nothing changes; the 1.1.2 experience penalty applies only to the player's
+own CSRF-protected POST. Also fixed: the 500 with no MOTD and the archive's 500 for
+a 30-day month on MySQL 8.4. Texts unchanged. See
+[serialized schemas part 5](SERIALIZED-SCHEMAS-PART5-20261022.md#c-motdphp-as-a-route-family).
+
+2026-10-22 payment log (`paylog.php`): candidate pending CI. The `processdate`
+stamp 1.1.2 ran on every GET is now `op=process`: POST + CSRF + a one-use intent
+bound to the pending payments and the dates they would get, under the existing
+`check_su_access(SU_EDIT_PAYLOG)`, bound per payment inside a transaction that
+re-checks the pending set under lock (409 when it changed). GET only displays; the
+display `month` is `YYYY-MM` and bound; stored payment fields are read through
+`PaymentInfo`. Payment intake stays disabled (`payment.php` answers 410). Also
+fixed: the page's 500 on MySQL 8.4 (zero-date comparison, `GROUP BY ... DESC`). See
+[serialized schemas part 5](SERIALIZED-SCHEMAS-PART5-20261022.md#d-paylogphp-processdate).

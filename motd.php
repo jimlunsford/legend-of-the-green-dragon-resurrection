@@ -25,15 +25,7 @@ if ($session['user']['superuser'] & SU_POST_MOTD) {
 }
 
 if ($op=="vote"){
-	$motditem = httppost('motditem');
-	$choice = httppost('choice');
-	$sql = "DELETE FROM " . db_prefix("pollresults") . " WHERE motditem='$motditem' AND account='{$session['user']['acctid']}'";
-	db_query($sql);
-	$sql = "INSERT INTO " . db_prefix("pollresults") . " (choice,account,motditem) VALUES ('$choice','{$session['user']['acctid']}','$motditem')";
-	db_query($sql);
-	invalidatedatacache("poll-$motditem");
-	header("Location: motd.php");
-	exit();
+	motd_vote();
 }
 if ($op == "add" || $op == "addpoll" || $op == "del")  {
 	if ($session['user']['superuser'] & SU_POST_MOTD) {
@@ -41,14 +33,7 @@ if ($op == "add" || $op == "addpoll" || $op == "del")  {
 		elseif ($op == "addpoll") motd_poll_form($id);
 		elseif ($op == "del") motd_del($id);
 	} else {
-		if ($session['user']['loggedin']){
-			$session['user']['experience'] =
-				round($session['user']['experience']*0.9,0);
-			addnews("%s was penalized for attempting to defile the gods.",
-					$session['user']['name']);
-			output("You've attempted to defile the gods.  You are struck with a wand of forgetfulness.  Some of what you knew, you no longer know.");
-			saveuser();
-		}
+		motd_refuse();
 	}
 }
 if ($op=="") {
@@ -59,9 +44,15 @@ if ($op=="") {
 	motditem("Beta!","Please see the beta message below.","","", "");
 	*/
 	$m = httpget("month");
+	if ($m !== false && $m !== '' && (!is_string($m) || !preg_match('/\A[0-9]{4}-(?:0[1-9]|1[0-2])\z/', $m))) {
+		http_response_code(400); exit('Invalid month.');
+	}
+	$newcount = (int)$newcount; $count = (int)$count;
 	if ($m > ""){
-		$sql = "SELECT " . db_prefix("motd") . ".*,name AS motdauthorname FROM " . db_prefix("motd") . " LEFT JOIN " . db_prefix("accounts") . " ON " . db_prefix("accounts") . ".acctid = " . db_prefix("motd") . ".motdauthor WHERE motddate >= '{$m}-01' AND motddate <= '{$m}-31' ORDER BY motddate DESC";
-		$result = db_query_cached($sql,"motd-$m");
+		// The whole month, as the archive list counts it. 1.1.2 compared with "{$m}-31", which strict SQL
+		// refuses for a 30-day month (error 1525) and which left out the 31st after midnight.
+		$sql = "SELECT " . db_prefix("motd") . ".*,name AS motdauthorname FROM " . db_prefix("motd") . " LEFT JOIN " . db_prefix("accounts") . " ON " . db_prefix("accounts") . ".acctid = " . db_prefix("motd") . ".motdauthor WHERE motddate >= ? AND motddate < ? ORDER BY motddate DESC";
+		$result = db_query_cached($sql,"motd-$m", 900, ["{$m}-01 00:00:00", date("Y-m-d H:i:s", strtotime("+1 month", strtotime("{$m}-01 00:00:00")))]);
 	}else{
 		$sql = "SELECT " . db_prefix("motd") . ".*,name AS motdauthorname FROM " . db_prefix("motd") . " LEFT JOIN " . db_prefix("accounts") . " ON " . db_prefix("accounts") . ".acctid = " . db_prefix("motd") . ".motdauthor ORDER BY motddate DESC limit $newcount,".($newcount+$count);
 		if ($newcount=0) //cache only the last x items
@@ -113,7 +104,8 @@ $session['needtoviewmotd']=false;
 $sql = "SELECT motddate FROM " . db_prefix("motd") ." ORDER BY motditem DESC LIMIT 1";
 $result = db_query_cached($sql, "motddate");
 $row = db_fetch_assoc($result);
-$session['user']['lastmotd']=$row['motddate'];
+// With no MoTD at all, PHP 5 read null here; PHP 8 stopped the page.
+$session['user']['lastmotd']=$row['motddate'] ?? null;
 
 popup_footer();
 ?>

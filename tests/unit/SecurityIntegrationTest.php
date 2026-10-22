@@ -67,6 +67,35 @@ final class SecurityIntegrationTest extends TestCase
 
     }
 
+    public function testNewsWriterRefusesUnrenderableArgumentsAndTheTransactionRollsBack(): void
+    {
+        require_once 'lib/addnews.php';
+        $GLOBALS['translation_namespace'] = 'news';
+        $db = $GLOBALS['dbinfo']['connection'];
+        $count = static fn (): int => (int)db_query("SELECT COUNT(*) AS n FROM news WHERE newstext LIKE 'Writer fixture%'")[0]['n'];
+        try {
+            foreach ([[['x', ['nested']]], [[]], [[true, 'taunts']], [new \stdClass()], [INF]] as $arguments) {
+                $db->beginTransaction();
+                try {
+                    addnews_for_user(1, 'Writer fixture kept %s', 'first');
+                    addnews_for_user(1, 'Writer fixture refused %s', ...$arguments);
+                    self::fail('Unrenderable news arguments stored.');
+                } catch (\DomainException $error) {
+                    $db->rollBack();
+                }
+                self::assertSame(0, $count());
+            }
+            $taunt = [true, 'taunts', '"100% sure, %s", sneers the Rat.', 'Bob'];
+            addnews_for_user(5, 'Writer fixture %s %s', "O'Reilly \\ 雪", $taunt, true);
+            addnews_for_user(5, 'Writer fixture plain');
+            $rows = db_query("SELECT accountid,arguments FROM news WHERE newstext LIKE 'Writer fixture%' ORDER BY newsid");
+            self::assertSame([['accountid'=>'0', 'arguments'=>serialize(["O'Reilly \\ 雪", $taunt])], ['accountid'=>'5', 'arguments'=>'']], $rows);
+        } finally {
+            if ($db->inTransaction()) $db->rollBack();
+            db_query("DELETE FROM news WHERE newstext LIKE 'Writer fixture%'");
+        }
+    }
+
     public function testMailboxMutationsRejectForgeryAndCrossAccountDeletion(): void
     {
         require_once 'lib/mail_security.php';
