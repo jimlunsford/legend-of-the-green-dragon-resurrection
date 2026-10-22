@@ -907,3 +907,34 @@ display `month` is `YYYY-MM` and bound; stored payment fields are read through
 `PaymentInfo`. Payment intake stays disabled (`payment.php` answers 410). Also
 fixed: the page's 500 on MySQL 8.4 (zero-date comparison, `GROUP BY ... DESC`). See
 [serialized schemas part 5](SERIALIZED-SCHEMAS-PART5-20261022.md#d-paylogphp-processdate).
+
+2026-10-22 paid player services (`mercenarycamp.php`, `healer.php`, `gypsy.php`,
+`lib/service_authority.php`): candidate pending CI, found and closed by final rescan
+task 1. 1.1.2 charged for each on a GET link guarded only by allowed navigation. Now
+a GET asks (a confirming form at the price the server works out); only the form's
+POST, with CSRF and a one-use intent bound to the action, its target, the price
+shown and the player's purse, level, hit points, place and companions, charges,
+inside `resurrection_player_mutation()` on the locked account. A stale, repeated or
+forged form is 409 and changes nothing; a late write failure rolls everything back
+and the spent intent cannot retry.
+- Mercenary camp hire: the companion must still be offered (active, here or
+  everywhere, dragon-kill cost met), at the price the form showed, affordable and
+  not already following the player, re-checked on the companion row under lock;
+  then the companion schema and the companion limit (1.1.2's text when full). The
+  listing query is bound (1.1.2 pasted the session location and dragon kills; a
+  quote in the location was a 500); the hire no longer pastes `id`.
+- Mercenary camp and healer companion healing: priced by 1.1.2's formula from the
+  companion's current wounds; the URL's `cost` and `compcost` are never read; an
+  unknown companion is 409 (1.1.2 created an empty one); the companion key is read
+  once from the URL, so a name with `%` or `\` can be healed.
+- Healer potions: the size is one of the listed 100% to 10%; the price is 1.1.2's
+  formula with the `healmultiply` hook; a player who is not hurt is offered none;
+  short gold shows 1.1.2's text. "Return whence you came" takes only `village.php`;
+  1.1.2 issued any URL the request named.
+- Gypsy seance: the 1.1.2 price (level x 20) is paid by the protected POST; the
+  seance page is open only to the player who paid in this session, until they snap
+  out of it, and to comment moderators (1.1.2 relied on allowed navigation).
+Prices, formulas, texts and hooks are unchanged. Read-only player pages bound in the
+same task: `list.php` (search, paging, clan list), `hof.php`, `news.php` and the
+mail read page's previous and next lookups. See the
+[route inventory](ROUTE-INVENTORY-20261022.md).

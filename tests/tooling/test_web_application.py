@@ -2352,7 +2352,9 @@ function fixturefightoptions_dohook($hook,$args) { $args['fixture_injected']=1; 
                 f['prepare']('TS',specialty='TS',badguy='',gold=5000,gems=20,location=village,hitpoints=300,maxhitpoints=1000,**values)
                 status,body=request('mercenarycamp.php'); self.assertEqual(200,status,body[:2000])
             def hire(cid):
-                camp(); before=snap(); status,body=request(f'mercenarycamp.php?op=buy&id={cid}'); return status,body,before
+                # A GET asks; the hire is the confirming form's protected POST.
+                camp(); url=f'mercenarycamp.php?op=buy&id={cid}'; status,body=request(url); self.assertEqual(200,status,body[:2000])
+                data=self._security_fields(body,url); before=snap(); status,body=request(url,data); return status,body,before
             def fight():
                 q('UPDATE accounts SET badguy=?,hitpoints=300 WHERE acctid=?',[e({'enemies':[f['enemy']],'options':{'type':'forest','didsurprise':1}}),player])
                 code,body=f['action'](f['ordinary_form']()); self.assertEqual(200,code,body[:2000])
@@ -6010,6 +6012,241 @@ $db=$GLOBALS['dbinfo']['connection'];$db->beginTransaction();db_query($argv[1],t
             q("DELETE FROM settings WHERE setting='allowfeed'")
             for row in saved: q('INSERT INTO settings(setting,value) VALUES (?,?)',[row['setting'],row['value']])
             q('UPDATE accounts SET '+','.join(k+'=?' for k in original if k!='acctid')+' WHERE acctid=?',[*[v for k,v in original.items() if k!='acctid'],player])
+
+    @contextmanager
+    def _service_fixture(self):
+        # WebPlayer at the mercenary camp, the healer or the gypsy, restored afterwards. Each request issues only the URL it
+        # requests as navigation, so business authority is tested without relying on allowednavs.
+        q=self.query;player=int(q('SELECT acctid FROM accounts WHERE login=?',['WebPlayer'])[0]['acctid'])
+        original=q('SELECT * FROM accounts WHERE acctid=?',[player])[0]
+        village=q("SELECT value FROM settings WHERE setting='villagename'");village=village[0]['value'] if village else 'Degolburg'
+        f={'player':player,'village':village,'call':self._security_client()}
+        def request(url,data=None):
+            q('UPDATE accounts SET lastnewday=? WHERE acctid=?',[self._current_game_day(),player])
+            self._security_allow(player,url);return f['call'](url,data)
+        def setup(**changes):
+            values=dict(alive=1,hitpoints=100,maxhitpoints=100,specialinc='',specialmisc='',badguy='',level=10,gold=2000,gems=5,
+                location=village,race='Human',specialty='DA',dragonkills=0,dragonpoints='a:0:{}',bufflist='a:0:{}',companions='a:0:{}',
+                superuser=0,restorepage='village.php');values.update(changes)
+            q('UPDATE accounts SET '+','.join(k+'=?' for k in values)+',lasthit=NOW() WHERE acctid=?',[*values.values(),player])
+        def state(*fields):
+            return tuple(q('SELECT '+','.join(fields or ['gold','gems','hitpoints','maxhitpoints','companions'])+' FROM accounts WHERE acctid=?',[player])[0].values())
+        def logs(): return q('SELECT message,value FROM debuglog WHERE actor=? ORDER BY id',[player])
+        def forms(body): return [html.unescape(a) for a in re.findall(r'<form\b[^>]*action=[\'"]([^\'"]+)',body)]
+        def form_text(body,action):
+            # The visible text of the one form that posts to action (its button reads like the 1.1.2 link).
+            parts=[part for url,part in re.findall(r'<form\b[^>]*action=[\'"]([^\'"]+)[\'"][^>]*>(.*?)</form>',body,re.S) if html.unescape(url)==action]
+            self.assertEqual(1,len(parts),body[:2000]); return html.unescape(re.sub(r'<[^>]*>','',parts[0]))
+        @contextmanager
+        def failing(check):
+            # A late failure on the account write: the request's transaction must roll back everything.
+            q("ALTER TABLE accounts ADD CONSTRAINT fixture_service CHECK (login <> 'WebPlayer' OR "+check+")")
+            try: yield
+            finally: q('ALTER TABLE accounts DROP CONSTRAINT fixture_service')
+        f.update(request=request,setup=setup,state=state,logs=logs,forms=forms,form_text=form_text,failing=failing,
+            fields=self._security_fields,decode=self._normal_day_decode,encode=self._php_serialize)
+        try: yield f
+        finally:
+            if q("SELECT CONSTRAINT_NAME FROM information_schema.TABLE_CONSTRAINTS WHERE CONSTRAINT_SCHEMA=DATABASE() AND TABLE_NAME='accounts' AND CONSTRAINT_NAME='fixture_service'"):
+                q('ALTER TABLE accounts DROP CONSTRAINT fixture_service')
+            q('UPDATE accounts SET '+','.join(k+'=?' for k in original if k!='acctid')+' WHERE acctid=?',[*[v for k,v in original.items() if k!='acctid'],player])
+
+    def test_mercenary_camp_hire_and_heal_authority_http(self):
+        # 1.1.2 hired and healed on GET links guarded only by allowed navigation, pasted the id, the location and the dragon
+        # kills into SQL, and took the healing price from the URL. Now a GET asks; the protected POST acts at the server's price.
+        q=self.query;name="Merc O'Reilly \\ 雪 <b>x</b>"
+        with self._service_fixture() as f:
+            request,setup,state,fields,forms=f['request'],f['setup'],f['state'],f['fields'],f['forms']
+            source=q('SELECT * FROM companions WHERE companionid=1')[0];source.pop('companionid')
+            source.update(name=name,companioncostgold=1000,companioncostgems=2,companionlocation='all',companionactive=1,companioncostdks=0,
+                attack=5,attackperlevel=1,defense=5,defenseperlevel=1,maxhitpoints=40,maxhitpointsperlevel=2,cannotbehealed=0)
+            q('INSERT INTO companions ('+','.join('`'+k+'`' for k in source)+') VALUES ('+','.join('?' for _ in source)+')',list(source.values()))
+            cid=int(q('SELECT MAX(companionid) AS id FROM companions')[0]['id']);buy=f'mercenarycamp.php?op=buy&id={cid}'
+            try:
+                setup();before=state()
+                anonymous=self._security_client(login=None)
+                for data in [None,{'x':'1'}]: self.assertIn(anonymous(buy,data)[0],[302,303,403])
+                # The listing links the hire (escaped name, no price in any link) and binds its query (a quote in the location).
+                q('UPDATE accounts SET location=? WHERE acctid=?',["O'Reilly \\ town",f['player']])
+                status,body=request('mercenarycamp.php');self.assertEqual(200,status,body[:2000]);self.assertNotIn('<b>x',body)
+                self.assertIn(buy,html.unescape(body));self.assertNotIn('cost=',html.unescape(body))
+                setup()
+                # GET only asks: 1.1.2 hired on this GET, and replayed it from a restored page or New Day's "Continue".
+                status,body=request(buy);self.assertEqual(200,status,body[:2000]);self.assertIn(buy,forms(body));self.assertEqual(before,state())
+                form=lambda:fields(request(buy)[1],buy)
+                data=form()
+                self.assertEqual(403,request(buy,{'action_token':data['action_token']})[0])
+                self.assertEqual(403,request(buy,{**data,'csrf_token':'0'*64})[0])
+                for url in ['mercenarycamp.php?op=buy&id=abc','mercenarycamp.php?op=buy&id=0','mercenarycamp.php?op=buy','mercenarycamp.php?op=bogus']:
+                    self.assertEqual(400,request(url,data)[0],url)
+                self.assertEqual(400,request(buy,{**data,'gold':'1'})[0])
+                self.assertEqual(409,request('mercenarycamp.php?op=buy&id=99999999',data)[0]);self.assertEqual(before,state())
+                # The offer is checked again under lock: deactivated, moved, out of reach, repriced, or no longer affordable.
+                for change,restore in [('companionactive=0','companionactive=1'),("companionlocation='Elsewhere'","companionlocation='all'"),
+                        ('companioncostdks=5','companioncostdks=0'),('companioncostgold=1500','companioncostgold=1000')]:
+                    with self.subTest(change=change):
+                        data=form();q(f'UPDATE companions SET {change} WHERE companionid=?',[cid])
+                        self.assertEqual(409,request(buy,data)[0]);self.assertEqual(before,state())
+                        q(f'UPDATE companions SET {restore} WHERE companionid=?',[cid])
+                for short in [dict(gold=999),dict(gems=1)]:
+                    with self.subTest(short=short):
+                        setup(**short);status,body=request(buy);self.assertEqual(200,status);self.assertNotIn(buy,forms(body))
+                        setup();data=form();setup(**short);mine=state()
+                        self.assertEqual(409,request(buy,data)[0]);self.assertEqual(mine,state())
+                setup()
+                # A late failure on the account write rolls back gold, gems and companions; the spent intent cannot retry.
+                data=form()
+                with f['failing']('gems <> 3'):
+                    status,body=request(buy,data);self.assertEqual(500,status,body[:500]);self.assertIn('Nothing was changed',body);self.assertEqual(before,state())
+                    self.assertEqual(409,request(buy,data)[0])
+                # A URL price is ignored: the hire costs the stored 1000 gold and 2 gems; stats scale with level 10.
+                data=form();status,body=request(buy+'&cost=1&companioncostgold=1',data);self.assertEqual(200,status,body[:2000]);self.assertIn('You hand over',body)
+                gold,gems,hp,maxhp,stored=state();self.assertEqual(('1000','3'),(gold,gems))
+                hired=f['decode'](stored)[name]
+                self.assertEqual((15,15,60,60,cid),(hired['attack'],hired['defense'],hired['maxhitpoints'],hired['hitpoints'],hired['companionid']))
+                self.assertIn(f'has spent 1000 gold and 2 gems on hiring a mercenary ({name}).',[r['message'] for r in f['logs']()])
+                self.assertEqual(409,request(buy,data)[0]);after=state()
+                # Already following the player: no form, and an earlier form is stale.
+                status,body=request(buy);self.assertNotIn(buy,forms(body));self.assertEqual(after,state())
+                # Healing: the price is round(log(11) x (points + 10) x 1.33), from the server, never the URL.
+                hurt=stored.replace('s:9:"hitpoints";i:60;','s:9:"hitpoints";i:20;');self.assertNotEqual(stored,hurt)
+                q('UPDATE accounts SET companions=? WHERE acctid=?',[hurt,f['player']]);before=state();cost=159
+                heal='mercenarycamp.php?op=heal&name='+urllib.parse.quote(name,safe='')
+                status,body=request('mercenarycamp.php');self.assertEqual(200,status);self.assertIn(heal,html.unescape(body));self.assertNotIn('cost=',html.unescape(body))
+                for url in [heal,heal+'&cost=1',heal+'&cost=notenough']:
+                    status,body=request(url);self.assertEqual(200,status,body[:2000]);self.assertIn(f'({cost} Gold)',f['form_text'](body,heal));self.assertEqual(before,state())
+                hform=lambda:fields(request(heal)[1],heal)
+                data=hform()
+                self.assertEqual(403,request(heal,{**data,'csrf_token':'0'*64})[0]);self.assertEqual(400,request(heal,{**data,'cost':'1'})[0])
+                self.assertEqual(409,request('mercenarycamp.php?op=heal&name=Nobody',data)[0]);self.assertEqual(before,state())
+                # Not enough gold: 1.1.2's text and no form; an earlier form is stale.
+                q('UPDATE accounts SET gold=? WHERE acctid=?',[cost-1,f['player']]);mine=state()
+                status,body=request(heal);self.assertEqual(200,status);self.assertIn('No healing for someone who cannot pay',body);self.assertNotIn(heal,forms(body))
+                self.assertEqual(409,request(heal,data)[0]);self.assertEqual(mine,state())
+                q('UPDATE accounts SET gold=1000 WHERE acctid=?',[f['player']])
+                data=hform()
+                with f['failing'](f'gold <> {1000-cost}'):
+                    self.assertEqual(500,request(heal,data)[0]);self.assertEqual(before,state())
+                    self.assertEqual(409,request(heal,data)[0])
+                status,body=request(heal+'&cost=1',hform());self.assertEqual(200,status,body[:2000]);self.assertIn('bandages them with learned skill',body)
+                gold,_,_,_,stored=state();self.assertEqual(str(1000-cost),gold);self.assertEqual(60,f['decode'](stored)[name]['hitpoints'])
+                self.assertEqual({'message':f'spent {cost} gold on healing a companion ({cost})','value':str(cost)},f['logs']()[-1])
+                self.assertEqual(409,request(heal,data)[0]);self.assertEqual(str(1000-cost),state()[0])
+                self.assertEqual(409,request(heal)[0])
+            finally:
+                q('DELETE FROM companions WHERE companionid=?',[cid])
+
+    def test_healer_potion_and_companion_authority_http(self):
+        # 1.1.2 sold potions on GET links and took the companion price from the URL (compcost); "Return whence you came"
+        # issued any URL the request named. Now a GET asks; the protected POST heals at the server's price.
+        q=self.query
+        with self._service_fixture() as f:
+            request,setup,state,fields,forms=f['request'],f['setup'],f['state'],f['fields'],f['forms']
+            # Level 10, 50 of 100 hit points: a complete heal costs round(log(10) x 60) = 138; half costs 69 and heals 25.
+            setup(hitpoints=50,gold=1000);before=state();buy='healer.php?op=buy&pct=50'
+            status,body=request('healer.php');self.assertEqual(200,status,body[:2000]);self.assertIn('138',body)
+            self.assertIn('healer.php?op=buy&pct=100',html.unescape(body));self.assertNotIn('gold&',html.unescape(body));self.assertEqual(before,state())
+            for url in ['healer.php?op=buy&pct=55','healer.php?op=buy&pct=abc','healer.php?return=evil.php','healer.php?op=bogus']:
+                self.assertEqual(400,request(url)[0],url)
+            status,body=request('healer.php?return=village.php');self.assertEqual(200,status)
+            status,body=request(buy);self.assertEqual(200,status);self.assertIn('50% - 69 gold',f['form_text'](body,buy));self.assertEqual(before,state())
+            form=lambda url=buy:fields(request(url)[1],url)
+            data=form()
+            self.assertEqual(403,request(buy,{'action_token':data['action_token']})[0]);self.assertEqual(403,request(buy,{**data,'csrf_token':'0'*64})[0])
+            self.assertEqual(400,request(buy,{**data,'pct':'100'})[0])
+            # Another potion size or changed hit points make the form stale.
+            self.assertEqual(409,request('healer.php?op=buy&pct=100',data)[0])
+            q('UPDATE accounts SET hitpoints=51 WHERE acctid=?',[f['player']]);self.assertEqual(409,request(buy,data)[0])
+            setup(hitpoints=50,gold=1000);self.assertEqual(before,state())
+            # Not enough gold under lock: 1.1.2's text, nothing changes.
+            setup(hitpoints=50,gold=68);mine=state()
+            status,body=request(buy,form());self.assertEqual(200,status,body[:2000]);self.assertIn('asked for',body);self.assertIn('69',body);self.assertEqual(mine,state())
+            setup(hitpoints=50,gold=1000)
+            data=form()
+            with f['failing']('hitpoints <> 75'):
+                self.assertEqual(500,request(buy,data)[0]);self.assertEqual(before,state())
+                self.assertEqual(409,request(buy,data)[0])
+            status,body=request(buy,form());self.assertEqual(200,status,body[:2000]);self.assertIn('You have been healed for 25 points!',body)
+            after=state();self.assertEqual(('931','75'),(after[0],after[2]))
+            self.assertEqual({'message':'spent gold on healing (69)','value':'69'},f['logs']()[-1])
+            self.assertEqual(409,request(buy,data)[0]);self.assertEqual('931',state()[0])
+            # Full hit points: no potion is offered.
+            setup(hitpoints=100,gold=1000);status,body=request(buy);self.assertEqual(200,status);self.assertNotIn(buy,forms(body))
+            # A companion's heal: round(log(11) x (40 + 10) x 1.33) = 159, whatever compcost the URL names.
+            # Stored in the companion schema's normalized shape, so the next page view does not rewrite it.
+            companion={'name':"Pal O'Reilly \\ 雪",'hitpoints':20,'maxhitpoints':60,'attack':5,'defense':5,'abilities':{},'healmsg':'','healcompanionmsg':'','magicfailmsg':''}
+            key="Pal O'Reilly \\ 雪";setup(companions=f['encode']({key:companion}),gold=1000);before=state()
+            heal='healer.php?op=companion&name='+urllib.parse.quote(key,safe='')
+            status,body=request('healer.php');self.assertIn(heal,html.unescape(body));self.assertNotIn('compcost',body)
+            for url in [heal,heal+'&compcost=1']:
+                status,body=request(url);self.assertEqual(200,status,body[:2000]);self.assertIn('(159 Gold)',f['form_text'](body,heal));self.assertEqual(before,state())
+            data=form(heal)
+            self.assertEqual(403,request(heal,{**data,'csrf_token':'0'*64})[0]);self.assertEqual(400,request(heal,{**data,'compcost':'1'})[0])
+            self.assertEqual(409,request('healer.php?op=companion&name=Nobody',data)[0]);self.assertEqual(before,state())
+            q('UPDATE accounts SET gold=158 WHERE acctid=?',[f['player']]);mine=state()
+            status,body=request(heal);self.assertEqual(200,status);self.assertIn('asked for',body);self.assertNotIn(heal,forms(body))
+            self.assertEqual(409,request(heal,data)[0]);self.assertEqual(mine,state())
+            q('UPDATE accounts SET gold=1000 WHERE acctid=?',[f['player']]);data=form(heal)
+            with f['failing']('gold <> 841'):
+                self.assertEqual(500,request(heal,data)[0]);self.assertEqual(before,state())
+                self.assertEqual(409,request(heal,data)[0])
+            status,body=request(heal+'&compcost=1',form(heal));self.assertEqual(200,status,body[:2000]);self.assertIn('is ready to battle once again',body)
+            self.assertEqual('841',state()[0]);self.assertEqual(60,f['decode'](state()[4])[key]['hitpoints'])
+            self.assertEqual(409,request(heal,data)[0]);self.assertEqual(409,request(heal)[0]);self.assertEqual('841',state()[0])
+
+    def test_gypsy_seance_authority_http(self):
+        # 1.1.2 charged for the seance on a GET and opened the seance to anyone the navigation allowed. Now a GET asks; the
+        # protected POST pays; the seance is open to the player who paid in this session, until they snap out of it.
+        q=self.query
+        with self._service_fixture() as f:
+            request,setup,state,fields,forms=f['request'],f['setup'],f['state'],f['fields'],f['forms']
+            setup(gold=1000);before=state();pay='gypsy.php?op=pay';talk='gypsy.php?op=talk'
+            status,body=request('gypsy.php');self.assertEqual(200,status,body[:2000]);self.assertIn('200',body);self.assertEqual(before,state())
+            self.assertEqual(403,request(talk)[0]);self.assertEqual(400,request('gypsy.php?op=bogus')[0])
+            status,body=request(pay);self.assertEqual(200,status,body[:2000]);self.assertIn(pay,forms(body));self.assertEqual(before,state())
+            form=lambda:fields(request(pay)[1],pay)
+            data=form()
+            self.assertEqual(403,request(pay,{'action_token':data['action_token']})[0]);self.assertEqual(403,request(pay,{**data,'csrf_token':'0'*64})[0])
+            self.assertEqual(400,request(pay,{**data,'cost':'1'})[0])
+            q('UPDATE accounts SET level=11 WHERE acctid=?',[f['player']]);self.assertEqual(409,request(pay,data)[0])
+            setup(gold=1000);self.assertEqual(before,state())
+            setup(gold=199);mine=state()
+            status,body=request(pay,form());self.assertEqual(200,status,body[:2000]);self.assertIn("they ain't cheap",html.unescape(body));self.assertEqual(mine,state())
+            self.assertEqual(403,request(talk)[0])
+            setup(gold=1000);data=form()
+            with f['failing']('gold <> 800'):
+                self.assertEqual(500,request(pay,data)[0]);self.assertEqual(before,state());self.assertEqual(403,request(talk)[0])
+                self.assertEqual(409,request(pay,data)[0])
+            status,body=request(pay+'&cost=1',form());self.assertEqual(302,status,body[:2000]);self.assertEqual('800',state()[0])
+            self.assertEqual('spent 200 gold to speak to the dead',f['logs']()[-1]['message'])
+            status,body=request(talk);self.assertEqual(200,status,body[:2000]);self.assertIn('While in a deep trance',body)
+            self.assertEqual(409,request(pay,data)[0]);self.assertEqual('800',state()[0])
+            # Snapping out closes the seance; a comment moderator may enter without paying.
+            self.assertEqual(200,request('gypsy.php')[0]);self.assertEqual(403,request(talk)[0])
+            q('UPDATE accounts SET superuser=16 WHERE acctid=?',[f['player']]);self.assertEqual(200,request(talk)[0]);self.assertEqual('800',state()[0])
+
+    def test_list_hall_of_fame_and_news_bound_requests_http(self):
+        # Read-only player pages: request values are checked and bound. 1.1.2 pasted the warrior search into SQL with
+        # addslashes() and gave database errors for a negative page.
+        q=self.query
+        with self._service_fixture() as f:
+            request,setup,state=f['request'],f['setup'],f['state']
+            setup();before=state()
+            target=self._security_target('ServiceListTarget')
+            try:
+                for search,found in [("O'Reilly \\ 雪",True),('Reilly',True),("' OR 1=1 -- ",False),('雪',True)]:
+                    with self.subTest(search=search):
+                        status,body=request('list.php?op=search',{'name':search});self.assertEqual(200,status,body[:2000])
+                        self.assertEqual(found,f'bio.php?char={target}' in body,search)
+                self.assertEqual(400,request('list.php?op=search',{'name':'x'*256})[0])
+                self.assertEqual(400,request('list.php?op=search',{'name':b'\xff'})[0])
+                for url in ['list.php?op=bogus','list.php?page=-1','hof.php?op=bogus','hof.php?subop=bogus','hof.php?page=-1','hof.php?page=abc']:
+                    self.assertEqual(400,request(url)[0],url)
+                for url in ['list.php?page=2','hof.php?op=money&subop=least&page=2','hof.php?op=days','news.php?page=-3','news.php?offset=2&page=2']:
+                    status,body=request(url);self.assertEqual(200,status,(url,body[:2000]))
+                self.assertEqual(before,state())
+            finally:
+                q('DELETE FROM accounts_output WHERE acctid=?',[target]);q('DELETE FROM accounts WHERE acctid=?',[target])
 
     def test_graveyard_haunt_authority_http(self):
         q=self.query;player=int(q('SELECT acctid FROM accounts WHERE login=?',['WebPlayer'])[0]['acctid'])

@@ -55,16 +55,17 @@ if (db_num_rows($result)>0){
 		rawoutput("<td>&nbsp;</td>");
 	}
 	rawoutput("</tr><tr>");
-	$sql = "SELECT messageid FROM $mail WHERE msgto='{$session['user']['acctid']}' AND messageid < '$id' ORDER BY messageid DESC LIMIT 1";
-	$result = db_query($sql);
+	// Bound: the message ID comes from the request (as an integer).
+	$sql = "SELECT messageid FROM $mail WHERE msgto=? AND messageid < ? ORDER BY messageid DESC LIMIT 1";
+	$result = db_query($sql, true, [(int)$session['user']['acctid'], (int)$id]);
 	if (db_num_rows($result)>0){
 		$row = db_fetch_assoc($result);
 		$pid = $row['messageid'];
 	}else{
 		$pid = 0;
 	}
-	$sql = "SELECT messageid FROM $mail WHERE msgto='{$session['user']['acctid']}' AND messageid > '$id' ORDER BY messageid  LIMIT 1";
-	$result = db_query($sql);
+	$sql = "SELECT messageid FROM $mail WHERE msgto=? AND messageid > ? ORDER BY messageid  LIMIT 1";
+	$result = db_query($sql, true, [(int)$session['user']['acctid'], (int)$id]);
 	if (db_num_rows($result)>0){
 		$row = db_fetch_assoc($result);
 		$nid = $row['messageid'];

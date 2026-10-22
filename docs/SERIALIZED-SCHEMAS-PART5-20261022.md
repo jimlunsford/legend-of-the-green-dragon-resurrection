@@ -338,3 +338,18 @@ Recorded, not changed (1.1.2 behavior): the MOTD penalty on the player's own pro
 `newcount` paging, and the archive list skipping its first month row. The comment moderation
 form keeps CSRF without a one-use intent: a replay finds the comments already gone, and the
 ban step only bans the author of a comment that still exists, so a replay changes nothing.
+
+## Acceptance, 2026-10-22
+
+Inspected once on 2026-10-22 at 16:27Z for `c00f2d19d377ca21cf3a9169637aaa50976f93e0`:
+
+- Modern core 39773347686: SUCCESS, all 12 jobs (per leg one `checks`, four `http` shards
+  and one `result`, on PHP 8.4 / MariaDB 11.4 and PHP 8.5 / MySQL 8.4). The run started at
+  11:48:20Z; the two `result` jobs finished at 12:07:04Z and 12:07:23Z.
+- Baseline integrity 39773347676: SUCCESS.
+
+Serialized business schemas part 5 (news arguments and other business state), the `motd.php`
+route family, the `paylog.php` processdate fix and the `moderate.php` longer-ban rule are Done
+at `c00f2d1`. No site of the serialized-state audit is left OPEN. The news delete line and the
+admin repair line stay on the Final rescan list, taken up by the final rescan, which starts
+with the [route inventory](ROUTE-INVENTORY-20261022.md).

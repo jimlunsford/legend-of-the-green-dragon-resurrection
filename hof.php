@@ -22,9 +22,14 @@ addnav("Other");
 villagenav();
 $playersperpage = 50;
 
-$op = httpget('op');
+// Request values are checked here and the page's rows are read with a bound LIMIT; 1.1.2 put the op and subop into
+// navigation links unchecked and gave a database error for a negative page.
+try {
+	$op = \Resurrection\Http\Input::choice($_GET, 'op', ['', 'kills', 'money', 'gems', 'charm', 'tough', 'resurrects', 'days'], '');
+	$subop = \Resurrection\Http\Input::choice($_GET, 'subop', ['', 'most', 'least'], '');
+	$page = \Resurrection\Http\Input::integer($_GET, 'page', 0, 0);
+} catch (InvalidArgumentException $error) { http_response_code(400); exit('Invalid Hall of Fame request.'); }
 if ($op == "") $op = "kills";
-$subop = httpget('subop');
 if ($subop == "") $subop = "most";
 
 $sql = "SELECT count(acctid) AS c FROM " . db_prefix("accounts") . " WHERE $standardwhere";
@@ -38,14 +43,14 @@ $result = db_query($sql.$extra);
 $row = db_fetch_assoc($result);
 $totalplayers = $row['c'];
 
-$page = (int)httpget('page');
 if ($page == 0) $page = 1;
 $pageoffset = $page;
 if ($pageoffset > 0) $pageoffset--;
 $pageoffset *= $playersperpage;
 $from = $pageoffset+1;
 $to = min($pageoffset+$playersperpage, $totalplayers);
-$limit = "$pageoffset,$playersperpage";
+$limit = "?,?";
+$limitparams = array($pageoffset, $playersperpage);
 
 addnav("Warrior Rankings");
 addnav("Dragon Kills", "hof.php?op=kills&subop=$subop&page=1");
@@ -75,7 +80,7 @@ if ($totalplayers > $playersperpage) {
 function display_table($title, $sql, $none=false, $foot=false,
 		$data_header=false, $tag=false, $translate=false)
 {
-	global $session, $from, $to, $page, $playersperpage, $totalplayers;
+	global $session, $from, $to, $page, $playersperpage, $totalplayers, $limitparams;
 
 	$title = translate_inline($title);
 	if ($foot !== false) $foot = translate_inline($foot);
@@ -102,7 +107,7 @@ function display_table($title, $sql, $none=false, $foot=false,
 			output_notl("<td>`b{$data_header[$i]}`b</td>", true);
 		}
 	}
-	$result = db_query($sql);
+	$result = db_query($sql, true, $limitparams);
 	if (db_num_rows($result)==0){
 		$size = ($data_header === false) ? 2 : 2+count($data_header);
 		output_notl("<tr class='trlight'><td colspan='$size' align='center'>`&$none`0</td></tr>",true);

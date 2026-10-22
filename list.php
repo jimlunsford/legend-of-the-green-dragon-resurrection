@@ -36,18 +36,25 @@ $result = db_query($sql);
 $row = db_fetch_assoc($result);
 $totalplayers = $row['c'];
 
-$op = httpget('op');
-$page = httpget('page');
+// Request values are checked here and every query below is bound; 1.1.2 pasted the search into SQL with addslashes().
+try {
+	$op = \Resurrection\Http\Input::choice($_GET, 'op', ['', 'search', 'clan'], '');
+	$page = isset($_GET['page']) ? \Resurrection\Http\Input::integer($_GET, 'page', 0, 0) : "";
+	$n = $op == "search" ? \Resurrection\Http\Input::string($_POST, 'name') : '';
+	if (!mb_check_encoding($n, 'UTF-8') || strlen($n) > 255) throw new InvalidArgumentException('Invalid name.');
+} catch (InvalidArgumentException $error) { http_response_code(400); exit('Invalid list request.'); }
 $search = "";
+$searchparams = array();
 $limit = "";
 
 if ($op=="search"){
+	// 1.1.2's pattern, one wildcard between characters; split by character, not byte, so the pattern stays UTF-8.
 	$search="%";
-	$n = httppost('name');
-	for ($x=0;$x<strlen($n);$x++){
-		$search .= substr($n,$x,1)."%";
+	foreach (mb_str_split($n, 1, 'UTF-8') as $character){
+		$search .= str_replace("\\", "\\\\", $character)."%";
 	}
-	$search=" AND name LIKE '".addslashes($search)."' ";
+	$searchparams = array($search);
+	$search=" AND name LIKE ? ";
 }else{
 	$pageoffset = (int)$page;
 	if ($pageoffset>0) $pageoffset--;
@@ -55,7 +62,8 @@ if ($op=="search"){
 	$from = $pageoffset+1;
 	$to = min($pageoffset+$playersperpage,$totalplayers);
 
-	$limit=" LIMIT $pageoffset,$playersperpage ";
+	$limit=" LIMIT ?,? ";
+	$searchparams = array($pageoffset, $playersperpage);
 }
 addnav("Pages");
 for ($i=0;$i<$totalplayers;$i+=$playersperpage){
@@ -76,8 +84,8 @@ if ($page=="" && $op==""){
 	$result = db_query_cached($sql,"list.php-warsonline");
 }elseif($op=='clan'){
 	$title = translate_inline("Clan Members Online");
-	$sql = "SELECT acctid,name,login,alive,location,race,sex,level,laston,loggedin,lastip,uniqueid FROM " . db_prefix("accounts") . " WHERE locked=0 AND loggedin=1 AND laston>'".date("Y-m-d H:i:s",strtotime("-".getsetting("LOGINTIMEOUT",900)." seconds"))."' AND clanid='{$session['user']['clanid']}' ORDER BY level DESC, dragonkills DESC, login ASC";
-	$result = db_query($sql);
+	$sql = "SELECT acctid,name,login,alive,location,race,sex,level,laston,loggedin,lastip,uniqueid FROM " . db_prefix("accounts") . " WHERE locked=0 AND loggedin=1 AND laston>'".date("Y-m-d H:i:s",strtotime("-".getsetting("LOGINTIMEOUT",900)." seconds"))."' AND clanid=? ORDER BY level DESC, dragonkills DESC, login ASC";
+	$result = db_query($sql, true, array((int)$session['user']['clanid']));
 }else{
 	if ($totalplayers > $playersperpage && $op != "search") {
 		$title = sprintf_translate("Warriors of the realm (Page %s: %s-%s of %s)", ($pageoffset/$playersperpage+1), $from, $to, $totalplayers);
@@ -86,7 +94,7 @@ if ($page=="" && $op==""){
 	}
 	rawoutput(tlbutton_clear());
 	$sql = "SELECT acctid,name,login,alive,hitpoints,location,race,sex,level,laston,loggedin,lastip,uniqueid FROM " . db_prefix("accounts") . " WHERE locked=0 $search ORDER BY level DESC, dragonkills DESC, login ASC $limit";
-	$result = db_query($sql);
+	$result = db_query($sql, true, $searchparams);
 }
 if ($session['user']['loggedin']){
 	$search = translate_inline("Search by name: ");

@@ -24,17 +24,19 @@ $newsperpage=50;
 
 $offset = (int)httpget('offset');
 $timestamp=strtotime((0-$offset)." days");
-$sql = "SELECT count(newsid) AS c FROM " . db_prefix("news") . " WHERE newsdate='".date("Y-m-d",$timestamp)."'";
-$result = db_query($sql);
+// Bound: the day and the page come from the request (as integers).
+$sql = "SELECT count(newsid) AS c FROM " . db_prefix("news") . " WHERE newsdate=?";
+$result = db_query($sql, true, array(date("Y-m-d",$timestamp)));
 $row = db_fetch_assoc($result);
 $totaltoday=$row['c'];
 $page = (int)httpget('page');
-if (!$page) $page=1;
+// A page below 1 is page 1 (1.1.2 gave a database error for a negative page).
+if ($page < 1) $page=1;
 $pageoffset = $page;
 if ($pageoffset>0) $pageoffset--;
 $pageoffset*=$newsperpage;
-$sql = "SELECT * FROM " . db_prefix("news") . " WHERE newsdate='".date("Y-m-d",$timestamp)."' ORDER BY newsid DESC LIMIT $pageoffset,$newsperpage";
-$result = db_query($sql);
+$sql = "SELECT * FROM " . db_prefix("news") . " WHERE newsdate=? ORDER BY newsid DESC LIMIT ?,?";
+$result = db_query($sql, true, array(date("Y-m-d",$timestamp), $pageoffset, $newsperpage));
 page_header("LoGD News");
 $date=date("D, M j, Y",$timestamp);
 
