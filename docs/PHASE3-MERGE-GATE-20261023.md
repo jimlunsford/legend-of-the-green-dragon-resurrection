@@ -7,6 +7,9 @@ edit its body.
 
 ## Result: NOT PASSED
 
+This was the result at `54e22e6`. The findings were closed at `19bf7a0` and its final full run passed: all four
+gates PASSED ("Final full run recorded" below).
+
 | Gate | Result | Why |
 | --- | --- | --- |
 | 1. Every item above is DONE | NOT PASSED | Every Done line checks out, and rescan task 3 is now accepted, which closes the Final rescan item. But this task opens four items (findings 1 to 4) besides the expected PR #1 body. |
@@ -414,6 +417,8 @@ same, PR #1 open and draft, `main` `999cec6f9c655a840320d982d673bb863c68c2b2`.
   the MySQL `result` job had not started. The push of this task cancels the run if it is still going
   (`cancel-in-progress`). It is not the final full run: this task publishes a new commit, and the final run is that
   commit's.
+- Correction, recorded with the final full run: the run was not cancelled. It finished at 18:11 UTC, before the
+  `19bf7a0` push at about 18:31 UTC, with conclusion success.
 
 ### Finding 1: Graveyard view pages sober the player
 
@@ -526,3 +531,49 @@ Supporting evidence only; this commit's tree, PHP 8.4.27, MariaDB 11.4 in dispos
 
 `ROADMAP.md` now says Phase 3 is complete pending the final run, then Jim's PR body, ready-for-review and merge. That
 line is written before the final run finishes, as the brief asks; it holds only if the run passes.
+
+## Final full run recorded, 2026-10-23
+
+Read once through the GitHub Actions API at about 19:13 UTC. The branch head, PR #1 head and expected start were
+`19bf7a0021b05bde398a9da9176ec21f5e127378`; `main` was `999cec6f9c655a840320d982d673bb863c68c2b2`.
+
+### `d3082f2`'s own run
+
+Modern core 39998306405: run conclusion success (read from the run list when `19bf7a0` was published; the jobs
+were not listed again). It finished at 18:11 UTC, before the `19bf7a0` push, so
+`cancel-in-progress` did not cancel it. This corrects the note above that said it would be cancelled. Baseline
+integrity 39998306290: success.
+
+### Gate 2: the final full run on `19bf7a0`
+
+Modern core 40004015634 (run 159, attempt 1, started 18:31:39 UTC, completed 18:51:57 UTC): success. 12 of 12 jobs
+success, 0 failed, 0 cancelled, 0 skipped:
+
+| Leg | `checks` | `http (1)` | `http (2)` | `http (3)` | `http (4)` | `result` |
+| --- | --- | --- | --- | --- | --- | --- |
+| PHP 8.4, MariaDB 11.4 | success | success, 15m10s | success, 13m07s | success, 15m49s | success, 18m02s | success |
+| PHP 8.5, MySQL 8.4 | success | success, 17m41s | success, 18m53s | success, 14m59s | success, 19m23s | success |
+
+The shard times are the `scripts/tooling-shards.py` step of each job. Each `checks` job ran composer validate,
+install, audit and lint, `composer test`, both PHPStan gates, the historical verifier and the project validator, each
+step a success. Each `http` job also ran `composer test` first. The per-test totals in the job logs could not be read:
+the API returned only the tail of each log (database container output), and the log archive host
+(`results-receiver.actions.githubusercontent.com`) is blocked from this session (proxy 403). The job and step
+conclusions above come from the API.
+
+Baseline integrity 40004015236: success (`provenance`).
+
+Gate 2 PASSED.
+
+### Result
+
+| Gate | Result |
+| --- | --- |
+| 1. Every item above is DONE | PASSED, except the PR #1 body, which is Jim's |
+| 2. A final full run passes on both supported CI targets | PASSED: Modern core 40004015634, 12 of 12 jobs; Baseline integrity 40004015236 |
+| 3. Historical integrity verifies unchanged | PASSED |
+| 4. A final GET-mutation and replay rescan finds no unclosed family | PASSED |
+
+All four gates PASSED. Phase 3 is complete. Still to do, all Jim's: replace the PR #1 body, mark PR #1 ready for
+review, and merge it with a normal merge commit. The commit that records this run has its own CI run, and that run
+must also pass before the merge.
