@@ -188,3 +188,48 @@ All four shards ran, because shared helpers changed (`lib/systemmail.php`, `lib/
 
 - The referer tracking in `common.php` (new line above).
 - Rescan task 3: the admin repair path for locked-out players, and the final unbound-SQL sweep.
+
+## CI failure on `623ca49`, 2026-10-23 (kept on record)
+
+Modern core 39868186035 on `623ca49`: every job passed except engineering (8.4, mariadb:11.4) / http (1), which failed
+`test_gamelog_and_referers_authority_http` at `self.assertIn("href='http://ref.fixture.example/path&#039;&lt;x&gt;'",
+body)`: the referer list showed one site group, `x`, with the long fixture URL, and no group for
+`ref.fixture.example` or `stale`; status 200. The job ran 22:54 to 22:58 UTC. Every MySQL job passed; Baseline
+integrity 39868185442 passed. This run is not acceptance for rescan task 2.
+
+Reproduction (supporting evidence only): shard 1 through `scripts/tooling-shards.py` at `623ca49`, with the
+`referers` table dumped just before and just after the view, on PHP 8.4 with MariaDB 11.4.13 and with MySQL 8.4.13.
+MariaDB failed exactly as in CI; MySQL passed.
+
+| | Rows (id, site, `last`) | `NOW()` and PHP `date()` | Summary order (`GROUP BY site ORDER BY count DESC`) |
+| --- | --- | --- | --- |
+| MariaDB, before the view | 1 `ref.fixture.example`, 2 `stale`, 3 `x` (all 08:29:14), 4 `old.fixture.example` (2000-01-01) | both 08:29:19 UTC (`time_zone` SYSTEM, UTC) | `x`, `stale`, `ref.fixture.example`, `old.fixture.example` |
+| MariaDB, after the view | 1, 2, 3 unchanged; 4 deleted | | `x`, `stale`, `ref.fixture.example` |
+| MySQL, before the view | the same four rows (08:29:19 and 2000-01-01) | both 08:29:24 UTC | `old.fixture.example`, `ref.fixture.example`, `stale`, `x` |
+| MySQL, after the view | 1, 2, 3 unchanged; 4 deleted | | `ref.fixture.example`, `stale`, `x` |
+
+So every current row was stored and kept, the expiry removed only the 2000-dated row, the clocks agree, and the
+summary query returned all three current sites on both databases. Ruled out: the expiry and the clocks, the summary
+query itself, and `common.php`'s referer tracking (the rows are unchanged by the request, and the test client sends no
+`Referer`).
+
+Root cause: a product defect, kept from 1.1.2. `referers.php` counts the summary rows into `$number` for the site
+loop, then reuses `$number` for each site's URL rows (`historical-source-1.1.2:referers.php` lines 54 and 72). After
+the first site, the loop runs on only while its index is below that site's URL count, so with one URL per site only
+the first site is ever shown. The three fixture sites have equal counts, and MariaDB and MySQL return the tie in a
+different order: MySQL's first site was `ref.fixture.example`, the one the assertion looks for; MariaDB's was `x`. The
+fixture was valid; the assertion was right; the test only passed on MySQL by the luck of the tie.
+
+Fix: the per-site loop has its own counter (`$urls`), so every site of the summary (up to its 1.1.2 limit of 100) is
+listed. This is a deliberate correction of 1.1.2 behavior. The test now also requires the other two current sites'
+URLs, so it fails without the fix on both databases, whatever order the tie takes. No assertion was loosened.
+
+Against `623ca49`'s `referers.php`, with only the strengthened test: MariaDB 11.4 failed at the
+`ref.fixture.example` link (its first site was `x`); MySQL 8.4 failed at `http://other.fixture.example/a` (its first
+site was `ref.fixture.example`).
+
+Local result with the fix (PHP 8.4.27, supporting evidence only): shard 1 OK on MariaDB 11.4 (50 tests, 957 s) and on
+MySQL 8.4 (50 tests, 971 s), each after PHPUnit OK (245 tests, 139449 assertions). No shared helper changed, so only
+shard 1 (the changed test's) ran. Static: `test_route_inventory` and `test_tooling_shards` OK; PHP lint (392 files,
+0 failures); both PHPStan gates no errors; `composer validate --strict` valid; `composer audit` no advisories;
+historical verifier PASS; project validator PASS; `git diff --check` clean.

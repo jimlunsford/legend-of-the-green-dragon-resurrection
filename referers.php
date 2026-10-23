@@ -93,8 +93,10 @@ for ($i=0;$i<$number;$i++){
 	$result1 = db_query($sql, true, [$row['site']]);
 	$skippedcount=0;
 	$skippedtotal=0;
-	$number=db_num_rows($result1);
-	for ($k=0;$k<$number;$k++){
+	// Its own count: 1.1.2 reused the site loop's $number here, so the list stopped after the first site whose URL
+	// count was not above that site's position (with one URL each, only the first site was ever shown).
+	$urls=db_num_rows($result1);
+	for ($k=0;$k<$urls;$k++){
 		$row1=db_fetch_assoc($result1);
 		$diffsecs = strtotime("now")-strtotime($row1['last']);
 		if ($diffsecs<=604800){

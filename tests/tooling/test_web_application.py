@@ -8154,6 +8154,10 @@ function MODULE_dohook($hook,$args) {
                 # referers.php: the expired referer is removed on view, as in 1.1.2; the current ones are escaped.
                 status,body=request('referers.php');self.assertEqual(200,status,body[:2000]);self.assertNotIn("path'<x>",body)
                 self.assertIn("href='http://ref.fixture.example/path&#039;&lt;x&gt;'",body)
+                # Every current site is listed. 1.1.2 reused the site loop's counter for each site's URL count, so with one
+                # URL per site only the first site showed, and which one came first among equal counts differs between
+                # MariaDB and MySQL (Modern core 39868186035).
+                for uri in ['http://other.fixture.example/a','http://'+'a'*60+'.fixture.example/x']: self.assertIn("href='"+uri+"'",body,uri)
                 self.assertEqual(3,len(refs()));before=refs()
                 for sort in ['count','count+DESC','uri','uri+DESC','last','last+DESC','']:
                     status,body=request('referers.php?sort='+sort);self.assertEqual(200,status,(sort,body[:2000]))
