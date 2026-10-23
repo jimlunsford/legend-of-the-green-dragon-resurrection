@@ -35,6 +35,7 @@ function crazyaudrey_getmoduleinfo(){
 		"prefs"=>array(
 			"Crazy Audrey User Preferences,title",
 			"played"=>"Played Baskets Today?,bool|0",
+            "paidvisit"=>"Paid Village visit awaiting baskets,viewonly|0",
 		)
 	);
 	return $info;
@@ -77,6 +78,7 @@ function crazyaudrey_dohook($hookname,$args){
 		break;
 	case "newday":
 		set_module_pref("played",0);
+        set_module_pref("paidvisit",0);
 		break;
 	case "newday-runonce":
 		$daysremaining=get_module_setting("gamedaysremaining");
@@ -155,6 +157,7 @@ function crazyaudrey_baskets($type)
 	}else if($op=="play"){
 		if ($type == "module-internal") {
 			set_module_pref("played",1);
+            set_module_pref("paidvisit",0);
 		}
 		$colors = array("`^C`&a`Ql`6i`7c`qo","`7T`&i`7g`&e`7r","`QGinger","`&White","`^`bHedgehog!`b");
 		$colors = translate_inline($colors);
@@ -227,11 +230,11 @@ function crazyaudrey_baskets($type)
 	}
 }
 
-function crazyaudrey_run(){
+function crazyaudrey_village_action(){
 	global $session;
 	$op = httpget('op');
 	if ($op=="pet"){
-		page_header("Crazy Audrey's Zoo");
+
 		$cost = get_module_setting("cost");
 		$animal = get_module_setting("animal");
 		$lcanimal = get_module_setting("lanimal");
@@ -244,10 +247,11 @@ function crazyaudrey_run(){
 			output("You place your `^%s`5 gold in the basket, and spend a few minutes petting one of the %s`5.", $cost, $lcplural);
 			output("Soon though, Crazy Audrey chases you off, and you stand at a distance admiring the %s`5.",$lcplural);
 			$session['user']['gold']-=$cost;
+            set_module_pref("paidvisit",1);
 			debuglog("spent $cost gold to pet audrey's pets");
 			$profit += $cost;
 			set_module_setting("profit",$profit);
-			$buffname = get_module_setting("buffname");
+			$buffname = htmlspecialchars((string)get_module_setting("buffname"), ENT_QUOTES, "UTF-8");
 			apply_buff('crazyaudrey',array("name"=>$buffname,"rounds"=>5,"activate"=>"defense","defmod"=>1.05, "schema"=>"module-crazyaudrey"));
 			output("`5After a few minutes, you once again try to approach in order to look into her baskets.");
 			if (get_module_pref("played")==0) {
@@ -260,10 +264,60 @@ function crazyaudrey_run(){
 			output("Not having `^%s`5 gold, you wander sadly away.",$cost);
 		}
 	}elseif ($op=="baskets" || $op == "play" || $op == "run"){
-		page_header("Crazy Audrey");
+
 		crazyaudrey_baskets("module-internal",
 				"runmodule.php?module=crazyaudrey");
 	}
+}
+
+function crazyaudrey_run(){
+    global $session;
+    require_once "lib/typed_editor.php";
+    $op = httpget("op");
+    if (!is_string($op) || !in_array($op,["pet","baskets","play","run"],true)) {
+        http_response_code(400); exit("Invalid Audrey action.");
+    }
+    $context=(string)$session["user"]["acctid"].":".(string)$session["user"]["lasthit"].":".$op;
+    if ($_SERVER["REQUEST_METHOD"] === "POST") resurrection_consume_action("crazyaudrey-village",$context);
+    page_header("Crazy Audrey");
+    try {
+        if ($_SERVER["REQUEST_METHOD"] === "POST") {
+            resurrection_player_mutation(function () use ($op) {
+                global $session;
+                $active=db_query("SELECT active FROM ".db_prefix("modules")." WHERE modulename=? FOR UPDATE",true,["crazyaudrey"]);
+                if (count($active)!==1 || (int)$active[0]["active"]!==1 || !$session["user"]["alive"] || $session["user"]["specialinc"]!=="") throw new DomainException("Unavailable visit.");
+                $values=resurrection_settings_values("crazyaudrey",true);
+                $schema=\Resurrection\Http\SettingDescriptor::declare(crazyaudrey_getmoduleinfo()["settings"]);
+                resurrection_settings_rules("crazyaudrey",$schema,$values);
+                $GLOBALS["module_settings"]["crazyaudrey"]=$values;
+                db_query("SELECT setting,value FROM ".db_prefix("module_userprefs")." WHERE modulename=? AND userid=? FOR UPDATE",true,["crazyaudrey",(int)$session["user"]["acctid"]]);
+                unset($GLOBALS["module_prefs"][(int)$session["user"]["acctid"]]["crazyaudrey"]);
+                $played=(string)get_module_pref("played","crazyaudrey");
+                $paid=(string)get_module_pref("paidvisit","crazyaudrey");
+                if (!in_array($played,["0","1"],true) || !in_array($paid,["0","1"],true)) throw new DomainException("Invalid visit state.");
+                if ($op==="pet") {
+                    $cost=(int)get_module_setting("cost","crazyaudrey");
+                    $profit=(int)get_module_setting("profit","crazyaudrey");
+                    if ($cost<0 || $profit<0 || $profit>2147483647-$cost || $session["user"]["gold"]<$cost) throw new DomainException("Invalid or unaffordable visit.");
+                } elseif ($op==="play" && ($played!=="0" || $paid!=="1")) {
+                    throw new DomainException("No paid unplayed visit.");
+                }
+                crazyaudrey_village_action();
+            });
+        } elseif ($op==="pet" || $op==="play") {
+            $url="runmodule.php?module=crazyaudrey&op=".$op;
+            addnav("",$url);
+            output("Confirm your visit to Crazy Audrey.");
+            rawoutput('<form method="POST" action="'.htmlspecialchars($url,ENT_QUOTES,"UTF-8").'">'.resurrection_action_fields("crazyaudrey-village",$context).'<button class="button">Continue</button></form>');
+        } else {
+            crazyaudrey_village_action();
+        }
+    } catch (DomainException | InvalidArgumentException $error) {
+        http_response_code(409);
+        output("This visit is unavailable. Return to the Village and try again.");
+    } catch (Throwable $error) {
+        http_response_code(500); exit("Audrey visit was not completed.");
+    }
 	if ($op != "baskets") {
 		require_once("lib/villagenav.php");
 		villagenav();

@@ -1,0 +1,26 @@
+name: Modern core
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: modern-core-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  # Each supported leg runs its checks and HTTP shards in parallel; its "result" job is the leg verdict.
+  engineering:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - php: '8.4'
+            database: 'mariadb:11.4'
+          - php: '8.5'
+            database: 'mysql:8.4'
+    uses: ./.github/workflows/modern-core-leg.yml
+    with:
+      php: ${{ matrix.php }}
+      database: ${{ matrix.database }}

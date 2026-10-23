@@ -7,12 +7,8 @@
 		require_once("lib/clan/clan_motd.php");
 	}elseif ($op=="membership"){
 		require_once("lib/clan/clan_membership.php");
-	}elseif ($op=="withdrawconfirm"){
-		output("Are you sure you want to withdraw from your clan?");
-		addnav("Withdraw?");
-		addnav("No","clan.php");
-		addnav("!?Yes","clan.php?op=withdraw");
-	}elseif ($op=="withdraw"){
+	}elseif ($op=="withdrawconfirm" || $op=="withdraw"){
+		// The confirmation is a protected form; only its POST withdraws.
 		require_once("lib/clan/clan_withdraw.php");
 	}
 

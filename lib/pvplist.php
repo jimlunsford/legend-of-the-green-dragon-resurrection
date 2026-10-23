@@ -30,8 +30,8 @@ function pvplist($location=false,$link=false,$extra=false,$sql=false){
 		$last = date("Y-m-d H:i:s",
 				strtotime("-".getsetting("LOGINTIMEOUT", 900)." sec"));
 		$id = $session['user']['acctid'];
-		$loc = addslashes($location);
 
+		// Bound: 1.1.2 pasted these in, the location (stored text, such as the inn's name) with addslashes().
 		$sql = "SELECT acctid, name, alive, location, sex, level, laston, " .
 			"loggedin, login, pvpflag, clanshort, clanrank, dragonkills, " .
 			db_prefix("accounts") . ".clanid FROM " .
@@ -39,14 +39,14 @@ function pvplist($location=false,$link=false,$extra=false,$sql=false){
 			db_prefix("clans") . " ON " . db_prefix("clans") . ".clanid=" .
 			db_prefix("accounts") . ".clanid WHERE (locked=0) " .
 			"AND (slaydragon=0) AND " .
-			"(age>$days OR dragonkills>0 OR pk>0 OR experience>$exp) " .
-			"AND (level>=$lev1 AND level<=$lev2) AND (alive=1) " .
-			"AND (laston<'$last' OR loggedin=0) AND (acctid<>$id) " .
-			"ORDER BY location='$loc' DESC, location, level DESC, " .
+			"(age>? OR dragonkills>0 OR pk>0 OR experience>?) " .
+			"AND (level>=? AND level<=?) AND (alive=1) " .
+			"AND (laston<? OR loggedin=0) AND (acctid<>?) " .
+			"ORDER BY location=? DESC, location, level DESC, " .
 			"experience DESC, dragonkills DESC";
+		$parameters = [(int)$days, (int)$exp, (int)$lev1, (int)$lev2, $last, (int)$id, (string)$location];
 	}
-
-	$result = db_query($sql);
+	$result = db_query($sql, true, $parameters ?? []);
 
 	$pvp = array();
 	while($row = db_fetch_assoc($result)) {

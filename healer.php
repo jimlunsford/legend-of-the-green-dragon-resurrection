@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/src/Security/ScalarState.php';
 // addnews ready
 // translator ready
 // mail ready
@@ -6,23 +7,29 @@ require_once("common.php");
 require_once("lib/forest.php");
 require_once("lib/http.php");
 require_once("lib/villagenav.php");
+require_once("lib/service_authority.php");
 
 tlschema("healer");
 
-$config = unserialize($session['user']['donationconfig']);
+$config = \Resurrection\Security\ScalarState::read($session['user']['donationconfig']);
 
-$return = httpget("return");
+// The op, the potion size and the return target are checked before anything runs. 1.1.2 offered "Return whence
+// you came" to any URL the request named, which issued that URL as an allowed navigation.
+try {
+	$op = \Resurrection\Http\Input::choice($_GET, 'op', ['', 'buy', 'companion'], '');
+	$return = resurrection_healer_return();
+	$pct = $op == "buy" ? resurrection_healer_percent() : 0;
+} catch (InvalidArgumentException $error) { resurrection_service_failure($error, 'the healer'); }
 $returnline = $return>""?"&return=$return":"";
+// Only the protected POST of the confirming form heals; a GET asks, with the server's price. The URL's
+// compcost is never read.
+$posted = resurrection_service_posted();
 
 page_header("Healer's Hut");
 output("`#`b`cHealer's Hut`c`b`n");
 
-$cost = log($session['user']['level']) * (($session['user']['maxhitpoints']-$session['user']['hitpoints']) + 10);
-$result=modulehook("healmultiply",array("alterpct"=>1.0));
-$cost*=$result['alterpct'];
-$cost = round($cost,0);
+$cost = resurrection_healer_cost();
 
-$op = httpget('op');
 if ($op==""){
   	checkday();
 	output("`3You duck into the small smoke-filled grass hut.");
@@ -49,13 +56,20 @@ if ($op==""){
 		$session['user']['hitpoints'] = $session['user']['maxhitpoints'];
 	}
 }elseif ($op=="buy"){
-	$pct = httpget('pct');
-	$newcost=round($pct*$cost/100,0);
-	if ($session['user']['gold']>=$newcost){
-		$session['user']['gold']-=$newcost;
-		debuglog("spent gold on healing",false,false,"healing",$newcost);
-		$diff = round(($session['user']['maxhitpoints']-$session['user']['hitpoints'])*$pct/100,0);
-		$session['user']['hitpoints'] += $diff;
+	$potion = $pct == 100 ? "`^Complete Healing`0" : array("%s%% - %s gold", $pct, round($cost*$pct/100,0));
+	$context = resurrection_service_context('healer-buy', (string)$pct, [$cost]);
+	if (!$posted) {
+		// 1.1.2 sold the potion on this GET; the sale is now this form's protected POST.
+		if ($session['user']['hitpoints'] < $session['user']['maxhitpoints']) {
+			resurrection_service_form("healer.php?op=buy&pct=$pct$returnline", "healer-buy-$pct", $context, is_array($potion) ? $potion : translate_inline($potion));
+		}
+	} else {
+		try {
+			resurrection_service_fields();
+			resurrection_consume_action("healer-buy-$pct", $context);
+			[$newcost, $diff] = resurrection_player_mutation(fn () => resurrection_healer_potion($pct));
+		} catch (Throwable $error) { resurrection_service_failure($error, 'the healer'); }
+		if ($diff !== null){
 		output("`3With a grimace, you up-end the potion the creature hands you, and despite the foul flavor, you feel a warmth spreading through your veins as your muscles knit back together.");
 		if($newcost){
 			output("`3With a grimace, you up-end the potion the creature hands you, and despite the foul flavor, you feel a warmth spreading through your veins as your muscles knit back together.");
@@ -69,24 +83,36 @@ if ($op==""){
 		} else {
 			output("`n`n`#You have been healed for %s points!", $diff);
 		}
-	}else{
+		}else{
 		output("`3The old creature pierces you with a gaze hard and cruel.");
 		output("Your lightning quick reflexes enable you to dodge the blow from its gnarled staff.");
 		output("Perhaps you should get some more money before you attempt to engage in local commerce.`n`n");
 		output("You recall that the creature had asked for `b`\$%s`3`b gold.", $newcost);
+		}
 	}
 }elseif ($op=="companion"){
-	$compcost = httpget('compcost');
-	
-	if($session['user']['gold'] < $compcost){
+	try {
+		$name = resurrection_companion_key();
+		$compcost = resurrection_companion_heal_cost($companions[$name]);
+		if ($compcost === null) throw new DomainException('Nothing to heal.');
+		$context = resurrection_service_context('healer-companion', $name, [$compcost]);
+		$paid = null;
+		if ($posted) {
+			resurrection_service_fields();
+			resurrection_consume_action('healer-companion', $context);
+			$paid = resurrection_player_mutation(fn () => resurrection_companion_heal($name, false));
+		}
+	} catch (Throwable $error) { resurrection_service_failure($error, 'the healer'); }
+	if($posted ? $paid === null : $session['user']['gold'] < $compcost){
 		output("`3The old creature pierces you with a gaze hard and cruel.`n");
 		output("Your lightning quick reflexes enable you to dodge the blow from its gnarled staff.`n");
 		output("Perhaps you should get some more money before you attempt to engage in local commerce.`n`n");
 		output("You recall that the creature had asked for `b`\$%s`3`b gold.", $compcost);
+	}elseif(!$posted){
+		// 1.1.2 healed on this GET; the healing is now this form's protected POST.
+		resurrection_service_form("healer.php?op=companion&name=" . rawurlencode($name) . $returnline, 'healer-companion', $context,
+			array("%s`0 (`^%s Gold`0)", $companions[$name]['name'], $compcost));
 	}else{
-		$name = stripslashes(rawurldecode(httpget('name')));
-		$session['user']['gold'] -= $compcost;
-		$companions[$name]['hitpoints'] = $companions[$name]['maxhitpoints'];
 		output("`3With a grimace, %s`3 up-ends the potion from the creature.`n", $companions[$name]['name']);
 		output("Muscles knit back together, cuts close and bruises fade. %s`3 is ready to battle once again!`n", $companions[$name]['name']);
 		output("You hand the creature your gold and are ready to be out of here.");
@@ -110,7 +136,8 @@ foreach($companions as $name => $companion){
 		$points = $companion['maxhitpoints'] - $companion['hitpoints'];
 		if($points > 0){
 			$compcost = round(log($session['user']['level']+1) * ($points + 10)*1.33);
-			addnav(array("%s`0 (`^%s Gold`0)", $companion['name'], $compcost), "healer.php?op=companion&name=".rawurlencode($name)."&compcost=$compcost$returnline");
+			// The link no longer carries the price; the companion page works it out again.
+			addnav(array("%s`0 (`^%s Gold`0)", $companion['name'], $compcost), "healer.php?op=companion&name=".rawurlencode($name).$returnline);
 			$compheal = true;
 		}
 	}

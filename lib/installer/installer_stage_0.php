@@ -1,4 +1,6 @@
 <?php
+// Included by the historical web installer only (installer.php answers 403); never an endpoint itself.
+if (realpath($_SERVER['SCRIPT_FILENAME'] ?? '')===__FILE__) { http_response_code(404); exit('Not an application endpoint.'); }
 output("`@`c`bWelcome to Legend of the Green Dragon`b`c`0");
 output("`2This is the installer script for Legend of the Green Dragon, by Eric Stevens & JT Traub.`n");
 output("`nIn order to install and use Legend of the Green Dragon (LoGD), you must agree to the license under which it is deployed.`n");
@@ -17,8 +19,8 @@ if (DB_CHOSEN){
 		$version = getsetting("installer_version","-1");
 		if ($version == "-1") {
 			// Passwords weren't encrypted in these versions
-			$sql = "SELECT * FROM ".db_prefix("accounts")." WHERE login='".mysql_real_escape_string(httppost("username"))."' AND password='".mysql_real_escape_string(httppost("password"))."' AND superuser & ".SU_MEGAUSER;
-		}else $sql = "SELECT * FROM ".db_prefix("accounts")." WHERE login='".mysql_real_escape_string(httppost("username"))."' AND password='".md5(md5(stripslashes(httppost("password"))))."' AND superuser & ".SU_MEGAUSER;
+			$sql = "SELECT * FROM ".db_prefix("accounts")." WHERE login='".db_escape(httppost("username"))."' AND password='".db_escape(httppost("password"))."' AND superuser & ".SU_MEGAUSER;
+		}else $sql = "SELECT * FROM ".db_prefix("accounts")." WHERE login='".db_escape(httppost("username"))."' AND password='".md5(md5(stripslashes(httppost("password"))))."' AND superuser & ".SU_MEGAUSER;
 		$result = db_query($sql);
 		if (db_num_rows($result) > 0){
 			$row = db_fetch_assoc($result);

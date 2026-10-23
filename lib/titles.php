@@ -8,9 +8,10 @@ require_once("lib/e_rand.php");
 
 function valid_dk_title($title, $dks, $gender)
 {
+	// Bound here and below: 1.1.2 pasted the kill count and the caller's ref in.
 	$sql = "SELECT dk,male,female FROM " . db_prefix("titles") .
-		" WHERE dk <= $dks ORDER by dk DESC";
-	$res = db_query($sql);
+		" WHERE dk <= ? ORDER by dk DESC";
+	$res = db_query($sql, true, [(int)$dks]);
 	$d = -1;
 	while ($row = db_fetch_assoc($res)) {
 		if ($d == -1) $d = $row['dk'];
@@ -35,32 +36,35 @@ function get_dk_title($dks, $gender, $ref=false)
 	$refdk = -1;
 	if ($ref !== false) {
 		$sql = "SELECT max(dk) as dk FROM " . db_prefix("titles") .
-			" WHERE dk<='$dks' and ref='$ref'";
-		$res = db_query($sql);
+			" WHERE dk<=? and ref=?";
+		$res = db_query($sql, true, [(int)$dks, (string)$ref]);
 		$row = db_fetch_assoc($res);
 		$refdk = $row['dk'];
 	}
 
 	$sql = "SELECT max(dk) as dk FROM " . db_prefix("titles") .
-		" WHERE dk<='$dks'";
-	$res = db_query($sql);
+		" WHERE dk<=?";
+	$res = db_query($sql, true, [(int)$dks]);
 	$row = db_fetch_assoc($res);
 	$anydk = $row['dk'];
 
 	$useref = "";
+	$parameters = [];
 	$targetdk = $anydk;
 	if ($refdk >= $anydk) {
-		$useref = "AND ref='$ref'";
+		$useref = "AND ref=?";
 		$targetdk = $refdk;
 	}
+	array_unshift($parameters, (string)$targetdk);
+	if ($useref !== "") $parameters[] = (string)$ref;
 
 	// Okay, we now have the right dk target to use, so select a title from
 	// any titles available at that level.  We will prefer titles that
 	// match the ref if possible.
 	$sql = "SELECT male,female FROM " . db_prefix("titles") .
-		" WHERE dk='$targetdk' $useref ORDER BY RAND(" .
+		" WHERE dk=? $useref ORDER BY RAND(" .
 		e_rand() . ") LIMIT 1";
-	$res = db_query($sql);
+	$res = db_query($sql, true, $parameters);
 	$row = array('male'=>'God', 'female'=>'Goddess');
 	if (db_num_rows($res) != 0) {
 		$row = db_fetch_assoc($res);

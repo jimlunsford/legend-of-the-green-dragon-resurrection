@@ -1,4 +1,7 @@
 <?php
+// Included by the historical web installer only (installer.php answers 403); never an endpoint itself.
+if (realpath($_SERVER['SCRIPT_FILENAME'] ?? '')===__FILE__) { http_response_code(404); exit('Not an application endpoint.'); }
+require_once __DIR__ . '/../../src/Compatibility/array_cursor.php';
 require_once("lib/installer/installer_sqlstatements.php");
 require_once("lib/installer/installer_functions.php");
 require_once("lib/installer/installer_default_settings.php");
@@ -11,7 +14,7 @@ rawoutput("<div style='width: 100%; height: 150px; max-height: 150px; overflow: 
 $descriptors = descriptors($DB_PREFIX);
 require_once("lib/tabledescriptor.php");
 reset($descriptors);
-while (list($tablename,$descriptor)=each($descriptors)){
+while (list($tablename,$descriptor)=resurrection_array_next($descriptors)){
 	output("`3Synchronizing table `#$tablename`3..`n");
 	synctable($tablename,$descriptor,true);
 	if ($session['dbinfo']['upgrade']==false){
@@ -24,14 +27,14 @@ output("`n`2The tables now have new fields and columns added, I'm going to begin
 rawoutput("<div style='width: 100%; height: 150px; max-height: 150px; overflow: auto;'>");
 $dosql = false;
 reset($sql_upgrade_statements);
-while (list($key,$val)=each($sql_upgrade_statements)){
+while (list($key,$val)=resurrection_array_next($sql_upgrade_statements)){
 	if ($dosql){
 		output("`3Version `#%s`3: %s SQL statements...`n",$key,count($val));
 		if (count($val)>0){
 			output("`^Doing: `6");
 			reset($val);
 			$count=0;
-			while (list($id,$sql)=each($val)){
+			while (list($id,$sql)=resurrection_array_next($val)){
 				$onlyupgrade = 0;
 				if (substr($sql, 0, 2) == "1|") {
 					$sql = substr($sql, 2);
@@ -76,7 +79,7 @@ output("Please note that these modules will be installed, but not activated.");
 output("Once installation is complete, you should use the Module Manager found in the superuser grotto to activate those modules you wish to use.");
 reset($recommended_modules);
 rawoutput("<div style='width: 100%; height: 150px; max-height: 150px; overflow: auto;'>");
-while (list($key,$modulename)=each($recommended_modules)){
+while (list($key,$modulename)=resurrection_array_next($recommended_modules)){
 output("`3Installing `#$modulename`\$`n");
 install_module($modulename, false);
 }
@@ -88,7 +91,7 @@ if (!$session['skipmodules']) {
   foreach($session['moduleoperations'] as $modulename=>$val){
 	  $ops = explode(",",$val);
 	  reset($ops);
-	  while (list($trash,$op) = each($ops)){
+	  while (list($trash,$op) = resurrection_array_next($ops)){
 		  switch($op){
 			  case "uninstall":
 			  output("`3Uninstalling `#$modulename`3: ");
@@ -134,7 +137,7 @@ if (!$session['skipmodules']) {
 output("`n`2Finally, I'll clean up old data.`n");
 rawoutput("<div style='width: 100%; height: 150px; max-height: 150px; overflow: auto;'>");
 reset($descriptors);
-while (list($tablename,$descriptor)=each($descriptors)){
+while (list($tablename,$descriptor)=resurrection_array_next($descriptors)){
 	output("`3Cleaning up `#$tablename`3...`n");
 	synctable($tablename,$descriptor);
 }

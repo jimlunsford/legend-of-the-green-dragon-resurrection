@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/../src/Security/ScalarState.php';
 // translator ready
 // addnews ready
 // mail ready
@@ -31,7 +32,7 @@ function datacache($name,$duration=60){
 				//the cache file *does* exist, and is not overly old.
 				$fullfile = @file_get_contents($fullname);
 				if ($fullfile > ""){
-					$datacache[$name] = @unserialize($fullfile);
+					$datacache[$name] = \Resurrection\Security\ScalarState::read($fullfile);
 					return $datacache[$name];
 				}else{
 					return false;

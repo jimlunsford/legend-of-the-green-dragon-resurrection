@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/../src/Compatibility/array_cursor.php';
 // translator ready
 // addnews ready
 // mail ready
@@ -7,9 +8,16 @@ require_once("lib/arraytourl.php");
 
 $injected_modules = array(1=>array(),0=>array());
 
+function resurrection_module_manager(): bool {
+    global $session;
+    return !empty($session['loggedin']) && (((int)($session['user']['superuser'] ?? 0) & SU_MANAGE_MODULES) !== 0);
+}
+
 function injectmodule($modulename,$force=false){
 	global $mostrecentmodule,$injected_modules;
-	//try to circumvent the array_key_exists() problem we've been having.
+	if (!is_string($modulename) || !preg_match('/\\A[A-Za-z][A-Za-z0-9_]*\\z/', $modulename)) { return false; }
+    $force = $force && resurrection_module_manager();
+    // Only trusted management calls may inspect an inactive module.
 	if ($force) $force = 1; else $force = 0;
 
 	//early escape if we already called injectmodule this hit with the
@@ -23,21 +31,19 @@ function injectmodule($modulename,$force=false){
 	$modulefilename = "modules/{$modulename}.php";
 	if (file_exists($modulefilename)){
 		tlschema("module-{$modulename}");
-		$sql = "SELECT active,filemoddate,infokeys,version FROM " . db_prefix("modules") . " WHERE modulename='$modulename'";
-		$result = db_query_cached($sql, "inject-$modulename", 3600);
+		$sql = "SELECT active,filemoddate,infokeys,version FROM " . db_prefix("modules") . " WHERE modulename=?";
+        $result = db_query($sql, true, [$modulename]);
 		if (!$force) {
 			//our chance to abort if this module isn't currently installed
 			//or doesn't meet the prerequisites.
 			if (db_num_rows($result)==0) {
 				tlschema();
-			 	output_notl("`n`3Module `#%s`3 is not installed, but was attempted to be injected.`n",$modulename);
 				$injected_modules[$force][$modulename]=false;
 				return false;
 			}
 			$row = db_fetch_assoc($result);
 			if ($row['active']){ } else {
 				tlschema();
-			 	output("`n`3Module `#%s`3 is not active, but was attempted to be injected.`n",$modulename);
 				$injected_modules[$force][$modulename]=false;
 				return false;
 			}
@@ -50,80 +56,26 @@ function injectmodule($modulename,$force=false){
 			$fname = $modulename."_getmoduleinfo";
 			$info = $fname();
 			if (!isset($info['requires'])) $info['requires'] = array();
-			if (!is_array($info['requires'])) $info['requires'] = array();
+			if (!is_array($info['requires'])) {
+                $injected_modules[$force][$modulename] = false;
+                tlschema();
+                return false;
+            }
 			if (!isset($info['download'])) $info['download']="";
 			if (!isset($info['description'])) $info['description']="";
 			if (!module_check_requirements($info['requires'])) {
 				$injected_modules[$force][$modulename]=false;
 				tlschema();
-				output("`n`3Module `#%s`3 does not meet its prerequisites.`n",$modulename);
 				return false;
 			}
 		}
-		//check to see if the module needs to be upgraded.
-		if (db_num_rows($result)>0){
-			if (!isset($row)) $row = db_fetch_assoc($result);
-			$filemoddate = date("Y-m-d H:i:s",filemtime($modulefilename));
-			if ($row['filemoddate']!=$filemoddate || $row['infokeys']=="" ||
-					$row['infokeys'][0] != '|' || $row['version']==''){
-				//The file has recently been modified, lock tables and
-				//check again (knowing we're the only one who can do this
-				//at one shot)
-				$sql = "LOCK TABLES " . db_prefix("modules") . " WRITE";
-				db_query($sql);
-				//check again after the table has been locked.
-				$sql = "SELECT filemoddate FROM " . db_prefix("modules") . " WHERE modulename='$modulename'";
-				$result = db_query($sql);
-				$row = db_fetch_assoc($result);
-				if ($row['filemoddate']!=$filemoddate ||
-						!isset($row['infokeys']) || $row['infokeys']=="" || $row['infokeys'][0] != '|' ||
-						$row['version']==''){
-					//the file mod time is still different from that
-					//recorded in the database, time to update the database
-					//and upgrade the module.
-					debug("The module $modulename was found to have updated, upgrading the module now.");
-					if (!is_array($info)){
-						//we might have gotten this info above, if not,
-						//we need it now.
-						$fname = $modulename."_getmoduleinfo";
-						$info = $fname();
-						if (!isset($info['download']))
-							$info['download']="";
-						if (!isset($info['version']))
-							$info['version']="0.0";
-						if (!isset($info['description']))
-							$info['description'] = '';
-					}
-					//Everyone else will block at the initial lock tables,
-					//we'll update, and on their second check, they'll fail.
-					//Only we will update the table.
+        // Runtime injection must never install or upgrade code as a side effect.
+        // Explicit authorized module lifecycle operations own those changes.
 
-					$keys = "|".join(array_keys($info), "|")."|";
-
-					$sql = "UPDATE ". db_prefix("modules") . " SET moduleauthor='".addslashes($info['author'])."', category='".addslashes($info['category'])."', formalname='".addslashes($info['name'])."', description='".addslashes($info['description'])."', filemoddate='$filemoddate', infokeys='$keys',version='".addslashes($info['version'])."',download='".addslashes($info['download'])."' WHERE modulename='$modulename'";
-					db_query($sql);
-					debug($sql);
-					$sql = "UNLOCK TABLES";
-					db_query($sql);
-					// Remove any old hooks (install will reset them)
-					module_wipehooks();
-					$fname = $modulename."_install";
-					if ($fname() === false) {
-						return false;
-					}
-					invalidatedatacache("inject-$modulename");
-
-				}else{
-					$sql = "UNLOCK TABLES";
-					db_query($sql);
-				}
-			}
-		}
 		tlschema();
 		$injected_modules[$force][$modulename]=true;
 		return true;
 	}else{
-	 	output("`n`\$Module `^%s`\$ was not found in the modules directory.`n",$modulename);
 		$injected_modules[$force][$modulename]=false;
 		return false;
 	}
@@ -143,8 +95,8 @@ function module_status($modulename, $version=false) {
 	$modulefilename = "modules/$modulename.php";
 	$status = MODULE_NO_INFO;
 	if (file_exists($modulefilename)) {
-		$sql = "SELECT active,filemoddate,infokeys,version FROM " . db_prefix("modules") . " WHERE modulename='$modulename'";
-		$result = db_query_cached($sql, "inject-$modulename", 3600);
+		$sql = "SELECT active,filemoddate,infokeys,version FROM " . db_prefix("modules") . " WHERE modulename=?";
+        $result = db_query($sql, true, [$modulename]);
 		if (db_num_rows($result) > 0) {
 			// The module is installed
 			$status = MODULE_INSTALLED;
@@ -208,8 +160,7 @@ function is_module_active($modulename){
 function is_module_installed($modulename,$version=false){
 	// Status will say the version is okay if we don't care about the
 	// version or if the version is actually correct
-	return (module_status($modulename, $version) &
-			(MODULE_INSTALLED|MODULE_VERSION_OK));
+	return (module_status($modulename, $version) & (MODULE_INSTALLED|MODULE_VERSION_OK)) === (MODULE_INSTALLED|MODULE_VERSION_OK);
 }
 
 /**
@@ -220,31 +171,27 @@ function is_module_installed($modulename,$version=false){
  * @return bool If successful or not
  */
 function module_check_requirements($reqs, $forceinject=false){
-	// Since we can inject here, we need to save off the module we're on
-	global $mostrecentmodule;
-
-	$oldmodule = $mostrecentmodule;
-	$result = true;
-
-	if (!is_array($reqs)) return false;
-
-	// Check the requirements.
-	reset($reqs);
-	while (list($key,$val)=each($reqs)){
-		$info = explode("|",$val);
-		if (!is_module_installed($key,$info[0])) {
-			return false;
-		}
-		// This is actually cheap since we cache the result
-		$status = module_status($key);
-		// If it's not injected and we should force it, do so.
-		if (!($status & MODULE_INJECTED) && $forceinject) {
-			$result = $result && injectmodule($key);
-		}
-	}
-
-	$mostrecentmodule = $oldmodule;
-	return $result;
+    global $mostrecentmodule;
+    static $checking = [];
+    if (!is_array($reqs)) return false;
+    $oldmodule = $mostrecentmodule;
+    try {
+        foreach ($reqs as $name => $descriptor) {
+            if (!is_string($name) || !preg_match('/\\A[A-Za-z][A-Za-z0-9_]*\\z/', $name)
+                || !is_string($descriptor)) return false;
+            $version = explode('|', $descriptor, 2)[0];
+            if (!preg_match('/\\A[0-9]+(?:\\.[0-9]+)*\\z/', $version) || isset($checking[$name])) return false;
+            if (!is_module_installed($name, $version) || !is_module_active($name)) return false;
+            $checking[$name] = true;
+            try {
+                require_once 'modules/' . $name . '.php';
+                $metadata = ($name . '_getmoduleinfo')();
+                if (!is_array($metadata) || !module_check_requirements($metadata['requires'] ?? [], false)) return false;
+                if ($forceinject && !injectmodule($name)) return false;
+            } finally { unset($checking[$name]); }
+        }
+        return true;
+    } finally { $mostrecentmodule = $oldmodule; }
 }
 
 /**
@@ -329,12 +276,14 @@ function mass_module_prepare($hooknames){
 		ON	$Pmodules.modulename = $Pmodule_hooks.modulename
 		WHERE
 			active = 1
-		AND	location IN ('".join("', '",$hooknames)."')
+		AND	location IN (" . implode(',', array_fill(0, max(1, count($hooknames)), '?')) . ")
 		ORDER BY
 			$Pmodule_hooks.location,
 			$Pmodule_hooks.priority,
 			$Pmodule_hooks.modulename";
-	$result = db_query_cached($sql,"moduleprepare-".md5(join($hooknames)));
+	// Bound: 1.1.2 pasted the hook and module names in quoted.
+	$hooknames = array_values(array_map('strval', $hooknames));
+	$result = db_query_cached($sql,"moduleprepare-".md5(join($hooknames)), 900, $hooknames === [] ? [''] : $hooknames);
 	$modulenames = array();
 	while ($row = db_fetch_assoc($result)){
 		$modulenames[$row['modulename']] = $row['modulename'];
@@ -348,8 +297,10 @@ function mass_module_prepare($hooknames){
 		array_push($modulehook_queries[$row['location']],$row);
 		$module_preload[$row['location']][$row['modulename']] = $row['function'];
 	}
-	//SQL IN() syntax for the modules involved here.
-	$modulelist = "'".join("', '",$modulenames)."'";
+	//SQL IN() placeholders for the modules involved here.
+	$modulenames = array_values(array_map('strval', $modulenames));
+	$modulelist = implode(',', array_fill(0, max(1, count($modulenames)), '?'));
+	$moduleparameters = $modulenames === [] ? [''] : $modulenames;
 
 	//Load the settings for the modules on these hooks.
 	$sql =
@@ -361,7 +312,7 @@ function mass_module_prepare($hooknames){
 			$Pmodule_settings
 		WHERE
 			modulename IN ($modulelist)";
-	$result = db_query($sql);
+	$result = db_query($sql, true, $moduleparameters);
 	while ($row = db_fetch_assoc($result)){
 		$module_settings[$row['modulename']][$row['setting']] = $row['value'];
 	}
@@ -377,8 +328,8 @@ function mass_module_prepare($hooknames){
 			$Pmodule_userprefs
 		WHERE
 			modulename IN ($modulelist)
-		AND	userid = ".(int)$session['user']['acctid'];
-	$result = db_query($sql);
+		AND	userid = ?";
+	$result = db_query($sql, true, [...$moduleparameters, (int)$session['user']['acctid']]);
 	while ($row = db_fetch_assoc($result)){
 		$module_prefs[$row['userid']][$row['modulename']][$row['setting']] = $row['value'];
 	}
@@ -421,7 +372,7 @@ function modulehook($hookname, $args=false, $allowinactive=false, $only=false){
 			rawoutput("  arg: $arg");
 		} else {
 			reset($args);
-			while (list($key,$val)=each($args)){
+			while (list($key,$val)=resurrection_array_next($args)){
 				$arg = $key." = ";
 				if (is_array($val)){
 					$arg.="array(".count($val).")";
@@ -454,11 +405,11 @@ function modulehook($hookname, $args=false, $allowinactive=false, $only=false){
 			ON	" . db_prefix("modules") . ".modulename = " . db_prefix("module_hooks") . ".modulename
 			WHERE
 				$active
-				" . db_prefix("module_hooks") . ".location='$hookname'
+				" . db_prefix("module_hooks") . ".location=?
 			ORDER BY
 				" . db_prefix("module_hooks") . ".priority,
 				" . db_prefix("module_hooks") . ".modulename";
-		$result = db_query_cached($sql,"hook-".$hookname);
+		$result = db_query_cached($sql,"hook-".$hookname, 900, [(string)$hookname]);
 	}
 	// $args is an array passed by value and we take the output and pass it
 	// back through
@@ -510,11 +461,16 @@ function modulehook($hookname, $args=false, $allowinactive=false, $only=false){
 /*******************************************************/
 				$starttime = getmicrotime();
 /*******************************************************/
-				if (function_exists($row['function'])) {
-					$res = $row['function']($hookname, $args);
-				} else {
-					trigger_error("Unknown function {$row['function']} for hoookname $hookname in module {$row['module']}.", E_USER_WARNING);
-				}
+                try {
+                    $res = resurrection_invoke_module_hook($row, $hookname, $args);
+                } catch (Throwable $error) {
+                    $output = $outputbeforehook;
+                    $navsection = $oldnavsection;
+                    $mostrecentmodule = $mod;
+                    $currenthook = $lasthook;
+                    tlschema();
+                    throw $error;
+                }
 /*******************************************************/
 				$endtime = getmicrotime();
 				if (($endtime - $starttime >= 1.00 && ($session['user']['superuser'] & SU_DEBUG_OUTPUT))){
@@ -574,6 +530,38 @@ function get_all_module_settings($module=false){
 	return $module_settings[$module];
 }
 
+/** Database hook rows may select only the conventional bundled hook entrypoint. */
+function resurrection_invoke_module_hook($row, $hookname, $args) {
+    $callback = $row['modulename'] . '_dohook';
+    if ($row['function'] !== $callback || !is_callable($callback)) {
+        throw new DomainException('Unsupported module hook callback.');
+    }
+    $daily = $hookname === 'newday-runonce' && defined('RESURRECTION_MAINTENANCE_DAY');
+    $receipt = 'mh:' . substr(hash('sha256', $callback), 0, 17);
+    if ($daily) {
+        $rows = db_query('SELECT value FROM ' . db_prefix('settings') . ' WHERE setting=?', true, [$receipt]);
+        if (($rows[0]['value'] ?? '') === RESURRECTION_MAINTENANCE_DAY) return $args;
+        $GLOBALS['dbinfo']['connection']->beginTransaction();
+    }
+    try {
+        $result = $callback($hookname, $args);
+        if (!is_array($result)) throw new UnexpectedValueException('Module hook returned invalid state.');
+        if ($daily) {
+            db_query('INSERT INTO ' . db_prefix('settings') . ' (setting,value) VALUES (?,?) ON DUPLICATE KEY UPDATE value=VALUES(value)', true, [$receipt, RESURRECTION_MAINTENANCE_DAY]);
+            $GLOBALS['dbinfo']['connection']->commit();
+        }
+        return $result;
+    } catch (Throwable $error) {
+        if ($daily && $GLOBALS['dbinfo']['connection']->inTransaction()) $GLOBALS['dbinfo']['connection']->rollBack();
+        if ($daily) {
+            clearsettings();
+            $GLOBALS['module_settings'] = [];
+            $GLOBALS['module_prefs'] = [];
+        }
+        throw $error;
+    }
+}
+
 function get_module_setting($name,$module=false){
 	global $module_settings,$mostrecentmodule;
 	if ($module === false) $module = $mostrecentmodule;
@@ -599,19 +587,14 @@ function get_module_setting($name,$module=false){
 }
 
 function set_module_setting($name,$value,$module=false){
-	if ($name == "showFormTabIndex") return true;
-	global $module_settings,$mostrecentmodule;
-	if ($module === false) $module = $mostrecentmodule;
-	load_module_settings($module);
-	if (isset($module_settings[$module][$name])){
-		$sql = "UPDATE " . db_prefix("module_settings") . " SET value='".addslashes($value)."' WHERE modulename='$module' AND setting='".addslashes($name)."'";
-		db_query($sql);
-	}else{
-		$sql = "INSERT INTO " . db_prefix("module_settings") . " (modulename,setting,value) VALUES ('$module','".addslashes($name)."','".addslashes($value)."')";
-		db_query($sql);
-	}
-	invalidatedatacache("modulesettings-$module");
-	$module_settings[$module][$name] = $value;
+    if ($name === 'showFormTabIndex') return true;
+    global $module_settings,$mostrecentmodule;
+    if ($module === false) $module = $mostrecentmodule;
+    load_module_settings($module);
+    db_query('INSERT INTO ' . db_prefix('module_settings') . ' (modulename,setting,value) VALUES (?,?,?) ON DUPLICATE KEY UPDATE value=?', true,
+        [$module, $name, (string)$value, (string)$value]);
+    invalidatedatacache('modulesettings-' . $module);
+    $module_settings[$module][$name] = $value;
 }
 
 function increment_module_setting($name, $value=1, $module=false){
@@ -620,11 +603,10 @@ function increment_module_setting($name, $value=1, $module=false){
 	if ($module === false) $module = $mostrecentmodule;
 	load_module_settings($module);
 	if (isset($module_settings[$module][$name])){
-		$sql = "UPDATE " . db_prefix("module_settings") . " SET value=value+$value WHERE modulename='$module' AND setting='".addslashes($name)."'";
-		db_query($sql);
+		// Bound: 1.1.2 pasted the names in (the setting name with addslashes()) and the number unquoted.
+		db_query("UPDATE " . db_prefix("module_settings") . " SET value=value+? WHERE modulename=? AND setting=?", true, [$value, (string)$module, (string)$name]);
 	}else{
-		$sql = "INSERT INTO " . db_prefix("module_settings") . " (modulename,setting,value) VALUES ('$module','".addslashes($name)."','".addslashes($value)."')";
-		db_query($sql);
+		db_query("INSERT INTO " . db_prefix("module_settings") . " (modulename,setting,value) VALUES (?,?,?)", true, [(string)$module, (string)$name, (string)$value]);
 	}
 	invalidatedatacache("modulesettings-$module");
 	$module_settings[$module][$name] += $value;
@@ -641,30 +623,26 @@ function clear_module_settings($module=false){
 }
 
 function load_module_settings($module){
-	global $module_settings;
-	if (!isset($module_settings[$module])){
-		$module_settings[$module] = array();
-		$sql = "SELECT * FROM " . db_prefix("module_settings") . " WHERE modulename='$module'";
-		$result = db_query_cached($sql,"modulesettings-$module");
-		while ($row = db_fetch_assoc($result)){
-			$module_settings[$module][$row['setting']] = $row['value'];
-		}//end while
-	}//end if
-}//end function
+    global $module_settings;
+    if (!is_string($module) || !preg_match('/\A[A-Za-z][A-Za-z0-9_]*\z/', $module)) { throw new InvalidArgumentException('Invalid module name.'); }
+    if (!isset($module_settings[$module])) {
+        $module_settings[$module] = [];
+        $rows = db_query('SELECT setting,value FROM ' . db_prefix('module_settings') . ' WHERE modulename=?', true, [$module]);
+        foreach ($rows as $row) { $module_settings[$module][$row['setting']] = $row['value']; }
+    }
+}
 
 
 function module_delete_objprefs($objtype, $objid)
 {
-	$sql = "DELETE FROM " . db_prefix("module_objprefs") . " WHERE objtype='$objtype' AND objid='$objid'";
-	db_query($sql);
+	db_query("DELETE FROM " . db_prefix("module_objprefs") . " WHERE objtype=? AND objid=?", true, [(string)$objtype, (string)$objid]);
 	massinvalidate("objpref-$objtype-$objid");
 }
 
 function get_module_objpref($type, $objid, $name, $module=false){
 	global $mostrecentmodule;
 	if ($module === false) $module = $mostrecentmodule;
-	$sql = "SELECT value FROM ".db_prefix("module_objprefs")." WHERE modulename='$module' AND objtype='$type' AND setting='".addslashes($name)."' AND objid='$objid' ";
-	$result = db_query_cached($sql, "objpref-$type-$objid-$name-$module", 86400);
+	$result = db_query('SELECT value FROM '.db_prefix('module_objprefs').' WHERE modulename=? AND objtype=? AND setting=? AND objid=?',true,[$module,$type,$name,$objid]);
 	if (db_num_rows($result)>0){
 		$row = db_fetch_assoc($result);
 		return $row['value'];
@@ -679,7 +657,6 @@ function get_module_objpref($type, $objid, $name, $module=false){
 			$x = explode("|",$info['prefs-'.$type][$name]);
 		}
 		if (isset($x[1])){
-			set_module_objpref($type,$objid,$name,$x[1],$module);
 			return $x[1];
 		}
 	}
@@ -689,9 +666,7 @@ function get_module_objpref($type, $objid, $name, $module=false){
 function set_module_objpref($objtype,$objid,$name,$value,$module=false){
 	global $mostrecentmodule;
 	if ($module === false) $module = $mostrecentmodule;
-	// Delete the old version and insert the new
-	$sql = "REPLACE INTO " . db_prefix("module_objprefs") . "(modulename,objtype,setting,objid,value) VALUES ('$module', '$objtype', '$name', '$objid', '".addslashes($value)."')";
-	db_query($sql);
+	db_query('INSERT INTO '.db_prefix('module_objprefs').' (modulename,objtype,setting,objid,value) VALUES (?,?,?,?,?) ON DUPLICATE KEY UPDATE value=?',true,[$module,$objtype,$name,$objid,(string)$value,(string)$value]);
 	invalidatedatacache("objpref-$objtype-$objid-$name-$module");
 }
 
@@ -699,20 +674,20 @@ function increment_module_objpref($objtype,$objid,$name,$value=1,$module=false) 
 	global $mostrecentmodule;
 	$value = (float)$value;
 	if ($module === false) $module = $mostrecentmodule;
-	$sql = "UPDATE " . db_prefix("module_objprefs") . " SET value=value+$value WHERE modulename='$module' AND setting='".addslashes($name)."' AND objtype='".addslashes($objtype)."' AND objid=$objid;";
-	$result= db_query($sql);
+	// Bound: 1.1.2 pasted the names and the object ID in.
+	$result= db_query("UPDATE " . db_prefix("module_objprefs") . " SET value=value+? WHERE modulename=? AND setting=? AND objtype=? AND objid=?", true,
+		[$value, (string)$module, (string)$name, (string)$objtype, (int)$objid]);
 	if (db_affected_rows($result)==0){
 		//if the update did not do anything, insert the row
-		$sql = "INSERT INTO " . db_prefix("module_objprefs") . "(modulename,objtype,setting,objid,value) VALUES ('$module', '$objtype', '$name', '$objid', '".addslashes($value)."')";
-		db_query($sql);
+		db_query("INSERT INTO " . db_prefix("module_objprefs") . "(modulename,objtype,setting,objid,value) VALUES (?,?,?,?,?)", true,
+			[(string)$module, (string)$objtype, (string)$name, (int)$objid, (string)$value]);
 	}
 	invalidatedatacache("objpref-$objtype-$objid-$name-$module");
 }
 
 
 function module_delete_userprefs($user){
-	$sql = "DELETE FROM " . db_prefix("module_userprefs") . " WHERE userid='$user'";
-	db_query($sql);
+	db_query("DELETE FROM " . db_prefix("module_userprefs") . " WHERE userid=?", true, [(int)$user]);
 }
 
 $module_prefs=array();
@@ -777,13 +752,8 @@ function set_module_pref($name,$value,$module=false,$user=false){
 		return;
 	}
 
-	if (isset($module_prefs[$uid][$module][$name])){
-		$sql = "UPDATE " . db_prefix("module_userprefs") . " SET value='".addslashes($value)."' WHERE modulename='$module' AND setting='$name' AND userid='$uid'";
-		db_query($sql);
-	}else{
-		$sql = "INSERT INTO " . db_prefix("module_userprefs"). " (modulename,setting,userid,value) VALUES ('$module','$name','$uid','".addslashes($value)."')";
-		db_query($sql);
-	}
+    db_query('INSERT INTO ' . db_prefix('module_userprefs') . ' (modulename,setting,userid,value) VALUES (?,?,?,?) ON DUPLICATE KEY UPDATE value=?', true,
+        [$module, $name, (int)$uid, (string)$value, (string)$value]);
 	$module_prefs[$uid][$module][$name] = $value;
 }
 
@@ -803,12 +773,11 @@ function increment_module_pref($name,$value=1,$module=false,$user=false){
 	}
 
 	if (isset($module_prefs[$uid][$module][$name])){
-		$sql = "UPDATE " . db_prefix("module_userprefs") . " SET value=value+$value WHERE modulename='$module' AND setting='$name' AND userid='$uid'";
-		db_query($sql);
+		// Bound: 1.1.2 pasted the names and the account ID in.
+		db_query("UPDATE " . db_prefix("module_userprefs") . " SET value=value+? WHERE modulename=? AND setting=? AND userid=?", true, [$value, (string)$module, (string)$name, (int)$uid]);
 		$module_prefs[$uid][$module][$name] += $value;
 	}else{
-		$sql = "INSERT INTO " . db_prefix("module_userprefs"). " (modulename,setting,userid,value) VALUES ('$module','$name','$uid','".addslashes($value)."')";
-		db_query($sql);
+		db_query("INSERT INTO " . db_prefix("module_userprefs"). " (modulename,setting,userid,value) VALUES (?,?,?,?)", true, [(string)$module, (string)$name, (int)$uid, (string)$value]);
 		$module_prefs[$uid][$module][$name] = $value;
 	}
 }
@@ -828,25 +797,21 @@ function clear_module_pref($name,$module=false,$user=false){
 	}
 
 	if (isset($module_prefs[$uid][$module][$name])){
-		$sql = "DELETE FROM " . db_prefix("module_userprefs") . " WHERE modulename='$module' AND setting='$name' AND userid='$uid'";
-		db_query($sql);
+		db_query("DELETE FROM " . db_prefix("module_userprefs") . " WHERE modulename=? AND setting=? AND userid=?", true, [(string)$module, (string)$name, (int)$uid]);
 	}
 	unset($module_prefs[$uid][$module][$name]);
 }
 
-function load_module_prefs($module, $user=false){
-	global $module_prefs,$session;
-	if ($user===false) $user = $session['user']['acctid'];
-	if (!isset($module_prefs[$user])) $module_prefs[$user] = array();
-	if (!isset($module_prefs[$user][$module])){
-		$module_prefs[$user][$module] = array();
-		$sql = "SELECT setting,value FROM " . db_prefix("module_userprefs") . " WHERE modulename='$module' AND userid='$user'";
-		$result = db_query($sql);
-		while ($row = db_fetch_assoc($result)){
-			$module_prefs[$user][$module][$row['setting']] = $row['value'];
-		}//end while
-	}//end if
-}//end function
+function load_module_prefs($module,$user=false){
+    global $module_prefs,$session;
+    if ($user === false) $user = $session['user']['acctid'];
+    if (!is_string($module) || !preg_match('/\A[A-Za-z][A-Za-z0-9_]*\z/', $module)) { throw new InvalidArgumentException('Invalid module name.'); }
+    if (!isset($module_prefs[$user][$module])) {
+        $module_prefs[$user][$module] = [];
+        $rows = db_query('SELECT setting,value FROM ' . db_prefix('module_userprefs') . ' WHERE modulename=? AND userid=?', true, [$module, (int)$user]);
+        foreach ($rows as $row) { $module_prefs[$user][$module][$row['setting']] = $row['value']; }
+    }
+}
 
 function get_module_info($shortname){
 	global $mostrecentmodule;
@@ -909,32 +874,27 @@ function module_wipehooks() {
 	db_query($sql);
 
 	//invalidate data caches for module hooks associated with this module.
-	$sql = "SELECT location FROM ".db_prefix("module_hooks")." WHERE modulename='$mostrecentmodule'";
-	$result = db_query($sql);
+	$result = db_query("SELECT location FROM ".db_prefix("module_hooks")." WHERE modulename=?", true, [(string)$mostrecentmodule]);
 	while ($row = db_fetch_assoc($result)){
 		invalidatedatacache("hook-".$row['location']);
 	}
 	invalidatedatacache("moduleprepare");
 
 	debug("Removing all hooks for $mostrecentmodule");
-	$sql = "DELETE FROM " . db_prefix("module_hooks"). " WHERE modulename='$mostrecentmodule'";
-	db_query($sql);
+	db_query("DELETE FROM " . db_prefix("module_hooks"). " WHERE modulename=?", true, [(string)$mostrecentmodule]);
 	//unlock the module hooks table.
 	$sql = "UNLOCK TABLES";
 	db_query($sql);
 
-	$sql = "DELETE FROM " . db_prefix("module_event_hooks") . " WHERE modulename='$mostrecentmodule'";
-	db_query($sql);
+	db_query("DELETE FROM " . db_prefix("module_event_hooks") . " WHERE modulename=?", true, [(string)$mostrecentmodule]);
 
 }
 
 function module_addeventhook($type, $chance){
 	global $mostrecentmodule;
 	debug("Adding an event hook on $type events for $mostrecentmodule");
-	$sql = "DELETE FROM " . db_prefix("module_event_hooks") . " WHERE modulename='$mostrecentmodule' AND event_type='$type'";
-	db_query($sql);
-	$sql = "INSERT INTO " . db_prefix("module_event_hooks") . " (event_type,modulename,event_chance) VALUES ('$type', '$mostrecentmodule','".addslashes($chance)."')";
-	db_query($sql);
+	db_query("DELETE FROM " . db_prefix("module_event_hooks") . " WHERE modulename=? AND event_type=?", true, [(string)$mostrecentmodule, (string)$type]);
+	db_query("INSERT INTO " . db_prefix("module_event_hooks") . " (event_type,modulename,event_chance) VALUES (?,?,?)", true, [(string)$type, (string)$mostrecentmodule, (string)$chance]);
 	invalidatedatacache("event-".$type);
 }
 
@@ -942,8 +902,7 @@ function module_drophook($hookname,$functioncall=false){
 	global $mostrecentmodule;
 	if ($functioncall===false)
 		$functioncall=$mostrecentmodule."_dohook";
-	$sql = "DELETE FROM " . db_prefix("module_hooks") . " WHERE modulename='$mostrecentmodule' AND location='".addslashes($hookname)."' AND function='".addslashes($functioncall)."'";
-	db_query($sql);
+	db_query("DELETE FROM " . db_prefix("module_hooks") . " WHERE modulename=? AND location=? AND `function`=?", true, [(string)$mostrecentmodule, (string)$hookname, (string)$functioncall]);
 	invalidatedatacache("hook-".$hookname);
 	invalidatedatacache("moduleprepare");
 }
@@ -981,8 +940,8 @@ function module_addhook_priority($hookname,$priority=50,$functioncall=false,$whe
 	debug("Adding a hook at $hookname for $mostrecentmodule to $functioncall which is active on condition '$whenactive'");
 	//we want to do a replace in case there's any garbage left in this table which might block new clean data from going in.
 	//normally that won't be the case, and so this doesn't have any performance implications.
-	$sql = "REPLACE INTO " . db_prefix("module_hooks") . " (modulename,location,function,whenactive,priority) VALUES ('$mostrecentmodule','".addslashes($hookname)."','".addslashes($functioncall)."','".addslashes($whenactive)."','".addslashes($priority)."')";
-	db_query($sql);
+	db_query("REPLACE INTO " . db_prefix("module_hooks") . " (modulename,location,`function`,whenactive,priority) VALUES (?,?,?,?,?)", true,
+		[(string)$mostrecentmodule, (string)$hookname, (string)$functioncall, (string)$whenactive, (string)$priority]);
 	invalidatedatacache("hook-".$hookname);
 	invalidatedatacache("moduleprepare");
 }
@@ -1021,20 +980,11 @@ function module_collect_events($type, $allowinactive=false)
 	$events = array();
 	if (!$allowinactive) $active = " active=1 AND";
 
-	$sql = "SELECT " . db_prefix("module_event_hooks") . ".* FROM " . db_prefix("module_event_hooks") . " INNER JOIN " . db_prefix("modules") . " ON ". db_prefix("modules") . ".modulename = " . db_prefix("module_event_hooks") . ".modulename WHERE $active event_type='$type' ORDER BY RAND(".e_rand().")";
-	$result = db_query_cached($sql,"event-".$type);
+	$sql = "SELECT " . db_prefix("module_event_hooks") . ".* FROM " . db_prefix("module_event_hooks") . " INNER JOIN " . db_prefix("modules") . " ON ". db_prefix("modules") . ".modulename = " . db_prefix("module_event_hooks") . ".modulename WHERE $active event_type=? ORDER BY RAND(".e_rand().")";
+	$result = db_query_cached($sql,"event-".$type, 900, [(string)$type]);
 	while ($row = db_fetch_assoc($result)){
-		// The event_chance bit needs to return a value, but it can do that
-		// in any way it wants, and can have if/then or other logical
-		// structures, so we cannot just force the 'return' syntax unlike
-		// with buffs.
-		ob_start();
-		$chance = eval($row['event_chance'].";");
-		$err = ob_get_contents();
-		ob_end_clean();
-		if ($err > ""){
-			debug(array("error"=>$err,"Eval code"=>$row['event_chance']));
-		}
+        if (!injectmodule($row['modulename'], $allowinactive)) continue;
+        $chance = resurrection_event_chance($row['modulename'], $row['event_chance']);
 		if ($chance < 0) $chance = 0;
 		if ($chance > 100) $chance = 100;
 		if (($block_all_modules || array_key_exists($row['modulename'],$blocked_modules) && $blocked_modules[$row['modulename']]) &&
@@ -1066,10 +1016,10 @@ function module_collect_events($type, $allowinactive=false)
 	return modulehook("collect-events", $events);
 }
 
-function module_events($eventtype, $basechance, $baseLink = false) {
+function module_events($eventtype, $basechance, $baseLink = false, $defer = false) {
 	if ($baseLink === false){
 		global $PHP_SELF;
-		$baseLink = substr($PHP_SELF,strrpos($PHP_SELF,"/")+1)."?";
+		$baseLink = basename($_SERVER['SCRIPT_NAME'] ?? '') . '?';
 	}else{
 		//debug("Base link was specified as $baseLink");
 		//debug(debug_backtrace());
@@ -1091,7 +1041,16 @@ function module_events($eventtype, $basechance, $baseLink = false) {
 				tlschema();
 				$op = httpget('op');
 				httpset('op', "");
-				module_do_event($eventtype, $event['modulename'], false, $baseLink);
+                require_once 'lib/event_security.php';
+                if (resurrection_secured_event($event['modulename'])) resurrection_event_context($event['modulename'],$eventtype);
+                if ($defer) {
+                    global $session;
+                    $session['user']['specialinc']='module:'.$event['modulename'];
+                    addnav('Continue encounter',strtok($baseLink,'?'));
+                    httpset('op',$op);
+                    return 1;
+                }
+                module_do_event($eventtype, $event['modulename'], false, $baseLink);
 				httpset('op', $op);
 				return 1;
 			}
@@ -1107,7 +1066,7 @@ function module_do_event($type, $module, $allowinactive=false, $baseLink=false)
 
 	if ($baseLink === false){
 		global $PHP_SELF;
-		$baseLink = substr($PHP_SELF,strrpos($PHP_SELF,"/")+1)."?";
+		$baseLink = basename($_SERVER['SCRIPT_NAME'] ?? '') . '?';
 	}else{
 		//debug("Base link was specified as $baseLink");
 		//debug(debug_backtrace());
@@ -1122,7 +1081,12 @@ function module_do_event($type, $module, $allowinactive=false, $baseLink=false)
 		$oldnavsection = $navsection;
 		tlschema("module-$module");
 		$fname = $module."_runevent";
-		$fname($type,$baseLink);
+        require_once 'lib/event_security.php';
+        if (resurrection_secured_event($module)) {
+            resurrection_run_event($module,$type,$baseLink,static function () use ($fname,$type,$baseLink) { $fname($type,$baseLink); });
+        } else {
+            $fname($type,$baseLink);
+        }
 		tlschema();
 		//hook into the running event, but only in *this* running event, not in all
 		modulehook("runevent_$module", array("type"=>$type, "baselink"=>$baseLink, "get"=>httpallget(), "post"=>httpallpost()));
@@ -1141,7 +1105,7 @@ function module_display_events($eventtype, $forcescript=false) {
 	global $PHP_SELF, $session;
 	if (!($session['user']['superuser'] & SU_DEVELOPER)) return;
 	if ($forcescript === false)
-		$script = substr($PHP_SELF,strrpos($PHP_SELF,"/")+1);
+		$script = basename($_SERVER['SCRIPT_NAME'] ?? '');
 	else
 		$script = $forcescript;
 	$events = module_collect_events($eventtype,true);
@@ -1187,8 +1151,9 @@ function module_display_events($eventtype, $forcescript=false) {
 
 function module_editor_navs($like, $linkprefix)
 {
-	$sql = "SELECT formalname,modulename,active,category FROM " . db_prefix("modules") . " WHERE infokeys LIKE '%|$like|%' ORDER BY category,formalname";
-	$result = db_query($sql);
+	// Bound: 1.1.2 pasted the key into the LIKE pattern.
+	$sql = "SELECT formalname,modulename,active,category FROM " . db_prefix("modules") . " WHERE infokeys LIKE ? ORDER BY category,formalname";
+	$result = db_query($sql, true, ['%|' . $like . '|%']);
 	$curcat = "";
 	while($row = db_fetch_assoc($result)) {
 		if ($curcat != $row['category']) {
@@ -1205,32 +1170,8 @@ function module_editor_navs($like, $linkprefix)
 
 function module_objpref_edit($type, $module, $id)
 {
-	$info = get_module_info($module);
-	if (count($info['prefs-'.$type]) > 0) {
-		$data = array();
-		$msettings = array();
-		while(list($key, $val) = each($info['prefs-'.$type])) {
-			if (is_array($val)) {
-				$v = $val[0];
-				$x = explode("|", $v);
-				$val[0] = $x[0];
-				$x[0] = $val;
-			} else {
-				$x = explode("|", $val);
-			}
-			$msettings[$key]=$x[0];
-			// Set up default
-			if (isset($x[1])) $data[$key]=$x[1];
-		}
-		$sql = "SELECT setting, value FROM " . db_prefix("module_objprefs") . " WHERE modulename='$module' AND objtype='$type' AND objid='$id'";
-		$result = db_query($sql);
-		while($row = db_fetch_assoc($result)) {
-			$data[$row['setting']] = $row['value'];
-		}
-		tlschema("module-$module");
-		showform($msettings, $data);
-		tlschema();
-	}
+    require_once 'lib/typed_editor.php';
+    resurrection_object_editor($type,$module,(int)$id,false);
 }
 
 function module_compare_versions($a,$b){
@@ -1238,22 +1179,43 @@ function module_compare_versions($a,$b){
 	//insert alternate version detection and comparison algorithms here.
 
 	//default case, typecast as float
-	$a = (float)$a;
-	$b = (float)$b;
-	return ($a < $b ? -1 : ($a > $b ? 1 : 0) );
+	return version_compare((string)$a, (string)$b);
+}
+
+/** Lifecycle changes invalidate dependants as well as preloaded hook/event rows. */
+function resurrection_invalidate_module_runtime($module) {
+    $GLOBALS['injected_modules'] = [0 => [], 1 => []];
+    $GLOBALS['modulehook_queries'] = [];
+    $GLOBALS['module_preload'] = [];
+    foreach (['hook-', 'event-', 'moduleprepare', 'inject-'] as $prefix) {
+        foreach (array_keys($GLOBALS['datacache'] ?? []) as $key) {
+            if (str_starts_with($key, $prefix)) invalidatedatacache($key);
+        }
+        massinvalidate($prefix);
+    }
+    invalidatedatacache('modulesettings-' . $module);
+    unset($GLOBALS['module_settings'][$module]);
 }
 
 function activate_module($module){
+    if (!resurrection_module_manager()) { return false; }
+    require_once 'lib/web_security.php';
+    resurrection_require_post();
+    if (!is_string($module) || !preg_match('/\\A[A-Za-z][A-Za-z0-9_]*\\z/', $module)) { return false; }
 	if (!is_module_installed($module)){
 		if (!install_module($module)){
 			return false;
 		}
 	}
-	$sql = "UPDATE " . db_prefix("modules") . " SET active=1 WHERE modulename='$module'";
-	db_query($sql);
+    $info = get_module_info($module);
+    if (!module_check_requirements($info['requires'] ?? [])) { return false; }
+	$sql = "UPDATE " . db_prefix("modules") . " SET active=1 WHERE modulename=?";
+    db_query($sql, true, [$module]);
+    $changed = db_affected_rows();
+    resurrection_invalidate_module_runtime($module);
 	invalidatedatacache("inject-$module");
 	massinvalidate("moduleprepare");
-	if (db_affected_rows() <= 0){
+	if ($changed <= 0){
 		return false;
 	}else{
 		return true;
@@ -1261,6 +1223,10 @@ function activate_module($module){
 }
 
 function deactivate_module($module){
+    if (!resurrection_module_manager()) { return false; }
+    require_once 'lib/web_security.php';
+    resurrection_require_post();
+    if (!is_string($module) || !preg_match('/\\A[A-Za-z][A-Za-z0-9_]*\\z/', $module)) { return false; }
 	if (!is_module_installed($module)){
 		if (!install_module($module)){
 			return false;
@@ -1269,116 +1235,118 @@ function deactivate_module($module){
 			return true;
 		}
 	}
-	$sql = "UPDATE " . db_prefix("modules") . " SET active=0 WHERE modulename='$module'";
-	db_query($sql);
+	$sql = "UPDATE " . db_prefix("modules") . " SET active=0 WHERE modulename=?";
+    db_query($sql, true, [$module]);
+    $changed = db_affected_rows();
+    resurrection_invalidate_module_runtime($module);
 	invalidatedatacache("inject-$module");
 	massinvalidate("moduleprepare");
-	if (db_affected_rows() <= 0){
+	if ($changed <= 0){
 		return false;
 	}else{
 		return true;
 	}
 }
 
+/**
+ * Uninstall a module. Its own uninstall script runs first (it may still read its settings, and dag and drinks drop
+ * their tables, which commits implicitly), then its entry, hooks, settings and preferences go in one transaction. The
+ * module is deactivated before anything else, so a failure partway never leaves a half-removed module running. On a
+ * failure the page says what was and was not removed, the response is 500, and the result is false; the module is
+ * then still installed (inactive) and can be uninstalled again to finish.
+ */
 function uninstall_module($module){
-	if (injectmodule($module,true)) {
+    global $dbinfo, $mostrecentmodule;
+    if (!resurrection_module_manager()) { return false; }
+    require_once 'lib/web_security.php';
+    resurrection_require_post();
+    if (!is_string($module) || !preg_match('/\\A[A-Za-z][A-Za-z0-9_]*\\z/', $module)) { return false; }
+	if (!injectmodule($module,true)) {
+		return false;
+	}
+    $connection = $dbinfo['connection'];
+    if ($connection->inTransaction()) { throw new LogicException('Nested module uninstall.'); }
+    db_query('UPDATE ' . db_prefix('modules') . ' SET active=0 WHERE modulename=?', true, [$module]);
+    resurrection_invalidate_module_runtime($module);
+    $scriptRan = false;
+    try {
 		$fname = $module."_uninstall";
 		output("Running module uninstall script`n");
 		tlschema("module-{$module}");
-		$fname();
-		tlschema();
-
-		output("Deleting module entry`n");
-		$sql = "DELETE FROM " . db_prefix("modules") .
-			" WHERE modulename='$module'";
-		db_query($sql);
-
-		output("Deleting module hooks`n");
-		module_wipehooks();
-
-		output("Deleting module settings`n");
-		$sql = "DELETE FROM " . db_prefix("module_settings") .
-			" WHERE modulename='$module'";
-		db_query($sql);
-		invalidatedatacache("modulesettings-$module");
-
-		output("Deleting module user prefs`n");
-		$sql = "DELETE FROM " . db_prefix("module_userprefs") .
-			" WHERE modulename='$module'";
-		db_query($sql);
-
-		output("Deleting module object prefs`n");
-		$sql = "DELETE FROM " . db_prefix("module_objprefs") .
-			" WHERE modulename='$module'";
-		db_query($sql);
-		invalidatedatacache("inject-$module");
-		massinvalidate("moduleprepare");
-		return true;
-	} else {
-		return false;
-	}
+        try { $fname(); } finally { tlschema(); }
+        $scriptRan = true;
+        $mostrecentmodule = $module;
+        // The page lists each deletion only once all of them are kept.
+        $before = $GLOBALS['output'] ?? '';
+        $connection->beginTransaction();
+        try {
+            output("Deleting module entry`n");
+            db_query('DELETE FROM ' . db_prefix('modules') . ' WHERE modulename=?', true, [$module]);
+            output("Deleting module hooks`n");
+            db_query('DELETE FROM ' . db_prefix('module_hooks') . ' WHERE modulename=?', true, [$module]);
+            db_query('DELETE FROM ' . db_prefix('module_event_hooks') . ' WHERE modulename=?', true, [$module]);
+            output("Deleting module settings`n");
+            db_query('DELETE FROM ' . db_prefix('module_settings') . ' WHERE modulename=?', true, [$module]);
+            output("Deleting module user prefs`n");
+            db_query('DELETE FROM ' . db_prefix('module_userprefs') . ' WHERE modulename=?', true, [$module]);
+            output("Deleting module object prefs`n");
+            db_query('DELETE FROM ' . db_prefix('module_objprefs') . ' WHERE modulename=?', true, [$module]);
+            $connection->commit();
+        } catch (Throwable $error) {
+            if ($connection->inTransaction()) { $connection->rollBack(); }
+            $GLOBALS['output'] = $before;
+            throw $error;
+        }
+    } catch (Throwable $error) {
+        error_log('Module uninstall of ' . $module . ' failed: ' . $error->getMessage());
+        resurrection_invalidate_module_runtime($module);
+        if ($scriptRan) {
+            output("`\$The module uninstall script ran, but deleting its entry, hooks, settings, user prefs and object prefs failed, so none of them were deleted.  The module is still installed and is now inactive.  Uninstall it again to finish.`0`n");
+        } else {
+            output("`\$The module uninstall script failed.  Its entry, hooks, settings, user prefs and object prefs were not deleted.  The module is still installed and is now inactive.`0`n");
+        }
+        http_response_code(500);
+        return false;
+    }
+    resurrection_invalidate_module_runtime($module);
+	invalidatedatacache("inject-$module");
+	massinvalidate("moduleprepare");
+	return true;
 }
 
 function install_module($module, $force=true){
- 	global $mostrecentmodule, $session;
-	$name = $session['user']['name'];
-	if (!$name) $name = '`@System`0';
-
-	require_once("lib/sanitize.php");
-	if (modulename_sanitize($module)!=$module){
-		output("Error, module file names can only contain alpha numeric characters and underscores before the trailing .php`n`nGood module names include 'testmodule.php', 'joesmodule2.php', while bad module names include, 'test.module.php' or 'joes module.php'`n");
-		return false;
-	}else{
-		// If we are forcing an install, then whack the old version.
-		if ($force) {
-			$sql = "DELETE FROM " . db_prefix("modules") . " WHERE modulename='$module'";
-			db_query($sql);
-		}
-		// We want to do the inject so that it auto-upgrades any installed
-		// version correctly.
-		if (injectmodule($module,true)) {
-			// If we're not forcing and this is already installed, we are done
-			if (!$force && is_module_installed($module))
-				return true;
-			$info = get_module_info($module);
-			//check installation requirements
-			if (!module_check_requirements($info['requires'])){
-				output("`\$Module could not installed -- it did not meet its prerequisites.`n");
-				return false;
-			}else{
-				$keys = "|".join(array_keys($info), "|")."|";
-				$sql = "INSERT INTO " . db_prefix("modules") . " (modulename,formalname,moduleauthor,active,filename,installdate,installedby,category,infokeys,version,download,description) VALUES ('$mostrecentmodule','".addslashes($info['name'])."','".addslashes($info['author'])."',0,'{$mostrecentmodule}.php','".date("Y-m-d H:i:s")."','".addslashes($name)."','".addslashes($info['category'])."','$keys','".addslashes($info['version'])."','".addslashes($info['download'])."', '".addslashes($info['description'])."')";
-				db_query($sql);
-				$fname = $mostrecentmodule."_install";
-				if (isset($info['settings']) && count($info['settings']) > 0) {
-					foreach($info['settings'] as $key=>$val){
-						if (is_array($val)) {
-							$x = explode("|", $val[0]);
-						} else {
-							$x = explode("|",$val);
-						}
-						if (isset($x[1])){
-							set_module_setting($key,$x[1]);
-							debug("Setting $key to default {$x[1]}");
-						}
-					}
-				}
-				if ($fname() === false) {
-					return false;
-				}
-				output("`^Module installed.  It is not yet active.`n");
-				invalidatedatacache("inject-$mostrecentmodule");
-				massinvalidate("moduleprepare");
-				return true;
-			}
-		} else {
-			output("`\$Module could not be injected.");
-			output("Module not installed.");
-			output("This is probably due to the module file having a parse error or not existing in the filesystem.`n");
-			return false;
-		}
-	}
-
+    if (!resurrection_module_manager()) { return false; }
+    require_once 'lib/web_security.php';
+    resurrection_require_post();
+    if (!is_string($module) || !preg_match('/\\A[A-Za-z][A-Za-z0-9_]*\\z/', $module)) { return false; }
+    global $session;
+    if (!injectmodule($module, true)) { return false; }
+    if (!$force && is_module_installed($module)) { return true; }
+    $info = get_module_info($module);
+    // Preflight before modifying existing metadata. Reinstallation always leaves
+    // the module inactive until an explicit successful activation request.
+    if (!module_check_requirements($info['requires'] ?? [])) { return false; }
+    $columns = ['modulename','formalname','moduleauthor','active','filename','installdate','installedby','category','infokeys','version','download','description','filemoddate'];
+    $values = [$module, $info['name'], $info['author'], 0, $module . '.php', date('Y-m-d H:i:s'),
+        $session['user']['name'] ?? 'Administrator', $info['category'], '|' . implode('|', array_keys($info)) . '|',
+        $info['version'], $info['download'] ?? '', $info['description'] ?? '', date('Y-m-d H:i:s', filemtime('modules/' . $module . '.php'))];
+    $updates = [];
+    foreach (array_slice($columns, 1) as $column) { $updates[] = db_identifier($column) . '=VALUES(' . db_identifier($column) . ')'; }
+    db_query('INSERT INTO ' . db_prefix('modules') . ' (' . implode(',', array_map('db_identifier', $columns)) . ') VALUES (' . implode(',', array_fill(0, count($columns), '?')) . ') ON DUPLICATE KEY UPDATE ' . implode(',', $updates), true, $values);
+    try {
+        foreach ($info['settings'] ?? [] as $key => $descriptor) {
+            if (!is_string($key)) { continue; }
+            $parts = explode('|', is_array($descriptor) ? $descriptor[0] : $descriptor, 2);
+            if (isset($parts[1])) {
+                db_query('INSERT INTO ' . db_prefix('module_settings') . ' (modulename,setting,value) VALUES (?,?,?) ON DUPLICATE KEY UPDATE setting=VALUES(setting)', true, [$module, $key, $parts[1]]);
+            }
+        }
+        return ($module . '_install')() !== false;
+    } finally {
+        resurrection_invalidate_module_runtime($module);
+        invalidatedatacache('inject-' . $module);
+        massinvalidate('moduleprepare');
+    }
 }
 
 /**
@@ -1388,9 +1356,22 @@ function install_module($module, $force=true){
   * @return bool The result of the evaluated expression
   */
 function module_condition($condition) {
-	global $session;
-	$result = eval($condition);
-	return (bool)$result;
+    global $session;
+    require_once 'src/Game/Expression.php';
+    return (bool)\Resurrection\Game\Expression::evaluate($condition, $session['user'] ?? []);
+}
+
+/** Fixed named event condition; persisted strings cannot select PHP functions. */
+function resurrection_event_chance($module, $expression) {
+    require_once 'src/Game/Expression.php';
+    if ($module === 'darkhorse') {
+        $legacy = 'require_once("modules/darkhorse.php");return(darkhorse_tavernmount()?0:100);';
+        $normalized = preg_replace('/\\s+/', '', $expression);
+        if ($expression === 'bundled:darkhorse-without-tavern-mount' || $normalized === $legacy) {
+            return darkhorse_tavernmount() ? 0 : 100;
+        }
+    }
+    return \Resurrection\Game\Expression::evaluate($expression);
 }
 
 function get_module_install_status(){
@@ -1437,16 +1418,16 @@ function get_racename($thisuser=true) {
 function module_delete_oldvalues($table,$key) {
     require_once 'lib/gamelog.php';
     $total = 0;
-    $res = db_query("SELECT modulename FROM ".db_prefix('modules')." WHERE infokeys LIKE '%|$key|%'");
+    $res = db_query("SELECT modulename FROM ".db_prefix('modules')." WHERE infokeys LIKE ?", true, ['%|' . $key . '|%']);
     while ($row = db_fetch_assoc($res)) {
         $mod = $row['modulename'];
         require_once "modules/{$mod}.php";
         $func = $mod."_getmoduleinfo";
         $info = $func();
 		$keys = array_filter(array_keys($info[$key]), "module_pref_filter");
-		$keys = array_map("addslashes", $keys);
-        $keys = implode("','", $keys);
-        if ($keys) db_query("DELETE FROM ".db_prefix($table)." WHERE modulename='$mod' AND setting NOT IN ('$keys')");
+		$keys = array_values(array_map('strval', $keys));
+        // Bound: 1.1.2 pasted the module name and the setting names (with addslashes()) in.
+        if (implode("','", $keys)) db_query("DELETE FROM ".db_prefix($table)." WHERE modulename=? AND setting NOT IN (" . implode(',', array_fill(0, count($keys), '?')) . ")", true, [(string)$mod, ...$keys]);
         $total += db_affected_rows();
     }
     gamelog("Cleaned up $total old values in $table that don't exist anymore", 'maintenance');

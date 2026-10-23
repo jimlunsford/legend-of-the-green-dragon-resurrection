@@ -29,3 +29,7 @@ Do not import advertising, mightyblogs, charrestore, TopWebGames, payment module
 ## Confirmed mismatch
 
 Archived `icecaravan` requires `icetown >= 1.3`, but archived `icetown` reports `1.0`. Do not change its version string to satisfy the dependency checker. Investigate original revision, required API and behavior. Neither module is admitted in this foundation.
+
+## Modern engineering phase
+
+The same 24 bundled entrypoints remain. They receive PHP syntax checks during core modernization. Hook registration, dependencies, activation enforcement, preferences and module DDL are not yet certified. The archived module set remains outside this phase.

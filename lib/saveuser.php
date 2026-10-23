@@ -1,4 +1,10 @@
 <?php
+require_once __DIR__ . '/../src/Compatibility/array_cursor.php';
+require_once __DIR__ . '/../src/Security/NavigationState.php';
+require_once __DIR__ . '/../src/Security/PreferenceState.php';
+require_once __DIR__ . '/../src/Game/BuffState.php';
+require_once __DIR__ . '/../src/Game/CompanionState.php';
+require_once __DIR__ . '/../src/Game/DragonPointState.php';
 // translator ready
 // addnews ready
 // mail ready
@@ -12,32 +18,36 @@ function saveuser(){
 		// are undone.
 		restore_buff_fields();
 
-		$session['user']['allowednavs']=serialize($session['allowednavs']);
-		$session['user']['bufflist']=serialize($session['bufflist']);
-		if (isset($companions) && is_array($companions)) $session['user']['companions']=serialize($companions);
-		$sql="";
-		reset($session['user']);
-		while(list($key,$val)=each($session['user'])){
-			if (is_array($val)) $val = serialize($val);
-			//only update columns that have changed.
-			if ($baseaccount[$key]!=$val){
-				$sql.="$key='".addslashes($val)."', ";
-			}
-		}
-		//due to the change in the accounts table -> moved output -> save everyhit
-		$sql.="laston='".date("Y-m-d H:i:s")."', ";
-		$sql = substr($sql,0,strlen($sql)-2);
-		$sql="UPDATE " . db_prefix("accounts") . " SET " . $sql .
-			" WHERE acctid = ".$session['user']['acctid'];
-		db_query($sql);
-		if (isset($session['output']) && $session['output']) {
-			$sql_output="UPDATE " . db_prefix("accounts_output") . " SET output='".addslashes($session['output'])."' WHERE acctid={$session['user']['acctid']};";
-			$result=db_query($sql_output);
-			if (db_affected_rows($result)<1) {
-				$sql_output="REPLACE INTO " . db_prefix("accounts_output") . " VALUES ({$session['user']['acctid']},'".addslashes($session['output'])."');";
-				db_query($sql_output);
-			}
-		}
+		// Store only navigation and preference state the readers accept; a failure writes nothing.
+		$session['user']['allowednavs']=serialize(\Resurrection\Security\NavigationState::map($session['allowednavs']));
+		if (array_key_exists('restorepage', $session['user'])) \Resurrection\Security\NavigationState::restorePage($session['user']['restorepage']);
+		if (array_key_exists('prefs', $session['user'])) $session['user']['prefs']=\Resurrection\Security\PreferenceState::encode($session['user']['prefs']);
+		// Torment presentation may calculate display fields but cannot persist buff changes. Only a valid list is stored.
+        $session['user']['bufflist']=defined('RESURRECTION_GRAVEYARD_READ_ONLY')
+            ? $baseaccount['bufflist'] : \Resurrection\Game\BuffState::encode($session['bufflist'], $session['user']);
+		// Only a valid companion list is stored; a refused one throws and nothing is written.
+		if (isset($companions) && is_array($companions)) $session['user']['companions']=\Resurrection\Game\CompanionState::encode($companions);
+        $assignments = [];
+        $parameters = [];
+        foreach ($session['user'] as $key => $value) {
+            if (defined('RESURRECTION_NEWDAY_PRESENTATION') && !in_array($key, ['allowednavs','restorepage','gentime','gentimecount','gensize'], true)) { continue; }
+            if ($key === 'password' || !array_key_exists($key, $baseaccount)) { continue; }
+            // Every stored collection is encoded by its schema; any other array is refused, never stored unchecked.
+            if ($key === 'dragonpoints') { $value = \Resurrection\Game\DragonPointState::encode($value); }
+            elseif (is_array($value)) { throw new DomainException('Unencoded stored collection.'); }
+            if ($baseaccount[$key] != $value) {
+                $assignments[] = db_identifier($key) . '=?';
+                $parameters[] = $value;
+            }
+        }
+        $assignments[] = 'laston=?';
+        $parameters[] = date('Y-m-d H:i:s');
+        $parameters[] = (int)$session['user']['acctid'];
+        db_query('UPDATE ' . db_prefix('accounts') . ' SET ' . implode(',', $assignments) . ' WHERE acctid=?', true, $parameters);
+        if (!empty($session['output'])) {
+            db_query('INSERT INTO ' . db_prefix('accounts_output') . ' (acctid,output) VALUES (?,?) ON DUPLICATE KEY UPDATE output=?', true,
+                [(int)$session['user']['acctid'], $session['output'], $session['output']]);
+        }
 		unset($session['bufflist']);
 		$session['user'] = array(
 			"acctid"=>$session['user']['acctid'],

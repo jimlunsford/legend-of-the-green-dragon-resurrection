@@ -1,70 +1,85 @@
 <?php
 		page_header("Update Clan Description / MoTD");
 		addnav("Clan Options");
+		require_once("lib/clan_authority.php");
+		// Authority is the actor's own clan and rank: read from the account row each request, rechecked under lock.
+		$clanid = (int)$session['user']['clanid'];
 		if ($session['user']['clanrank']>=CLAN_OFFICER){
-			$clanmotd = substr(httppost('clanmotd'),0,4096);
-			if (httppostisset('clanmotd') &&
-					stripslashes($clanmotd)!=$claninfo['clanmotd']){
-				$sql = "UPDATE " . db_prefix("clans") . " SET clanmotd='$clanmotd',motdauthor={$session['user']['acctid']} WHERE clanid={$claninfo['clanid']}";
-				db_query($sql);
-				invalidatedatacache("clandata-{$claninfo['clanid']}");
-				$claninfo['clanmotd']=stripslashes($clanmotd);
-				output("Updating MoTD`n");
-				$claninfo['motdauthor']=$session['user']['acctid'];
+			$leader = $session['user']['clanrank']>=CLAN_LEADER;
+			if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
+				// One protected POST, bound to the clan's stored text; values are stored as entered and bound.
+				try {
+					resurrection_clan_fields(['clanmotd','clandesc', ...($leader ? ['customsay'] : [])]);
+					$text = [];
+					foreach (['clanmotd'=>4096, 'clandesc'=>4096, 'customsay'=>15] as $key=>$limit) {
+						if (array_key_exists($key, $_POST)) $text[$key] = resurrection_clan_text(\Resurrection\Http\Input::string($_POST, $key), $limit, $key === 'customsay');
+					}
+				} catch (InvalidArgumentException $error) { resurrection_clan_failure($error); }
+				$stored = resurrection_clan_text_row($clanid);
+				if ($stored === null) resurrection_clan_failure(new DomainException('Clan unavailable.'));
+				$context = resurrection_clan_text_context($stored, $session['user']);
+				resurrection_consume_action('clan-motd', $context);
+				try {
+					$updated = resurrection_clan_mutation(function () use ($clanid, $text, $context) {
+						global $session;
+						if ((int)$session['user']['clanid'] !== $clanid || $session['user']['clanrank'] < CLAN_OFFICER) throw new DomainException('Not an officer of this clan.');
+						$clan = resurrection_clan_text_row($clanid, true);
+						if ($clan === null || resurrection_clan_text_context($clan, $session['user']) !== $context) throw new DomainException('Clan text changed.');
+						$actor = (int)$session['user']['acctid'];
+						$updated = [];
+						if (isset($text['clanmotd']) && $text['clanmotd'] !== (string)$clan['clanmotd']) {
+							db_query("UPDATE " . db_prefix("clans") . " SET clanmotd=?,motdauthor=? WHERE clanid=?", true, [$text['clanmotd'], $actor, $clanid]);
+							$updated[] = 'motd';
+						}
+						if (isset($text['clandesc'])) {
+							// A blocked description stays blocked until a moderator unblocks it.
+							if ((int)$clan['descauthor'] === RESURRECTION_CLAN_DESC_BLOCKED) throw new InvalidArgumentException('Description blocked.');
+							if ($text['clandesc'] !== (string)$clan['clandesc']) {
+								db_query("UPDATE " . db_prefix("clans") . " SET clandesc=?,descauthor=? WHERE clanid=?", true, [$text['clandesc'], $actor, $clanid]);
+								$updated[] = 'desc';
+							}
+						}
+						if (isset($text['customsay']) && $session['user']['clanrank'] >= CLAN_LEADER && $text['customsay'] !== (string)$clan['customsay']) {
+							db_query("UPDATE " . db_prefix("clans") . " SET customsay=? WHERE clanid=?", true, [$text['customsay'], $clanid]);
+							$updated[] = 'say';
+						}
+						return $updated;
+					});
+				} catch (Throwable $error) { resurrection_clan_failure($error); }
+				invalidatedatacache("clandata-$clanid");
+				if (in_array('motd', $updated, true)) output("Updating MoTD`n");
+				if (in_array('desc', $updated, true)) output("Updating description`n");
+				if (in_array('say', $updated, true)) output("Updating custom say line`n");
 			}
-			$clandesc = httppost('clandesc');
-			if (httppostisset('clandesc') &&
-					stripslashes($clandesc)!=$claninfo['clandesc'] &&
-					$claninfo['descauthor']!=4294967295){
-				$sql = "UPDATE " . db_prefix("clans") . " SET clandesc='".addslashes(substr(stripslashes($clandesc),0,4096))."',descauthor={$session['user']['acctid']} WHERE clanid={$claninfo['clanid']}";
-				db_query($sql);
-				invalidatedatacache("clandata-{$claninfo['clanid']}");
-				output("Updating description`n");
-				$claninfo['clandesc']=stripslashes($clandesc);
-				$claninfo['descauthor']=$session['user']['acctid'];
-			}
-			$customsay = httppost('customsay');
-			if (httppostisset('customsay') && $customsay!=$claninfo['customsay'] && $session['user']['clanrank']>=CLAN_LEADER){
-				$sql = "UPDATE " . db_prefix("clans") . " SET customsay='$customsay' WHERE clanid={$claninfo['clanid']}";
-				db_query($sql);
-				invalidatedatacache("clandata-{$claninfo['clanid']}");
-				output("Updating custom say line`n");
-				$claninfo['customsay']=stripslashes($customsay);
-			}
-			$sql = "SELECT name FROM " . db_prefix("accounts") . " WHERE acctid={$claninfo['motdauthor']}";
-			$result = db_query($sql);
-			$row = db_fetch_assoc($result);
-			$motdauthname = $row['name'];
-
-			$sql = "SELECT name FROM " . db_prefix("accounts") . " WHERE acctid={$claninfo['descauthor']}";
-			$result = db_query($sql);
-			$row = db_fetch_assoc($result);
-			$descauthname = $row['name'];
+			$claninfo = array_merge($claninfo, resurrection_clan_text_row($clanid) ?? []);
+			$motdauthname = resurrection_clan_author($claninfo['motdauthor']);
+			$descauthname = resurrection_clan_author($claninfo['descauthor']);
 
 			output("`&`bCurrent MoTD:`b `#by %s`2`n",$motdauthname);
-			output_notl(nltoappon($claninfo['clanmotd'])."`n");
+			output_notl(nltoappon((string)$claninfo['clanmotd'])."`n");
 			output("`&`bCurrent Description:`b `#by %s`2`n",$descauthname);
-			output_notl(nltoappon($claninfo['clandesc'])."`n");
+			output_notl(nltoappon((string)$claninfo['clandesc'])."`n");
 
-			rawoutput("<form action='clan.php?op=motd' method='POST'>");
 			addnav("","clan.php?op=motd");
+			rawoutput("<form action='clan.php?op=motd' method='POST'>".resurrection_action_fields('clan-motd', resurrection_clan_text_context($claninfo, $session['user'])));
 			output("`&`bMoTD:`b `7(4096 chars)`n");
-			rawoutput("<textarea name='clanmotd' cols='50' rows='10' class='input' style='width: 66%'>".htmlentities($claninfo['clanmotd'], ENT_COMPAT, getsetting("charset", "ISO-8859-1"))."</textarea><br>");
+			rawoutput("<textarea name='clanmotd' cols='50' rows='10' class='input' style='width: 66%'>".resurrection_clan_attribute($claninfo['clanmotd'])."</textarea><br>");
 			output("`n`&`bDescription:`b `7(4096 chars)`n");
 			$blocked = translate_inline("Your clan has been blocked from posting a description.`n");
-			if ($claninfo['descauthor']==INT_MAX){
+			if ((int)$claninfo['descauthor']===RESURRECTION_CLAN_DESC_BLOCKED){
 				output_notl($blocked);
 			}else{
-				rawoutput("<textarea name='clandesc' cols='50' rows='10' class='input' style='width: 66%'>".htmlentities($claninfo['clandesc'], ENT_COMPAT, getsetting("charset", "ISO-8859-1"))."</textarea><br>");
+				rawoutput("<textarea name='clandesc' cols='50' rows='10' class='input' style='width: 66%'>".resurrection_clan_attribute($claninfo['clandesc'])."</textarea><br>");
 			}
-			if ($session['user']['clanrank']>=CLAN_LEADER){
+			if ($leader){
 				output("`n`&`bCustom Talk Line`b `7(blank means \"says\" -- 15 chars max)`n");
-				rawoutput("<input name='customsay' value=\"".htmlentities($claninfo['customsay'], ENT_COMPAT, getsetting("charset", "ISO-8859-1"))."\" class='input' maxlength=\"15\"><br/>");
+				rawoutput("<input name='customsay' value=\"".resurrection_clan_attribute($claninfo['customsay'])."\" class='input' maxlength=\"15\"><br/>");
 			}
-			$save = translate_inline("Save");
+			$save = resurrection_clan_attribute(translate_inline("Save"));
 			rawoutput("<input type='submit' class='button' value='$save'>");
 			rawoutput("</form>");
 		}else{
+			if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') http_response_code(403);
 			output("You do not have authority to change your clan's motd or description.");
 		}
 		addnav("Return to your clan hall","clan.php");

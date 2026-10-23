@@ -1,4 +1,6 @@
 <?php
+require_once __DIR__ . '/src/Security/NewsArguments.php';
+require_once __DIR__ . '/src/Compatibility/array_cursor.php';
 // translator ready
 // addnews ready
 // mail ready
@@ -22,17 +24,19 @@ $newsperpage=50;
 
 $offset = (int)httpget('offset');
 $timestamp=strtotime((0-$offset)." days");
-$sql = "SELECT count(newsid) AS c FROM " . db_prefix("news") . " WHERE newsdate='".date("Y-m-d",$timestamp)."'";
-$result = db_query($sql);
+// Bound: the day and the page come from the request (as integers).
+$sql = "SELECT count(newsid) AS c FROM " . db_prefix("news") . " WHERE newsdate=?";
+$result = db_query($sql, true, array(date("Y-m-d",$timestamp)));
 $row = db_fetch_assoc($result);
 $totaltoday=$row['c'];
 $page = (int)httpget('page');
-if (!$page) $page=1;
+// A page below 1 is page 1 (1.1.2 gave a database error for a negative page).
+if ($page < 1) $page=1;
 $pageoffset = $page;
 if ($pageoffset>0) $pageoffset--;
 $pageoffset*=$newsperpage;
-$sql = "SELECT * FROM " . db_prefix("news") . " WHERE newsdate='".date("Y-m-d",$timestamp)."' ORDER BY newsid DESC LIMIT $pageoffset,$newsperpage";
-$result = db_query($sql);
+$sql = "SELECT * FROM " . db_prefix("news") . " WHERE newsdate=? ORDER BY newsid DESC LIMIT ?,?";
+$result = db_query($sql, true, array(date("Y-m-d",$timestamp), $pageoffset, $newsperpage));
 page_header("LoGD News");
 $date=date("D, M j, Y",$timestamp);
 
@@ -59,18 +63,25 @@ output_notl("`n");
 output("`c`b`!News for %s %s`0`b`c", $date, $pagestr);
 
 while ($row = db_fetch_assoc($result)) {
+	// A stored line whose arguments fail the schema is skipped; a comment moderator still gets its Del link.
+	try { $base_arguments = \Resurrection\Security\NewsArguments::read($row['arguments']); }
+	catch (DomainException $error) { $base_arguments = null; }
+	if ($base_arguments === null && !($session['user']['superuser'] & SU_EDIT_COMMENTS)) continue;
 	output_notl("`c`2-=-`@=-=`2-=-`@=-=`2-=-`@=-=`2-=-`0`c");
 	if ($session['user']['superuser'] & SU_EDIT_COMMENTS){
-		$del = translate_inline("Del");
-		rawoutput("[ <a href='superuser.php?op=newsdelete&newsid=".$row['newsid']."&return=".URLEncode($_SERVER['REQUEST_URI'])."'>$del</a> ]&nbsp;");
-		addnav("","superuser.php?op=newsdelete&newsid={$row['newsid']}&return=".URLEncode($_SERVER['REQUEST_URI']));
+		// 1.1.2's Del link deleted on a GET. It is now a protected POST bound to this news line (superuser.php).
+		require_once("lib/admin_tools.php");
+		$del = htmlspecialchars(translate_inline("Del"), ENT_QUOTES, 'UTF-8');
+		$delurl = "superuser.php?op=newsdelete&newsid=".(int)$row['newsid']."&return=".URLEncode($_SERVER['REQUEST_URI']);
+		rawoutput("[ <form method='POST' action='$delurl' style='display:inline'>".resurrection_action_fields('news-delete-'.(int)$row['newsid'], resurrection_news_delete_context($row))."<button type='submit' class='button'>$del</button></form> ]&nbsp;");
+		addnav("",$delurl);
 	}
+	if ($base_arguments === null) continue;
 	tlschema($row['tlschema']);
 	if ($row['arguments']>""){
 		$arguments = array();
-		$base_arguments = unserialize($row['arguments']);
 		array_push($arguments,$row['newstext']);
-		while (list($key,$val)=each($base_arguments)){
+		while (list($key,$val)=resurrection_array_next($base_arguments)){
 			array_push($arguments,$val);
 		}
 		$news = call_user_func_array("sprintf_translate",$arguments);

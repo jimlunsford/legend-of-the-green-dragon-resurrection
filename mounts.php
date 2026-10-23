@@ -1,4 +1,7 @@
 <?php
+require_once __DIR__ . '/src/Security/ScalarState.php';
+require_once __DIR__ . '/src/Game/BuffState.php';
+require_once __DIR__ . '/src/Compatibility/array_cursor.php';
 // addnews ready
 // mail ready
 // translator ready
@@ -6,13 +9,36 @@ require_once("common.php");
 require_once("lib/http.php");
 require_once("lib/showform.php");
 
+// Shared object preferences are dispatched before all legacy mount-editor branches.
+if (($_GET['subop'] ?? '') === 'module') {
+    require_once 'lib/typed_editor.php';
+    check_su_access(SU_EDIT_MOUNTS);
+    try {
+        $editorOp=\Resurrection\Http\Input::choice($_GET,'op',['edit','save'],'edit');
+        $editorId=\Resurrection\Http\Input::integer($_GET,'id',0,1);
+        $editorModule=\Resurrection\Http\Input::string($_GET,'module');
+        if (isset($_GET['objtype']) || isset($_GET['objid'])) throw new InvalidArgumentException();
+        page_header('Mount Preferences');
+        resurrection_object_editor('mounts',$editorModule,$editorId,$editorOp==='save');
+        page_footer();
+    } catch (InvalidArgumentException|DomainException $error) { http_response_code(400); exit('Invalid or stale object preferences.'); }
+    catch (Throwable $error) { http_response_code(500); exit('Preferences were not saved.'); }
+    exit;
+}
+require_once("lib/mount_companion_editor.php");
+
 $op = httpget('op');
-$id = httpget('id');
 
 if ($op=="xml") {
+	// The owner lookup (the list's owner count). 1.1.2 answered it before the editor's SU_EDIT_MOUNTS check, so
+	// only forced navigation stood in front of it, and pasted the id into the SQL. It is the editor's own lookup:
+	// it needs the editor's flag and a mount ID.
+	check_su_access(SU_EDIT_MOUNTS);
+	try {
+		$id = resurrection_content_id($_GET, 'id');
+	} catch (InvalidArgumentException $error) { resurrection_content_failure($error, 'the mount editor'); }
 	header("Content-Type: text/xml");
-	$sql = "select name from " . db_prefix("accounts") . " where hashorse=$id";
-	$r = db_query($sql);
+	$r = db_query("select name from " . db_prefix("accounts") . " where hashorse=?", true, [$id]);
 	echo("<xml>");
 	while($row = db_fetch_assoc($r)) {
 		echo("<name name=\"");
@@ -31,6 +57,12 @@ check_su_access(SU_EDIT_MOUNTS);
 
 tlschema("mounts");
 
+try {
+	$op = \Resurrection\Http\Input::choice($_GET, 'op', ['', 'add', 'edit', 'save', 'del', 'give', 'activate', 'deactivate'], '');
+	// The list and the add form need no mount; a save without one adds (1.1.2's add form posts id=).
+	$id = resurrection_content_id($_GET, 'id', in_array($op, ['', 'add', 'save'], true));
+} catch (InvalidArgumentException $error) { resurrection_content_failure($error, 'the mount editor'); }
+
 page_header("Mount Editor");
 
 require_once("lib/superusernav.php");
@@ -39,85 +71,34 @@ superusernav();
 addnav("Mount Editor");
 addnav("Add a mount","mounts.php?op=add");
 
+// Every change is its protected POST form's (lib/mount_companion_editor.php); GET only displays.
 if ($op=="deactivate"){
-	$sql = "UPDATE " . db_prefix("mounts") . " SET mountactive=0 WHERE mountid='$id'";
-	db_query($sql);
+	resurrection_object_set_active('mounts', 'mountid', 'mount', 'mountactive', $id, 0, 'the mount editor');
 	$op="";
 	httpset("op", "");
-	invalidatedatacache("mountdata-$id");
 } elseif ($op=="activate"){
-	$sql = "UPDATE " . db_prefix("mounts") . " SET mountactive=1 WHERE mountid='$id'";
-	db_query($sql);
+	resurrection_object_set_active('mounts', 'mountid', 'mount', 'mountactive', $id, 1, 'the mount editor');
 	$op="";
 	httpset("op", "");
-	invalidatedatacache("mountdata-$id");
 } elseif ($op=="del") {
-	//refund for anyone who has a mount of this type.
-	$sql = "SELECT * FROM ".db_prefix("mounts")." WHERE mountid='$id'";
-	$result = db_query_cached($sql, "mountdata-$id", 3600);
-	$row = db_fetch_assoc($result);
-	$sql = "UPDATE ".db_prefix("accounts")." SET gems=gems+{$row['mountcostgems']}, goldinbank=goldinbank+{$row['mountcostgold']}, hashorse=0 WHERE hashorse={$row['mountid']}";
-	db_query($sql);
-	//drop the mount.
-	$sql = "DELETE FROM " . db_prefix("mounts") . " WHERE mountid='$id'";
-	db_query($sql);
-	module_delete_objprefs('mounts', $id);
+	//refund for anyone who has a mount of this type, and drop the mount.
+	resurrection_mount_delete($id);
 	$op = "";
 	httpset("op", "");
-	invalidatedatacache("mountdata-$id");
 } elseif ($op=="give") {
-	$session['user']['hashorse'] = $id;
-	// changed to make use of the cached query
-	$sql = "SELECT * FROM ".db_prefix("mounts")." WHERE mountid='$id'";
-	$result = db_query_cached($sql, "mountdata-$id", 3600);
-	$row = db_fetch_assoc($result);
-	$buff = unserialize($row['mountbuff']);
-	if ($buff['schema'] == "") $buff['schema'] = "mounts";
-	apply_buff("mount",$buff);
+	resurrection_mount_give($id);
 	$op="";
 	httpset("op", "");
 }elseif ($op=="save"){
-	$subop = httpget("subop");
-	if ($subop == "") {
-		$buff = array();
-		$mount = httppost('mount');
-		if ($mount) {
-			reset($mount['mountbuff']);
-			while (list($key,$val)=each($mount['mountbuff'])){
-				if ($val>""){
-					$buff[$key]=stripslashes($val);
-				}
-			}
-			$buff['schema']="mounts";
-			httppostset('mount', $buff, 'mountbuff');
-
-			list($sql, $keys, $vals) = postparse(false, 'mount');
-			if ($id>""){
-				$sql="UPDATE " . db_prefix("mounts") .
-					" SET $sql WHERE mountid='$id'";
-			}else{
-				$sql="INSERT INTO " . db_prefix("mounts") .
-					" ($keys) VALUES ($vals)";
-			}
-			db_query($sql);
-			invalidatedatacache("mountdata-$id");
-			if (db_affected_rows()>0){
-				output("`^Mount saved!`0`n");
-			}else{
-				output("`^Mount `\$not`^ saved: `\$%s`0`n", $sql);
-			}
-		}
-	} elseif ($subop=="module") {
-		// Save modules settings
-		$module = httpget("module");
-		$post = httpallpost();
-		reset($post);
-		while(list($key, $val) = each($post)) {
-			set_module_objpref("mounts", $id, $key, $val, $module);
-		}
-		output("`^Saved!`0`n");
+	$editing = $id > 0;
+	[$id, $affected] = resurrection_mount_save($id);
+	if ($affected>0){
+		output("`^Mount saved!`0`n");
+	}else{
+		// 1.1.2 printed the SQL here.
+		output("`^Mount `\$not`^ saved!`0`n");
 	}
-	if ($id) {
+	if ($editing) {
 		$op="edit";
 	} else {
 		$op = "";
@@ -177,6 +158,7 @@ if ($op==""){
 	$number=db_num_rows($result);
 	for ($i=0;$i<$number;$i++){
 		$row = db_fetch_assoc($result);
+		$mid = (int)$row['mountid'];
 		if ($cat!=$row['mountcategory']){
 			rawoutput("<tr class='trlight'><td colspan='5'>");
 			output("Category: %s", $row['mountcategory']);
@@ -189,24 +171,21 @@ if ($op==""){
 		} else {
 			$mounts[$row['mountid']] = 0;
 		}
+		// The 1.1.2 links, as protected forms bound to the mount as listed (and, for Del, its owner count).
 		rawoutput("<tr class='".($count%2?"trlight":"trdark")."'>");
-		rawoutput("<td nowrap>[ <a href='mounts.php?op=edit&id={$row['mountid']}'>$edit</a> |");
-		addnav("","mounts.php?op=edit&id={$row['mountid']}");
-		rawoutput("<a href='mounts.php?op=give&id={$row['mountid']}'>$give</a> |",true);
-		addnav("","mounts.php?op=give&id={$row['mountid']}");
+		rawoutput("<td nowrap>[ <a href='mounts.php?op=edit&id=$mid'>$edit</a> |");
+		addnav("","mounts.php?op=edit&id=$mid");
+		rawoutput(resurrection_content_button_form("mounts.php?op=give&id=$mid", "mount-give-$mid", resurrection_object_action_context('give', $row, resurrection_mount_give_state()), $give) . " |");
 		if ($row['mountactive']){
 			rawoutput("$del |");
 		}else{
 			$mconf = sprintf($conf, $mounts[$row['mountid']]);
-			rawoutput("<a href='mounts.php?op=del&id={$row['mountid']}' onClick=\"return confirm('$mconf');\">$del</a> |");
-			addnav("","mounts.php?op=del&id={$row['mountid']}");
+			rawoutput(resurrection_content_delete_form("mounts.php?op=del&id=$mid", "mount-del-$mid", resurrection_object_action_context('del', $row, ['owners'=>$mounts[$row['mountid']]]), $del, $mconf) . " |");
 		}
 		if ($row['mountactive']) {
-			rawoutput("<a href='mounts.php?op=deactivate&id={$row['mountid']}'>$deac</a> ]</td>");
-			addnav("","mounts.php?op=deactivate&id={$row['mountid']}");
+			rawoutput(resurrection_content_button_form("mounts.php?op=deactivate&id=$mid", "mount-deactivate-$mid", resurrection_object_action_context('deactivate', $row), $deac) . " ]</td>");
 		}else{
-			rawoutput("<a href='mounts.php?op=activate&id={$row['mountid']}'>$act</a> ]</td>");
-			addnav("","mounts.php?op=activate&id={$row['mountid']}");
+			rawoutput(resurrection_content_button_form("mounts.php?op=activate&id=$mid", "mount-activate-$mid", resurrection_object_action_context('activate', $row), $act) . " ]</td>");
 		}
 		rawoutput("<td>");
 		output_notl("`&%s`0", $row['mountname']);
@@ -225,8 +204,8 @@ if ($op==""){
 			$mcount++;
 		}
 		rawoutput("</td><td nowrap>");
-		$file = "mounts.php?op=xml&id=".$row['mountid'];
-		rawoutput("<div id='mountusers$i'><a href='$file' target='_blank' onClick=\"getUserInfo('".$row{'mountid'}."', $i); return false\">");
+		$file = "mounts.php?op=xml&id=".$mid;
+		rawoutput("<div id='mountusers$i'><a href='$file' target='_blank' onClick=\"getUserInfo('".$mid."', $i); return false\">");
  		output_notl("`#%s`0", $mounts[$row['mountid']]);
 		addnav("", $file);
 		rawoutput("</a></div>");
@@ -239,33 +218,31 @@ if ($op==""){
 }elseif ($op=="add"){
 	output("Add a mount:`n");
 	addnav("Mount Editor Home","mounts.php");
-	mountform(array());
+	mountform(array(), resurrection_content_context('add', []));
 }elseif ($op=="edit"){
 	addnav("Mount Editor Home","mounts.php");
-	$sql = "SELECT * FROM " . db_prefix("mounts") . " WHERE mountid='$id'";
-	$result = db_query_cached($sql, "mountdata-$id", 3600);
+	$sql = "SELECT * FROM " . db_prefix("mounts") . " WHERE mountid=?";
+	$result = db_query_cached($sql, "mountdata-$id", 3600, [$id]);
 	if (db_num_rows($result)<=0){
 		output("`iThis mount was not found.`i");
 	}else{
 		addnav("Mount properties", "mounts.php?op=edit&id=$id");
+		// Object preferences (subop=module) are the shared typed editor's, dispatched above.
 		module_editor_navs("prefs-mounts", "mounts.php?op=edit&subop=module&id=$id&module=");
-		$subop=httpget("subop");
-		if ($subop=="module") {
-			$module = httpget("module");
-			rawoutput("<form action='mounts.php?op=save&subop=module&id=$id&module=$module' method='POST'>");
-			module_objpref_edit("mounts", $module, $id);
-			rawoutput("</form>");
-			addnav("", "mounts.php?op=save&subop=module&id=$id&module=$module");
-		} else {
-			output("Mount Editor:`n");
-			$row = db_fetch_assoc($result);
-			$row['mountbuff']=unserialize($row['mountbuff']);
-			mountform($row);
-		}
+		output("Mount Editor:`n");
+		$row = db_fetch_assoc($result);
+		$context = resurrection_content_context('edit', $row);
+		// A stored buff the mount buff schema refuses is shown empty for repair: PHP 8 refused to turn a malformed
+		// value into the form's array, and the form's fields are text.
+		$buff=\Resurrection\Security\ScalarState::read($row['mountbuff']);
+		try { \Resurrection\Game\BuffState::mount($buff, $session['user']); }
+		catch (DomainException $error) { $buff = array(); }
+		$row['mountbuff']=$buff;
+		mountform($row, $context);
 	}
 }
 
-function mountform($mount){
+function mountform($mount, $context){
 	// Let's sanitize the data
 	if (!isset($mount['mountname'])) $mount['mountname'] = "";
 	if (!isset($mount['mountid'])) $mount['mountid'] = "";
@@ -326,9 +303,8 @@ function mountform($mount){
 	if (!isset($mount['mountbuff']['badguydefmod']))
 		$mount['mountbuff']['badguydefmod'] = "";
 
-	rawoutput("<form action='mounts.php?op=save&id={$mount['mountid']}' method='POST'>");
-	rawoutput("<input type='hidden' name='mount[mountactive]' value=\"".$mount['mountactive']."\">");
-	addnav("","mounts.php?op=save&id={$mount['mountid']}");
+	rawoutput(resurrection_content_form("mounts.php?op=save&id={$mount['mountid']}", "mount-edit-".(int)$mount['mountid'], $context));
+	rawoutput("<input type='hidden' name='mount[mountactive]' value=\"".(int)$mount['mountactive']."\">");
 	rawoutput("<table>");
 	rawoutput("<tr><td nowrap>");
 	output("Mount Name:");
@@ -345,16 +321,12 @@ function mountform($mount){
 	// Run a modulehook to find out where stables are located.  By default
 	// they are located in 'Degolburg' (ie, getgamesetting('villagename'));
 	// Some later module can remove them however.
-	$vname = getsetting('villagename', LOCATION_FIELDS);
-	$locs = array($vname => sprintf_translate("The Village of %s", $vname));
-	$locs = modulehook("stablelocs", $locs);
-	$locs['all'] = translate_inline("Everywhere");
-	ksort($locs);
-	reset($locs);
+	$locs = resurrection_object_locations("stablelocs");
 	rawoutput("<select name='mount[mountlocation]'>");
 	foreach($locs as $loc=>$name) {
-		rawoutput("<option value='$loc'".($mount['mountlocation']==$loc?" selected":"").">$name</option>");
+		rawoutput("<option value='".htmlspecialchars((string)$loc, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8')."'".($mount['mountlocation']==$loc?" selected":"").">".htmlspecialchars((string)$name, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8')."</option>");
 	}
+	rawoutput("</select></td></tr>");
 
 	rawoutput("<tr><td nowrap>");
 	output("Mount Cost (DKs):");

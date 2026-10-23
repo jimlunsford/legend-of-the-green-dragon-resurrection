@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/../src/Compatibility/array_cursor.php';
 // translator ready
 // addnews ready
 // mail ready
@@ -96,7 +97,7 @@ function substitute_array($string, $extra=false, $extrarep=false){
 	// Iterate the string and find the replacements in order
 	for ($x=0; $x<strlen($replacement_array[0]); $x++){
 		reset($search);
-		while (list($skey,$sval)=each($search)){
+		while (list($skey,$sval)=resurrection_array_next($search)){
 			// Get the replacement for this value.
 			$rval = $replace[$skey];
 			if (substr($replacement_array[0],$x,strlen($sval))==$sval){

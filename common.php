@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/src/Security/ScalarState.php';
 // translator ready
 // addnews ready
 // mail ready
@@ -88,10 +89,24 @@ require_once("lib/debuglog.php");
 require_once("lib/forcednavigation.php");
 require_once("lib/php_generic_environment.php");
 
+php_generic_environment();
 //session_register("session");
-session_start();
-$session = array();
+require_once 'lib/web_security.php';
+resurrection_start_session();
+$_SESSION['session'] ??= [];
 $session =& $_SESSION['session'];
+$session += ['loggedin' => false, 'lasthit' => 0, 'message' => '', 'debug' => '', 'allowednavs' => [], 'bufflist' => [], 'templatename' => '', 'templatemtime' => 0];
+$session['user'] ??= [];
+require_once 'lib/all_tables.php';
+foreach (get_all_tables()['accounts'] as $name => $column) {
+    if (str_contains($column['type'], 'key')) { continue; }
+    $session['user'][$name] ??= $column['default'] ?? '';
+}
+$session['user']['superuser'] = (int)($session['user']['superuser'] ?? 0);
+$session['user']['loggedin'] = (bool)($session['user']['loggedin'] ?? false);
+if (!is_array($session['user']['prefs'])) { $session['user']['prefs'] = []; }
+if (!$session['loggedin']) { $session['user']['superuser'] = 0; }
+
 
 // lets us provide output in dbconnect.php that only appears if there's a
 // problem connecting to the database server.  Useful for migration moves
@@ -168,21 +183,17 @@ if (!DB_CONNECTED || !db_select_db ($DB_NAME)){
 	define("LINK",$link);
 	define("DB_CHOSEN",true);
 }
-if ($logd_version == getsetting("installer_version","-1")) {
+if (!defined("IS_INSTALLER") && $logd_version == getsetting("installer_version","-1")) {
 	define("IS_INSTALLER", false);
 }
 
 header("Content-Type: text/html; charset=".getsetting('charset','ISO-8859-1'));
 
 if (strtotime("-".getsetting("LOGINTIMEOUT",900)." seconds") > $session['lasthit'] && $session['lasthit']>0 && $session['loggedin']){
-	// force the abandoning of the session when the user should have been
-	// sent to the fields.
-	$session=array();
-	// technically we should be able to translate this, but for now,
-	// ignore it.
-	// 1.1.1 now should be a good time to get it on with it, added tl-inline
-	translator_setup();
-	$session['message'].=translate_inline("`nYour session has expired!`n","common");
+    db_query('UPDATE ' . db_prefix('accounts') . ' SET loggedin=0 WHERE acctid=?', true, [(int)$session['user']['acctid']]);
+    resurrection_end_session();
+    header('Location: index.php?op=timeout', true, 303);
+    exit();
 }
 $session['lasthit']=strtotime("now");
 
@@ -219,7 +230,9 @@ $session['counter']++;
 $nokeeprestore=array("newday.php"=>1,"badnav.php"=>1,"motd.php"=>1,"mail.php"=>1,"petition.php"=>1);
 if (OVERRIDE_FORCED_NAV) $nokeeprestore[$SCRIPT_NAME]=1;
 if (!isset($nokeeprestore[$SCRIPT_NAME]) || !$nokeeprestore[$SCRIPT_NAME]) {
-  $session['user']['restorepage']=$REQUEST_URI;
+  // A request the column cannot hold, or with characters a page link never has, keeps the previous page.
+  require_once __DIR__ . '/src/Security/NavigationState.php';
+  if (\Resurrection\Security\NavigationState::validRestorePage($REQUEST_URI)) $session['user']['restorepage']=$REQUEST_URI;
 }else{
 
 }
@@ -229,7 +242,7 @@ if ($logd_version != getsetting("installer_version","-1") && !defined("IS_INSTAL
 	output("In order to perform the upgrade, an admin will have to run through the installer.");
 	output("If you are an admin, please <a href='installer.php'>visit the Installer</a> and complete the upgrade process.`n`n",true);
 	output("`@If you don't know what this all means, just sit tight, we're doing an upgrade and will be done soon, you will be automatically returned to the game when the upgrade is complete.");
-	rawoutput("<meta http-equiv='refresh' content='30; url={$session['user']['restorepage']}'>");
+	rawoutput("<meta http-equiv='refresh' content='30; url=" . htmlspecialchars((string)$session['user']['restorepage'], ENT_QUOTES) . "'>");
 	addnav("Installer (Admins only!)","installer.php");
 	define("NO_SAVE_USER",true);
 	page_footer();
@@ -241,63 +254,29 @@ if ($session['user']['hitpoints']>0){
 	$session['user']['alive']=false;
 }
 
-if (isset($session['user']['bufflist']))
-	$session['bufflist']=unserialize($session['user']['bufflist']);
-else
-	$session['bufflist'] = array();
-if (!is_array($session['bufflist'])) $session['bufflist']=array();
+// The buff list, checked and normalized (src/Game/BuffState.php). 1.1.2 turned any stored value that was not an array
+// into no buffs; its only such value was the empty column (create.php, newday.php), which still reads as none.
+// Anything else stops the page: a reset would silently drop a player's buffs.
+require_once 'src/Game/BuffState.php';
+$storedbuffs = $session['user']['bufflist'] ?? null;
+$session['bufflist'] = in_array($storedbuffs, [null, ''], true) ? [] : \Resurrection\Security\ScalarState::read($storedbuffs);
+if (is_array($session['bufflist']) && array_key_exists('transmute',$session['bufflist'])) {
+    require_once 'src/Game/TransmutationState.php';
+    try { \Resurrection\Game\TransmutationState::read($session['bufflist']['transmute']); }
+    catch (DomainException $error) { http_response_code(400); exit('Invalid stored potion state.'); }
+}
+try { $session['bufflist'] = \Resurrection\Game\BuffState::read($storedbuffs, $session['user']); }
+catch (DomainException $error) { http_response_code(409); exit('Invalid stored buff state. No game action was completed.'); }
+
 $session['user']['lastip']=$REMOTE_ADDR;
-if (strlen($_COOKIE['lgi'])<32){
-	if (strlen($session['user']['uniqueid'])<32){
-		$u=md5(microtime());
-		setcookie("lgi",$u,strtotime("+365 days"));
-		$_COOKIE['lgi']=$u;
-		$session['user']['uniqueid']=$u;
-	}else{
-		setcookie("lgi",$session['user']['uniqueid'],strtotime("+365 days"));
-	}
-}else{
-	$session['user']['uniqueid']=$_COOKIE['lgi'];
+[$session['user']['uniqueid'], $sendid] = resurrection_player_id($_COOKIE['lgi'] ?? null, $session['user']['uniqueid']);
+if ($sendid) {
+	setcookie('lgi', $session['user']['uniqueid'], ['expires' => strtotime('+365 days'), 'secure' => session_get_cookie_params()['secure'], 'httponly' => true, 'samesite' => 'Lax']);
 }
-$url = "http://".$_SERVER['SERVER_NAME'].dirname($_SERVER['REQUEST_URI']);
-$url = substr($url,0,strlen($url)-1);
-$urlport = "http://".$_SERVER['SERVER_NAME'].":".$_SERVER['SERVER_PORT'].dirname($_SERVER['REQUEST_URI']);
-$urlport = substr($urlport,0,strlen($urlport)-1);
-
-if (!isset($_SERVER['HTTP_REFERER'])) $_SERVER['HTTP_REFERER'] = "";
-
-if (
-	substr($_SERVER['HTTP_REFERER'],0,strlen($url))==$url ||
-	substr($_SERVER['HTTP_REFERER'],0,strlen($urlport))==$urlport ||
-	$_SERVER['HTTP_REFERER']=="" ||
-	strtolower(substr($_SERVER['HTTP_REFERER'],0,7))!="http://"
-	){
-
-}else{
-	$site = str_replace("http://","",$_SERVER['HTTP_REFERER']);
-	if (strpos($site,"/"))
-		$site = substr($site,0,strpos($site,"/"));
-	$host = str_replace(":80","",$_SERVER['HTTP_HOST']);
-
-	if ($site != $host){
-		$sql = "SELECT * FROM " . db_prefix("referers") . " WHERE uri='{$_SERVER['HTTP_REFERER']}'";
-		$result = db_query($sql);
-		$row = db_fetch_assoc($result);
-		db_free_result($result);
-		if ($row['refererid']>""){
-			$sql = "UPDATE " . db_prefix("referers") . " SET count=count+1,last='".date("Y-m-d H:i:s")."',site='".addslashes($site)."',dest='".addslashes($host)."/".addslashes($REQUEST_URI)."',ip='{$_SERVER['REMOTE_ADDR']}' WHERE refererid='{$row['refererid']}'";
-		}else{
-			$sql = "INSERT INTO " . db_prefix("referers") . " (uri,count,last,site,dest,ip) VALUES ('{$_SERVER['HTTP_REFERER']}',1,'".date("Y-m-d H:i:s")."','".addslashes($site)."','".addslashes($host)."/".addslashes($REQUEST_URI)."','{$_SERVER['REMOTE_ADDR']}')";
-			if (e_rand(1,100)==2){
-				$timestamp = date("Y-m-d H:i:s",strtotime("-1 month"));
-				db_query("DELETE FROM ".db_prefix("referers")." WHERE last < '$timestamp' LIMIT 300");
-				require_once("lib/gamelog.php");
-				gamelog("Deleted ".db_affected_rows()." records from ".db_prefix("referers")." older than $timestamp.","maintenance");
-			}
-		}
-		db_query($sql);
-	}
-}
+$_COOKIE['lgi'] = $session['user']['uniqueid'];
+// 1.1.2's referer tracking, bound and fitted to its columns; a failure there never stops the page.
+require_once 'lib/referer_tracking.php';
+resurrection_track_referer();
 
 if (!isset($session['user']['superuser'])) $session['user']['superuser']=0;
 
@@ -332,16 +311,16 @@ prepare_template();
 
 if (!isset($session['user']['hashorse'])) $session['user']['hashorse']=0;
 $playermount = getmount($session['user']['hashorse']);
-$temp_comp = @unserialize($session['user']['companions']);
-$companions = array();
-if(is_array($temp_comp)) {
-	foreach ($temp_comp as $name => $companion) {
-		if (is_array($companion)) {
-			$companions[$name] = $companion;
-		}
-	}
+// The companion list, checked and normalized (src/Game/CompanionState.php). 1.1.2 turned any stored value that was
+// not an array into no companions and dropped entries that were not arrays; its only such value was the empty column
+// (create.php), which still reads as none. Anything else stops the page: a reset would silently drop the companions.
+require_once __DIR__ . '/src/Game/CompanionState.php';
+try {
+    $companions = \Resurrection\Game\CompanionState::read($session['user']['companions'] ?? null);
+} catch (DomainException $error) {
+    http_response_code(409);
+    exit('Invalid stored companion state. No game action was completed.');
 }
-unset($temp_comp);
 
 $beta = getsetting("beta", 0);
 if (!$beta && getsetting("betaperplayer", 1) == 1)

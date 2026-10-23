@@ -33,7 +33,7 @@
 	massinvalidate("mail");
 	
 	// clean up old bans
-	db_query("DELETE FROM " . db_prefix("bans") . " WHERE banexpire < \"".date("Y-m-d")."\" AND banexpire>'0000-00-00'");
+	db_query("DELETE FROM " . db_prefix("bans") . " WHERE banexpire < \"".date("Y-m-d")."\" AND banexpire IS NOT NULL");
 	
 	if (getsetting("expirecontent",180)>0){
 		// Clean up old prefs

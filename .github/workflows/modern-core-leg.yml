@@ -1,0 +1,115 @@
+name: Modern core leg
+on:
+  workflow_call:
+    inputs:
+      php:
+        required: true
+        type: string
+      database:
+        required: true
+        type: string
+permissions:
+  contents: read
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    services:
+      database:
+        image: ${{ inputs.database }}
+        env:
+          MYSQL_ROOT_PASSWORD: disposable-root-only
+          MYSQL_DATABASE: resurrection_test
+          MYSQL_USER: resurrection_test
+          MYSQL_PASSWORD: disposable-test-only
+        ports:
+          - 3306/tcp
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -pdisposable-root-only || mariadb-admin ping -h 127.0.0.1 -uroot -pdisposable-root-only"
+          --health-interval=10s --health-timeout=5s --health-retries=10
+    env:
+      RESURRECTION_TEST_DB_USER: resurrection_test
+      RESURRECTION_TEST_DB_PASSWORD: disposable-test-only
+      RESURRECTION_TEST_DB_NAME: resurrection_test
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          fetch-tags: true
+          persist-credentials: false
+      - uses: shivammathur/setup-php@bf6b4fbd49ca58e4608c9c89fba0b8d90bd2a39f # 2.35.5
+        with:
+          php-version: ${{ inputs.php }}
+          extensions: pdo_mysql, mbstring, dom, xml, xmlwriter
+          coverage: none
+          tools: composer:v2
+          ini-values: error_reporting=-1, display_errors=1
+      - run: composer validate --strict
+      - run: composer install --no-interaction --prefer-dist --no-progress
+      - run: composer audit
+      - run: composer lint
+      - run: composer test
+        env:
+          RESURRECTION_TEST_DB_HOST: 127.0.0.1:${{ job.services.database.ports[3306] }}
+      - run: composer analyse
+      - run: vendor/bin/phpstan analyse -c phpstan-new.neon --no-progress --memory-limit=1G
+      - run: python3 scripts/verify-historical-baseline.py
+      - run: python3 scripts/validate-project.py
+  http:
+    name: http (${{ matrix.shard }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
+    # A fresh disposable database per shard; composer test performs the same clean install as before.
+    services:
+      database:
+        image: ${{ inputs.database }}
+        env:
+          MYSQL_ROOT_PASSWORD: disposable-root-only
+          MYSQL_DATABASE: resurrection_test
+          MYSQL_USER: resurrection_test
+          MYSQL_PASSWORD: disposable-test-only
+        ports:
+          - 3306/tcp
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -pdisposable-root-only || mariadb-admin ping -h 127.0.0.1 -uroot -pdisposable-root-only"
+          --health-interval=10s --health-timeout=5s --health-retries=10
+    env:
+      RESURRECTION_TEST_DB_USER: resurrection_test
+      RESURRECTION_TEST_DB_PASSWORD: disposable-test-only
+      RESURRECTION_TEST_DB_NAME: resurrection_test
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          fetch-tags: true
+          persist-credentials: false
+      - uses: shivammathur/setup-php@bf6b4fbd49ca58e4608c9c89fba0b8d90bd2a39f # 2.35.5
+        with:
+          php-version: ${{ inputs.php }}
+          extensions: pdo_mysql, mbstring, dom, xml, xmlwriter
+          coverage: none
+          tools: composer:v2
+          ini-values: error_reporting=-1, display_errors=1
+      - run: composer install --no-interaction --prefer-dist --no-progress
+      - run: composer test
+        env:
+          RESURRECTION_TEST_DB_HOST: 127.0.0.1:${{ job.services.database.ports[3306] }}
+      - run: python3 scripts/tooling-shards.py --shards 4 --shard ${{ matrix.shard }}
+        env:
+          RESURRECTION_TEST_DB_HOST: 127.0.0.1:${{ job.services.database.ports[3306] }}
+  result:
+    needs: [checks, http]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - run: test "$CHECKS" = success && test "$HTTP" = success
+        env:
+          CHECKS: ${{ needs.checks.result }}
+          HTTP: ${{ needs.http.result }}

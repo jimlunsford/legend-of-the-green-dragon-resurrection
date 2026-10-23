@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/../src/Security/NewsArguments.php';
 // addnews ready (duh ;))
 // translator ready
 // mail ready
@@ -72,16 +73,14 @@ function addnews_for_user()
 				array_push($arguments,$val);
 			}
 		}
-		$arguments = serialize($arguments);
+		// Only arguments news.php can render are stored; a refusal throws, so the caller's transaction rolls back.
+		$arguments = \Resurrection\Security\NewsArguments::encode($arguments);
 	}else{
 		$arguments="";
 	}
 	if ($hidefrombio === true) $user = 0;
-	$sql = "INSERT INTO " . db_prefix("news") .
-		" (newstext,newsdate,accountid,arguments,tlschema) VALUES ('" .
-		addslashes($news) . "','" . date("Y-m-d H:i:s") . "'," .
-		$user .",'".addslashes($arguments)."','".$translation_namespace."')";
-	return db_query($sql);
+    return db_query('INSERT INTO ' . db_prefix('news') . ' (newstext,newsdate,accountid,arguments,tlschema) VALUES (?,?,?,?,?)',true,
+        [$news,date('Y-m-d H:i:s'),(int)$user,$arguments,$translation_namespace]);
 }
 
 ?>

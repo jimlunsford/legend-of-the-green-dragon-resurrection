@@ -1,4 +1,6 @@
 <?php
+require_once __DIR__ . '/src/Security/NewsArguments.php';
+require_once __DIR__ . '/src/Compatibility/array_cursor.php';
 // addnews ready
 // translator ready
 // mail ready
@@ -9,22 +11,22 @@ tlschema("bio");
 
 checkday();
 
+require_once("lib/return_links.php");
 $ret = httpget('ret');
-if ($ret==""){
-	$return = "/list.php";
-}else{
-	$return = cmd_sanitize($ret);
-}
+$return = resurrection_bio_return($ret);
 
 $char = httpget('char');
+// The value is bound as plain text: 1.1.2 pasted it into the SQL. A missing or non-text char finds nobody, as 1.1.2's
+// empty login did; a numeric one is compared with acctid, as 1.1.2's unquoted number was.
+if (!is_string($char)) $char = "";
 //Legacy support
 if (is_numeric($char)){
-	$where = "acctid = $char";
+	$where = "acctid = ?";
 } else {
-	$where = "login = '$char'";
+	$where = "login = ?";
 }
 $sql = "SELECT login, name, level, sex, title, specialty, hashorse, acctid, resurrections, bio, dragonkills, race, clanname, clanshort, clanrank, ".db_prefix("accounts").".clanid, laston, loggedin FROM " . db_prefix("accounts") . " LEFT JOIN " . db_prefix("clans") . " ON " . db_prefix("accounts") . ".clanid = " . db_prefix("clans") . ".clanid WHERE $where";
-$result = db_query($sql);
+$result = db_query($sql, true, [$char]);
 if ($target = db_fetch_assoc($result)) {
   $target['login'] = rawurlencode($target['login']);
   $id = $target['acctid'];
@@ -88,9 +90,11 @@ if ($target = db_fetch_assoc($result)) {
   if (isset($specialties[$target['specialty']])) {
 		output("`^Specialty: `@%s`n",$specialties[$target['specialty']]);
   }
-  $sql = "SELECT * FROM " . db_prefix("mounts") . " WHERE mountid='{$target['hashorse']}'";
-  $result = db_query_cached($sql, "mountdata-{$target['hashorse']}", 3600);
+  $sql = "SELECT * FROM " . db_prefix("mounts") . " WHERE mountid=?";
+  $result = db_query_cached($sql, "mountdata-{$target['hashorse']}", 3600, [(int)$target['hashorse']]);
   $mount = db_fetch_assoc($result);
+  // Without a mount there is no row. PHP 5 turned the false into an array on the next line; PHP 8 refuses to.
+  if (!is_array($mount)) $mount = array();
 
   $mount['acctid']=$target['acctid'];
   $mount = modulehook("bio-mount",$mount);
@@ -110,17 +114,19 @@ if ($target = db_fetch_assoc($result)) {
   modulehook("bioinfo", $target);
 
   output("`n`^Recent accomplishments (and defeats) of %s`^",$target['name']);
-  $result = db_query("SELECT * FROM " . db_prefix("news") . " WHERE accountid={$target['acctid']} ORDER BY newsdate DESC,newsid ASC LIMIT 100");
+  $result = db_query("SELECT * FROM " . db_prefix("news") . " WHERE accountid=? ORDER BY newsdate DESC,newsid ASC LIMIT 100", true, [(int)$target['acctid']]);
 
   $odate="";
   tlschema("news");
   while ($row = db_fetch_assoc($result)) {
+	  // A stored line whose arguments fail the schema is skipped.
+	  try { $base_arguments = \Resurrection\Security\NewsArguments::read($row['arguments']); }
+	  catch (DomainException $error) { continue; }
 	  tlschema($row['tlschema']);
 	  if ($row['arguments'] > "") {
 		  $arguments = array();
-		  $base_arguments = unserialize($row['arguments']);
 		  array_push($arguments, $row['newstext']);
-		  while(list($key, $val) = each($base_arguments)) {
+		  while(list($key, $val) = resurrection_array_next($base_arguments)) {
 			  array_push($arguments, $val);
 		  }
 		  $news = call_user_func_array("sprintf_translate", $arguments);
@@ -139,46 +145,28 @@ if ($target = db_fetch_assoc($result)) {
   }
   tlschema();
 
-  if ($ret==""){
-	  $return = substr($return,strrpos($return,"/")+1);
-	  tlschema("nav");
-	  addnav("Return");
+  tlschema("nav");
+  addnav("Return");
+  if ($return=="list.php") {
 	  addnav("Return to the warrior list",$return);
-	  tlschema();
-  }else{
-	  $return = substr($return,strrpos($return,"/")+1);
-	  tlschema("nav");
-	  addnav("Return");
-	  if ($return=="list.php") {
-		  addnav("Return to the warrior list",$return);
-	  } else {
-		  addnav("Return whence you came",$return);
-	  }
-	  tlschema();
+  } else {
+	  addnav("Return whence you came",$return);
   }
+  tlschema();
 
   modulehook("bioend", $target);
   page_footer();
 } else {
 	page_header("Character has been deleted");
 	output("This character is already deleted.");
-  if ($ret==""){
-	  $return = substr($return,strrpos($return,"/")+1);
-	  tlschema("nav");
-	  addnav("Return");
+  tlschema("nav");
+  addnav("Return");
+  if ($return=="list.php") {
 	  addnav("Return to the warrior list",$return);
-	  tlschema();
-  }else{
-	  $return = substr($return,strrpos($return,"/")+1);
-	  tlschema("nav");
-	  addnav("Return");
-	  if ($return=="list.php") {
-		  addnav("Return to the warrior list",$return);
-	  } else {
-		  addnav("Return whence you came",$return);
-	  }
-	  tlschema();
+  } else {
+	  addnav("Return whence you came",$return);
   }
+  tlschema();
 	page_footer();
 }
 ?>

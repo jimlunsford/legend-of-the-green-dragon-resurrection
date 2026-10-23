@@ -5,13 +5,19 @@
 require_once("common.php");
 require_once("lib/showform.php");
 require_once("lib/http.php");
+require_once("lib/content_editor.php");
 
 check_su_access(SU_EDIT_EQUIPMENT);
 
 tlschema("armor");
 
+$shop = resurrection_equipment_shop('armor');
+try {
+	$op = \Resurrection\Http\Input::choice($_GET, 'op', ['', 'add', 'edit', 'save', 'del'], '');
+	$armorlevel = resurrection_content_level();
+	$id = $op == "edit" || $op == "del" ? resurrection_content_id($_GET, 'id') : 0;
+} catch (InvalidArgumentException $error) { resurrection_content_failure($error, 'the armor editor'); }
 page_header("Armor Editor");
-$armorlevel = (int)httpget('level');
 require_once("lib/superusernav.php");
 superusernav();
 addnav("Armor Editor");
@@ -26,38 +32,27 @@ $armorarray=array(
 	"armorid"=>"Armor ID,hidden",
 	"armorname"=>"Armor Name",
 	"defense"=>"Defense,range,1,15,1");
-$op = httpget('op');
-$id = httpget('id');
 if($op=="edit" || $op=="add"){
 	if ($op=="edit"){
-		$sql = "SELECT * FROM " . db_prefix("armor") . " WHERE armorid='$id'";
-		$result = db_query($sql);
-		$row = db_fetch_assoc($result);
+		$row = resurrection_content_row("armor", "armorid", $id);
+		if ($row === null) resurrection_content_failure(new OutOfBoundsException('Armor not found.'), 'the armor editor');
+		$context = resurrection_content_context('edit', $row);
 	}else{
-		$sql = "SELECT max(defense+1) AS defense FROM " . db_prefix("armor") . " WHERE level=$armorlevel";
-		$result = db_query($sql);
-		$row = db_fetch_assoc($result);
+		$rows = db_query("SELECT max(defense+1) AS defense FROM " . db_prefix("armor") . " WHERE level=?", true, [$armorlevel]);
+		$row = $rows[0];
+		$context = resurrection_content_context('add', [$armorlevel]);
 	}
-	rawoutput("<form action='armoreditor.php?op=save&level=$armorlevel' method='POST'>");
-	addnav("","armoreditor.php?op=save&level=$armorlevel");
+	// 1.1.2 posted to this URL with the hidden armor ID (none for an add); the form now carries the intent for
+	// that row as shown, or for an add at this level.
+	rawoutput(resurrection_content_form("armoreditor.php?op=save&level=$armorlevel", 'armor-edit-' . $id, $context));
 	showform($armorarray,$row);
 	rawoutput("</form>");
 }else if($op=="del"){
-	$sql = "DELETE FROM " . db_prefix("armor") . " WHERE armorid='$id'";
-	db_query($sql);
-	//output($sql);
+	resurrection_content_delete("armor", "armorid", "id", "armor", "the armor editor");
 	$op = "";
 	httpset("op", $op);
 }else if($op=="save"){
-	$armorid = httppost('armorid');
-	$armorname = httppost('armorname');
-	$defense = httppost('defense');
-	if ($armorid>0){
-		$sql = "UPDATE " . db_prefix("armor") . " SET armorname=\"$armorname\",defense=\"$defense\",value=".$values[$defense]." WHERE armorid='$armorid'";
-	}else{
-		$sql = "INSERT INTO " . db_prefix("armor") . " (level,defense,armorname,value) VALUES ($armorlevel,\"$defense\",\"$armorname\",".$values[$defense].")";
-	}
-	db_query($sql);
+	resurrection_equipment_editor_save($shop, $armorlevel, $values);
 	$op = "";
 	httpset("op", $op);
 }
@@ -72,8 +67,7 @@ if ($op==""){
 		else
 			addnav(array("Armor for %s DKs",$i),"armoreditor.php?level=$i");
 	}
-	$sql = "SELECT * FROM " . db_prefix("armor") . " WHERE level=$armorlevel ORDER BY defense";
-	$result= db_query($sql);
+	$result = db_query("SELECT * FROM " . db_prefix("armor") . " WHERE level=? ORDER BY defense", true, [$armorlevel]);
 	$ops = translate_inline("Ops");
 	$name = translate_inline("Name");
 	$cost = translate_inline("Cost");
@@ -89,9 +83,10 @@ if ($op==""){
 	for ($i=0;$i<$number;$i++){
 		$row = db_fetch_assoc($result);
 		rawoutput("<tr class='".($i%2?"trdark":"trlight")."'>");
-		rawoutput("<td>[<a href='armoreditor.php?op=edit&id={$row['armorid']}&level=$armorlevel'>$edit</a>|<a href='armoreditor.php?op=del&id={$row['armorid']}&level=$armorlevel' onClick='return confirm(\"$delconfirm\");'>$del</a>]</td>");
-		addnav("","armoreditor.php?op=edit&id={$row['armorid']}&level=$armorlevel");
-		addnav("","armoreditor.php?op=del&id={$row['armorid']}&level=$armorlevel");
+		$rowid = (int)$row['armorid'];
+		rawoutput("<td>[<a href='armoreditor.php?op=edit&id=$rowid&level=$armorlevel'>$edit</a>|" .
+			resurrection_content_delete_form("armoreditor.php?op=del&id=$rowid&level=$armorlevel", "armor-del-$rowid", resurrection_content_context('del', $row), $del, $delconfirm) . "]</td>");
+		addnav("","armoreditor.php?op=edit&id=$rowid&level=$armorlevel");
 		rawoutput("<td>");
 		output_notl($row['armorname']);
 		rawoutput("</td><td>");

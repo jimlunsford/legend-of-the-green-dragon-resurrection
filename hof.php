@@ -22,9 +22,14 @@ addnav("Other");
 villagenav();
 $playersperpage = 50;
 
-$op = httpget('op');
+// Request values are checked here and the page's rows are read with a bound LIMIT; 1.1.2 put the op and subop into
+// navigation links unchecked and gave a database error for a negative page.
+try {
+	$op = \Resurrection\Http\Input::choice($_GET, 'op', ['', 'kills', 'money', 'gems', 'charm', 'tough', 'resurrects', 'days'], '');
+	$subop = \Resurrection\Http\Input::choice($_GET, 'subop', ['', 'most', 'least'], '');
+	$page = \Resurrection\Http\Input::integer($_GET, 'page', 0, 0);
+} catch (InvalidArgumentException $error) { http_response_code(400); exit('Invalid Hall of Fame request.'); }
 if ($op == "") $op = "kills";
-$subop = httpget('subop');
 if ($subop == "") $subop = "most";
 
 $sql = "SELECT count(acctid) AS c FROM " . db_prefix("accounts") . " WHERE $standardwhere";
@@ -38,14 +43,14 @@ $result = db_query($sql.$extra);
 $row = db_fetch_assoc($result);
 $totalplayers = $row['c'];
 
-$page = (int)httpget('page');
 if ($page == 0) $page = 1;
 $pageoffset = $page;
 if ($pageoffset > 0) $pageoffset--;
 $pageoffset *= $playersperpage;
 $from = $pageoffset+1;
 $to = min($pageoffset+$playersperpage, $totalplayers);
-$limit = "$pageoffset,$playersperpage";
+$limit = "?,?";
+$limitparams = array($pageoffset, $playersperpage);
 
 addnav("Warrior Rankings");
 addnav("Dragon Kills", "hof.php?op=kills&subop=$subop&page=1");
@@ -75,7 +80,7 @@ if ($totalplayers > $playersperpage) {
 function display_table($title, $sql, $none=false, $foot=false,
 		$data_header=false, $tag=false, $translate=false)
 {
-	global $session, $from, $to, $page, $playersperpage, $totalplayers;
+	global $session, $from, $to, $page, $playersperpage, $totalplayers, $limitparams;
 
 	$title = translate_inline($title);
 	if ($foot !== false) $foot = translate_inline($foot);
@@ -102,7 +107,7 @@ function display_table($title, $sql, $none=false, $foot=false,
 			output_notl("<td>`b{$data_header[$i]}`b</td>", true);
 		}
 	}
-	$result = db_query($sql);
+	$result = db_query($sql, true, $limitparams);
 	if (db_num_rows($result)==0){
 		$size = ($data_header === false) ? 2 : 2+count($data_header);
 		output_notl("<tr class='trlight'><td colspan='$size' align='center'>`&$none`0</td></tr>",true);
@@ -201,8 +206,11 @@ if ($op=="money"){
 	$headers = array("Level");
 	$table = array($title, $sql, false, false, $headers, false);
 } elseif ($op=="days") {
+	// Bound: the translated text is stored translator text, which 1.1.2 pasted in quoted. Cast, so that the server
+	// does not take the parameter for a number from the other branch.
 	$unk = translate_inline("Unknown");
-	$sql = "SELECT name, IF(bestdragonage,bestdragonage,'$unk') AS data1 FROM " . db_prefix("accounts") . " WHERE $standardwhere $extra ORDER BY bestdragonage $order, level $order, experience $order, acctid $order LIMIT $limit";
+	$limitparams = array_merge(array($unk), $limitparams);
+	$sql = "SELECT name, IF(bestdragonage,bestdragonage,CAST(? AS CHAR)) AS data1 FROM " . db_prefix("accounts") . " WHERE $standardwhere $extra ORDER BY bestdragonage $order, level $order, experience $order, acctid $order LIMIT $limit";
 	$me = "SELECT count(acctid) AS count FROM ".db_prefix("accounts")." WHERE $standardwhere $extra AND bestdragonage $meop {$session['user']['bestdragonage']}";
 	$adverb = "fastest";
 	if ($subop == "least") $adverb = "slowest";
@@ -212,7 +220,8 @@ if ($op=="money"){
 	$table = array($title, $sql, $none, false, $headers, false);
 } else {
 	$unk = translate_inline("Unknown");
-	$sql = "SELECT name,dragonkills AS data1,level AS data2,'&nbsp;' AS data3, IF(dragonage,dragonage,'$unk') AS data4, '&nbsp;' AS data5, IF(bestdragonage,bestdragonage,'$unk') AS data6 FROM " . db_prefix("accounts") . " WHERE $standardwhere $extra ORDER BY dragonkills $order,level $order,experience $order, acctid $order LIMIT $limit";
+	$limitparams = array_merge(array($unk, $unk), $limitparams);
+	$sql = "SELECT name,dragonkills AS data1,level AS data2,'&nbsp;' AS data3, IF(dragonage,dragonage,CAST(? AS CHAR)) AS data4, '&nbsp;' AS data5, IF(bestdragonage,bestdragonage,CAST(? AS CHAR)) AS data6 FROM " . db_prefix("accounts") . " WHERE $standardwhere $extra ORDER BY dragonkills $order,level $order,experience $order, acctid $order LIMIT $limit";
 	if ($session['user']['dragonkills']>0) $me = "SELECT count(acctid) AS count FROM ".db_prefix("accounts")." WHERE $standardwhere $extra AND dragonkills $meop {$session['user']['dragonkills']}";
 	$adverb = "most";
 	if ($subop == "least") $adverb = "least";

@@ -1,15 +1,25 @@
 <?php
+require_once __DIR__ . '/src/Security/ScalarState.php';
 // translator ready
 // addnews ready
 // mail ready
 require_once("common.php");
 require_once("lib/http.php");
 require_once("lib/villagenav.php");
+require_once("lib/service_authority.php");
 
 tlschema("mercenarycamp");
 
+// The op, the companion id and the companion key are checked before anything runs. 1.1.2 decoded the key twice and
+// stripped slashes, so a name with % or \ could not be healed; the link now carries it encoded once.
+try {
+	$op = \Resurrection\Http\Input::choice($_GET, 'op', ['', 'heal', 'buy'], '');
+	$id = $op == 'buy' ? \Resurrection\Http\Input::integer($_GET, 'id', 0, 1) : 0;
+	if ($op == 'buy' && $id < 1) throw new InvalidArgumentException('Missing companion.');
+	$name = \Resurrection\Http\Input::string($_GET, 'name');
+} catch (InvalidArgumentException $error) { resurrection_service_failure($error, 'the camp'); }
+
 checkday();
-$name = stripslashes(rawurldecode(httpget('name')));
 if (isset($companions[$name])) {
 	$displayname = $companions[$name]['name'];
 } else {
@@ -95,7 +105,9 @@ page_header($texts['title']);
 output("`c`b`&".$texts['title']."`0`b`c");
 tlschema();
 
-$op = httpget("op");
+// Only the protected POST of the confirming form hires or heals; a GET (a link, a restored page, New Day's
+// "Continue") asks, with the price the server works out. The URL's cost is never read.
+$posted = resurrection_service_posted();
 
 if ($op==""){
   	if (httpget('skip') != 1) {
@@ -110,11 +122,11 @@ if ($op==""){
 	  	tlschema();
   	}
 
-	$sql = "SELECT * FROM " .  db_prefix("companions") . "
-				WHERE companioncostdks<={$session['user']['dragonkills']}
-				AND (companionlocation = '{$session['user']['location']}' OR companionlocation = 'all')
-				AND companionactive = 1";
-	$result = db_query($sql);
+	// Bound: 1.1.2 pasted the session location and dragon kills into this query.
+	$result = db_query("SELECT * FROM " . db_prefix("companions") . "
+				WHERE companioncostdks<=?
+				AND (companionlocation = ? OR companionlocation = 'all')
+				AND companionactive = 1", true, [(int)$session['user']['dragonkills'], (string)$session['user']['location']]);
   	tlschema($schemas['buynav']);
 	addnav($texts['buynav']);
 	tlschema();
@@ -174,8 +186,18 @@ if ($op==""){
 	}
 	healnav($companions, $texts, $schemas);
 } else if ($op == "heal") {
-	$cost = httpget('cost');
-	if ($cost == 'notenough') {
+	try {
+		$name = resurrection_companion_key();
+		$cost = resurrection_companion_heal_cost($companions[$name]);
+		if ($cost === null) throw new DomainException('Nothing to heal.');
+		$paid = null;
+		if ($posted) {
+			resurrection_service_fields();
+			resurrection_consume_action('mercenary-heal', resurrection_service_context('mercenary-heal', $name, [$cost]));
+			$paid = resurrection_player_mutation(fn () => resurrection_companion_heal($name, true));
+		}
+	} catch (Throwable $error) { resurrection_service_failure($error, 'the camp'); }
+	if ($posted ? $paid === null : $session['user']['gold'] < $cost) {
 		tlschema($schemas['healpaid']);
 	  	if (is_array($texts['healnotenough'])) {
 	  		foreach ($texts['healnotenough'] as $healnotenough) {
@@ -185,10 +207,11 @@ if ($op==""){
 	  		output($texts['healnotenough']);
 	  	}
 		tlschema();
+	} elseif (!$posted) {
+		// 1.1.2 healed on this GET; the healing is now this form's protected POST.
+		resurrection_service_form("mercenarycamp.php?op=heal&name=" . rawurlencode($name), 'mercenary-heal',
+			resurrection_service_context('mercenary-heal', $name, [$cost]), array("%s`0 (`^%s Gold`0)", $companions[$name]['name'], $cost));
 	} else {
-		$companions[$name]['hitpoints'] = $companions[$name]['maxhitpoints'];
-		$session['user']['gold'] -= $cost;
-		debuglog("spent $cost gold on healing a companion", false, false, "healcompanion", $cost);
 		tlschema($schemas['healpaid']);
 	  	if (is_array($texts['healpaid'])) {
 	  		foreach ($texts['healpaid'] as $healpaid) {
@@ -203,25 +226,36 @@ if ($op==""){
 	addnav("Navigation");
 	addnav("Return to the camp", "mercenarycamp.php?skip=1");
 } else if ($op == "buy") {
-	$id = httpget('id');
-	$sql = "SELECT * FROM ".db_prefix("companions")." WHERE companionid = $id";
-	$result = db_query($sql);
-	if ($row = db_fetch_assoc($result)) {
-		$row['attack'] = $row['attack'] + $row['attackperlevel'] * $session['user']['level'];
-		$row['defense'] = $row['defense'] + $row['defenseperlevel'] * $session['user']['level'];
-		$row['maxhitpoints'] = $row['maxhitpoints'] + $row['maxhitpointsperlevel'] * $session['user']['level'];
-		$row['hitpoints'] = $row['maxhitpoints'];
-		$row = modulehook("alter-companion", $row);
-		$row['abilities'] = @unserialize($row['abilities']);
-		require_once("lib/buffs.php");
-		if (apply_companion($row['name'], $row)) {
+	if (!$posted) {
+		// 1.1.2 hired on this GET; the hire is now this form's protected POST. The offer is the listing's.
+		$row = resurrection_mercenary_offered($id);
+		if ($row) {
+			$row = modulehook("alter-companion", $row);
+			output("`#%s`n`7%s`n`n",$row['name'], $row['description']);
+			if (resurrection_mercenary_affordable($row)) {
+				tlschema($schemas['buynav']);
+				resurrection_service_form("mercenarycamp.php?op=buy&id=$id", "mercenary-hire-$id",
+					resurrection_mercenary_context($id, $row), translate_inline($texts['buynav']));
+				tlschema();
+			}
+		}
+	} else {
+		try {
+			resurrection_service_fields();
+			// The form is bound to the price it showed; a companion repriced or withdrawn since is refused.
+			$row = resurrection_mercenary_offered($id);
+			if ($row === null) throw new DomainException('Companion not offered.');
+			$row = modulehook("alter-companion", $row);
+			resurrection_consume_action("mercenary-hire-$id", resurrection_mercenary_context($id, $row));
+			$price = [(int)$row['companioncostgold'], (int)$row['companioncostgems']];
+			$hire = resurrection_player_mutation(fn () => resurrection_mercenary_hire($id, $price));
+		} catch (Throwable $error) { resurrection_service_failure($error, 'the camp'); }
+		$row = $hire['row'];
+		if ($hire['outcome'] == 'hired') {
 			output("`QYou hand over `^%s gold`Q and `%%s %s`Q.`n`n", (int)$row['companioncostgold'], (int)$row['companioncostgems'],translate_inline($row['companioncostgems'] == 1?"gem":"gems"));
 			if (isset($row['jointext']) && $row['jointext'] > "") {
 				output($row['jointext']);
 			}
-			$session['user']['gold'] -= $row['companioncostgold'];
-			$session['user']['gems'] -= $row['companioncostgems'];
-			debuglog("has spent {$row['companioncostgold']} gold and {$row['companioncostgems']} gems on hiring a mercenary ({$row['name']}).");
 		} else {
 			// applying the companion failed. Most likely they already have more than enough companions...
 			tlschema($schemas['toomanycompanions']);
@@ -256,10 +290,11 @@ function healnav($companions, $texts, $schemas) {
 			if ($pointstoheal > 0) {
 				$healable = true;
 				$costtoheal = round(log($session['user']['level']+1) * ($pointstoheal + 10)*1.33);
+				// The link no longer carries the price; the heal page works it out again.
 				if ($session['user']['gold'] >= $costtoheal) {
-					addnav(array("%s`0 (`^%s Gold`0)", $companion['name'], $costtoheal), "mercenarycamp.php?op=heal&name=".rawurlencode($name)."&cost=$costtoheal");
+					addnav(array("%s`0 (`^%s Gold`0)", $companion['name'], $costtoheal), "mercenarycamp.php?op=heal&name=".rawurlencode($name));
 				} else {
-					addnav(array("%s`0 (`\$Not enough gold`0)", $companion['name']), "mercenarycamp.php?op=heal&name=".rawurlencode($name)."&cost=notenough");
+					addnav(array("%s`0 (`\$Not enough gold`0)", $companion['name']), "mercenarycamp.php?op=heal&name=".rawurlencode($name));
 				}
 			}
 		}

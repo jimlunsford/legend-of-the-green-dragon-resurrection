@@ -1,8 +1,10 @@
 <?php
+require_once __DIR__ . '/../user_editor.php';
 if ($display == 1){
 	$q = "";
 	if ($query) {
-		$q = "&q=$query";
+		// The search text is carried in the sort links URL-encoded, never as markup.
+		$q = "&q=".rawurlencode($query);
 	}
 	$ops=translate_inline("Ops");
 	$acid =translate_inline("AcctID");
@@ -41,11 +43,15 @@ if ($display == 1){
 		if ($loggedin)
 			$laston=translate_inline("`#Online`0");
 		$row['laston']=$laston;
-		if ($row[$order]!=$oorder) $rn++;
-		$oorder = $row[$order];
+		$ordercolumn = explode(' ', $order)[0];
+		if ($row[$ordercolumn]!=$oorder) $rn++;
+		$oorder = $row[$ordercolumn];
 		rawoutput("<tr class='".($rn%2?"trlight":"trdark")."'>");
 		rawoutput("<td nowrap>");
-		rawoutput("[ <a href='user.php?op=edit&userid={$row['acctid']}$m'>$ed</a> | <a href='user.php?op=del&userid={$row['acctid']}' onClick=\"return confirm('$conf');\">$del</a> | <a href='user.php?op=setupban&userid={$row['acctid']}'>$ban</a> | <a href='user.php?op=debuglog&userid={$row['acctid']}'>$log</a> ]");
+		// Del is a protected POST bound to this account; GET never deletes.
+		rawoutput("[ <a href='user.php?op=edit&userid={$row['acctid']}$m'>$ed</a> | <form method='POST' action='user.php?op=del&userid={$row['acctid']}' style='display:inline' onsubmit=\"return confirm(" . htmlspecialchars(json_encode($conf, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT), ENT_QUOTES, 'UTF-8') . ");\">" .
+			resurrection_action_fields('user-delete-' . (int)$row['acctid'], resurrection_user_delete_context($row)) .
+			"<button type='submit' class='button'>" . htmlspecialchars($del, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . "</button></form> | <a href='user.php?op=setupban&userid={$row['acctid']}'>$ban</a> | <a href='user.php?op=debuglog&userid={$row['acctid']}'>$log</a> ]");
 		addnav("","user.php?op=edit&userid={$row['acctid']}$m");
 		addnav("","user.php?op=del&userid={$row['acctid']}");
 		addnav("","user.php?op=setupban&userid={$row['acctid']}");

@@ -43,8 +43,8 @@ function racedwarf_install(){
 	$sql = "SELECT companionid FROM ".db_prefix("companions")." WHERE name = 'Grizzly Bear'";
 	$result = db_query($sql);
 	if (db_num_rows($result) == 0) {
-		$sql = "INSERT INTO " . db_prefix("companions") . " (`companionid`, `name`, `category`, `description`, `attack`, `attackperlevel`, `defense`, `defenseperlevel`, `maxhitpoints`, `maxhitpointsperlevel`, `abilities`, `cannotdie`, `cannotbehealed`, `companionlocation`, `companionactive`, `companioncostdks`, `companioncostgems`, `companioncostgold`, `jointext`, `dyingtext`, `allowinshades`, `allowinpvp`, `allowintrain`) VALUES (0, 'Grizzly Bear', 'Wild Beasts', 'You look at the beast knowing that this Grizzly Bear will provide an effective block against attack with its long curved claws and massive body of silver-tipped fur.', 1, 2, 5, 2, 25, 25, 'a:4:{s:5:\"fight\";s:1:\"0\";s:4:\"heal\";s:1:\"0\";s:5:\"magic\";s:1:\"0\";s:6:\"defend\";s:1:\"1\";}', 0, 0, '".get_module_setting("villagename", "racedwarf")."', 1, 0, 4, 600, 'You hear a low, deep belly growl coming from a shadowed corner of the Bestiarium.  Curious you walk over to investigate your purchase. As you approach a large form shuffles on all four legs towards the front of its hewn rock enclosure.`n`nThe hunched shoulders of the largest bear you have ever seen ripple as its front haunches push against the ground causing it to stand on its hind legs.  It makes another low growl before dropping back on all four legs to follow you on your adventure.', 'The grizzly gets scared by the multitude of blows and hits he has to take and flees into the forest.', 1, 0, 0)";
-		db_query($sql);
+		$sql = "INSERT INTO " . db_prefix("companions") . " (`companionid`, `name`, `category`, `description`, `attack`, `attackperlevel`, `defense`, `defenseperlevel`, `maxhitpoints`, `maxhitpointsperlevel`, `abilities`, `cannotdie`, `cannotbehealed`, `companionlocation`, `companionactive`, `companioncostdks`, `companioncostgems`, `companioncostgold`, `jointext`, `dyingtext`, `allowinshades`, `allowinpvp`, `allowintrain`) VALUES (0, 'Grizzly Bear', 'Wild Beasts', 'You look at the beast knowing that this Grizzly Bear will provide an effective block against attack with its long curved claws and massive body of silver-tipped fur.', 1, 2, 5, 2, 25, 25, 'a:4:{s:5:\"fight\";s:1:\"0\";s:4:\"heal\";s:1:\"0\";s:5:\"magic\";s:1:\"0\";s:6:\"defend\";s:1:\"1\";}', 0, 0, ?, 1, 0, 4, 600, 'You hear a low, deep belly growl coming from a shadowed corner of the Bestiarium.  Curious you walk over to investigate your purchase. As you approach a large form shuffles on all four legs towards the front of its hewn rock enclosure.`n`nThe hunched shoulders of the largest bear you have ever seen ripple as its front haunches push against the ground causing it to stand on its hind legs.  It makes another low growl before dropping back on all four legs to follow you on your adventure.', 'The grizzly gets scared by the multitude of blows and hits he has to take and flees into the forest.', 1, 0, 0)";
+		db_query($sql, true, [(string)get_module_setting("villagename", "racedwarf")]);
 		debug("Inserted new companion: Grizzly Bear");
 	}
 	return true;
@@ -52,10 +52,9 @@ function racedwarf_install(){
 
 function racedwarf_uninstall(){
 	global $session;
-	$vname = get_module_setting("villagename", "racedwarf");;
+	$vname = getsetting("villagename", LOCATION_FIELDS);
 	$gname = get_module_setting("villagename");
-	$sql = "UPDATE " . db_prefix("accounts") . " SET location='$vname' WHERE location = '$gname'";
-	db_query($sql);
+	db_query('UPDATE ' . db_prefix('accounts') . ' SET location=? WHERE location=?', true, [$vname, $gname]);
 	if ($session['user']['location'] == $gname)
 		$session['user']['location'] = $vname;
 	// Force anyone who was a Dwarf to rechoose race
@@ -63,8 +62,7 @@ function racedwarf_uninstall(){
 	db_query($sql);
 	if ($session['user']['race'] == 'Dwarf')
 		$session['user']['race'] = RACE_UNKNOWN;
-	$sql = "UPDATE ". db_prefix("companions") ." SET location='all' WHERE location ='$vname'";
-	db_query($sql);
+	db_query('UPDATE ' . db_prefix('companions') . ' SET companionlocation=? WHERE companionlocation=?', true, ['all', $gname]);
 	return true;
 }
 
@@ -91,25 +89,17 @@ function racedwarf_dohook($hookname,$args){
 		if ($args['setting'] == "villagename" && $args['module']=="racedwarf") {
 			if ($session['user']['location'] == $args['old'])
 				$session['user']['location'] = $args['new'];
-			$sql = "UPDATE " . db_prefix("accounts") .
-				" SET location='" . addslashes($args['new']) .
-				"' WHERE location='" . addslashes($args['old']) . "'";
-			db_query($sql);
-			$sql = "UPDATE ".db_prefix("companions")." SET location='".$args['new']." WHERE location='".$args['old']."'";
-			db_query($sql);
+			db_query('UPDATE ' . db_prefix('accounts') . ' SET location=? WHERE location=?', true, [$args['new'], $args['old']]);
+			db_query('UPDATE ' . db_prefix('companions') . ' SET companionlocation=? WHERE companionlocation=?', true, [$args['new'], $args['old']]);
 			if (is_module_active("cities")) {
-				$sql = "UPDATE " . db_prefix("module_userprefs") .
-					" SET value='" . addslashes($args['new']) .
-					"' WHERE modulename='cities' AND setting='homecity'" .
-					"AND value='" . addslashes($args['old']) . "'";
-				db_query($sql);
+				db_query('UPDATE ' . db_prefix('module_userprefs') . ' SET value=? WHERE modulename=? AND setting=? AND value=?', true, [$args['new'], 'cities', 'homecity', $args['old']]);
 			}
 		}
 		break;
 	case "chooserace":
-		output("<a href='newday.php?setrace=$race$resline'>Deep in the subterranean strongholds of %s</a>, home to the noble and fierce `#Dwarven`0 people whose desire for privacy and treasure bears no resemblance to their tiny stature.`n`n", $city, true);
-		addnav("`#Dwarf`0","newday.php?setrace=$race$resline");
-		addnav("","newday.php?setrace=$race$resline");
+		output("Deep in the subterranean strongholds of %s, home to the noble and fierce `#Dwarven`0 people whose desire for privacy and treasure bears no resemblance to their tiny stature.`n`n", $city);
+		require_once('lib/race_onboarding.php');
+		resurrection_race_form($race);
 		break;
 	case "setrace":
 		if ($session['user']['race']==$race){
@@ -185,9 +175,10 @@ function racedwarf_dohook($hookname,$args){
 			$args['schemas']['talk'] = "module-racedwarf";
 			$new = get_module_setting("newest-$city", "cities");
 			if ($new != 0) {
+				// Bound: 1.1.2 pasted the stored setting in quoted.
 				$sql =  "SELECT name FROM " . db_prefix("accounts") .
-					" WHERE acctid='$new'";
-				$result = db_query_cached($sql, "newest-$city");
+					" WHERE acctid=?";
+				$result = db_query_cached($sql, "newest-$city", 900, [(int)$new]);
 				$row = db_fetch_assoc($result);
 				$args['newestplayer'] = $row['name'];
 				$args['newestid']=$new;

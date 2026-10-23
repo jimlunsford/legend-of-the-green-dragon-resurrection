@@ -1,4 +1,6 @@
 <?php
+require_once __DIR__ . '/src/Security/ScalarState.php';
+require_once __DIR__ . '/src/Compatibility/array_cursor.php';
 // addnews ready
 // mail ready
 // translator ready
@@ -10,7 +12,32 @@ require_once("lib/showform.php");
 
 check_su_access(SU_EDIT_MOUNTS);
 
+// Companion object preferences are dispatched before the editor, as for mounts and creatures: an installed module,
+// its declared preferences and typed values (lib/typed_editor.php). 1.1.2 wrote every posted key into the module named
+// in the URL.
+if (($_GET['subop'] ?? '') === 'module') {
+    require_once 'lib/typed_editor.php';
+    try {
+        $editorOp=\Resurrection\Http\Input::choice($_GET,'op',['edit','save'],'edit');
+        $editorId=\Resurrection\Http\Input::integer($_GET,'id',0,1);
+        $editorModule=\Resurrection\Http\Input::string($_GET,'module');
+        if (isset($_GET['objtype']) || isset($_GET['objid'])) throw new InvalidArgumentException();
+        page_header('Companion Preferences');
+        resurrection_object_editor('companions',$editorModule,$editorId,$editorOp==='save');
+        page_footer();
+    } catch (InvalidArgumentException|DomainException $error) { http_response_code(400); exit('Invalid or stale object preferences.'); }
+    catch (Throwable $error) { http_response_code(500); exit('Preferences were not saved.'); }
+    exit;
+}
+require_once("lib/mount_companion_editor.php");
+
 tlschema("companions");
+
+try {
+	$op = \Resurrection\Http\Input::choice($_GET, 'op', ['', 'add', 'edit', 'save', 'del', 'take', 'activate', 'deactivate'], '');
+	// The list and the add form need no companion; a save without one adds (1.1.2's add form posts id=).
+	$id = resurrection_content_id($_GET, 'id', in_array($op, ['', 'add', 'save'], true));
+} catch (InvalidArgumentException $error) { resurrection_content_failure($error, 'the companion editor'); }
 
 page_header("Companion Editor");
 
@@ -20,108 +47,36 @@ superusernav();
 addnav("Companion Editor");
 addnav("Add a companion","companions.php?op=add");
 
-$op = httpget('op');
-$id = httpget('id');
+// Every change is its protected POST form's (lib/mount_companion_editor.php); GET only displays.
 if ($op=="deactivate"){
-	$sql = "UPDATE " . db_prefix("companions") . " SET companionactive=0 WHERE companionid='$id'";
-	db_query($sql);
+	// 1.1.2 dropped the cache entry "companionsdata-$id" here, a typo for the edit page's "companiondata-$id".
+	resurrection_object_set_active('companions', 'companionid', 'companion', 'companionactive', $id, 0, 'the companion editor');
 	$op="";
 	httpset("op", "");
-	invalidatedatacache("companionsdata-$id");
 } elseif ($op=="activate"){
-	$sql = "UPDATE " . db_prefix("companions") . " SET companionactive=1 WHERE companionid='$id'";
-	db_query($sql);
+	resurrection_object_set_active('companions', 'companionid', 'companion', 'companionactive', $id, 1, 'the companion editor');
 	$op="";
 	httpset("op", "");
-	invalidatedatacache("companiondata-$id");
 } elseif ($op=="del") {
 	//drop the companion.
-	$sql = "DELETE FROM " . db_prefix("companions") . " WHERE companionid='$id'";
-	db_query($sql);
-	module_delete_objprefs('companions', $id);
+	resurrection_companion_delete($id);
 	$op = "";
 	httpset("op", "");
-	invalidatedatacache("companiondata-$id");
 } elseif ($op=="take"){
-	$sql = "SELECT * FROM " . db_prefix("companions") . " WHERE companionid='$id'";
-	$result = db_query($sql);
-	if ($row = db_fetch_assoc($result)) {
-		$row['attack'] = $row['attack'] + $row['attackperlevel'] * $session['user']['level'];
-		$row['defense'] = $row['defense'] + $row['defenseperlevel'] * $session['user']['level'];
-		$row['maxhitpoints'] = $row['maxhitpoints'] + $row['maxhitpointsperlevel'] * $session['user']['level'];
-		$row['hitpoints'] = $row['maxhitpoints'];
-		$row = modulehook("alter-companion", $row);
-		$row['abilities'] = @unserialize($row['abilities']);
-		require_once("lib/buffs.php");
-		apply_companion($row['name'], $row);
-		output("`\$Succesfully taken `^%s`\$ as companion.", $row['name']);
-	}
+	$taken = resurrection_companion_take($id);
+	output("`\$Succesfully taken `^%s`\$ as companion.", $taken);
 	$op = "";
 	httpset("op", "");
 } elseif ($op=="save"){
-	$subop = httpget("subop");
-	if ($subop == "") {
-		$companion = httppost('companion');
-		if ($companion) {
-			if (!isset($companion['allowinshades'])) {
-				$companion['allowinshades'] = 0;
-			}
-			if (!isset($companion['allowinpvp'])) {
-				$companion['allowinpvp'] = 0;
-			}
-			if (!isset($companion['allowintrain'])) {
-				$companion['allowintrain'] = 0;
-			}
-			if (!isset($companion['abilities']['fight'])) {
-				$companion['abilities']['fight'] = false;
-			}
-			if (!isset($companion['abilities']['defend'])) {
-				$companion['abilities']['defend'] = false;
-			}
-			if (!isset($companion['cannotdie'])) {
-				$companion['cannotdie'] = false;
-			}
-			if (!isset($companion['cannotbehealed'])) {
-				$companion['cannotbehealed'] = false;
-			}
-			$sql = "";
-			$keys = "";
-			$vals = "";
-			$i = 0;
-			while(list($key, $val) = each($companion)) {
-				if (is_array($val)) $val = addslashes(serialize($val));
-				$sql .= (($i > 0) ? ", " : "") . "$key='$val'";
-				$keys .= (($i > 0) ? ", " : "") . "$key";
-				$vals .= (($i > 0) ? ", " : "") . "'$val'";
-				$i++;
-			}
-			if ($id>""){
-				$sql="UPDATE " . db_prefix("companions") .
-					" SET $sql WHERE companionid='$id'";
-			}else{
-				$sql="INSERT INTO " . db_prefix("companions") .
-					" ($keys) VALUES ($vals)";
-			}
-			db_query($sql);
-			invalidatedatacache("companiondata-$id");
-			if (db_affected_rows()>0){
-				output("`^Companion saved!`0`n`n");
-			}else{
-//				if (strlen($sql) > 400) $sql = substr($sql,0,200)." ... ".substr($sql,strlen($sql)-200);
-				output("`^Companion `\$not`^ saved: `\$%s`0`n`n", $sql);
-			}
-		}
-	} elseif ($subop=="module") {
-		// Save modules settings
-		$module = httpget("module");
-		$post = httpallpost();
-		reset($post);
-		while(list($key, $val) = each($post)) {
-			set_module_objpref("companions", $id, $key, $val, $module);
-		}
-		output("`^Saved!`0`n");
+	$editing = $id > 0;
+	[$id, $affected] = resurrection_companion_save($id);
+	if ($affected>0){
+		output("`^Companion saved!`0`n`n");
+	}else{
+		// 1.1.2 printed the SQL here.
+		output("`^Companion `\$not`^ saved!`0`n`n");
 	}
-	if ($id) {
+	if ($editing) {
 		$op="edit";
 	} else {
 		$op = "";
@@ -148,7 +103,11 @@ if ($op==""){
 	$cat = "";
 	$count=0;
 
+	// 1.1.2 also counted into $companions here, copied from the mount list's owner count: that is the acting
+	// superuser's own companion list, which the page then shows and saves (PHP 8 fails on it), and the delete
+	// confirmation it fed was never shown.
 	while ($row=db_fetch_assoc($result)) {
+		$cid = (int)$row['companionid'];
 		if ($cat!=$row['category']){
 			rawoutput("<tr class='trlight'><td colspan='5'>");
 			output("Category: %s", $row['category']);
@@ -156,30 +115,21 @@ if ($op==""){
 			$cat = $row['category'];
 			$count=0;
 		}
-		if (isset($companions[$row['companionid']])) {
-			$companions[$row['companionid']] = (int)$companions[$row['companionid']];
-		} else {
-			$companions[$row['companionid']] = 0;
-		}
+		// The 1.1.2 links, as protected forms bound to the companion as listed.
 		rawoutput("<tr class='".($count%2?"trlight":"trdark")."'>");
-		rawoutput("<td nowrap>[ <a href='companions.php?op=edit&id={$row['companionid']}'>$edit</a> |");
-		addnav("","companions.php?op=edit&id={$row['companionid']}");
+		rawoutput("<td nowrap>[ <a href='companions.php?op=edit&id=$cid'>$edit</a> |");
+		addnav("","companions.php?op=edit&id=$cid");
 		if ($row['companionactive']){
 			rawoutput("$del |");
 		}else{
-			$mconf = sprintf($conf, $companions[$row['companionid']]);
-			rawoutput("<a href='companions.php?op=del&id={$row['companionid']}'>$del</a> |");
-			addnav("","companions.php?op=del&id={$row['companionid']}");
+			rawoutput(resurrection_content_button_form("companions.php?op=del&id=$cid", "companion-del-$cid", resurrection_object_action_context('del', $row), $del) . " |");
 		}
 		if ($row['companionactive']) {
-			rawoutput("<a href='companions.php?op=deactivate&id={$row['companionid']}'>$deac</a> | ");
-			addnav("","companions.php?op=deactivate&id={$row['companionid']}");
+			rawoutput(resurrection_content_button_form("companions.php?op=deactivate&id=$cid", "companion-deactivate-$cid", resurrection_object_action_context('deactivate', $row), $deac) . " | ");
 		}else{
-			rawoutput("<a href='companions.php?op=activate&id={$row['companionid']}'>$act</a> | ");
-			addnav("","companions.php?op=activate&id={$row['companionid']}");
+			rawoutput(resurrection_content_button_form("companions.php?op=activate&id=$cid", "companion-activate-$cid", resurrection_object_action_context('activate', $row), $act) . " | ");
 		}
-		rawoutput("<a href='companions.php?op=take&id={$row['companionid']}'>$take</a> ]</td>");
-		addnav("", "companions.php?op=take&id={$row['companionid']}");
+		rawoutput(resurrection_content_button_form("companions.php?op=take&id=$cid", "companion-take-$cid", resurrection_object_action_context('take', $row, resurrection_companion_take_state()), $take) . " ]</td>");
 		rawoutput("<td>");
 		output_notl("`&%s`0", $row['name']);
 		rawoutput("</td><td>");
@@ -192,35 +142,32 @@ if ($op==""){
 }elseif ($op=="add"){
 	output("Add a companion:`n");
 	addnav("Companion Editor Home","companions.php");
-	companionform(array());
+	companionform(array(), resurrection_content_context('add', []));
 }elseif ($op=="edit"){
 	addnav("Companion Editor Home","companions.php");
-	$sql = "SELECT * FROM " . db_prefix("companions") . " WHERE companionid='$id'";
-	$result = db_query_cached($sql, "companiondata-$id", 3600);
+	$sql = "SELECT * FROM " . db_prefix("companions") . " WHERE companionid=?";
+	$result = db_query_cached($sql, "companiondata-$id", 3600, [$id]);
 	if (db_num_rows($result)<=0){
 		output("`iThis companion was not found.`i");
 	}else{
 		addnav("Companion properties", "companions.php?op=edit&id=$id");
+		// Object preferences (subop=module) are the shared typed editor's, dispatched above.
 		module_editor_navs("prefs-companions", "companions.php?op=edit&subop=module&id=$id&module=");
-		$subop=httpget("subop");
-		if ($subop=="module") {
-			$module = httpget("module");
-			rawoutput("<form action='companions.php?op=save&subop=module&id=$id&module=$module' method='POST'>");
-			module_objpref_edit("companions", $module, $id);
-			rawoutput("</form>");
-			addnav("", "companions.php?op=save&subop=module&id=$id&module=$module");
-		} else {
-			output("Companion Editor:`n");
-			$row = db_fetch_assoc($result);
-			$row['abilities'] = @unserialize($row['abilities']);
-			companionform($row);
-		}
+		output("Companion Editor:`n");
+		$row = db_fetch_assoc($result);
+		$context = resurrection_content_context('edit', $row);
+		// Stored abilities the abilities schema refuses are shown empty for repair; PHP 8 refused to turn their false into
+		// the form's array.
+		try { $row['abilities'] = \Resurrection\Game\CompanionState::abilities(\Resurrection\Security\ScalarState::read($row['abilities'])); }
+		catch (DomainException $error) { $row['abilities'] = array(); }
+		companionform($row, $context);
 	}
 }
 
-function companionform($companion){
+function companionform($companion, $context){
 	// Let's sanitize the data
-	if (!isset($companion['companionactive'])) $companion['companionactive'] = "";
+	// 1.1.2 posted an empty flag for a new companion, which non-strict MySQL stored as 0 and strict SQL refuses.
+	if (!isset($companion['companionactive'])) $companion['companionactive'] = 0;
 	if (!isset($companion['name'])) $companion['name'] = "";
 	if (!isset($companion['companionid'])) $companion['companionid'] = "";
 	if (!isset($companion['description'])) $companion['description'] = "";
@@ -252,9 +199,8 @@ function companionform($companion){
 	if (!isset($companion['allowinpvp'])) $companion['allowinpvp'] = 0;
 	if (!isset($companion['allowintrain'])) $companion['allowintrain'] = 0;
 
-	rawoutput("<form action='companions.php?op=save&id={$companion['companionid']}' method='POST'>");
-	rawoutput("<input type='hidden' name='companion[companionactive]' value=\"".$companion['companionactive']."\">");
-	addnav("","companions.php?op=save&id={$companion['companionid']}");
+	rawoutput(resurrection_content_form("companions.php?op=save&id={$companion['companionid']}", "companion-edit-".(int)$companion['companionid'], $context));
+	rawoutput("<input type='hidden' name='companion[companionactive]' value=\"".(int)$companion['companionactive']."\">");
 	rawoutput("<table width='100%'>");
 	rawoutput("<tr><td nowrap>");
 	output("Companion Name:");
@@ -277,16 +223,12 @@ function companionform($companion){
 	// Run a modulehook to find out where camps are located.  By default
 	// they are located in 'Degolburg' (ie, getgamesetting('villagename'));
 	// Some later module can remove them however.
-	$vname = getsetting('villagename', LOCATION_FIELDS);
-	$locs = array($vname => sprintf_translate("The Village of %s", $vname));
-	$locs = modulehook("camplocs", $locs);
-	$locs['all'] = translate_inline("Everywhere");
-	ksort($locs);
-	reset($locs);
+	$locs = resurrection_object_locations("camplocs");
 	rawoutput("<select name='companion[companionlocation]'>");
 	foreach($locs as $loc=>$name) {
-		rawoutput("<option value='$loc'".($companion['companionlocation']==$loc?" selected":"").">$name</option>");
+		rawoutput("<option value='".htmlspecialchars((string)$loc, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8')."'".($companion['companionlocation']==$loc?" selected":"").">".htmlspecialchars((string)$name, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8')."</option>");
 	}
+	rawoutput("</select></td></tr>");
 
 	rawoutput("<tr><td nowrap>");
 	output("Maxhitpoints / Bonus per level:");

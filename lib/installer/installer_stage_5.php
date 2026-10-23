@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/../../src/Compatibility/array_cursor.php';
 require_once("lib/installer/installer_functions.php");
 if (httppostisset("DB_PREFIX") > ""){
 	$session['dbinfo']['DB_PREFIX'] = httppost("DB_PREFIX");
@@ -12,12 +13,12 @@ $game=0;
 $missing=0;
 $conflict = array();
 
-$link = mysql_connect($session['dbinfo']['DB_HOST'],$session['dbinfo']['DB_USER'],$session['dbinfo']['DB_PASS']);
-mysql_select_db($session['dbinfo']['DB_NAME']);
+$link = db_connect($session['dbinfo']['DB_HOST'],$session['dbinfo']['DB_USER'],$session['dbinfo']['DB_PASS']);
+db_select_db($session['dbinfo']['DB_NAME']);
 $sql = "SHOW TABLES";
-$result = mysql_query($sql);
-while ($row = mysql_fetch_assoc($result)){
-	list($key,$val)=each($row);
+$result = db_query($sql);
+while ($row = db_fetch_assoc($result)){
+	list($key,$val)=resurrection_array_next($row);
 	if (isset($descriptors[$val])){
 		$game++;
 		array_push($conflict,$val);
