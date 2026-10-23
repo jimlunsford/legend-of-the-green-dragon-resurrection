@@ -397,3 +397,132 @@ The final full run is the Modern core and Baseline integrity runs on the commit 
 had not started or finished when this document was written; their IDs, states and totals are in the task report and
 are recorded by the next task that reads them. Gate 2 passes only when all 12 Modern core jobs and Baseline
 integrity are SUCCESS on that commit.
+
+## Merge gate findings closed, 2026-10-23
+
+The task that follows the verification: it closes the four findings and is the commit whose CI run is the final full
+run. Expected and actual start: `d3082f22628d33d5640c088d14473540465f46cd` (matched); remote branch and PR #1 head the
+same, PR #1 open and draft, `main` `999cec6f9c655a840320d982d673bb863c68c2b2`.
+
+### The verification commit's own CI
+
+`d3082f2`, through the GitHub Actions API, inspected at about 17:53 UTC and once more at 18:09 UTC:
+
+- Baseline integrity 39998306290: success (`provenance`).
+- Modern core 39998306405: in progress at both checks. At the second, 10 of its jobs were success (both `checks`,
+  all four MariaDB shards and the MariaDB `result`, MySQL shards 1 to 3) and MySQL `http (4)` was still running, so
+  the MySQL `result` job had not started. The push of this task cancels the run if it is still going
+  (`cancel-in-progress`). It is not the final full run: this task publishes a new commit, and the final run is that
+  commit's.
+
+### Finding 1: Graveyard view pages sober the player
+
+Decision: kept as 1.1.2 behavior, in the same class as the referer expiry on view and the keepalive. Reasons: it is
+one absolute write of a fixed value, so a repeated or replayed view gains nothing; it only lowers a value; changing it
+would change gameplay.
+
+- **The write is bound.** The Drinks `header-graveyard` hook calls `set_module_pref('drunkeness',0)`;
+  `set_module_pref()` (`lib/modules.php`) writes it with one bound `INSERT ... ON DUPLICATE KEY UPDATE`.
+- **Who reaches the five views.** `graveyard.php?op=enter`, `haunt`, `haunt2`, `haunt3` and `restore` are issued only
+  by Graveyard pages, and `graveyard.php` itself only by `shades.php` and, for a dead player, `list.php`. A URL that
+  was not issued sends the player to `badnav.php` before `page_header()` runs (`lib/forcednavigation.php`; 1.1.2's
+  `do_forced_nav()` is the same). Checked directly against a running copy:
+  - a living player with drunkenness 80 requesting each of the five views by URL: 302 to `badnav.php`, drunkenness
+    still 80;
+  - a living player who logs in with `restorepage` set to `graveyard.php?op=enter`: 303 to `village.php`,
+    drunkenness unchanged;
+  - a dead player through the issued link: `op=enter` 200, drunkenness 80 to 0.
+- **The living case.** `page_header()` runs before the alive check that sends a living player to the village, in
+  `graveyard.php` as in 1.1.2 (1.1.2 `graveyard.php` lines 12 and 16). So a living player who holds an issued
+  Graveyard link would be sobered and then sent away. No shipped page issues one to a living player, and the probe
+  below reaches it only by seeding the link as issued. A living player cannot skip a hangover by URL; a dead player
+  sobers on these views exactly as in 1.1.2. Recorded under "Recorded, not changed" in `ROADMAP.md`.
+- **Route inventory.** The five rows now say "drunkenness reset on view (1.1.2, kept)"; `op=enter` and `op=question`
+  are separate rows (`op=question` changes nothing on view: its header hook runs only inside the ritual settlement).
+
+### Finding 2: the `pvp.php` row
+
+`pvp.php` keeps its READ-ONLY row (the list and its paging). `pvp.php?act=attack`, the PvP entry, has its own row:
+player, fights, reservation and the first round, CLOSED, evidence `PVP-COMBAT-AUTHORITY-20260927.md`, tests
+`test_pvp_eligibility_and_entry_rollback` and `test_pvp_cross_player_reservation_and_tokens`.
+`tests/tooling/test_route_inventory.py` now reads entry keys other than `op` (`ENTRY_KEYS`, `pvp.php`: `act`) and
+fails if a value has no row. Without the row: `pvp.php act: ['attack'] != []`; with it: OK, 4 tests.
+
+### Finding 3: the serialized-state count
+
+`SERIALIZED-STATE-AUDIT.md`, "Recount at the merge gate, 2026-10-23", has the per-commit recount. The count was
+91 / 44 / 38 / 52 / 1 from `c00f2d1` through `107ce87`; `593578e` moved the mercenary camp's hire check from
+`mercenarycamp.php:216` to `lib/service_authority.php:146` with the count unchanged, and was not recorded. `54e22e6`
+(rescan task 3) added the repair path's three ScalarState reads in a new file, `lib/stored_state_repair.php` (buff
+list `:82`, stored fight `:96`, Dragon Point history `:137`), giving 94 / 45 / 38 / 55 / 1, and recorded no recount.
+Each of the four sites reads through its schema and is CLOSED; no site is OPEN. The `CLAUDE.md` inventory line now
+gives the recount.
+
+### Finding 4: the settings editor's game log
+
+1.1.2 (`configuration.php` at the historical tag, lines 68 to 79 and 105 to 120) saved every submitted setting but
+logged it, and told the `changesetting` hook, only when no value was stored yet or the stored one differed from the
+submitted one (`!=`), with the message `` `@Changed core setting `^key`@ from `#old`@ to `&new`0 `` or
+`` `@Changed module(`5module`@) setting ... ``. `lib/typed_editor.php` logged every field, without the values, and
+fired the hook for each. It now saves every field as before and logs and fires the hook only for a field whose stored
+value changed, with 1.1.2's message and both values. The game log page escapes the message (`output_notl()` without the private flag: HTML
+entities, color codes kept), and its column is `text`.
+
+New test `test_settings_editor_logs_only_changed_values_http` (shard 1): for the game settings and for a module's
+(`cedrikspotions`), a save of the form as shown logs nothing, and changing one field logs exactly that field with its
+old and new value. Before the fix it fails on both forms (126 extra lines for the game settings, first
+`Changed core setting loginbanner`; 22 for the module, first `Changed cedrikspotions setting ischarm`); after it, OK,
+with `test_shared_typed_settings_http`.
+
+### Gate re-check
+
+- **Gate 1.** Every Phase 3 checklist line is Done except "Replace the PR #1 body", which is Jim's: the four merge
+  gate findings are Done with this commit, the Final rescan item closed with rescan task 3, and no "to fix" line is
+  left.
+- **Gate 3.** `python3 scripts/verify-historical-baseline.py`: PASS. Tag object
+  `51cab4fbe58a234651a3177a56289b18bc152b4d`, commit `bdc29df9bc344774b41e0ad7cae7f6ed2f7512e2`, tree
+  `4013a0ccc5227e87cd7a22de00b7c322d7aa237c`, 417 files, 11 historical commits; `main` `999cec6`.
+- **Gate 4.** The GET-mutation and replay pass, repeated on a running copy with this task's change, over the routes
+  it touched (each URL seeded as issued, the whole database compared after each request):
+  - Admin: `configuration.php` and the seven module settings pages on GET change nothing. Saving the game settings
+    form as shown wrote and logged one setting, `instantexp` (stored empty, the form's value `0`: a stored change);
+    each module form saved as shown wrote and logged nothing. The replayed save: 409, no change; the save sent as a
+    GET: 403, no change.
+  - Player: `pvp.php` and `pvp.php?act=attack` on GET change nothing; the attack POST without a valid target and
+    reservation: 409, no change.
+  - Dead: `graveyard.php` and `op=question` on GET change nothing; `op=enter`, `haunt`, `haunt2`, `haunt3` and
+    `restore` reset drunkenness only (the decision above). The haunt search POST (`op=haunt2`) changes nothing;
+    the Graveyard search and restore POSTs replayed: 409, no change; the search sent as a GET: 400, no change; the restore sent as a GET renders the view, which resets
+    drunkenness only.
+  - Seeding the Graveyard link for a living player: 302 to `village.php`, drunkenness reset (the living case above).
+
+  The route inventory has 168 rows, OPEN 0 (CLOSED 89, DISABLED 9, READ-ONLY 70), and no row with a wrong status
+  for these routes; `test_route_inventory.py` passes.
+- **Gate 2.** Pending: only the CI run on this commit, with all 12 Modern core jobs and Baseline integrity SUCCESS,
+  passes it. Its IDs are in the task report and are recorded by the next task that reads them.
+
+### Local verification
+
+Supporting evidence only; this commit's tree, PHP 8.4.27, MariaDB 11.4 in disposable containers.
+
+- All four HTTP shards through `scripts/tooling-shards.py`, one fresh database each: shard 1 58 tests (with the new
+  settings test, the PvP tests and the route inventory tests), shard 2 49, shard 3 49 (with the Graveyard tests),
+  shard 4 50, each OK with no failures, errors or skips. Shard 1 ran twice: first with the log line still without
+  values, then with the final change (13.7 minutes, OK).
+- PHPUnit (`composer test`, fresh database): OK, 265 tests, 141,142 assertions, including `SqlSweepTest`.
+- Both PHPStan gates: no errors. `composer validate --strict`: valid; `composer audit`: no advisories;
+  `composer lint`: 397 files, 0 failures.
+- `scripts/verify-historical-baseline.py` and `scripts/validate-project.py`: PASS (664 tracked files).
+  `git diff --check`: clean.
+
+### Result
+
+| Gate | Result |
+| --- | --- |
+| 1. Every item above is DONE | PASSED, except the PR #1 body (Jim's) |
+| 2. A final full run passes on both supported CI targets | PENDING, the CI run on this commit |
+| 3. Historical integrity verifies unchanged | PASSED |
+| 4. A final GET-mutation and replay rescan finds no unclosed family | PASSED |
+
+`ROADMAP.md` now says Phase 3 is complete pending the final run, then Jim's PR body, ready-for-review and merge. That
+line is written before the final run finishes, as the brief asks; it holds only if the run passes.

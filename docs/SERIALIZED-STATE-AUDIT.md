@@ -732,3 +732,31 @@ unserialize**. Removed: the reads in `bio.php`, `news.php`, `login.php`, `modera
 `login.php`, `moderate.php`, `paylog.php`, `lib/addnews.php`, `lib/commentary_security.php` and
 `lib/motd.php` leave the file count; the four new schema files join it. ScalarState limits are
 unchanged.
+
+## Recount at the merge gate, 2026-10-23
+
+The merge gate verification (`PHASE3-MERGE-GATE-20261023.md`, finding 3) found that the recorded count, 91 / 44 /
+38 / 52 / 1 from the part 5 candidate, no longer matched the source. The same token recount (`serialize(`,
+`ScalarState::read(`, `unserialize(` in tracked PHP outside `tests/`, `scripts/` and `lab/`) at each commit since
+`c00f2d1`:
+
+| Commit | Count | Change |
+|---|---|---|
+| `c00f2d1` part 5 | 91 / 44 / 38 / 52 / 1 | the recorded recount |
+| `593578e` rescan task 1 | 91 / 44 / 38 / 52 / 1 | the companion hire check moves from `mercenarycamp.php:216` to `lib/service_authority.php:146`; same count, one file out and one in |
+| `aea4608`, `623ca49`, `107ce87` | 91 / 44 / 38 / 52 / 1 | none |
+| `54e22e6` rescan task 3 | 94 / 45 / 38 / 55 / 1 | three reads in the new admin repair path, `lib/stored_state_repair.php` (one new file) |
+| `d3082f2` and this task | 94 / 45 / 38 / 55 / 1 | none |
+
+Neither commit recorded a recount. The four sites:
+
+| Site | Now | Category | Status | Evidence |
+|---|---|---|---|---|
+| `mercenarycamp.php:216` | `lib/service_authority.php:146` | companions | CLOSED | Unchanged check, moved: `CompanionState::abilities()` and `apply_companion()` before anything is charged; a refusal changes nothing (`ROUTE-INVENTORY-20261022.md`, `test_mercenary_camp_hire_and_heal_authority_http`) |
+| new | `lib/stored_state_repair.php:82` | buffs | CLOSED | The repair page's check of the buff list: the session-load potion check, then `BuffState::read()`; it only judges the value, the repair writes the fixed empty list (`RESCAN-TASK3-20261023.md`, `test_user_editor_stored_state_repair_http`) |
+| new | `lib/stored_state_repair.php:96` | general combat | CLOSED | The stored fight read once to find the route that continues it, then that route's schema (`ForestCombatState`, `DragonCombatState`, `PvpState`, the Graveyard and Training checks); the repair clears the fight |
+| new | `lib/stored_state_repair.php:137` | other: dragon points | CLOSED | Rebuilding a failing history: each entry kept only as a lower-case identifier, otherwise `hp`, then stored through `DragonPointState::encode()`; a history that is not a list becomes one `hp` per Dragon kill |
+
+Recount: **94 sites / 45 files / 38 serialize writers-checks / 55 ScalarState reads / one centralized
+unserialize**. **No site is OPEN.** ScalarState limits are unchanged. `CLAUDE.md`'s inventory line now gives this
+count.

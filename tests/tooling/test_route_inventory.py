@@ -12,6 +12,8 @@ ROOT = Path(__file__).resolve().parents[2]
 INVENTORY = ROOT / 'docs' / 'ROUTE-INVENTORY-20261022.md'
 STATUSES = ('CLOSED', 'DISABLED', 'READ-ONLY', 'OPEN')
 LITERAL = r"""['"]([A-Za-z0-9_\-]*)['"]"""
+# A request key other than op that selects a separate entry point while op is empty; each of its values needs a row.
+ENTRY_KEYS = {'pvp.php': 'act'}
 
 
 def _block(text, start):
@@ -80,6 +82,8 @@ def scan():
                 for key in ['op', 'subop']:
                     if key in values:
                         modules[values['module']][key].add(values[key])
+    for page, key in ENTRY_KEYS.items():
+        pages[page][key] = compared((ROOT / page).read_text(errors='replace'), key) - {''}
     for found in [*pages.values(), *modules.values()]:
         found['op'].add('')
         found['subop'].discard('')
@@ -108,7 +112,8 @@ def listed(rows):
         if not match:
             raise AssertionError('Unreadable inventory entry: ' + cells[0])
         query = dict(part.split('=', 1) for part in (match.group('query') or '').split('&') if part)
-        if set(query) - {'op', 'subop', 'module'}:
+        entry_key = ENTRY_KEYS.get(match.group('page'))
+        if set(query) - {'op', 'subop', 'module', entry_key}:
             raise AssertionError('Unexpected inventory parameter: ' + cells[0])
         # A module's default view is implied by its routes; a page's needs its own row.
         target = modules.setdefault(query['module'], {'op': {''}, 'subop': set()}) if 'module' in query else \
@@ -116,6 +121,8 @@ def listed(rows):
         target['op'] |= set(query.get('op', '').split('|'))
         if 'subop' in query:
             target['subop'] |= set(query['subop'].split('|'))
+        if entry_key in query:
+            target.setdefault(entry_key, set()).update(query[entry_key].split('|'))
         if 'module' not in query:
             target.setdefault('pages', set()).add(match.group('page'))
     return pages, modules
@@ -135,6 +142,9 @@ class RouteInventoryTests(unittest.TestCase):
                     continue
                 self.assertEqual(sorted(found['op']), sorted(pages[page]['op']), page + ' ops')
                 self.assertEqual(sorted(found['subop']), sorted(pages[page]['subop']), page + ' subops')
+                if page in ENTRY_KEYS:
+                    key = ENTRY_KEYS[page]
+                    self.assertEqual(sorted(found[key]), sorted(pages[page].get(key, set())), page + ' ' + key)
         for module, found in sorted(found_modules.items()):
             with self.subTest(module=module):
                 self.assertEqual(sorted(found['op']), sorted(modules[module]['op']), module + ' ops')
@@ -186,6 +196,7 @@ class RouteInventoryTests(unittest.TestCase):
         self.assertTrue({'faq', 'faq1', 'primer'} <= pages['petition.php']['op'])
         self.assertTrue({'least', 'most'} <= pages['hof.php']['subop'])
         self.assertTrue({'give', 'dont'} <= modules['foilwench']['op'])
+        self.assertEqual({'attack'}, pages['pvp.php']['act'])
 
 
 if __name__ == '__main__':

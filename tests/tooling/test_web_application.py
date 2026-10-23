@@ -1116,6 +1116,40 @@ echo "locked\\n";fflush(STDOUT);$change=json_decode(fgets(STDIN),true,512,JSON_T
                 for row in rows: self.query('INSERT INTO module_settings(modulename,setting,value) VALUES (?,?,?)',[m,row['setting'],row['value']])
             self.query('UPDATE accounts SET superuser=? WHERE acctid=?',[original,player]); self.query('UPDATE modules SET active=0')
 
+    def test_settings_editor_logs_only_changed_values_http(self):
+        # 1.1.2's configuration.php logged a setting, with its old and new value, and told the changesetting hook,
+        # only when its stored value differed from the one submitted. A save of the form as shown logs nothing.
+        player=self.query('SELECT acctid FROM accounts WHERE login=?',['WebPlayer'])[0]['acctid']
+        original=self.query('SELECT superuser FROM accounts WHERE acctid=?',[player])[0]['superuser']
+        core_saved=self.query('SELECT setting,value FROM settings ORDER BY setting')
+        module_saved=self.query('SELECT setting,value FROM module_settings WHERE modulename=? ORDER BY setting',['cedrikspotions'])
+        self.query('UPDATE modules SET active=1'); self.query('UPDATE accounts SET superuser=128 WHERE acctid=?',[player])
+        call=self._security_client()
+        def request(url,fields=None): self._security_allow(player,url); return call(url,fields)
+        def logs(): return [row['message'] for row in self.query("SELECT message FROM gamelog WHERE who=? AND category='settings' ORDER BY logid",[player])]
+        def save(base,action,patch):
+            _,body=request(base); fields={**dict(self._user_editor_form(body,action)),**patch}
+            before=logs(); status,result=request(action,fields); self.assertEqual(200,status,result[:1500])
+            return logs()[len(before):]
+        try:
+            for base,action,key,choices,stored in [('configuration.php','configuration.php?op=save','autofightfull',['1','2'],
+                    lambda: self.query('SELECT value FROM settings WHERE setting=?',['autofightfull'])),
+                    ('configuration.php?op=modulesettings&module=cedrikspotions','configuration.php?op=modulesettings&module=cedrikspotions&save=1','transcost',['7','8'],
+                    lambda: self.query('SELECT value FROM module_settings WHERE modulename=? AND setting=?',['cedrikspotions','transcost']))]:
+                with self.subTest(form=base):
+                    save(base,action,{})  # the first save stores any value shown from a default
+                    self.assertEqual([],save(base,action,{}))
+                    stored_before=stored()[0]['value']; new=next(value for value in choices if value!=stored_before)
+                    changed=save(base,action,{key:new}); self.assertEqual([{'value':new}],stored())
+                    label='core' if base=='configuration.php' else 'module(`5cedrikspotions`@)'
+                    self.assertEqual(['`@Changed '+label+' setting `^'+key+'`@ from `#'+stored_before+'`@ to `&'+new+'`0'],changed)
+        finally:
+            self.query('DELETE FROM settings')
+            for row in core_saved: self.query('INSERT INTO settings(setting,value) VALUES (?,?)',[row['setting'],row['value']])
+            self.query('DELETE FROM module_settings WHERE modulename=?',['cedrikspotions'])
+            for row in module_saved: self.query('INSERT INTO module_settings(modulename,setting,value) VALUES (?,?,?)',['cedrikspotions',row['setting'],row['value']])
+            self.query('UPDATE accounts SET superuser=? WHERE acctid=?',[original,player]); self.query('UPDATE modules SET active=0')
+
     def test_shared_mount_preferences_http(self):
         player=self.query('SELECT acctid FROM accounts WHERE login=?',['WebPlayer'])[0]['acctid']
         original=self.query('SELECT superuser FROM accounts WHERE acctid=?',[player])[0]['superuser']

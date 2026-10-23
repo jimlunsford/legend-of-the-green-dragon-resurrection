@@ -16,6 +16,8 @@ A sweep for unbound SQL alone would not have found all of them, so this list sta
   those pages, ops, subops and modules: a new page, op or module cannot appear without an entry, and a removed one cannot
   stay listed. It also checks every row's status and the counts.
 - Other request parameters (for example `act`, `what`, `type`, `id`) are covered by the row of the op that reads them.
+  The exception is a key that opens a separate entry point while `op` is empty: `pvp.php`'s `act=attack` has its own
+  row, and the test lists such keys (`ENTRY_KEYS`) and checks their values the same way.
 
 ## Statuses
 
@@ -34,11 +36,11 @@ with `check_su_access()`. Short names in the evidence column: `CRS` is `CORE-ROU
 
 | Status | Entries |
 |---|---|
-| CLOSED | 88 |
+| CLOSED | 89 |
 | DISABLED | 9 |
-| READ-ONLY | 69 |
+| READ-ONLY | 70 |
 | OPEN | 0 |
-| Total | 166 |
+| Total | 168 |
 
 ## Top-level pages
 
@@ -82,11 +84,12 @@ with `check_su_access()`. Short names in the evidence column: `CRS` is `CORE-ROU
 | `forest.php?op=search\|fight\|run\|newtarget\|dragon\|specialty` | player | combat | CLOSED | `ORDINARY-FOREST-COMBAT-20260927.md`, `SERIALIZED-SCHEMAS-PART4-20261022.md`; `test_ordinary_forest_http_authority_and_context`, `test_forest_specialty_post_authority_and_rollback`. |
 | `gamelog.php` | admin SU_EDIT_CONFIG | no | READ-ONLY | `RESCAN-TASK2-20261022.md`: `cat` and `start` checked and bound; the category links encoded and escaped; `test_gamelog_and_referers_authority_http`. |
 | `gardens.php` | player | commentary | CLOSED | Commentary through the shared helper (`MODERN-CORE-CHECKPOINT-20260913-PHASE2.md`); `SecurityIntegrationTest::testCommentaryAuthorizationAndRawStorage`. No bundled gardens event. |
-| `graveyard.php` | player (dead) | no | READ-ONLY | `GRAVEYARD-COMBAT-AUTHORITY-20260927.md`. |
+| `graveyard.php` | player (dead) | no | READ-ONLY | `GRAVEYARD-COMBAT-AUTHORITY-20260927.md`. With a pending event (no bundled module has a Graveyard event) or a developer's `eventhandler`, the page renders the header and the Drinks reset below. |
 | `graveyard.php?op=search\|fight\|run` | player (dead) | torment combat | CLOSED | `GRAVEYARD-COMBAT-AUTHORITY-20260927.md`; `test_graveyard_search_round_authority_and_replay`, `test_graveyard_victory_defeat_and_late_rollback`. |
-| `graveyard.php?op=enter\|question` | player (dead) | no | READ-ONLY | The mausoleum and Ramius's question; no query takes request input. |
-| `graveyard.php?op=haunt\|haunt2\|haunt3` | player (dead) | favor, haunt | CLOSED | `HAUNT-AUTHORITY-20261016.md`; `test_graveyard_haunt_authority_http`. |
-| `graveyard.php?op=restore` | player (dead) | favor, soul | CLOSED | `RESTORE-PREFS-AUTHORITY-20261016.md`; `test_graveyard_restore_authority_http`. |
+| `graveyard.php?op=enter` | player (dead) | drunkenness reset on view (1.1.2, kept) | READ-ONLY | The mausoleum; no query takes request input. The page header runs the bundled Drinks `header-graveyard` hook, which sets `drunkeness` to 0 as 1.1.2 did on every Graveyard page: one bound write of a fixed value, kept as 1.1.2 behavior (`PHASE3-MERGE-GATE-20261023.md`, merge gate findings). Reached only through an issued link; a living player is sent to `badnav.php` first. |
+| `graveyard.php?op=question` | player (dead) | no | READ-ONLY | Ramius's question; no query takes request input. The header hook runs only inside the ritual's settlement (`RAMIUS-EARLY-RESURRECTION-AUTHORITY-20261004.md`). |
+| `graveyard.php?op=haunt\|haunt2\|haunt3` | player (dead) | favor, haunt; drunkenness reset on view (1.1.2, kept) | CLOSED | `HAUNT-AUTHORITY-20261016.md`; `test_graveyard_haunt_authority_http`. The view's Drinks reset is kept 1.1.2 behavior, as on `op=enter`. |
+| `graveyard.php?op=restore` | player (dead) | favor, soul; drunkenness reset on view (1.1.2, kept) | CLOSED | `RESTORE-PREFS-AUTHORITY-20261016.md`; `test_graveyard_restore_authority_http`. The view's Drinks reset is kept 1.1.2 behavior, as on `op=enter`. |
 | `graveyard.php?op=resurrection` | player (dead) | resurrection | CLOSED | `RAMIUS-EARLY-RESURRECTION-AUTHORITY-20261004.md`; `test_ramius_strict_transport_replay_and_multiple_forms`. |
 | `gypsy.php` | player | no | READ-ONLY | The price; closes a paid seance (this task). |
 | `gypsy.php?op=pay` | player | gold | CLOSED | This task: GET asks; POST + CSRF + intent bound to the price and purse; server price; locked transaction (`CRS`, 2026-10-22 paid services); `test_gypsy_seance_authority_http`. |
@@ -139,6 +142,7 @@ with `check_su_access()`. Short names in the evidence column: `CRS` is `CORE-ROU
 | `prefs.php?op=save` | player | preferences, password, email | CLOSED | `CRS` (player preference namespace), `RESTORE-PREFS-AUTHORITY-20261016.md`; `test_navigation_and_preference_state_http`. |
 | `prefs.php?op=suicide` | player | account deletion | CLOSED | `DELETION-EXPIRATION-AUTHORITY-20261017.md`; `test_self_deletion_authority_http`. |
 | `pvp.php` | player | no | READ-ONLY | The target list (`PVP-COMBAT-AUTHORITY-20260927.md`). |
+| `pvp.php?act=attack` | player | PvP entry: fights, reservation, the first round | CLOSED | `PVP-COMBAT-AUTHORITY-20260927.md`: GET asks; POST with CSRF and a one-use intent bound to the target; eligibility checked under lock, participants locked in ID order, one transaction; `test_pvp_eligibility_and_entry_rollback`, `test_pvp_cross_player_reservation_and_tokens`. |
 | `pvp.php?op=fight\|run` | player | PvP combat | CLOSED | `PVP-COMBAT-AUTHORITY-20260927.md`; `test_pvp_eligibility_and_entry_rollback`, `test_pvp_round_stale_reservation_and_victim_authority`. |
 | `rawsql.php` | anyone | no | DISABLED | 410 (`test_disabled_endpoints.py`). |
 | `referers.php` | admin SU_EDIT_CONFIG | expired referers | READ-ONLY | `RESCAN-TASK2-20261022.md`: the 1.1.2 expiry on view kept, from server values only, bound; `sort` from an allow-list (400 otherwise); output escaped, only http(s) links; `test_gamelog_and_referers_authority_http`. |
@@ -246,6 +250,8 @@ is a line on the `ROADMAP.md` Final rescan list.
   caches the online count in a setting. All use server values only.
 - The gypsy's seance commentary section, once shown, stays usable for the rest of the session through the shared
   commentary helper, as any shown section does.
+- The Graveyard's view pages (`op=enter`, `haunt`, `haunt2`, `haunt3`, `restore`) reset the player's `drunkeness` to 0
+  through the bundled Drinks `header-graveyard` hook, as 1.1.2 did (merge gate findings, 2026-10-23).
 
 ## Tests
 
@@ -400,3 +406,17 @@ The SQL sweep in the same document ties each value it bound to its routes: `vill
 commentary (`comscroll`), `motd.php` (`newcount`), `hof.php` (the translated "Unknown"), and the shared libraries behind
 many routes (the game log, the module API, the PvP list, the title lookup). Each of those entries keeps its status; their
 request values are now bound. `common.php`'s referer tracking (not a route of its own) fits its values to the columns.
+
+## Merge gate findings, 2026-10-23
+
+The merge gate verification (`PHASE3-MERGE-GATE-20261023.md`) found two wrong rows; both are corrected above.
+
+- `pvp.php` covered `act=attack`, the PvP entry, under a READ-ONLY row. The entry now has its own CLOSED row, and
+  `tests/tooling/test_route_inventory.py` checks the `act` values `pvp.php` reads (`ENTRY_KEYS`): without the row the
+  test fails (`pvp.php act: ['attack'] != []`).
+- `graveyard.php?op=enter|question` said "no" change, and the haunt and restore rows named only their protected
+  actions, but those five views reset `drunkeness` through the Drinks header hook. Decided: kept as 1.1.2 behavior,
+  like the referer expiry and the keepalive (one bound write of a fixed value, repeating it gains nothing, it only
+  lowers a value, changing it would change gameplay). `op=enter` and `op=question` are now separate rows.
+
+Counts: CLOSED 89, DISABLED 9, READ-ONLY 70, OPEN 0, total 168.

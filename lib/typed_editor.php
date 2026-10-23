@@ -91,6 +91,9 @@ function resurrection_settings_save(string $namespace,array $schema): void {
             resurrection_settings_rules($namespace,$schema,$values);
             require_once 'lib/gamelog.php';
             foreach ($patch as $key=>$value) {
+                // As 1.1.2's configuration.php: a setting is logged, with its old and new value, and the changesetting
+                // hook told, only when the submitted value differs from the stored one (or none is stored yet).
+                $changed=!array_key_exists($key,$old) || (string)$old[$key]!=(string)$value;
                 if ($namespace==='core') {
                     if (in_array($key,['villagename','innname'],true) && isset($old[$key]) && $old[$key]!==$value) {
                         db_query('UPDATE '.db_prefix('accounts').' SET location=? WHERE location=?',true,[$value,$old[$key]]);
@@ -99,7 +102,9 @@ function resurrection_settings_save(string $namespace,array $schema): void {
                     }
                     savesetting($key,$value);
                 } else set_module_setting($key,$value,$namespace);
-                gamelog('Changed '.$namespace.' setting '.$key,'settings');
+                if (!$changed) continue;
+                $label=$namespace==='core' ? 'core' : 'module(`5'.$namespace.'`@)';
+                gamelog('`@Changed '.$label.' setting `^'.$key.'`@ from `#'.(string)($old[$key] ?? '').'`@ to `&'.(string)$value.'`0','settings');
                 // Shipped callbacks perform DML only. No network or DDL callback is certified here.
                 modulehook('changesetting',['module'=>$namespace,'setting'=>$key,'old'=>$old[$key] ?? '', 'new'=>$value],true);
             }
