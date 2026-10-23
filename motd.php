@@ -54,11 +54,15 @@ if ($op=="") {
 		$sql = "SELECT " . db_prefix("motd") . ".*,name AS motdauthorname FROM " . db_prefix("motd") . " LEFT JOIN " . db_prefix("accounts") . " ON " . db_prefix("accounts") . ".acctid = " . db_prefix("motd") . ".motdauthor WHERE motddate >= ? AND motddate < ? ORDER BY motddate DESC";
 		$result = db_query_cached($sql,"motd-$m", 900, ["{$m}-01 00:00:00", date("Y-m-d H:i:s", strtotime("+1 month", strtotime("{$m}-01 00:00:00")))]);
 	}else{
-		$sql = "SELECT " . db_prefix("motd") . ".*,name AS motdauthorname FROM " . db_prefix("motd") . " LEFT JOIN " . db_prefix("accounts") . " ON " . db_prefix("accounts") . ".acctid = " . db_prefix("motd") . ".motdauthor ORDER BY motddate DESC limit $newcount,".($newcount+$count);
+		$sql = "SELECT " . db_prefix("motd") . ".*,name AS motdauthorname FROM " . db_prefix("motd") . " LEFT JOIN " . db_prefix("accounts") . " ON " . db_prefix("accounts") . ".acctid = " . db_prefix("motd") . ".motdauthor ORDER BY motddate DESC limit ?,?";
+		// Bound: `newcount` is a request value. 1.1.2 pasted it in (a negative one, or one whose sum with the item
+		// count passed PHP's integer range, was a database error); the offset and 1.1.2's row count are kept.
+		$newcount = max(0, $newcount); $count = max(0, $count);
+		$limitparams = [$newcount, $newcount > PHP_INT_MAX - $count ? PHP_INT_MAX : $newcount + $count];
 		if ($newcount=0) //cache only the last x items
-			$result = db_query_cached($sql,"motd");
+			$result = db_query_cached($sql,"motd", 900, $limitparams);
 			else
-			$result = db_query($sql);
+			$result = db_query($sql, true, $limitparams);
 	}
 	while ($row = db_fetch_assoc($result)) {
 		if (!isset($session['user']['lastmotd']))

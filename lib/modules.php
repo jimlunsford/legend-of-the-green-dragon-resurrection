@@ -276,12 +276,14 @@ function mass_module_prepare($hooknames){
 		ON	$Pmodules.modulename = $Pmodule_hooks.modulename
 		WHERE
 			active = 1
-		AND	location IN ('".join("', '",$hooknames)."')
+		AND	location IN (" . implode(',', array_fill(0, max(1, count($hooknames)), '?')) . ")
 		ORDER BY
 			$Pmodule_hooks.location,
 			$Pmodule_hooks.priority,
 			$Pmodule_hooks.modulename";
-	$result = db_query_cached($sql,"moduleprepare-".md5(join($hooknames)));
+	// Bound: 1.1.2 pasted the hook and module names in quoted.
+	$hooknames = array_values(array_map('strval', $hooknames));
+	$result = db_query_cached($sql,"moduleprepare-".md5(join($hooknames)), 900, $hooknames === [] ? [''] : $hooknames);
 	$modulenames = array();
 	while ($row = db_fetch_assoc($result)){
 		$modulenames[$row['modulename']] = $row['modulename'];
@@ -295,8 +297,10 @@ function mass_module_prepare($hooknames){
 		array_push($modulehook_queries[$row['location']],$row);
 		$module_preload[$row['location']][$row['modulename']] = $row['function'];
 	}
-	//SQL IN() syntax for the modules involved here.
-	$modulelist = "'".join("', '",$modulenames)."'";
+	//SQL IN() placeholders for the modules involved here.
+	$modulenames = array_values(array_map('strval', $modulenames));
+	$modulelist = implode(',', array_fill(0, max(1, count($modulenames)), '?'));
+	$moduleparameters = $modulenames === [] ? [''] : $modulenames;
 
 	//Load the settings for the modules on these hooks.
 	$sql =
@@ -308,7 +312,7 @@ function mass_module_prepare($hooknames){
 			$Pmodule_settings
 		WHERE
 			modulename IN ($modulelist)";
-	$result = db_query($sql);
+	$result = db_query($sql, true, $moduleparameters);
 	while ($row = db_fetch_assoc($result)){
 		$module_settings[$row['modulename']][$row['setting']] = $row['value'];
 	}
@@ -324,8 +328,8 @@ function mass_module_prepare($hooknames){
 			$Pmodule_userprefs
 		WHERE
 			modulename IN ($modulelist)
-		AND	userid = ".(int)$session['user']['acctid'];
-	$result = db_query($sql);
+		AND	userid = ?";
+	$result = db_query($sql, true, [...$moduleparameters, (int)$session['user']['acctid']]);
 	while ($row = db_fetch_assoc($result)){
 		$module_prefs[$row['userid']][$row['modulename']][$row['setting']] = $row['value'];
 	}
@@ -401,11 +405,11 @@ function modulehook($hookname, $args=false, $allowinactive=false, $only=false){
 			ON	" . db_prefix("modules") . ".modulename = " . db_prefix("module_hooks") . ".modulename
 			WHERE
 				$active
-				" . db_prefix("module_hooks") . ".location='$hookname'
+				" . db_prefix("module_hooks") . ".location=?
 			ORDER BY
 				" . db_prefix("module_hooks") . ".priority,
 				" . db_prefix("module_hooks") . ".modulename";
-		$result = db_query_cached($sql,"hook-".$hookname);
+		$result = db_query_cached($sql,"hook-".$hookname, 900, [(string)$hookname]);
 	}
 	// $args is an array passed by value and we take the output and pass it
 	// back through
@@ -599,11 +603,10 @@ function increment_module_setting($name, $value=1, $module=false){
 	if ($module === false) $module = $mostrecentmodule;
 	load_module_settings($module);
 	if (isset($module_settings[$module][$name])){
-		$sql = "UPDATE " . db_prefix("module_settings") . " SET value=value+$value WHERE modulename='$module' AND setting='".addslashes($name)."'";
-		db_query($sql);
+		// Bound: 1.1.2 pasted the names in (the setting name with addslashes()) and the number unquoted.
+		db_query("UPDATE " . db_prefix("module_settings") . " SET value=value+? WHERE modulename=? AND setting=?", true, [$value, (string)$module, (string)$name]);
 	}else{
-		$sql = "INSERT INTO " . db_prefix("module_settings") . " (modulename,setting,value) VALUES ('$module','".addslashes($name)."','".addslashes($value)."')";
-		db_query($sql);
+		db_query("INSERT INTO " . db_prefix("module_settings") . " (modulename,setting,value) VALUES (?,?,?)", true, [(string)$module, (string)$name, (string)$value]);
 	}
 	invalidatedatacache("modulesettings-$module");
 	$module_settings[$module][$name] += $value;
@@ -632,8 +635,7 @@ function load_module_settings($module){
 
 function module_delete_objprefs($objtype, $objid)
 {
-	$sql = "DELETE FROM " . db_prefix("module_objprefs") . " WHERE objtype='$objtype' AND objid='$objid'";
-	db_query($sql);
+	db_query("DELETE FROM " . db_prefix("module_objprefs") . " WHERE objtype=? AND objid=?", true, [(string)$objtype, (string)$objid]);
 	massinvalidate("objpref-$objtype-$objid");
 }
 
@@ -672,20 +674,20 @@ function increment_module_objpref($objtype,$objid,$name,$value=1,$module=false) 
 	global $mostrecentmodule;
 	$value = (float)$value;
 	if ($module === false) $module = $mostrecentmodule;
-	$sql = "UPDATE " . db_prefix("module_objprefs") . " SET value=value+$value WHERE modulename='$module' AND setting='".addslashes($name)."' AND objtype='".addslashes($objtype)."' AND objid=$objid;";
-	$result= db_query($sql);
+	// Bound: 1.1.2 pasted the names and the object ID in.
+	$result= db_query("UPDATE " . db_prefix("module_objprefs") . " SET value=value+? WHERE modulename=? AND setting=? AND objtype=? AND objid=?", true,
+		[$value, (string)$module, (string)$name, (string)$objtype, (int)$objid]);
 	if (db_affected_rows($result)==0){
 		//if the update did not do anything, insert the row
-		$sql = "INSERT INTO " . db_prefix("module_objprefs") . "(modulename,objtype,setting,objid,value) VALUES ('$module', '$objtype', '$name', '$objid', '".addslashes($value)."')";
-		db_query($sql);
+		db_query("INSERT INTO " . db_prefix("module_objprefs") . "(modulename,objtype,setting,objid,value) VALUES (?,?,?,?,?)", true,
+			[(string)$module, (string)$objtype, (string)$name, (int)$objid, (string)$value]);
 	}
 	invalidatedatacache("objpref-$objtype-$objid-$name-$module");
 }
 
 
 function module_delete_userprefs($user){
-	$sql = "DELETE FROM " . db_prefix("module_userprefs") . " WHERE userid='$user'";
-	db_query($sql);
+	db_query("DELETE FROM " . db_prefix("module_userprefs") . " WHERE userid=?", true, [(int)$user]);
 }
 
 $module_prefs=array();
@@ -771,12 +773,11 @@ function increment_module_pref($name,$value=1,$module=false,$user=false){
 	}
 
 	if (isset($module_prefs[$uid][$module][$name])){
-		$sql = "UPDATE " . db_prefix("module_userprefs") . " SET value=value+$value WHERE modulename='$module' AND setting='$name' AND userid='$uid'";
-		db_query($sql);
+		// Bound: 1.1.2 pasted the names and the account ID in.
+		db_query("UPDATE " . db_prefix("module_userprefs") . " SET value=value+? WHERE modulename=? AND setting=? AND userid=?", true, [$value, (string)$module, (string)$name, (int)$uid]);
 		$module_prefs[$uid][$module][$name] += $value;
 	}else{
-		$sql = "INSERT INTO " . db_prefix("module_userprefs"). " (modulename,setting,userid,value) VALUES ('$module','$name','$uid','".addslashes($value)."')";
-		db_query($sql);
+		db_query("INSERT INTO " . db_prefix("module_userprefs"). " (modulename,setting,userid,value) VALUES (?,?,?,?)", true, [(string)$module, (string)$name, (int)$uid, (string)$value]);
 		$module_prefs[$uid][$module][$name] = $value;
 	}
 }
@@ -796,8 +797,7 @@ function clear_module_pref($name,$module=false,$user=false){
 	}
 
 	if (isset($module_prefs[$uid][$module][$name])){
-		$sql = "DELETE FROM " . db_prefix("module_userprefs") . " WHERE modulename='$module' AND setting='$name' AND userid='$uid'";
-		db_query($sql);
+		db_query("DELETE FROM " . db_prefix("module_userprefs") . " WHERE modulename=? AND setting=? AND userid=?", true, [(string)$module, (string)$name, (int)$uid]);
 	}
 	unset($module_prefs[$uid][$module][$name]);
 }
@@ -874,32 +874,27 @@ function module_wipehooks() {
 	db_query($sql);
 
 	//invalidate data caches for module hooks associated with this module.
-	$sql = "SELECT location FROM ".db_prefix("module_hooks")." WHERE modulename='$mostrecentmodule'";
-	$result = db_query($sql);
+	$result = db_query("SELECT location FROM ".db_prefix("module_hooks")." WHERE modulename=?", true, [(string)$mostrecentmodule]);
 	while ($row = db_fetch_assoc($result)){
 		invalidatedatacache("hook-".$row['location']);
 	}
 	invalidatedatacache("moduleprepare");
 
 	debug("Removing all hooks for $mostrecentmodule");
-	$sql = "DELETE FROM " . db_prefix("module_hooks"). " WHERE modulename='$mostrecentmodule'";
-	db_query($sql);
+	db_query("DELETE FROM " . db_prefix("module_hooks"). " WHERE modulename=?", true, [(string)$mostrecentmodule]);
 	//unlock the module hooks table.
 	$sql = "UNLOCK TABLES";
 	db_query($sql);
 
-	$sql = "DELETE FROM " . db_prefix("module_event_hooks") . " WHERE modulename='$mostrecentmodule'";
-	db_query($sql);
+	db_query("DELETE FROM " . db_prefix("module_event_hooks") . " WHERE modulename=?", true, [(string)$mostrecentmodule]);
 
 }
 
 function module_addeventhook($type, $chance){
 	global $mostrecentmodule;
 	debug("Adding an event hook on $type events for $mostrecentmodule");
-	$sql = "DELETE FROM " . db_prefix("module_event_hooks") . " WHERE modulename='$mostrecentmodule' AND event_type='$type'";
-	db_query($sql);
-	$sql = "INSERT INTO " . db_prefix("module_event_hooks") . " (event_type,modulename,event_chance) VALUES ('$type', '$mostrecentmodule','".addslashes($chance)."')";
-	db_query($sql);
+	db_query("DELETE FROM " . db_prefix("module_event_hooks") . " WHERE modulename=? AND event_type=?", true, [(string)$mostrecentmodule, (string)$type]);
+	db_query("INSERT INTO " . db_prefix("module_event_hooks") . " (event_type,modulename,event_chance) VALUES (?,?,?)", true, [(string)$type, (string)$mostrecentmodule, (string)$chance]);
 	invalidatedatacache("event-".$type);
 }
 
@@ -907,8 +902,7 @@ function module_drophook($hookname,$functioncall=false){
 	global $mostrecentmodule;
 	if ($functioncall===false)
 		$functioncall=$mostrecentmodule."_dohook";
-	$sql = "DELETE FROM " . db_prefix("module_hooks") . " WHERE modulename='$mostrecentmodule' AND location='".addslashes($hookname)."' AND `function`='".addslashes($functioncall)."'";
-	db_query($sql);
+	db_query("DELETE FROM " . db_prefix("module_hooks") . " WHERE modulename=? AND location=? AND `function`=?", true, [(string)$mostrecentmodule, (string)$hookname, (string)$functioncall]);
 	invalidatedatacache("hook-".$hookname);
 	invalidatedatacache("moduleprepare");
 }
@@ -946,8 +940,8 @@ function module_addhook_priority($hookname,$priority=50,$functioncall=false,$whe
 	debug("Adding a hook at $hookname for $mostrecentmodule to $functioncall which is active on condition '$whenactive'");
 	//we want to do a replace in case there's any garbage left in this table which might block new clean data from going in.
 	//normally that won't be the case, and so this doesn't have any performance implications.
-	$sql = "REPLACE INTO " . db_prefix("module_hooks") . " (modulename,location,`function`,whenactive,priority) VALUES ('$mostrecentmodule','".addslashes($hookname)."','".addslashes($functioncall)."','".addslashes($whenactive)."','".addslashes($priority)."')";
-	db_query($sql);
+	db_query("REPLACE INTO " . db_prefix("module_hooks") . " (modulename,location,`function`,whenactive,priority) VALUES (?,?,?,?,?)", true,
+		[(string)$mostrecentmodule, (string)$hookname, (string)$functioncall, (string)$whenactive, (string)$priority]);
 	invalidatedatacache("hook-".$hookname);
 	invalidatedatacache("moduleprepare");
 }
@@ -986,8 +980,8 @@ function module_collect_events($type, $allowinactive=false)
 	$events = array();
 	if (!$allowinactive) $active = " active=1 AND";
 
-	$sql = "SELECT " . db_prefix("module_event_hooks") . ".* FROM " . db_prefix("module_event_hooks") . " INNER JOIN " . db_prefix("modules") . " ON ". db_prefix("modules") . ".modulename = " . db_prefix("module_event_hooks") . ".modulename WHERE $active event_type='$type' ORDER BY RAND(".e_rand().")";
-	$result = db_query_cached($sql,"event-".$type);
+	$sql = "SELECT " . db_prefix("module_event_hooks") . ".* FROM " . db_prefix("module_event_hooks") . " INNER JOIN " . db_prefix("modules") . " ON ". db_prefix("modules") . ".modulename = " . db_prefix("module_event_hooks") . ".modulename WHERE $active event_type=? ORDER BY RAND(".e_rand().")";
+	$result = db_query_cached($sql,"event-".$type, 900, [(string)$type]);
 	while ($row = db_fetch_assoc($result)){
         if (!injectmodule($row['modulename'], $allowinactive)) continue;
         $chance = resurrection_event_chance($row['modulename'], $row['event_chance']);
@@ -1157,8 +1151,9 @@ function module_display_events($eventtype, $forcescript=false) {
 
 function module_editor_navs($like, $linkprefix)
 {
-	$sql = "SELECT formalname,modulename,active,category FROM " . db_prefix("modules") . " WHERE infokeys LIKE '%|$like|%' ORDER BY category,formalname";
-	$result = db_query($sql);
+	// Bound: 1.1.2 pasted the key into the LIKE pattern.
+	$sql = "SELECT formalname,modulename,active,category FROM " . db_prefix("modules") . " WHERE infokeys LIKE ? ORDER BY category,formalname";
+	$result = db_query($sql, true, ['%|' . $like . '|%']);
 	$curcat = "";
 	while($row = db_fetch_assoc($result)) {
 		if ($curcat != $row['category']) {
@@ -1423,16 +1418,16 @@ function get_racename($thisuser=true) {
 function module_delete_oldvalues($table,$key) {
     require_once 'lib/gamelog.php';
     $total = 0;
-    $res = db_query("SELECT modulename FROM ".db_prefix('modules')." WHERE infokeys LIKE '%|$key|%'");
+    $res = db_query("SELECT modulename FROM ".db_prefix('modules')." WHERE infokeys LIKE ?", true, ['%|' . $key . '|%']);
     while ($row = db_fetch_assoc($res)) {
         $mod = $row['modulename'];
         require_once "modules/{$mod}.php";
         $func = $mod."_getmoduleinfo";
         $info = $func();
 		$keys = array_filter(array_keys($info[$key]), "module_pref_filter");
-		$keys = array_map("addslashes", $keys);
-        $keys = implode("','", $keys);
-        if ($keys) db_query("DELETE FROM ".db_prefix($table)." WHERE modulename='$mod' AND setting NOT IN ('$keys')");
+		$keys = array_values(array_map('strval', $keys));
+        // Bound: 1.1.2 pasted the module name and the setting names (with addslashes()) in.
+        if (implode("','", $keys)) db_query("DELETE FROM ".db_prefix($table)." WHERE modulename=? AND setting NOT IN (" . implode(',', array_fill(0, count($keys), '?')) . ")", true, [(string)$mod, ...$keys]);
         $total += db_affected_rows();
     }
     gamelog("Cleaned up $total old values in $table that don't exist anymore", 'maintenance');

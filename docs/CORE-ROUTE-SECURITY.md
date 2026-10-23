@@ -960,3 +960,35 @@ on `referers.php` (PHP 8 float modulo in `dhms()`, and the URL sort on MySQL 8.4
 A new test races a clan leader's deletion against a member's withdrawal in both
 orders. New gap recorded: `common.php`'s referer tracking can fail a page on a long
 `Referer` host. See [rescan task 2](RESCAN-TASK2-20261022.md).
+
+2026-10-23 rescan task 2 accepted through `107ce87`, the first accepted descendant
+(Modern core 39929029453, all 12 jobs success; Baseline integrity 39929029457);
+`623ca49`'s own run 39868186035 failed on MariaDB and stays on record. Correction:
+the referer expiry on view was not the only 1.1.2 cleanup; `common.php` also had a
+monthly cleanup, dropped in `899cf0b` and restored in task 3.
+
+2026-10-23 repair path, SQL sweep and referer tracking (final rescan task 3):
+candidate pending CI. Referer tracking on every page (`common.php`, now
+`lib/referer_tracking.php`) keeps 1.1.2's rules, binds its writes and cuts the
+host, destination and URL to their columns in characters, as 1.1.2's non-strict
+MySQL stored them; a `Referer` that is not UTF-8 is not tracked, and any tracking
+failure is swallowed, so tracking never fails the page. 1.1.2's monthly referer
+cleanup is restored, bound. A sweep of every value interpolated into SQL text in
+shipped PHP classifies each one: no request value is left; the commentary page
+(`comscroll`) and MoTD paging (`newcount`) are bound (both were 500s with a large or
+negative value), as are the Hall of Fame's translated "Unknown" (a 500 with a quote),
+the PvP list's location, the game log, the module API names and the title lookups.
+Every value still interpolated is a server value or unreachable, on a reviewed list
+that `tests/unit/SqlSweepTest.php` keeps exact. The historical web installer's stage
+files refuse a direct request (404), like `lib/mail.php`. New admin route
+`user.php?op=repair` (Edit Users or megauser; linked from the user editor) shows only
+the stored values that fail their existing schema (preferences, buff list,
+companions, `restorepage`, the stored fight, the Dragon Point history) and repairs
+each with one fixed value: a POST with CSRF and a one-use intent bound to the account,
+the field and the failing value; under lock in one transaction, re-checked, every
+other field untouched, a debug log line naming the field and the administrator. A
+value that passes cannot be repaired. Preferences go to defaults, the buff list and
+companions to empty, `restorepage` to the village, the fight is cleared, and a Dragon
+Point history is rebuilt with `hp` entries (the readable valid entries kept; one
+spend per dragon kill when unreadable), so no point can be spent twice. See
+[rescan task 3](RESCAN-TASK3-20261023.md).

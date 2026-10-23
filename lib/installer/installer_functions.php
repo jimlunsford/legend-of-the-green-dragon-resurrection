@@ -1,4 +1,6 @@
 <?php
+// Included by the historical web installer only (installer.php answers 403); never an endpoint itself.
+if (realpath($_SERVER['SCRIPT_FILENAME'] ?? '')===__FILE__) { http_response_code(404); exit('Not an application endpoint.'); }
 require_once __DIR__ . '/../../src/Compatibility/array_cursor.php';
 function create_db($dbname){
 	output("`n`2Attempting to create your database...`n");

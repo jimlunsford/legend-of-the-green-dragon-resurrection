@@ -9,15 +9,21 @@ require_once __DIR__ . '/villagenav.php';
 require_once __DIR__ . '/extended-battle.php';
 require_once __DIR__ . '/../src/Game/TrainingCombatState.php';
 
-/** @return list<array<string,mixed>> */
-function resurrection_training_masters(): array {
+/**
+ * The masters for a player's level (the session's player unless another account is named, as the user editor's
+ * repair path does).
+ * @param array<string,mixed>|null $player
+ * @return list<array<string,mixed>>
+ */
+function resurrection_training_masters(?array $player = null): array {
     global $session;
+    $player ??= $session['user'];
     $table=db_prefix('masters');
-    $rows=db_query("SELECT * FROM $table WHERE creaturelevel=(SELECT MAX(creaturelevel) FROM $table WHERE creaturelevel<=?) ORDER BY creatureid",true,[(int)$session['user']['level']]);
+    $rows=db_query("SELECT * FROM $table WHERE creaturelevel=(SELECT MAX(creaturelevel) FROM $table WHERE creaturelevel<=?) ORDER BY creatureid",true,[(int)$player['level']]);
     $masters=[];
     foreach ($rows as $master) {
         foreach (['creaturename','creaturewin','creaturelose','creatureweapon'] as $key) $master[$key]=stripslashes((string)$master[$key]);
-        if ($master['creaturename']==='Gadriel the Elven Ranger' && $session['user']['race']==='Elf') {
+        if ($master['creaturename']==='Gadriel the Elven Ranger' && $player['race']==='Elf') {
             $master['creaturewin']='You call yourself an Elf?? Maybe Half-Elf! Come back when you\'ve been better trained.';
             $master['creaturelose']='It is only fitting that another Elf should best me.  You make good progress.';
         }
@@ -47,17 +53,26 @@ function resurrection_training_state(): array {
     $masters=resurrection_training_masters();
     if ($masters===[]) throw new DomainException('No master.');
     $combat=[];
-    if ($session['user']['badguy']!=='') {
-        $combat=\Resurrection\Security\ScalarState::read($session['user']['badguy']);
-        $id=$combat['enemies'][0]['creatureid'] ?? null;
-        if (!is_int($id) && !is_string($id)) throw new DomainException('Invalid master identity.');
-        $selected=null;
-        foreach ($masters as $master) if ((string)$master['creatureid']===(string)$id) $selected=$master;
-        if ($selected===null || !$session['user']['seenmaster'] ||
-            $session['user']['experience']<exp_for_next_level($session['user']['level'],$session['user']['dragonkills'])) throw new DomainException('Invalid master.');
-        $combat=\Resurrection\Game\TrainingCombatState::read($session['user']['badguy'],$session['user'],$selected);
-    }
+    if ($session['user']['badguy']!=='') $combat=resurrection_training_fight($session['user'],$masters);
     return ['masters'=>$masters,'combat'=>$combat];
+}
+
+/**
+ * A player's stored Training fight, as the Training route accepts it: against one of the masters for the player's
+ * level, after the player has challenged, with the experience to train. The user editor's repair path asks the same.
+ * @param array<string,mixed> $player
+ * @param list<array<string,mixed>> $masters
+ * @return array<string,mixed>
+ */
+function resurrection_training_fight(array $player, array $masters): array {
+    $combat=\Resurrection\Security\ScalarState::read($player['badguy']);
+    $id=$combat['enemies'][0]['creatureid'] ?? null;
+    if (!is_int($id) && !is_string($id)) throw new DomainException('Invalid master identity.');
+    $selected=null;
+    foreach ($masters as $master) if ((string)$master['creatureid']===(string)$id) $selected=$master;
+    if ($selected===null || !$player['seenmaster'] ||
+        $player['experience']<exp_for_next_level($player['level'],$player['dragonkills'])) throw new DomainException('Invalid master.');
+    return \Resurrection\Game\TrainingCombatState::read($player['badguy'],$player,$selected);
 }
 
 function resurrection_training_context(): string {

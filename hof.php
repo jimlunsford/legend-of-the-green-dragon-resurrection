@@ -206,8 +206,11 @@ if ($op=="money"){
 	$headers = array("Level");
 	$table = array($title, $sql, false, false, $headers, false);
 } elseif ($op=="days") {
+	// Bound: the translated text is stored translator text, which 1.1.2 pasted in quoted. Cast, so that the server
+	// does not take the parameter for a number from the other branch.
 	$unk = translate_inline("Unknown");
-	$sql = "SELECT name, IF(bestdragonage,bestdragonage,'$unk') AS data1 FROM " . db_prefix("accounts") . " WHERE $standardwhere $extra ORDER BY bestdragonage $order, level $order, experience $order, acctid $order LIMIT $limit";
+	$limitparams = array_merge(array($unk), $limitparams);
+	$sql = "SELECT name, IF(bestdragonage,bestdragonage,CAST(? AS CHAR)) AS data1 FROM " . db_prefix("accounts") . " WHERE $standardwhere $extra ORDER BY bestdragonage $order, level $order, experience $order, acctid $order LIMIT $limit";
 	$me = "SELECT count(acctid) AS count FROM ".db_prefix("accounts")." WHERE $standardwhere $extra AND bestdragonage $meop {$session['user']['bestdragonage']}";
 	$adverb = "fastest";
 	if ($subop == "least") $adverb = "slowest";
@@ -217,7 +220,8 @@ if ($op=="money"){
 	$table = array($title, $sql, $none, false, $headers, false);
 } else {
 	$unk = translate_inline("Unknown");
-	$sql = "SELECT name,dragonkills AS data1,level AS data2,'&nbsp;' AS data3, IF(dragonage,dragonage,'$unk') AS data4, '&nbsp;' AS data5, IF(bestdragonage,bestdragonage,'$unk') AS data6 FROM " . db_prefix("accounts") . " WHERE $standardwhere $extra ORDER BY dragonkills $order,level $order,experience $order, acctid $order LIMIT $limit";
+	$limitparams = array_merge(array($unk, $unk), $limitparams);
+	$sql = "SELECT name,dragonkills AS data1,level AS data2,'&nbsp;' AS data3, IF(dragonage,dragonage,CAST(? AS CHAR)) AS data4, '&nbsp;' AS data5, IF(bestdragonage,bestdragonage,CAST(? AS CHAR)) AS data6 FROM " . db_prefix("accounts") . " WHERE $standardwhere $extra ORDER BY dragonkills $order,level $order,experience $order, acctid $order LIMIT $limit";
 	if ($session['user']['dragonkills']>0) $me = "SELECT count(acctid) AS count FROM ".db_prefix("accounts")." WHERE $standardwhere $extra AND dragonkills $meop {$session['user']['dragonkills']}";
 	$adverb = "most";
 	if ($subop == "least") $adverb = "least";

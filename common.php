@@ -274,39 +274,9 @@ if ($sendid) {
 	setcookie('lgi', $session['user']['uniqueid'], ['expires' => strtotime('+365 days'), 'secure' => session_get_cookie_params()['secure'], 'httponly' => true, 'samesite' => 'Lax']);
 }
 $_COOKIE['lgi'] = $session['user']['uniqueid'];
-$url = "http://".$_SERVER['SERVER_NAME'].dirname($_SERVER['REQUEST_URI']);
-$url = substr($url,0,strlen($url)-1);
-$urlport = "http://".$_SERVER['SERVER_NAME'].":".$_SERVER['SERVER_PORT'].dirname($_SERVER['REQUEST_URI']);
-$urlport = substr($urlport,0,strlen($urlport)-1);
-
-if (!isset($_SERVER['HTTP_REFERER'])) $_SERVER['HTTP_REFERER'] = "";
-
-if (
-	substr($_SERVER['HTTP_REFERER'],0,strlen($url))==$url ||
-	substr($_SERVER['HTTP_REFERER'],0,strlen($urlport))==$urlport ||
-	$_SERVER['HTTP_REFERER']=="" ||
-	strtolower(substr($_SERVER['HTTP_REFERER'],0,7))!="http://"
-	){
-
-}else{
-	$site = str_replace("http://","",$_SERVER['HTTP_REFERER']);
-	if (strpos($site,"/"))
-		$site = substr($site,0,strpos($site,"/"));
-	$host = str_replace(":80","",$_SERVER['HTTP_HOST']);
-
-	if ($site != $host){
-        $result = db_query('SELECT refererid FROM ' . db_prefix('referers') . ' WHERE uri=?', true, [$_SERVER['HTTP_REFERER']]);
-        $row = db_fetch_assoc($result);
-        $values = [date('Y-m-d H:i:s'), $site, $host . '/' . $REQUEST_URI, $_SERVER['REMOTE_ADDR']];
-        if ($row) {
-            $values[] = (int)$row['refererid'];
-            db_query('UPDATE ' . db_prefix('referers') . ' SET count=count+1,last=?,site=?,dest=?,ip=? WHERE refererid=?', true, $values);
-        } else {
-            array_unshift($values, $_SERVER['HTTP_REFERER']);
-            db_query('INSERT INTO ' . db_prefix('referers') . ' (uri,last,site,dest,ip,count) VALUES (?,?,?,?,?,1)', true, $values);
-        }
-	}
-}
+// 1.1.2's referer tracking, bound and fitted to its columns; a failure there never stops the page.
+require_once 'lib/referer_tracking.php';
+resurrection_track_referer();
 
 if (!isset($session['user']['superuser'])) $session['user']['superuser']=0;
 

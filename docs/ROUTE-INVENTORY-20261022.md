@@ -34,11 +34,11 @@ with `check_su_access()`. Short names in the evidence column: `CRS` is `CORE-ROU
 
 | Status | Entries |
 |---|---|
-| CLOSED | 87 |
+| CLOSED | 88 |
 | DISABLED | 9 |
 | READ-ONLY | 69 |
 | OPEN | 0 |
-| Total | 165 |
+| Total | 166 |
 
 ## Top-level pages
 
@@ -170,6 +170,7 @@ with `check_su_access()`. Short names in the evidence column: `CRS` is `CORE-ROU
 | `user.php?op=search\|edit\|save\|special\|savemodule\|lasthit\|debuglog&subop=module\|xml` | admin SU_EDIT_USERS | accounts, module preferences | CLOSED | `USER-EDITOR-AUTHORITY-20261016.md`; `test_user_editor_account_save_authority_http`, `test_user_editor_special_module_and_log_authority_http`. |
 | `user.php?op=setupban\|saveban\|delban\|removeban` | admin SU_EDIT_USERS | bans | CLOSED | `BAN-ADMIN-AUTHORITY-20261016.md`; `test_user_editor_ban_authority_http`. |
 | `user.php?op=del` | admin SU_EDIT_USERS | account deletion | CLOSED | `DELETION-EXPIRATION-AUTHORITY-20261017.md`; `test_account_deletion_authority_http`. |
+| `user.php?op=repair` | admin SU_EDIT_USERS | the failing stored value of one account | CLOSED | `RESCAN-TASK3-20261023.md`: shows only the stored values that fail their schema; one fixed repair each, a POST with CSRF and a one-use intent bound to the account and the failing value, locked and re-checked in one transaction (a value that passes is refused), with a debug log line; `test_user_editor_stored_state_repair_http`. |
 | `viewpetition.php` | admin SU_EDIT_PETITIONS | cleanup | CLOSED | `PETITION-ADMIN-AUTHORITY-20261015.md`; `test_petition_admin_cleanup_and_commentary_http`. |
 | `viewpetition.php?op=view\|setstat\|del` | admin SU_EDIT_PETITIONS | petition status | CLOSED | `PETITION-ADMIN-AUTHORITY-20261015.md`; `test_petition_admin_status_authority_http` (`del` is the 1.1.2 commented-out branch; its link is not served). |
 | `village.php` | player | location, commentary | CLOSED | `MODERN-CORE-CHECKPOINT-20260913-PHASE2.md`: the 1.1.2 location write on view uses server values; commentary through the shared helper. No bundled village event. |
@@ -383,3 +384,19 @@ evidence document and names an HTTP test that exists. Against the task 1 invento
 New gap found (on the Final rescan list): `common.php`'s referer tracking writes the visitor's `Referer` host and the
 request path into `referers.site` (50 characters) and `referers.dest` (255) unchecked; under strict SQL a longer value
 fails the page. Not a route of its own; it runs on every page.
+
+## Final rescan task 2 accepted, 2026-10-23
+
+Task 2 is accepted through `107ce87`, the first accepted descendant of its candidate `623ca49`: Modern core
+39929029453 and Baseline integrity 39929029457 succeeded. `623ca49`'s own run, Modern core 39868186035, failed on
+MariaDB (the referer list's 1.1.2 loop counter) and stays on record. The twelve entries above stand as recorded.
+
+## Final rescan task 3, 2026-10-23 (candidate)
+
+One new entry: `user.php?op=repair`, the user editor's repair path for an account locked out by stored state
+(`RESCAN-TASK3-20261023.md`), CLOSED. Counts: CLOSED 88, DISABLED 9, READ-ONLY 69, OPEN 0, total 166.
+
+The SQL sweep in the same document ties each value it bound to its routes: `village.php` and every other page that shows
+commentary (`comscroll`), `motd.php` (`newcount`), `hof.php` (the translated "Unknown"), and the shared libraries behind
+many routes (the game log, the module API, the PvP list, the title lookup). Each of those entries keeps its status; their
+request values are now bound. `common.php`'s referer tracking (not a route of its own) fits its values to the columns.

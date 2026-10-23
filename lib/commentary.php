@@ -237,12 +237,11 @@ function viewcommentary($section,$message="Interject your own commentary?",$limi
 			db_prefix("accounts") .
 			".clanid WHERE $sectionWhere AND " .
 			"( ".db_prefix("accounts") . ".locked=0 OR ".db_prefix("accounts") .".locked is null ) ".
-			"ORDER BY commentid DESC LIMIT " .
-			($com*$limit).",$limit";
-		if ($com==0 && strstr( $_SERVER['REQUEST_URI'], "/moderate.php" ) !== $_SERVER['REQUEST_URI'] )
-			$result = db_query($sql, true, $sectionParameters);
-		else
-			$result = db_query($sql, true, $sectionParameters);
+			"ORDER BY commentid DESC LIMIT ?,?";
+		// Bound: `comscroll` is a request value. 1.1.2 pasted the page times the page size in; a page past PHP's
+		// integer range became a float there and the page failed with a database error. Past the end is empty.
+		$offset = $com > intdiv(PHP_INT_MAX, $limit) ? PHP_INT_MAX : $com * $limit;
+		$result = db_query($sql, true, [...$sectionParameters, $offset, $limit]);
 		while($row = db_fetch_assoc($result)) $commentbuffer[] = $row;
 	} else {
 		$sql = "SELECT " . db_prefix("commentary") . ".*, " .

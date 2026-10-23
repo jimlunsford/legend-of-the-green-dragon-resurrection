@@ -6830,6 +6830,170 @@ function MODULE_dohook($hook,$args) {
             response=opener.open(f'http://127.0.0.1:{self.port}/'+url,timeout=20)
             self.assertEqual('sandbox',response.headers['Content-Security-Policy']);self.assertIn('<script>alert(1)</script>',response.read().decode())
 
+    def test_referer_tracking_fits_its_columns_http(self):
+        # common.php counts off-site http:// referers on every page. 1.1.2 pasted the Referer and the request path into
+        # SQL; under strict SQL a host past referers.site (50) or a path past referers.dest (255) failed the page. The
+        # values are now bound and cut to their columns in characters, as 1.1.2's MySQL stored them; a Referer that is
+        # not UTF-8 is not tracked; and a tracking failure never stops the page.
+        q=self.query
+        refs=lambda:sorted((r['uri'],r['site'],r['dest'],r['count']) for r in q("SELECT uri,site,dest,count FROM referers WHERE uri LIKE 'http://%track3%'"))
+        def visit(referer,path='home.php'):
+            request=urllib.request.Request(f'http://127.0.0.1:{self.port}/'+path,headers={'Referer':referer.encode('utf-8','surrogateescape').decode('latin-1')})
+            try: response=urllib.request.urlopen(request,timeout=20)
+            except urllib.error.HTTPError as error: response=error
+            body=response.read().decode('utf-8',errors='replace');self.assertNotRegex(body,r'(?i)(fatal error|warning:|deprecated:|notice:)',body[:2000])
+            return response.status,body
+        host=f'127.0.0.1:{self.port}'
+        try:
+            long_site='a'*70+'.track3.example';snow='雪'*60+'.track3.example';quoted="o'reilly\\\".track3.example"
+            path='home.php?op=x'+'p'*300
+            cases=[('http://'+long_site+'/x?'+"q='"+'b'*500,path,long_site[:50]),
+                   ('http://'+snow+'/雪',path,snow[:50]),
+                   ('http://'+quoted+"/a'b",'home.php',quoted)]
+            for referer,page,site in cases:
+                with self.subTest(referer=referer[:40]):
+                    status,body=visit(referer,page);self.assertEqual(200,status,body[:2000])
+                    rows=[r for r in refs() if r[0]==referer];self.assertEqual(1,len(rows),refs())
+                    self.assertEqual((site,(host+'/'+page)[:255],'1'),rows[0][1:])
+                    # The same referer counts on its row.
+                    self.assertEqual(200,visit(referer,page)[0]);self.assertEqual('2',[r for r in refs() if r[0]==referer][0][3])
+            # A Referer that is not UTF-8 is not tracked; the page still loads.
+            before=refs();status,body=visit('http://bad\udcff.track3.example/x');self.assertEqual(200,status,body[:2000]);self.assertEqual(before,refs())
+            # The database refusing the row stops the tracking, never the page.
+            q("ALTER TABLE referers ADD CONSTRAINT fixture_referer_failure CHECK (site <> 'refused.track3.example')")
+            try:
+                status,body=visit('http://refused.track3.example/x');self.assertEqual(200,status,body[:2000]);self.assertEqual(before,refs())
+            finally: q('ALTER TABLE referers DROP CONSTRAINT fixture_referer_failure')
+        finally: q("DELETE FROM referers WHERE uri LIKE 'http://%track3%'")
+
+    def test_rescan_task3_bound_request_values_http(self):
+        # Request values that 1.1.2 pasted into SQL and that failed pages under PHP 8 and strict SQL: the commentary page
+        # (`comscroll`), the MoTD paging (`newcount`) and the Hall of Fame's translated "Unknown".
+        q=self.query
+        with self._service_fixture() as f:
+            request,setup=f['request'],f['setup']
+            setup()
+            try:
+                # A commentary page past PHP's integer range: 1.1.2's offset became a float in the SQL. Past the end is empty.
+                for scroll in ['9223372036854775807','1000000000000000000','0']:
+                    status,body=request('village.php?comscroll='+scroll);self.assertEqual(200,status,(scroll,body[:2000]))
+                # MoTD paging: a negative offset and one whose sum with the page size passes PHP's integer range.
+                for newcount in ['-1','9223372036854775807','5']:
+                    status,body=request('motd.php?newcount='+newcount,{'proceed':'1'});self.assertEqual(200,status,(newcount,body[:2000]))
+                # The Hall of Fame's "Unknown", translated with a quote and a backslash.
+                q("INSERT INTO translations (language,uri,intext,outtext,author,version) VALUES ('en','hof','Unknown',?,'fixture','v')",["Unknown O'Reilly \\"])
+                q('UPDATE accounts SET dragonkills=1,dragonpoints=?,dragonage=0,bestdragonage=0 WHERE acctid=?',['a:1:{i:0;s:2:"hp";}',f['player']])
+                status,body=request('hof.php');self.assertEqual(200,status,body[:2000]);self.assertIn("<td align='right'>Unknown O'Reilly \\</td>",body)
+                # The speed listing shows only known ages, but its SQL carries the text too.
+                status,body=request('hof.php?op=days');self.assertEqual(200,status,body[:2000])
+            finally: q("DELETE FROM translations WHERE author='fixture' AND intext='Unknown'")
+
+    def test_unbound_sql_files_are_not_endpoints_http(self):
+        # The SQL sweep's unreachable class: the historical web installer's stages and lib/mail.php still paste values into
+        # SQL, but nothing reaches them. installer.php answers 403 before any include, and each file refuses a direct request.
+        client=self._security_client(login=None)
+        self.assertEqual(403,client('installer.php')[0])
+        for path in ['lib/mail.php','lib/installer/installer_stage_0.php','lib/installer/installer_stage_9.php',
+                     'lib/installer/installer_stage_10.php','lib/installer/installer_functions.php']:
+            status,body=client(path,{'username':"x' OR '1",'password':'x','name':'x','pass1':'xxxxxx','pass2':'xxxxxx'})
+            self.assertEqual((404,'Not an application endpoint.'),(status,body),path)
+
+    def test_user_editor_stored_state_repair_http(self):
+        # Stored values that fail their schemas lock a player out; the repair page shows only those and repairs each alone.
+        with self._user_editor_fixture() as f:
+            q,target,player,request,login,row=(f[k] for k in ['q','target','player','request','login','row'])
+            encode=lambda value:subprocess.run([shutil.which('php'),'-r','echo serialize(json_decode(stream_get_contents(STDIN),true));'],input=json.dumps(value),text=True,capture_output=True,cwd=ROOT,check=True).stdout
+            page=lambda who=target:f'user.php?op=repair&userid={who}'
+            repair=lambda field,who=target:f'user.php?op=repair&userid={who}&field={field}'
+            offered=lambda body:sorted(set(re.findall(r'op=repair&userid=\d+&field=([a-z]+)',html.unescape(body))))
+            log=lambda:[r['message'] for r in q('SELECT message FROM debuglog WHERE target=? ORDER BY id',[target])]
+            clean=dict(prefs='',bufflist='a:0:{}',companions='a:0:{}',restorepage='',badguy='',dragonpoints='a:0:{}',dragonkills=0,alive=1,level=10,seenmaster=0,experience=15143,maxhitpoints=100,hitpoints=20,specialinc='')
+            def reset(**values): q('UPDATE accounts SET '+','.join('`'+k+'`=?' for k in clean|values)+' WHERE acctid=?',[*(clean|values).values(),target])
+            reset()
+            # Role matrix: a player and every flag but Edit Users and megauser are refused; anonymous goes to login.
+            anonymous=self._security_client(login=None)
+            for url,data in [(page(),None),(repair('prefs'),{'x':'1'})]: self.assertIn(anonymous(url,data)[0],[302,303,403],url)
+            for role in [0,0xFFFFFFFF&~(64|1)]:
+                login(role)
+                for url,data in [(page(),None),(repair('prefs'),{'x':'1'})]: self.assertEqual(403,request(url,data)[0],(role,url))
+            for role in [1,64]:
+                login(role);status,body=request(page());self.assertEqual(200,status,body[:2000]);self.assertIn('nothing to repair',body);self.assertEqual([],offered(body))
+            login(64)
+            self.assertEqual(404,request(page(target+100000))[0]);self.assertIn('op=repair&userid='+str(target),html.unescape(request(f['edit']())[1]))
+            # The target plays while its stored state is valid; login itself checks most of these values.
+            q('UPDATE accounts SET lastnewday=? WHERE acctid=?',[self._current_game_day(),target]);self._security_allow(target,'village.php')
+            player_client=self._security_client(login='EditorTarget',password='Synthetic administrator password')
+            def play(url='village.php'):
+                q('UPDATE accounts SET lastnewday=? WHERE acctid=?',[self._current_game_day(),target]);self._security_allow(target,url);return player_client(url)
+            self.assertEqual(200,play()[0])
+            truncated='a:2:{i:0;s:2:"hp";i:1;s:2:"at"'
+            cases=[
+                # field, stored value, extra account state, page that is locked, the repaired value
+                ('prefs','a:1:{s:11:"emailonmail";s:3:"yes";}',{},'village.php','a:0:{}'),
+                ('bufflist','a:1:{s:3:"bad";s:1:"x";}',{},'village.php','a:0:{}'),
+                ('companions','a:1:{i:0;s:1:"x";}',{},'village.php','a:0:{}'),
+                ('restorepage',"village.php?op='x",{},'village.php','village.php'),
+                ('badguy',encode({'enemies':[],'options':{'type':'forest'}}),{},'forest.php?op=fight','',),
+                ('badguy',encode({'enemies':[],'options':{'type':'cellar'}}),{},'forest.php?op=fight',''),
+                ('badguy','broken',{},'forest.php?op=fight',''),
+                ('dragonpoints',truncated,{'dragonkills':2},'village.php',encode(['hp','hp'])),
+                ('dragonpoints',encode(['ff','HP',5]),{'dragonkills':3},'village.php',encode(['ff','hp','hp'])),
+            ]
+            for field,value,extra,locked,repaired in cases:
+                with self.subTest(field=field,value=value):
+                    reset(**extra);q('UPDATE accounts SET `'+field+'`=? WHERE acctid=?',[value,target])
+                    status,body=play(locked);self.assertEqual(409,status,body[:1500])
+                    status,body=request(page());self.assertEqual(200,status,body[:2000]);self.assertEqual([field],offered(body))
+                    form=self._user_editor_form(body,repair(field));before=row();count=len(log())
+                    # CSRF, a missing intent, an extra field and a field the form was not for are refused, writing nothing.
+                    self.assertEqual(403,request(repair(field),[(k,'0'*64 if k=='csrf_token' else v) for k,v in form])[0])
+                    self.assertEqual(409,request(repair(field),[(k,v) for k,v in form if k!='action_token'])[0])
+                    self.assertEqual(400,request(repair(field),form+[('value','x')])[0])
+                    self.assertEqual(409,request(repair('companions' if field!='companions' else 'prefs'),form)[0])
+                    self.assertEqual(400,request(repair('gold'),form)[0])
+                    self.assertEqual(before,row());self.assertEqual(count,len(log()))
+                    status,body=request(repair(field),form);self.assertEqual(200,status,body[:2000]);self.assertIn('was repaired',body)
+                    after=row();self.assertEqual(repaired,after[field] or '')
+                    self.assertEqual({k:v for k,v in before.items() if k!=field},{k:v for k,v in after.items() if k!=field})
+                    self.assertEqual(count+1,len(log()));self.assertIn('Administrator WebPlayer repaired the stored '+field,log()[-1])
+                    # Repeating the form changes nothing; the value passes now and is no longer offered.
+                    self.assertEqual(409,request(repair(field),form)[0]);self.assertEqual(after,row())
+                    status,body=request(page());self.assertEqual([],offered(body))
+                    # The player loads a normal page.
+                    status,body=play();self.assertEqual(200,status,body[:1500])
+            # Every spent Dragon Point stays spent: no allocation is offered at the next New Day.
+            self.assertEqual(3,int(row()['dragonkills']));self.assertEqual(encode(['ff','hp','hp']),row()['dragonpoints'])
+            # Fights are judged by their route. A 1.1.2 Training fight the upgrade accepts is not offered; one it cannot
+            # accept is; a Graveyard fight for a living player is.
+            master=q('SELECT * FROM masters WHERE creaturelevel=10 ORDER BY creatureid LIMIT 1')[0]
+            def training(**changes):
+                enemy={k:(None if v is None else str(v)) for k,v in master.items()}|dict(creaturehealth=str(int(master['creaturehealth'])-1),dead=False,istarget=True,diddamage=1)
+                return encode({'enemies':[enemy|changes],'options':{'type':'train','maxattacks':'4','didsurprise':1}})
+            reset(badguy=training(),seenmaster=1);status,body=request(page());self.assertEqual([],offered(body),body[:3000])
+            for values in [dict(badguy=training(creatureattack=str(int(master['creatureattack'])+1)),seenmaster=1),
+                           dict(badguy=encode({'enemies':[{'creaturename':'x'}],'options':{'type':'graveyard'}}))]:
+                reset(**values);status,body=request(page());self.assertEqual(['badguy'],offered(body))
+            # A form for a value that passes by the time it is posted is refused: a passing value is never "repaired".
+            reset(badguy=training(),seenmaster=0);status,body=request(page());self.assertEqual(['badguy'],offered(body))
+            form=self._user_editor_form(body,repair('badguy'));q('UPDATE accounts SET seenmaster=1 WHERE acctid=?',[target]);before=row()
+            self.assertEqual(409,request(repair('badguy'),form)[0]);self.assertEqual(before,row())
+            # A stale form: the value changed after the page was shown.
+            reset(prefs='a:1:{s:8:"timezone";a:0:{}}');form=self._user_editor_form(request(page())[1],repair('prefs'))
+            q('UPDATE accounts SET prefs=? WHERE acctid=?',['a:1:{s:8:"timezone";a:1:{i:0;i:1;}}',target]);before=row()
+            self.assertEqual(409,request(repair('prefs'),form)[0]);self.assertEqual(before,row())
+            # A late failure rolls back the repair and its log line; the spent intent is refused, a fresh form repairs.
+            form=self._user_editor_form(request(page())[1],repair('prefs'));count=len(log())
+            q("ALTER TABLE accounts ADD CONSTRAINT fixture_user_editor CHECK (login <> 'EditorTarget' OR prefs <> 'a:0:{}')")
+            try:
+                self.assertEqual(500,request(repair('prefs'),form)[0]);self.assertEqual(before,row());self.assertEqual(count,len(log()))
+                self.assertEqual(409,request(repair('prefs'),form)[0])
+            finally: q('ALTER TABLE accounts DROP CONSTRAINT fixture_user_editor')
+            form=self._user_editor_form(request(page())[1],repair('prefs'));self.assertEqual(200,request(repair('prefs'),form)[0]);self.assertEqual('a:0:{}',row()['prefs'])
+            # The administrator's own stored fight: the session and the database agree on later pages.
+            q("UPDATE accounts SET badguy='broken' WHERE acctid=?",[player]);status,body=request(page(player));self.assertEqual(['badguy'],offered(body))
+            form=self._user_editor_form(body,repair('badguy',player));self.assertEqual(200,request(repair('badguy',player),form)[0])
+            self.assertEqual(200,request(page(player))[0]);self.assertEqual('',row(player)['badguy'])
+
     def test_user_editor_ban_authority_http(self):
         with self._user_editor_fixture() as f:
             q,player,target,request,login,row=(f[k] for k in ['q','player','target','request','login','row'])

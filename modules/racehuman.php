@@ -175,9 +175,10 @@ function racehuman_dohook($hookname,$args){
 			$args['schemas']['talk'] = "module-racehuman";
 			$new = get_module_setting("newest-$city", "cities");
 			if ($new != 0) {
+				// Bound: 1.1.2 pasted the stored setting in quoted.
 				$sql =  "SELECT name FROM " . db_prefix("accounts") .
-					" WHERE acctid='$new'";
-				$result = db_query_cached($sql, "newest-$city");
+					" WHERE acctid=?";
+				$result = db_query_cached($sql, "newest-$city", 900, [(int)$new]);
 				$row = db_fetch_assoc($result);
 				$args['newestplayer'] = $row['name'];
 				$args['newestid']=$new;

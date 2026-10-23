@@ -15,11 +15,22 @@ function resurrection_graveyard_state(): array {
     \Resurrection\Game\CompanionState::read($baseaccount['companions']);
     \Resurrection\Game\CompanionState::collection($companions);
     if ($session['user']['badguy']==='') return [];
-    $state=\Resurrection\Game\GraveyardCombatState::read($session['user']['badguy'],$session['user']);
+    $state=resurrection_graveyard_torment($session['user']);
+    foreach ($companions as $companion) if (empty($companion['allowinshades']) && empty($companion['suspended'])) throw new DomainException('Invalid Shades participation.');
+    return $state;
+}
+
+/**
+ * A player's stored torment, as the Graveyard route accepts it: the schema, then the creature it names, still a
+ * Graveyard creature without an AI script, with the same text. The user editor's repair path asks the same.
+ * @param array<string,mixed> $player
+ * @return array<string,mixed>
+ */
+function resurrection_graveyard_torment(array $player): array {
+    $state=\Resurrection\Game\GraveyardCombatState::read($player['badguy'],$player);
     $rows=db_query('SELECT creatureid,creaturename,creatureweapon,creaturelose,creaturewin,creatureaiscript FROM '.db_prefix('creatures').' WHERE graveyard=1 AND creatureid=?',true,[$state['enemies'][0]['creatureid']]);
     if (count($rows)!==1 || (string)$rows[0]['creatureaiscript']!=='') throw new DomainException('Invalid torment identity.');
     unset($rows[0]['creatureaiscript']);
-    foreach ($companions as $companion) if (empty($companion['allowinshades']) && empty($companion['suspended'])) throw new DomainException('Invalid Shades participation.');
     foreach ($rows[0] as $key=>$value) if ((string)$state['enemies'][0][$key] !== (string)$value) throw new DomainException('Torment identity changed.');
     return $state;
 }

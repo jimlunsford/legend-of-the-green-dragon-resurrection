@@ -279,6 +279,15 @@ switch($op) {
 	case "debuglog":
 		require("lib/user/user_debuglog.php");
 		break;
+	case "repair":
+		// Stored state that fails its schema: each failing value and its one fixed repair (lib/stored_state_repair.php).
+		require_once("lib/stored_state_repair.php");
+		if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
+			$field = httpget('field');
+			resurrection_repair_field((int)$userid, is_string($field) ? $field : '');
+		}
+		resurrection_repair_page((int)$userid, $returnpetition);
+		break;
 	case "":
 		require("lib/user/user_.php");
 		break;

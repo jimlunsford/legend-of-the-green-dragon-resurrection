@@ -11,6 +11,7 @@ if (!$row) { http_response_code(404); exit('Account not found.'); }
 	addnav("Operations");
 addnav("View last page hit","user.php?op=lasthit&userid=$userid",false,true);
 addnav("Display debug log","user.php?op=debuglog&userid=$userid$returnpetition");
+addnav("Repair stored state","user.php?op=repair&userid=$userid$returnpetition");
 addnav("View user bio","bio.php?char=".$row['acctid']."&ret=".urlencode($_SERVER['REQUEST_URI']));
 if ($session['user']['superuser'] & SU_EDIT_DONATIONS) {
 	addnav("Add donation points","donators.php?op=add1&name=".rawurlencode($row['login'])."&ret=".urlencode($_SERVER['REQUEST_URI']));

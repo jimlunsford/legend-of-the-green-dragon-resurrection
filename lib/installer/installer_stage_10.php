@@ -1,4 +1,6 @@
 <?php
+// Included by the historical web installer only (installer.php answers 403); never an endpoint itself.
+if (realpath($_SERVER['SCRIPT_FILENAME'] ?? '')===__FILE__) { http_response_code(404); exit('Not an application endpoint.'); }
 output("`@`c`bSuperuser Accounts`b`c");
 debug($logd_version, true);
 $sql = "SELECT login, password FROM ".db_prefix("accounts")." WHERE superuser & ".SU_MEGAUSER;

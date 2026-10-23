@@ -1,4 +1,6 @@
 <?php
+// Included by the historical web installer only (installer.php answers 403); never an endpoint itself.
+if (realpath($_SERVER['SCRIPT_FILENAME'] ?? '')===__FILE__) { http_response_code(404); exit('Not an application endpoint.'); }
 output("`@`c`bWelcome to Legend of the Green Dragon`b`c`0");
 output("`2This is the installer script for Legend of the Green Dragon, by Eric Stevens & JT Traub.`n");
 output("`nIn order to install and use Legend of the Green Dragon (LoGD), you must agree to the license under which it is deployed.`n");

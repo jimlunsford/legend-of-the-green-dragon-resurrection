@@ -485,8 +485,9 @@ function battle_spawn($creature) {
 		$nextindex++;
 	}
 	if(is_numeric($creature)) {
-		$sql = "SELECT * FROM " . db_prefix("creatures") . " WHERE creatureid = $creature LIMIT 1";
-		$result = db_query($sql);
+		// Bound: 1.1.2 pasted the numeric value in.
+		$sql = "SELECT * FROM " . db_prefix("creatures") . " WHERE creatureid = ? LIMIT 1";
+		$result = db_query($sql, true, [is_int($creature) ? $creature : (string)$creature]);
 		if ($row = db_fetch_assoc($result)) {
 			$newenemies[$nextindex] = $row;
 			output("`^%s`2 summons `^%s`2 for help!`n", $badguy['creaturename'], $row['creaturename']);

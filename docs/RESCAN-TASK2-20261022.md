@@ -233,3 +233,27 @@ MySQL 8.4 (50 tests, 971 s), each after PHPUnit OK (245 tests, 139449 assertions
 shard 1 (the changed test's) ran. Static: `test_route_inventory` and `test_tooling_shards` OK; PHP lint (392 files,
 0 failures); both PHPStan gates no errors; `composer validate --strict` valid; `composer audit` no advisories;
 historical verifier PASS; project validator PASS; `git diff --check` clean.
+
+## Acceptance, 2026-10-23
+
+Rescan task 2 is accepted through `107ce87`, the first accepted descendant of `623ca49`. `623ca49` itself is not
+accepted: its own run, Modern core 39868186035, failed on MariaDB 11.4 shard 1 (the referer list showed only its first
+site) and stays on record above.
+
+At `107ce8732e0341e8ab5ba1962371ab6f1dd726ae`, read through the GitHub Actions API:
+
+- Modern core 39929029453: success. All 12 jobs success: for each leg (PHP 8.5 with MySQL 8.4, PHP 8.4 with MariaDB
+  11.4) `checks`, `http (1)` to `http (4)` and `result`.
+- Baseline integrity 39929029457: success (`provenance`).
+
+The twelve Final rescan lines this task closed are recorded Done in `ROADMAP.md` in the commit that records this
+acceptance: news delete, the keepalive, `badword.php`, `gamelog.php`, `referers.php`, `translatortool.php`,
+`untranslated.php`, the mail notification link, `getmount()`, the name length after a dragon kill, `bio.php`'s return
+link and the deletion race test.
+
+## Correction, 2026-10-23
+
+Section A says `referers.php` is "the only place" expired referers are removed in 1.1.2. That is wrong: 1.1.2's
+`common.php` also deleted up to 300 referers last seen over a month ago on one new referer row in a hundred, with a game
+log line. That cleanup had been dropped without a record in `899cf0b`. Final rescan task 3 restores it, bound
+(`RESCAN-TASK3-20261023.md`, section A). The expiry on view in `referers.php` is unchanged.
