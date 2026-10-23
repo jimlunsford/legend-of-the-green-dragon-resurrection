@@ -10,7 +10,7 @@ Modernize the code. Preserve the game.
 
 Bring LoGD 1.1.2 DragonPrime Edition onto supported PHP and databases with every important state transition examined, constrained and tested. Keep the gameplay, atmosphere, odd historical behavior and module system intact.
 
-The finish line for this roadmap is the merge of PR #1 into `main`. What happens after that is a separate decision.
+The finish line for this roadmap was the merge of PR #1 into `main`, reached on 2026-10-23 at `0d078df`. What happens after that is a separate decision.
 
 ## Phases
 
@@ -19,7 +19,7 @@ The finish line for this roadmap is the merge of PR #1 into `main`. What happens
 | Foundation | Preserve the exact 1.1.2 source, provenance, historical tag and manifests. Inventory compatibility and security. No modernization claims. | DONE | `docs/FOUNDATION-CHECKPOINT-20260913.md` |
 | Phase 1 | First modern engineering base: PHP/database compatibility, PDO direction, CI, static analysis, early installer and runtime work. | DONE | `docs/MODERN-CORE-CHECKPOINT-20260913.md` |
 | Phase 2 | A real modern base application: strict fresh install, modern credentials, authentication, session rotation, CSRF infrastructure, account creation, village, commentary, logout, all 24 bundled modules installable. | DONE | `docs/MODERN-CORE-CHECKPOINT-20260913-PHASE2.md` |
-| Phase 3 | Close every game and application trust boundary until the modern core is mergeable. | DONE pending merge | `docs/MODERN-CORE-CHECKPOINT-20260913-PHASE3*.md`, `docs/CORE-ROUTE-SECURITY.md` |
+| Phase 3 | Close every game and application trust boundary until the modern core is mergeable. | DONE, merged into `main` at `0d078df` on 2026-10-23 | [`docs/PHASE3-MERGE-GATE-20261023.md`](docs/PHASE3-MERGE-GATE-20261023.md), `docs/MODERN-CORE-CHECKPOINT-20260913-PHASE3*.md`, `docs/CORE-ROUTE-SECURITY.md` |
 | After Phase 3 | Choose a direction. | NOT STARTED | This file, when decided |
 
 ## Phase 3 checklist
@@ -95,13 +95,13 @@ Each family is DONE only when its acceptance evidence passes on both supported C
 
 ### Current
 
-- None. Phase 3 is complete; waiting on Jim: PR body, ready for review, merge.
+- None. Phase 3 is complete and merged. No phase is active until Jim picks a direction.
 
 ### Remaining
 
 Infrastructure and records:
 
-- [ ] Replace the PR #1 body with a short current summary that links here.
+- [x] Replace the PR #1 body with a short current summary that links here. Done by Jim by hand before the merge.
 
 State and maintenance (remaining serialized business schemas, split in `SERIALIZED-SCHEMAS-PART1-20261017.md`; per-site status in `SERIALIZED-STATE-AUDIT.md`):
 
@@ -151,7 +151,11 @@ Re-check, 2026-10-23, with the merge gate findings closed (`PHASE3-MERGE-GATE-20
 
 Final full run, 2026-10-23 at `19bf7a0` (`PHASE3-MERGE-GATE-20261023.md`, "Final full run recorded"): Modern core 40004015634 success, all 12 jobs; Baseline integrity 40004015236 success. 2 passed. All four gates PASSED.
 
-**Phase 3 complete. Waiting on Jim: PR body, ready for review, merge (normal merge commit).** The commit that records the final run must also pass its own CI before the merge.
+The commit that recorded the final run, `93c468f`, passed its own CI before the merge: Modern core 40009875511 success, Baseline integrity 40009875538 success.
+
+Merged, 2026-10-23: Jim merged PR #1 into `main` with a normal merge commit, `0d078df` (parents `999cec6` and `93c468f`; same tree as `93c468f`). Its push run on `main`: Modern core 40016472780 success, all 12 jobs; Baseline integrity 40016473210 success. Gate record: [`docs/PHASE3-MERGE-GATE-20261023.md`](docs/PHASE3-MERGE-GATE-20261023.md).
+
+**Phase 3 DONE. Merged into `main` at `0d078df` on 2026-10-23.**
 
 ## After Phase 3
 
@@ -166,7 +170,7 @@ Options on the table at that point:
 
 Public hosting has its own gates regardless of direction: modern account recovery and email verification, abuse controls, production TLS/proxy/session configuration, internal-file protection, isolation and least privilege, backup and restore testing, monitoring, and independent review. Merge does not equal hosting.
 
-"Do not start Phase 4" means: do not make direction decisions or begin post-merge work until the merge gate passes.
+"Do not start Phase 4" means: do not make direction decisions or begin post-merge work until Jim picks a direction and names it.
 
 ## Supported targets
 

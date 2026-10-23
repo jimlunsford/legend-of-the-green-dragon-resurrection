@@ -6,16 +6,16 @@ Standing rules for Claude Code sessions in this repository. Read this first. A t
 
 Legend of the Green Dragon - Resurrection. A behaviorally faithful modernization of LoGD 1.1.2 DragonPrime Edition for supported modern PHP and databases.
 
-Current phase: Phase 3, route authority and compatibility. Phase 3 is INCOMPLETE.
+Phase 3 is complete, merged into `main` at `0d078dff49e790339e0ab0aefdf5b35478bf6419` (PR #1, normal merge commit, 2026-10-23). No phase is active. Do not start new work until Jim picks a direction.
 
 Preserve historical behavior. Fix security and runtime defects without redesigning gameplay. When modern behavior must differ from 1.1.2, check the historical source first and record why.
 
-## Working branch and PR
+## Working branch
 
-- Work only on `modernization/core-modernization`.
-- PR #1 stays OPEN, DRAFT, NOT READY, NOT MERGED.
-- Never merge. Never mark ready.
-- Never create another branch or PR.
+- Work on `main`.
+- PR #1 is merged and closed.
+- Keep `modernization/core-modernization` as a historical branch. Do not delete it or push to it.
+- Do not create branches or PRs unless a task prompt says to.
 - Never reset, rebase, squash, force-push, or rewrite published history.
 - One task produces at most one coherent commit, unless the task prompt says otherwise.
 - Publish with a normal non-force `git push`.
@@ -23,16 +23,7 @@ Preserve historical behavior. Fix security and runtime defects without redesigni
 Before publishing:
 
 1. Verify the working tree is clean except for intended changes.
-2. Verify remote branch head, PR #1 head, and `main`.
-3. If the branch advanced past the task's expected starting SHA, STOP and report. Do not overwrite.
-
-`main` is `999cec6f9c655a840320d982d673bb863c68c2b2` and must not change.
-
-## PR #1 body
-
-Do not edit the PR #1 body. Each API edit rewraps every link in extra backticks and compounds the damage. Jim maintains the body by hand.
-
-Record checkpoints in `docs/` and `ROADMAP.md` instead.
+2. Verify the remote `main` head matches the task's expected starting SHA. If it moved, STOP and report. Do not overwrite.
 
 ## Historical integrity
 
@@ -143,7 +134,7 @@ End every task with a compact report:
 8. Remote branch head, PR #1 head, main
 9. CI run IDs and states, if any
 10. Historical integrity
-11. Phase 3 / merge / public hosting verdicts
+11. Phase / public hosting verdicts
 12. Exact next task
 
 Then STOP.
