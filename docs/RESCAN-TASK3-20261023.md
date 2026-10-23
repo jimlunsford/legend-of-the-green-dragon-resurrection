@@ -531,3 +531,18 @@ are not listed.
 | `viewpetition.php` | `$sort` | 1 | server | Repeated fixed ` WHEN ? THEN ?`; the status values are bound. |
 | `village.php` | `$newestplayer` | 1 | server | The `newestplayer` setting, written only by `create.php` as the new account's integer ID (not in the settings editor); the page also requires a non-zero integer. |
 <!-- /sql-sweep-table -->
+
+## Acceptance, 2026-10-23
+
+Rescan task 3 is accepted at its own commit. Checked independently by the merge gate verification task
+(`PHASE3-MERGE-GATE-20261023.md`).
+
+At `54e22e6f83fb624eb019e38bb5ffe0e6ddb3668c`, read through the GitHub Actions API:
+
+- Modern core 39950404013: success. All 12 jobs success: for each leg (PHP 8.5 with MySQL 8.4, PHP 8.4 with MariaDB
+  11.4) `checks`, `http (1)` to `http (4)` and `result`.
+- Baseline integrity 39950404085: success (`provenance`).
+
+The three Final rescan lines this task closed are recorded Done in `ROADMAP.md` in the commit that records this
+acceptance: referer tracking on every page, request values reaching SQL unbound, and the admin repair path. With them
+every "to fix" line is Done, so the Final rescan item is closed too.
