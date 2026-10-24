@@ -65,7 +65,6 @@ addnav("Daily News", "news.php");
 addnav("Other Info");
 addnav("About LoGD","about.php");
 addnav("Game Setup Info", "about.php?op=setup");
-addnav("LoGD Net","logdnet.php?op=list");
 
 modulehook("index", array());
 

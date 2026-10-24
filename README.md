@@ -50,6 +50,7 @@ The integrity commands do not execute the application. The modern CI matrix also
 
 - [Versioning](docs/VERSIONING.md)
 - [Licensing and provenance](docs/LICENSING-AND-PROVENANCE.md)
+- [Notice](NOTICE) and [third-party licenses](docs/THIRD-PARTY-LICENSES.md)
 - [Module admission](docs/MODULE-POLICY.md)
 - [Security status](docs/SECURITY-STATUS.md)
 - [Compatibility status](docs/COMPATIBILITY-STATUS.md)
@@ -66,6 +67,8 @@ The integrity commands do not execute the application. The modern CI matrix also
 ## Licensing
 
 Resurrection is a **noncommercial project**. The inherited [LICENSE.txt](LICENSE.txt) remains unchanged. It identifies CC BY-NC-SA 2.0 and contains additional LoGD-specific source/public-performance language. This project does not apply an incompatible replacement license to inherited code. Individual module and asset rights require review.
+
+See [NOTICE](NOTICE) for the attribution, the license and what it asks of anyone who runs a modified copy, and [third-party licenses](docs/THIRD-PARTY-LICENSES.md) for the development libraries in `composer.lock` (the game itself needs none). The game's "View PHP Source" link points at the public source; an operator who changes the game sets it (`sourceurl`) to their own modified source.
 
 ## Credits
 

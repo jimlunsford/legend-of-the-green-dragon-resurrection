@@ -28,3 +28,12 @@ Known security defects are not desired gameplay. Historical originals remain in 
 Before public hosting: finish remaining SQL/output/authorization/CSRF routes, replace or constrain module/buff/combat eval paths, certify active bundled hooks and scheduler recovery, implement modern recovery/email delivery, and verify private configuration/internal-file denial, TLS/headers, abuse controls, deployment isolation and restore procedures. These are remaining gates even though the base installation/authentication milestone now passes. Independent security review remains required for public readiness.
 
 PR #1 remains open and draft. Public-hosting verdict: **NO**. See [phase-2 checkpoint](MODERN-CORE-CHECKPOINT-20260913-PHASE2.md) and [validation](ENGINEERING-VALIDATION.md); the [previous checkpoint](MODERN-CORE-CHECKPOINT-20260913.md) is retained unchanged.
+
+## 2026-10-24: disabled endpoints removed
+
+S03, S09, S10 and the source viewer: the 410 stubs `logdnet.php`, `images/logdnet.php`, `rawsql.php`, `payment.php`
+and `source.php` were removed from `main`, with the payment log `paylog.php` (`UNNECESSARY-FILES-20261024.md`,
+"License and dead weight"). A request now finds no file (404). The features stay disabled, and nothing that served
+them is left: `tests/tooling/test_disabled_endpoints.py` checks GET and POST get 404 and that no shipped file links
+them. The footer's "View PHP Source" link now points at the configured public source (`sourceurl`, http or https
+only), not at a viewer. The rows above are kept as recorded on 2026-09-13.

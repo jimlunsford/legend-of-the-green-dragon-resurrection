@@ -511,7 +511,6 @@ are not listed.
 | `modules/specialtymysticpower.php` | `$specialty` | 1 | server | The module's fixed specialty code, set in the same function. |
 | `modules/specialtythiefskills.php` | `$specialty` | 1 | server | The module's fixed specialty code, set in the same function. |
 | `news.php` | `date("Y-m-d H:i:s",strtotime("-".getsetting("expirecontent",180)." days"))` | 1 | server | `date()` output. |
-| `paylog.php` | `$lock ? " FOR UPDATE" : ""` | 1 | server | Fixed lock clause chosen by a boolean argument. |
 | `prefs.php` | `$session['user']['acctid']` | 1 | server | Integer `acctid` of the signed-in account row. |
 | `prefs.php` | `implode("','",$foundmodules)` | 1 | server | Names of installed active modules read from the modules table (bundled file names; the module manager installs only bundled modules). |
 | `referers.php` | `$order` | 1 | server | From the fixed seven-entry sort table, chosen by the checked `sort`. |
@@ -545,3 +544,11 @@ every "to fix" line is Done, so the Final rescan item is closed too.
 `$row1['acctid']`, `$session['user']['acctid']`, `$to`, `addslashes($string)`, the `oldmail` date expression and
 `join("','",$msg)`, all class unreachable) left the reviewed list in the same commit, as `SqlSweepTest` requires for a
 value that is no longer interpolated. No other row changed, and the test is unchanged.
+
+## Reviewed list change, 2026-10-24 (license and dead weight)
+
+`paylog.php` was removed from `main` with the other dead weight Jim named (`UNNECESSARY-FILES-20261024.md`, "License and
+dead weight"). Its one row (`$lock ? " FOR UPDATE" : ""`, class server) left the reviewed list in the same commit, as
+`SqlSweepTest` requires for a value that is no longer interpolated. The five 410 stubs removed with it (`payment.php`,
+`source.php`, `rawsql.php`, `logdnet.php` and `images/logdnet.php`) ran no SQL and had no row. No other row changed,
+and the test is unchanged.

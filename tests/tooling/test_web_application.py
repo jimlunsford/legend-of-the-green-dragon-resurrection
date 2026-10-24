@@ -6586,6 +6586,8 @@ function MODULE_dohook($hook,$args) { if ($hook==='donation_adjustments') { $arg
             fields=self._security_fields(body,add(player));self.assertEqual(409,post(fields,'40',player,'TXN-FIXTURE-2')[0])
             fields=form('40',player,'TXN-FIXTURE-1','WebPlayer');status,body=post(fields,'40',player,'TXN-FIXTURE-1')
             self.assertIn(status,[302,303]);self.assertEqual((115,pm+1,pl+3),state(player));self.assertEqual((str(player),'1'),tuple(map(str,payment())))
+            # 1.1.2 then went to the payment log, which is removed; the credit returns to the donator page.
+            self.assertEqual('a:1:{s:12:"donators.php";b:1;}',q('SELECT allowednavs FROM accounts WHERE acctid=?',[player])[0]['allowednavs'])
             logs=[r['message'] for r in q("SELECT message FROM debuglog WHERE actor=? AND field='donation' ORDER BY id",[player])]
             self.assertEqual(['Fixture adjustment (0)',f'Received donator points for donating -- Credited manually [{reason}] (80)'],logs[-2:])
             self.assertEqual(200,request('donators.php')[0]);self.assertEqual((115,pm+1,pl+3),state(player))
@@ -8170,45 +8172,56 @@ function MODULE_dohook($hook,$args) {
             q('UPDATE accounts SET superuser=?,experience=? WHERE acctid=?',[original['superuser'],original['experience'],player])
             q('DELETE FROM pollresults WHERE motditem>?',[first]);q('DELETE FROM motd WHERE motditem>?',[first]);q('DELETE FROM news WHERE newsid>? AND accountid=?',[news,player])
 
-    def test_paylog_process_dates_post_only_http(self):
-        # 1.1.2 stamped every payment without a process date on each view of the payment log. That write is now a protected
-        # POST for SU_EDIT_PAYLOG; a record whose info fails its schema is shown with blank payment fields and never dated.
+    def test_source_link_setting_and_removed_surface_links_http(self):
+        # 1.1.2's "View PHP Source" link opened source.php, now removed; it links the configured public source, escaped,
+        # and only an http or https URL (UNNECESSARY-FILES-20261024.md, "License and dead weight"). No page links the
+        # removed endpoints. paylog.php is removed with its test (test_paylog_process_dates_post_only_http).
         q=self.query;player=int(q('SELECT acctid FROM accounts WHERE login=?',['WebPlayer'])[0]['acctid'])
-        original=q('SELECT superuser FROM accounts WHERE acctid=?',[player])[0]['superuser'];serialize=self._php_serialize;call=None
-        def login(bits):
-            nonlocal call;q('UPDATE accounts SET superuser=? WHERE acctid=?',[bits,player]);call=self._security_client()
-        def request(url,data=None):
-            q('UPDATE accounts SET lastnewday=? WHERE acctid=?',[self._current_game_day(),player]);self._security_allow(player,url);return call(url,data)
-        info=lambda **extra:serialize({'payment_date':'10:00:00 Oct 22, 2026 PDT','txn_type':'web_accept','mc_gross':'5.00','mc_fee':'0.45','mc_currency':'USD',
-                                       'memo':"O\\'Reilly <b>memo</b>",'item_number':'Joe:x<i>',**extra})
-        def payment(txn,data,date=None):
-            q("INSERT INTO paylog(info,response,txnid,amount,name,acctid,processed,filed,txfee,processdate) VALUES (?,'',?,5.00,'',0,0,0,0.45,?)",[data,txn,date])
-        dates=lambda:{r['txnid']:r['processdate'] for r in q("SELECT txnid,processdate FROM paylog WHERE txnid LIKE 'TXN-PAYLOG-%'")}
-        expected=subprocess.run([shutil.which('php'),'-r',"echo date('Y-m-d H:i:s', strtotime('10:00:00 Oct 22, 2026 PDT'));"],text=True,capture_output=True,check=True).stdout
+        original=q('SELECT superuser FROM accounts WHERE acctid=?',[player])[0]['superuser'];saved=q('SELECT setting,value FROM settings ORDER BY setting')
+        default='https://github.com/jimlunsford/legend-of-the-green-dragon-resurrection';removed=['rawsql.php','logdnet.php','payment.php','source.php','paylog.php']
+        anonymous=self._security_client(login=None)
+        def links(body): return [html.unescape(m) for m in re.findall(r"<a href='([^']*)' target='_blank' rel='noopener noreferrer'>View PHP Source</a>",body)]
+        def stored(value):
+            if value is None: q("DELETE FROM settings WHERE setting='sourceurl'")
+            else: q("INSERT INTO settings(setting,value) VALUES ('sourceurl',?) ON DUPLICATE KEY UPDATE value=VALUES(value)",[value])
         try:
-            payment('TXN-PAYLOG-1',info());payment('TXN-PAYLOG-2','a:1:{s:1:"a";');payment('TXN-PAYLOG-3',serialize({'txn_type':'web_accept'}))
-            payment('TXN-PAYLOG-4',serialize({'payment_date':['nested']}),'2026-10-05 00:00:00')
-            before=dates();self.assertEqual(None,before['TXN-PAYLOG-1'])
-            for bits in [0,16|32|64|4096]:
-                login(bits)
-                for url,data in [('paylog.php',None),('paylog.php?op=process',{'x':'1'})]: self.assertEqual(403,request(url,data)[0],(bits,url))
-            login(1024);status,body=request('paylog.php?month=2026-10');self.assertEqual(200,status,body[:2000]);self.assertEqual(before,dates())
-            self.assertIn('TXN-PAYLOG-4',body);self.assertIn('1 payments have no process date yet.',html.unescape(body))
-            fields=self._security_fields(body,'paylog.php?op=process')
-            for bad in ["2026-10' OR '1",'2026-13','x']: self.assertEqual(400,request('paylog.php?month='+urllib.parse.quote(bad))[0],bad)
-            self.assertEqual(405,request('paylog.php?op=process')[0]);self.assertEqual(403,request('paylog.php?op=process',{'action_token':fields['action_token']})[0])
-            self.assertEqual(400,request('paylog.php?op=process',{**fields,'payid':'1'})[0]);self.assertEqual(before,dates())
-            # A payment added after the form was shown: the form is stale.
-            payment('TXN-PAYLOG-5',info());self.assertEqual(409,request('paylog.php?op=process',fields)[0]);self.assertEqual(None,dates()['TXN-PAYLOG-5'])
-            q("DELETE FROM paylog WHERE txnid='TXN-PAYLOG-5'")
-            fields=self._security_fields(request('paylog.php')[1],'paylog.php?op=process')
-            self.assertIn(request('paylog.php?op=process',fields)[0],[302,303])
-            self.assertEqual({**before,'TXN-PAYLOG-1':expected},dates())
-            self.assertEqual(409,request('paylog.php?op=process',fields)[0])
-            status,body=request('paylog.php?month=2026-10');self.assertEqual(200,status);self.assertNotIn('op=process',body)
-            self.assertIn('TXN-PAYLOG-1',body);self.assertNotIn('<b>memo',body);self.assertNotIn('Joe:x<i>',body);self.assertIn('web_accept',body)
+            self.assertEqual([{'value':default}],q("SELECT value FROM settings WHERE setting='sourceurl'"))  # installed by default
+            status,body=anonymous('home.php');self.assertEqual(200,status);self.assertEqual([default],links(body))
+            for page in removed: self.assertNotIn(page,body)
+            # Unset: the default, and the page view stores nothing.
+            stored(None);self.assertEqual([default],links(anonymous('home.php')[1]));self.assertEqual([],q("SELECT value FROM settings WHERE setting='sourceurl'"))
+            fork='https://fork.example.org:8443/my-logd/tree/main?ref=a&tab=b#readme'
+            stored(fork);status,body=anonymous('home.php');self.assertEqual([fork],links(body))
+            self.assertIn("href='https://fork.example.org:8443/my-logd/tree/main?ref=a&amp;tab=b#readme'",body)
+            for bad in ['javascript:alert(1)','JAVASCRIPT:alert(1)//https://x.example','ftp://example.org/src','//example.org/src','example.org/src','data:text/html,x',
+                        "https://example.org/x' onmouseover='alert(1)",'https://example.org/<script>','https://user:pw@example.org/','https://example.org/a b',
+                        'https://example.org/\nx','https://-bad.example/','https://example.org:0/','',"https://example.org/`x"]:
+                with self.subTest(stored=bad):
+                    stored(bad);status,body=anonymous('home.php');self.assertEqual(200,status);self.assertEqual([default],links(body))
+                    if bad: self.assertNotIn(bad,html.unescape(body))
+            stored(default)
+            # Staff pages: the raw SQL console and payment log links are gone, even for staff with those flags.
+            call=None
+            def request(url,data=None):
+                q('UPDATE accounts SET lastnewday=? WHERE acctid=?',[self._current_game_day(),player]);self._security_allow(player,url);return call(url,data)
+            q('UPDATE accounts SET superuser=? WHERE acctid=?',[1024|524288|32|128,player]);call=self._security_client()
+            for page in ['superuser.php','donators.php']:
+                status,body=request(page);self.assertEqual(200,status,body[:1500])
+                for target in removed: self.assertNotIn(target,body,page)
+                self.assertNotIn('Payment Log',body);self.assertNotIn('Run Raw SQL',body)
+            # The settings editor refuses a source URL that is not http or https; a valid one is stored as typed.
+            base,save='configuration.php','configuration.php?op=save'
+            for bad in ['javascript:alert(1)','ftp://example.org/src',"https://example.org/x'y",'']:
+                with self.subTest(saved=bad):
+                    _,body=request(base);fields={**dict(self._user_editor_form(body,save)),'sourceurl':bad}
+                    self.assertEqual(400,request(save,fields)[0]);self.assertEqual([{'value':default}],q("SELECT value FROM settings WHERE setting='sourceurl'"))
+            _,body=request(base);self.assertIn('own complete modified source',body)
+            fields={**dict(self._user_editor_form(body,save)),'sourceurl':fork};status,result=request(save,fields);self.assertEqual(200,status,result[:1500])
+            self.assertEqual([{'value':fork}],q("SELECT value FROM settings WHERE setting='sourceurl'"));self.assertEqual([fork],links(anonymous('home.php')[1]))
         finally:
-            q('UPDATE accounts SET superuser=? WHERE acctid=?',[original,player]);q("DELETE FROM paylog WHERE txnid LIKE 'TXN-PAYLOG-%'")
+            q('DELETE FROM settings')
+            for row in saved: q('INSERT INTO settings(setting,value) VALUES (?,?)',[row['setting'],row['value']])
+            q('UPDATE accounts SET superuser=? WHERE acctid=?',[original,player])
 
     @contextmanager
     def _admin_tool_session(self):

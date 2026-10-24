@@ -26,6 +26,10 @@ function resurrection_core_layout(): array {
 		"defaultskin"=>"What skin should be the default?,theme",
 		"impressum"=>"Tell the world something about the person running this server. (e.g. name and address),textarea",
 
+		"Source Code,title",
+		// The label is the setting's description in the settings editor. It must not contain a comma.
+		"sourceurl"=>"Public source code URL for the View PHP Source link. If you change the game you must point this at your own complete modified source: the license (LICENSE.txt) requires you to give it on request to anyone you let play. Only http and https addresses are accepted.|https://github.com/jimlunsford/legend-of-the-green-dragon-resurrection",
+
 		"Beta Setup,title",
 		"beta"=>"Enable beta features for all players?,bool",
 		"betaperplayer"=>"Enable beta features per player?,bool",

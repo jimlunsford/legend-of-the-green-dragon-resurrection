@@ -21,7 +21,7 @@ try {
 	$id = \Resurrection\Http\Input::integer($_GET, 'id', 0, 1);
 	if ($id > RESURRECTION_ADMIN_MAX_ID || ($op === 'add2' && $id === 0)) throw new InvalidArgumentException('Invalid account.');
 	// The form values: POSTed by the search form and the confirmation forms, or prefilled by a GET link
-	// (the user editor, the petition viewer and the payment log).
+	// (the user editor and the petition viewer; 1.1.2's payment log, now removed, also linked here).
 	$values = array();
 	foreach (['name', 'amt', 'reason', 'txnid'] as $key) {
 		$value = \Resurrection\Http\Input::string($_POST, $key);
@@ -59,10 +59,6 @@ rawoutput("<input type='submit' class='button' value='$add'>");
 rawoutput("</form>");
 
 addnav("Donations");
-if (($session['user']['superuser'] & SU_EDIT_PAYLOG) &&
-		file_exists("paylog.php")){
-	addnav("Payment Log","paylog.php");
-}
 if ($op=="add2"){
 	// 1.1.2 credited on this GET link, with the account ID, points and transaction pasted into SQL.
 	// Only the protected POST form from the search below credits, once.
@@ -91,8 +87,9 @@ if ($op=="add2"){
 		$credit = resurrection_donation_credit($row, $points, $reason, $txnid, $payment);
 	} catch (Throwable $error) { resurrection_admin_failure($error, 'the donator page'); }
 	output("%s donation points added to %s`0, reason: `^%s`0",$amt,$credit['name'],$reason);
+	// 1.1.2 returned a transaction credit to the payment log, which is removed (payments are disabled).
 	if ($txnid>""){
-		redirect("paylog.php");
+		redirect("donators.php");
 	}
 	httpset('op', "");
 	$op = "";

@@ -9,7 +9,7 @@ A sweep for unbound SQL alone would not have found all of them, so this list sta
 
 ## How the list is built and kept
 
-- Every top-level `*.php` file (67), every `op` and `subop` a page compares, chooses, switches on or links to (in any
+- Every top-level `*.php` file (62 since 2026-10-24; 67 before), every `op` and `subop` a page compares, chooses, switches on or links to (in any
   shipped file), the `lib/about` and `lib/petition` files a page includes by op, and every `op` and `subop` of the 24
   bundled modules (their run function, their events, and every `runmodule.php?module=` link).
 - `tests/tooling/test_route_inventory.py` scans the source the same way and fails unless the tables below list exactly
@@ -25,6 +25,7 @@ A sweep for unbound SQL alone would not have found all of them, so this list sta
   repeated, a one-use intent bound to the state it was shown for; checked under lock in one transaction; SQL bound;
   output escaped. The evidence names the authority document and the HTTP test.
 - **DISABLED**: refused before the game starts (410 for disabled features; 404 or 403 where noted). Never re-enabled.
+  The 410 endpoints themselves were removed on 2026-10-24 (see the last section).
 - **READ-ONLY**: changes no game state; its queries that take request input are bound and its output escaped.
 - **OPEN**: something is missing, as stated. Every OPEN entry is a line on the `ROADMAP.md` Final rescan list.
 
@@ -36,11 +37,11 @@ with `check_su_access()`. Short names in the evidence column: `CRS` is `CORE-ROU
 
 | Status | Entries |
 |---|---|
-| CLOSED | 89 |
-| DISABLED | 9 |
-| READ-ONLY | 70 |
+| CLOSED | 88 |
+| DISABLED | 4 |
+| READ-ONLY | 69 |
 | OPEN | 0 |
-| Total | 168 |
+| Total | 161 |
 
 ## Top-level pages
 
@@ -112,8 +113,6 @@ with `check_su_access()`. Short names in the evidence column: `CRS` is `CORE-ROU
 | `list.php?op=search\|clan` | anyone / player | no | READ-ONLY | This task: the search is bound (1.1.2 pasted it with `addslashes()`), split by character so the pattern stays UTF-8, at most 255 bytes; the clan list bound. |
 | `lodge.php` | player | commentary | CLOSED | Core spends no points: the `lodge` hook has no bundled consumer. Commentary through the shared helper, for members only. |
 | `lodge.php?op=points` | player | no | READ-ONLY | The points text; no query. |
-| `logdnet.php` | anyone | no | DISABLED | 410 (`test_disabled_endpoints.py::test_disabled_features_reject_get_and_post_before_bootstrap`). |
-| `logdnet.php?op=list` | anyone | no | DISABLED | Same 410. |
 | `login.php` | anonymous | session | CLOSED | POST + CSRF, rotation (`MODERN-CORE-CHECKPOINT-20260913-PHASE2.md`); `test_create_login_rotate_render_logout`. |
 | `login.php?op=logout` | player | session | CLOSED | Same. |
 | `mail.php` | player | no | READ-ONLY | The inbox (`MAIL-AUTHORITY-20261004.md`). |
@@ -132,9 +131,6 @@ with `check_su_access()`. Short names in the evidence column: `CRS` is `CORE-ROU
 | `mounts.php?op=add\|edit\|save\|del\|give\|activate\|deactivate\|xml&subop=module` | admin SU_EDIT_MOUNTS | mount rows, owners, module preferences | CLOSED | `CONTENT-EDITORS-PART3-AUTHORITY-20261017.md`; `test_mount_and_companion_editor_authority_http`, `test_mount_owner_lookup_and_bio_page_http`, `test_shared_mount_preferences_http`. |
 | `newday.php` | player | New Day, race, specialty, Dragon Points, resurrection | CLOSED | `NEWDAY-DAILY-RESET-AUTHORITY-20261003.md`, `DRAGON-POINT-AUTHORITY-20261003.md`, `RAMIUS-EARLY-RESURRECTION-AUTHORITY-20261004.md`; `test_normal_newday_stale_replay_transport_and_corruption`, `test_race_onboarding_http_authority`, `test_specialty_onboarding_http_authority`, `test_dragon_points_single_bulk_replay_and_handoffs`. |
 | `news.php` | anyone | expired news | READ-ONLY | This task binds the day and paging and treats a page below 1 as page 1; the 1.1.2 expiry of old news on view uses server values only; `test_list_hall_of_fame_and_news_bound_requests_http`. |
-| `paylog.php` | admin SU_EDIT_PAYLOG | no | READ-ONLY | `SERIALIZED-SCHEMAS-PART5-20261022.md` (D). |
-| `paylog.php?op=process` | admin SU_EDIT_PAYLOG | processdate | CLOSED | `SERIALIZED-SCHEMAS-PART5-20261022.md` (D); `test_paylog_process_dates_post_only_http`. |
-| `payment.php` | anyone | no | DISABLED | 410 (`test_disabled_endpoints.py`). |
 | `petition.php` | anyone | petition | CLOSED | Intake (`CRS`, petition intake; `COMPLETION-REPORTING-20261017.md`); `test_petition_notice_email_and_server_url_http`. |
 | `petition.php?op=submit` | anyone | petition | CLOSED | The intake form's target, handled by the default file; same evidence. |
 | `petition.php?op=faq\|faq1\|faq2\|faq3\|primer` | anyone | no | READ-ONLY | Help text, one file per op. |
@@ -144,14 +140,12 @@ with `check_su_access()`. Short names in the evidence column: `CRS` is `CORE-ROU
 | `pvp.php` | player | no | READ-ONLY | The target list (`PVP-COMBAT-AUTHORITY-20260927.md`). |
 | `pvp.php?act=attack` | player | PvP entry: fights, reservation, the first round | CLOSED | `PVP-COMBAT-AUTHORITY-20260927.md`: GET asks; POST with CSRF and a one-use intent bound to the target; eligibility checked under lock, participants locked in ID order, one transaction; `test_pvp_eligibility_and_entry_rollback`, `test_pvp_cross_player_reservation_and_tokens`. |
 | `pvp.php?op=fight\|run` | player | PvP combat | CLOSED | `PVP-COMBAT-AUTHORITY-20260927.md`; `test_pvp_eligibility_and_entry_rollback`, `test_pvp_round_stale_reservation_and_victim_authority`. |
-| `rawsql.php` | anyone | no | DISABLED | 410 (`test_disabled_endpoints.py`). |
 | `referers.php` | admin SU_EDIT_CONFIG | expired referers | READ-ONLY | `RESCAN-TASK2-20261022.md`: the 1.1.2 expiry on view kept, from server values only, bound; `sort` from an allow-list (400 otherwise); output escaped, only http(s) links; `test_gamelog_and_referers_authority_http`. |
 | `referers.php?op=rebuild` | admin SU_EDIT_CONFIG | referers | CLOSED | `RESCAN-TASK2-20261022.md`: GET asks; POST with CSRF and a one-use intent; every row locked and rewritten in one transaction, bound; `test_gamelog_and_referers_authority_http`. |
 | `referral.php` | anyone | no | READ-ONLY | The referral link and list; the query takes no request input; `serverurl` never saved (`COMPLETION-REPORTING-20261017.md`). |
 | `rock.php` | player (veteran) | commentary | CLOSED | Commentary through the shared helper. |
 | `runmodule.php` | player | dispatch | CLOSED | Active install and dependency checks (`CRS`, runmodule row); `test_dispatcher_enforces_module_state`. Module routes are below. |
 | `shades.php` | player (dead) | commentary | CLOSED | Commentary through the shared helper. |
-| `source.php` | anyone | no | DISABLED | 410 (`test_disabled_endpoints.py`). |
 | `stables.php` | player | no | READ-ONLY | Listing bound (`STABLES-AUTHORITY-20261016.md`). |
 | `stables.php?op=examine\|buymount\|confirmbuy\|feed\|sellmount\|confirmsell` | player | gold, gems, mount | CLOSED | `STABLES-AUTHORITY-20261016.md`; `test_stables_buy_feed_and_sell_authority_http`. |
 | `stats.php` | admin SU_EDIT_CONFIG | no | READ-ONLY | No query takes request input. |
@@ -420,3 +414,28 @@ The merge gate verification (`PHASE3-MERGE-GATE-20261023.md`) found two wrong ro
   lowers a value, changing it would change gameplay). `op=enter` and `op=question` are now separate rows.
 
 Counts: CLOSED 89, DISABLED 9, READ-ONLY 70, OPEN 0, total 168.
+
+## License and dead weight, 2026-10-24
+
+Maintenance named by Jim (`UNNECESSARY-FILES-20261024.md`, "License and dead weight"). Seven rows are removed with their
+files; the features stay disabled and stay at `historical-source-1.1.2`. A request for any of these files now finds no
+file (404 from the web server), and `tests/tooling/test_disabled_endpoints.py::test_removed_disabled_features_are_not_found`
+checks GET and POST against a plain file server. No shipped file links them
+(`test_no_shipped_file_links_a_removed_file`).
+
+Removed entries (status before, and why):
+
+- `logdnet.php` and `logdnet.php?op=list` (DISABLED, 410): LoGDnet stays disabled; `home.php`'s "LoGD Net" link to
+  `op=list` is removed with them.
+- `payment.php` (DISABLED, 410): PayPal intake stays disabled.
+- `rawsql.php` (DISABLED, 410): the SQL/PHP console stays disabled; `superuser.php`'s "Run Raw SQL" link is removed
+  with it.
+- `source.php` (DISABLED, 410): the source viewer stays disabled; the "View PHP Source" link now opens the configured
+  public source (`sourceurl`).
+- `paylog.php` (READ-ONLY) and `paylog.php?op=process` (CLOSED): the payment log can never show a new payment while
+  payments are disabled; its links in `superuser.php` and `donators.php` are removed.
+
+`images/logdnet.php` (410) is removed too; it was not a top-level page, so it had no row. `donators.php?op=add1|add2`
+keeps its row: a transaction credit now returns to `donators.php` instead of the removed payment log.
+
+Counts: CLOSED 88, DISABLED 4, READ-ONLY 69, OPEN 0, total 161.

@@ -60,6 +60,9 @@ function resurrection_settings_rules(string $namespace,array $schema,array $valu
     if ($namespace==='core') {
         $days=(int)($values['daysperday'] ?? $schema['daysperday']['default']);
         if ((int)($values['gameoffsetseconds'] ?? $schema['gameoffsetseconds']['default'])>86400/$days) throw new DomainException('Invalid day offset.');
+        // The View PHP Source link accepts only an http or https URL (lib/source_link.php).
+        require_once 'lib/source_link.php';
+        if (resurrection_valid_source_url((string)($values['sourceurl'] ?? $schema['sourceurl']['default']))===null) throw new InvalidArgumentException('Invalid source URL.');
     }
     if ($namespace==='cedrikspotions') {
         foreach (['charmgain','vitalgain','tempgain'] as $key) if ((int)($values[$key] ?? $schema[$key]['default'])<0) throw new DomainException('Negative effect.');

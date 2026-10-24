@@ -100,6 +100,7 @@ $default_settings = array(
 	"serverurl"=>"http://".($_SERVER['SERVER_NAME'] ?? 'localhost').(($_SERVER['SERVER_PORT'] ?? 80) == 80?"":":".$_SERVER['SERVER_PORT']).dirname($_SERVER['REQUEST_URI'] ?? '/'),
 	"defaultlanguage"=>"en",
 	"serverdesc"=>"Another LoGD Server",
+	"sourceurl"=>"https://github.com/jimlunsford/legend-of-the-green-dragon-resurrection",
 	"logdnetserver"=>"http://logdnet.logd.com/",
 	"paypalemail"=>"",
 	"paypaltext"=>"legend of the green dragon site donation from",

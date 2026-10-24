@@ -45,6 +45,7 @@ parameters:
         - lib/maintenance.php
         - lib/db_optimize.php
         - lib/server_url.php
+        - lib/source_link.php
         - lib/installer/fresh_install.php
         - lib/installer/bundled_modules.php
         - scripts/install.php

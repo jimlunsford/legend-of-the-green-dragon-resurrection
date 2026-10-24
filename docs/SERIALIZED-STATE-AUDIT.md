@@ -772,3 +772,17 @@ tracked PHP outside `tests/`, `scripts/` and `lab/`; it reproduces 94 / 45 / 38 
 Removed: the ten EXCLUDED reads in `lib/mail.php` (`:139`, `:140`, `:181`, `:182`, `:187`, `:188`, `:291`, `:292`,
 `:298`, `:299`), and the file leaves the file count. No other file removed in that commit held a site. Mail is now 8
 of 8 closed. **No site is OPEN.** ScalarState limits are unchanged.
+
+## Recount after the license and dead weight task, 2026-10-24
+
+`paylog.php` and its only helper `src/Security/PaymentInfo.php` were removed from `main` with the dead weight Jim named
+(`UNNECESSARY-FILES-20261024.md`, "License and dead weight"). The same token recount (`serialize(`,
+`ScalarState::read(`, `unserialize(` in tracked PHP outside `tests/`, `scripts/` and `lab/`, comments excluded; it
+reproduces 84 / 44 / 38 / 45 / 1 at `acb31f6`):
+
+**83 sites / 43 files / 38 serialize writers-checks / 44 ScalarState reads / one centralized unserialize**.
+
+Removed: the one read in `src/Security/PaymentInfo.php` (`:21`, recorded CLOSED above as a read with no writer), and
+the file leaves the file count. `paylog.php` held no site of its own since part 5 (its two reads went through
+`PaymentInfo::read`). `PaymentInfoTest` is removed with the class. The `paylog` table stays in the installer and
+schema, unread. **No site is OPEN.** ScalarState limits are unchanged.

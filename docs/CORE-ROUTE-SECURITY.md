@@ -992,3 +992,18 @@ companions to empty, `restorepage` to the village, the fight is cleared, and a D
 Point history is rebuilt with `hp` entries (the readable valid entries kept; one
 spend per dragon kill when unreadable), so no point can be spent twice. See
 [rescan task 3](RESCAN-TASK3-20261023.md).
+
+2026-10-24 license and dead weight (maintenance named by Jim, not a phase): the
+disabled endpoints `payment.php`, `source.php`, `rawsql.php`, `logdnet.php` and
+`images/logdnet.php` (each answered 410 before bootstrap) and the payment log
+`paylog.php` (with its only helper, `src/Security/PaymentInfo.php`) are removed from
+`main`. A request now finds no file (404). The features stay disabled; nothing is
+re-enabled, and the 1.1.2 files stay at `historical-source-1.1.2`. The nav links to
+them are removed as deliberate corrections (each pointed at a disabled 1.1.2
+feature): `home.php` "LoGD Net", `superuser.php` "Run Raw SQL" and "Payment Log",
+`donators.php` "Payment Log". `donators.php`'s transaction credit keeps its
+protections and now returns to `donators.php`. The footer and header "View PHP
+Source" link, which opened `source.php`, now links the `sourceurl` setting (default:
+the public repository), escaped, http or https only; the settings editor refuses
+any other value. See
+[unnecessary files, license and dead weight](UNNECESSARY-FILES-20261024.md).

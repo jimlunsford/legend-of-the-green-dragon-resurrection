@@ -194,17 +194,8 @@ function page_footer($saveuser=true){
 	//-->
 	</script>";
 
-	//NOTICE |
-	//NOTICE | Although under the license, you're not required to keep this
-	//NOTICE | paypal link, I do request, as the author of this software
-	//NOTICE | which I have made freely available to you, that you leave it in.
-	//NOTICE |
-	//NOTICE |
-	//NOTICE | Although I will not deny you the ability to remove the above
-	//NOTICE | paypal link, I do request, as the author of this software
-	//NOTICE | which I made available for free to you that you leave it in.
-	//NOTICE |
-	// Legacy payment and remote LoGDnet registration are disabled.
+	// 1.1.2's PayPal buttons and LoGDnet registration are gone (payments and LoGDnet are disabled). The skins
+	// still carry {paypal}, so it is emptied.
 	$footer = str_replace('{paypal}', '', $footer);
 	$header = str_replace('{paypal}', '', $header);
 
@@ -260,9 +251,11 @@ function page_footer($saveuser=true){
 	//do something -- I don't know what
 	$header=str_replace("{script}",$script,$header);
 	//output view PHP source link
-	$sourcelink = "source.php?url=".preg_replace("/[?].*/","",($_SERVER['REQUEST_URI']));
-	$footer=str_replace("{source}","<a href='$sourcelink' onclick=\"".popup($sourcelink).";return false;\" target='_blank'>".translate_inline("View PHP Source")."</a>",$footer);
-	$header=str_replace("{source}","<a href='$sourcelink' onclick=\"".popup($sourcelink).";return false;\" target='_blank'>".translate_inline("View PHP Source")."</a>",$header);
+	// 1.1.2 linked its source viewer, source.php, in a popup; it now links the public source (lib/source_link.php).
+	require_once("lib/source_link.php");
+	$sourcelink = resurrection_source_link();
+	$footer=str_replace("{source}",$sourcelink,$footer);
+	$header=str_replace("{source}",$sourcelink,$header);
 	//output version
 	$footer=str_replace("{version}", "Version: $logd_version", $footer);
 	//output page generation time

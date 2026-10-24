@@ -57,11 +57,6 @@ if ($session['user']['superuser'] & SU_EDIT_PETITIONS) addnav("Petition Viewer",
 if ($session['user']['superuser'] & SU_EDIT_COMMENTS) addnav("C?Recent Commentary","moderate.php");
 if ($session['user']['superuser'] & SU_EDIT_COMMENTS) addnav("B?Player Bios","bios.php");
 if ($session['user']['superuser'] & SU_EDIT_DONATIONS) addnav("Donator Page","donators.php");
-if (file_exists("paylog.php")  &&
-		($session['user']['superuser'] & SU_EDIT_PAYLOG)) {
-	addnav("Payment Log","paylog.php");
-}
-if ($session['user']['superuser'] & SU_RAW_SQL) addnav("Q?Run Raw SQL", "rawsql.php");
 if ($session['user']['superuser'] & SU_IS_TRANSLATOR) addnav("U?Untranslated Texts", "untranslated.php");
 
 addnav("Editors");
