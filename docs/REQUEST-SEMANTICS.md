@@ -25,3 +25,9 @@ Passwords are read as raw strings, including quotes and backslashes, and verifie
 InputTest covers missing/default/null/scalar/array/type/range/allow-list behavior and literal quote/backslash/HTML payload preservation. Password and CSRF tests cover malformed credentials, replay and session-bound tokens. The real fresh-install tests preserve raw Unicode, quotes and backslashes in database values. HTTP smoke tests submit a raw password containing an apostrophe and backslash, then authenticate it, inspect fixed diagnostic records and follow the historical navigation flow.
 
 This is not a claim that every historical route is now SQL-safe. Remaining petition, mail, clan, editor and gameplay routes still contain string-built SQL or stripslashes assumptions. They require route-specific migration and output review before public hosting. C09 remains a scoped compatibility effort, with untested gameplay routes recorded separately in the checkpoint.
+
+## Update, 2026-10-24
+
+`lib/register_global.php` and `lib/safeescape.php` had no callers left on `main` (the system mail and clan membership
+callers named above had already moved to bound SQL) and were removed with the other unused files
+(`UNNECESSARY-FILES-20261024.md`). Both remain at `historical-source-1.1.2`.

@@ -760,3 +760,15 @@ Neither commit recorded a recount. The four sites:
 Recount: **94 sites / 45 files / 38 serialize writers-checks / 55 ScalarState reads / one centralized
 unserialize**. **No site is OPEN.** ScalarState limits are unchanged. `CLAUDE.md`'s inventory line now gives this
 count.
+
+## Recount after removing unused files, 2026-10-24
+
+`lib/mail.php`, the inert duplicate of the pre-split mail page recorded EXCLUDED above, was removed from `main`
+(`UNNECESSARY-FILES-20261024.md`). The same token recount (`serialize(`, `ScalarState::read(`, `unserialize(` in
+tracked PHP outside `tests/`, `scripts/` and `lab/`; it reproduces 94 / 45 / 38 / 55 / 1 at `d0e17ab`):
+
+**84 sites / 44 files / 38 serialize writers-checks / 45 ScalarState reads / one centralized unserialize**.
+
+Removed: the ten EXCLUDED reads in `lib/mail.php` (`:139`, `:140`, `:181`, `:182`, `:187`, `:188`, `:291`, `:292`,
+`:298`, `:299`), and the file leaves the file count. No other file removed in that commit held a site. Mail is now 8
+of 8 closed. **No site is OPEN.** ScalarState limits are unchanged.

@@ -93,6 +93,10 @@ Each family is DONE only when its acceptance evidence passes on both supported C
 - [x] Merge gate verification (`PHASE3-MERGE-GATE-20261023.md`): an independent check of the four gate conditions at `54e22e6`; not passed, with four findings, each closed by the next line. Published at `d3082f2` (Baseline integrity 39998306290 success; Modern core 39998306405 success, finished before the next push).
 - [x] Merge gate findings: the Graveyard views' drunkenness reset kept as 1.1.2 behavior (one bound write of a fixed value; forced navigation keeps a living player out, as in 1.1.2); the route inventory's `pvp.php?act=attack` row, held by `test_route_inventory.py`; the serialized-state recount (94 / 45 / 38 / 55 / 1 from `54e22e6`, four sites recorded, none OPEN); the settings editor logging, and telling the `changesetting` hook, only the fields whose stored value changed, with 1.1.2's message and both values (`PHASE3-MERGE-GATE-20261023.md`, "Merge gate findings closed"). Accepted at `19bf7a0`, Modern core 40004015634 (all 12 jobs), Baseline integrity 40004015236: the final full run.
 
+### Maintenance after Phase 3
+
+- [x] Unnecessary files removed (2026-10-24): the 1.1.2 developer notes `TODO.txt`, `AFTERUPGRADE.txt` and `BUG FIXES.txt`, and 21 shipped files proven unused (dead PHP including `lib/mail.php`, orphaned scripts and unused images), each kept byte for byte at `historical-source-1.1.2`. Serialized-state inventory 84 / 44 / 38 / 45 / 1 (`UNNECESSARY-FILES-20261024.md`).
+
 ### Current
 
 - None. Phase 3 is complete and merged. No phase is active until Jim picks a direction.
@@ -128,7 +132,7 @@ Recorded, not changed (kept as 1.1.2 behavior):
 - The Hall of Fame shows the translated "Unknown" as raw HTML; translators write it, as every translated text (`RESCAN-TASK3-20261023.md`)
 - The Graveyard views (`graveyard.php?op=enter`, `haunt`, `haunt2`, `haunt3`, `restore`) reset drunkenness through the Drinks header hook on view, so a dead player sobers there; forced navigation keeps a living player out, as in 1.1.2 (`PHASE3-MERGE-GATE-20261023.md`)
 
-The unused `lib/mail.php` is recorded as excluded: nothing includes it, and a direct request gets 404 (`SERIALIZED-SCHEMAS-PART5-20261022.md`).
+The unused `lib/mail.php` was recorded as excluded: nothing includes it, and a direct request got 404 (`SERIALIZED-SCHEMAS-PART5-20261022.md`). It was removed from `main` on 2026-10-24 (`UNNECESSARY-FILES-20261024.md`).
 
 - [x] Final rescan: Done only when every "to fix" line above is Done or proven not reachable. Closed 2026-10-23 with Final rescan task 3 (accepted at `54e22e6`).
 

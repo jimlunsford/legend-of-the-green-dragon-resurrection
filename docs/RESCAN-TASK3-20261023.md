@@ -400,14 +400,6 @@ are not listed.
 | `lib/lookup_user.php` | `$sql` | 2 | server | Fixed SELECT of the allow-listed columns. |
 | `lib/lookup_user.php` | `db_identifier($match[1])` | 1 | server | `db_identifier()` of a column checked against the fixed column list. |
 | `lib/lookup_user.php` | `implode(',', array_map('db_identifier', $columns))` | 1 | server | The fixed column list. |
-| `lib/mail.php` | `$id` | 6 | unreachable | 1.1.2's old mail page: nothing includes it, and a direct request gets 404 (`SERIALIZED-SCHEMAS-PART5-20261022.md`; `test_unbound_sql_files_are_not_endpoints_http`). |
-| `lib/mail.php` | `$replyto` | 1 | unreachable | 1.1.2's old mail page: nothing includes it, and a direct request gets 404 (`SERIALIZED-SCHEMAS-PART5-20261022.md`; `test_unbound_sql_files_are_not_endpoints_http`). |
-| `lib/mail.php` | `$row1['acctid']` | 1 | unreachable | 1.1.2's old mail page: nothing includes it, and a direct request gets 404 (`SERIALIZED-SCHEMAS-PART5-20261022.md`; `test_unbound_sql_files_are_not_endpoints_http`). |
-| `lib/mail.php` | `$session['user']['acctid']` | 9 | unreachable | 1.1.2's old mail page: nothing includes it, and a direct request gets 404 (`SERIALIZED-SCHEMAS-PART5-20261022.md`; `test_unbound_sql_files_are_not_endpoints_http`). |
-| `lib/mail.php` | `$to` | 4 | unreachable | 1.1.2's old mail page: nothing includes it, and a direct request gets 404 (`SERIALIZED-SCHEMAS-PART5-20261022.md`; `test_unbound_sql_files_are_not_endpoints_http`). |
-| `lib/mail.php` | `addslashes($string)` | 1 | unreachable | 1.1.2's old mail page: nothing includes it, and a direct request gets 404 (`SERIALIZED-SCHEMAS-PART5-20261022.md`; `test_unbound_sql_files_are_not_endpoints_http`). |
-| `lib/mail.php` | `date("Y-m-d H:i:s",strtotime("-".getsetting("oldmail",14)."days"))` | 1 | unreachable | 1.1.2's old mail page: nothing includes it, and a direct request gets 404 (`SERIALIZED-SCHEMAS-PART5-20261022.md`; `test_unbound_sql_files_are_not_endpoints_http`). |
-| `lib/mail.php` | `join("','",$msg)` | 1 | unreachable | 1.1.2's old mail page: nothing includes it, and a direct request gets 404 (`SERIALIZED-SCHEMAS-PART5-20261022.md`; `test_unbound_sql_files_are_not_endpoints_http`). |
 | `lib/mail/case_default.php` | `$accounts` | 3 | server | `db_prefix('accounts')`. |
 | `lib/mail/case_default.php` | `$mail` | 2 | server | `db_prefix('mail')`. |
 | `lib/mail/case_default.php` | `$session['user']['acctid']` | 1 | server | Integer `acctid` of the signed-in account row. |
@@ -546,3 +538,10 @@ At `54e22e6f83fb624eb019e38bb5ffe0e6ddb3668c`, read through the GitHub Actions A
 The three Final rescan lines this task closed are recorded Done in `ROADMAP.md` in the commit that records this
 acceptance: referer tracking on every page, request values reaching SQL unbound, and the admin repair path. With them
 every "to fix" line is Done, so the Final rescan item is closed too.
+
+## Reviewed list change, 2026-10-24
+
+`lib/mail.php` was removed from `main` as unused (`UNNECESSARY-FILES-20261024.md`). Its eight rows (`$id`, `$replyto`,
+`$row1['acctid']`, `$session['user']['acctid']`, `$to`, `addslashes($string)`, the `oldmail` date expression and
+`join("','",$msg)`, all class unreachable) left the reviewed list in the same commit, as `SqlSweepTest` requires for a
+value that is no longer interpolated. No other row changed, and the test is unchanged.

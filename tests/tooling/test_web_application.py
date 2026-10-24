@@ -6923,14 +6923,19 @@ function MODULE_dohook($hook,$args) {
             finally: q("DELETE FROM translations WHERE author='fixture' AND intext='Unknown'")
 
     def test_unbound_sql_files_are_not_endpoints_http(self):
-        # The SQL sweep's unreachable class: the historical web installer's stages and lib/mail.php still paste values into
-        # SQL, but nothing reaches them. installer.php answers 403 before any include, and each file refuses a direct request.
+        # The SQL sweep's unreachable class: the historical web installer's stages still paste values into SQL, but
+        # nothing reaches them. installer.php answers 403 before any include, and each file refuses a direct request.
         client=self._security_client(login=None)
         self.assertEqual(403,client('installer.php')[0])
-        for path in ['lib/mail.php','lib/installer/installer_stage_0.php','lib/installer/installer_stage_9.php',
+        attack={'username':"x' OR '1",'password':'x','name':'x','pass1':'xxxxxx','pass2':'xxxxxx'}
+        for path in ['lib/installer/installer_stage_0.php','lib/installer/installer_stage_9.php',
                      'lib/installer/installer_stage_10.php','lib/installer/installer_functions.php']:
-            status,body=client(path,{'username':"x' OR '1",'password':'x','name':'x','pass1':'xxxxxx','pass2':'xxxxxx'})
+            status,body=client(path,attack)
             self.assertEqual((404,'Not an application endpoint.'),(status,body),path)
+        # 1.1.2's old lib/mail.php was in this class too; it is removed from main (UNNECESSARY-FILES-20261024.md), so a
+        # request finds no file at all.
+        self.assertFalse((ROOT/'lib/mail.php').exists())
+        self.assertEqual(404,client('lib/mail.php',attack)[0])
 
     def test_user_editor_stored_state_repair_http(self):
         # Stored values that fail their schemas lock a player out; the repair page shows only those and repairs each alone.

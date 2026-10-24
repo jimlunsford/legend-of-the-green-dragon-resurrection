@@ -101,7 +101,7 @@ Modern core runs per leg: one `checks` job, four `http` shard jobs, and one `res
 
 ## Serialized state
 
-Inventory (94 / 48 / 39 / 54 / 1 at `5bdba80`; 91 / 44 / 38 / 52 / 1 at `c00f2d1`; recounted at the merge gate, see `docs/SERIALIZED-STATE-AUDIT.md`): 94 sites, 45 files, 38 serialize writers/checks, 55 ScalarState reads, 1 centralized unserialize, at `54e22e6` and after.
+Inventory (94 / 48 / 39 / 54 / 1 at `5bdba80`; 91 / 44 / 38 / 52 / 1 at `c00f2d1`; 94 / 45 / 38 / 55 / 1 from `54e22e6`, recounted at the merge gate; see `docs/SERIALIZED-STATE-AUDIT.md`): 84 sites, 44 files, 38 serialize writers/checks, 45 ScalarState reads, 1 centralized unserialize, after `lib/mail.php` was removed (2026-10-24).
 
 Recompute only if serialized-state source changes. Never change counts by assumption.
 
@@ -131,7 +131,7 @@ End every task with a compact report:
 5. Tests added or changed
 6. Local verification results
 7. Published SHA, if any
-8. Remote branch head, PR #1 head, main
+8. Remote main head
 9. CI run IDs and states, if any
 10. Historical integrity
 11. Phase / public hosting verdicts

@@ -9,7 +9,7 @@
 - Identity: **Legend of the Green Dragon 1.1.2 Dragonprime Edition with bundled maintenance fixes**.
 - New-project baseline tag: `historical-source-1.1.2`.
 
-The complete 11-commit core ancestry is preserved without rewriting original commit objects. Those 2019 GitHub uploads are Jim Lunsford's preservation activity, not original LoGD development history. `BUG FIXES.txt` records maintenance changes already present when uploaded; their precise dates and authorship are not established by the upload history.
+The complete 11-commit core ancestry is preserved without rewriting original commit objects. Those 2019 GitHub uploads are Jim Lunsford's preservation activity, not original LoGD development history. `BUG FIXES.txt` (kept at the historical tag; removed from `main` on 2026-10-24, see `docs/UNNECESSARY-FILES-20261024.md`) records maintenance changes already present when uploaded; their precise dates and authorship are not established by the upload history.
 
 Original authors include Eric Stevens and JT Traub. Preserve DragonPrime Development Team and individual source/module credits. Jim is the preservation owner and Resurrection maintainer, not an original LoGD author. No official continuation or endorsement is claimed.
 
