@@ -6,7 +6,16 @@ Standing rules for Claude Code sessions in this repository. Read this first. A t
 
 Legend of the Green Dragon - Resurrection. A behaviorally faithful modernization of LoGD 1.1.2 DragonPrime Edition for supported modern PHP and databases.
 
-Phase 3 is complete, merged into `main` at `0d078dff49e790339e0ab0aefdf5b35478bf6419` (PR #1, normal merge commit, 2026-10-23). No phase is active. Do not start new work until Jim picks a direction.
+Phase 3 is complete, merged into `main` at `0d078dff49e790339e0ab0aefdf5b35478bf6419` (PR #1, normal merge commit, 2026-10-23).
+
+Current phase: **Phase 4, Release foundation**. Goal: make the game ready for its first release. Tasks (status in `ROADMAP.md`):
+
+- 1A: start Phase 4 (docs only).
+- 1B: a fresh install ready to play: activate the recommended modules during install, a guided config file step, and an "unsupported" message for a 1.1.2 database.
+- 2: the upgrade system, built before anything ships.
+- 3: one-command local setup.
+
+The release itself (hosting, tags, GitHub releases, image, skin and archive-module rights) stays excluded until Jim says so. Work only on the task a task prompt names.
 
 Preserve historical behavior. Fix security and runtime defects without redesigning gameplay. When modern behavior must differ from 1.1.2, check the historical source first and record why.
 
@@ -43,13 +52,21 @@ Never, in any task:
 
 - Touch `vps1.phoenix233.com`
 - Deploy, release, tag, or publicly host
-- Begin Phase 4
 - Perform penetration testing, network scanning, credential discovery, or investigation of external systems
 - Import archive-only modules or the Cities module
 - Rebalance gameplay, or rewrite in a framework (React, Vue, Laravel, Symfony)
 - Re-enable a disabled surface: LoGDnet, SQL/PHP console, historical payments, source viewer, legacy recovery
+- Do not build a 1.1.2 database migration; installs are fresh only.
 
 Do not start a subsystem the task prompt does not name.
+
+## Versioning
+
+- Resurrection has its own numbers, `MAJOR.MINOR.PATCH`. They do not continue 1.1.2's.
+- The first release is 1.0.0. Test builds are `1.0.0-rc.N`.
+- Every release must upgrade cleanly from the one before.
+- No 1.1.2 server will be upgraded. All installs are fresh.
+- Do not change a version string unless a task prompt says to.
 
 ## Tests
 

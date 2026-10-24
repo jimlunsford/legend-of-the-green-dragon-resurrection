@@ -1,6 +1,6 @@
 # Modern local installation and operation
 
-This branch is not approved for public hosting. These instructions are for a disposable development installation. No existing player database migration is implemented or certified.
+Public hosting is not approved yet. These instructions are for a local, disposable development installation. Resurrection installs fresh only: a 1.1.2 database is not migrated or upgraded.
 
 ## Runtime and database
 
@@ -28,13 +28,13 @@ The command runs the supported installation service, creates the historical core
 
 The installer uses an advisory database lock. Any existing table causes refusal, including an unrelated populated database, a partial failed install, and a previous historical game. A completed Resurrection database is reported as installed; a recognizable historical accounts/settings/version combination is reported as upgrade-required, while unrelated tables are populated. Both populated states are refused without modification. No automatic truncate, drop, retry cleanup or in-place upgrade is performed. Diagnose a failed disposable installation before explicitly recreating its disposable database. Never apply that procedure to valuable data.
 
-The historical web installer returns 403 before bootstrap. Direct requests cannot install or upgrade, even if an installation marker is removed. scripts/install.php rejects HTTP with 404. A future upgrade must be a separately reviewed migration with backup and recovery evidence.
+The historical web installer returns 403 before bootstrap. Direct requests cannot install or upgrade, even if an installation marker is removed. scripts/install.php rejects HTTP with 404. No 1.1.2 database will be migrated; installs are fresh only.
 
 ## Authentication and sessions
 
 Fresh accounts use password_hash(PASSWORD_DEFAULT) and password_verify. Legacy hashes and submitted stored hashes cannot authenticate. The former client-side MD5, password-derived recovery and email-validation login flows are unavailable. Password recovery is removed (since 2026-10-24 an unknown op, 400; resets stay an admin action in the user editor) and the old email validation link returns 410; email verification must be modernized before enabling requirevalidemail. Normal creation fails closed when that unsupported requirement is enabled.
 
-Login, logout, account creation, password changes and the modified administrative/moderation/module mutations require POST and a session-bound CSRF token. Existing navigation state continues to govern game navigation and is not treated as CSRF protection. The logout link displays a confirmation form; POST destroys the native session and expires its cookie.
+Login, logout, account creation, password changes and the game, administrative, moderation and module actions that change state require POST and a session-bound CSRF token; `ROUTE-INVENTORY-20261022.md` lists every route, who reaches it and whether it changes state. Existing navigation state continues to govern game navigation and is not treated as CSRF protection. The logout link displays a confirmation form; POST destroys the native session and expires its cookie.
 
 Native sessions use strict ID acceptance, cookie-only transport, HttpOnly and SameSite=Lax. Secure is set when the web server reports HTTPS=on. An eventual production proxy must establish that trusted server value; client-supplied forwarding headers must not decide it. Keep display_errors off in production, error_reporting at E_ALL, zend.exception_ignore_args enabled, session files private, and session storage isolated from other applications. Production TLS, headers, authorization review and abuse controls remain separate hosting gates.
 
@@ -48,12 +48,12 @@ Fresh installs set newdaycron=1. Global maintenance is run locally with:
 php cron.php
 ```
 
-The command must run with the same private configuration and filesystem ownership as the application. Schedule it often enough to cover the configured game-day interval. No scheduler or server deployment is performed by this phase.
+The command must run with the same private configuration and filesystem ownership as the application. Schedule it often enough to cover the configured game-day interval. The project does not install a scheduler or deploy a server.
 
 A database advisory lock serializes maintenance. A completed game-day marker makes repeated invocations skip that day's maintenance. The marker is written after successful maintenance. Player New Day behavior and its turn/economy rules remain separate. Individual third-party hook side effects are not transactionally rolled back after a failure; full hook and failure-recovery certification remains required before production scheduling. HTTP GET and POST to cron.php return 404 before bootstrap.
 
 ## Validation
 
-CI installs into a truly empty resurrection_test database using a non-root database account, executes the actual CLI install command, and tests populated/repeated-install refusal, strict schema, seeds, administrator and player credentials, all 24 bundled module install callbacks and Dag/Drinks DDL. The result is 38 tables, 24 installed modules and zero active modules. Activation and gameplay certification are the next phase. Python smoke tests use a standard PHP server bound only to 127.0.0.1, then run application HTTP requests and CLI maintenance. Tests refuse a differently named database.
+CI installs into a truly empty resurrection_test database using a non-root database account, executes the actual CLI install command, and tests populated/repeated-install refusal, strict schema, seeds, administrator and player credentials, all 24 bundled module install callbacks and Dag/Drinks DDL. The result is 38 tables, 24 installed modules and zero active modules. An administrator activates modules in the module manager after install; activation, lifecycle and gameplay of the 24 bundled modules are certified in `BUNDLED-MODULE-CERTIFICATION.md`. Python smoke tests use a standard PHP server bound only to 127.0.0.1, then run application HTTP requests and CLI maintenance. Tests refuse a differently named database.
 
-See the phase-2 checkpoint and security/compatibility ledgers for exact passing runs and remaining limitations. Installation success alone does not certify bundled gameplay modules or public hosting.
+Exact passing runs and remaining limitations are in the Phase 2 and Phase 3 records (`MODERN-CORE-CHECKPOINT-20260913-PHASE2.md`, `PHASE3-MERGE-GATE-20261023.md`) and in `SECURITY-STATUS.md` and `COMPATIBILITY-STATUS.md`. A successful install does not approve public hosting.

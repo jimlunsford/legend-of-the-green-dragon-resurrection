@@ -669,3 +669,15 @@ Local, on the working tree (supporting evidence only; CI is the acceptance):
 `754bf14` is not accepted on its own runs: its Baseline integrity run failed. It is accepted only through this fix,
 its first descendant, if both Modern core legs and Baseline integrity succeed on this commit; the next task records
 those runs.
+
+## Accepted, 2026-10-24 (installer pages and the PHP test guard)
+
+Read through the GitHub Actions API by Phase 4 task 1A, at `main` `96204899385a91a7caec2f130aea1abbc20ba390`:
+
+- "Baseline on the runner's PHP" is accepted at its own commit, `96204899385a91a7caec2f130aea1abbc20ba390`:
+  - Modern core 40113437111: success. All 12 jobs success: for each leg (PHP 8.5 with MySQL 8.4, PHP 8.4 with
+    MariaDB 11.4) `checks`, `http (1)` to `http (4)` and `result`.
+  - Baseline integrity 40113437055: success.
+- "Installer pages", `754bf14ed01970858be6afd5c2f4b62e9147c22f`, is accepted through `9620489`, its first accepted
+  descendant, on the runs above. Its own runs stay on record: Modern core 40109324440 success; Baseline integrity
+  40109324481 failure (the operator page test ran on the runner's PHP 8.3, "The failed run" above).

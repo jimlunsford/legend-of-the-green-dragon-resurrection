@@ -10,7 +10,7 @@ Modernize the code. Preserve the game.
 
 Bring LoGD 1.1.2 DragonPrime Edition onto supported PHP and databases with every important state transition examined, constrained and tested. Keep the gameplay, atmosphere, odd historical behavior and module system intact.
 
-The finish line for this roadmap was the merge of PR #1 into `main`, reached on 2026-10-23 at `0d078df`. What happens after that is a separate decision.
+The finish line for the modernization was the merge of PR #1 into `main`, reached on 2026-10-23 at `0d078df`. On 2026-10-24 Jim chose the next direction: Phase 4, Release foundation.
 
 ## Phases
 
@@ -20,7 +20,7 @@ The finish line for this roadmap was the merge of PR #1 into `main`, reached on 
 | Phase 1 | First modern engineering base: PHP/database compatibility, PDO direction, CI, static analysis, early installer and runtime work. | DONE | `docs/MODERN-CORE-CHECKPOINT-20260913.md` |
 | Phase 2 | A real modern base application: strict fresh install, modern credentials, authentication, session rotation, CSRF infrastructure, account creation, village, commentary, logout, all 24 bundled modules installable. | DONE | `docs/MODERN-CORE-CHECKPOINT-20260913-PHASE2.md` |
 | Phase 3 | Close every game and application trust boundary until the modern core is mergeable. | DONE, merged into `main` at `0d078df` on 2026-10-23 | [`docs/PHASE3-MERGE-GATE-20261023.md`](docs/PHASE3-MERGE-GATE-20261023.md), `docs/MODERN-CORE-CHECKPOINT-20260913-PHASE3*.md`, `docs/CORE-ROUTE-SECURITY.md` |
-| After Phase 3 | Choose a direction. | NOT STARTED | This file, when decided |
+| Phase 4 | Release foundation: make the game ready for its first release. | CURRENT | [Phase 4 below](#phase-4-release-foundation) |
 
 ## Phase 3 checklist
 
@@ -98,12 +98,12 @@ Each family is DONE only when its acceptance evidence passes on both supported C
 - [x] Unnecessary files removed (2026-10-24): the 1.1.2 developer notes `TODO.txt`, `AFTERUPGRADE.txt` and `BUG FIXES.txt`, and 21 shipped files proven unused (dead PHP including `lib/mail.php`, orphaned scripts and unused images), each kept byte for byte at `historical-source-1.1.2`. Serialized-state inventory 84 / 44 / 38 / 45 / 1 (`UNNECESSARY-FILES-20261024.md`). Accepted at `acb31f6`, Modern core 40087707354 (all 12 jobs), Baseline integrity 40087707287.
 - [x] License honored and dead weight removed (2026-10-24): the "View PHP Source" link opens the `sourceurl` setting (default the public repository; http or https only, escaped); a root `NOTICE`; `docs/THIRD-PARTY-LICENSES.md` (no incompatible license); a test that keeps `LICENSE.txt`, `README.txt` and the original about-page text and copyright lines; the disabled 410 endpoints (`payment.php`, `source.php`, `rawsql.php`, `logdnet.php`, `images/logdnet.php`), `paylog.php` with `PaymentInfo`, `paypal1`-`3.gif`, the PayPal request comments and `CHANGELOG.txt` removed, each kept at `historical-source-1.1.2`, with their dead nav links. Serialized-state inventory 83 / 43 / 38 / 44 / 1. Open rights items in `LICENSING-AND-PROVENANCE.md` (`UNNECESSARY-FILES-20261024.md`, "License and dead weight"). Accepted at `9fb11a6`, Modern core 40093585247 (all 12 jobs), Baseline integrity 40093585196.
 - [x] Dead weight, round 2 (2026-10-24): the "Forgotten Password" link and `create.php?op=forgot` (now an unknown op, 400; `op=val` still 410); the PayPal and LoGDnet setting declarations and defaults (stored rows kept) and `logdnet_sanitize()`; the user editor's "Manage Payment Log" and "View source code" flags hidden, their bits kept as stored; `common.php`'s two installer links replaced by the command-line instruction; the unused web installer stages, `installer_functions.php` and `lib/pullurl.php` removed (`installer_stage_6.php` and `installer.php`'s 403 stay). A static test fails on any link to a missing or DISABLED page. Serialized-state inventory unchanged, 83 / 43 / 38 / 44 / 1 (`UNNECESSARY-FILES-20261024.md`, "Dead weight, round 2"). Accepted at `2e0c948`, Modern core 40103233755 (all 12 jobs), Baseline integrity 40103233707.
-- [x] Installer pages fixed (2026-10-24, candidate; `754bf14`'s own Baseline integrity 40109324481 failed on the runner's PHP 8.3 and stays on record, Modern core 40109324440 succeeded; accepted only through the next line, its first descendant): "not yet installed", "Database Connection Error" and "Upgrade Needed" render their text and the normal footer with the copyright line (the footer values are set before them; the tamper check is unchanged); signed-in pages show the copyright line again instead of `0` (PHP 8 comparison); the signed-in upgrade page no longer stops in the stats panel (`UNNECESSARY-FILES-20261024.md`, "Installer pages").
-- [x] PHP tooling tests guarded (2026-10-24, candidate): tooling tests that run the application's PHP without a database skip, with the reason, on a PHP older than `composer.json` allows (Baseline integrity's system PHP 8.3), and fail instead in Modern core (`RESURRECTION_REQUIRE_PHP=1`) (`UNNECESSARY-FILES-20261024.md`, "Baseline on the runner's PHP").
+- [x] Installer pages fixed (2026-10-24; `754bf14`'s own Baseline integrity 40109324481 failed on the runner's PHP 8.3 and stays on record, Modern core 40109324440 succeeded; accepted through the next line, its first accepted descendant `9620489`): "not yet installed", "Database Connection Error" and "Upgrade Needed" render their text and the normal footer with the copyright line (the footer values are set before them; the tamper check is unchanged); signed-in pages show the copyright line again instead of `0` (PHP 8 comparison); the signed-in upgrade page no longer stops in the stats panel (`UNNECESSARY-FILES-20261024.md`, "Installer pages"). Accepted through `9620489`, Modern core 40113437111 (all 12 jobs), Baseline integrity 40113437055.
+- [x] PHP tooling tests guarded (2026-10-24): tooling tests that run the application's PHP without a database skip, with the reason, on a PHP older than `composer.json` allows (Baseline integrity's system PHP 8.3), and fail instead in Modern core (`RESURRECTION_REQUIRE_PHP=1`) (`UNNECESSARY-FILES-20261024.md`, "Baseline on the runner's PHP"). Accepted at `9620489`, Modern core 40113437111 (all 12 jobs), Baseline integrity 40113437055.
 
 ### Current
 
-- None. Phase 3 is complete and merged. No phase is active until Jim picks a direction.
+- None. Phase 3 is complete and merged. The current phase is Phase 4, below.
 
 ### Remaining
 
@@ -165,20 +165,28 @@ Merged, 2026-10-23: Jim merged PR #1 into `main` with a normal merge commit, `0d
 
 **Phase 3 DONE. Merged into `main` at `0d078df` on 2026-10-23.**
 
-## After Phase 3
+## Phase 4: Release foundation
 
-No direction is chosen yet. That is deliberate. Direction gets decided after the code is done, not before.
+**CURRENT** (started 2026-10-24). Goal: make the game ready for its first release.
 
-Options on the table at that point:
+The release itself stays excluded until Jim says so: hosting, tags, GitHub releases, an image, and the skin and archive-module rights (`docs/LICENSING-AND-PROVENANCE.md`).
 
-- Tag a Resurrection release (`v0.1.0` per `docs/VERSIONING.md`)
-- Run a server
-- Keep it as a preserved, runnable reference edition
-- Something else
+### Decisions (Jim, 2026-10-24)
 
-Public hosting has its own gates regardless of direction: modern account recovery and email verification, abuse controls, production TLS/proxy/session configuration, internal-file protection, isolation and least privilege, backup and restore testing, monitoring, and independent review. Merge does not equal hosting.
+- No 1.1.2 server will be upgraded. All installs are fresh. No 1.1.2 database migration is built.
+- Versioning: `MAJOR.MINOR.PATCH`, Resurrection's own numbers. The first release is 1.0.0; test builds are `1.0.0-rc.N`. Every release must upgrade cleanly from the one before. No version string changes in task 1A.
+- The upgrade system (task 2) is built before anything ships.
 
-"Do not start Phase 4" means: do not make direction decisions or begin post-merge work until Jim picks a direction and names it.
+### Checklist
+
+- [x] 1A: start Phase 4 (docs only). Records the acceptance of `754bf14` (through `9620489`) and `9620489`; `CLAUDE.md` gets the current phase, the fresh-install-only exclusion and the versioning rule; `docs/MODERN-INSTALLATION.md` describes the install as it works today.
+- [ ] 1B: a fresh install ready to play: activate the recommended modules during install, a guided config file step, and an "unsupported" message for a 1.1.2 database.
+- [ ] 2: the upgrade system, built before anything ships.
+- [ ] 3: one-command local setup.
+
+### Public hosting
+
+Public hosting is not approved. It has its own gates: modern account recovery and email verification, abuse controls, production TLS/proxy/session configuration, internal-file protection, isolation and least privilege, backup and restore testing, monitoring, and independent review. Release readiness does not equal hosting.
 
 ## Supported targets
 
