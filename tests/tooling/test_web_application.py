@@ -6981,6 +6981,43 @@ function MODULE_dohook($hook,$args) {
             self.assertFalse((ROOT/path).exists(),path)
             self.assertEqual(404,client(path,attack)[0],path)
 
+    def test_upgrade_needed_page_and_copyright_footer_http(self):
+        # "Upgrade Needed" (the stored installer version is not the code's) renders its text and the normal footer for an
+        # anonymous visitor and a signed-in player; it stopped with a runtime error until 2026-10-24, because the footer's
+        # copyright values were set after it. Every signed-in page showed "0" in place of the copyright line: PHP 8
+        # counts 0 > '' as true (UNNECESSARY-FILES-20261024.md, "Installer pages").
+        copyright='Game Design and Code: Copyright &copy; 2002-2005, Eric Stevens & JT Traub, &copy; 2006-2007, Dragonprime Development Team'
+        license="This work is licensed under a <a rel='license' href='http://creativecommons.org/licenses/by-nc-sa/2.0/' target='_blank'>Creative Commons License</a>."
+        q=self.query;player=int(q('SELECT acctid FROM accounts WHERE login=?',['WebPlayer'])[0]['acctid'])
+        saved=q("SELECT value FROM settings WHERE setting='installer_version'");self.assertEqual([{'value':'1.1.2 Dragonprime Edition'}],saved)
+        anonymous=self._security_client(login=None);player_client=self._security_client()
+        def signed_in(url):
+            q('UPDATE accounts SET lastnewday=? WHERE acctid=?',[self._current_game_day(),player]);self._security_allow(player,url);return player_client(url)
+        def footer(body):
+            self.assertEqual(1,body.count(copyright),body[-3000:]);self.assertEqual(1,body.count(license),body[-3000:])
+            self.assertNotIn('-->\n0<br />',body)
+        # Before the upgrade notice: an ordinary signed-in page and an anonymous one carry the copyright line.
+        status,body=signed_in('village.php');self.assertEqual(200,status,body[:2000]);footer(body)
+        status,body=anonymous('home.php');self.assertEqual(200,status,body[:2000]);footer(body)
+        try:
+            q("UPDATE settings SET value='1.1.1 Dragonprime Edition' WHERE setting='installer_version'")
+            for who,status,body in [('anonymous',*anonymous('home.php?a=1&b=2')),('player',*signed_in('village.php'))]:
+                with self.subTest(who=who):
+                    self.assertEqual(200,status,body[:2000]);self.assertIn('<title>Upgrade Needed',body);footer(body)
+                    shown=html.unescape(body)
+                    self.assertIn("An administrator applies the upgrade from the server's command line; the web installer is no longer available.",shown)
+                    self.assertIn('docs/MODERN-INSTALLATION.md',shown);self.assertNotIn('installer.php',body)
+                    # The refresh returns to the page asked for, escaped; nothing else is linked.
+                    refresh=re.findall(r"<meta http-equiv='refresh' content='30; url=([^']*)'>",body)
+                    self.assertEqual(['home.php?a=1&amp;b=2' if who=='anonymous' else 'village.php'],refresh)
+            # Markup in the query stays percent-encoded, as the request sent it: the refresh never carries a quote or a tag.
+            status,body=anonymous("home.php?x=%27%22%3E%3Cb%3E");self.assertEqual(200,status,body[:2000])
+            self.assertEqual(['home.php?x=%27%22%3E%3Cb%3E'],re.findall(r"<meta http-equiv='refresh' content='30; url=([^']*)'>",body))
+            self.assertNotIn("<b>",body.split('<title>')[1].split('</title>')[0]);self.assertNotIn('\'"><b>',body)
+        finally:
+            q("UPDATE settings SET value=? WHERE setting='installer_version'",[saved[0]['value']])
+        status,body=anonymous('home.php');self.assertEqual(200,status);self.assertNotIn('Upgrade Needed',body)
+
     def test_user_editor_stored_state_repair_http(self):
         # Stored values that fail their schemas lock a player out; the repair page shows only those and repairs each alone.
         with self._user_editor_fixture() as f:

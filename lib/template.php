@@ -84,7 +84,9 @@ function prepare_template($force=false){
 	}else {
 		$y = 0;
 		$z = $y2^$z2;
-		if ($session['user']['loggedin'] && $x > ''){
+		// $x is 0, or the tamper message string. PHP 8 counts 0 > '' as true (PHP 5 and 7 did not), which put "0" in
+		// place of the copyright line on every logged-in page; only a message replaces it, as in 1.1.2.
+		if ($session['user']['loggedin'] && is_string($x) && $x > ''){
 			$$z = $x;
 		}
 		$$z = $lc . $$z . "<br />";

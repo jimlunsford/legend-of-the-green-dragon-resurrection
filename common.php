@@ -107,6 +107,18 @@ $session['user']['loggedin'] = (bool)($session['user']['loggedin'] ?? false);
 if (!is_array($session['user']['prefs'])) { $session['user']['prefs'] = []; }
 if (!$session['loggedin']) { $session['user']['superuser'] = 0; }
 
+// The copyright and license footer values that prepare_template() and page_footer() read, set before the first
+// page_header() that can run: the not-installed, database error and upgrade pages below. 1.1.2 set them only after
+// those pages, which then showed no copyright line; under the modern error handler they stopped with an error.
+// Every page that gets past them recomputes $x and $lc below, exactly as before; until then the license is shown
+// as it stands.
+$cp = $copyright;
+$l = $license;
+$y2 = "\xc0\x3e\xfe\xb3\x4\x74\x9a\x7c\x17";
+$z2 = "\xa3\x51\x8e\xca\x76\x1d\xfd\x14\x63";
+$x = 0;
+$lc = $l;
+
 
 // lets us provide output in dbconnect.php that only appears if there's a
 // problem connecting to the database server.  Useful for migration moves
@@ -197,8 +209,6 @@ if (strtotime("-".getsetting("LOGINTIMEOUT",900)." seconds") > $session['lasthit
 }
 $session['lasthit']=strtotime("now");
 
-$cp = $copyright;
-$l = $license;
 
 php_generic_environment();
 do_forced_nav(ALLOW_ANONYMOUS,OVERRIDE_FORCED_NAV);
@@ -245,6 +255,11 @@ if ($logd_version != getsetting("installer_version","-1") && !defined("IS_INSTAL
 	output("`@If you don't know what this all means, just sit tight, we're doing an upgrade and will be done soon, you will be automatically returned to the game when the upgrade is complete.");
 	rawoutput("<meta http-equiv='refresh' content='30; url=" . htmlspecialchars((string)$session['user']['restorepage'], ENT_QUOTES) . "'>");
 	define("NO_SAVE_USER",true);
+	// A signed-in player's stats panel reads the buff list and the companions, which are loaded below this page.
+	// 1.1.2 showed the buff list the session already held and no companions here; on PHP 8 the unloaded values stop
+	// the page instead.
+	if (!is_array($session['bufflist'] ?? null)) $session['bufflist'] = array();
+	$companions = array();
 	page_footer();
 }
 
@@ -280,8 +295,6 @@ resurrection_track_referer();
 
 if (!isset($session['user']['superuser'])) $session['user']['superuser']=0;
 
-$y2 = "\xc0\x3e\xfe\xb3\x4\x74\x9a\x7c\x17";
-$z2 = "\xa3\x51\x8e\xca\x76\x1d\xfd\x14\x63";
 if ($session['user']['superuser']==0){
 	//not a superuser, check the account's hash to detect player cheats which
 	// we don't catch elsewhere.

@@ -485,3 +485,109 @@ MySQL 8.4, one disposable database per run:
   tracked files). `git diff --check`: clean.
 
 Tracked files on `main`: 634 before, 621 after (13 removed, none added).
+
+## Accepted, 2026-10-24 (dead weight, round 2)
+
+"Dead weight, round 2" is accepted at its own commit, `2e0c948c8b03bba23b5a270a462c75a61dad431b`, read through the
+GitHub Actions API by the next task:
+
+- Modern core 40103233755: success. All 12 jobs success: for each leg (PHP 8.5 with MySQL 8.4, PHP 8.4 with MariaDB
+  11.4) `checks`, `http (1)` to `http (4)` and `result`.
+- Baseline integrity 40103233707: success.
+
+## Installer pages, 2026-10-24
+
+Fix named by Jim, not a phase. Starting head: `main` at `2e0c948c8b03bba23b5a270a462c75a61dad431b`. Round 2 found
+that the two operator pages in `common.php` never showed their text.
+
+### The error
+
+- "The game has not yet been installed" (no `dbconnect.php`), reproduced with PHP's built-in server on a copy of the
+  tree without `dbconnect.php`: `Uncaught ErrorException: Runtime error in template.php:90`, from
+  `prepare_template()` called by `page_header()` at `common.php:120`. No page text is sent.
+- "Database Connection Error" (a `dbconnect.php` whose server is unreachable): the same error. Not named in the
+  brief; it has the same cause and the same fix.
+- "Upgrade Needed" (the stored `installer_version` is not the code's), reproduced with the HTTP fixture (installer
+  version set to `1.1.1 Dragonprime Edition`): the same error from `page_header()` at `common.php:240`. For a
+  signed-in player, once that is fixed, a second one: `Uncaught TypeError: count(): Argument #1 ($value) must be of
+  type Countable|array, null given` in `charstats()` (`lib/pageparts.php:573`), from `page_footer()`.
+- Found while checking the footer, decided by Jim to fix here: every page a signed-in player sees showed `0` where the
+  copyright line ("Game Design and Code: Copyright © 2002-2005, Eric Stevens & JT Traub, © 2006-2007, Dragonprime
+  Development Team") belongs. Anonymous pages were right.
+
+### The cause
+
+- `prepare_template()` and `page_footer()` read `$y2` and `$z2` (whose XOR names the `copyright` variable), `$lc` (the
+  license block) and `$x` (the 1.1.2 tamper check's message, or 0). `common.php` set `$cp`, `$l` at line 200 and the
+  rest at lines 283 to 308, after all three early pages. With them unset, `$y2 ^ $z2` is 0 and `$$z` reads the
+  undefined variable `${0}`; the modern error handler turns that warning into an exception.
+- The signed-in upgrade page's stats panel counts `$companions` and walks `$session['bufflist']`, which `common.php`
+  loads only after the page.
+- `lib/template.php` replaces the copyright line with `$x` when `$x > ''`. Untampered, `$x` is the integer 0. PHP 5
+  and 7 compared `0 > ''` as numbers (false); PHP 8 compares them as strings (`'0' > ''`, true), so the line became
+  `0`.
+
+### 1.1.2
+
+`historical-source-1.1.2:common.php` has the same order: the pages at lines 105 ("not yet been installed"), 143 and 162
+("Database Connection Error") and 227 ("Upgrade Needed"); `$cp` and `$l` at 189 to 190; `$y2`, `$z2` and the tamper
+check at 304 to 328; `prepare_template()` at 331. On the PHP of its day the pages rendered with notices: the text
+showed, but `$y2 ^ $z2` was 0, so `{copyright}` was never filled and was then cleared as a spare tag. The pages had
+no copyright or license line. The signed-in upgrade page showed the session's buff list and no companions
+(`count(null)` was 0). Every other page, signed in or not, showed the copyright line.
+
+### The fix
+
+- `common.php`, before the first early page: `$cp = $copyright;`, `$l = $license;`, `$y2` and `$z2` (moved there
+  unchanged, same values), then `$x = 0;` and `$lc = $l;`. The tamper check (`if ($session['user']['superuser']==0)`
+  ... `else` ...) stays where it was, unchanged, and still sets `$x` and `$lc` for every page that gets past the early
+  pages. The copyright and license text are not changed.
+- The "Upgrade Needed" page sets the buff list to empty only if the session holds none, and the companions to none,
+  before its `page_footer()`: what 1.1.2 showed there.
+- `lib/template.php`: the copyright line is replaced only when `$x` is a string (the tamper message), as on PHP 5
+  and 7.
+
+Why this changes nothing for any other page: `$copyright`, `$license`, `$y2` and `$z2` are constants assigned once
+(the moved lines are byte for byte the old ones); no code between the new and old places reads or writes `$cp`,
+`$l`, `$y2`, `$z2`, `$x`, `$lc` (checked in `common.php`, in the files it includes at top level in between, and for
+`global`/`$GLOBALS` use anywhere: only `prepare_template()` and `popup_footer()` declare them); and both branches of
+the unchanged tamper check overwrite `$x` and `$lc` before `prepare_template()`. So every page past the early ones
+gets the same values as before. The two other changes act only on the upgrade page and on signed-in pages' copyright
+line (the decided fix). The early pages show what any anonymous page shows in its header and footer (the MoTD and
+petition links, the online list, the license, the copyright line, the skin credit, the source link, the version, the
+page timing); their own text is unchanged from round 2.
+
+The refresh link: with no account loaded, `common.php` fills every account column with its default, so
+`restorepage` is a string ('' or the page asked for, which `NavigationState::validRestorePage()` allows only without
+quotes, angle brackets, backslash or backtick), and the page escapes it with `htmlspecialchars(..., ENT_QUOTES)`. The
+new HTTP test checks `home.php?a=1&b=2` (shown as `&amp;`) and a query with encoded markup (shown still encoded).
+
+### Tests
+
+- Added `tests/tooling/test_operator_pages.py` (no database): the not-installed page and the database error page,
+  served from a symlinked copy of the tree, answer 200 with no error text, their own text (the CLI instruction; "Unable
+  to connect to the database server."), the copyright line and the license once each, and the version. A static test
+  keeps the footer values before the first `page_header()` call and the tamper check after the upgrade page. On the
+  old tree all three fail (`Runtime error in template.php:90`; the values after the first page).
+- Added `test_upgrade_needed_page_and_copyright_footer_http`: a signed-in page and an anonymous page carry the
+  copyright line and no `0`; with a mismatched installer version, the anonymous and the signed-in upgrade page render
+  with the text, the copyright line, the license, no `installer.php`, and the escaped refresh link. On the old tree it
+  fails at the signed-in copyright line (`1 != 0`); with only the template fix, at the upgrade page (`Runtime error
+  in template.php:90`); without the buff and companion defaults, at the signed-in upgrade page (`count(): Argument
+  #1 ($value) must be of type Countable|array, null given`); without the template fix, at the signed-in copyright
+  line again.
+- `tests/tooling/test_license_text.py` is unchanged and passes.
+
+### Verification
+
+Local, on the working tree (supporting evidence only; CI on the published commit is the acceptance). PHP 8.5.12 with
+MySQL 8.4, one disposable database per run:
+
+- All four HTTP shards through `scripts/tooling-shards.py --shards 4` (`common.php` runs on every page), in parallel
+  copies, each after PHPUnit's fresh CLI install: shard 1 61 tests OK (1200 s), shard 2 51 OK (1344 s), shard 3 54
+  OK (1194 s), shard 4 53 OK (1278 s).
+- PHPUnit: 267 tests OK in each copy. `test_license_text.py`: 5 tests OK.
+- PHPStan `phpstan.neon` and `phpstan-new.neon`: no errors. `scripts/lint-php.py`: 369 files, 0 failures.
+- `composer validate --strict`, `composer install`, `composer audit` (no advisories).
+- `scripts/verify-historical-baseline.py`: PASS (417 files, 11 commits). `scripts/validate-project.py`: PASS (622
+  tracked files). `git diff --check`: clean.
