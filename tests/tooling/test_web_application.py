@@ -6811,6 +6811,49 @@ function MODULE_dohook($hook,$args) {
             fields=form(who=player);status,body=request(f'user.php?op=save&userid={player}',change(fields,gold=4321));self.assertEqual(200,status,body[:2000])
             self.assertEqual(200,request(f['edit'](player))[0]);self.assertEqual('4321',row(player)['gold'])
 
+    def test_dead_admin_flags_and_settings_are_hidden_http(self):
+        # "Manage Payment Log" (SU_EDIT_PAYLOG, 1024) and "View source code" (SU_VIEW_SOURCE, 1048576) grant nothing since
+        # the payment log and the source viewer were removed, and 1.1.2's PayPal and LoGDnet settings configure nothing
+        # (UNNECESSARY-FILES-20261024.md, round 2). The editors no longer show them. A save never changes a hidden bit or
+        # a stored row: an admin who holds a hidden flag keeps it, nobody can grant one, and the old rows stay as stored.
+        hidden={1024:'Manage Payment Log',1048576:'View source code'};kept=1024|1048576
+        old_settings={'paypalemail':'staff@example.test','paypalcurrency':'EUR','logdnet':'1','logdnetserver':'http://logdnet.example/','serverdesc':'Old','curltimeout':'3'}
+        with self._user_editor_fixture() as f:
+            q,target,request,login,row,form=(f[k] for k in ['q','target','request','login','row','form'])
+            saved=q('SELECT setting,value FROM settings ORDER BY setting');save=f'user.php?op=save&userid={target}'
+            try:
+                login(1)  # megauser: may set and clear every flag the editor shows
+                q('UPDATE accounts SET superuser=? WHERE acctid=?',[kept|8192,target])
+                status,body=request(f['edit']());self.assertEqual(200,status,body[:2000])
+                for bit,label in hidden.items():
+                    self.assertNotIn(f'superuser[{bit}]',body);self.assertNotIn(label,body)
+                self.assertIn('superuser[8192]',body);self.assertIn('Execute Raw SQL',body)  # still grants the creature A.I. script
+                # Unchanged, the form writes nothing; checking another flag keeps the hidden bits.
+                fields=form();self.assertNotIn(('superuser[1024]','1'),fields)
+                status,body=request(save,fields);self.assertEqual(200,status,body[:2000]);self.assertIn('No fields were changed',body)
+                self.assertEqual(str(kept|8192),row()['superuser'])
+                status,body=request(save,form()+[('superuser[256]','1')]);self.assertEqual(200,status,body[:2000]);self.assertEqual(str(kept|8192|256),row()['superuser'])
+                # Clearing every shown flag clears only those.
+                status,body=request(save,[(k,v) for k,v in form() if not k.startswith('superuser[') or k=='superuser[0]'])
+                self.assertEqual(200,status,body[:2000]);self.assertEqual(str(kept),row()['superuser'])
+                # A forged box grants nothing, and a forged clear removes nothing.
+                q('UPDATE accounts SET superuser=0 WHERE acctid=?',[target])
+                status,body=request(save,form()+[('superuser[1024]','1'),('superuser[1048576]','1')]);self.assertEqual(200,status,body[:2000])
+                self.assertIn('No fields were changed',body);self.assertEqual('0',row()['superuser'])
+                # The settings editor: no PayPal or LoGDnet field and no hidden flag; the server URL is still there.
+                login(128)
+                for name,value in old_settings.items():
+                    q('INSERT INTO settings(setting,value) VALUES (?,?) ON DUPLICATE KEY UPDATE value=VALUES(value)',[name,value])
+                status,body=request('configuration.php');self.assertEqual(200,status,body[:2000])
+                fields=dict(self._user_editor_form(body,'configuration.php?op=save'))
+                for name in [*old_settings,'paypaltext','paypalcountry-code','defaultsuperuser']: self.assertNotIn(name,fields)
+                self.assertIn('serverurl',fields);self.assertNotIn('View Source Code',body);self.assertNotIn('LoGDnet',body)
+                status,body=request('configuration.php?op=save',fields);self.assertEqual(200,status,body[:2000])
+                self.assertEqual(old_settings,{r['setting']:r['value'] for r in q('SELECT setting,value FROM settings WHERE setting IN (?,?,?,?,?,?)',list(old_settings))})
+            finally:
+                q('DELETE FROM settings')
+                for r in saved: q('INSERT INTO settings(setting,value) VALUES (?,?)',[r['setting'],r['value']])
+
     def test_user_editor_special_module_and_log_authority_http(self):
         with self._user_editor_fixture() as f:
             q,target,request,login,row,form,change,logs,module=(f[k] for k in ['q','target','request','login','row','form','change','logs','module'])
@@ -6925,19 +6968,18 @@ function MODULE_dohook($hook,$args) {
             finally: q("DELETE FROM translations WHERE author='fixture' AND intext='Unknown'")
 
     def test_unbound_sql_files_are_not_endpoints_http(self):
-        # The SQL sweep's unreachable class: the historical web installer's stages still paste values into SQL, but
-        # nothing reaches them. installer.php answers 403 before any include, and each file refuses a direct request.
+        # The SQL sweep's unreachable class: code that pasted values into SQL but that no request reached. installer.php
+        # still answers 403 before any include.
         client=self._security_client(login=None)
         self.assertEqual(403,client('installer.php')[0])
         attack={'username':"x' OR '1",'password':'x','name':'x','pass1':'xxxxxx','pass2':'xxxxxx'}
-        for path in ['lib/installer/installer_stage_0.php','lib/installer/installer_stage_9.php',
+        # 1.1.2's old lib/mail.php and the web installer's stages and helpers were in this class too. They are removed
+        # from main (UNNECESSARY-FILES-20261024.md; the stages in round 2, before which each answered 'Not an application
+        # endpoint.' with 404), so a request finds no file at all.
+        for path in ['lib/mail.php','lib/installer/installer_stage_0.php','lib/installer/installer_stage_9.php',
                      'lib/installer/installer_stage_10.php','lib/installer/installer_functions.php']:
-            status,body=client(path,attack)
-            self.assertEqual((404,'Not an application endpoint.'),(status,body),path)
-        # 1.1.2's old lib/mail.php was in this class too; it is removed from main (UNNECESSARY-FILES-20261024.md), so a
-        # request finds no file at all.
-        self.assertFalse((ROOT/'lib/mail.php').exists())
-        self.assertEqual(404,client('lib/mail.php',attack)[0])
+            self.assertFalse((ROOT/path).exists(),path)
+            self.assertEqual(404,client(path,attack)[0],path)
 
     def test_user_editor_stored_state_repair_http(self):
         # Stored values that fail their schemas lock a player out; the repair page shows only those and repairs each alone.
@@ -10598,7 +10640,10 @@ function MODULE_dohook($hook,$args) {
         status, headers, _ = request('village.php', extra_headers={'Cookie': 'PHPSESSID=' + authenticated_id})
         self.assertIn(status, (302, 303))
         self.assertIn('index.php', headers['Location'])
+        # 1.1.2's password recovery is removed (an unknown op, 400); the old email validation link still answers 410.
         status, _, _ = request('create.php?op=forgot')
+        self.assertEqual(400, status)
+        status, _, _ = request('create.php?op=val')
         self.assertEqual(410, status)
         status, _, _ = request('runmodule.php?module[]=drinks&admin=true')
         self.assertEqual(400, status)

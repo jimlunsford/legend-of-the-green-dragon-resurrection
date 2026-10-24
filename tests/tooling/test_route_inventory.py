@@ -92,6 +92,47 @@ def scan():
 
 
 ENTRY = re.compile(r'^(?P<page>[a-z_]+\.php)(?:\?(?P<query>.*))?$')
+_QUOTED = r"""(?:"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')"""
+# A link the game sends a browser to: a nav entry, an href or form action, a redirect or a Location header.
+LINK = re.compile(r"""(?:\baddnav\(\s*(?:""" + _QUOTED + r"""|[^,()'"]+)\s*,\s*|\bhref\s*=\s*|\baction\s*=\s*|"""
+                  r"""\bredirect\(\s*|\bLocation:\s*)\\?["']?(?P<page>[a-z_]+\.php)(?:\?(?P<query>[^'"\\\s<>]*))?""")
+# 1.1.2 links to optional pages it never shipped, listed for Jim (UNNECESSARY-FILES-20261024.md, round 2), not removed:
+# the Loot Editor and the Pavilion navs appear only if their file exists, and retitle.php is a hidden nav (no link).
+UNSHIPPED = {('superuser.php', 'looteditor.php'), ('village.php', 'pavilion.php'), ('village.php', 'retitle.php')}
+DEAD_STATUS = re.compile(r'^(?:403|404|410)\b|\bgets? (?:403|404|410)\b|\bSame (?:403|404|410)\b')
+
+
+def links(text):
+    """(page, op, module) for every link to a top-level page in the text. A value built at run time reads as empty."""
+    found = []
+    for match in LINK.finditer(text):
+        query = dict(re.findall(r'(?:^|&(?:amp;)?)(op|module)=([A-Za-z0-9_]*)', match.group('query') or ''))
+        found.append((match.group('page'), query.get('op', ''), query.get('module')))
+    return found
+
+
+def dead_links():
+    """Links in shipped files to a page that does not exist (404) or to an entry the inventory lists as DISABLED."""
+    pages = {path.name for path in ROOT.glob('*.php')}
+    disabled, enabled = {}, {}
+    for cells in inventory():
+        match = ENTRY.match(cells[0].strip('`'))
+        query = dict(part.split('=', 1) for part in (match.group('query') or '').split('&') if part)
+        if 'module' in query:
+            continue
+        ops = set(query.get('op', '').split('|'))
+        (disabled if cells[3] == 'DISABLED' else enabled).setdefault(match.group('page'), set()).update(ops)
+    dead = []
+    for path in [*shipped(), *sorted((ROOT / 'templates').glob('*.htm'))]:
+        for page, op, module in links(path.read_text(errors='replace')):
+            where = str(path.relative_to(ROOT))
+            if page not in pages and (where, page) not in UNSHIPPED:
+                dead.append((where, page, 'no such page (404)'))
+            elif page in disabled and (page not in enabled or op in disabled[page]):
+                dead.append((where, page + ('?op=' + op if op else ''), 'disabled (403, 404 or 410)'))
+            elif page == 'runmodule.php' and module and not (ROOT / 'modules' / (module + '.php')).is_file():
+                dead.append((where, page + '?module=' + module, 'no such module (404)'))
+    return dead
 
 
 def inventory():
@@ -187,6 +228,34 @@ class RouteInventoryTests(unittest.TestCase):
         tests = (ROOT / 'tests' / 'tooling' / 'test_web_application.py').read_text()
         for name in sorted({name for cells in rows.values() if 'RESCAN-TASK2' in cells[4] for name in re.findall(r'`(test_[a-z0-9_]+_http)`', cells[4])}):
             self.assertIn('def ' + name + '(self', tests, name)
+
+    def test_no_page_links_a_missing_or_disabled_page(self):
+        # A nav entry, link, form or redirect must not send a player or an admin to a page that answers 404, 403 or
+        # 410. Missing pages are 404; the inventory's DISABLED entries are the ones that answer 403, 404 or 410.
+        for cells in inventory():
+            if cells[3] == 'DISABLED':
+                with self.subTest(entry=cells[0]):
+                    self.assertRegex(cells[4], DEAD_STATUS)
+        for where, page in sorted(UNSHIPPED):
+            with self.subTest(unshipped=page):
+                self.assertFalse((ROOT / page).exists(), page + ' now ships: drop it from UNSHIPPED')
+                self.assertIn(page, [link[0] for link in links((ROOT / where).read_text())], where)
+        self.assertEqual([], dead_links())
+
+    def test_link_scan_finds_known_links(self):
+        # The scan itself must keep working: home.php's own navs and every link form it reads.
+        home = links((ROOT / 'home.php').read_text())
+        self.assertTrue({('create.php', '', None), ('list.php', '', None), ('about.php', 'setup', None)} <= set(home))
+        sample = '''addnav("Back","village.php"); addnav($label, 'forest.php?op=search'); addnav("Yes, really","inn.php?op=bartender");
+            output("<a href='bio.php?char=1'>"); rawoutput("<form action=\\"login.php?op=logout\\" method='POST'>");
+            redirect("news.php"); header('Location: index.php?op=timeout', true, 303); require_once("lib/nav.php");'''
+        self.assertEqual([('village.php', '', None), ('forest.php', 'search', None), ('inn.php', 'bartender', None),
+                          ('bio.php', '', None), ('login.php', 'logout', None), ('news.php', '', None),
+                          ('index.php', 'timeout', None)], links(sample))
+        self.assertEqual([('runmodule.php', 'enter', 'lovers')], links('addnav("L","runmodule.php?module=lovers&op=enter");'))
+        self.assertRegex('403: installation is a CLI action', DEAD_STATUS)
+        self.assertRegex('A web request gets 404 (`X.md`)', DEAD_STATUS)
+        self.assertNotRegex('Reads only; 404 is not involved here', DEAD_STATUS)
 
     def test_scan_finds_known_ops(self):
         # The scan itself must keep working: these are dispatched in four different ways.

@@ -119,6 +119,20 @@ function resurrection_user_editor_superuser(int $requested, int $old, int $edito
 }
 
 /**
+ * Flags the editor no longer shows because they grant nothing: SU_EDIT_PAYLOG (the payment log is removed) and
+ * SU_VIEW_SOURCE (the source viewer is removed). Their bits stay defined and stored; nobody can set or clear them here.
+ */
+function resurrection_user_editor_hidden_flags(): int {
+    return SU_EDIT_PAYLOG | SU_VIEW_SOURCE;
+}
+
+/** The posted flags with each hidden flag as the account already has it, so a save never changes a hidden bit. */
+function resurrection_user_editor_keep_hidden(int $requested, int $old): int {
+    $hidden = resurrection_user_editor_hidden_flags();
+    return ($requested & ~$hidden) | ($old & $hidden);
+}
+
+/**
  * What the edit form showed for each field, as showform() renders it: the name without its title, the
  * selected yes/no or choice (the browser selects the first option when none matches), an empty password.
  * @param array<string, array{type: string, options: list<string>, mask: int}> $schema
@@ -227,9 +241,9 @@ function resurrection_user_editor_save(int $userid, array $userinfo): void {
                         debuglog("Administrator changed account password", $userid);
                     }
                 } elseif ($key == "superuser") {
-                    if (resurrection_user_editor_superuser($val, (int)$snapshot['superuser'], (int)$session['user']['superuser']) === (int)$snapshot['superuser']) continue;
+                    if (resurrection_user_editor_superuser(resurrection_user_editor_keep_hidden($val, (int)$snapshot['superuser']), (int)$snapshot['superuser'], (int)$session['user']['superuser']) === (int)$snapshot['superuser']) continue;
                     $changed($key);
-                    $value = resurrection_user_editor_superuser($val, (int)$oldvalues['superuser'], (int)$session['user']['superuser']);
+                    $value = resurrection_user_editor_superuser(resurrection_user_editor_keep_hidden($val, (int)$oldvalues['superuser']), (int)$oldvalues['superuser'], (int)$session['user']['superuser']);
                     $sql .= db_identifier($key) . '=?,'; $parameters[] = $value;
                     $updates++;
                     output("Superuser values have changed.`n");

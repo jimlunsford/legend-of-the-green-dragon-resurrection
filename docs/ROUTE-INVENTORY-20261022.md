@@ -38,10 +38,10 @@ with `check_su_access()`. Short names in the evidence column: `CRS` is `CORE-ROU
 | Status | Entries |
 |---|---|
 | CLOSED | 88 |
-| DISABLED | 4 |
+| DISABLED | 3 |
 | READ-ONLY | 69 |
 | OPEN | 0 |
-| Total | 161 |
+| Total | 160 |
 
 ## Top-level pages
 
@@ -73,7 +73,7 @@ with `check_su_access()`. Short names in the evidence column: `CRS` is `CORE-ROU
 | `configuration.php?op=save\|modulesettings` | admin SU_EDIT_CONFIG | settings | CLOSED | `CRS`; `test_shared_typed_settings_http`. |
 | `create.php` | anonymous | no | READ-ONLY | The account form. |
 | `create.php?op=create` | anonymous | account | CLOSED | POST + CSRF, bound (`MODERN-CORE-CHECKPOINT-20260913-PHASE2.md`); `test_create_login_rotate_render_logout`. |
-| `create.php?op=forgot\|val` | anonymous | no | DISABLED | 410: legacy recovery and email validation stay disabled. |
+| `create.php?op=val` | anonymous | no | DISABLED | 410: email validation stays disabled. `op=forgot` (legacy recovery) is removed since 2026-10-24 and is refused as an unknown op (400); `test_create_login_rotate_render_logout`. |
 | `creatures.php` | admin SU_EDIT_CREATURES | no | READ-ONLY | `CONTENT-EDITORS-PART2-AUTHORITY-20261016.md`. |
 | `creatures.php?op=search\|add\|edit\|save\|del&subop=module` | admin SU_EDIT_CREATURES | creature rows, module preferences | CLOSED | `CONTENT-EDITORS-PART2-AUTHORITY-20261016.md`; `test_creature_and_master_editor_authority_http`. |
 | `cron.php` | CLI only | maintenance | DISABLED | A web request gets 404 (`COMPLETION-REPORTING-20261017.md`); `test_disabled_endpoints.py::test_web_cron_rejected_on_repeated_requests`. |
@@ -108,7 +108,6 @@ with `check_su_access()`. Short names in the evidence column: `CRS` is `CORE-ROU
 | `inn.php?op=room\|fleedragon` | player | gold, logout, Dragon flee | CLOSED | `INN-ECONOMY-AUTHORITY-20261015.md`; `test_inn_room_and_dragon_flee_authority_http`. |
 | `inn.php?op=converse\|strolldown` | player | commentary | CLOSED | Commentary through the shared helper; Seth's song hooks here (`runmodule.php?module=sethsong` row). |
 | `installer.php` | none | no | DISABLED | 403: installation is a CLI action (`MODERN-INSTALLATION.md`); the web installer test checks it. |
-| `installer.php?op=trycreate\|confirm_overwrite` | none | no | DISABLED | Same 403; the ops are the historical installer stages' links. |
 | `list.php` | anyone | no | READ-ONLY | This task: `op` and `page` checked, paging bound; `test_list_hall_of_fame_and_news_bound_requests_http`. |
 | `list.php?op=search\|clan` | anyone / player | no | READ-ONLY | This task: the search is bound (1.1.2 pasted it with `addslashes()`), split by character so the pattern stays UTF-8, at most 255 bytes; the clan list bound. |
 | `lodge.php` | player | commentary | CLOSED | Core spends no points: the `lodge` hook has no bundled consumer. Commentary through the shared helper, for members only. |
@@ -439,3 +438,26 @@ Removed entries (status before, and why):
 keeps its row: a transaction credit now returns to `donators.php` instead of the removed payment log.
 
 Counts: CLOSED 88, DISABLED 4, READ-ONLY 69, OPEN 0, total 161.
+
+## Dead weight, round 2, 2026-10-24
+
+Maintenance named by Jim (`UNNECESSARY-FILES-20261024.md`, "Dead weight, round 2"). The 62 top-level pages are
+unchanged.
+
+- `create.php?op=forgot|val` is now `create.php?op=val`: 1.1.2's password recovery (`op=forgot`, 410) is removed with
+  `home.php`'s "Forgotten Password" link, and `create.php` refuses it as an unknown op (400). Password resets stay an
+  admin action in the user editor. `op=val`, the old email validation link, still answers 410 and keeps its row.
+- `installer.php?op=trycreate|confirm_overwrite` (DISABLED, 403) is removed: the historical installer stages that linked
+  those ops are removed. `installer.php` keeps its row and still answers 403 to any request.
+- `common.php`'s "Game Installer" and "Installer (Admins only!)" links to `installer.php` are removed; the two pages
+  name the command-line installer in plain text instead.
+
+`test_route_inventory.py::test_no_page_links_a_missing_or_disabled_page` is new: no nav entry, link, form action or
+redirect in a shipped file (or a skin) points at a page that does not exist, or at an entry this inventory lists as
+DISABLED (each of which says 403, 404 or 410). Before this change it found 19 such links: `common.php` (4, to
+`installer.php`), `home.php` (1, to `create.php?op=forgot`) and the removed installer stages (14, to `installer.php`).
+Three 1.1.2 links to optional pages 1.1.2 never shipped are recorded in the test and listed for Jim, not removed
+(`superuser.php`'s Loot Editor and `village.php`'s Pavilion, shown only if their file exists, and `village.php`'s
+hidden `retitle.php` nav).
+
+Counts: CLOSED 88, DISABLED 3, READ-ONLY 69, OPEN 0, total 160.

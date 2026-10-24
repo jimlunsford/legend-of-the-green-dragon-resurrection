@@ -1007,3 +1007,20 @@ Source" link, which opened `source.php`, now links the `sourceurl` setting (defa
 the public repository), escaped, http or https only; the settings editor refuses
 any other value. See
 [unnecessary files, license and dead weight](UNNECESSARY-FILES-20261024.md).
+
+2026-10-24 dead weight, round 2 (maintenance named by Jim, not a phase): `home.php`'s
+"Forgotten Password" link and `create.php?op=forgot` (410) are removed; `create.php`
+refuses `op=forgot` as an unknown op (400), password resets stay an admin action in the
+user editor, and `op=val` still answers 410. `common.php`'s "Game Installer" and
+"Installer (Admins only!)" links to `installer.php` (403) are removed and the two
+pages name the command-line installer in plain text. The historical web installer's
+stages that nothing loads are removed with `installer_functions.php` and
+`lib/pullurl.php`; `installer_stage_6.php` stays for `InstallerStage6Test`, and
+`installer.php` still answers 403. The PayPal and LoGDnet settings are no longer
+declared (stored rows are not deleted) and `logdnet_sanitize()` is removed. The user
+editor no longer shows "Manage Payment Log" (`SU_EDIT_PAYLOG`) or "View source code"
+(`SU_VIEW_SOURCE`); a save keeps those bits exactly as stored, so nobody can grant or
+clear them, and every constant keeps its value. "Execute Raw SQL" (`SU_RAW_SQL`) stays:
+it still grants the creature A.I. script field. A new static test fails if any shipped
+page links a missing page or a DISABLED inventory entry. See
+[unnecessary files, dead weight round 2](UNNECESSARY-FILES-20261024.md).

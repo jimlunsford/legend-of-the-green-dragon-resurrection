@@ -202,8 +202,7 @@ $userinfo = array(
         SU_OVERRIDE_YOM_WARNING.",Do NOT display YOM warning for this person,".
 		SU_POST_MOTD.       ",Post MoTD's".
 		"<br/><br/><b>Donations</b>,".
-		SU_EDIT_DONATIONS.  ",Manage Donations*,".
-		SU_EDIT_PAYLOG.     ",Manage Payment Log".
+		SU_EDIT_DONATIONS.  ",Manage Donations*".
 		"<br/><br/><b>Game Development</b>,".
 		SU_INFINITE_DAYS.   ",Infinite Days*,".
 		SU_DEVELOPER.       ",Game Developer* (super powers),".
@@ -211,7 +210,6 @@ $userinfo = array(
 		SU_DEBUG_OUTPUT.    ",Debug Output,".
 		SU_SHOW_PHPNOTICE.  ",See PHP Notices in debug output,".
 		SU_RAW_SQL.         ",Execute Raw SQL*,".
-		SU_VIEW_SOURCE.     ",View source code,".
 		SU_GIVE_GROTTO.     ",Grotto access (only if not granted implicitly in another permission),".
 		SU_NEVER_EXPIRE.    ",Account never expires".
 		"<br/><br/>* Granting any of these options will hide the user from the HoF",

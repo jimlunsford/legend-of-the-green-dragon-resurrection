@@ -119,11 +119,11 @@ if (file_exists("dbconnect.php")){
 	 	if (!defined("DB_NODB")) define("DB_NODB",true);
 	 	page_header("The game has not yet been installed");
 		output("`#Welcome to `@Legend of the Green Dragon`#, a game by Eric Stevens & JT Traub.`n`n");
-		output("You must run the game's installer, and follow its instructions in order to set up LoGD.  You can go to the installer <a href='installer.php'>here</a>.",true);
+		// 1.1.2 linked its web installer here; installation is now a command-line action (docs/MODERN-INSTALLATION.md).
+		output("The game must be installed from the server's command line before it can be played: the operator runs `^php scripts/install.php`#, as docs/MODERN-INSTALLATION.md describes. There is no web installer.");
 		output("`n`nIf you're not sure why you're seeing this message, it's because this game is not properly configured right now. ");
 		output("If you've previously been running the game here, chances are that you lost a file called '`%dbconnect.php`#' from your site.");
-		output("If that's the case, no worries, we can get you back up and running in no time, and the installer can help!");
-		addnav("Game Installer","installer.php");
+		output("If that's the case, restore that file from your backup: the installer only sets up an empty database and never changes an existing one.");
 		page_footer();
 	}
 }
@@ -239,11 +239,11 @@ if (!isset($nokeeprestore[$SCRIPT_NAME]) || !$nokeeprestore[$SCRIPT_NAME]) {
 if ($logd_version != getsetting("installer_version","-1") && !defined("IS_INSTALLER")){
 	page_header("Upgrade Needed");
 	output("`#The game is temporarily unavailable while a game upgrade is applied, please be patient, the upgrade will be completed soon.");
-	output("In order to perform the upgrade, an admin will have to run through the installer.");
-	output("If you are an admin, please <a href='installer.php'>visit the Installer</a> and complete the upgrade process.`n`n",true);
+	// 1.1.2 sent admins to its web installer here; there is none now (docs/MODERN-INSTALLATION.md).
+	output("An administrator applies the upgrade from the server's command line; the web installer is no longer available.");
+	output("If you are the operator, see docs/MODERN-INSTALLATION.md: a database from an older version needs a separately verified migration before this version can use it.`n`n");
 	output("`@If you don't know what this all means, just sit tight, we're doing an upgrade and will be done soon, you will be automatically returned to the game when the upgrade is complete.");
 	rawoutput("<meta http-equiv='refresh' content='30; url=" . htmlspecialchars((string)$session['user']['restorepage'], ENT_QUOTES) . "'>");
-	addnav("Installer (Admins only!)","installer.php");
 	define("NO_SAVE_USER",true);
 	page_footer();
 }

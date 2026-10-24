@@ -11,8 +11,10 @@ use Resurrection\Http\Input;
 checkban();
 page_header('Create A Character');
 try {
-    $op = Input::choice($_GET, 'op', ['', 'create', 'forgot', 'val'], '');
-    if ($op === 'forgot' || $op === 'val') {
+    // 1.1.2's password recovery (op=forgot) is removed: an unknown op is refused (400). Resets stay an admin action in
+    // the user editor. op=val, the old email validation link, still answers 410.
+    $op = Input::choice($_GET, 'op', ['', 'create', 'val'], '');
+    if ($op === 'val') {
         http_response_code(410);
         output('Account recovery and the historical email login-link mechanism are disabled until secure recovery is available.');
     } elseif (!getsetting('allowcreation', 1) || getsetting('requirevalidemail', 0)) {

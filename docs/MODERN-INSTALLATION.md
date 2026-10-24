@@ -32,7 +32,7 @@ The historical web installer returns 403 before bootstrap. Direct requests canno
 
 ## Authentication and sessions
 
-Fresh accounts use password_hash(PASSWORD_DEFAULT) and password_verify. Legacy hashes and submitted stored hashes cannot authenticate. The former client-side MD5, password-derived recovery and email-validation login flows are unavailable. Recovery returns 410; email verification must be modernized before enabling requirevalidemail. Normal creation fails closed when that unsupported requirement is enabled.
+Fresh accounts use password_hash(PASSWORD_DEFAULT) and password_verify. Legacy hashes and submitted stored hashes cannot authenticate. The former client-side MD5, password-derived recovery and email-validation login flows are unavailable. Password recovery is removed (since 2026-10-24 an unknown op, 400; resets stay an admin action in the user editor) and the old email validation link returns 410; email verification must be modernized before enabling requirevalidemail. Normal creation fails closed when that unsupported requirement is enabled.
 
 Login, logout, account creation, password changes and the modified administrative/moderation/module mutations require POST and a session-bound CSRF token. Existing navigation state continues to govern game navigation and is not treated as CSRF protection. The logout link displays a confirmation form; POST destroys the native session and expires its cookie.
 

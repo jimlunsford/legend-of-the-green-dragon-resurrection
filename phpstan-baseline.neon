@@ -35,9 +35,3 @@ parameters:
 			identifier: array.duplicateKey
 			count: 1
 			path: lib/installer/installer_default_settings.php
-
-		-
-			message: '#^Undefined variable\: \$fp$#'
-			identifier: variable.undefined
-			count: 1
-			path: lib/pullurl.php

@@ -383,17 +383,9 @@ are not listed.
 | `lib/graveyard_combat.php` | `e_rand()` | 1 | server | Integer from the game's random number generator. |
 | `lib/installer/fresh_install.php` | `db_identifier(db_prefix('accounts'))` | 1 | server | `db_identifier()` of a fixed table name. |
 | `lib/installer/fresh_install.php` | `db_identifier(db_prefix('settings'))` | 2 | server | `db_identifier()` of a fixed table name. |
-| `lib/installer/installer_functions.php` | `db_identifier($dbname)` | 1 | unreachable | Historical web installer only: `installer.php` answers 403 before any include, and a direct request to this file gets 404 (guard added in this commit; `test_unbound_sql_files_are_not_endpoints_http`). |
 | `lib/installer/installer_sqlstatements.php` | `$creaturefields111` | 1 | server | Fixed column list defined at the top of the same file. |
 | `lib/installer/installer_sqlstatements.php` | `$creaturefields` | 287 | server | Fixed column list defined at the top of the same file. |
 | `lib/installer/installer_sqlstatements.php` | `getsetting("villagename", LOCATION_FIELDS)` | 2 | server | Read only by the CLI installer on an empty database, where it is the installer's default village name. |
-| `lib/installer/installer_stage_0.php` | `db_escape(httppost("password"))` | 1 | unreachable | Historical web installer only: `installer.php` answers 403 before any include, and a direct request to this file gets 404 (guard added in this commit; `test_unbound_sql_files_are_not_endpoints_http`). |
-| `lib/installer/installer_stage_0.php` | `db_escape(httppost("username"))` | 2 | unreachable | Historical web installer only: `installer.php` answers 403 before any include, and a direct request to this file gets 404 (guard added in this commit; `test_unbound_sql_files_are_not_endpoints_http`). |
-| `lib/installer/installer_stage_0.php` | `md5(md5(stripslashes(httppost("password"))))` | 1 | unreachable | Historical web installer only: `installer.php` answers 403 before any include, and a direct request to this file gets 404 (guard added in this commit; `test_unbound_sql_files_are_not_endpoints_http`). |
-| `lib/installer/installer_stage_10.php` | `$name` | 3 | unreachable | Historical web installer only: `installer.php` answers 403 before any include, and a direct request to this file gets 404 (guard added in this commit; `test_unbound_sql_files_are_not_endpoints_http`). |
-| `lib/installer/installer_stage_10.php` | `$pass` | 1 | unreachable | Historical web installer only: `installer.php` answers 403 before any include, and a direct request to this file gets 404 (guard added in this commit; `test_unbound_sql_files_are_not_endpoints_http`). |
-| `lib/installer/installer_stage_10.php` | `$su` | 1 | unreachable | Historical web installer only: `installer.php` answers 403 before any include, and a direct request to this file gets 404 (guard added in this commit; `test_unbound_sql_files_are_not_endpoints_http`). |
-| `lib/installer/installer_stage_9.php` | `$tablename` | 1 | unreachable | Historical web installer only: `installer.php` answers 403 before any include, and a direct request to this file gets 404 (guard added in this commit; `test_unbound_sql_files_are_not_endpoints_http`). |
 | `lib/lookup_user.php` | `$match[2] ?? 'ASC'` | 1 | server | `ASC` or `DESC`, matched by the ordering pattern. |
 | `lib/lookup_user.php` | `$predicate` | 2 | server | Fixed predicate with placeholders; the search text is bound. |
 | `lib/lookup_user.php` | `$sort` | 2 | server | `ORDER BY` of an allow-listed column and `ASC`/`DESC`. |
@@ -552,3 +544,17 @@ dead weight"). Its one row (`$lock ? " FOR UPDATE" : ""`, class server) left the
 `SqlSweepTest` requires for a value that is no longer interpolated. The five 410 stubs removed with it (`payment.php`,
 `source.php`, `rawsql.php`, `logdnet.php` and `images/logdnet.php`) ran no SQL and had no row. No other row changed,
 and the test is unchanged.
+
+## Reviewed list change, 2026-10-24 (dead weight, round 2)
+
+The historical web installer's stages that nothing loads were removed from `main` (`UNNECESSARY-FILES-20261024.md`,
+"Dead weight, round 2"): `installer_stage_0.php` to `_5.php`, `_7.php` to `_10.php`, `installer_stage_default.php`
+and `installer_functions.php`. Their eight rows, all class unreachable, left the reviewed list in the same commit, as
+`SqlSweepTest` requires for a value that is no longer interpolated: `installer_functions.php`'s
+`db_identifier($dbname)`; `installer_stage_0.php`'s `db_escape(httppost("password"))`, `db_escape(httppost("username"))`
+and `md5(md5(stripslashes(httppost("password"))))`; `installer_stage_10.php`'s `$name`, `$pass` and `$su`; and
+`installer_stage_9.php`'s `$tablename`. With them the unreachable class has no rows left. `installer_stage_6.php` stays
+(`InstallerStage6Test` runs it) and has no row: its only SQL names a literal table. `installer.php` still answers 403.
+`test_unbound_sql_files_are_not_endpoints_http` now asserts the removed files are absent and a request gets 404, as it
+did for `lib/mail.php`. No other row changed, and `SqlSweepTest` is unchanged; with the rows still listed it fails
+("Listed but no longer interpolated", the eight values above).

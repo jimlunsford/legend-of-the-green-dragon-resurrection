@@ -322,3 +322,166 @@ MySQL 8.4, one disposable database per run:
 
 Tracked files on `main`: 641 before, 634 after (12 removed; `NOTICE`, `docs/THIRD-PARTY-LICENSES.md`,
 `lib/source_link.php`, `tests/unit/SourceLinkTest.php` and `tests/tooling/test_license_text.py` added).
+
+## Accepted, 2026-10-24 (license and dead weight)
+
+"License and dead weight" is accepted at its own commit, `9fb11a65925bb5cf87267cc56f9c3ef808e23def`, read through the
+GitHub Actions API by the next task:
+
+- Modern core 40093585247: success. All 12 jobs success: for each leg (PHP 8.5 with MySQL 8.4, PHP 8.4 with MariaDB
+  11.4) `checks`, `http (1)` to `http (4)` and `result`.
+- Baseline integrity 40093585196: success.
+
+## Dead weight, round 2, 2026-10-24
+
+Maintenance named by Jim, not a phase. Starting head: `main` at `9fb11a65925bb5cf87267cc56f9c3ef808e23def`. The rule:
+remove what points at, configures or grants a feature that no longer exists; never a working game feature. Untouched:
+`LICENSE.txt`, `README.txt`, `NOTICE`, every copyright notice, the about-page text and `test_license_text.py`. The
+transaction credit and `favicon.png` stay. Every removed file stays byte for byte at `historical-source-1.1.2`.
+
+### 1. "Forgotten Password"
+
+- `home.php`'s "Forgotten Password" nav linked `create.php?op=forgot`, which only answered 410 (legacy recovery stays
+  disabled). The link is removed, and `op=forgot` leaves `create.php`'s op list, so it is refused as an unknown op
+  (400) like any other. Password resets stay an admin action: the user editor's "New Password" field.
+- `op=val` (1.1.2's email validation link) is kept: it still answers 410 with the same text. Nothing in the shipped
+  code links it, but emails sent by a 1.1.2 server may (listed below for Jim).
+- Proof: no other shipped file names `op=forgot` (`git grep`); the route inventory scan agrees.
+
+### 2. PayPal and LoGDnet settings, `logdnet_sanitize()`
+
+- Removed from `lib/configuration_descriptors.php`: the "Paypal" section (`paypalemail`, `paypalcurrency`,
+  `paypalcountry-code`, `paypaltext`, its note) and the "LoGDnet Setup" section (`logdnet`, `serverdesc`,
+  `logdnetserver`, `curltimeout`, its note); the unset list keeps only `defaultsuperuser`. `serverurl`, which 1.1.2
+  listed under LoGDnet, is a working setting (system mail and expiration notices link it) and moves to "Game Setup".
+- Removed from `lib/installer/installer_default_settings.php`: the same eight defaults, so a fresh install no longer
+  stores them. `serverurl` and `sourceurl` stay.
+- Stored rows in an existing database are not deleted. Nothing reads them, and the settings editor neither shows nor
+  writes an undeclared setting (the new HTTP test saves the editor with six such rows present and they stay as
+  stored).
+- `logdnet_sanitize()` is removed from `lib/sanitize.php`: no caller in any tracked file.
+- Proof: `git grep` finds no read of any of the eight settings outside the declarations and defaults; `curltimeout`
+  was read only by `lib/pullurl.php` (removed under 4).
+
+### 3. Admin flags that grant nothing
+
+Hidden from the user editor (`user.php`'s superuser bitfield) and from the settings editor's `defaultsuperuser`
+declaration (which the editor already never shows):
+
+- "Manage Payment Log", `SU_EDIT_PAYLOG` (1024): the payment log is removed; nothing checks the bit.
+- "View source code", `SU_VIEW_SOURCE` (1048576): the source viewer is removed; nothing checks the bit except
+  `SU_DOESNT_GIVE_GROTTO`, which keeps using it.
+
+Kept visible: "Execute Raw SQL*", `SU_RAW_SQL` (524288). The SQL console is removed, but the bit still grants the
+creature editor's A.I. script field (`creatures.php`, `lib/content_editor.php`) and still hides its holder from the
+Hall of Fame (`SU_HIDE_FROM_LEADERBOARD`), so it grants something.
+
+Every constant keeps its name and value in `lib/constants.php`. No account changes: a save keeps each hidden bit
+exactly as the account already holds it (`resurrection_user_editor_keep_hidden()` in `lib/user_editor.php`, applied
+before the unchanged 1.1.2 superuser arithmetic), so an admin who holds one keeps it, nobody can clear it, and a
+forged checkbox cannot grant it. Without that step a megauser saving an unchanged form would silently drop the hidden
+bits, because the browser no longer posts their boxes.
+
+### 4. The old web installer
+
+- `common.php`'s "Game Installer" link and nav (no `dbconnect.php`) and "Installer (Admins only!)" link and nav
+  ("Upgrade Needed") pointed at `installer.php`, which answers 403. They are removed, and each page names the
+  command line in plain text: the not-installed page says the operator runs `php scripts/install.php` as
+  `docs/MODERN-INSTALLATION.md` describes, and to restore a lost `dbconnect.php` from backup; the upgrade page says
+  an administrator applies upgrades from the command line and points at the same guide (an older database needs a
+  separately verified migration). Neither page shows a path, setting or account beyond the public repository's own
+  file names.
+- Which stages are still used: the CLI install (`scripts/install.php`, `cron.php`) loads only
+  `lib/installer/fresh_install.php`, which loads `installer_sqlstatements.php`, `installer_default_settings.php` and
+  `bundled_modules.php` (all kept). `installer.php` includes nothing. The tests load only `installer_stage_6.php`
+  (`tests/fixtures/installer-stage6.php`, `InstallerStage6Test`), which needs only `LegacyConfig`. Kept:
+  `installer.php` (the 403 answer) and `installer_stage_6.php`.
+- Removed, each proven unused (no reference outside `docs/` except the other removed stages and the test path list
+  updated below): `installer_stage_0.php` to `_5.php`, `_7.php` to `_10.php`, `installer_stage_default.php`,
+  `installer_functions.php` (required only by stages 3, 4, 5, 8 and 9) and `lib/pullurl.php` (required only by stage
+  1; `pullurl(` has no other caller). Its PHPStan baseline entry goes with it.
+
+### 5. The rest of the last report's list
+
+Everything else on the previous "Candidates for Jim" list is covered by 1 to 4, except the transaction credit and
+`favicon.png`, which stay as Jim decided.
+
+### Records updated in the same commit
+
+- `docs/ROUTE-INVENTORY-20261022.md`: `create.php?op=forgot|val` becomes `create.php?op=val`;
+  `installer.php?op=trycreate|confirm_overwrite` (its ops were the removed stages' links) is removed; counts CLOSED
+  88, DISABLED 3, READ-ONLY 69, OPEN 0, total 160; 62 top-level pages, unchanged. A new section records why.
+- `docs/RESCAN-TASK3-20261023.md`: the removed stages' eight rows (all unreachable) leave the SQL sweep's reviewed
+  list; `SqlSweepTest` is unchanged and fails with them still listed.
+- Serialized-state recount (same method, comments excluded): unchanged, 83 sites / 43 files / 38 serialize
+  writers-checks / 44 ScalarState reads / one centralized unserialize. None of the removed code held a site.
+  `SERIALIZED-STATE-AUDIT.md` and `CLAUDE.md` need no change.
+- `docs/CORE-ROUTE-SECURITY.md` (appended), `docs/MODERN-INSTALLATION.md` (recovery wording), `ROADMAP.md`.
+
+### Tests added and changed
+
+- Added `test_route_inventory.py::test_no_page_links_a_missing_or_disabled_page` (static): no nav entry, href, form
+  action, redirect or Location header in a shipped PHP file or skin points at a top-level page that does not exist,
+  a missing module, or an entry the route inventory lists as DISABLED (each DISABLED row must say 403, 404 or 410).
+  Before the change it fails with 19 dead links: `common.php` 4 (`installer.php`), `home.php` 1
+  (`create.php?op=forgot`) and the installer stages 14 (`installer.php`, `?op=trycreate`, `?op=confirm_overwrite`).
+  Three 1.1.2 links to pages 1.1.2 never shipped are listed in the test (`UNSHIPPED`), which also fails if one of
+  them ships or its link goes, and are listed for Jim below. `test_link_scan_finds_known_links` checks the scan.
+- Added `test_dead_admin_flags_and_settings_are_hidden_http`: the user editor (as megauser) shows neither hidden
+  flag's box nor label and still shows "Execute Raw SQL"; an unchanged save writes nothing; adding or clearing every
+  shown flag leaves the hidden bits as stored; forged hidden boxes grant nothing; the settings editor shows no PayPal
+  or LoGDnet field and still shows `serverurl`, and saving it leaves six stored PayPal and LoGDnet rows untouched.
+  Against the old tree it fails (`'superuser[1024]' unexpectedly found`); with the labels hidden but without the
+  keep-hidden step it fails too (`'No fields were changed' not found`: the save dropped the bits).
+- Added `UserEditorTest::testHiddenFlagsKeepTheirStoredBits` (the two bit values, the hidden mask, and the kept and
+  refused bits for three kinds of editor). Against the old code the functions do not exist.
+- Changed `test_create_login_rotate_render_logout`: `create.php?op=forgot` is now 400 (was 410), and a new assertion
+  keeps `create.php?op=val` at 410. Against the old tree it fails (`400 != 410`).
+- Changed `test_unbound_sql_files_are_not_endpoints_http`: the four installer files it requested no longer exist, so
+  it asserts each is absent and gets 404, as it already did for `lib/mail.php`; `installer.php` is still 403.
+
+### Found, not changed: the two installer pages fail to render
+
+Both pages that name the installer (no `dbconnect.php`, and "Upgrade Needed") stop with a runtime error before any
+text is shown, on `9fb11a6` as on this commit: `page_header()` runs `prepare_template()`, which reads the template
+values `$y2`, `$z2` and `$lc` (the copyright and license footer) that `common.php` sets only later (lines 283 to 310,
+after both pages), and the modern error handler turns the resulting undefined-variable warning into an exception
+(`Runtime error in template.php:90`). Seen locally with PHP's built-in server for the first page and with the HTTP
+fixture (installer version set to `1.1.1 Dragonprime Edition`) for the second. The text change above is correct but
+cannot be seen until this is fixed. It is not fixed here: the fix moves the copyright footer's setup, which this
+task does not name and which sits next to the copyright notices. Listed for Jim below.
+
+### Candidates for Jim (found, not removed)
+
+- The two installer pages' render failure (above). Suggested fix: compute the footer values before either early page,
+  with a test that renders both pages.
+- `create.php?op=val`: 410 only, linked from nothing shipped; old 1.1.2 emails may link it.
+- `superuser.php`'s "Loot Editor" and `village.php`'s "Eye-catching Pavilion" navs appear only if `looteditor.php` or
+  `pavilion.php` exists (neither is in 1.1.2); `village.php`'s hidden nav to `retitle.php` points at no file.
+- "Execute Raw SQL*" now grants only the creature A.I. script field; its label could say so (a label change only).
+- `installer_stage_6.php` is used only by its own test; the code path it tests (rewriting a pre-1.1.0
+  `dbconnect.php` during a web upgrade) has no caller.
+- `common.php`'s two `lib/smsnotify.php` hooks ("only really for Eric's server"): the file does not exist.
+- The `{paypal}` skin placeholder in 20 skins and `lib/template.php`'s required-tag list, emptied by
+  `lib/pageparts.php` (kept last round; still kept).
+- Not candidates, recorded: the `paylog`, `logdnet` and `logdnetbans` tables and the installer's `UPDATE logdnet`
+  upgrade statement stay so a 1.1.2 database still upgrades; the stored PayPal and LoGDnet setting rows stay.
+
+### Verification
+
+Local, on the working tree (supporting evidence only; CI on the published commit is the acceptance). PHP 8.5.12 with
+MySQL 8.4, one disposable database per run:
+
+- PHPUnit: 267 tests OK (was 266: `testHiddenFlagsKeepTheirStoredBits` added), in each of the four shard copies. It
+  includes `FreshInstallTest` (the real CLI install on an empty database, and refusal of a populated, installed or
+  upgrade-required one) and `InstallerStage6Test`.
+- All four HTTP shards through `scripts/tooling-shards.py --shards 4`, run in parallel copies, each after its own
+  fresh CLI install: shard 1 60 tests OK (1406 s), shard 2 50 OK (1318 s), shard 3 53 OK (1390 s), shard 4 52 OK
+  (1282 s). A first attempt failed because it overlapped with stale runs left over from a Docker restart (same
+  copies, same databases); it was discarded and all four shards were rerun clean.
+- PHPStan `phpstan.neon` and `phpstan-new.neon`: no errors. `scripts/lint-php.py`: 369 files, 0 failures.
+- `composer validate --strict`, `composer install`, `composer audit` (no advisories).
+- `scripts/verify-historical-baseline.py`: PASS (417 files, 11 commits). `scripts/validate-project.py`: PASS (621
+  tracked files). `git diff --check`: clean.
+
+Tracked files on `main`: 634 before, 621 after (13 removed, none added).

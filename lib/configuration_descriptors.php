@@ -11,6 +11,8 @@ function resurrection_core_layout(): array {
 		"maxonline"=>"Max # of players online (0 for unlimited), int",
 		"allowcreation"=>"Allow creation of new characters,bool",
 		"gameadminemail"=>"Admin Email",
+		// 1.1.2 listed the server URL under LoGDnet Setup, which is removed with LoGDnet. Mail and links still use it.
+		"serverurl"=>"Server URL",
 		"emailpetitions"=>"Should submitted petitions be emailed to Admin Email address?,bool",
 		"Enter languages here like this: `i(shortname 2 chars) comma (readable name of the language)`i and continue as long as you wish,note",
 		"serverlanguages"=>"Languages available on this server",
@@ -39,7 +41,6 @@ function resurrection_core_layout(): array {
 			"Flags automatically granted to new players,bitfield," .
 			($session['user']['superuser'] | SU_ANYONE_CAN_SET)." ,".
 			SU_INFINITE_DAYS.",Infinite Days,".
-			SU_VIEW_SOURCE.",View Source Code,".
 			SU_DEVELOPER.",Developer Super Powers (special inc list; god mode; auto defeat master; etc),".
 			SU_DEBUG_OUTPUT. ",Debug Output",
 		"newplayerstartgold"=>"Amount of gold to start a new character with,int",
@@ -76,20 +77,6 @@ function resurrection_core_layout(): array {
 		"innchance"=>"Chance for Something Special in the Inn,range,0,100,1",
 		"gravechance"=>"Chance for Something Special in the Graveyard,range,0,100,1",
 		"gardenchance"=>"Chance for Something Special in the Gardens,range,0,100,1",
-
-		"Paypal,title",
-		"paypalemail"=>"Email address of Admin's paypal account",
-		"paypalcurrency"=>"Currency type",
-		"paypalcountry-code"=>"What country's predominant language do you wish to have displayed in your PayPal screen?,enum
-		,US,United States,DE,Germany,AI,Anguilla,AR,Argentina,AU,Australia,AT,Austria,BE,Belgium,BR,Brazil,CA,Canada
-		,CL,Chile,C2,China,CR,Costa Rica,CY,Cyprus,CZ,Czech Republic,DK,Denmark,DO,Dominican Republic
-		,EC,Ecuador,EE,Estonia,FI,Finland,FR,France,GR,Greece,HK,Hong Kong,HU,Hungary,IS,Iceland,IN,India
-		,IE,Ireland,IL,Israel,IT,Italy,JM,Jamaica,JP,Japan,LV,Latvia,LT,Lithuania,LU,Luxembourg,MY,Malaysia
-		,MT,Malta,MX,Mexico,NL,Netherlands,NZ,New Zealand,NO,Norway,PL,Poland,PT,Portugal,SG,Singapore,SK,Slovakia
-		,SI,Slovenia,ZA,South Africa,KR,South Korea,ES,Spain,SE,Sweden,CH,Switzerland,TW,Taiwan,TH,Thailand,TR,Turkey
-		,GB,United Kingdom,UY,Uruguay,VE,Venezuela",
-		"paypaltext"=>"What text should be displayed as item name in the donations screen(player name will be added after it)?",
-		"(standard: 'Legend of the Green Dragon Site Donation from',note",
 
 		"General Combat,title",
 		"autofight"=>"Allow fighting multiple rounds automatically,bool",
@@ -195,14 +182,6 @@ function resurrection_core_layout(): array {
 		//this has been put to the dbconnect.php
 		*/
 
-		"LoGDnet Setup,title",
-		"(LoGDnet requires your PHP configuration to have file wrappers enabled!!),note",
-		"logdnet"=>"Register with LoGDnet?,bool",
-		"serverurl"=>"Server URL",
-		"serverdesc"=>"Server Description (75 chars max)",
-		"logdnetserver"=>"Master LoGDnet Server (default http://logdnet.logd.com/)",
-		"curltimeout"=>"How long we wait for responses from logdnet.logd.com (in seconds),range,1,10,1|2",
-
 		"Game day Setup,title",
 		"dayduration"=>"Day Duration,viewonly",
 		"curgametime"=>"Current game time,viewonly",
@@ -232,7 +211,8 @@ function resurrection_core_layout(): array {
 		"allowspecialswitch"=>"The Barkeeper may help you to switch your specialty?,bool",
 		"maxlistsize"=>"Maximum number of items to be shown in the warrior list,int",
 	);
- // Disabled source/payment/LoGDnet features do not gain writable configuration.
- unset($setup['defaultsuperuser'],$setup['paypalemail'],$setup['paypalcurrency'],$setup['paypalcountry-code'],$setup['paypaltext'],$setup['logdnet'],$setup['logdnetserver']);
+ // New accounts gain no flags from configuration. 1.1.2's PayPal and LoGDnet settings are no longer declared at all
+ // (payments and LoGDnet are removed); rows an existing database stores for them are left alone and never read.
+ unset($setup['defaultsuperuser']);
  return $setup;
 }

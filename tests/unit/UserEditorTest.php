@@ -53,6 +53,29 @@ final class UserEditorTest extends TestCase
         self::assertSame(SU_RAW_SQL, resurrection_user_editor_superuser(0, SU_RAW_SQL, $edit | SU_EDIT_CONFIG));
     }
 
+    public function testHiddenFlagsKeepTheirStoredBits(): void
+    {
+        // "Manage Payment Log" and "View source code" grant nothing and are no longer shown. Their bits keep their values
+        // (stored in every admin's permission number, and SU_DOESNT_GIVE_GROTTO uses SU_VIEW_SOURCE).
+        self::assertSame(1024, SU_EDIT_PAYLOG);
+        self::assertSame(1048576, SU_VIEW_SOURCE);
+        self::assertSame(SU_EDIT_PAYLOG | SU_VIEW_SOURCE, resurrection_user_editor_hidden_flags());
+        self::assertSame(SU_VIEW_SOURCE, SU_DOESNT_GIVE_GROTTO & SU_VIEW_SOURCE);
+        $hidden = SU_EDIT_PAYLOG | SU_VIEW_SOURCE;
+        // A save without the boxes keeps what the account holds, and a forged box grants nothing, for any editor.
+        foreach ([SU_MEGAUSER, SU_EDIT_USERS, SU_EDIT_USERS | $hidden] as $editor) {
+            $kept = static fn (int $requested, int $old): int => resurrection_user_editor_superuser(resurrection_user_editor_keep_hidden($requested, $old), $old, $editor);
+            self::assertSame($hidden | SU_DEBUG_OUTPUT, $kept(SU_DEBUG_OUTPUT, $hidden | SU_DEBUG_OUTPUT), (string)$editor);
+            self::assertSame($hidden, $kept(0, $hidden), (string)$editor);
+            self::assertSame(SU_EDIT_PAYLOG, $kept(0, SU_EDIT_PAYLOG), (string)$editor);
+            self::assertSame(0, $kept($hidden, 0), (string)$editor);
+            self::assertSame(SU_VIEW_SOURCE, $kept(SU_EDIT_PAYLOG, SU_VIEW_SOURCE), (string)$editor);
+        }
+        // Every other bit is passed through unchanged.
+        self::assertSame(0xFFFFFFFF & ~$hidden, resurrection_user_editor_keep_hidden(0xFFFFFFFF, 0));
+        self::assertSame($hidden, resurrection_user_editor_keep_hidden(0, 0xFFFFFFFF));
+    }
+
     public function testPrivilegeCheckboxesAreSingleBitsCheckedOnce(): void
     {
         self::assertSame(SU_EDIT_USERS | SU_MEGAUSER, resurrection_user_editor_bits([0 => '1', 64 => '1', 1 => '1']));
