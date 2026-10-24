@@ -1,23 +1,23 @@
 """Exercise real HTTP entrypoints on loopback without bootstrapping a game."""
 import http.client
-import os
 from pathlib import Path
 import re
-import shutil
 import socket
 import subprocess
+import sys
 import tempfile
 import time
 import unittest
 
 ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from php_runtime import supported_php  # noqa: E402
 
 class DisabledEndpointTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        php = os.environ.get('PHP_BINARY') or shutil.which('php')
-        if not php:
-            raise unittest.SkipTest('PHP required; mandatory in Modern core CI')
+        # A supported PHP, or a skip (a failure in Modern core).
+        php = supported_php()
         with socket.socket() as sock:
             sock.bind(('127.0.0.1', 0))
             cls.port = sock.getsockname()[1]
@@ -66,6 +66,18 @@ class DisabledEndpointTests(unittest.TestCase):
                     self.assertIsNone(response.getheader('Set-Cookie'))
                     conn.close()
 
+    def test_web_cron_rejected_on_repeated_requests(self):
+        for method in ('GET', 'POST', 'GET'):
+            conn = http.client.HTTPConnection('127.0.0.1', self.port, timeout=3)
+            conn.request(method, '/cron.php')
+            response = conn.getresponse()
+            self.assertEqual(response.status, 404)
+            self.assertEqual(response.read(), b'Not found.\n')
+            conn.close()
+
+
+class ShippedLinkTests(unittest.TestCase):
+    # Static: runs wherever the suite runs, with or without a supported PHP.
     def test_no_shipped_file_links_a_removed_file(self):
         # The removed endpoints and 1.1.2's PayPal buttons: no page, library, module or skin links them (a quoted name,
         # path or attribute value); comments that tell their history may still name them.
@@ -75,12 +87,3 @@ class DisabledEndpointTests(unittest.TestCase):
         self.assertGreater(len(shipped), 300)
         found = [f'{p.relative_to(ROOT)}: {m.group(0)}' for p in shipped for m in removed.finditer(p.read_text(errors='replace'))]
         self.assertEqual([], found)
-
-    def test_web_cron_rejected_on_repeated_requests(self):
-        for method in ('GET', 'POST', 'GET'):
-            conn = http.client.HTTPConnection('127.0.0.1', self.port, timeout=3)
-            conn.request(method, '/cron.php')
-            response = conn.getresponse()
-            self.assertEqual(response.status, 404)
-            self.assertEqual(response.read(), b'Not found.\n')
-            conn.close()

@@ -9,9 +9,9 @@ import html
 import os
 from pathlib import Path
 import re
-import shutil
 import socket
 import subprocess
+import sys
 import tempfile
 import time
 import unittest
@@ -19,6 +19,9 @@ import urllib.error
 import urllib.request
 
 ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from php_runtime import supported_php  # noqa: E402
+
 COPYRIGHT = 'Game Design and Code: Copyright &copy; 2002-2005, Eric Stevens & JT Traub, &copy; 2006-2007, Dragonprime Development Team'
 LICENSE = "This work is licensed under a <a rel='license' href='http://creativecommons.org/licenses/by-nc-sa/2.0/' target='_blank'>Creative Commons License</a>."
 ERROR = re.compile(r'(?i)fatal error|runtime error|warning:|notice:|deprecated:|uncaught')
@@ -30,14 +33,10 @@ def text(body):
 
 
 class OperatorPageTests(unittest.TestCase):
-    @classmethod
-    def setUpClass(cls):
-        cls.php = os.environ.get('PHP_BINARY') or shutil.which('php')
-        if not cls.php:
-            raise unittest.SkipTest('PHP required; mandatory in Modern core CI')
-
     def serve(self, config=None):
         """GET home.php from a fresh server on a symlinked copy of the tree; config is the dbconnect.php to use."""
+        # The pages run the application's PHP: a supported PHP, or a skip (a failure in Modern core).
+        php = supported_php()
         with tempfile.TemporaryDirectory(prefix='resurrection-operator-') as tree:
             for entry in ROOT.iterdir():
                 if entry.name not in ('dbconnect.php', '.git'):
@@ -49,7 +48,7 @@ class OperatorPageTests(unittest.TestCase):
                 port = sock.getsockname()[1]
             sessions = Path(tree) / '.sessions'
             sessions.mkdir()
-            server = subprocess.Popen([self.php, '-d', 'display_errors=1', '-d', 'session.save_path=' + str(sessions),
+            server = subprocess.Popen([php, '-d', 'display_errors=1', '-d', 'session.save_path=' + str(sessions),
                                        '-S', f'127.0.0.1:{port}', '-t', tree], cwd=tree,
                                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             try:

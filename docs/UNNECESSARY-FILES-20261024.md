@@ -591,3 +591,81 @@ MySQL 8.4, one disposable database per run:
 - `composer validate --strict`, `composer install`, `composer audit` (no advisories).
 - `scripts/verify-historical-baseline.py`: PASS (417 files, 11 commits). `scripts/validate-project.py`: PASS (622
   tracked files). `git diff --check`: clean.
+
+## Baseline on the runner's PHP, 2026-10-24
+
+Fix named by Jim, not a phase. Starting head: `main` at `754bf14ed01970858be6afd5c2f4b62e9147c22f` ("Installer
+pages").
+
+### The failed run
+
+`754bf14`'s own runs, read through the GitHub Actions API, stay on record:
+
+- Modern core 40109324440: success, all 12 jobs.
+- Baseline integrity 40109324481: failure. Job `provenance` (120917544779), step 5 "Test integrity rejection cases"
+  (`python3 -m unittest discover -s tests/tooling -v`, 15:57:35 to 15:57:38Z): 28 tests, 1 failure, 1 skipped.
+  `test_operator_pages.OperatorPageTests.test_database_connection_error_page_shows_its_text_and_footer` failed in
+  `assertRendered` at `assertNotRegex(body, ERROR)`: expected no error text, the page held `Fatal error: Uncaught
+  Error: Class "Pdo\Mysql" not found in lib/dbwrapper_pdo.php on line 26` (from `db_connect()`, `common.php:151`).
+  The job log was readable this time; reproduced locally with PHP 8.3.6 and no database: the same failure, and the
+  other 27 tests as in the job.
+
+### The cause
+
+The Baseline job installs no PHP, so the test ran on the runner's system PHP, 8.3. `Pdo\Mysql` exists from PHP 8.4,
+and the project supports only PHP 8.4 and 8.5 (`composer.json`: `"php": "~8.4.0 || ~8.5.0"`). The product is not at
+fault; the test ran PHP on a version the project does not support. The tooling tests that ran PHP skipped only when
+there was no PHP at all. `test_disabled_endpoints.py` shares that gap (it passed on 8.3, by chance of what it calls).
+`test_web_application.py` runs PHP only with the installed CI database and skips without it, so Baseline never runs
+its PHP.
+
+### The fix
+
+- `tests/tooling/php_runtime.py`: `supported_php()` returns the PHP binary when its version is at least the lowest
+  that `composer.json`'s constraint allows (read from the file, 8.4 now). Otherwise it skips, with the reason
+  (`PHP 8.3 at /usr/bin/php is older than the supported minimum, PHP 8.4 (composer.json); these tests run in Modern
+  core`). With `RESURRECTION_REQUIRE_PHP=1` the same case, or no PHP, is an error instead. A PHP whose version cannot
+  be read is an error either way, never a skip.
+- `test_operator_pages.py` and `test_disabled_endpoints.py` get their PHP from it. The two operator page tests
+  check per test, so the static order test still runs everywhere; `test_disabled_endpoints.py`'s static link scan
+  moved to its own class, `ShippedLinkTests`, for the same reason (the test itself is unchanged). On a supported PHP
+  every test runs exactly as before.
+- Modern core's `http` jobs (the ones that run the tooling shards on PHP 8.4 and 8.5) set
+  `RESURRECTION_REQUIRE_PHP: '1'`, so a skip of these tests fails the job with its reason. `scripts/tooling-shards.py`
+  already fails a shard with any skipped test; the variable makes the failure name the cause and holds outside the
+  shard runner too.
+- Baseline integrity is unchanged: still provenance, no PHP installed, the same command.
+- `tests/tooling/test_php_runtime.py` (no PHP needed: fake binaries print a version): the minimum comes from
+  `composer.json`; an older PHP skips with the reason, and with the variable set to `1` (only `1`) fails; 8.4, 8.5
+  and newer run with or without it; no PHP skips, or fails when required; an unreadable version fails; Modern core's
+  `http` job sets the variable once and installs the matrix PHP (8.4 and 8.5), Baseline neither installs PHP nor sets
+  it; and no other tooling test finds PHP except through the guard (`test_web_application.py` excepted, as above).
+
+Before the fix: on `754bf14`'s tree the new test file errors on import (no `php_runtime`); with the guard but
+without the workflow variable, `test_modern_core_requires_php_and_baseline_does_not` fails (`1 != 0`); with
+`test_operator_pages.py` alone reverted, PHP 8.3 fails the database error page again and
+`test_tooling_tests_find_php_only_through_the_guard` fails (`['test_operator_pages.py']`).
+
+### Verification
+
+Local, on the working tree (supporting evidence only; CI is the acceptance):
+
+- The Baseline step's command, `python3 -m unittest discover -s tests/tooling -v`, no database:
+  - PHP 8.3.6: OK, 32 tests, 4 skipped (the `DisabledEndpointTests` class and the two operator pages, each with the
+    reason above; the web tests for their database).
+  - PHP 8.5.12: OK, 34 tests, 1 skipped (the web tests for their database).
+  - PHP 8.3.6 with `RESURRECTION_REQUIRE_PHP=1`: exit 1, 3 errors (the same three, `RuntimeError: ...;
+    RESURRECTION_REQUIRE_PHP=1 requires them to run`) instead of skips.
+- The changed and new tests fall in all four shards, so all four ran, PHP 8.5.12 with MySQL 8.4 and
+  `RESURRECTION_REQUIRE_PHP=1` as in Modern core, each after PHPUnit's fresh install (267 tests OK each): shard 1
+  62 tests OK (1220 s), shard 2 54 OK (1307 s), shard 3 54 OK (1232 s), shard 4 55 OK (1390 s), 0 skipped.
+  PHP 8.4 is not available locally; Modern core's 8.4 leg covers it.
+- PHPStan `phpstan.neon` and `phpstan-new.neon`: no errors. `scripts/lint-php.py`: 369 files, 0 failures.
+- `scripts/verify-historical-baseline.py`: PASS (417 files, 11 commits). `scripts/validate-project.py`: PASS.
+  `git diff --check`: clean.
+
+### Acceptance of `754bf14`
+
+`754bf14` is not accepted on its own runs: its Baseline integrity run failed. It is accepted only through this fix,
+its first descendant, if both Modern core legs and Baseline integrity succeed on this commit; the next task records
+those runs.

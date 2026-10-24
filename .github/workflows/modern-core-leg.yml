@@ -82,6 +82,8 @@ jobs:
       RESURRECTION_TEST_DB_USER: resurrection_test
       RESURRECTION_TEST_DB_PASSWORD: disposable-test-only
       RESURRECTION_TEST_DB_NAME: resurrection_test
+      # PHP tooling tests skip on a PHP older than composer.json allows (Baseline's system PHP); here that fails.
+      RESURRECTION_REQUIRE_PHP: '1'
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
