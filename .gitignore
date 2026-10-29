@@ -6,6 +6,8 @@
 !.env.example
 *.key
 *.pem
+# Local play (scripts/local-play.py): generated credentials and backups
+/.local-play/
 # Disposable lab data, sessions, output and credentials
 .runtime/
 lab/**/runtime/

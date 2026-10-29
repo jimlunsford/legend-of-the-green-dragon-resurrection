@@ -1,0 +1,120 @@
+# Legend of the Green Dragon - Resurrection: a game on your own computer (Phase 4 task 3).
+#
+# LOCAL USE ONLY, not for hosting. PHP's built-in web server, no TLS, mail goes nowhere, and the game is published
+# only on 127.0.0.1. Public hosting is not approved (ROADMAP.md, "Public hosting").
+#
+# Use it through `python3 scripts/local-play.py up | stop | wipe | backup | upgrade` (docs/MODERN-INSTALLATION.md,
+# "Play locally"), which generates the credentials into the ignored .local-play/ directory before Compose reads them.
+name: resurrection-local
+
+services:
+  db:
+    image: mariadb:11.4
+    command: ["--character-set-server=utf8mb4", "--collation-server=utf8mb4_unicode_ci"]
+    env_file:
+      - path: ../.local-play/database.env
+        required: false
+    volumes:
+      - db:/var/lib/mysql
+    # No ports: the database is reachable only from the other containers, on the internal network.
+    networks:
+      - database
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+    restart: unless-stopped
+
+  # One-off: installs a new game, or reports an existing game's upgrade state (local/setup.sh). Never serves.
+  setup:
+    image: resurrection-local-game
+    command: ["sh", "/usr/local/lib/resurrection-local/setup.sh"]
+    env_file:
+      - path: ../.local-play/database.env
+        required: false
+      - path: ../.local-play/admin.env
+        required: false
+    volumes:
+      - config:/config
+    networks:
+      - database
+    depends_on:
+      db:
+        condition: service_healthy
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    read_only: true
+    tmpfs:
+      - /tmp
+    profiles:
+      - tools
+
+  app:
+    build:
+      context: ..
+      dockerfile: local/Dockerfile
+    image: resurrection-local-game
+    command: ["php", "-S", "0.0.0.0:8080", "-t", "/srv/game"]
+    environment:
+      PHP_CLI_SERVER_WORKERS: "4"
+    # Published on the loopback address only: reachable from this computer, not from the network.
+    ports:
+      - "127.0.0.1:${RESURRECTION_LOCAL_PORT:-8080}:8080"
+    volumes:
+      - config:/config:ro
+    networks:
+      - database
+      - web
+    depends_on:
+      db:
+        condition: service_healthy
+    init: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    read_only: true
+    tmpfs:
+      - /tmp
+    healthcheck:
+      test: ["CMD", "php", "-r", "exit(@file_get_contents('http://127.0.0.1:8080/') === false ? 1 : 0);"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    restart: unless-stopped
+
+  cron:
+    image: resurrection-local-game
+    command: ["sh", "/usr/local/lib/resurrection-local/cron.sh"]
+    volumes:
+      - config:/config:ro
+    networks:
+      - database
+    depends_on:
+      db:
+        condition: service_healthy
+    init: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    read_only: true
+    tmpfs:
+      - /tmp
+    restart: unless-stopped
+
+networks:
+  # Internal: no route out and nothing published. Only the app also joins `web`, to publish its loopback port.
+  database:
+    internal: true
+  web: {}
+
+volumes:
+  db:
+  config:

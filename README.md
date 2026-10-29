@@ -27,6 +27,18 @@ The goal is to preserve recognizable gameplay, atmosphere, progression and modul
 
 The original 11 preservation commits and exact 417-file core tree remain reachable under the immutable historical tag. Historical TXT documentation remains intact. The separate 187-entrypoint module archive is reference material, not an automatically supported module set. See [PROVENANCE.md](PROVENANCE.md).
 
+## Play it on your own computer
+
+Local use only, not for hosting. With Docker (Compose v2.24 or newer) and Python 3:
+
+```sh
+python3 scripts/local-play.py up      # start the game; the first time, install it
+python3 scripts/local-play.py stop    # stop it; the game is kept
+python3 scripts/local-play.py wipe    # delete the game and its data
+```
+
+Then open http://127.0.0.1:8080/. Details, upgrades and backups: [Play locally](docs/MODERN-INSTALLATION.md#play-locally).
+
 ## Development model
 
 Modernize and test the core boundaries first. Compare specific gameplay behavior against the preserved baseline when needed.

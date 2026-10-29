@@ -357,3 +357,28 @@ ignored, so CI scans the same list. The test, its matching and its classes are u
 
 **Acceptance.** `ca4e660`'s own run failed. Task 2 is accepted only through this fix commit's runs, as the first
 accepted descendant of `ca4e660`, once Modern core (both legs, all 12 jobs) and Baseline integrity succeed on it.
+
+## Acceptance (appended 2026-10-29, task 3)
+
+Task 2 is **accepted through `86f8e74`**, the first accepted descendant of `ca4e660`. Read through the GitHub Actions
+API on 2026-10-29:
+
+| Commit | Workflow | Run | Result |
+|---|---|---|---|
+| `ca4e660` (task 2) | Modern core | 40855211633 | FAILURE, every job at `composer test` (`SqlSweepTest`, three unreviewed values in `lib/upgrade.php`; above). Kept on record |
+| `ca4e660` | Baseline integrity | 40855211402 | success |
+| `86f8e74` (the fix) | Modern core | 40858859597 | **SUCCESS, all 12 jobs**: both legs' `checks`, eight `http` shards and both `result` jobs, 10:36 to 10:55 UTC |
+| `86f8e74` | Baseline integrity | 40858859591 | **SUCCESS** |
+
+`ca4e660`'s own run is not acceptance; `86f8e74`'s runs are, for both commits. `ROADMAP.md` marks task 2 done in the
+task 3 commit.
+
+**Shard times on `86f8e74`** (the `tooling-shards.py` step of each `http` job, from the job steps' start and end times):
+
+| Leg | Shard 1 | Shard 2 | Shard 3 | Shard 4 |
+|---|---|---|---|---|
+| PHP 8.4 / MariaDB 11.4 | 16:24 | 14:10 | 18:24 | 16:01 |
+| PHP 8.5 / MySQL 8.4 | 18:29 | 18:43 | 18:07 | 15:51 |
+
+Whole `http` jobs took 14:56 to 19:34. Every shard is well under the 30-minute mark in `CLAUDE.md`, so
+`tests/tooling/shard-durations.json` needs no refresh.

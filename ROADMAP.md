@@ -181,13 +181,18 @@ The release itself stays excluded until Jim says so: hosting, tags, GitHub relea
 
 - [x] 1A: start Phase 4 (docs only). Records the acceptance of `754bf14` (through `9620489`) and `9620489`; `CLAUDE.md` gets the current phase, the fresh-install-only exclusion and the versioning rule; `docs/MODERN-INSTALLATION.md` describes the install as it works today. Accepted at `b38bc21`, Modern core 40119918321 (all 12 jobs), Baseline integrity 40119918310.
 - [x] 1B: a fresh install ready to play: activate the recommended modules during install, a guided config file step, and an "unsupported" message for a 1.1.2 database (`docs/PHASE4-TASK1B-FRESH-INSTALL-20261029.md`). Accepted at `504b5aa`, Modern core 40800637109 (all 12 jobs), Baseline integrity 40800637058.
-- [ ] 2: the version number and the upgrade system, built before anything ships (`docs/PHASE4-TASK2-UPGRADE-SYSTEM-20261029.md`). Done when CI accepts it.
-  - [ ] One version number, `1.0.0-dev`, in `src/Version.php`, read by the code, `project.json` and the docs check; the footer shows it and credits 1.1.2; the shown version is no longer the install marker.
-  - [ ] Schema state: the `upgrade_steps` ledger, numbered steps in `upgrades/`, bundled module upgrades through the lifecycle API, "Upgrade Needed" when behind, a refusal for a downgrade, a 1.1.2 database still unsupported.
-  - [ ] `php scripts/upgrade.php`: CLI only, the install's configuration, the install and maintenance locks, `--dry-run`, `--backup-confirmed`, stop at the first failure.
-  - [ ] Tests: the runner, an equivalence test with temporary test-only steps, and the release upgrade check in Modern core ("no release yet" until a release tag exists).
-  - [ ] Docs: `docs/VERSIONING.md` rewritten, "Upgrading" in `docs/MODERN-INSTALLATION.md`.
-- [ ] 3: one-command local setup.
+- [x] 2: the version number and the upgrade system, built before anything ships (`docs/PHASE4-TASK2-UPGRADE-SYSTEM-20261029.md`). `ca4e660`'s own Modern core 40855211633 failed (`SqlSweepTest`, three unreviewed values in `lib/upgrade.php`) and stays on record. Accepted through `86f8e74`, its first accepted descendant: Modern core 40858859597 (all 12 jobs), Baseline integrity 40858859591.
+  - [x] One version number, `1.0.0-dev`, in `src/Version.php`, read by the code, `project.json` and the docs check; the footer shows it and credits 1.1.2; the shown version is no longer the install marker.
+  - [x] Schema state: the `upgrade_steps` ledger, numbered steps in `upgrades/`, bundled module upgrades through the lifecycle API, "Upgrade Needed" when behind, a refusal for a downgrade, a 1.1.2 database still unsupported.
+  - [x] `php scripts/upgrade.php`: CLI only, the install's configuration, the install and maintenance locks, `--dry-run`, `--backup-confirmed`, stop at the first failure.
+  - [x] Tests: the runner, an equivalence test with temporary test-only steps, and the release upgrade check in Modern core ("no release yet" until a release tag exists).
+  - [x] Docs: `docs/VERSIONING.md` rewritten, "Upgrading" in `docs/MODERN-INSTALLATION.md`.
+- [ ] 3: one-command local setup: `python3 scripts/local-play.py up` brings up a playable local game from a clean clone, for local play and development only, never hosting (`docs/PHASE4-TASK3-LOCAL-SETUP-20261029.md`). Done when CI accepts it.
+  - [ ] Docker Compose (`local/compose.yaml`): PHP 8.4 with CI's php.ini and MariaDB 11.4; an empty database, the config written by `scripts/install.php --write-config` (0600), the recommended modules, the administrator, the game served, `php cron.php` on a schedule.
+  - [ ] Safe by default: the game on 127.0.0.1 only, no database port, generated credentials in the ignored `.local-play/`, the database password never printed, the administrator login printed once, labelled local use only.
+  - [ ] A second `up` keeps the game; when the code is newer than the database it says so, shows the backup and upgrade commands, and does not upgrade; `stop`, and `wipe` with the data volumes.
+  - [ ] Tests: the static test `tests/tooling/test_local_play.py`; the full flow run once from a clean clone (supporting evidence).
+  - [ ] Docs: "Play locally" in `docs/MODERN-INSTALLATION.md`.
 
 ### Public hosting
 

@@ -2,9 +2,44 @@
 
 Public hosting is not approved yet. These instructions are for a local, disposable development installation. Resurrection installs fresh only: a 1.1.2 database is not migrated or upgraded.
 
+## Play locally
+
+**Local use only, not for hosting.** This runs the game on your own computer for play and development. It uses PHP's built-in web server, no TLS and no mail, and publishes the game only on 127.0.0.1. Public hosting is not approved and has its own gates (`ROADMAP.md`, "Public hosting").
+
+You need Docker with Compose v2.24 or newer, and Python 3. From a clone of the repository:
+
+```sh
+python3 scripts/local-play.py up      # start the game; the first time, install it
+python3 scripts/local-play.py stop    # stop it; the game is kept
+python3 scripts/local-play.py wipe    # delete the game, its data volumes and its credentials
+```
+
+Then open http://127.0.0.1:8080/ (set `RESURRECTION_LOCAL_PORT` to use another port; the address stays 127.0.0.1).
+
+**What `up` does.** It runs `local/compose.yaml` with three services: `db` (MariaDB 11.4), `app` (PHP 8.4 with PHP's `php.ini-production`, as CI's setup-php uses, serving the game) and `cron` (`php cron.php` every 15 minutes). The first time, it generates a database password, a database root password and an administrator password into `.local-play/database.env` and `.local-play/admin.env`. The directory is owner-only, the files 0600, and Git ignores them. The database starts empty, and a one-off `setup` container runs `php scripts/install.php --write-config /config/dbconnect.php`: the guided config step above writes the configuration file (0600, in a Docker volume outside the served directory), then installs with the recommended modules active and creates the administrator. `up` prints the administrator login once, at that first install; afterwards it says where it is (`.local-play/admin.env`). The database password is never printed or passed on a command line, and the database publishes no port: it sits on an internal Docker network that only the game's containers join.
+
+**Running `up` again** keeps the game. When the configuration file exists, the game is never installed again: `setup` runs `php scripts/upgrade.php --dry-run`, which changes nothing. When the database is current, the game starts. When the code is newer than the database, `up` says so, leaves the game stopped, upgrades nothing, and shows the commands:
+
+```sh
+python3 scripts/local-play.py backup                      # write .local-play/backups/resurrection-DATE.sql
+python3 scripts/local-play.py upgrade --dry-run           # what the upgrade would change
+python3 scripts/local-play.py upgrade --backup-confirmed  # upgrade (scripts/upgrade.php, see "Upgrading")
+python3 scripts/local-play.py up                          # play again
+```
+
+`upgrade` stops the game while it runs `scripts/upgrade.php` and refuses anything but one of those two options. `backup` checks that the file ends with `-- Dump completed` and keeps it owner-only; it holds every account, so keep it private. A database newer than the code (a downgrade) is refused, as in "Upgrading"; the way back is the backup taken before the upgrade:
+
+```sh
+python3 scripts/local-play.py restore .local-play/backups/resurrection-DATE.sql
+```
+
+`restore` asks first, then replaces everything in the local game's database with the file. Run it with the version of the game the backup was taken with.
+
+**`stop` and `wipe`.** `stop` removes the containers and keeps the data volumes, so the next `up` continues the same game. `wipe` asks first (or takes `--yes`), then removes the containers and the data volumes (`docker compose down --volumes`) and the generated credentials; backups in `.local-play/backups/` are kept. The next `up` installs a new game. Edits to the code take effect at the next `up`, which rebuilds the image.
+
 ## Runtime and database
 
-Use a standard PHP 8.4 or 8.5 build with PDO MySQL, mbstring, JSON, filter, and native sessions. Install the locked Composer dependencies. The CI pairs are PHP 8.4 with MariaDB 11.4 and PHP 8.5 with MySQL 8.4. A sessionless PHP build cannot run the application.
+Use a standard PHP 8.4 or 8.5 build with PDO MySQL, mbstring, JSON, filter, and native sessions, and PHP's standard `php.ini` (`php.ini-production`, as CI uses, or `php.ini-development`). The game needs that file's output buffering: without a `php.ini` (as in PHP's official Docker image), every web page of an installed game fails with a runtime error (`PHASE4-TASK3-LOCAL-SETUP-20261029.md`). Install the locked Composer dependencies. The CI pairs are PHP 8.4 with MariaDB 11.4 and PHP 8.5 with MySQL 8.4. A sessionless PHP build cannot run the application.
 
 Create a dedicated **empty** database and a dedicated account authorized only for that database. Use utf8mb4 at database creation. Application connections explicitly use utf8mb4 and retain server SQL modes while adding STRICT_TRANS_TABLES, NO_ZERO_DATE, NO_ZERO_IN_DATE, ERROR_FOR_DIVISION_BY_ZERO, and NO_ENGINE_SUBSTITUTION. Fresh tables use InnoDB and utf8mb4_unicode_ci. Do not weaken global SQL modes.
 

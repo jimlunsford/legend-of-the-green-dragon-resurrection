@@ -1,0 +1,18 @@
+# What the local play image leaves out of /srv/game: history, tooling, tests, local state and secrets.
+.git
+.github
+.local-play
+.runtime
+.phpunit.cache
+.phpstan-cache
+vendor
+var
+tests
+lab
+dbconnect.php
+prefixes.php
+.env
+.env.*
+**/*.sql
+**/*.log
+**/__pycache__
