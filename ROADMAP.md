@@ -187,12 +187,13 @@ The release itself stays excluded until Jim says so: hosting, tags, GitHub relea
   - [x] `php scripts/upgrade.php`: CLI only, the install's configuration, the install and maintenance locks, `--dry-run`, `--backup-confirmed`, stop at the first failure.
   - [x] Tests: the runner, an equivalence test with temporary test-only steps, and the release upgrade check in Modern core ("no release yet" until a release tag exists).
   - [x] Docs: `docs/VERSIONING.md` rewritten, "Upgrading" in `docs/MODERN-INSTALLATION.md`.
-- [ ] 3: one-command local setup: `python3 scripts/local-play.py up` brings up a playable local game from a clean clone, for local play and development only, never hosting (`docs/PHASE4-TASK3-LOCAL-SETUP-20261029.md`). Done when CI accepts it.
-  - [ ] Docker Compose (`local/compose.yaml`): PHP 8.4 with CI's php.ini and MariaDB 11.4; an empty database, the config written by `scripts/install.php --write-config` (0600), the recommended modules, the administrator, the game served, `php cron.php` on a schedule.
-  - [ ] Safe by default: the game on 127.0.0.1 only, no database port, generated credentials in the ignored `.local-play/`, the database password never printed, the administrator login printed once, labelled local use only.
-  - [ ] A second `up` keeps the game; when the code is newer than the database it says so, shows the backup and upgrade commands, and does not upgrade; `stop`, and `wipe` with the data volumes.
-  - [ ] Tests: the static test `tests/tooling/test_local_play.py`; the full flow run once from a clean clone (supporting evidence).
-  - [ ] Docs: "Play locally" in `docs/MODERN-INSTALLATION.md`.
+- [x] 3: one-command local setup: `python3 scripts/local-play.py up` brings up a playable local game from a clean clone, for local play and development only, never hosting (`docs/PHASE4-TASK3-LOCAL-SETUP-20261029.md`). Accepted at `0c39020`, Modern core 40950097216 (all 12 jobs), Baseline integrity 40950097228.
+  - [x] Docker Compose (`local/compose.yaml`): PHP 8.4 with CI's php.ini and MariaDB 11.4; an empty database, the config written by `scripts/install.php --write-config` (0600), the recommended modules, the administrator, the game served, `php cron.php` on a schedule.
+  - [x] Safe by default: the game on 127.0.0.1 only, no database port, generated credentials in the ignored `.local-play/`, the database password never printed, the administrator login printed once, labelled local use only.
+  - [x] A second `up` keeps the game; when the code is newer than the database it says so, shows the backup and upgrade commands, and does not upgrade; `stop`, and `wipe` with the data volumes.
+  - [x] Tests: the static test `tests/tooling/test_local_play.py`; the full flow run once from a clean clone (supporting evidence).
+  - [x] Docs: "Play locally" in `docs/MODERN-INSTALLATION.md`.
+- [ ] Fix: the game no longer depends on PHP's output buffering. Found in task 3: with `output_buffering` off (PHP's default without a `php.ini`, and the official Docker image), every page of an installed game failed at `common.php:206`, because `lib/all_tables.php` (1.1.2) prints a newline before `common.php`'s buffer starts (`docs/PHASE4-OUTPUT-BUFFERING-FIX-20261029.md`). Done when CI accepts it.
 
 ### Public hosting
 

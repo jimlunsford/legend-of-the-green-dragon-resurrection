@@ -77,7 +77,7 @@ final class FreshInstallTest extends TestCase
             [$code, $out, $err] = $run();
             self::assertSame(1, $code);
             self::assertSame($unsupported . "\n", $err);
-            self::assertSame('', trim($out)); // lib/all_tables.php (1.1.2) prints a newline after its closing tag
+            self::assertSame('', $out); // lib/all_tables.php's trailing newline is discarded (OutputBufferingTest)
             self::assertSame($historical, $snapshot());
             // The config step refuses it too, before writing anything.
             $private = sys_get_temp_dir() . '/resurrection-config-' . bin2hex(random_bytes(8));

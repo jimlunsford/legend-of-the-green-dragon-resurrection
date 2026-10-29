@@ -99,7 +99,12 @@ $_SESSION['session'] ??= [];
 $session =& $_SESSION['session'];
 $session += ['loggedin' => false, 'lasthit' => 0, 'message' => '', 'debug' => '', 'allowednavs' => [], 'bufflist' => [], 'templatename' => '', 'templatemtime' => 0];
 $session['user'] ??= [];
+// lib/all_tables.php (1.1.2, unchanged) prints a newline after its closing tag. 1.1.2's common.php did not load it.
+// Here it loads before the output buffer below starts, so with output_buffering off that newline would be sent and
+// every header() after it would fail: discard it, as scripts/upgrade.php does.
+ob_start();
 require_once 'lib/all_tables.php';
+ob_end_clean();
 foreach (get_all_tables()['accounts'] as $name => $column) {
     if (str_contains($column['type'], 'key')) { continue; }
     $session['user'][$name] ??= $column['default'] ?? '';

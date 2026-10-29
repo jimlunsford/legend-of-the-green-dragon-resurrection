@@ -128,7 +128,7 @@ class LocalPlayTests(unittest.TestCase):
         dockerfile = (LOCAL / 'Dockerfile').read_text()
         self.assertRegex(dockerfile, r'(?m)^FROM php:8\.4-cli$')
         self.assertIn('image: mariadb:11.4\n', self.compose)
-        # CI's setup-php runs PHP with php.ini-production; the image ships no php.ini, and the game needs one.
+        # CI's setup-php runs PHP with php.ini-production, and the image ships no php.ini: local play uses CI's settings.
         self.assertIn('cp "$PHP_INI_DIR/php.ini-production" "$PHP_INI_DIR/php.ini"', dockerfile)
         # The served tree has no history, tests, local state or configuration of its own.
         ignore = (LOCAL / 'Dockerfile.dockerignore').read_text().split()

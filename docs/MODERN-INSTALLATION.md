@@ -39,7 +39,7 @@ python3 scripts/local-play.py restore .local-play/backups/resurrection-DATE.sql
 
 ## Runtime and database
 
-Use a standard PHP 8.4 or 8.5 build with PDO MySQL, mbstring, JSON, filter, and native sessions, and PHP's standard `php.ini` (`php.ini-production`, as CI uses, or `php.ini-development`). The game needs that file's output buffering: without a `php.ini` (as in PHP's official Docker image), every web page of an installed game fails with a runtime error (`PHASE4-TASK3-LOCAL-SETUP-20261029.md`). Install the locked Composer dependencies. The CI pairs are PHP 8.4 with MariaDB 11.4 and PHP 8.5 with MySQL 8.4. A sessionless PHP build cannot run the application.
+Use a standard PHP 8.4 or 8.5 build with PDO MySQL, mbstring, JSON, filter, and native sessions. The game does not depend on PHP's output buffering: it also runs with `output_buffering` off, PHP's default without a `php.ini` (`PHASE4-OUTPUT-BUFFERING-FIX-20261029.md`). Install the locked Composer dependencies. The CI pairs are PHP 8.4 with MariaDB 11.4 and PHP 8.5 with MySQL 8.4. A sessionless PHP build cannot run the application.
 
 Create a dedicated **empty** database and a dedicated account authorized only for that database. Use utf8mb4 at database creation. Application connections explicitly use utf8mb4 and retain server SQL modes while adding STRICT_TRANS_TABLES, NO_ZERO_DATE, NO_ZERO_IN_DATE, ERROR_FOR_DIVISION_BY_ZERO, and NO_ENGINE_SUBSTITUTION. Fresh tables use InnoDB and utf8mb4_unicode_ci. Do not weaken global SQL modes.
 

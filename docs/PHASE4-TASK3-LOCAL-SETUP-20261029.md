@@ -303,3 +303,16 @@ PHP 8.5.12 (php-builder, as setup-php) and MySQL 8.4 in Docker, on the task's tr
 
 Pending: this commit's Modern core (both legs, all 12 jobs) and Baseline integrity runs. `ROADMAP.md` marks task 3 done
 only after CI accepts it.
+
+## Acceptance (appended 2026-10-29, output buffering fix)
+
+Task 3 is **accepted at `0c39020`**. Read through the GitHub Actions API on 2026-10-29:
+
+- Modern core 40950097216: **SUCCESS, all 12 jobs** (both legs' `checks`, eight `http` shards and both `result` jobs,
+  20:33 to 20:55 UTC). Shard steps: PHP 8.4 / MariaDB 11.4 13:29, 17:47, 18:05, 16:59; PHP 8.5 / MySQL 8.4 18:28,
+  15:02, 21:02, 13:13 (shards 1 to 4), all under 30 minutes.
+- Baseline integrity 40950097228: **SUCCESS**.
+
+`ROADMAP.md` marks task 3 done in the commit that fixes the defect found above ("Finding: the game needs a `php.ini`").
+That fix removes the dependency: the game now runs with `output_buffering` off (`PHASE4-OUTPUT-BUFFERING-FIX-20261029.md`).
+The local image still installs `php.ini-production`, so local play keeps CI's settings.

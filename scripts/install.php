@@ -41,7 +41,10 @@ try {
     require 'lib/output.php';
     require 'lib/sanitize.php';
     require 'lib/translator.php';
+    // lib/all_tables.php (1.1.2), which the installer loads, prints a newline after its closing tag; the output starts clean.
+    ob_start();
     require 'lib/installer/fresh_install.php';
+    ob_end_clean();
     // The module API's translation namespace falls back to the page address (common.php sets it); a command has none.
     $REQUEST_URI = '';
     $activate = resurrection_install_module_plan($modules);
