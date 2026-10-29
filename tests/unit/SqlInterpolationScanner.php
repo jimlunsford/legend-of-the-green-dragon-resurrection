@@ -298,14 +298,15 @@ final class SqlInterpolationScanner
     }
 
     /**
-     * Shipped PHP: every tracked PHP file except tests, tooling and the lab.
+     * Shipped PHP: every PHP file git tracks or would add (not ignored), except tests, tooling and the lab.
      *
      * @return list<string>
      */
     public static function shippedFiles(string $root): array
     {
         $output = [];
-        exec('git -C ' . escapeshellarg($root) . ' ls-files -z -- "*.php"', $output, $status);
+        // Tracked files, and untracked ones git does not ignore, so a local run scans a new file before its commit.
+        exec('git -C ' . escapeshellarg($root) . ' ls-files -z --cached --others --exclude-standard -- "*.php"', $output, $status);
         if ($status !== 0) { throw new \RuntimeException('git ls-files failed'); }
         $files = array_filter(explode("\0", implode("\n", $output)), static fn (string $file): bool =>
             $file !== '' && !preg_match('#\A(tests|scripts|lab)/#', $file));

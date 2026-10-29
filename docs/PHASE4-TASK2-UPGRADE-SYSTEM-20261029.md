@@ -296,3 +296,64 @@ Supporting evidence only; CI is the acceptance. PHP 8.5.12 with MySQL 8.4 in Doc
 - No 1.1.2 database is upgraded or migrated. The 60-minute CI timeout is unchanged. The serialized-state inventory's
   source is unchanged, so it was not recounted.
 - Public hosting remains **NO**.
+
+## CI failure on `ca4e660`, and its fix (appended 2026-10-29)
+
+**The failed run, kept on record.** Modern core 40855211633 on `ca4e660` FAILED in every job at `composer test`.
+Baseline integrity 40855211402 passed. The one failure:
+
+```
+1) Resurrection\Tests\SqlSweepTest::testEveryValueInterpolatedIntoSqlIsOnTheReviewedList
+Interpolated into SQL and not reviewed: bind the value, or review it onto the list in docs/RESCAN-TASK3-20261023.md
++    0 => 'lib/upgrade.php	db_identifier(db_prefix('modules'))',
++    1 => 'lib/upgrade.php	db_identifier(db_prefix('upgrade_steps'))',
++    2 => 'lib/upgrade.php	implode(',', array_fill(0, count($versions), '?'))',
+Tests: 281, Assertions: 141306, Failures: 1.
+```
+
+**The cause.** `lib/upgrade.php` puts three values into SQL text, and none of them was on the reviewed list. The guard
+was right.
+
+**The reviewed entries** (`docs/RESCAN-TASK3-20261023.md`, "Reviewed list change, 2026-10-29"). All three are class
+server, so they were reviewed onto the list rather than bound:
+
+| Value | Sites | Why it is server-only |
+|---|---|---|
+| `db_identifier(db_prefix('upgrade_steps'))` | 2 (`lib/upgrade.php:42`, `:76`) | A literal table name through the prefix and `db_identifier()`. The step ID and time are bound. |
+| `db_identifier(db_prefix('modules'))` | 1 (`lib/upgrade.php:86`) | A literal table name through the prefix and `db_identifier()`. |
+| `implode(',', array_fill(0, count($versions), '?'))` | 1 (`lib/upgrade.php:86`) | One `?` per entry of the literal 24-module list from `resurrection_bundled_module_versions()`. The names are bound. |
+
+No request value reaches any of them. The callers are `common.php` (no request arguments), `scripts/upgrade.php`
+(command line only) and the tests. The other task 2 files build no SQL by interpolation:
+
+- `src/Upgrade/*` runs no SQL.
+- `scripts/upgrade.php` calls only `lib/upgrade.php`, and `scripts/` is outside the scan by its existing rule.
+- `upgrades/` holds no step yet. A step added there will be scanned.
+
+**Why the local run passed and CI failed.** `SqlInterpolationScanner::shippedFiles()` built its file list with
+`git ls-files`, so it saw only files git tracks. Every local run of this task (PHPUnit, then the four shards in tree
+copies) happened before the commit, while `lib/upgrade.php` was still untracked, so the sweep never saw it. CI checks out
+the commit, where the file is tracked. Reproduced in a copy of `ca4e660`:
+
+| Case | `SqlSweepTest` |
+|---|---|
+| `ca4e660` as committed | FAIL with the three values above (as in CI) |
+| `ca4e660` with `lib/upgrade.php` untracked (the local run) | OK: the file was not scanned |
+| The scanner fix, file untracked, list unchanged | FAIL with the same three values |
+| The scanner fix and the reviewed rows, file untracked, then tracked | OK, both |
+
+**Closing the gap.** `shippedFiles()` now runs `git ls-files --cached --others --exclude-standard`, which also lists
+untracked files that git does not ignore. A local `composer test` therefore scans a new file before it is committed.
+This only adds files. On a CI checkout every file is tracked, and `vendor/`, `dbconnect.php` and the caches are
+ignored, so CI scans the same list. The test, its matching and its classes are unchanged.
+
+**Local verification of the fix** (supporting evidence only; PHP 8.5.12, MySQL 8.4):
+
+- `composer test`: OK, 281 tests, 141332 assertions, on a fresh database.
+- Both PHPStan gates: no errors. Lint: 391 files, 0 failures.
+- The historical verifier reports 417 files and 11 historical commits. The project validator: PASS.
+- `composer validate --strict`: valid. `git diff --check`: clean.
+- No HTTP test changed, so no shard was run.
+
+**Acceptance.** `ca4e660`'s own run failed. Task 2 is accepted only through this fix commit's runs, as the first
+accepted descendant of `ca4e660`, once Modern core (both legs, all 12 jobs) and Baseline integrity succeed on it.

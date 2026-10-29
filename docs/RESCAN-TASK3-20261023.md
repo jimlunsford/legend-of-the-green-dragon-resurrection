@@ -456,6 +456,9 @@ are not listed.
 | `lib/tabledescriptor.php` | `join(",\n",$changes)` | 1 | server | Column definitions built from the fixed descriptors during installation. |
 | `lib/taunt.php` | `e_rand()` | 2 | server | Integer from the game's random number generator. |
 | `lib/titles.php` | `$useref` | 1 | server | Empty or the fixed `AND ref=?`; the ref is bound. |
+| `lib/upgrade.php` | `db_identifier(db_prefix('modules'))` | 1 | server | `db_identifier()` of a fixed table name. |
+| `lib/upgrade.php` | `db_identifier(db_prefix('upgrade_steps'))` | 2 | server | `db_identifier()` of a fixed table name (the upgrade ledger). |
+| `lib/upgrade.php` | `implode(',', array_fill(0, count($versions), '?'))` | 1 | server | Placeholders, one per entry of the fixed bundled module version list (`resurrection_bundled_module_versions()`); the module names are bound. |
 | `lib/titles.php` | `e_rand()` | 1 | server | Integer from the game's random number generator. |
 | `lib/training_combat.php` | `$table` | 2 | server | `db_prefix('masters')`. |
 | `lib/training_outcomes.php` | `$session['user']['referer']` | 1 | server | Integer `referer` column of the signed-in account row. |
@@ -558,3 +561,27 @@ and `md5(md5(stripslashes(httppost("password"))))`; `installer_stage_10.php`'s `
 `test_unbound_sql_files_are_not_endpoints_http` now asserts the removed files are absent and a request gets 404, as it
 did for `lib/mail.php`. No other row changed, and `SqlSweepTest` is unchanged; with the rows still listed it fails
 ("Listed but no longer interpolated", the eight values above).
+
+## Reviewed list change, 2026-10-29 (Phase 4 task 2 fix)
+
+Task 2 (`ca4e660`) added `lib/upgrade.php` with three values put into SQL text, and none was on the list:
+Modern core 40855211633 failed `SqlSweepTest` in every job ("Interpolated into SQL and not reviewed"). Each is
+server-only, so each was reviewed onto the list rather than bound:
+
+- `db_identifier(db_prefix('upgrade_steps'))`, two sites (`resurrection_upgrade_record()`, `resurrection_upgrade_state()`),
+  and `db_identifier(db_prefix('modules'))`, one site (`resurrection_upgrade_state()`): literal table names through the
+  configured prefix and `db_identifier()`, the class of the other fixed-table rows. The step ID and its time are bound.
+- `implode(',', array_fill(0, count($versions), '?'))` (`resurrection_upgrade_state()`): one `?` per entry of
+  `resurrection_bundled_module_versions()`, a literal array of the 24 bundled modules; the module names are bound
+  (`array_keys($versions)`).
+
+No request value reaches any of them: `resurrection_upgrade_state()` takes only the step IDs read from `upgrades/`, and
+its callers are `common.php` (no arguments from the request), `scripts/upgrade.php` (command line only) and the tests.
+The other task 2 files build no SQL by interpolation: `src/Upgrade/*` runs no SQL; `scripts/upgrade.php` calls only
+`lib/upgrade.php` (and `scripts/` is outside the scan); `upgrades/` holds no step yet, and a step there will be scanned.
+
+The local run missed it because `SqlInterpolationScanner::shippedFiles()` listed only files git tracks
+(`git ls-files`), and `lib/upgrade.php` was still untracked when PHPUnit ran before the commit. It now also lists
+untracked files that are not ignored (`--others --exclude-standard`), so a local `composer test` scans a new file before
+it is committed. That only adds files: in CI, where every file is tracked, the list is the same. The test and its
+matching are unchanged.
