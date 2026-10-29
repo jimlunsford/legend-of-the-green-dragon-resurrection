@@ -23,6 +23,8 @@ The driver uses native PDO prepares and explicit utf8mb4. Fresh installation pro
 
 The fixed 24 bundled entrypoints are installed with metadata, settings and hooks, and left inactive. Dag/Drinks support DDL and seeds are executed, including safe repeated callback checks. S04 state/dependency/force boundaries are exercised with actual injection and HTTP dispatch. Full activation, event and gameplay certification is still required. No archive-only module was imported and no balance, theme or framework changes were made.
 
+2026-10-29 (Phase 4 task 1B): the paragraph above is as recorded in Phase 2. Phase 3 certified activation, events and gameplay of all 24 (`BUNDLED-MODULE-CERTIFICATION.md`), and the fresh install now activates 23 of them, 1.1.2's recommended list, unless the operator passes `--modules=none` (`PHASE4-TASK1B-FRESH-INSTALL-20261029.md`).
+
 ## Additional runtime findings discovered in phase 2
 
 | Finding | Resolution | Evidence |

@@ -32,3 +32,31 @@ function resurrection_install_bundled_modules(): void {
         }
     } finally { $session = $previous; }
 }
+
+/**
+ * The modules a fresh install activates unless the operator chooses none: 1.1.2's installer list
+ * (`$recommended_modules` in installer.php at historical-source-1.1.2), limited to the bundled modules. 1.1.2's
+ * installer pre-selected that list on a fresh install (installer_stage_8.php calls chooseRecommendedModules() unless
+ * upgrading). Every bundled module is on it except game_fivesix.
+ * @return list<string>
+ */
+function resurrection_recommended_modules(): array {
+    return ['cedrikspotions','crazyaudrey','dag','darkhorse','drinks','fairy','findgem','findgold',
+        'foilwench','game_dice','game_stones','glowingstream','goldmine','lovers','outhouse',
+        'racedwarf','raceelf','racehuman','racetroll','sethsong','specialtydarkarts','specialtymysticpower','specialtythiefskills'];
+}
+
+/**
+ * Activate installed bundled modules through the module lifecycle API, inside the caller's open transaction, so one
+ * failure leaves none of them active once the caller rolls back. Called only by the locked fresh install.
+ * @param list<string> $modules
+ */
+function resurrection_activate_installed_modules(array $modules): void {
+    $connection = $GLOBALS['dbinfo']['connection'];
+    if (!$connection instanceof PDO || !$connection->inTransaction()) { throw new LogicException('Module activation needs the install transaction.'); }
+    foreach ($modules as $module) {
+        $GLOBALS['fresh_install_phase'] = 'activate-module:' . $module;
+        if (!in_array($module, resurrection_bundled_modules(), true)) { throw new RuntimeException('Not a bundled module.'); }
+        if (!resurrection_activate_module($module)) { throw new RuntimeException('Bundled module activation failed.'); }
+    }
+}

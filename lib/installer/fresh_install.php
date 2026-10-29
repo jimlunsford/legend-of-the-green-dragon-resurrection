@@ -1,6 +1,7 @@
 <?php
 /** The supported fresh-install path. Never modifies an existing database. */
 require_once __DIR__ . '/../../src/Security/Passwords.php';
+require_once __DIR__ . '/../../src/Installation/InstallRefused.php';
 require_once __DIR__ . '/../all_tables.php';
 require_once __DIR__ . '/../tabledescriptor.php';
 require_once __DIR__ . '/../accounts.php';
@@ -17,10 +18,33 @@ function resurrection_install_state(): string {
         if (($state['resurrection_install'] ?? '') === 'complete') { return 'installed'; }
         if (isset($state['installer_version']) && str_starts_with($state['installer_version'], '1.') && db_table_exists(db_prefix('accounts'))) {
             $columns = array_column(db_query('SHOW COLUMNS FROM ' . db_identifier(db_prefix('accounts'))), 'Field');
-            if (!array_diff(['acctid', 'login', 'password'], $columns)) { return 'upgrade-required'; }
+            if (!array_diff(['acctid', 'login', 'password'], $columns)) { return 'unsupported-1.1.2'; }
         }
     }
     return 'populated';
+}
+
+/** Refuse an install into a database that is not empty, with the reason; nothing has been changed. */
+function resurrection_refuse_install_state(string $state): void {
+    if ($state === 'empty') { return; }
+    throw new \Resurrection\Installation\InstallRefused(match ($state) {
+        'installed' => 'Installation is complete. Fresh installation is locked. Nothing was changed.',
+        // No 1.1.2 game is upgraded or migrated (ROADMAP.md, Phase 4 decisions).
+        'unsupported-1.1.2' => 'This database holds a Legend of the Green Dragon 1.1.2 game, which is unsupported: Resurrection does not upgrade or migrate a 1.1.2 database. The only path is a fresh install into an empty database. Nothing was changed.',
+        default => 'The database is not empty. A fresh install needs an empty database. Nothing was changed.',
+    });
+}
+
+/**
+ * The modules an install choice activates: "recommended" (the default of scripts/install.php) or "none".
+ * @return list<string>
+ */
+function resurrection_install_module_plan(string $choice): array {
+    return match ($choice) {
+        'recommended' => resurrection_recommended_modules(),
+        'none' => [],
+        default => throw new \Resurrection\Installation\InstallRefused('Unknown module choice. Use --modules=recommended or --modules=none.'),
+    };
 }
 
 /** @return array<string, array<string, array<string, mixed>>> */
@@ -54,10 +78,16 @@ function resurrection_fresh_schema(): array {
     return $tables;
 }
 
-/** @return array{tables: int, modules_installed: int, modules_active: int, administrator: int, state: string} */
-function resurrection_fresh_install(string $login, #[\SensitiveParameter] string $password, string $email = ''): array {
-    // Validate credentials before any DDL, without logging them.
+/**
+ * @param list<string> $activate installed bundled modules to activate (resurrection_install_module_plan())
+ * @return array{tables: int, modules_installed: int, modules_active: int, administrator: int, state: string}
+ */
+function resurrection_fresh_install(string $login, #[\SensitiveParameter] string $password, string $email, array $activate): array {
+    // Validate credentials and the module plan before any DDL, without logging them.
     resurrection_validate_account($login, $email);
+    if (array_diff($activate, resurrection_bundled_modules()) || count(array_unique($activate)) !== count($activate)) {
+        throw new InvalidArgumentException('Only bundled modules, each once, can be activated.');
+    }
     $hash = \Resurrection\Security\Passwords::hash($password);
     $db = $GLOBALS['dbinfo']['connection'];
     $database = $db->query('SELECT DATABASE()')->fetchColumn();
@@ -65,12 +95,7 @@ function resurrection_fresh_install(string $login, #[\SensitiveParameter] string
     $result = db_query('SELECT GET_LOCK(?, 0) AS acquired', true, [$lock]);
     if (db_fetch_assoc($result)['acquired'] !== '1') { throw new RuntimeException('Another installation is in progress.'); }
     try {
-        $state = resurrection_install_state();
-        if ($state !== 'empty') {
-            throw new RuntimeException($state === 'installed'
-                ? 'Installation is complete. Fresh installation is locked.'
-                : 'Database is populated. Fresh installation refused; upgrades require a separately verified migration.');
-        }
+        resurrection_refuse_install_state(resurrection_install_state());
         $result = db_query('SELECT @@sql_mode AS modes');
         $modes = db_fetch_assoc($result)['modes'];
         if (!str_contains($modes, 'STRICT_TRANS_TABLES') && !str_contains($modes, 'STRICT_ALL_TABLES')) {
@@ -101,16 +126,20 @@ function resurrection_fresh_install(string $login, #[\SensitiveParameter] string
         savesetting('charset', 'UTF-8');
         savesetting('newdaycron', 1);
         savesetting('serverlanguages', 'en,English,fr,Français,dk,Danish,de,Deutsch,es,Español,it,Italian');
-        // Install only the fixed 24 shipped modules, all initially inactive.
+        // Install only the fixed 24 shipped modules, all inactive until the final transaction activates the plan.
         resurrection_install_bundled_modules();
         // No external mail or payments are required by a fresh installation.
+        // The activations, the administrator and the completion marker commit together or not at all: a failure
+        // leaves every module inactive and the install not complete.
         $db->beginTransaction();
+        resurrection_activate_installed_modules($activate);
         $GLOBALS['fresh_install_phase'] = 'administrator';
         $admin = resurrection_insert_account($login, $hash, $email, SU_MEGAUSER | SU_EDIT_USERS | SU_EDIT_CONFIG | SU_MANAGE_MODULES | SU_EDIT_COMMENTS);
         savesetting('installer_version', '1.1.2 Dragonprime Edition');
         savesetting('resurrection_install', 'complete');
         $db->commit();
-        return ['tables' => db_num_rows(db_query('SHOW TABLES')), 'modules_installed' => count(resurrection_bundled_modules()), 'modules_active' => 0, 'administrator' => $admin, 'state' => resurrection_install_state()];
+        $active = db_query('SELECT COUNT(*) AS n FROM ' . db_prefix('modules') . ' WHERE active=1');
+        return ['tables' => db_num_rows(db_query('SHOW TABLES')), 'modules_installed' => count(resurrection_bundled_modules()), 'modules_active' => (int)db_fetch_assoc($active)['n'], 'administrator' => $admin, 'state' => resurrection_install_state()];
     } finally {
         if ($db->inTransaction()) { $db->rollBack(); }
         db_query('SELECT RELEASE_LOCK(?)', false, [$lock]);

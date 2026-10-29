@@ -10328,6 +10328,60 @@ function MODULE_dohook($hook,$args) {
             self.query('UPDATE module_settings SET value=? WHERE modulename=? AND setting=?',['1','cedrikspotions','ischarm'])
             self.query('UPDATE accounts SET '+','.join(key+'=?' for key in original)+' WHERE acctid=?', [*original.values(),player])
 
+    def test_recommended_install_new_player_reaches_village_and_forest(self):
+        # FreshInstallTest proves the default install activates exactly resurrection_recommended_modules(); this plays
+        # that module state as a brand-new player: create, log in, first New Day onboarding, village, forest.
+        code = "require 'lib/installer/bundled_modules.php'; echo json_encode([resurrection_bundled_modules(), resurrection_recommended_modules()]);"
+        result = subprocess.run([shutil.which('php'), '-r', code], cwd=ROOT, capture_output=True, text=True, timeout=20)
+        self.assertEqual(0, result.returncode, result.stderr)
+        bundled, recommended = json.loads(result.stdout)
+        self.assertEqual(['game_fivesix'], [module for module in bundled if module not in recommended])
+        saved = self.query('SELECT modulename,active FROM modules')
+        login, password = 'FreshPlayer', 'Synthetic fresh player password'
+        try:
+            for module in bundled:
+                self.query('UPDATE modules SET active=? WHERE modulename=?', [1 if module in recommended else 0, module])
+            self.assertEqual(sorted(recommended), sorted(row['modulename'] for row in self.query('SELECT modulename FROM modules WHERE active=1')))
+            request = self._security_client(login=None)
+            def page(url, data=None):
+                status, body = request(url, data)
+                self.assertEqual(200, status, url + ' ' + body[:2000])
+                return body
+            def link(body, prefix):
+                found = next((html.unescape(href) for href in re.findall(r'href=[\'"]([^\'"]+)', body) if html.unescape(href).startswith(prefix)), None)
+                self.assertIsNotNone(found, 'Missing navigation: ' + prefix + ' ' + body[:2000])
+                return found
+            body = page('create.php')
+            csrf = re.search(r'name=[\'"]csrf_token[\'"] value=[\'"]([a-f0-9]{64})', body).group(1)
+            body = page('create.php?op=create', {'csrf_token': csrf, 'name': login, 'pass1': password, 'pass2': password,
+                                                 'email': 'fresh@example.invalid', 'sex': '0'})
+            self.assertIn('Your account was created', body)
+            status, _ = request('login.php', {'csrf_token': csrf, 'name': login, 'password': password})
+            self.assertEqual(303, status)
+            # First login: New Day, where every active race and specialty is offered, as for any new character.
+            status, body = request('village.php')
+            self.assertEqual(302, status, body[:2000])
+            body = page('newday.php')
+            for race in ['Dwarf', 'Elf', 'Human', 'Troll']:
+                self.assertRegex(body, r'name=[\'"]setrace[\'"] value=[\'"]' + race)
+            body = page('newday.php?continue=1', self._security_fields(body) | {'onboarding': 'race', 'setrace': 'Elf'})
+            body = page(link(body, 'newday.php?continue=1'))
+            for specialty in ['DA', 'MP', 'TS']:
+                self.assertRegex(body, r'name=[\'"]setspecialty[\'"] value=[\'"]' + specialty)
+            body = page('newday.php?continue=1', self._security_fields(body) | {'onboarding': 'specialty', 'setspecialty': 'TS'})
+            body = page(link(body, 'newday.php?continue=1'))
+            body = page('newday.php?continue=1', self._security_fields(body) | {'newday': 'normal'})
+            body = page(link(body, 'village.php'))
+            self.assertIn(login, body)
+            player = self.query('SELECT race,specialty,alive,turns,location FROM accounts WHERE login=?', [login])[0]
+            self.assertEqual(('Elf', 'TS', '1'), (player['race'], player['specialty'], str(player['alive'])))
+            self.assertGreater(int(player['turns']), 0)
+            body = page(link(body, 'forest.php'))
+            self.assertIn('<title>The Forest', body)
+            self.assertIn('forest.php?op=search', body)
+        finally:
+            for row in saved: self.query('UPDATE modules SET active=? WHERE modulename=?', [row['active'], row['modulename']])
+
     def test_create_login_rotate_render_logout(self):
         class NoRedirect(urllib.request.HTTPRedirectHandler):
             def redirect_request(self, *args):

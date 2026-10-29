@@ -1201,6 +1201,15 @@ function activate_module($module){
     if (!resurrection_module_manager()) { return false; }
     require_once 'lib/web_security.php';
     resurrection_require_post();
+    return resurrection_activate_module($module);
+}
+
+/**
+ * activate_module() after its request checks: the module manager's POST, and the locked fresh install (which has no
+ * request) for the modules it has just installed. Not installed and not installable here, or unmet requirements, or
+ * already active: false.
+ */
+function resurrection_activate_module($module){
     if (!is_string($module) || !preg_match('/\\A[A-Za-z][A-Za-z0-9_]*\\z/', $module)) { return false; }
 	if (!is_module_installed($module)){
 		if (!install_module($module)){
