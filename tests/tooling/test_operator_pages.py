@@ -25,6 +25,9 @@ from php_runtime import supported_php  # noqa: E402
 COPYRIGHT = 'Game Design and Code: Copyright &copy; 2002-2005, Eric Stevens & JT Traub, &copy; 2006-2007, Dragonprime Development Team'
 LICENSE = "This work is licensed under a <a rel='license' href='http://creativecommons.org/licenses/by-nc-sa/2.0/' target='_blank'>Creative Commons License</a>."
 ERROR = re.compile(r'(?i)fatal error|runtime error|warning:|notice:|deprecated:|uncaught')
+# The footer shows Resurrection's version and credits the base (src/Version.php; 1.1.2 showed "Version: 1.1.2
+# Dragonprime Edition").
+VERSION = re.search(r"const string CURRENT = '([^']+)';", (ROOT / 'src' / 'Version.php').read_text()).group(1)
 
 
 def text(body):
@@ -75,7 +78,7 @@ class OperatorPageTests(unittest.TestCase):
         # The normal footer: the license and the copyright line, each once.
         self.assertEqual(1, body.count(COPYRIGHT), body[-3000:])
         self.assertEqual(1, body.count(LICENSE), body[-3000:])
-        self.assertIn('Version: 1.1.2 Dragonprime Edition', body)
+        self.assertIn(f'Version: Resurrection {VERSION}, based on LoGD 1.1.2 Dragonprime Edition', body)
 
     def test_not_installed_page_shows_the_cli_instruction_and_footer(self):
         status, body = self.serve()

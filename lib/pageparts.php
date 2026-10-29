@@ -257,7 +257,10 @@ function page_footer($saveuser=true){
 	$footer=str_replace("{source}",$sourcelink,$footer);
 	$header=str_replace("{source}",$sourcelink,$header);
 	//output version
-	$footer=str_replace("{version}", "Version: $logd_version", $footer);
+	// 1.1.2 showed "Version: $logd_version" here. Resurrection shows its own version and credits that base
+	// (src/Version.php; $logd_version stays the base, as the about page shows it).
+	require_once __DIR__ . '/../src/Version.php';
+	$footer=str_replace("{version}", "Version: " . \Resurrection\Version::display(), $footer);
 	//output page generation time
 	$gentime = getmicrotime()-$pagestarttime;
 	$session['user']['gentime']+=$gentime;

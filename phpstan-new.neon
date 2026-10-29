@@ -48,7 +48,9 @@ parameters:
         - lib/source_link.php
         - lib/installer/fresh_install.php
         - lib/installer/bundled_modules.php
+        - lib/upgrade.php
         - scripts/install.php
+        - scripts/upgrade.php
     bootstrapFiles:
         - lib/constants.php
     scanFiles:

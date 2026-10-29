@@ -49,6 +49,14 @@ jobs:
       - run: composer install --no-interaction --prefer-dist --no-progress
       - run: composer audit
       - run: composer lint
+      # On the still-empty database: install the latest release and upgrade it to this commit (until the first release
+      # tag it says there is none and passes), then the same with this commit standing in as the release.
+      - run: python3 scripts/release-upgrade-check.py
+        env:
+          RESURRECTION_TEST_DB_HOST: 127.0.0.1:${{ job.services.database.ports[3306] }}
+      - run: python3 scripts/release-upgrade-check.py --release-ref HEAD
+        env:
+          RESURRECTION_TEST_DB_HOST: 127.0.0.1:${{ job.services.database.ports[3306] }}
       - run: composer test
         env:
           RESURRECTION_TEST_DB_HOST: 127.0.0.1:${{ job.services.database.ports[3306] }}

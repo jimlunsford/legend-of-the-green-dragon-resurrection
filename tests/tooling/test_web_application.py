@@ -6982,14 +6982,18 @@ function MODULE_dohook($hook,$args) {
             self.assertEqual(404,client(path,attack)[0],path)
 
     def test_upgrade_needed_page_and_copyright_footer_http(self):
-        # "Upgrade Needed" (the stored installer version is not the code's) renders its text and the normal footer for an
-        # anonymous visitor and a signed-in player; it stopped with a runtime error until 2026-10-24, because the footer's
-        # copyright values were set after it. Every signed-in page showed "0" in place of the copyright line: PHP 8
-        # counts 0 > '' as true (UNNECESSARY-FILES-20261024.md, "Installer pages").
+        # "Upgrade Needed" renders its text and the normal footer for an anonymous visitor and a signed-in player; it
+        # stopped with a runtime error until 2026-10-24, because the footer's copyright values were set after it. Every
+        # signed-in page showed "0" in place of the copyright line: PHP 8 counts 0 > '' as true
+        # (UNNECESSARY-FILES-20261024.md, "Installer pages"). Until Phase 4 task 2 the page showed when the stored
+        # installer_version setting was not the version shown; it now shows when the database is behind the code
+        # (lib/upgrade.php): here a bundled module recorded at an older version than its file's.
         copyright='Game Design and Code: Copyright &copy; 2002-2005, Eric Stevens & JT Traub, &copy; 2006-2007, Dragonprime Development Team'
         license="This work is licensed under a <a rel='license' href='http://creativecommons.org/licenses/by-nc-sa/2.0/' target='_blank'>Creative Commons License</a>."
         q=self.query;player=int(q('SELECT acctid FROM accounts WHERE login=?',['WebPlayer'])[0]['acctid'])
-        saved=q("SELECT value FROM settings WHERE setting='installer_version'");self.assertEqual([{'value':'1.1.2 Dragonprime Edition'}],saved)
+        # A fresh install no longer writes 1.1.2's installer_version: it was the version shown, used as the install marker.
+        self.assertEqual([],q("SELECT value FROM settings WHERE setting='installer_version'"))
+        saved=q("SELECT version FROM modules WHERE modulename='findgold'");self.assertEqual([{'version':'1.1'}],saved)
         anonymous=self._security_client(login=None);player_client=self._security_client()
         def signed_in(url):
             q('UPDATE accounts SET lastnewday=? WHERE acctid=?',[self._current_game_day(),player]);self._security_allow(player,url);return player_client(url)
@@ -7000,13 +7004,17 @@ function MODULE_dohook($hook,$args) {
         status,body=signed_in('village.php');self.assertEqual(200,status,body[:2000]);footer(body)
         status,body=anonymous('home.php');self.assertEqual(200,status,body[:2000]);footer(body)
         try:
-            q("UPDATE settings SET value='1.1.1 Dragonprime Edition' WHERE setting='installer_version'")
+            q("UPDATE modules SET version='0.1' WHERE modulename='findgold'")
             for who,status,body in [('anonymous',*anonymous('home.php?a=1&b=2')),('player',*signed_in('village.php'))]:
                 with self.subTest(who=who):
                     self.assertEqual(200,status,body[:2000]);self.assertIn('<title>Upgrade Needed',body);footer(body)
                     shown=html.unescape(body)
                     self.assertIn("An administrator applies the upgrade from the server's command line; the web installer is no longer available.",shown)
-                    self.assertIn('docs/MODERN-INSTALLATION.md',shown);self.assertNotIn('installer.php',body)
+                    # The operator is pointed to the upgrade command and its documentation.
+                    plain=re.sub(r'\s+',' ',re.sub(r'<[^>]+>','',shown))
+                    self.assertIn('If you are the operator: take a fresh backup, see what is pending with php scripts/upgrade.php --dry-run, then apply it with '
+                                  'php scripts/upgrade.php --backup-confirmed (docs/MODERN-INSTALLATION.md, "Upgrading").',plain)
+                    self.assertNotIn('installer.php',body)
                     # The refresh returns to the page asked for, escaped; nothing else is linked.
                     refresh=re.findall(r"<meta http-equiv='refresh' content='30; url=([^']*)'>",body)
                     self.assertEqual(['home.php?a=1&amp;b=2' if who=='anonymous' else 'village.php'],refresh)
@@ -7014,9 +7022,58 @@ function MODULE_dohook($hook,$args) {
             status,body=anonymous("home.php?x=%27%22%3E%3Cb%3E");self.assertEqual(200,status,body[:2000])
             self.assertEqual(['home.php?x=%27%22%3E%3Cb%3E'],re.findall(r"<meta http-equiv='refresh' content='30; url=([^']*)'>",body))
             self.assertNotIn("<b>",body.split('<title>')[1].split('</title>')[0]);self.assertNotIn('\'"><b>',body)
+            # Maintenance refuses a database behind the code instead of printing the page.
+            day=q("SELECT value FROM settings WHERE setting='maintenance_day'")
+            cron=subprocess.run([shutil.which('php'),'cron.php'],cwd=ROOT,capture_output=True,text=True,timeout=60)
+            self.assertEqual(1,cron.returncode,cron.stdout);self.assertEqual('',cron.stdout)
+            self.assertRegex(cron.stderr,r'^Maintenance refused or failed at common\.php:\d+ [^\n]*\.\n$')
+            self.assertEqual(day,q("SELECT value FROM settings WHERE setting='maintenance_day'"))
+            # The upgrade command brings it back: the module's upgrade runs and the game is available again.
+            config=str(ROOT/'dbconnect.php')
+            dry=subprocess.run([shutil.which('php'),'scripts/upgrade.php','--dry-run',config],cwd=ROOT,capture_output=True,text=True,timeout=60)
+            self.assertEqual((0,'Pending:\n- module findgold: upgrade from 0.1 to 1.1\nDry run: nothing was changed.\n',''),(dry.returncode,dry.stdout,dry.stderr))
+            done=subprocess.run([shutil.which('php'),'scripts/upgrade.php','--backup-confirmed',config],cwd=ROOT,capture_output=True,text=True,timeout=60)
+            self.assertEqual(0,done.returncode,done.stderr);self.assertTrue(done.stdout.endswith('- upgraded module findgold from 0.1 to 1.1\nUpgrade complete: applied 0 upgrade step(s) and 1 module upgrade(s). The database is current.\n'),done.stdout)
+            self.assertEqual(saved,q("SELECT version FROM modules WHERE modulename='findgold'"))
         finally:
-            q("UPDATE settings SET value=? WHERE setting='installer_version'",[saved[0]['value']])
+            q("UPDATE modules SET version=? WHERE modulename='findgold'",[saved[0]['version']])
         status,body=anonymous('home.php');self.assertEqual(200,status);self.assertNotIn('Upgrade Needed',body)
+
+    def test_game_unavailable_pages_for_a_database_it_refuses_http(self):
+        # A database this version will not run on gets a refusal, not "Upgrade Needed": one a newer version upgraded
+        # (a downgrade), a 1.1.2 game (still unsupported, as Phase 4 task 1B made the install command say), and one
+        # whose install never completed. Each keeps the normal footer and never refreshes, since waiting changes nothing.
+        copyright='Game Design and Code: Copyright &copy; 2002-2005, Eric Stevens & JT Traub, &copy; 2006-2007, Dragonprime Development Team'
+        q=self.query;anonymous=self._security_client(login=None)
+        marker=q("SELECT value FROM settings WHERE setting='resurrection_install'");self.assertEqual([{'value':'complete'}],marker)
+        def page():
+            status,body=anonymous('home.php');self.assertEqual(200,status,body[:2000])
+            self.assertIn('<title>Game Unavailable',body);self.assertEqual(1,body.count(copyright),body[-3000:])
+            self.assertNotIn("http-equiv='refresh'",body);self.assertNotIn('Upgrade Needed',body)
+            return re.sub(r'\s+',' ',re.sub(r'<[^>]+>','',html.unescape(body)))
+        cases=[
+            ('newer module',lambda:q("UPDATE modules SET version='99.0' WHERE modulename='findgold'"),lambda:q("UPDATE modules SET version='1.1' WHERE modulename='findgold'"),
+             'The game is unavailable: a newer version of Resurrection has upgraded this database, so this version will not run on it or change it. If you are the operator: install that newer version again, or restore the backup taken before it upgraded the database (docs/MODERN-INSTALLATION.md, "Upgrading").'),
+            ('newer step',lambda:q("INSERT INTO upgrade_steps (step,applied) VALUES ('9999-from-a-newer-version',UTC_TIMESTAMP())"),lambda:q("DELETE FROM upgrade_steps WHERE step='9999-from-a-newer-version'"),
+             'The game is unavailable: a newer version of Resurrection has upgraded this database'),
+            ('1.1.2 game',lambda:(q("DELETE FROM settings WHERE setting='resurrection_install'"),q("INSERT INTO settings (setting,value) VALUES ('installer_version','1.1.2 Dragonprime Edition')")),
+             lambda:(q("DELETE FROM settings WHERE setting='installer_version'"),q("INSERT IGNORE INTO settings (setting,value) VALUES ('resurrection_install','complete')")),
+             'The game is unavailable: this database holds a Legend of the Green Dragon 1.1.2 game, which is unsupported. Resurrection does not upgrade or migrate a 1.1.2 database. If you are the operator: the only path is a fresh install into an empty database (docs/MODERN-INSTALLATION.md).'),
+            ('incomplete install',lambda:q("DELETE FROM settings WHERE setting='resurrection_install'"),lambda:q("INSERT IGNORE INTO settings (setting,value) VALUES ('resurrection_install','complete')"),
+             'The game is unavailable: its database is not a completed installation. If you are the operator: diagnose the failed install, then recreate the disposable database and install again (docs/MODERN-INSTALLATION.md).'),
+        ]
+        for name,change,restore,message in cases:
+            with self.subTest(name):
+                try:
+                    change();self.assertIn(message,page())
+                    # The upgrade command refuses each too, without changing anything.
+                    refused=subprocess.run([shutil.which('php'),'scripts/upgrade.php','--backup-confirmed',str(ROOT/'dbconnect.php')],cwd=ROOT,capture_output=True,text=True,timeout=60)
+                    self.assertEqual((1,''),(refused.returncode,refused.stdout));self.assertTrue(refused.stderr.startswith('Upgrade refused. '),refused.stderr)
+                finally:
+                    restore()
+        self.assertEqual(marker,q("SELECT value FROM settings WHERE setting='resurrection_install'"))
+        self.assertEqual([],q("SELECT value FROM settings WHERE setting='installer_version'"))
+        status,body=anonymous('home.php');self.assertEqual(200,status);self.assertNotIn('Game Unavailable',body)
 
     def test_user_editor_stored_state_repair_http(self):
         # Stored values that fail their schemas lock a player out; the repair page shows only those and repairs each alone.

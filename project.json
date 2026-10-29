@@ -5,7 +5,7 @@
   "intended_visibility": "public",
   "default_branch": "main",
   "phase": "modern-core-engineering-in-progress",
-  "version": null,
+  "version": "1.0.0-dev",
   "public_game_hosting_approved": false,
   "commercial_use_approved": false,
   "baseline_tag": "historical-source-1.1.2",

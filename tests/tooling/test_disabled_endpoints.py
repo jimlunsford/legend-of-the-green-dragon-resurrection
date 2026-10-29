@@ -66,6 +66,18 @@ class DisabledEndpointTests(unittest.TestCase):
                     self.assertIsNone(response.getheader('Set-Cookie'))
                     conn.close()
 
+    def test_web_upgrade_command_rejected(self):
+        # scripts/upgrade.php is a command; over HTTP it answers 404 before loading anything, like cron.php.
+        for method in ('GET', 'POST'):
+            with self.subTest(method=method):
+                conn = http.client.HTTPConnection('127.0.0.1', self.port, timeout=3)
+                conn.request(method, '/scripts/upgrade.php?--backup-confirmed', '--backup-confirmed')
+                response = conn.getresponse()
+                self.assertEqual(response.status, 404)
+                self.assertEqual(response.read(), b'Not found.\n')
+                self.assertIsNone(response.getheader('Set-Cookie'))
+                conn.close()
+
     def test_web_cron_rejected_on_repeated_requests(self):
         for method in ('GET', 'POST', 'GET'):
             conn = http.client.HTTPConnection('127.0.0.1', self.port, timeout=3)

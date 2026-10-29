@@ -37,7 +37,9 @@ $license = "\n<!-- Creative Commons License -->\n<a rel='license' href='http://c
 // work.  This license text may not be removed nor altered in any way.
 // Please see the file LICENSE for a full textual description of the license.
 
-$logd_version = "1.1.2 Dragonprime Edition";
+// The preserved base, as 1.1.2 named itself (the about page shows it). Resurrection's own version is src/Version.php.
+require_once __DIR__ . '/src/Version.php';
+$logd_version = \Resurrection\Version::BASE;
 
 //start the gzip compression
 //ob_start('ob_gzhandler');
@@ -195,9 +197,11 @@ if (!DB_CONNECTED || !db_select_db ($DB_NAME)){
 	define("LINK",$link);
 	define("DB_CHOSEN",true);
 }
-if (!defined("IS_INSTALLER") && $logd_version == getsetting("installer_version","-1")) {
-	define("IS_INSTALLER", false);
-}
+// 1.1.2 compared $logd_version with its installer_version setting here and below, so the version shown was also the
+// install marker. Whether the game can run on this database is now its completion marker and its applied upgrade
+// steps (lib/upgrade.php); the version shown is src/Version.php.
+require_once 'lib/upgrade.php';
+$resurrection_database_state = defined("IS_INSTALLER") ? 'current' : resurrection_database_state();
 
 header("Content-Type: text/html; charset=".getsetting('charset','ISO-8859-1'));
 
@@ -246,14 +250,34 @@ if (!isset($nokeeprestore[$SCRIPT_NAME]) || !$nokeeprestore[$SCRIPT_NAME]) {
 }else{
 
 }
-if ($logd_version != getsetting("installer_version","-1") && !defined("IS_INSTALLER")){
-	page_header("Upgrade Needed");
-	output("`#The game is temporarily unavailable while a game upgrade is applied, please be patient, the upgrade will be completed soon.");
-	// 1.1.2 sent admins to its web installer here; there is none now (docs/MODERN-INSTALLATION.md).
-	output("An administrator applies the upgrade from the server's command line; the web installer is no longer available.");
-	output("If you are the operator, see docs/MODERN-INSTALLATION.md: a database from an older version needs a separately verified migration before this version can use it.`n`n");
-	output("`@If you don't know what this all means, just sit tight, we're doing an upgrade and will be done soon, you will be automatically returned to the game when the upgrade is complete.");
-	rawoutput("<meta http-equiv='refresh' content='30; url=" . htmlspecialchars((string)$session['user']['restorepage'], ENT_QUOTES) . "'>");
+if ($resurrection_database_state !== 'current'){
+	// A command (cron.php) stops instead of printing a page, so maintenance never runs on a database it cannot use.
+	if (PHP_SAPI === 'cli') { throw new RuntimeException('The game cannot run on this database: ' . $resurrection_database_state . '.'); }
+	if ($resurrection_database_state === 'behind') {
+		page_header("Upgrade Needed");
+		output("`#The game is temporarily unavailable while a game upgrade is applied, please be patient, the upgrade will be completed soon.");
+		// 1.1.2 sent admins to its web installer here; the upgrade is now a command (docs/MODERN-INSTALLATION.md).
+		output("An administrator applies the upgrade from the server's command line; the web installer is no longer available.");
+		output("If you are the operator: take a fresh backup, see what is pending with `^php scripts/upgrade.php --dry-run`#, then apply it with `^php scripts/upgrade.php --backup-confirmed`# (docs/MODERN-INSTALLATION.md, \"Upgrading\").`n`n");
+		output("`@If you don't know what this all means, just sit tight, we're doing an upgrade and will be done soon, you will be automatically returned to the game when the upgrade is complete.");
+		rawoutput("<meta http-equiv='refresh' content='30; url=" . htmlspecialchars((string)$session['user']['restorepage'], ENT_QUOTES) . "'>");
+	} else {
+		// Not an upgrade: this version refuses the database, and waiting does not change that.
+		page_header("Game Unavailable");
+		if ($resurrection_database_state === 'ahead') {
+			output("`#The game is unavailable: a newer version of Resurrection has upgraded this database, so this version will not run on it or change it.`n`n");
+			output("If you are the operator: install that newer version again, or restore the backup taken before it upgraded the database (docs/MODERN-INSTALLATION.md, \"Upgrading\").");
+		} elseif ($resurrection_database_state === 'out-of-order') {
+			output("`#The game is unavailable: the database's record of applied upgrade steps is out of order, so this version will not run on it.`n`n");
+			output("If you are the operator: `^php scripts/upgrade.php --dry-run`# names the missing step; restore the backup taken before the last upgrade (docs/MODERN-INSTALLATION.md, \"Upgrading\").");
+		} elseif ($resurrection_database_state === 'unsupported-1.1.2') {
+			output("`#The game is unavailable: this database holds a Legend of the Green Dragon 1.1.2 game, which is unsupported. Resurrection does not upgrade or migrate a 1.1.2 database.`n`n");
+			output("If you are the operator: the only path is a fresh install into an empty database (docs/MODERN-INSTALLATION.md).");
+		} else {
+			output("`#The game is unavailable: its database is not a completed installation.`n`n");
+			output("If you are the operator: diagnose the failed install, then recreate the disposable database and install again (docs/MODERN-INSTALLATION.md).");
+		}
+	}
 	define("NO_SAVE_USER",true);
 	// A signed-in player's stats panel reads the buff list and the companions, which are loaded below this page.
 	// 1.1.2 showed the buff list the session already held and no companions here; on PHP 8 the unloaded values stop

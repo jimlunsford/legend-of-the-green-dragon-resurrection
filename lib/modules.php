@@ -1359,6 +1359,41 @@ function install_module($module, $force=true){
 }
 
 /**
+ * A bundled module's upgrade, run only by the locked upgrade command (lib/upgrade.php) for an installed module whose
+ * stored version is older than its file's. It is 1.1.2's module upgrade, which injectmodule() ran on any request once
+ * the module's file changed: the module's hooks are removed and its own install function runs again, which adds them
+ * back and makes whatever changes the new version needs; then its entry gets the new metadata. Resurrection never
+ * upgrades a module as a side effect of a request (injectmodule() above), so the upgrade command does it explicitly.
+ *
+ * Unlike 1.1.2, the entry is updated last: an install function can change tables, which MySQL and MariaDB commit at
+ * once, so a failure partway leaves the old version recorded and the next upgrade runs the module's upgrade again (an
+ * install function checks before it changes, as 1.1.2 already required of it, since it ran on every upgrade). The
+ * module's active state and its settings and preferences are kept, as in 1.1.2.
+ */
+function resurrection_upgrade_module($module): bool {
+    global $mostrecentmodule;
+    if (!is_string($module) || !preg_match('/\\A[A-Za-z][A-Za-z0-9_]*\\z/', $module) || !file_exists('modules/' . $module . '.php')) { return false; }
+    if (!db_query('SELECT modulename FROM ' . db_prefix('modules') . ' WHERE modulename=?', true, [$module])) { return false; }
+    require_once 'modules/' . $module . '.php';
+    tlschema("module-{$module}");
+    try { $info = ($module . '_getmoduleinfo')(); } finally { tlschema(); }
+    if (!is_array($info) || !isset($info['name'], $info['author'], $info['category'], $info['version'])) { return false; }
+    if (!module_check_requirements($info['requires'] ?? [])) { return false; }
+    $mostrecentmodule = $module;
+    module_wipehooks();
+    tlschema("module-{$module}");
+    try { $installed = ($module . '_install')() !== false; } finally { tlschema(); }
+    resurrection_invalidate_module_runtime($module);
+    invalidatedatacache('inject-' . $module);
+    massinvalidate('moduleprepare');
+    if (!$installed) { return false; }
+    db_query('UPDATE ' . db_prefix('modules') . ' SET moduleauthor=?, category=?, formalname=?, description=?, filemoddate=?, infokeys=?, version=?, download=? WHERE modulename=?', true,
+        [$info['author'], $info['category'], $info['name'], $info['description'] ?? '', date('Y-m-d H:i:s', filemtime('modules/' . $module . '.php')),
+         '|' . implode('|', array_keys($info)) . '|', $info['version'], $info['download'] ?? '', $module]);
+    return true;
+}
+
+/**
   * Evaluates a PHP Expression
   *
   * @param string $condition The PHP condition to evaluate

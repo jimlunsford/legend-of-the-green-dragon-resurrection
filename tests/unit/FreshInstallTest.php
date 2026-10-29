@@ -108,9 +108,14 @@ final class FreshInstallTest extends TestCase
                 self::assertSame('empty', resurrection_install_state());
             } finally { if (file_exists($served)) unlink($served); }
 
-            // The default install writes the config from the environment and activates 1.1.2's recommended modules.
-            [$code, $out, $err] = $run('--write-config', $written);
+            // The default install writes the config from the environment and activates 1.1.2's recommended modules. A
+            // step in upgrades/ while it runs is recorded as applied and never run: the fresh schema already has it.
+            $step = dirname(__DIR__, 2) . '/upgrades/9998-fixture-recorded-by-a-fresh-install.php';
+            file_put_contents($step, "<?php\nreturn ['description' => 'Fixture', 'apply' => static function (): void { throw new LogicException('A fresh install never runs a step.'); }];\n", LOCK_EX);
+            try { [$code, $out, $err] = $run('--write-config', $written); } finally { unlink($step); }
             self::assertSame(0, $code, $err . $out);
+            self::assertSame(['9998-fixture-recorded-by-a-fresh-install'], array_column(db_query('SELECT step FROM upgrade_steps'), 'step'));
+            self::assertSame([], db_query("SELECT value FROM settings WHERE setting='installer_version'"));
             foreach ($secrets as $secret) self::assertStringNotContainsString($secret, $out . $err);
             self::assertSame(['tables' => count(resurrection_fresh_schema()) + 2, 'modules_installed' => 24, 'modules_active' => 23,
                 'administrator' => 1, 'state' => 'installed', 'modules' => 'recommended', 'config' => 'written'], json_decode($out, true, 512, JSON_THROW_ON_ERROR));
@@ -169,6 +174,11 @@ final class FreshInstallTest extends TestCase
             self::assertSame(['tables' => count(resurrection_fresh_schema()) + 2, 'modules_installed' => 24, 'modules_active' => 0,
                 'administrator' => 1, 'state' => 'installed', 'modules' => 'none', 'config' => 'existing'], json_decode($out, true, 512, JSON_THROW_ON_ERROR));
             self::assertSame('installed', resurrection_install_state());
+            // No step exists yet, so the install's ledger is empty and the database is current.
+            self::assertSame([], db_query('SELECT step FROM upgrade_steps'));
+            require_once 'lib/modules.php';
+            $GLOBALS['settings'] = null;
+            self::assertSame('current', resurrection_database_state());
             $result = db_query('SELECT COUNT(*) AS n FROM creatures');
             self::assertGreaterThan(100, (int)db_fetch_assoc($result)['n']);
             self::assertSame('UTF-8', getsetting('charset', ''));
@@ -197,8 +207,13 @@ final class FreshInstallTest extends TestCase
             $bounty = $GLOBALS['dbinfo']['connection']->query('SELECT setdate,windate FROM bounty')->fetch();
             self::assertNull($bounty['windate']);
             self::assertNotEmpty($bounty['setdate']);
+            // Each install function registers its hooks under the module named by $mostrecentmodule: name it again, or
+            // dag's hooks would be left registered under drinks for the tests that follow (UpgradeTest found this).
+            $GLOBALS['mostrecentmodule'] = 'dag';
             self::assertTrue(dag_install_private());
+            $GLOBALS['mostrecentmodule'] = 'drinks';
             self::assertTrue(drinks_install_private());
+            self::assertSame('15', $GLOBALS['dbinfo']['connection']->query("SELECT COUNT(*) FROM module_hooks WHERE modulename IN ('dag','drinks')")->fetchColumn());
             self::assertSame('1', $GLOBALS['dbinfo']['connection']->query('SELECT COUNT(*) FROM bounty')->fetchColumn());
             $admin = resurrection_authenticate('FixtureAdmin', $password);
             self::assertIsArray($admin);
@@ -243,6 +258,7 @@ final class FreshInstallTest extends TestCase
             }
             fwrite(STDERR, 'Fresh install: ' . json_encode(['php' => PHP_VERSION, 'database' => db_get_server_version(), 'tables' => count($tables), 'seed_counts' => $seedCounts, 'password_api' => password_get_info($admin['password']), 'sql_mode' => $modes, 'admin' => 'modern hash', 'repeat' => 'locked']) . "\n");
         } finally {
+            if (isset($step) && file_exists($step)) unlink($step);
             unlink($config);
             if (isset($written) && file_exists($written)) unlink($written);
             if (isset($private) && is_dir($private)) rmdir($private);

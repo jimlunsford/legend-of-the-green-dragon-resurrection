@@ -42,7 +42,7 @@ The game itself reads `dbconnect.php` in the repository root. For local play, ei
 
 ### Step 2: the install and its modules
 
-The command runs the supported installation service, creates the historical core schema and chronological fresh seed content, installs the fixed 24 shipped modules and their support data, activates the recommended modules, creates a modern administrator, and records completion only after all of that succeeds. Output contains counts and state, never credentials.
+The command runs the supported installation service, creates the historical core schema and chronological fresh seed content, installs the fixed 24 shipped modules and their support data, activates the recommended modules, creates a modern administrator, and records completion only after all of that succeeds. In the same final transaction it records every upgrade step in `upgrades/` as applied in the `upgrade_steps` table, because a fresh schema already has them (see "Upgrading"). Since task 2 the install no longer writes 1.1.2's `installer_version` setting: the shown version is not an install marker. Output contains counts and state, never credentials.
 
 `--modules` chooses what the install activates:
 
@@ -77,8 +77,63 @@ The command must run with the same private configuration and filesystem ownershi
 
 A database advisory lock serializes maintenance. A completed game-day marker makes repeated invocations skip that day's maintenance. The marker is written after successful maintenance. Player New Day behavior and its turn/economy rules remain separate. Each bundled daily hook commits its writes with a per-day receipt, so a failed run rolls that hook back and a retry skips hooks already done; the core cleanup is not one transaction, and a non-bundled module's filesystem, network or DDL effects would not roll back (`SECURITY-STATUS.md`, S13). Running a scheduler in production is a public hosting gate. HTTP GET and POST to cron.php return 404 before bootstrap.
 
+## Upgrading
+
+A new version of Resurrection can change the database. Each change is a numbered upgrade step in `upgrades/`; a bundled module's change is a raised module version. A database records the steps it has applied in its `upgrade_steps` table. Once the new version's files are in place, the game compares that record and the bundled modules' versions with its own:
+
+- **Behind** (steps or module upgrades pending): every page shows 1.1.2's "Upgrade Needed" message, with a line for the operator that names the commands below, and returns players to the game once the upgrade is done. `cron.php` refuses to run maintenance.
+- **Ahead** (the database has a step this version does not have, or a newer bundled module): "Game Unavailable". This is a downgrade, and it is refused: run the newer version again, or restore the backup taken before it upgraded the database.
+- A 1.1.2 database stays unsupported, and an incomplete install stays refused. Neither is upgraded.
+
+Upgrades go one release at a time (`VERSIONING.md`). Run every command below as the same user, with the same private configuration file, as the install and `cron.php`. `scripts/upgrade.php` takes the same optional configuration path as `scripts/install.php` (default `dbconnect.php` in the repository root) and rejects HTTP with 404.
+
+### 1. Back up
+
+Put the new version's files in place first: the game then shows "Upgrade Needed" and no one can play while you work. Take a fresh backup of the whole database, for example:
+
+```sh
+mysqldump --single-transaction --default-character-set=utf8mb4 -h HOST -u USER -p DATABASE > resurrection-before-upgrade.sql
+```
+
+Keep the backup private: it holds every account. Check that the file is complete (it ends with a `-- Dump completed` line). A backup is required because MySQL and MariaDB commit a table change the moment it runs: if an upgrade stops partway, the changes it made cannot be rolled back.
+
+To restore it, recreate the database empty and load the file into it, then put the previous version's files back:
+
+```sh
+mysql -h HOST -u USER -p -e 'DROP DATABASE DATABASE; CREATE DATABASE DATABASE CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci'
+mysql --default-character-set=utf8mb4 -h HOST -u USER -p DATABASE < resurrection-before-upgrade.sql
+```
+
+Restoring replaces everything in that database. Check the name twice before dropping it.
+
+### 2. Dry run
+
+```sh
+php scripts/upgrade.php --dry-run
+```
+
+This lists what is pending, each upgrade step with its description and each bundled module upgrade with its versions, and changes nothing. On a current database it says so, also without changing anything.
+
+### 3. Upgrade
+
+```sh
+php scripts/upgrade.php --backup-confirmed
+```
+
+Without `--backup-confirmed` the command refuses and says why. It takes the install's and the maintenance's database locks, so it never runs alongside an install or `cron.php`; if one is running, it refuses and changes nothing. It applies the pending steps in number order, recording each in `upgrade_steps` only after it has fully succeeded, then upgrades the bundled modules through the module lifecycle (each module's install function runs again, as 1.1.2 did when a module changed), and reports each one.
+
+If a step fails, the command stops there with exit code 1. It names the failed step and the last good step; the failed step is not recorded and nothing after it runs. Fix the cause and run the command again: recorded steps are skipped, and every step checks for its own changes before it makes them. If the cause cannot be fixed, restore the backup.
+
+### 4. Verify
+
+```sh
+php scripts/upgrade.php --dry-run
+```
+
+It should now say the database is current, with every step applied. Open the game: the "Upgrade Needed" page is gone, and the footer shows the new version. Run `php cron.php` once to confirm maintenance runs again.
+
 ## Validation
 
-CI installs into a truly empty resurrection_test database using a non-root database account, executes the actual CLI install command, and tests populated, 1.1.2 and repeated-install refusal, strict schema, seeds, administrator and player credentials, all 24 bundled module install callbacks and Dag/Drinks DDL. Its default install writes the configuration file from the environment and ends with 38 tables, 24 installed modules and exactly the 23 recommended modules active; it then clears that disposable database and installs again with `--modules=none` (24 installed, zero active), the state the later tests start from. An HTTP test plays the recommended module set as a brand-new player through account creation, first New Day onboarding, the village and the forest. Activation, lifecycle and gameplay of the 24 bundled modules are certified in `BUNDLED-MODULE-CERTIFICATION.md`. Python smoke tests use a standard PHP server bound only to 127.0.0.1, then run application HTTP requests and CLI maintenance. Tests refuse a differently named database.
+CI installs into a truly empty resurrection_test database using a non-root database account, executes the actual CLI install command, and tests populated, 1.1.2 and repeated-install refusal, strict schema, seeds, administrator and player credentials, all 24 bundled module install callbacks and Dag/Drinks DDL. Its default install writes the configuration file from the environment and ends with 39 tables (the 38 game tables and the `upgrade_steps` ledger), 24 installed modules and exactly the 23 recommended modules active; it then clears that disposable database and installs again with `--modules=none` (24 installed, zero active), the state the later tests start from. An HTTP test plays the recommended module set as a brand-new player through account creation, first New Day onboarding, the village and the forest. Activation, lifecycle and gameplay of the 24 bundled modules are certified in `BUNDLED-MODULE-CERTIFICATION.md`. The upgrade tests (`tests/unit/UpgradeTest.php`) run the upgrade command's steps, refusals and lock on that installed database and leave it exactly as they found it; an equivalence test applies temporary test-only steps and compares the result with the same changes made directly. Before the PHP tests, the release upgrade check (`scripts/release-upgrade-check.py`) installs the latest release tag, upgrades it to the commit under test and compares it with a fresh install; with no release tag yet it reports "no release yet" and passes, and a second run treats the commit under test as the release so the install, upgrade and comparison run on every commit. Python smoke tests use a standard PHP server bound only to 127.0.0.1, then run application HTTP requests and CLI maintenance. Tests refuse a differently named database.
 
 Exact passing runs and remaining limitations are in the Phase 2 and Phase 3 records (`MODERN-CORE-CHECKPOINT-20260913-PHASE2.md`, `PHASE3-MERGE-GATE-20261023.md`) and in `SECURITY-STATUS.md` and `COMPATIBILITY-STATUS.md`. A successful install does not approve public hosting.

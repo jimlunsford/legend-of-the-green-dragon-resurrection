@@ -25,6 +25,8 @@ The fixed 24 bundled entrypoints are installed with metadata, settings and hooks
 
 2026-10-29 (Phase 4 task 1B): the paragraph above is as recorded in Phase 2. Phase 3 certified activation, events and gameplay of all 24 (`BUNDLED-MODULE-CERTIFICATION.md`), and the fresh install now activates 23 of them, 1.1.2's recommended list, unless the operator passes `--modules=none` (`PHASE4-TASK1B-FRESH-INSTALL-20261029.md`).
 
+2026-10-29 (Phase 4 task 2): fresh installation now produces 39 tables, the 38 above plus the `upgrade_steps` ledger (InnoDB, utf8mb4_unicode_ci), which records the upgrade steps a database has applied. Whether a database is current, behind ("Upgrade Needed") or newer than the code is read from that ledger and the bundled modules' versions, no longer from the shown version string; `php scripts/upgrade.php` applies pending steps (`MODERN-INSTALLATION.md`, "Upgrading"; `PHASE4-TASK2-UPGRADE-SYSTEM-20261029.md`). A 1.1.2 database is still not upgraded or migrated.
+
 ## Additional runtime findings discovered in phase 2
 
 | Finding | Resolution | Evidence |

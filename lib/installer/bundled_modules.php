@@ -8,6 +8,21 @@ function resurrection_bundled_modules(): array {
         'racedwarf','raceelf','racehuman','racetroll','sethsong','specialtydarkarts','specialtymysticpower','specialtythiefskills'];
 }
 
+/**
+ * Each bundled module's version, as its file's getmoduleinfo() declares it (tests/unit/UpgradeTest.php checks that the
+ * two agree). common.php compares the installed modules' stored versions with these on every request, and the upgrade
+ * command upgrades a module whose stored version is older (lib/upgrade.php), so a module's version is read here
+ * without loading 24 module files per request.
+ * @return array<string, string>
+ */
+function resurrection_bundled_module_versions(): array {
+    return ['cedrikspotions' => '2.6', 'crazyaudrey' => '1.1', 'dag' => '1.3', 'darkhorse' => '1.1', 'drinks' => '1.1',
+        'fairy' => '1.1', 'findgem' => '1.1', 'findgold' => '1.1', 'foilwench' => '1.1', 'game_dice' => '1.1',
+        'game_fivesix' => '1.7', 'game_stones' => '1.1', 'glowingstream' => '1.1', 'goldmine' => '1.0', 'lovers' => '1.0',
+        'outhouse' => '2.0', 'racedwarf' => '1.1', 'raceelf' => '1.0', 'racehuman' => '1.0', 'racetroll' => '1.0',
+        'sethsong' => '1.1', 'specialtydarkarts' => '1.1', 'specialtymysticpower' => '1.0', 'specialtythiefskills' => '1.0'];
+}
+
 /** Called only inside the locked, empty-database fresh-install path. */
 function resurrection_install_bundled_modules(): void {
     global $session, $mostrecentmodule;

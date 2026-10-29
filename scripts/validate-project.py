@@ -18,7 +18,10 @@ def validate():
     require(meta['name'] == 'Legend of the Green Dragon - Resurrection', 'Project name mismatch')
     require(meta['repository'] == 'jimlunsford/legend-of-the-green-dragon-resurrection', 'Repository mismatch')
     require(meta['intended_visibility'] == 'public' and meta['default_branch'] == 'main', 'Repository policy mismatch')
-    require(meta['version'] is None, 'Foundation does not assign a release version')
+    # Resurrection's version is set in src/Version.php (docs/VERSIONING.md); tests/tooling/test_version.py checks the docs.
+    code = re.findall(r"const string CURRENT = '([^']*)';", (ROOT / 'src/Version.php').read_text())
+    require(len(code) == 1 and meta['version'] == code[0], 'project.json version must match src/Version.php')
+    require(re.fullmatch(r'(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-dev|-rc\.[1-9][0-9]*)?', meta['version']) is not None, 'Version must be MAJOR.MINOR.PATCH, -dev or -rc.N')
     require(meta['public_game_hosting_approved'] is False and meta['commercial_use_approved'] is False, 'Foundation approval flags must remain false')
     require(meta['archive_modules_imported'] == 0, 'Foundation excludes extra archive modules')
     base = json.loads((ROOT / 'docs/provenance/baseline.json').read_text())

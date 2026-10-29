@@ -6,6 +6,13 @@ require_once __DIR__ . '/../all_tables.php';
 require_once __DIR__ . '/../tabledescriptor.php';
 require_once __DIR__ . '/../accounts.php';
 require_once __DIR__ . '/bundled_modules.php';
+require_once __DIR__ . '/../upgrade.php';
+
+/** The install's advisory lock for this database. The upgrade command takes it too (lib/upgrade.php). */
+function resurrection_install_lock_name(): string {
+    $database = $GLOBALS['dbinfo']['connection']->query('SELECT DATABASE()')->fetchColumn();
+    return 'resurrection-install-' . substr(hash('sha256', (string)$database), 0, 32);
+}
 
 function resurrection_install_state(): string {
     $tables = db_query('SHOW TABLES');
@@ -75,6 +82,8 @@ function resurrection_fresh_schema(): array {
     $tables['accounts']['lastnewday'] = ['name' => 'lastnewday', 'type' => 'varchar(10)', 'default' => ''];
     $tables['accounts']['key-login']['type'] = 'unique key';
     $tables['accounts']['superuser']['default'] = '0';
+    // Resurrection's applied upgrade steps (lib/upgrade.php).
+    $tables['upgrade_steps'] = resurrection_upgrade_ledger_descriptor();
     return $tables;
 }
 
@@ -89,9 +98,10 @@ function resurrection_fresh_install(string $login, #[\SensitiveParameter] string
         throw new InvalidArgumentException('Only bundled modules, each once, can be activated.');
     }
     $hash = \Resurrection\Security\Passwords::hash($password);
+    // The steps that exist now are part of this install's schema; a step file that cannot be read refuses it first.
+    $steps = \Resurrection\Upgrade\StepCatalog::ids(resurrection_upgrade_steps_directory());
     $db = $GLOBALS['dbinfo']['connection'];
-    $database = $db->query('SELECT DATABASE()')->fetchColumn();
-    $lock = 'resurrection-install-' . substr(hash('sha256', (string)$database), 0, 32);
+    $lock = resurrection_install_lock_name();
     $result = db_query('SELECT GET_LOCK(?, 0) AS acquired', true, [$lock]);
     if (db_fetch_assoc($result)['acquired'] !== '1') { throw new RuntimeException('Another installation is in progress.'); }
     try {
@@ -135,7 +145,9 @@ function resurrection_fresh_install(string $login, #[\SensitiveParameter] string
         resurrection_activate_installed_modules($activate);
         $GLOBALS['fresh_install_phase'] = 'administrator';
         $admin = resurrection_insert_account($login, $hash, $email, SU_MEGAUSER | SU_EDIT_USERS | SU_EDIT_CONFIG | SU_MANAGE_MODULES | SU_EDIT_COMMENTS);
-        savesetting('installer_version', '1.1.2 Dragonprime Edition');
+        // 1.1.2's installer_version setting is no longer written: it was the version shown, used as the install
+        // marker. The completion marker and the applied steps are the database's state (lib/upgrade.php).
+        foreach ($steps as $step) { resurrection_upgrade_record($step); }
         savesetting('resurrection_install', 'complete');
         $db->commit();
         $active = db_query('SELECT COUNT(*) AS n FROM ' . db_prefix('modules') . ' WHERE active=1');

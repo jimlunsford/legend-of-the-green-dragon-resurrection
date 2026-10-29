@@ -180,8 +180,13 @@ The release itself stays excluded until Jim says so: hosting, tags, GitHub relea
 ### Checklist
 
 - [x] 1A: start Phase 4 (docs only). Records the acceptance of `754bf14` (through `9620489`) and `9620489`; `CLAUDE.md` gets the current phase, the fresh-install-only exclusion and the versioning rule; `docs/MODERN-INSTALLATION.md` describes the install as it works today. Accepted at `b38bc21`, Modern core 40119918321 (all 12 jobs), Baseline integrity 40119918310.
-- [ ] 1B: a fresh install ready to play: activate the recommended modules during install, a guided config file step, and an "unsupported" message for a 1.1.2 database.
-- [ ] 2: the upgrade system, built before anything ships.
+- [x] 1B: a fresh install ready to play: activate the recommended modules during install, a guided config file step, and an "unsupported" message for a 1.1.2 database (`docs/PHASE4-TASK1B-FRESH-INSTALL-20261029.md`). Accepted at `504b5aa`, Modern core 40800637109 (all 12 jobs), Baseline integrity 40800637058.
+- [ ] 2: the version number and the upgrade system, built before anything ships (`docs/PHASE4-TASK2-UPGRADE-SYSTEM-20261029.md`). Done when CI accepts it.
+  - [ ] One version number, `1.0.0-dev`, in `src/Version.php`, read by the code, `project.json` and the docs check; the footer shows it and credits 1.1.2; the shown version is no longer the install marker.
+  - [ ] Schema state: the `upgrade_steps` ledger, numbered steps in `upgrades/`, bundled module upgrades through the lifecycle API, "Upgrade Needed" when behind, a refusal for a downgrade, a 1.1.2 database still unsupported.
+  - [ ] `php scripts/upgrade.php`: CLI only, the install's configuration, the install and maintenance locks, `--dry-run`, `--backup-confirmed`, stop at the first failure.
+  - [ ] Tests: the runner, an equivalence test with temporary test-only steps, and the release upgrade check in Modern core ("no release yet" until a release tag exists).
+  - [ ] Docs: `docs/VERSIONING.md` rewritten, "Upgrading" in `docs/MODERN-INSTALLATION.md`.
 - [ ] 3: one-command local setup.
 
 ### Public hosting

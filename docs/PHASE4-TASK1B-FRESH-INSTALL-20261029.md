@@ -128,3 +128,9 @@ Supporting evidence only; CI is the acceptance. PHP 8.5.12 with MySQL 8.4.13 in 
 - `docs/VERSIONING.md` and every version string.
 - Production hosting gates: `SECURITY-STATUS.md` S04 and S13 were updated from the Phase 3 evidence they cite, keeping
   what is still true; public hosting remains **NO**.
+
+## Acceptance (appended 2026-10-29, task 2)
+
+`504b5aa`: Modern core 40800637109, all 12 jobs SUCCESS (both legs' `checks`, eight `http` shards and both `result`
+jobs, 01:28 to 01:50 UTC); Baseline integrity 40800637058 SUCCESS. Read through the GitHub Actions API on 2026-10-29.
+`ROADMAP.md` marks 1B done in the task 2 commit.

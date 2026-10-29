@@ -111,7 +111,9 @@ if ($onlinecount<getsetting("maxonline",0) || getsetting("maxonline",0)==0){
 $msg = getsetting("loginbanner","*BETA* This is a BETA of this website, things are likely to change now and again, as it is under active development *BETA*");
 output_notl("`n`c`b`&%s`0`b`c`n", $msg);
 $session['message']="";
-output("`c`2Game server running version: `@%s`0`c", $logd_version);
+// 1.1.2 showed $logd_version; the server now runs Resurrection, which credits that base (src/Version.php).
+require_once 'src/Version.php';
+output("`c`2Game server running version: `@%s`0`c", \Resurrection\Version::display());
 
 if (getsetting("homeskinselect", 1)) {
 	rawoutput("<form action='home.php' method='POST'>" . resurrection_csrf_field());
