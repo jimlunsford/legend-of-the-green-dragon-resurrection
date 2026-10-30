@@ -159,7 +159,7 @@ function racehuman_dohook($hookname,$args){
 	case "villagetext":
 		racehuman_checkcity();
 		if ($session['user']['location'] == $city){
-			$args['text']=array("`&`c`b%s, City of Men`b`c`n`7You are standing in the heart of %s.  Though called a city, this stronghold of humans is little more than a fortified village.  The city's low defensive walls are surrounded by rolling plains which gradually turn into thick forest in the distance.  Some residents are engaged in conversation around the well in the village square.`n", $city, $city);
+			$args['text']=array("`7You are standing in the heart of %s.  Though called a city, this stronghold of humans is little more than a fortified village.  The city's low defensive walls are surrounded by rolling plains which gradually turn into thick forest in the distance.  Some residents are engaged in conversation around the well in the village square.`n", $city);
 			$args['schemas']['text'] = "module-racehuman";
 			$args['clock']="`n`7The great sundial at the heart of the city reads `&%s`7.`n";
 			$args['schemas']['clock'] = "module-racehuman";

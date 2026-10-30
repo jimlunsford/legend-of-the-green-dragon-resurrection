@@ -27,7 +27,7 @@ function drinks_run_private(){
         tlschema($drinktext['schemas']['title']);
         page_header($drinktext['title']);
         rawoutput("<span style='color: #9900FF'>");
-        output_notl('`c`b'); output($drinktext['title']); output_notl('`b`c'); tlschema();
+        tlschema();
         if ($result===null) {
             output('Buy %s for %s gold?', $row['name'], (int)$session['user']['level']*(int)$row['costperlevel']);
             $url='runmodule.php?module=drinks&act=buy&id='.$id;

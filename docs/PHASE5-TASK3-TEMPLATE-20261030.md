@@ -234,3 +234,19 @@ PHP 8.5.12 (php-builder, as setup-php) and MySQL 8.4 in Docker:
 
 Pending: this commit's Modern core (both legs, all 12 jobs) and Baseline integrity runs. `ROADMAP.md` ticks task 3
 only after CI accepts it.
+
+### Accepted (recorded 2026-10-30, Phase 5 task 4)
+
+`976a61e` is accepted. Confirmed through the GitHub API before task 4 started:
+
+- Modern core [41094820755](https://github.com/jimlunsford/legend-of-the-green-dragon-resurrection/actions/runs/41094820755):
+  SUCCESS, all 12 jobs (both `checks` jobs, all eight `http` shard jobs, both `result` jobs). Shard jobs, from the
+  jobs' start and completion times:
+
+  | Leg | Shard 1 | Shard 2 | Shard 3 | Shard 4 |
+  |---|---|---|---|---|
+  | PHP 8.4 / MariaDB 11.4 | 18:29 | 18:19 | 17:03 | 14:43 |
+  | PHP 8.5 / MySQL 8.4 | 19:11 | 19:27 | 17:27 | 19:29 |
+
+- Baseline integrity [41094820993](https://github.com/jimlunsford/legend-of-the-green-dragon-resurrection/actions/runs/41094820993):
+  SUCCESS.

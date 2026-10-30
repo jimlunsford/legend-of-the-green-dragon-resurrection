@@ -26,7 +26,6 @@ $returnline = $return>""?"&return=$return":"";
 $posted = resurrection_service_posted();
 
 page_header("Healer's Hut");
-output("`#`b`cHealer's Hut`c`b`n");
 
 $cost = resurrection_healer_cost();
 

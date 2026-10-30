@@ -106,9 +106,6 @@ function sethsong_run(){
 	page_header($iname);
 
 	rawoutput("<span style='color: #9900FF'>");
-	output_notl("`c`b");
-	output($iname);
-	output_notl("`b`c");
 	tlschema();
 
 	// Short circuit out if we've heard enough

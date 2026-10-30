@@ -12,7 +12,6 @@ require_once("lib/bank_authority.php");
 tlschema("bank");
 
 page_header("Ye Olde Bank");
-output("`^`c`bYe Olde Bank`b`c");
 $op = httpget('op');
 // Only the protected POST of a finishing step moves gold; GET (a reload, a restored page) shows its form.
 $posted = ($_SERVER['REQUEST_METHOD'] ?? '') === 'POST';

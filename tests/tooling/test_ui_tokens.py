@@ -7,7 +7,9 @@ no page resource may come from another server.
 
 Static: runs wherever the suite runs, with or without a supported PHP (Baseline integrity too).
 """
+import colorsys
 import hashlib
+import math
 from pathlib import Path
 import re
 import unittest
@@ -228,6 +230,68 @@ class UiTokenTests(unittest.TestCase):
         for ground in ('--panel', '--header', '--ground'):
             self.assertGreaterEqual(contrast(self.properties['--input-border'], self.properties[ground]), UI_MINIMUM, ground)
         self.assertLess(contrast(self.properties['--input-border'], self.properties['--raised']), UI_MINIMUM)
+
+    def test_the_quieter_palette(self):
+        # Jim's approved values (2026-10-30, Phase 5 task 4): same codes and meanings, lower saturation, toward parchment.
+        approved = {'1': '#8FA3C4', '!': '#A9B8D4', '2': '#86A877', '@': '#9CCB8A', '3': '#7FAAA3', '#': '#A3C4BE',
+                    '4': '#D9775E', '$': '#E8826A', '5': '#B49AB8', '%': '#CDB0C2', '6': '#C9B47A', '^': '#E3CF9A',
+                    '7': '#C9C0AE', '&': '#F4EEE2', ')': '#9A917F', 'q': '#C4936A', 'Q': '#DDA878'}
+        codes = {code: (name, value) for code, name, value in spec_codes(self.spec)}
+        self.assertEqual(41, len(codes))
+        for code, value in approved.items():
+            self.assertEqual(value, codes[code][1], code)
+            self.assertEqual(value, self.properties[f'--code-{codes[code][0]}'], code)
+        # The other 24 codes, retuned by the same rule: no more saturated than task 2's values, and each still distinct
+        # from every other code (CIE76 distance 5 or more; only Jim's 4 and $ pair sits closer, at 4.66).
+        task2 = {'~': '#958C7E', 'e': '#B98680', 'E': '#D4A39C', 'g': '#B5E3A6', 'j': '#D6D0C4', 'J': '#8FA6E0',
+                 'k': '#8CE0C6', 'K': '#9DBF9A', 'l': '#6FA3D6', 'L': '#7FBCF0', 'm': '#EAD8B5', 'M': '#CDB08C',
+                 'p': '#EBA486', 'P': '#E58C7C', 'R': '#E6BDE0', 'T': '#A88B6C', 't': '#E9CF8C', 'V': '#A98BE6',
+                 'v': '#B3C1EA', 'x': '#D9B88F', 'X': '#EFE8D0', 'y': '#E6D99A', 'Y': '#BDB474'}
+        self.assertEqual(set(codes) - set(approved) - {'G'}, set(task2))
+        for code, before in task2.items():
+            self.assertLess(saturation(codes[code][1]), saturation(before), code)
+            self.assertNotEqual(before, codes[code][1], code)
+        values = {code: value for code, (_, value) in codes.items() if code != 'G'}
+        close = [(a, b, round(distance(values[a], values[b]), 2)) for a in values for b in values
+                 if a < b and {a, b} != {'4', '$'} and distance(values[a], values[b]) < 5]
+        self.assertEqual([], close)
+
+    def test_character_panel_values_are_text_not_gold(self):
+        # Jim, 2026-10-30 (task 4): values in --text, bold, by default; getcharstats() wraps each in `^ (colLtYellow),
+        # so the template's CSS, scoped to the character panel, reads that wrapper as --text. No PHP change.
+        css = without_comments((ROOT / 'assets' / 'ui' / 'resurrection.css').read_text())
+        rule = re.search(r'\.rz-statvalue \.colLtYellow, \.rz-statbuff \.colLtYellow \{\s*color: var\(--text\);\s*\}', css)
+        self.assertIsNotNone(rule, 'The character panel rule is missing')
+        self.assertEqual(2, css.count('.colLtYellow'), 'colLtYellow is restyled only by that rule, inside the character panel')
+        self.assertRegex(css, r'\.rz-statvalue \{[^}]*font-weight: var\(--weight-ui-bold\);')
+        source = (ROOT / 'lib' / 'pageparts.php').read_text()
+        self.assertIn('"value"=>"`^$val`0"', source)
+        # The bonus (`@) and penalty (`$) codes charstats() uses stay distinct from the value color and each other.
+        self.assertIn('`@+', source)
+        self.assertIn('`\\$', source)
+        bonus, penalty, text = self.properties['--code-colLtGreen'], self.properties['--code-colLtRed'], self.properties['--text']
+        for a, b in ((bonus, text), (penalty, text), (bonus, penalty)):
+            self.assertGreater(distance(a, b), 20, (a, b))
+
+
+def saturation(color):
+    channels = [int(color[i:i + 2], 16) / 255 for i in (1, 3, 5)]
+    return colorsys.rgb_to_hls(*channels)[2]
+
+
+def lab(color):
+    linear = [c / 12.92 if c <= 0.04045 else ((c + 0.055) / 1.055) ** 2.4
+              for c in (int(color[i:i + 2], 16) / 255 for i in (1, 3, 5))]
+    x = (0.4124 * linear[0] + 0.3576 * linear[1] + 0.1805 * linear[2]) / 0.95047
+    y = 0.2126 * linear[0] + 0.7152 * linear[1] + 0.0722 * linear[2]
+    z = (0.0193 * linear[0] + 0.1192 * linear[1] + 0.9505 * linear[2]) / 1.08883
+    f = [t ** (1 / 3) if t > 0.008856 else 7.787 * t + 16 / 116 for t in (x, y, z)]
+    return 116 * f[1] - 16, 500 * (f[0] - f[1]), 200 * (f[1] - f[2])
+
+
+def distance(first, second):
+    """CIE76 colour difference."""
+    return math.dist(lab(first), lab(second))
 
 
 class RequestScannerTests(unittest.TestCase):

@@ -46,7 +46,6 @@ try {
             invalidatedatacache('newest');
             output('Your account was created. Return to the login page to sign in.');
         } else {
-            output('`&`c`bCreate a Character`b`c`0');
             rawoutput('<form action="create.php?op=create" method="POST">' . resurrection_csrf_field());
             rawoutput('<table><tr><td>Character name:</td><td><input name="name" maxlength="25" required></td></tr>');
             rawoutput('<tr><td>Password (12 to 72 bytes):</td><td><input type="password" name="pass1" autocomplete="new-password" required></td></tr>');

@@ -111,9 +111,6 @@ function cedrikspotions_run(){
 	tlschema("inn");
 	page_header($iname);
 	rawoutput("<span style='color: #9900FF'>");
-	output_notl("`c`b");
-	output($iname);
-	output_notl("`b`c");
 	tlschema();
 	$barkeep = getsetting("barkeep","`tCedrik");
 	$mincost = 0;

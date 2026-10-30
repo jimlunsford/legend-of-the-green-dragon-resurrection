@@ -85,7 +85,7 @@ function popup($page,$size="550x300"){
 function page_footer($saveuser=true){
 	global $output,$nestedtags,$header,$nav,$session,$REMOTE_ADDR,
 		$REQUEST_URI,$pagestarttime,$quickkeys,$template,$y2,$z2,
-		$logd_version,$copyright,$SCRIPT_NAME,$nopopups, $footer,
+		$logd_version,$copyright,$SCRIPT_NAME, $footer,
 		$dbinfo;
 	$z = $y2^$z2;
 	$footer = $template['footer'];
@@ -133,11 +133,11 @@ function page_footer($saveuser=true){
 	$row = db_fetch_assoc($result);
 	db_free_result($result);
 	$headscript = "";
+	// 1.1.2 opened an unread MoTD in a popup window on every page load (from page_footer()). Popup blockers stop that,
+	// and a phone has no popups: an unread MoTD now marks the header's MoTD link instead, on every page (Phase 5 task 4).
 	if ($row && isset($session['user']['lastmotd']) &&
 			($row['motddate']>$session['user']['lastmotd']) &&
-			(!isset($nopopups[$SCRIPT_NAME]) || $nopopups[$SCRIPT_NAME]!=1) &&
 			$session['user']['loggedin']){
-		$headscript.=popup("motd.php");
 		$session['needtoviewmotd']=true;
 	}else{
 		$session['needtoviewmotd']=false;
@@ -217,8 +217,9 @@ function page_footer($saveuser=true){
 	}
 	//output petition count
 
-	$header=str_replace("{petition}","<a href='petition.php' onClick=\"".popup("petition.php").";return false;\" target='_blank' align='right' class='motd'>".translate_inline("Petition for Help")."</a>",$header);
-	$footer=str_replace("{petition}","<a href='petition.php' onClick=\"".popup("petition.php").";return false;\" target='_blank' align='right' class='motd'>".translate_inline("Petition for Help")."</a>",$footer);
+	$petitionlink = petitionlink();
+	$header=str_replace("{petition}",$petitionlink,$header);
+	$footer=str_replace("{petition}",$petitionlink,$footer);
 	if ($session['user']['superuser'] & SU_EDIT_PETITIONS){
 		$sql = "SELECT count(petitionid) AS c,status FROM " . db_prefix("petitions") . " GROUP BY status";
 		$result = db_query_cached($sql,"petition_counts");
@@ -261,6 +262,10 @@ function page_footer($saveuser=true){
 	// (src/Version.php; $logd_version stays the base, as the about page shows it).
 	require_once __DIR__ . '/../src/Version.php';
 	$footer=str_replace("{version}", "Version: " . \Resurrection\Version::display(), $footer);
+	// The footer's Credits link, only where about.php is a nav the page allows, and the time to the next new day
+	// (Phase 5 task 4).
+	$footer=str_replace("{credits}", creditslink(), $footer);
+	$footer=str_replace("{newday}", resurrection_newday_text(), $footer);
 	//output page generation time
 	$gentime = getmicrotime()-$pagestarttime;
 	$session['user']['gentime']+=$gentime;
@@ -316,7 +321,7 @@ function popup_header($title="Legend of the Green Dragon"){
  *
  */
 function popup_footer(){
-	global $output,$nestedtags,$header,$session,$y2,$z2,$copyright, $template;
+	global $output,$nestedtags,$header,$session,$y2,$z2,$copyright, $template, $baseaccount;
 
 	while (list($key,$val)=resurrection_array_next($nestedtags)){
 		if ($nestedtags[$key] === true) $output.="</$key>";
@@ -345,6 +350,13 @@ function popup_footer(){
 	$header = preg_replace("/{[^} \t\n\r]*}/i","",$header);
 
 	$output=$header.$output.$footer;
+	// A popup page (mail.php, motd.php, petition.php, translatortool.php) runs outside forced navigation and needs no
+	// navs of its own, so it keeps the navs the game page allowed exactly as they were: opening one from the header
+	// never changes what the game page allows. 1.1.2 saved the navs a popup added (the MoTD commentary's refresh
+	// links) into the game page's allowed navs (Phase 5 task 4).
+	if (OVERRIDE_FORCED_NAV && isset($baseaccount['allowednavs'])) {
+		$session['allowednavs'] = \Resurrection\Security\NavigationState::read($baseaccount['allowednavs']);
+	}
 	saveuser();
 	session_write_close();
 	echo $output;
@@ -674,36 +686,149 @@ function loadtemplate($templatename){
 }
 
 /**
- * Returns a display formatted (and popup enabled) mail link - determines if unread mail exists and highlights the link if needed
+ * The player's mail as data: unread ("new") and read ("old") message counts. maillink() builds the header link from
+ * them, so the count never has to be read back out of the translated sentence (Phase 5 task 4).
  *
- * @return string The formatted mail link
+ * @return array{new: int, old: int}
  */
-function maillink(){
+function maillink_counts(){
 	global $session;
 	$sql = "SELECT sum(if(seen=1,1,0)) AS seencount, sum(if(seen=0,1,0)) AS notseen FROM " . db_prefix("mail") . " WHERE msgto=\"".$session['user']['acctid']."\"";
 	$result = db_query_cached($sql,"mail-{$session['user']['acctid']}",86400);
 	$row = db_fetch_assoc($result);
 	db_free_result($result);
-	$row['seencount']=(int)$row['seencount'];
-	$row['notseen']=(int)$row['notseen'];
-	if ($row['notseen']>0){
-		return sprintf("<a href='mail.php' target='_blank' onClick=\"".popup("mail.php").";return false;\" class='hotmotd'>".translate_inline("Ye Olde Mail: %s new, %s old", 'common')."</a>",$row['notseen'],$row['seencount']);
-	}else{
-		return sprintf("<a href='mail.php' target='_blank' onClick=\"".popup("mail.php").";return false;\" class='motd'>".translate_inline("Ye Olde Mail: %s new, %s old", 'common')."</a>",$row['notseen'],$row['seencount']);
-	}
+	return array('new'=>(int)($row['notseen'] ?? 0), 'old'=>(int)($row['seencount'] ?? 0));
 }
 
 /**
- * Returns a display formatted (and popup enabled) MOTD link - determines if unread MOTD items exist and highlights the link if needed
+ * Returns the header's mail link: an envelope icon, an unread-count badge (none at zero) and the full "N new, M old"
+ * sentence as its accessible name. Highlighted (hotmotd) while there is unread mail.
+ *
+ * 1.1.2 printed the sentence as the link text. The sentence keeps its translation key ("Ye Olde Mail: %s new, %s old",
+ * common); the short visible label "Mail" is a new key in common.
+ *
+ * @return string The formatted mail link
+ */
+function maillink(){
+	$counts = maillink_counts();
+	$label = sprintf(translate_inline("Ye Olde Mail: %s new, %s old", 'common'), $counts['new'], $counts['old']);
+	return resurrection_header_control('mail.php', 'mail', translate_inline("Mail", 'common'), $label,
+		$counts['new'] > 0 ? (string)$counts['new'] : null, $counts['new'] > 0);
+}
+
+/**
+ * Returns the header's MoTD link: a scroll icon, and while an MoTD item is unread a dot badge and the hotmotd class.
+ * The unread mark replaces 1.1.2's automatic MoTD popup (Phase 5 task 4).
  *
  * @return string The formatted MOTD link
  */
 function motdlink(){
 	global $session;
-	if ($session['needtoviewmotd']){
-		return "<a href='motd.php' target='_blank' onClick=\"".popup("motd.php").";return false;\" class='hotmotd'><b>".translate_inline("MoTD")."</b></a>";
-	}else{
-		return "<a href='motd.php' target='_blank' onClick=\"".popup("motd.php").";return false;\" class='motd'><b>".translate_inline("MoTD")."</b></a>";
+	$unread = !empty($session['needtoviewmotd']);
+	$label = translate_inline("MoTD");
+	return resurrection_header_control('motd.php', 'motd', $label, $unread ? translate_inline("MoTD (unread)") : $label,
+		$unread ? '' : null, $unread);
+}
+
+/**
+ * Returns the header's petition link: a help icon and the label "Petition for Help" (1.1.2's text and key).
+ *
+ * @return string The formatted petition link
+ */
+function petitionlink(){
+	$label = translate_inline("Petition for Help");
+	return resurrection_header_control('petition.php', 'petition', $label, $label, null, false);
+}
+
+/**
+ * One header control: a real link to a popup page (mail.php, motd.php or petition.php) that works without JavaScript and
+ * on a phone. It opens in a new tab or window (target="_blank"), so the game page and the navigation it allows stay as
+ * they were: those pages are outside forced navigation (OVERRIDE_FORCED_NAV) and keep no restore page. On a desktop
+ * with a mouse, the click opens 1.1.2's small popup window instead; if a blocker stops it, the link opens as usual.
+ *
+ * @param string $page The popup page
+ * @param string $kind mail, motd or petition: the icon and the CSS class
+ * @param string $text The visible label (hidden on a phone)
+ * @param string $label The accessible name: aria-label and title
+ * @param string|null $badge The badge: a count, '' for a dot, null for none
+ * @param bool $hot Highlighted (1.1.2's hotmotd class)
+ * @return string
+ */
+function resurrection_header_control($page, $kind, $text, $label, $badge, $hot){
+	static $icons = array(
+		'mail'=>'<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3.5 6.5 12 13l8.5-6.5"/>',
+		'motd'=>'<path d="M7 4h11a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H6"/><path d="M7 4a2 2 0 0 0-2 2v12a2 2 0 0 1-2 2h3"/><path d="M9 9h7M9 13h7M9 17h4"/>',
+		'petition'=>'<circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .9-1 1.6v.6"/><path d="M12 17.2v.1"/>',
+	);
+	$charset = getsetting("charset", "ISO-8859-1");
+	$label = htmlentities(full_sanitize($label), ENT_QUOTES | ENT_SUBSTITUTE, $charset);
+	$text = htmlentities(full_sanitize($text), ENT_QUOTES | ENT_SUBSTITUTE, $charset);
+	$out = "<a href='$page' target='_blank' rel='noopener' class='rz-control rz-control-$kind ".($hot ? "hotmotd" : "motd")."'"
+		." aria-label='$label' title='$label' onclick=\"".resurrection_popup_enhancement($page)."\">"
+		."<svg class='rz-icon' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8'"
+		." stroke-linecap='round' stroke-linejoin='round' aria-hidden='true' focusable='false'>{$icons[$kind]}</svg>"
+		."<span class='rz-control-label'>$text</span>";
+	if ($badge !== null) {
+		$out .= $badge === '' ? "<span class='rz-badge rz-badge-dot' aria-hidden='true'></span>"
+			: "<span class='rz-badge' aria-hidden='true'>".(int)$badge."</span>";
 	}
+	return $out."</a>";
+}
+
+/**
+ * The click handler of a header control: on a desktop with a mouse (at least 900px wide, hover and a fine pointer) it
+ * opens 1.1.2's popup window (popup()'s name and size) and cancels the link; anywhere else, or if the window was
+ * blocked, the link is followed as a plain link.
+ *
+ * @param string $page The popup page
+ * @param string $size The popup window size (Default: 550x300, as popup())
+ * @return string
+ */
+function resurrection_popup_enhancement($page, $size="550x300"){
+	$s = explode("x",$size);
+	$name = preg_replace("([^[:alnum:]])","",$page);
+	return "if(window.matchMedia&&window.matchMedia('(min-width: 900px) and (hover: hover) and (pointer: fine)').matches){"
+		."var w=window.open(this.href,'$name','scrollbars=yes,resizable=yes,width={$s[0]},height={$s[1]}');"
+		."if(w){w.focus();return false;}}return true;";
+}
+
+/**
+ * The footer's Credits link to about.php, only where following it is allowed: always for a visitor who is not signed
+ * in (about.php allows anonymous visits), and for a signed-in player only on a page that allows about.php as a nav
+ * (home and news do). Elsewhere it is left out, so it never causes a bad nav or lets a player leave a fight or a
+ * forced page. The link uses the exact nav the page allowed. The 1.1.2 credit line itself ({copyright}) is on every
+ * page regardless (Phase 5 task 4).
+ *
+ * @return string
+ */
+function creditslink(){
+	global $session;
+	$href = null;
+	if (empty($session['loggedin'])) {
+		$href = 'about.php';
+	} else {
+		foreach (array_keys(is_array($session['allowednavs'] ?? null) ? $session['allowednavs'] : array()) as $nav) {
+			if ($nav === 'about.php' || preg_match('/\Aabout\.php\?c=[0-9]+-[0-9]{6}\z/', (string)$nav)) {
+				$href = (string)$nav;
+				break;
+			}
+		}
+	}
+	if ($href === null) return "";
+	return "<a href=\"".htmlspecialchars($href, ENT_QUOTES)."\" class=\"rz-credits\">".translate_inline("Credits")."</a>"
+		." <span class=\"rz-footer-sep\" aria-hidden=\"true\">&middot;</span> ";
+}
+
+/**
+ * The time to the next game day, as footer text ("Next new day in 3h 13m"), read from secondstonextgameday(). Plain
+ * text: no script is needed to read it (Phase 5 task 4).
+ *
+ * @param array<string, mixed>|false $details gametimedetails(), or false to read the clock now
+ * @return string
+ */
+function resurrection_newday_text($details=false){
+	if ($details === false) $details = gametimedetails();
+	$seconds = max(0, (int)secondstonextgameday($details) - (int)strtotime($details['now']));
+	return sprintf(translate_inline("Next new day in %sh %sm", 'common'), intdiv($seconds, 3600), intdiv($seconds % 3600, 60));
 }
 ?>

@@ -29,10 +29,13 @@ PART_KEYS = {
 # The tags page_header(), page_footer(), popup_header() and popup_footer() fill in the frame parts, and the four ad
 # slots modules fill through the footer hooks (1.1.2's {headerad}, {navad}, {verticalad}, {bodyad}).
 FRAME_TAGS = {'title', 'headscript', 'script', 'nav', 'stats', 'petition', 'petitiondisplay', 'motd', 'mail', 'paypal',
-              'source', 'version', 'pagegen', 'copyright'}
+              'source', 'version', 'pagegen', 'copyright', 'credits', 'newday'}
 AD_SLOTS = {'headerad', 'navad', 'verticalad', 'bodyad'}
 # page_footer() fills these in the footer part only; popup_footer() fills only {copyright}, in popupfoot.
-FOOTER_ONLY = {'copyright', 'version', 'pagegen'}
+FOOTER_ONLY = {'copyright', 'version', 'pagegen', 'credits', 'newday'}
+# The Resurrection attribution (Phase 5 task 4): its own line, with both links, in the page footer and the popup footer.
+ATTRIBUTION = ('<p class="rz-attribution">A <a href="https://phoenix233.com" target="_blank" rel="noopener">Phoenix 2:33 LLC</a>'
+               ' Project by <a href="https://jimlunsford.com" target="_blank" rel="noopener">Jim Lunsford</a></p>')
 
 
 def parts(text):
@@ -124,9 +127,10 @@ class TemplateTests(unittest.TestCase):
         for tag in FOOTER_ONLY:
             self.assertEqual(1, self.parts['footer'].count('{' + tag + '}'), tag)
             self.assertNotIn('{' + tag + '}', self.parts['header'], tag)
-        # The footer's Credits and Source links.
-        self.assertIn('<a href="about.php">Credits</a>', self.parts['footer'])
-        self.assertIn('{source}', self.parts['footer'])
+        # The footer's Credits and Source links. Credits is {credits}: page_footer() writes the link only where about.php
+        # is a nav the page allows (Phase 5 task 4), so the template has no fixed about.php link that could cause a bad nav.
+        self.assertIn('{copyright}{credits}{source}', self.parts['footer'])
+        self.assertNotIn('about.php', self.text)
 
     def test_frame_tags_are_ones_the_code_fills(self):
         pageparts = (ROOT / 'lib' / 'pageparts.php').read_text()
@@ -137,6 +141,30 @@ class TemplateTests(unittest.TestCase):
                 self.assertIn(tag, FRAME_TAGS | AD_SLOTS, f'{{{tag}}} in {part} is filled by nothing, and removed')
         for tag in AD_SLOTS:
             self.assertEqual(1, self.text.count('{' + tag + '}'), tag)
+
+    def test_the_attribution_line(self):
+        # On every page and popup, its own line after the 1.1.2 credit line, never inside it; exactly once per part.
+        for part in self.parts:
+            expected = 1 if part in ('footer', 'popupfoot') else 0
+            self.assertEqual(expected, self.parts[part].count(ATTRIBUTION), part)
+            self.assertEqual(expected, self.parts[part].count('Phoenix 2:33 LLC'), part)
+        for part in ('footer', 'popupfoot'):
+            text = self.parts[part]
+            credit = text.index('<div class="rz-footer-credits">{copyright}')
+            line = text.index(ATTRIBUTION)
+            self.assertLess(credit, line, part)
+            # The credit line's own element closes before the attribution starts.
+            self.assertLess(text.index('</div>', credit), line, part)
+            self.assertLess(line, text.index('</footer>'), part)
+        # Plain links: nothing is requested until a link is clicked.
+        for url in ('https://phoenix233.com', 'https://jimlunsford.com'):
+            self.assertEqual(2, self.text.count(f'href="{url}"'), url)
+        css = (ROOT / 'assets' / 'ui' / 'resurrection.css').read_text()
+        rule = re.search(r'\.rz-attribution\s*\{([^}]*)\}', css)
+        self.assertIsNotNone(rule)
+        for hidden in ('display: none', 'visibility', 'opacity', 'font-size: 0', 'clip', 'position: absolute', 'height: 0'):
+            self.assertNotIn(hidden, rule.group(1))
+        self.assertIn('font-size: var(--size-small)', rule.group(1))
 
     def test_page_and_popup_heads(self):
         for part in ('header', 'popuphead'):

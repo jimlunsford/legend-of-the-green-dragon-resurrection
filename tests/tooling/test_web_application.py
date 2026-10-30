@@ -7039,6 +7039,67 @@ function MODULE_dohook($hook,$args) {
             q("UPDATE modules SET version=? WHERE modulename='findgold'",[saved[0]['version']])
         status,body=anonymous('home.php');self.assertEqual(200,status);self.assertNotIn('Upgrade Needed',body)
 
+    def test_header_and_footer_links_never_cause_a_bad_nav_http(self):
+        # Phase 5 task 4 (docs/PHASE5-TASK4-HEADER-FOOTER-20261030.md). Mail, MoTD and Petition are real links (a new tab,
+        # the popup window only an enhancement); following them from a game page, a forest fight included, is no bad nav
+        # and leaves the page's allowed navs and restore page as they were. The footer's Credits link appears only where
+        # about.php is allowed: always signed out, on home and news, never in the village or a fight. Every page carries
+        # the 1.1.2 copyright line and the Resurrection attribution line once.
+        q=self.query;player=int(q('SELECT acctid FROM accounts WHERE login=?',['WebPlayer'])[0]['acctid'])
+        original=q('SELECT * FROM accounts WHERE acctid=?',[player])[0]
+        copyright='Game Design and Code: Copyright &copy; 2002-2005, Eric Stevens & JT Traub, &copy; 2006-2007, Dragonprime Development Team'
+        attribution=('<p class="rz-attribution">A <a href="https://phoenix233.com" target="_blank" rel="noopener">Phoenix 2:33 LLC</a>'
+                     ' Project by <a href="https://jimlunsford.com" target="_blank" rel="noopener">Jim Lunsford</a></p>')
+        def footer(body):
+            self.assertEqual(1,body.count(copyright),body[-3000:]);self.assertEqual(1,body.count(attribution),body[-3000:])
+        def controls(body,signed_in):
+            hrefs=re.findall(r"<a href='([^']+)' target='_blank' rel='noopener' class='rz-control ",body)
+            self.assertEqual((['mail.php'] if signed_in else [])+['motd.php','petition.php'],hrefs)
+            self.assertNotIn("window.open('motd.php'",body.split('</head>')[0])
+        def credits(body): return [html.unescape(h) for h in re.findall(r'<a href="([^"]+)" class="rz-credits">Credits</a>',body)]
+        anonymous=self._security_client(login=None)
+        for page in ['home.php','news.php']:
+            status,body=anonymous(page);self.assertEqual(200,status,body[:2000]);footer(body);controls(body,False)
+            self.assertEqual(['about.php'],credits(body))
+        status,body=anonymous('about.php');self.assertEqual(200,status,body[:2000]);footer(body)
+        for page in ['motd.php','petition.php']:
+            status,body=anonymous(page);self.assertEqual(200,status,body[:2000]);footer(body)
+        client=self._security_client()
+        state=lambda:q('SELECT allowednavs,restorepage,badguy FROM accounts WHERE acctid=?',[player])
+        def encode(value):
+            return subprocess.run([shutil.which('php'),'-r','echo serialize(json_decode(stream_get_contents(STDIN),true));'],input=json.dumps(value),text=True,capture_output=True,cwd=ROOT,check=True).stdout
+        try:
+            q("UPDATE accounts SET lastnewday=?,alive=1,hitpoints=500,maxhitpoints=1000,turns=10,badguy='',specialinc='',companions='a:0:{}',bufflist='a:0:{}' WHERE acctid=?",
+              [self._current_game_day(),player])
+            # News allows about.php: the Credits link is that exact nav, and following it is allowed.
+            self._security_allow(player,'news.php');status,body=client('news.php')
+            self.assertEqual(200,status,body[:2000]);footer(body);controls(body,True)
+            links=credits(body);self.assertEqual(1,len(links),body[-3000:]);self.assertRegex(links[0],r'^about\.php\?c=\d+-\d{6}$')
+            status,body=client(links[0]);self.assertEqual(200,status,body[:2000]);self.assertNotIn('Your Navs Are Corrupted',body);footer(body)
+            # The village allows no about.php nav: no Credits link, and no link to about.php at all.
+            self._security_allow(player,'village.php');status,body=client('village.php')
+            self.assertEqual(200,status,body[:2000]);footer(body);controls(body,True)
+            self.assertEqual([],credits(body));self.assertNotIn('href="about.php',body)
+            # A forest fight: no Credits link; Mail, MoTD and Petition change nothing the fight page allows.
+            enemy=q('SELECT * FROM creatures ORDER BY creatureid LIMIT 1')[0]
+            enemy.update(creaturename='Header Link Target',creaturehealth=100000,creatureattack=1,creaturedefense=1,creaturelevel=1,playerstarthp=500,diddamage=0)
+            q('UPDATE accounts SET badguy=? WHERE acctid=?',[encode({'enemies':[enemy],'options':{'type':'forest'}}),player])
+            self._security_allow(player,'forest.php?op=fight');status,fight=client('forest.php?op=fight')
+            self.assertEqual(200,status,fight[:2000]);self.assertIn('Header Link Target',fight);footer(fight);controls(fight,True)
+            self.assertEqual([],credits(fight));self.assertNotIn('href="about.php',fight)
+            before=state()
+            for page in ['mail.php','motd.php','petition.php']:
+                with self.subTest(page=page):
+                    status,body=client(page);self.assertEqual(200,status,body[:2000]);self.assertNotIn('Your Navs Are Corrupted',body)
+                    footer(body);self.assertEqual(before,state())
+            # The fight is still where the player left it: the fight page is still an allowed nav, and leaving it for the
+            # village is not.
+            self.assertIn('forest.php?op=fight',before[0]['allowednavs']);self.assertNotIn('village.php',before[0]['allowednavs'])
+            status,body=client('forest.php?op=fight');self.assertEqual(200,status,body[:2000]);self.assertNotIn('Your Navs Are Corrupted',body)
+            self.assertIn('Header Link Target',body)
+        finally:
+            q('UPDATE accounts SET '+','.join('`'+k+'`=?' for k in original)+' WHERE acctid=?',[*original.values(),player])
+
     def test_game_unavailable_pages_for_a_database_it_refuses_http(self):
         # A database this version will not run on gets a refusal, not "Upgrade Needed": one a newer version upgraded
         # (a downgrade), a 1.1.2 game (still unsupported, as Phase 4 task 1B made the install command say), and one

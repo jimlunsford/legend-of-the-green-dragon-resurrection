@@ -43,7 +43,6 @@ $schemas = $texts['schemas'];
 
 tlschema($schemas['title']);
 page_header($texts['title']);
-output("`c`b`%".$texts['title']."`0`b`c");
 tlschema();
 $op = httpget('op');
 $shop = resurrection_equipment_shop("armor");

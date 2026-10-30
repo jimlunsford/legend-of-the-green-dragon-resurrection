@@ -1,8 +1,5 @@
 <?php
 // Normal-day historical effects. Included only inside the locked daily mutation.
-	rawoutput("<font size='+1'>");
-	output("`c`b`#It is a New Day!`0`b`c");
-	rawoutput("</font>");
 	$resurrection = '';
 
 	if ($session['user']['alive']!=true){

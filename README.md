@@ -80,6 +80,10 @@ Resurrection is a **noncommercial project**. The inherited [LICENSE.txt](LICENSE
 
 See [NOTICE](NOTICE) for the attribution, the license and what it asks of anyone who runs a modified copy, and [third-party licenses](docs/THIRD-PARTY-LICENSES.md) for the development libraries in `composer.lock` (the game itself needs none). The game's "View PHP Source" link points at the public source; an operator who changes the game sets it (`sourceurl`) to their own modified source.
 
+## Credit and attribution
+
+Resurrection's modifications and additions are Copyright (c) 2026 Phoenix 2:33 LLC, licensed under CC BY-NC-SA 2.0 as an adaptation of LoGD 1.1.2; the original authors' copyright and credits stay as they are. The game credits Resurrection on every page and popup, on its own line under the original authors' credit: "A Phoenix 2:33 LLC Project by Jim Lunsford", with "Phoenix 2:33 LLC" linking to https://phoenix233.com and "Jim Lunsford" to https://jimlunsford.com. Anyone who hosts, distributes or adapts Resurrection keeps that credit and its links where the original authors' credit appears, at least as prominently, as the license's attribution section requires. See [NOTICE](NOTICE).
+
 ## Credits
 
 Original game design and code: **Eric Stevens and JT Traub**. Continued development: the **DragonPrime Development Team** and individually credited contributors/module authors.

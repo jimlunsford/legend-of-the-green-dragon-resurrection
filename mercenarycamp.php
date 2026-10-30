@@ -102,7 +102,6 @@ $schemas = $texts['schemas'];
 
 tlschema($schemas['title']);
 page_header($texts['title']);
-output("`c`b`&".$texts['title']."`0`b`c");
 tlschema();
 
 // Only the protected POST of the confirming form hires or heals; a GET (a link, a restored page, New Day's

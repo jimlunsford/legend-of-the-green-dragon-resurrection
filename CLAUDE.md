@@ -27,6 +27,7 @@ The release itself (hosting, tags, GitHub releases, an image, archive-module rig
 - Jim's standalone code, shipped as a separate work, is AGPL-3.0-or-later.
 - **Open question for Jim and a lawyer:** AGPL code bundled in this repository and run inside the NC core may leave hosts unable to satisfy both licenses. Until Jim decides, label no file AGPL.
 - Fonts and other third-party files keep their own licenses (for example SIL OFL for the UI fonts), recorded in `docs/THIRD-PARTY-LICENSES.md`.
+- The Resurrection attribution line, "A Phoenix 2:33 LLC Project by Jim Lunsford" (links to https://phoenix233.com and https://jimlunsford.com), stays in the template's `footer` and `popupfoot`, on its own line under the 1.1.2 credit line. No task removes, hides, shrinks or weakens it or its links. `NOTICE` ("Resurrection") states the credit; the wording is pending legal review before release.
 
 ## Working branch
 

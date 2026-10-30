@@ -19,8 +19,6 @@ if ($session['user']['dragonkills']>0 ||
 		$session['user']['superuser'] & SU_EDIT_COMMENTS){
 	page_header("The Veteran's Club");
 
-	output("`b`c`2The Veteran's Club`0`c`b");
-
 	output("`n`n`4Something in you compels you to examine the curious rock.  Some dark magic, locked up in age old horrors.`n`n");
 	output("When you arrive at the rock, an old scar on your arm begins to throb in succession with a mysterious light that now seems to come from the rock.  ");
 	output("As you stare at it, the rock shimmers, shaking off an illusion.  You realize that this is more than a rock.  ");

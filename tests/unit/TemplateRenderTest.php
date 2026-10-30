@@ -10,13 +10,24 @@ use Resurrection\Configuration\LegacyConfig;
  * is rendered by the PHP CLI with output_buffering=0, as OutputBufferingTest does, and must finish cleanly, print no
  * template warning, start with the template's own doctype, and carry the copyright line exactly once.
  *
+ * Phase 5 task 4 (docs/PHASE5-TASK4-HEADER-FOOTER-20261030.md) adds: the Resurrection attribution line exactly once on
+ * each page and popup; the mail link's unread badge and its full "N new, M old" label, from the mail table; the MoTD
+ * link's unread mark in place of the automatic popup; the footer's time to the next new day against
+ * secondstonextgameday() on a pinned clock; the Credits link only where about.php is allowed; and the village's page
+ * title shown once, not repeated as a heading in the page.
+ *
  * The test does not depend on the order it runs in: an installed database is used as it is; an empty one is installed
- * here with scripts/install.php --modules=none and emptied again afterwards. The player it creates is removed.
+ * here with scripts/install.php --modules=none and emptied again afterwards. The player it creates, its mail, the MoTD
+ * item and the clock settings it changes are removed or restored.
  */
 final class TemplateRenderTest extends TestCase
 {
     private const string ROOT = __DIR__ . '/../..';
     private const string COPYRIGHT = 'Game Design and Code: Copyright &copy; 2002-2005, Eric Stevens & JT Traub, &copy; 2006-2007, Dragonprime Development Team';
+    private const string ATTRIBUTION = '<p class="rz-attribution">A <a href="https://phoenix233.com" target="_blank" rel="noopener">Phoenix 2:33 LLC</a>'
+        . ' Project by <a href="https://jimlunsford.com" target="_blank" rel="noopener">Jim Lunsford</a></p>';
+    /** A pinned game clock: the epoch the installer writes (a UTC midnight), no offset, four game days a day. */
+    private const array CLOCK = ['game_epoch' => '2026-01-01 00:00:00 +0000', 'gameoffsetseconds' => '0', 'daysperday' => '4'];
 
     public function testTheDefaultTemplateRendersAPageASignedInPageAndAPopup(): void
     {
@@ -29,6 +40,8 @@ final class TemplateRenderTest extends TestCase
         mkdir($tree . '/.sessions', 0700, true);
         $installed = false;
         $player = 0;
+        $motd = 0;
+        $clock = null;
         try {
             foreach (scandir($root) ?: [] as $entry) {
                 if (in_array($entry, ['.', '..', '.git', 'dbconnect.php'], true)) { continue; }
@@ -49,12 +62,31 @@ final class TemplateRenderTest extends TestCase
             // The game's own default, as a fresh install stores it.
             self::assertSame('resurrection.htm', $this->php($tree, 'echo getsetting("defaultskin", "unset");'));
 
+            // The clock the footer's countdown is read from, pinned for the test and restored afterwards.
+            $clock = json_decode($this->php($tree, 'echo json_encode(db_query("SELECT setting, value FROM settings WHERE setting IN (?, ?, ?)", true, ["game_epoch", "gameoffsetseconds", "daysperday"]));'), true);
+            foreach (self::CLOCK as $name => $value) {
+                $this->php($tree, 'savesetting(' . var_export($name, true) . ', ' . var_export($value, true) . ');');
+            }
+
+            $before = $this->newdayText($tree);
             $home = $this->render($tree, $work, 'home.php', null);
+            $after = $this->newdayText($tree);
             $this->assertCleanPage($home, 'home.php');
             self::assertStringContainsString('<form action=\'login.php\' method=\'POST\'>', $home);
             self::assertStringContainsString('<input name="name" id="name"', $home);
             self::assertStringContainsString('class="rz-navitem nav"', $home);
-            self::assertStringContainsString('<a href="about.php">Credits</a>', $home);
+            // Signed out, the Credits link is always there: about.php allows anonymous visits.
+            self::assertSame(1, substr_count($home, '<a href="about.php" class="rz-credits">Credits</a>'));
+            // The time to the next new day, as text, equal to secondstonextgameday() on the pinned clock.
+            self::assertMatchesRegularExpression('/^Next new day in [0-5]h [0-5]?[0-9]m$/', $before);
+            self::assertSame(1, preg_match('#<span class="rz-newday">([^<]*)</span>#', $home, $newday));
+            self::assertContains($newday[1], array_unique([$before, $after]));
+            // Signed out: no mail link; MoTD and Petition are real links that open in a new tab, the popup only an
+            // enhancement, and no MoTD window is opened by the page.
+            self::assertStringNotContainsString("href='mail.php'", $home);
+            self::assertStringContainsString("<a href='motd.php' target='_blank' rel='noopener' class='rz-control rz-control-motd motd' aria-label='MoTD' title='MoTD'", $home);
+            self::assertStringContainsString("<a href='petition.php' target='_blank' rel='noopener' class='rz-control rz-control-petition motd' aria-label='Petition for Help'", $home);
+            self::assertStringNotContainsString("window.open('motd.php'", $home);
 
             // A signed-in player in the village: the account the game creates, signed in through the session the
             // forced-navigation check reads (do_forced_nav()).
@@ -68,7 +100,34 @@ final class TemplateRenderTest extends TestCase
             $this->assertCleanPage($village, 'village.php');
             self::assertStringContainsString('<section class="rz-card rz-statsection">', $village);
             self::assertStringContainsString('class="rz-navitem nav"', $village);
-            self::assertStringContainsString('Ye Olde Mail', $village);
+            // No mail: the envelope link without a badge, its label the full sentence.
+            $this->assertMailLink($village, 0, 0);
+            // The village allows no about.php nav, so there is no Credits link; the 1.1.2 credit line stays.
+            self::assertStringNotContainsString('rz-credits', $village);
+            self::assertStringNotContainsString('href="about.php', $village);
+            // The page title "<Village> Square" is shown once, as the page title: not again as a heading in the page.
+            $square = $this->php($tree, 'echo getsetting("villagename", LOCATION_FIELDS) . " Square";');
+            self::assertSame(1, substr_count($village, '<title>' . $square . '</title>'));
+            self::assertSame(1, substr_count($village, '<h1 class="rz-title">' . $square . '</h1>'));
+            $body = substr($village, (int)strpos($village, '</head>'));
+            self::assertSame(1, substr_count($body, $square), 'The village title is repeated in the page');
+
+            // Unread and read mail: the badge shows the unread count, the label the full counts, as the table holds them.
+            $this->php($tree, 'foreach ([0, 0, 1] as $seen) db_query("INSERT INTO mail (msgfrom, msgto, subject, body, sent, seen) VALUES (0, ?, ?, ?, ?, ?)", true, [' . $player . ', "Render test", "Render test body", date("Y-m-d H:i:s"), $seen]);');
+            $counts = $this->php($tree, '$r = db_query("SELECT SUM(seen=0) AS unread, SUM(seen=1) AS seen FROM mail WHERE msgto=?", true, [' . $player . ']); echo $r[0]["unread"], ",", $r[0]["seen"];');
+            self::assertSame('2,1', $counts);
+            // An MoTD item the player has not read: the MoTD link is marked; no window opens.
+            $motd = (int)$this->php($tree, 'db_query("INSERT INTO motd (motdtitle, motdbody, motddate, motdtype, motdauthor) VALUES (?, ?, ?, 0, 0)", true, ["Render test", "Render test MoTD", date("Y-m-d H:i:s")]); echo db_insert_id();');
+            self::assertGreaterThan(0, $motd);
+            // Signed in again on the village, as before the first visit (that visit replaced the allowed navs), with an
+            // MoTD last read in 2000.
+            $this->php($tree, 'db_query("UPDATE accounts SET allowednavs=?, laston=?, lasthit=?, lastmotd=? WHERE acctid=?", true, [serialize(["village.php" => true]), date("Y-m-d H:i:s"), date("Y-m-d H:i:s", time() + 60), "2000-01-01 00:00:00", ' . $player . ']);');
+            $village = $this->render($tree, $work, 'village.php', $session);
+            $this->assertCleanPage($village, 'village.php');
+            $this->assertMailLink($village, 2, 1);
+            self::assertStringContainsString("<a href='motd.php' target='_blank' rel='noopener' class='rz-control rz-control-motd hotmotd' aria-label='MoTD (unread)'", $village);
+            self::assertStringContainsString("<span class='rz-badge rz-badge-dot' aria-hidden='true'></span>", $village);
+            self::assertStringNotContainsString("window.open('motd.php'", $village);
 
             $mail = $this->render($tree, $work, 'mail.php', $session);
             $this->assertCleanPage($mail, 'mail.php');
@@ -76,8 +135,18 @@ final class TemplateRenderTest extends TestCase
             self::assertStringNotContainsString('class="rz-columns"', $mail);
         } finally {
             $cleanup = [];
+            if ($motd > 0) {
+                $cleanup[] = $this->php($tree, 'db_query("DELETE FROM motd WHERE motditem=?", true, [' . $motd . ']); echo "motd removed";', false);
+            }
             if ($player > 0) {
-                $cleanup[] = $this->php($tree, 'foreach (["accounts_output", "accounts"] as $t) db_query("DELETE FROM " . db_identifier($t) . " WHERE acctid=?", true, [' . $player . ']); echo "removed";', false);
+                $cleanup[] = $this->php($tree, 'db_query("DELETE FROM mail WHERE msgto=?", true, [' . $player . ']); foreach (["accounts_output", "accounts"] as $t) db_query("DELETE FROM " . db_identifier($t) . " WHERE acctid=?", true, [' . $player . ']); echo "removed";', false);
+            }
+            if (is_array($clock) && !$installed) {
+                $restore = 'db_query("DELETE FROM settings WHERE setting IN (?, ?, ?)", true, ["game_epoch", "gameoffsetseconds", "daysperday"]);';
+                foreach ($clock as $row) {
+                    $restore .= ' db_query("INSERT INTO settings (setting, value) VALUES (?, ?)", true, [' . var_export($row['setting'], true) . ', ' . var_export($row['value'], true) . ']);';
+                }
+                $cleanup[] = $this->php($tree, $restore . ' echo "clock restored";', false);
             }
             // Only an install this test made in the disposable database: empty it again for the tests that follow.
             if ($installed) {
@@ -85,7 +154,8 @@ final class TemplateRenderTest extends TestCase
             }
             $this->remove($work);
         }
-        self::assertSame(array_merge($player > 0 ? ['removed'] : [], $installed ? ['empty'] : []), $cleanup);
+        self::assertSame(array_merge($motd > 0 ? ['motd removed'] : [], $player > 0 ? ['removed'] : [],
+            is_array($clock) && !$installed ? ['clock restored'] : [], $installed ? ['empty'] : []), $cleanup);
     }
 
     /** A finished page of the new template: no error, no template warning, the copyright line once. */
@@ -99,7 +169,29 @@ final class TemplateRenderTest extends TestCase
         self::assertStringNotContainsString('errors in your template page', $page, $script);
         self::assertSame(1, substr_count($page, self::COPYRIGHT), $script);
         self::assertSame(1, substr_count($page, 'Creative Commons License</a>'), $script);
+        // The Resurrection attribution: its own line, once, after the 1.1.2 credit line.
+        self::assertSame(1, substr_count($page, self::ATTRIBUTION), $script);
+        self::assertSame(1, substr_count($page, 'Phoenix 2:33 LLC'), $script);
+        self::assertGreaterThan(strpos($page, self::COPYRIGHT), strpos($page, self::ATTRIBUTION), $script);
         self::assertStringEndsWith("</html>\n", $page, $script);
+    }
+
+    /** The header's mail link: an envelope, the unread count as a badge (none at zero), the full sentence as its label. */
+    private function assertMailLink(string $page, int $unread, int $read): void
+    {
+        $label = "Ye Olde Mail: $unread new, $read old";
+        self::assertSame(1, preg_match("#<a href='mail\\.php' target='_blank' rel='noopener' class='rz-control rz-control-mail (hotmotd|motd)' aria-label='([^']*)' title='([^']*)' onclick=\"[^\"]*\"><svg class='rz-icon'[^>]*>.*?</svg><span class='rz-control-label'>Mail</span>(.*?)</a>#s", $page, $link), 'mail link');
+        self::assertSame($unread > 0 ? 'hotmotd' : 'motd', $link[1]);
+        self::assertSame($label, $link[2]);
+        self::assertSame($label, $link[3]);
+        self::assertSame($unread > 0 ? "<span class='rz-badge' aria-hidden='true'>$unread</span>" : '', $link[4], $link[0]);
+    }
+
+    /** The footer's countdown text for the clock now: secondstonextgameday() from the start of today, in hours and minutes. */
+    private function newdayText(string $tree): string
+    {
+        return $this->php($tree, 'require_once "lib/datetime.php"; $d = gametimedetails(); $s = secondstonextgameday($d) - strtotime($d["now"]);'
+            . ' printf("Next new day in %dh %dm", intdiv($s, 3600), intdiv($s % 3600, 60));');
     }
 
     /**

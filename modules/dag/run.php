@@ -9,7 +9,6 @@ function dag_run_private(){
 	if (httpget('manage')!="true"){
 		page_header("Dag Durnick's Table");
 		output("<span style='color: #9900FF'>",true);
-		output("`c`bDag Durnick's Table`b`c");
 	}else{
 		dag_manage();
 	}

@@ -105,9 +105,6 @@ function lovers_run(){
 	$iname = getsetting("innname", LOCATION_INN);
 	page_header($iname);
 	rawoutput("<span style='color: #9900FF'>");
-	output_notl("`c`b");
-	output($iname);
-	output_notl("`b`c");
     try {
         $op = \Resurrection\Http\Input::choice($_GET, 'op', ['flirt','chat'], 'flirt');
         if (array_diff(array_keys($_GET), ['module','op','act','c']) !== []) throw new InvalidArgumentException('Unexpected query.');

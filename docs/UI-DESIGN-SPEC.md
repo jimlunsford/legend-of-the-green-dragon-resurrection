@@ -125,49 +125,56 @@ class selectors are case-sensitive: the CSS must use the exact class names `appo
 
 Every value clears 4.5:1 on `--panel` and on `--raised`.
 
+**The quieter palette** (Jim, 2026-10-30, Phase 5 task 4): same codes, same meanings, lower saturation, pulled toward
+parchment. Jim approved the 17 values marked "approved (Jim, task 4)". The other 24 codes were retuned by the same rule
+(`PHASE5-TASK4-HEADER-FOOTER-20261030.md`, "The palette"): saturation scaled by 0.5 for cool hues and 0.8 for warm
+ones (red to yellow), lightness up 0.02, hue nudged a few degrees toward parchment, then adjusted where needed so each
+code stays distinct from every other (CIE76 distance 5 or more; only Jim's `` `4 `` and `` `$ `` pair sits closer, at
+4.66). `tests/tooling/test_ui_tokens.py` pins Jim's values and checks the rule, the distances and the contrast.
+
 | Code | Class | Value | On panel | On raised | Source |
 |---|---|---|---|---|---|
-| `` `1 `` | `colDkBlue` | `#7E9BD9` | 6.38 | 5.84 | approved |
-| `` `! `` | `colLtBlue` | `#9CB4EA` | 8.53 | 7.81 | approved |
-| `` `2 `` | `colDkGreen` | `#6FA661` | 6.15 | 5.63 | approved |
-| `` `@ `` | `colLtGreen` | `#9CCB8A` | 9.54 | 8.73 | approved |
-| `` `3 `` | `colDkCyan` | `#5FB0A8` | 6.96 | 6.37 | approved |
-| `` `# `` | `colLtCyan` | `#8FD3CC` | 10.41 | 9.53 | approved |
-| `` `4 `` | `colDkRed` | `#D9644A` | 4.95 | 4.53 | approved |
-| `` `$ `` | `colLtRed` | `#E8826A` | 6.60 | 6.04 | approved |
-| `` `5 `` | `colDkMagenta` | `#B98AD0` | 6.41 | 5.87 | approved |
-| `` `% `` | `colLtMagenta` | `#D9A0C4` | 8.23 | 7.54 | approved |
-| `` `6 `` | `colDkYellow` | `#C2B05A` | 8.13 | 7.44 | approved |
-| `` `^ `` | `colLtYellow` | `#E9D27C` | 11.77 | 10.78 | approved |
-| `` `7 `` | `colDkWhite` | `#BDB4A3` | 8.61 | 7.88 | approved |
-| `` `& `` | `colLtWhite` | `#F4EEE2` | 15.31 | 14.02 | approved |
-| `` `) `` | `colLtBlack` | `#8F877A` | 4.98 | 4.56 | approved |
-| `` `q `` | `colDkOrange` | `#C08650` | 5.70 | 5.22 | approved |
-| `` `Q `` | `colLtOrange` | `#E9A25A` | 8.24 | 7.54 | approved |
-| `` `~ `` | `colBlack` | `#958C7E` | 5.33 | 4.88 | set here: black is unreadable on a dark panel, so the darkest legible warm grey, darker than `` `7 `` |
-| `` `e `` | `colDkRust` | `#B98680` | 5.71 | 5.23 | set here |
-| `` `E `` | `colLtRust` | `#D4A39C` | 8.02 | 7.34 | set here |
-| `` `g `` | `colXLtGreen` | `#B5E3A6` | 12.21 | 11.19 | set here |
-| `` `G `` | `colXLtGreen` | `#B5E3A6` | 12.21 | 11.19 | set here (same class as `` `g ``, as in 1.1.2) |
-| `` `j `` | `colMdGrey` | `#D6D0C4` | 11.52 | 10.55 | set here |
-| `` `J `` | `colMdBlue` | `#8FA6E0` | 7.33 | 6.71 | set here |
-| `` `k `` | `colaquamarine` | `#8CE0C6` | 11.45 | 10.48 | set here |
-| `` `K `` | `coldarkseagreen` | `#9DBF9A` | 8.72 | 7.98 | set here |
-| `` `l `` | `colDkLinkBlue` | `#6FA3D6` | 6.64 | 6.08 | set here |
-| `` `L `` | `colLtLinkBlue` | `#7FBCF0` | 8.72 | 7.99 | set here |
-| `` `m `` | `colwheat` | `#EAD8B5` | 12.62 | 11.56 | set here |
-| `` `M `` | `coltan` | `#CDB08C` | 8.58 | 7.86 | set here |
-| `` `p `` | `collightsalmon` | `#EBA486` | 8.58 | 7.86 | set here |
-| `` `P `` | `colsalmon` | `#E58C7C` | 7.05 | 6.46 | set here |
-| `` `R `` | `colRose` | `#E6BDE0` | 10.71 | 9.81 | set here |
-| `` `T `` | `colDkBrown` | `#A88B6C` | 5.54 | 5.07 | set here |
-| `` `t `` | `colLtBrown` | `#E9CF8C` | 11.60 | 10.62 | set here |
-| `` `V `` | `colBlueViolet` | `#A98BE6` | 6.34 | 5.80 | set here |
-| `` `v `` | `coliceviolet` | `#B3C1EA` | 9.88 | 9.05 | set here |
-| `` `x `` | `colburlywood` | `#D9B88F` | 9.44 | 8.64 | set here |
-| `` `X `` | `colbeige` | `#EFE8D0` | 14.42 | 13.21 | set here |
-| `` `y `` | `colkhaki` | `#E6D99A` | 12.43 | 11.38 | set here |
-| `` `Y `` | `coldarkkhaki` | `#BDB474` | 8.38 | 7.67 | set here |
+| `` `1 `` | `colDkBlue` | `#8FA3C4` | 6.91 | 6.33 | approved (Jim, task 4) |
+| `` `! `` | `colLtBlue` | `#A9B8D4` | 8.84 | 8.09 | approved (Jim, task 4) |
+| `` `2 `` | `colDkGreen` | `#86A877` | 6.64 | 6.08 | approved (Jim, task 4) |
+| `` `@ `` | `colLtGreen` | `#9CCB8A` | 9.54 | 8.73 | approved (Jim, task 4: unchanged) |
+| `` `3 `` | `colDkCyan` | `#7FAAA3` | 6.89 | 6.31 | approved (Jim, task 4) |
+| `` `# `` | `colLtCyan` | `#A3C4BE` | 9.43 | 8.64 | approved (Jim, task 4) |
+| `` `4 `` | `colDkRed` | `#D9775E` | 5.69 | 5.21 | approved (Jim, task 4) |
+| `` `$ `` | `colLtRed` | `#E8826A` | 6.60 | 6.04 | approved (Jim, task 4: unchanged) |
+| `` `5 `` | `colDkMagenta` | `#B49AB8` | 6.95 | 6.37 | approved (Jim, task 4) |
+| `` `% `` | `colLtMagenta` | `#CDB0C2` | 8.91 | 8.16 | approved (Jim, task 4) |
+| `` `6 `` | `colDkYellow` | `#C9B47A` | 8.67 | 7.94 | approved (Jim, task 4) |
+| `` `^ `` | `colLtYellow` | `#E3CF9A` | 11.50 | 10.53 | approved (Jim, task 4) |
+| `` `7 `` | `colDkWhite` | `#C9C0AE` | 9.80 | 8.97 | approved (Jim, task 4) |
+| `` `& `` | `colLtWhite` | `#F4EEE2` | 15.31 | 14.02 | approved (Jim, task 4: unchanged) |
+| `` `) `` | `colLtBlack` | `#9A917F` | 5.67 | 5.19 | approved (Jim, task 4) |
+| `` `q `` | `colDkOrange` | `#C4936A` | 6.51 | 5.96 | approved (Jim, task 4) |
+| `` `Q `` | `colLtOrange` | `#DDA878` | 8.38 | 7.67 | approved (Jim, task 4) |
+| `` `~ `` | `colBlack` | `#938E85` | 5.43 | 4.97 | set here (task 4: quieted by the rule). Black is unreadable on a dark panel, so a dark legible warm grey, darker than `` `7 `` and `` `) `` |
+| `` `e `` | `colDkRust` | `#B7938C` | 6.37 | 5.84 | set here (task 4: quieted by the rule) |
+| `` `E `` | `colLtRust` | `#D2B0A8` | 8.86 | 8.11 | set here (task 4: quieted by the rule) |
+| `` `g `` | `colXLtGreen` | `#C4D8BC` | 11.70 | 10.72 | set here (task 4: quieted by the rule) |
+| `` `G `` | `colXLtGreen` | `#C4D8BC` | 11.70 | 10.72 | set here (task 4: quieted by the rule; same class as `` `g ``, as in 1.1.2) |
+| `` `j `` | `colMdGrey` | `#D9D4CC` | 11.99 | 10.98 | set here (task 4: quieted by the rule) |
+| `` `J `` | `colMdBlue` | `#A4ADD0` | 7.97 | 7.30 | set here (task 4: quieted by the rule) |
+| `` `k `` | `colaquamarine` | `#A8CFC0` | 10.40 | 9.53 | set here (task 4: quieted by the rule) |
+| `` `K `` | `coldarkseagreen` | `#ABBAA9` | 8.70 | 7.97 | set here (task 4: quieted by the rule) |
+| `` `l `` | `colDkLinkBlue` | `#8FABC0` | 7.37 | 6.75 | set here (task 4: quieted by the rule) |
+| `` `L `` | `colLtLinkBlue` | `#A2C2D7` | 9.46 | 8.66 | set here (task 4: quieted by the rule) |
+| `` `m `` | `colwheat` | `#E8DBC2` | 12.92 | 11.83 | set here (task 4: quieted by the rule) |
+| `` `M `` | `coltan` | `#C6B49D` | 8.77 | 8.03 | set here (task 4: quieted by the rule) |
+| `` `p `` | `collightsalmon` | `#E3B198` | 9.27 | 8.49 | set here (task 4: quieted by the rule) |
+| `` `P `` | `colsalmon` | `#DD9E8E` | 7.88 | 7.22 | set here (task 4: quieted by the rule) |
+| `` `R `` | `colRose` | `#E0CDDC` | 11.74 | 10.75 | set here (task 4: quieted by the rule) |
+| `` `T `` | `colDkBrown` | `#A69178` | 5.85 | 5.35 | set here (task 4: quieted by the rule) |
+| `` `t `` | `colLtBrown` | `#DDCAA2` | 10.99 | 10.06 | set here (task 4: quieted by the rule) |
+| `` `V `` | `colBlueViolet` | `#B9A8D3` | 8.09 | 7.41 | set here (task 4: quieted by the rule) |
+| `` `v `` | `coliceviolet` | `#C7CCE0` | 11.07 | 10.14 | set here (task 4: quieted by the rule) |
+| `` `x `` | `colburlywood` | `#D5BD9E` | 9.77 | 8.95 | set here (task 4: quieted by the rule) |
+| `` `X `` | `colbeige` | `#ECE8D3` | 14.36 | 13.15 | set here (task 4: quieted by the rule) |
+| `` `y `` | `colkhaki` | `#E1D7A9` | 12.21 | 11.18 | set here (task 4: quieted by the rule) |
+| `` `Y `` | `coldarkkhaki` | `#B9B182` | 8.15 | 7.46 | set here (task 4: quieted by the rule) |
 
 That is every color code `appoencode()` knows (41 characters, 40 classes). Its other codes are not colors and keep
 their meaning: `` `n `` line break, `` `0 `` end color, `` `b `` bold, `` `i `` italic, `` `h `` emphasis, `` `c ``
@@ -177,8 +184,8 @@ centered block, `` `> `` and `` `< `` floated blocks, `` `w `` the player's weap
 ## Layout (approved)
 
 **Header** (`--header`, 1px `--border` bottom, padding `--space-header-y` by `--space-side`): the wordmark at the left
-("Legend of the Green Dragon" over "RESURRECTION"); at the right the mail link with its unread count as a badge (task 4),
-the MoTD link and the petition link, each a 44px outlined control (`--input-border`, `--radius-control`).
+("Legend of the Green Dragon" over "RESURRECTION"); at the right the mail, MoTD and petition controls (see Components,
+"Header controls").
 
 **Frame** (mockup, task 3): the page is `--ground` with `--text` in Alegreya Sans `--size-ui`. The columns sit in a
 container at most `--width-container` wide, centered, with `--space-side` padding (`--space-side-phone` on a phone)
@@ -204,9 +211,9 @@ content first. A compact header shows the HP and XP bars. A bottom tab bar (`--h
 Character, Talk, More. The page never scrolls sideways; wide admin tables scroll inside their own box.
 
 **Footer** (`--header`, 1px `--border` top, `--muted` text at `--size-small`): at the left the original credit line (the copyright line and license block the template's
-`{copyright}` tag carries, unaltered), a Credits link (`about.php`), a Source link (the `sourceurl` setting); at the
-right the version (`Resurrection\Version::display()`), the page generation time, and (task 4) the time to the next new
-day.
+`{copyright}` tag carries, unaltered), the Credits link (`{credits}`, see Components), a Source link (the `sourceurl`
+setting); at the right the version (`Resurrection\Version::display()`), the time to the next new day (`{newday}`,
+task 4) and the page generation time; under them, on its own line, the attribution line (see Components).
 
 Sizes, as tokens (column widths approved; the rest set here). CSS custom properties cannot be used inside a media
 query, so the template writes the two breakpoints as literals equal to these tokens:
@@ -245,6 +252,33 @@ query, so the template writes the two breakpoints as literals equal to these tok
 | `--focus-ring-offset` | `2px` | Its offset |
 
 ## Components (approved)
+
+- **Header controls** (Phase 5 task 4). Mail, MoTD and petition are real links (`<a href>` to `mail.php`, `motd.php`,
+  `petition.php`, `target="_blank"`), written by `maillink()`, `motdlink()` and `petitionlink()` in
+  `lib/pageparts.php`. Each is a 44px outlined control on the header fill: a line icon (24px grid, 1.8 stroke,
+  `currentColor`; an envelope, a scroll, a question mark in a circle), its label, and a badge. Mail's badge is the
+  unread count from `maillink_counts()` (none at zero); its `aria-label` and `title` are the full sentence ("Ye Olde
+  Mail: 2 new, 1 old"). An unread MoTD item gives the MoTD control a dot badge and the `aria-label` "MoTD (unread)";
+  the MoTD is never opened automatically. Highlighted controls (`hotmotd`) take an `--accent` outline and label. The
+  badge is `--accent` with `--ground` text, `--size-small` bold, fully rounded. On a desktop with a mouse a click opens
+  1.1.2's popup window instead (550x300); anywhere else the link opens as a page in a new tab. Below
+  `--breakpoint-phone` the labels are visually hidden (they stay as the accessible names) and the three controls are
+  44px squares on one row, each badge on its corner.
+- **Footer Credits link** (task 4). `{credits}`: a link to `about.php` only where following it is allowed: always for a
+  visitor who is not signed in, and for a signed-in player only on a page that allows `about.php` as a nav (home,
+  news), using that exact nav. Elsewhere (the village, a fight) it is left out, never a bad nav. The 1.1.2 credit line
+  (`{copyright}`) is on every page regardless.
+- **Next new day** (task 4). `{newday}`: "Next new day in 3h 13m", from `secondstonextgameday()`, plain text.
+- **Attribution line** (Jim, 2026-10-30, task 4). "A Phoenix 2:33 LLC Project by Jim Lunsford", with "Phoenix 2:33 LLC"
+  linking to https://phoenix233.com and "Jim Lunsford" to https://jimlunsford.com (plain links, `target="_blank"
+  rel="noopener"`, nothing requested until clicked). Its own line (`<p class="rz-attribution">`) in the template's
+  `footer` and `popupfoot`, after the 1.1.2 credit line and outside its element, so it never reads as authorship of the
+  1.1.2 code; the same `--muted` color and `--size-small` size as that line. `CLAUDE.md`: no task removes, hides,
+  shrinks or weakens it.
+- **Character panel values** (Jim, 2026-10-30, task 4). Values are `--text`, bold, by default, not gold:
+  `getcharstats()` wraps each value in `` `^ `` (`colLtYellow`), and the template's CSS, scoped to the character panel
+  (`.rz-statvalue`, `.rz-statbuff`), reads that wrapper as `--text`. The bonus (`` `@ ``) and penalty (`` `$ ``) codes
+  `charstats()` uses, and any other code in a value, keep their own colors. No PHP change.
 
 - **Nav groups.** Each group has an uppercase Cinzel heading (`addnavheader()`). Items are full-width rows.
 - **Key badges.** Every nav link that has a hotkey shows it as a key badge: a `--key-badge-size` square, `--raised`,

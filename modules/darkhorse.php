@@ -227,7 +227,9 @@ function darkhorse_bartender($from){
 	addnav("Return to the Main Room",$from."op=tavern");
 }
 
-function darkhorse_runevent($type, $link){
+// $showname: the tavern's name as a heading over the text. darkhorse_run() passes false: there the page title is
+// already the tavern's name (Phase 5 task 4 removed headings that repeat the page title).
+function darkhorse_runevent($type, $link, $showname=true){
 	global $session;
 	$from = $link;
 	$gameret = substr($link, 0, -1);
@@ -237,7 +239,7 @@ function darkhorse_runevent($type, $link){
 	$iname = get_module_setting("tavernname");
 
 	rawoutput("<span style='color: #787878'>");
-	output_notl("`c`b%s`b`c",$iname);
+	if ($showname) output_notl("`c`b%s`b`c",$iname);
 	$op = httpget('op');
 	switch($op){
 	case "":
@@ -358,7 +360,7 @@ function darkhorse_run(){
     page_header(get_module_setting('tavernname'));
     if (resurrection_darkhorse_enter()) {
         httpset('op','tavern');
-        darkhorse_runevent('forest','forest.php?');
+        darkhorse_runevent('forest','forest.php?',false);
     }
     page_footer();
 }
