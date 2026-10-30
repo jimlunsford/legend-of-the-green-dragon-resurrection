@@ -4,20 +4,29 @@ Standing rules for Claude Code sessions in this repository. Read this first. A t
 
 ## Project
 
-Legend of the Green Dragon - Resurrection. A behaviorally faithful modernization of LoGD 1.1.2 DragonPrime Edition for supported modern PHP and databases.
+Legend of the Green Dragon - Resurrection. A modern continuation of LoGD 1.1.2 DragonPrime Edition on supported PHP and databases, in PHP on this codebase so that other people can host it.
 
-Phase 3 is complete, merged into `main` at `0d078dff49e790339e0ab0aefdf5b35478bf6419` (PR #1, normal merge commit, 2026-10-23).
+Phase 3 is complete, merged into `main` at `0d078dff49e790339e0ab0aefdf5b35478bf6419` (PR #1, normal merge commit, 2026-10-23). Phase 4, Release foundation, is complete: its last item, the output buffering fix, was accepted at `8b33edfc8b9cf2f04661d5023011e704a21b485f` (Modern core 40958421349, all 12 jobs; Baseline integrity 40958422672).
 
-Current phase: **Phase 4, Release foundation**. Goal: make the game ready for its first release. Tasks (status in `ROADMAP.md`):
+Current phase: **Phase 5, Resurrection UI**. Goal: one new dark fantasy UI with original art replaces all 1.1.2 skins. Tasks and status in `ROADMAP.md`; the plan in `docs/PHASE5-UI-PLAN-20261030.md`; the design contract every UI task builds to in `docs/UI-DESIGN-SPEC.md`. Work only on the task a task prompt names.
 
-- 1A: start Phase 4 (docs only).
-- 1B: a fresh install ready to play: activate the recommended modules during install, a guided config file step, and an "unsupported" message for a 1.1.2 database.
-- 2: the upgrade system, built before anything ships.
-- 3: one-command local setup.
+Direction (Jim, 2026-10-30; `docs/PHASE5-TASK1-DIRECTION-20261030.md`):
 
-The release itself (hosting, tags, GitHub releases, image, skin and archive-module rights) stays excluded until Jim says so. Work only on the task a task prompt names.
+- Gameplay, balance, text and UI change only when a task prompt says so. Record every change from 1.1.2 in docs: old behavior, new behavior, and why. Check the historical tag for the old behavior first.
+- Fix security and runtime defects whenever found, recorded the same way.
+- One new UI replaces all skins. When it lands, every 1.1.2 skin in `templates/` and skin selection are removed, in the task that says so.
+- The game gets original SVG art (scenes, creature portraits, item and stat icons, race portraits), drawn by Claude for Jim / Phoenix 2:33 LLC.
+- A clean-room rewrite under AGPL-3.0-or-later is a possible future, not started. Do not start it.
 
-Preserve historical behavior. Fix security and runtime defects without redesigning gameplay. When modern behavior must differ from 1.1.2, check the historical source first and record why.
+The release itself (hosting, tags, GitHub releases, an image, archive-module rights) stays excluded until Jim says go.
+
+## Licensing
+
+- The core stays CC BY-NC-SA 2.0. The original credits stay, visible on every page (the copyright line and license block the templates must carry). `LICENSE.txt` and `README.txt` stay byte-identical to `historical-source-1.1.2`.
+- Jim's original art goes in `assets/` under CC BY-SA 4.0, with its own LICENSE file. That file is created in the art task, not before.
+- Jim's standalone code, shipped as a separate work, is AGPL-3.0-or-later.
+- **Open question for Jim and a lawyer:** AGPL code bundled in this repository and run inside the NC core may leave hosts unable to satisfy both licenses. Until Jim decides, label no file AGPL.
+- Fonts and other third-party files keep their own licenses (for example SIL OFL for the UI fonts), recorded in `docs/THIRD-PARTY-LICENSES.md`.
 
 ## Working branch
 
@@ -54,7 +63,7 @@ Never, in any task:
 - Deploy, release, tag, or publicly host
 - Perform penetration testing, network scanning, credential discovery, or investigation of external systems
 - Import archive-only modules or the Cities module
-- Rebalance gameplay, or rewrite in a framework (React, Vue, Laravel, Symfony)
+- Adopt or rewrite in a framework (React, Vue, Laravel, Symfony) unless a task prompt says so
 - Re-enable a disabled surface: LoGDnet, SQL/PHP console, historical payments, source viewer, legacy recovery
 - Do not build a 1.1.2 database migration; installs are fresh only.
 

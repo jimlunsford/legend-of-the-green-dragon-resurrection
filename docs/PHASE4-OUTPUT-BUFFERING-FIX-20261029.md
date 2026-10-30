@@ -138,3 +138,20 @@ PHP 8.5.12 (php-builder, as setup-php) and MySQL 8.4 in Docker:
 
 Pending: this commit's Modern core (both legs, all 12 jobs) and Baseline integrity runs. `ROADMAP.md` marks the fix
 done only after CI accepts it.
+
+## Acceptance (appended 2026-10-30, Phase 5 task 1)
+
+The fix is **accepted at `8b33edf`**. Read through the GitHub Actions API on 2026-10-30:
+
+- Modern core 40958421349: **SUCCESS, all 12 jobs** (both legs' `checks`, eight `http` shards and both `result` jobs,
+  21:30 to 21:51 UTC on 2026-10-29). Shard jobs: PHP 8.4 / MariaDB 11.4 15:43, 18:04, 16:36, 14:51; PHP 8.5 / MySQL 8.4
+  12:50, 20:26, 16:50, 18:00 (shards 1 to 4). Their shard steps: 15:01, 17:18, 15:52, 14:10; 11:54, 19:34, 15:59, 17:03,
+  all under 30 minutes, so `tests/tooling/shard-durations.json` needs no refresh.
+- Baseline integrity 40958422672: **SUCCESS**.
+
+`ROADMAP.md` marks the fix done, and with it Phase 4's last planned item.
+
+Follow-up in the same commit: `testAnInstalledGamePageRendersWithOutputBufferingOff` relied on the database
+`FreshInstallTest` leaves installed, so it failed when run alone or before that test (on an empty database: exit 255,
+"Database operation failed."). It now installs an empty database itself and empties it again afterwards; an installed
+database is used as it is (`PHASE5-TASK1-DIRECTION-20261030.md`).

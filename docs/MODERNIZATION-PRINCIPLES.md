@@ -27,3 +27,11 @@ Preserve useful native administrative workflows where they can be secured within
 ## Release gate
 
 Foundation is not alpha or a release. Release only after behavioral, compatibility, security and provenance gates for the shipped scope have passed. Public source and a private unsupported research runtime are different things. No VPS deployment belongs to foundation.
+
+## Direction change, 2026-10-30
+
+Jim dropped the behaviorally faithful rule (`PHASE5-TASK1-DIRECTION-20261030.md`). The "Preserve initially" section
+above described Phases 1 to 4. From Phase 5 on, gameplay, balance, text and the interface may change when a task
+prompt says so, each change recorded with the old behavior, the new behavior and why. One new UI replaces the original
+templates; they stay byte for byte at `historical-source-1.1.2`. "Modernize deliberately", "Security and fidelity"
+and the release gate still apply. No framework adoption is implied unless a task prompt says so.

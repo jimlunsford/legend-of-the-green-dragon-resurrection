@@ -16,10 +16,13 @@ final class OutputBufferingTest extends TestCase
     private const string ROOT = __DIR__ . '/../..';
 
     /**
-     * A page of the installed game (FreshInstallTest leaves it installed), rendered by the PHP CLI as a GET of home.php
-     * with output_buffering=0. The CLI enforces "headers already sent" like a web server does, so an early byte fails
-     * the same way. The run uses a tree of links to the repository with its own dbconnect.php, as the game reads the
-     * file from its working directory.
+     * A page of the installed game, rendered by the PHP CLI as a GET of home.php with output_buffering=0. The CLI
+     * enforces "headers already sent" like a web server does, so an early byte fails the same way. The run uses a tree
+     * of links to the repository with its own dbconnect.php, as the game reads the file from its working directory.
+     *
+     * The test does not depend on the order it runs in: an installed database (the one FreshInstallTest leaves) is used
+     * as it is; an empty one is installed here with scripts/install.php --modules=none, the same state, and emptied
+     * again afterwards, so a later FreshInstallTest still finds it empty.
      */
     public function testAnInstalledGamePageRendersWithOutputBufferingOff(): void
     {
@@ -30,6 +33,7 @@ final class OutputBufferingTest extends TestCase
         $work = sys_get_temp_dir() . '/resurrection-output-buffering-' . bin2hex(random_bytes(6));
         $tree = $work . '/tree';
         mkdir($tree . '/.sessions', 0700, true);
+        $installed = false;
         try {
             foreach (scandir($root) ?: [] as $entry) {
                 if (in_array($entry, ['.', '..', '.git', 'dbconnect.php'], true)) { continue; }
@@ -39,6 +43,15 @@ final class OutputBufferingTest extends TestCase
                 'DB_USER' => (string)getenv('RESURRECTION_TEST_DB_USER'), 'DB_PASS' => (string)getenv('RESURRECTION_TEST_DB_PASSWORD'),
                 'DB_NAME' => 'resurrection_test', 'DB_PREFIX' => '', 'DB_USEDATACACHE' => 0, 'DB_DATACACHEPATH' => '']));
             chmod($tree . '/dbconnect.php', 0600);
+            $state = $this->installState($tree);
+            self::assertContains($state, ['empty', 'installed'], 'The disposable test database must be empty or installed.');
+            if ($state === 'empty') {
+                [$code, $out, $err] = $this->process([PHP_BINARY, 'scripts/install.php', '--modules=none', $tree . '/dbconnect.php'], $root,
+                    ['RESURRECTION_ADMIN_LOGIN' => 'OutputBufferingAdmin', 'RESURRECTION_ADMIN_PASSWORD' => 'Synthetic output buffering password'] + getenv());
+                self::assertSame(0, $code, $err . $out);
+                $installed = true;
+                self::assertSame('installed', $this->installState($tree));
+            }
             file_put_contents($work . '/page.php', "<?php\n" .
                 "\$_SERVER = ['SCRIPT_NAME' => '/home.php', 'PHP_SELF' => '/home.php', 'REQUEST_URI' => '/home.php', 'QUERY_STRING' => '',\n" .
                 "    'REQUEST_METHOD' => 'GET', 'SERVER_NAME' => 'localhost', 'SERVER_PORT' => '80', 'REMOTE_ADDR' => '127.0.0.1',\n" .
@@ -55,8 +68,12 @@ final class OutputBufferingTest extends TestCase
             self::assertStringContainsString('<title>Legend of the Green Dragon', $out);
             self::assertStringNotContainsString((string)getenv('RESURRECTION_TEST_DB_PASSWORD'), $out);
         } finally {
+            // Only an install this test made in the disposable database: empty it again for the tests that follow.
+            $cleanup = $installed ? $this->process([PHP_BINARY, '-r', self::PREAMBLE . ' foreach (array_column(db_query("SHOW TABLES"),'
+                . ' "Tables_in_resurrection_test") as $t) db_query("DROP TABLE " . db_identifier($t)); echo resurrection_install_state();'], $tree) : null;
             $this->remove($work);
         }
+        if ($cleanup !== null) { self::assertSame([0, 'empty', ''], $cleanup); }
     }
 
     /**
@@ -77,10 +94,29 @@ final class OutputBufferingTest extends TestCase
         self::assertSame(['lib/all_tables.php:1492 "\n"'], $printing);
     }
 
-    /** @param list<string> $command @return array{0: int, 1: string, 2: string} */
-    private function process(array $command, string $directory): array
+    /**
+     * Loads the tree's dbconnect.php and the database libraries in a separate PHP process, which then runs its own code.
+     * The libraries load lib/all_tables.php, whose trailing newline is discarded as every loader does.
+     */
+    private const string PREAMBLE = 'require "dbconnect.php"; ob_start(); foreach (["dbwrapper_pdo", "constants", "datacache", "settings", "installer/fresh_install"] as $l) require "lib/" . $l . ".php";'
+        . ' ob_end_clean(); $DB_USEDATACACHE = 0; db_connect($DB_HOST, $DB_USER, $DB_PASS) && db_select_db($DB_NAME) or exit(2);';
+
+    /** The database's install state (lib/installer/fresh_install.php), read in a separate process. */
+    private function installState(string $tree): string
     {
-        $process = proc_open($command, [1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes, $directory);
+        [$exit, $out, $err] = $this->process([PHP_BINARY, '-r', self::PREAMBLE . ' echo resurrection_install_state();'], $tree);
+        self::assertSame(0, $exit, $err . $out);
+        return $out;
+    }
+
+    /**
+     * @param list<string> $command
+     * @param array<string, string>|null $environment
+     * @return array{0: int, 1: string, 2: string}
+     */
+    private function process(array $command, string $directory, ?array $environment = null): array
+    {
+        $process = proc_open($command, [1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes, $directory, $environment);
         self::assertIsResource($process);
         $out = (string)stream_get_contents($pipes[1]); fclose($pipes[1]);
         $err = (string)stream_get_contents($pipes[2]); fclose($pipes[2]);

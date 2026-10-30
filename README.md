@@ -6,11 +6,9 @@
 
 ## What this is
 
-A behaviorally faithful modernization project based on Legend of the Green Dragon 1.1.2 Dragonprime Edition with bundled maintenance fixes.
+A modern continuation of Legend of the Green Dragon 1.1.2 Dragonprime Edition with bundled maintenance fixes, in PHP, so that other people can host it.
 
-Preserve the game. Modernize the implementation.
-
-The goal is to preserve recognizable gameplay, atmosphere, progression and module-driven extensibility while improving runtime compatibility, security, maintainability, testing, database behavior and selected module support.
+Phases 1 to 4 modernized the implementation and kept the game as it was: runtime compatibility, security, maintainability, testing, database behavior and selected module support. Since 2026-10-30 gameplay, text and the interface may change too, one deliberate and recorded change at a time; the current phase gives the game a new interface and original art. See [ROADMAP.md](ROADMAP.md).
 
 ## What this is not
 

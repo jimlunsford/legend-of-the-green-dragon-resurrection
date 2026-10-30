@@ -6,11 +6,11 @@ Checkpoint documents hold the evidence. This file holds the plan. When they disa
 
 ## Goal
 
-Modernize the code. Preserve the game.
+Phases 1 to 4: modernize the code, preserve the game. LoGD 1.1.2 DragonPrime Edition was brought onto supported PHP and databases with every important state transition examined, constrained and tested, and the gameplay, atmosphere, odd historical behavior and module system kept intact.
 
-Bring LoGD 1.1.2 DragonPrime Edition onto supported PHP and databases with every important state transition examined, constrained and tested. Keep the gameplay, atmosphere, odd historical behavior and module system intact.
+The finish line for the modernization was the merge of PR #1 into `main`, reached on 2026-10-23 at `0d078df`. On 2026-10-24 Jim chose the next direction: Phase 4, Release foundation, complete at `8b33edf`.
 
-The finish line for the modernization was the merge of PR #1 into `main`, reached on 2026-10-23 at `0d078df`. On 2026-10-24 Jim chose the next direction: Phase 4, Release foundation.
+On 2026-10-30 Jim changed the direction (`docs/PHASE5-TASK1-DIRECTION-20261030.md`): the behaviorally faithful rule is dropped. Gameplay, balance, text and UI may change when a task prompt says so, and every change from 1.1.2 is recorded with the old behavior, the new behavior and why. Phase 5 gives the game one new UI and original art. It stays PHP on this codebase, so other people can host it.
 
 ## Phases
 
@@ -20,7 +20,8 @@ The finish line for the modernization was the merge of PR #1 into `main`, reache
 | Phase 1 | First modern engineering base: PHP/database compatibility, PDO direction, CI, static analysis, early installer and runtime work. | DONE | `docs/MODERN-CORE-CHECKPOINT-20260913.md` |
 | Phase 2 | A real modern base application: strict fresh install, modern credentials, authentication, session rotation, CSRF infrastructure, account creation, village, commentary, logout, all 24 bundled modules installable. | DONE | `docs/MODERN-CORE-CHECKPOINT-20260913-PHASE2.md` |
 | Phase 3 | Close every game and application trust boundary until the modern core is mergeable. | DONE, merged into `main` at `0d078df` on 2026-10-23 | [`docs/PHASE3-MERGE-GATE-20261023.md`](docs/PHASE3-MERGE-GATE-20261023.md), `docs/MODERN-CORE-CHECKPOINT-20260913-PHASE3*.md`, `docs/CORE-ROUTE-SECURITY.md` |
-| Phase 4 | Release foundation: make the game ready for its first release. | CURRENT | [Phase 4 below](#phase-4-release-foundation) |
+| Phase 4 | Release foundation: make the game ready for its first release. | DONE at `8b33edf` on 2026-10-30 | [Phase 4 below](#phase-4-release-foundation) |
+| Phase 5 | Resurrection UI: one new dark fantasy UI with original art replaces all 1.1.2 skins. | CURRENT | [Phase 5 below](#phase-5-resurrection-ui) |
 
 ## Phase 3 checklist
 
@@ -103,7 +104,7 @@ Each family is DONE only when its acceptance evidence passes on both supported C
 
 ### Current
 
-- None. Phase 3 is complete and merged. The current phase is Phase 4, below.
+- None. Phase 3 is complete and merged. The current phase is Phase 5, below.
 
 ### Remaining
 
@@ -167,7 +168,7 @@ Merged, 2026-10-23: Jim merged PR #1 into `main` with a normal merge commit, `0d
 
 ## Phase 4: Release foundation
 
-**CURRENT** (started 2026-10-24). Goal: make the game ready for its first release.
+**DONE** (started 2026-10-24, complete 2026-10-30 when CI accepted its last item at `8b33edf`). Goal: make the game ready for its first release.
 
 The release itself stays excluded until Jim says so: hosting, tags, GitHub releases, an image, and the skin and archive-module rights (`docs/LICENSING-AND-PROVENANCE.md`).
 
@@ -193,7 +194,46 @@ The release itself stays excluded until Jim says so: hosting, tags, GitHub relea
   - [x] A second `up` keeps the game; when the code is newer than the database it says so, shows the backup and upgrade commands, and does not upgrade; `stop`, and `wipe` with the data volumes.
   - [x] Tests: the static test `tests/tooling/test_local_play.py`; the full flow run once from a clean clone (supporting evidence).
   - [x] Docs: "Play locally" in `docs/MODERN-INSTALLATION.md`.
-- [ ] Fix: the game no longer depends on PHP's output buffering. Found in task 3: with `output_buffering` off (PHP's default without a `php.ini`, and the official Docker image), every page of an installed game failed at `common.php:206`, because `lib/all_tables.php` (1.1.2) prints a newline before `common.php`'s buffer starts (`docs/PHASE4-OUTPUT-BUFFERING-FIX-20261029.md`). Done when CI accepts it.
+- [x] Fix: the game no longer depends on PHP's output buffering. Found in task 3: with `output_buffering` off (PHP's default without a `php.ini`, and the official Docker image), every page of an installed game failed at `common.php:206`, because `lib/all_tables.php` (1.1.2) prints a newline before `common.php`'s buffer starts (`docs/PHASE4-OUTPUT-BUFFERING-FIX-20261029.md`). Accepted at `8b33edf`, Modern core 40958421349 (all 12 jobs), Baseline integrity 40958422672.
+
+All of Phase 4's planned tasks are done. **Phase 4 DONE.**
+
+## Phase 5: Resurrection UI
+
+**CURRENT** (started 2026-10-30). Goal: one new dark fantasy UI, with original art, replaces all 1.1.2 skins. The plan and audit: [`docs/PHASE5-UI-PLAN-20261030.md`](docs/PHASE5-UI-PLAN-20261030.md). The design contract: [`docs/UI-DESIGN-SPEC.md`](docs/UI-DESIGN-SPEC.md).
+
+The release stays excluded until Jim says go: hosting, tags, GitHub releases, an image, and the archive-module rights. The skins are going, so their rights are no longer a release item.
+
+### Decisions (Jim, 2026-10-30)
+
+Recorded in `docs/PHASE5-TASK1-DIRECTION-20261030.md`:
+
+1. The behaviorally faithful rule is dropped, for everything. Gameplay, balance, text and UI may change when a task prompt says so; each change from 1.1.2 is recorded (old vs new, why).
+2. One new UI replaces all skins, built from the mockups Jim approved. When it lands, every 1.1.2 skin in `templates/` and skin selection are removed.
+3. The game gets visuals: location scenes, creature portraits, item and stat icons, character portraits by race. Original SVG drawn by Claude for Jim / Phoenix 2:33 LLC.
+4. The game stays PHP on this codebase, so other people can host it. A clean-room rewrite under AGPL-3.0-or-later is a possible future, not started.
+5. Licensing: the core stays CC BY-NC-SA 2.0 with the original credits visible on every page, and `LICENSE.txt` and `README.txt` byte-identical to the tag; Jim's art in `assets/` under CC BY-SA 4.0 with its own LICENSE file; Jim's standalone code, shipped as a separate work, AGPL-3.0-or-later. Open question for Jim and a lawyer: AGPL code bundled here and run inside the NC core may leave hosts unable to satisfy both licenses; until Jim decides, no file is labelled AGPL.
+6. The release, tags, deploy and hosting stay excluded until Jim says go.
+
+### Checklist
+
+Each task is one commit with its own tests and acceptance checks, as proposed in the plan. Done only when CI accepts it.
+
+- [ ] 1: new direction, governance and UI plan: `CLAUDE.md` rewritten, Phase 4 closed, `docs/UI-DESIGN-SPEC.md`, the plan, and `OutputBufferingTest` independent of test order (`docs/PHASE5-TASK1-DIRECTION-20261030.md`). Done when CI accepts it.
+- [ ] 2: design tokens, self-hosted fonts and the color codes.
+- [ ] 3: the new template and base layout, made the default skin.
+- [ ] 4: header and footer: mail with unread count, petition, MoTD, credits, version, time to the next new day.
+- [ ] 5: navigation: nav groups and hotkey key badges.
+- [ ] 6: the character panel: HP and XP bars, stat tiles, equipment rows.
+- [ ] 7: the phone layout: bottom tab bar and compact HP/XP header.
+- [ ] 8: forms, buttons and tables.
+- [ ] 9: commentary and the battle log.
+- [ ] 10: popups, admin and superuser screens.
+- [ ] 11: the image pipeline: `assets/`, its LICENSE, lookup by place, race and creature, fallbacks.
+- [ ] 12: art: location scenes.
+- [ ] 13: art: race portraits and the icon set.
+- [ ] 14: art: the creature parts kit and portraits for every creature.
+- [ ] 15: remove the 1.1.2 skins and skin selection.
 
 ### Public hosting
 
