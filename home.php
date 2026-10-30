@@ -121,7 +121,7 @@ if (getsetting("homeskinselect", 1)) {
 	$form = array("template"=>"Choose a different display skin:,theme");
 	$prefs['template'] = $_COOKIE['template'] ?? '';
 	if ($prefs['template'] == "")
-		$prefs['template'] = getsetting("defaultskin", "jade.htm");
+		$prefs['template'] = getsetting("defaultskin", "resurrection.htm");
 	require_once("lib/showform.php");
 	showform($form, $prefs, true);
 	$submit = translate_inline("Choose");

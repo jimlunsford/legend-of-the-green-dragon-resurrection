@@ -1,0 +1,392 @@
+/*
+  Resurrection UI: the page frame (Phase 5 task 3), used by templates/resurrection.htm.
+
+  Every value comes from tokens.css, which docs/UI-DESIGN-SPEC.md defines. The two breakpoints are written as
+  literals equal to --breakpoint-stack (900px) and --breakpoint-phone (600px), because a custom property cannot be
+  used in a media query. Plain CSS, no build step, no request outside the game.
+*/
+@import url('fonts.css');
+@import url('tokens.css');
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html { background: var(--ground); -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+
+body {
+  margin: 0;
+  background: var(--ground);
+  color: var(--text);
+  font-family: var(--font-ui);
+  font-size: var(--size-ui);
+  font-weight: var(--weight-ui);
+  line-height: var(--leading-ui);
+}
+
+a { color: var(--accent); text-underline-offset: 2px; }
+a:hover { color: var(--accent-hover); }
+
+/* A visible focus ring on every focusable element. */
+:focus-visible {
+  outline: var(--focus-ring-width) solid var(--accent);
+  outline-offset: var(--focus-ring-offset);
+}
+
+img { max-width: 100%; height: auto; }
+hr { border: 0; border-top: 1px solid var(--border); margin: 16px 0; }
+pre { max-width: 100%; overflow-x: auto; }
+
+.rz-skip {
+  position: absolute;
+  left: var(--space-side-phone);
+  top: -100px;
+  z-index: 10;
+  padding: 10px 16px;
+  background: var(--accent);
+  color: var(--ground);
+  border-radius: var(--radius-control);
+  font-weight: var(--weight-ui-bold);
+}
+.rz-skip:focus { top: 8px; }
+
+/* Header bar */
+
+.rz-header {
+  background: var(--header);
+  border-bottom: 1px solid var(--border);
+}
+
+.rz-header-inner {
+  max-width: var(--width-container);
+  margin: 0 auto;
+  padding: var(--space-header-y) var(--space-side);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px 24px;
+}
+
+.rz-wordmark { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+
+.rz-wordmark-title {
+  font-family: var(--font-display);
+  font-weight: var(--weight-display-bold);
+  font-size: var(--size-wordmark);
+  letter-spacing: var(--tracking-wordmark);
+  line-height: 1.15;
+  color: var(--text);
+}
+
+.rz-wordmark-sub {
+  font-family: var(--font-display);
+  font-weight: var(--weight-display);
+  font-size: var(--size-wordmark-sub);
+  letter-spacing: var(--tracking-wordmark-sub);
+  text-transform: uppercase;
+  line-height: 1.2;
+  color: var(--accent);
+}
+
+.rz-header-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.rz-header-actions:empty { display: none; }
+
+/* Mail, MoTD and petition: 44px outlined controls on the header fill (never on --raised). */
+.rz-header-actions a {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--touch-target);
+  padding: 0 16px;
+  border: 1px solid var(--input-border);
+  border-radius: var(--radius-control);
+  color: var(--text);
+  font-weight: var(--weight-ui-medium);
+  text-decoration: none;
+  white-space: nowrap;
+}
+.rz-header-actions a:hover { border-color: var(--accent); color: var(--accent-hover); }
+.rz-header-actions a b { font-weight: inherit; }
+.rz-header-actions a.hotmotd { border-color: var(--accent); color: var(--accent); }
+
+.rz-header-staff:empty, .rz-header-ad:empty { display: none; }
+.rz-header-staff, .rz-header-ad { flex: 1 1 100%; }
+.rz-petitioncount { color: var(--muted); font-size: var(--size-small); text-align: right; }
+
+/* The three columns */
+
+.rz-frame {
+  max-width: var(--width-container);
+  margin: 0 auto;
+  padding: 24px var(--space-side) 32px;
+}
+
+.rz-columns {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--space-gutter);
+}
+
+.rz-nav { flex: 1 1 var(--width-nav-min); max-width: var(--width-nav-max); min-width: 0; }
+.rz-main { flex: 999 1 560px; min-width: 0; }
+.rz-character { flex: 1 1 var(--width-character-min); max-width: var(--width-character-max); min-width: 0; }
+
+.rz-card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-panel);
+}
+
+/* Navigation */
+
+.rz-nav-panel { padding: 12px; }
+.rz-nav-panel:empty { display: none; }
+
+.rz-navhead {
+  margin: 16px 12px 6px;
+  font-family: var(--font-display);
+  font-weight: var(--weight-display-bold);
+  font-size: var(--size-label);
+  letter-spacing: var(--tracking-nav-heading);
+  text-transform: uppercase;
+  line-height: 1.3;
+  color: var(--muted);
+}
+.rz-navhead:first-child { margin-top: 4px; }
+.rz-navhead span { color: inherit; }
+
+.rz-navhelp { padding: 4px 12px; color: var(--muted); font-size: var(--size-small); }
+
+.rz-navitem {
+  display: block;
+  min-height: var(--touch-target);
+  padding: 11px 12px;
+  border-radius: var(--radius-control);
+  color: var(--text);
+  text-decoration: none;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+.rz-navitem:hover { background: var(--raised); color: var(--text); }
+
+/* The hotkey letter, marked by appoencode()'s `H code. Key badges replace it in task 5. */
+.navhi { color: var(--accent); font-weight: var(--weight-ui-bold); text-decoration: underline; text-underline-offset: 3px; }
+
+/* Content */
+
+.rz-title {
+  margin: 0 0 16px;
+  font-family: var(--font-display);
+  font-weight: var(--weight-display-bold);
+  font-size: var(--size-title);
+  letter-spacing: var(--tracking-title);
+  line-height: 1.2;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
+.rz-content {
+  padding: var(--space-card-y) var(--space-card-x);
+  font-family: var(--font-story);
+  font-size: var(--size-body);
+  font-weight: var(--weight-story);
+  line-height: var(--leading-body);
+  overflow-wrap: break-word;
+}
+.rz-content::after { content: ""; display: block; clear: both; }
+
+.rz-content h1, .rz-content h2, .rz-content h3, .rz-content h4 {
+  font-family: var(--font-display);
+  font-weight: var(--weight-display-bold);
+  font-size: var(--size-heading);
+  line-height: 1.3;
+  margin: 1em 0 0.5em;
+}
+
+/* Forms, tables and controls use the UI face inside story text. */
+.rz-content table, .rz-content input, .rz-content select, .rz-content textarea, .rz-content button,
+.rz-content .button, .rz-content label {
+  font-family: var(--font-ui);
+  font-size: var(--size-ui);
+  line-height: var(--leading-ui);
+}
+
+/* Wide tables scroll in their own box, never the page. */
+.rz-content table { display: block; max-width: 100%; overflow-x: auto; border-collapse: collapse; }
+.rz-content table:not([width]) { width: fit-content; }
+.rz-content table table { display: table; overflow: visible; }
+.rz-content td, .rz-content th { padding: 6px 10px; vertical-align: top; }
+
+/* The row classes the game prints. No row uses --raised, so a control in a row never sits on it. */
+.trhead, .trhead td, .trhead th {
+  background: var(--header);
+  color: var(--muted);
+  font-weight: var(--weight-ui-bold);
+}
+.trhead td, .trhead th { border-bottom: 1px solid var(--border); }
+.trlight { background: var(--panel); }
+.trdark { background: var(--header); }
+.trhilight { background: var(--panel); }
+.trhilight > td:first-child, .trhilight > th:first-child { box-shadow: inset 3px 0 0 var(--accent); }
+
+/* Inputs: a --raised fill with an --input-border outline, on --panel or darker. */
+input:not([type]), input[type="text"], input[type="password"], input[type="number"], input[type="email"],
+input[type="search"], input[type="url"], input[type="tel"], select, textarea {
+  max-width: 100%;
+  min-height: var(--touch-target);
+  padding: 8px 12px;
+  background: var(--raised);
+  color: var(--text);
+  border: 1px solid var(--input-border);
+  border-radius: var(--radius-control);
+  font-family: var(--font-ui);
+  font-size: var(--size-ui);
+}
+textarea { min-height: 88px; line-height: var(--leading-ui); }
+input[type="checkbox"], input[type="radio"] { width: 20px; height: 20px; accent-color: var(--accent); vertical-align: middle; }
+
+/* Buttons: secondary by default (--raised fill, --input-border outline, --text label). */
+.button, button, input[type="submit"], input[type="button"], input[type="reset"] {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--touch-target);
+  padding: 0 18px;
+  background: var(--raised);
+  color: var(--text);
+  border: 1px solid var(--input-border);
+  border-radius: var(--radius-control);
+  font-family: var(--font-ui);
+  font-size: var(--size-ui);
+  font-weight: var(--weight-ui-bold);
+  text-decoration: none;
+  cursor: pointer;
+}
+.button:hover, button:hover, input[type="submit"]:hover, input[type="button"]:hover, input[type="reset"]:hover {
+  border-color: var(--accent);
+  color: var(--accent-hover);
+}
+
+/* The one primary action: gold fill, --ground label. */
+.rz-button-primary, input.rz-button-primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--ground);
+}
+.rz-button-primary:hover, input.rz-button-primary:hover {
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
+  color: var(--ground);
+}
+
+/* Sign-in box on the home page (the login part). */
+.rz-login {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 12px 16px;
+  margin: 16px 0;
+}
+.rz-field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.rz-field label { color: var(--muted); font-weight: var(--weight-ui-medium); }
+.rz-field input { width: 220px; }
+.rz-loginfull { margin: 16px 0; color: var(--damage); font-weight: var(--weight-ui-bold); text-align: center; }
+
+/* Character column. Each stat section is its own card; the signed-out online list sits in one card. */
+
+.rz-character-inner { display: flex; flex-direction: column; gap: 16px; }
+.rz-character-inner:not(:has(.rz-stats)) {
+  padding: var(--space-panel);
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-panel);
+  overflow-wrap: anywhere;
+}
+.rz-character-inner:empty { display: none; }
+
+.rz-stats { display: flex; flex-direction: column; gap: 16px; }
+.rz-stats-lead { display: none; }
+.rz-statsection { padding: var(--space-panel); }
+
+.rz-stathead {
+  margin: 0 0 10px;
+  font-family: var(--font-display);
+  font-weight: var(--weight-display);
+  font-size: var(--size-label);
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.rz-stathead span { color: inherit; }
+
+.rz-statrow {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  padding: 4px 0;
+  border-top: 1px solid var(--border);
+}
+.rz-stathead + .rz-statrow { border-top: 0; }
+.rz-statlabel { color: var(--muted); }
+.rz-statvalue { text-align: right; font-weight: var(--weight-ui-bold); overflow-wrap: anywhere; min-width: 0; }
+.rz-statbuff { overflow-wrap: anywhere; }
+
+/* Footer */
+
+.rz-footer {
+  background: var(--header);
+  border-top: 1px solid var(--border);
+  color: var(--muted);
+  font-size: var(--size-small);
+}
+
+.rz-footer-inner {
+  max-width: var(--width-container);
+  margin: 0 auto;
+  padding: 20px var(--space-side);
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 12px 32px;
+}
+
+.rz-footer-credits { flex: 1 1 420px; min-width: 0; overflow-wrap: anywhere; }
+.rz-footer-credits img { margin: 0 12px 4px 0; }
+.rz-footer-meta { flex: 0 1 auto; text-align: right; overflow-wrap: anywhere; }
+.rz-footer-sep { padding: 0 4px; }
+
+/* Other markup the game prints */
+
+.rz-adwrapper { padding: var(--space-panel); }
+div.debug { color: var(--muted); font-size: var(--size-small); }
+a.motd { color: var(--text); }
+a.hotmotd { color: var(--accent); }
+
+/* Popups: one column. */
+.rz-popup .rz-frame { padding-top: 16px; padding-bottom: 16px; }
+
+/* Below --breakpoint-stack (900px) each column takes the full width. */
+@media (max-width: 900px) {
+  .rz-nav, .rz-main, .rz-character { flex: 1 1 100%; max-width: none; }
+}
+
+/* Below --breakpoint-phone (600px): phone spacing and type. Task 7 adds the phone chrome. */
+@media (max-width: 600px) {
+  .rz-header-inner, .rz-footer-inner { padding-left: var(--space-side-phone); padding-right: var(--space-side-phone); }
+  .rz-frame { padding: 16px var(--space-side-phone) 24px; }
+  .rz-title { font-size: var(--size-title-phone); }
+  .rz-content {
+    padding: var(--space-card-phone);
+    font-size: var(--size-body-phone);
+    line-height: var(--leading-body-phone);
+  }
+  .rz-statsection, .rz-character-inner:not(:has(.rz-stats)) { padding: var(--space-panel-phone); }
+  .rz-footer-meta { text-align: left; }
+  .rz-field input { width: 100%; }
+  .rz-field { flex: 1 1 100%; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; animation: none !important; }
+}

@@ -203,3 +203,14 @@ PHP 8.5.12 (php-builder, as setup-php) and MySQL 8.4 in Docker:
 
 Pending: this commit's Modern core (both legs, all 12 jobs) and Baseline integrity runs. `ROADMAP.md` ticks task 2
 only after CI accepts it.
+
+### Accepted (recorded 2026-10-30, Phase 5 task 3)
+
+`4606b4ab2f69f31d4c7949bffe49d9ca59a89706` was confirmed through the GitHub Actions API:
+
+- Modern core 41077391337: SUCCESS, all 12 jobs. Shard job times (job / test step), shards 1 to 4: PHP 8.4 /
+  MariaDB 11.4 17:29 / 16:46, 15:53 / 15:07, 17:38 / 16:56, 19:26 / 18:42; PHP 8.5 / MySQL 8.4 19:00 / 18:08,
+  18:23 / 17:32, 16:53 / 15:56, 15:35 / 14:40. Every shard is under 30 minutes.
+- Baseline integrity 41077391247: SUCCESS.
+
+Task 2 is ticked in `ROADMAP.md`.

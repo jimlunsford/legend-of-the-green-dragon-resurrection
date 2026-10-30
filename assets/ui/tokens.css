@@ -38,25 +38,41 @@
   --weight-ui-bold: 700;
 
   /* Type: scale */
-  --size-body: 16px;
-  --leading-body: 1.55;
-  --size-ui: 15px;
+  --size-body: 19px;
+  --leading-body: 1.65;
+  --size-body-phone: 17px;
+  --leading-body-phone: 1.6;
+  --size-ui: 16px;
   --leading-ui: 1.4;
   --size-small: 13px;
-  --size-title: 26px;
+  --size-title: 34px;
+  --size-title-phone: 24px;
+  --tracking-title: 0.03em;
   --size-heading: 18px;
   --size-label: 13px;
   --tracking-label: 0.12em;
+  --tracking-nav-heading: 0.16em;
+  --size-wordmark: 22px;
+  --tracking-wordmark: 0.06em;
+  --size-wordmark-sub: 13px;
+  --tracking-wordmark-sub: 0.2em;
 
   /* Spacing and radii */
   --space-unit: 4px;
-  --space-panel: 16px;
-  --space-panel-phone: 12px;
-  --space-gutter: 16px;
+  --width-container: 1440px;
+  --space-side: 32px;
   --space-side-phone: 16px;
-  --radius-panel: 6px;
-  --radius-control: 4px;
-  --radius-badge: 3px;
+  --space-gutter: 24px;
+  --space-header-y: 14px;
+  --space-card-y: 32px;
+  --space-card-x: 36px;
+  --space-card-phone: 20px;
+  --space-panel: 20px;
+  --space-panel-phone: 12px;
+  --radius-panel: 12px;
+  --radius-control: 8px;
+  --radius-badge: 5px;
+  --radius-bar: 999px;
 
   /* Layout */
   --width-nav-min: 220px;
@@ -68,9 +84,10 @@
 
   /* Controls, bars, icons and focus */
   --touch-target: 44px;
-  --bar-height: 10px;
+  --bar-height: 8px;
+  --bar-height-fight: 10px;
   --bar-height-compact: 6px;
-  --key-badge-size: 22px;
+  --key-badge-size: 24px;
   --icon-size: 24px;
   --icon-stroke: 1.8;
   --focus-ring-width: 2px;

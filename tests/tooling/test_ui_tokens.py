@@ -193,14 +193,41 @@ class UiTokenTests(unittest.TestCase):
 
     def test_no_resource_request_leaves_the_game(self):
         found = []
-        scanned = 0
+        scanned = []
         for base in ('assets', 'templates'):
             for path in sorted((ROOT / base).rglob('*')):
                 if path.is_file() and path.suffix.lower() in SCANNED:
-                    scanned += 1
+                    scanned.append(str(path.relative_to(ROOT)))
                     found += external_requests(str(path.relative_to(ROOT)), path.read_text(errors='replace'))
-        self.assertGreater(scanned, 30)
+        self.assertGreater(len(scanned), 30)
+        # The Resurrection UI's own files (Phase 5 task 3) are among them.
+        for name in ('templates/resurrection.htm', 'assets/ui/resurrection.css', 'assets/ui/tokens.css', 'assets/ui/fonts.css'):
+            self.assertIn(name, scanned)
         self.assertEqual([], found)
+
+    def test_the_mockup_values(self):
+        # The values Jim approved in the mockup, corrected in Phase 5 task 3 (docs/PHASE5-TASK3-TEMPLATE-20261030.md).
+        # Changing one needs Jim; the spec and tokens.css must change together.
+        expected = {
+            '--radius-panel': '12px', '--radius-control': '8px', '--radius-badge': '5px', '--radius-bar': '999px',
+            '--size-title': '34px', '--size-title-phone': '24px', '--tracking-title': '0.03em',
+            '--size-body': '19px', '--leading-body': '1.65', '--size-body-phone': '17px', '--leading-body-phone': '1.6',
+            '--key-badge-size': '24px', '--bar-height': '8px', '--bar-height-fight': '10px',
+            '--size-ui': '16px', '--width-container': '1440px', '--space-side': '32px', '--space-side-phone': '16px',
+            '--space-gutter': '24px', '--space-header-y': '14px', '--space-card-y': '32px', '--space-card-x': '36px',
+            '--space-card-phone': '20px', '--space-panel': '20px', '--size-wordmark': '22px',
+            '--tracking-wordmark': '0.06em', '--size-wordmark-sub': '13px', '--tracking-wordmark-sub': '0.2em',
+            '--tracking-nav-heading': '0.16em', '--size-label': '13px',
+        }
+        spec = {name: value for name, (value, _) in spec_tokens(self.spec).items()}
+        for name, value in expected.items():
+            self.assertEqual(value, self.properties.get(name), name)
+            self.assertEqual(value, spec.get(name), name)
+        # Controls never sit on a --raised fill: the spec says so, and the outline clears 3:1 only on darker grounds.
+        self.assertIn('Inputs and outlined controls never sit on a `--raised` fill', self.spec)
+        for ground in ('--panel', '--header', '--ground'):
+            self.assertGreaterEqual(contrast(self.properties['--input-border'], self.properties[ground]), UI_MINIMUM, ground)
+        self.assertLess(contrast(self.properties['--input-border'], self.properties['--raised']), UI_MINIMUM)
 
 
 class RequestScannerTests(unittest.TestCase):

@@ -62,9 +62,11 @@ final class OutputBufferingTest extends TestCase
             self::assertSame(0, $code, $err . substr($out, 0, 2000));
             self::assertSame('', $err);
             self::assertStringNotContainsString('Runtime error', $out);
-            // Nothing before the page: it starts with the jade template's own page head ("\r\n" after the
-            // <!--!pagehead--> marker, then the doctype). The defect put lib/all_tables.php's "\n" first.
-            self::assertStringStartsWith("\r\n<!DOCTYPE", $out);
+            // Nothing before the page: it starts with the default template's own page head, the doctype written
+            // directly after the <!--!header--> marker in templates/resurrection.htm (Phase 5 task 3; before it, jade's
+            // "\r\n<!DOCTYPE"). The defect put lib/all_tables.php's "\n" first.
+            self::assertStringStartsWith("<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n", $out);
+            self::assertStringContainsString('<link rel="stylesheet" href="assets/ui/resurrection.css">', $out);
             self::assertStringContainsString('<title>Legend of the Green Dragon', $out);
             self::assertStringNotContainsString((string)getenv('RESURRECTION_TEST_DB_PASSWORD'), $out);
         } finally {

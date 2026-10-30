@@ -648,7 +648,7 @@ function charstats(){
 /**
  * Loads the template into the current session.  If the template doesn't
  * exist - uses the default (admin-defined) template, and then falls back
- * to jade.htm
+ * to resurrection.htm (1.1.2: jade.htm)
  *
  * @param string $templatename The template name (minus the path)
  * @return array The template split into the sections defined by <!--!
@@ -657,9 +657,9 @@ function charstats(){
  */
 function loadtemplate($templatename){
 	if ($templatename=="" || !file_exists("templates/$templatename") || substr($templatename, -4) != '.htm')
-		$templatename=getsetting("defaultskin", "jade.htm");
+		$templatename=getsetting("defaultskin", "resurrection.htm");
 	if ($templatename=="" || !file_exists("templates/$templatename"))
-		$templatename="jade.htm";
+		$templatename="resurrection.htm";
 	$fulltemplate = file_get_contents("templates/$templatename");
 	$fulltemplate = explode("<!--!",$fulltemplate);
 	while (list($key,$val)=resurrection_array_next($fulltemplate)){

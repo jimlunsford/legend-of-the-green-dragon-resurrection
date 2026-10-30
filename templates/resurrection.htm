@@ -1,0 +1,93 @@
+<!--!header--><!DOCTYPE html>
+<html lang="en">
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{title}</title>
+<link rel="stylesheet" href="assets/ui/resurrection.css">
+{headscript}{script}
+</head>
+<body class="rz-page">
+<a class="rz-skip" href="#rz-content">Skip to content</a>
+<header class="rz-header">
+ <div class="rz-header-inner">
+  <div class="rz-wordmark">
+   <span class="rz-wordmark-title">Legend of the Green Dragon</span>
+   <span class="rz-wordmark-sub">Resurrection</span>
+  </div>
+  <div class="rz-header-actions">{mail}{motd}{petition}</div>
+  <div class="rz-header-staff">{petitiondisplay}</div>
+  <div class="rz-header-ad">{headerad}</div>
+ </div>
+</header>
+<div class="rz-frame">
+ <div class="rz-columns">
+  <nav class="rz-nav" aria-label="Navigation">
+   <div class="rz-card rz-nav-panel">{navad}{nav}</div>
+  </nav>
+  <main class="rz-main" id="rz-content">
+   <h1 class="rz-title">{title}</h1>
+   <div class="rz-card rz-content">{verticalad}{bodyad}
+<!--!footer-->
+   </div>
+  </main>
+  <aside class="rz-character" aria-label="Character">
+   <div class="rz-character-inner">{stats}</div>
+  </aside>
+ </div>
+</div>
+<footer class="rz-footer">
+ <div class="rz-footer-inner">
+  <div class="rz-footer-credits">{copyright}<a href="about.php">Credits</a> <span class="rz-footer-sep" aria-hidden="true">&middot;</span> {source}</div>
+  <div class="rz-footer-meta">{version}{paypal}<br><span class="rz-pagegen">{pagegen}</span></div>
+ </div>
+</footer>
+</body>
+</html>
+<!--!popuphead--><!DOCTYPE html>
+<html lang="en">
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{title}</title>
+<link rel="stylesheet" href="assets/ui/resurrection.css">
+{headscript}{script}
+</head>
+<body class="rz-page rz-popup">
+<header class="rz-header">
+ <div class="rz-header-inner">
+  <div class="rz-wordmark">
+   <span class="rz-wordmark-title">Legend of the Green Dragon</span>
+   <span class="rz-wordmark-sub">Resurrection</span>
+  </div>
+ </div>
+</header>
+<div class="rz-frame">
+ <main class="rz-main" id="rz-content">
+  <h1 class="rz-title">{title}</h1>
+  <div class="rz-card rz-content">
+<!--!popupfoot-->
+  </div>
+ </main>
+</div>
+<footer class="rz-footer">
+ <div class="rz-footer-inner">
+  <div class="rz-footer-credits">{copyright}</div>
+ </div>
+</footer>
+</body>
+</html>
+<!--!statstart--><div class="rz-stats"><section class="rz-stats-lead">
+<!--!stathead--></section><section class="rz-card rz-statsection"><h2 class="rz-stathead">{title}</h2>
+<!--!statrow--><div class="rz-statrow"><span class="rz-statlabel">{title}</span><span class="rz-statvalue">{value}</span></div>
+<!--!statbuff--></section><section class="rz-card rz-statsection"><h2 class="rz-stathead">{title}</h2><div class="rz-statbuff">{value}</div>
+<!--!statend--></section></div>
+<!--!navhead--><h2 class="rz-navhead">{title}</h2>
+<!--!navhelp--><div class="rz-navhelp">{text}</div>
+<!--!navitem--><a href="{link}" {accesskey} class="rz-navitem nav" {popup}>{text}</a>
+<!--!petitioncount--><div class="rz-petitioncount">{petitioncount}</div>
+<!--!adwrapper--><div class="rz-card rz-adwrapper">{content}</div>
+<!--!login--><div class="rz-login">
+ <div class="rz-field"><label for="name">{username}</label><input name="name" id="name" accesskey="u" autocomplete="username"></div>
+ <div class="rz-field"><label for="password">{password}</label><input name="password" id="password" accesskey="p" type="password" autocomplete="current-password"></div>
+ <input type="submit" value="{button}" class="button rz-button-primary">
+</div>
+<!--!loginfull--><div class="rz-loginfull">Server Full!</div>

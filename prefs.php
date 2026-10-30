@@ -220,7 +220,7 @@ if ($op=="suicide" && getsetting("selfdelete",0)!=0) {
 	$prefs['bio'] = $session['user']['bio'];
 	$prefs['template'] = ($_COOKIE['template'] ?? '');
 	if ($prefs['template'] == "")
-		$prefs['template'] = getsetting("defaultskin", "jade.htm");
+		$prefs['template'] = getsetting("defaultskin", "resurrection.htm");
 	$prefs['email'] = $session['user']['emailaddress'];
 	// Default tabbed config to true
 	if (!isset($prefs['tabconfig'])) $prefs['tabconfig'] = 1;
