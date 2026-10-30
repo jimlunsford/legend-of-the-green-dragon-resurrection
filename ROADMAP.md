@@ -217,23 +217,25 @@ Recorded in `docs/PHASE5-TASK1-DIRECTION-20261030.md`:
 
 ### Checklist
 
-Each task is one commit with its own tests and acceptance checks, as proposed in the plan. Done only when CI accepts it.
+The plan's 15 tasks (section 7 of the plan has each task's tests and acceptance checks). Each task is one commit. Done only when CI accepts it.
 
-- [ ] 1: new direction, governance and UI plan: `CLAUDE.md` rewritten, Phase 4 closed, `docs/UI-DESIGN-SPEC.md`, the plan, and `OutputBufferingTest` independent of test order (`docs/PHASE5-TASK1-DIRECTION-20261030.md`). Done when CI accepts it.
-- [ ] 2: design tokens, self-hosted fonts and the color codes.
-- [ ] 3: the new template and base layout, made the default skin.
-- [ ] 4: header and footer: mail with unread count, petition, MoTD, credits, version, time to the next new day.
-- [ ] 5: navigation: nav groups and hotkey key badges.
-- [ ] 6: the character panel: HP and XP bars, stat tiles, equipment rows.
-- [ ] 7: the phone layout: bottom tab bar and compact HP/XP header.
-- [ ] 8: forms, buttons and tables.
-- [ ] 9: commentary and the battle log.
-- [ ] 10: popups, admin and superuser screens.
-- [ ] 11: the image pipeline: `assets/`, its LICENSE, lookup by place, race and creature, fallbacks.
-- [ ] 12: art: location scenes.
-- [ ] 13: art: race portraits and the icon set.
-- [ ] 14: art: the creature parts kit and portraits for every creature.
-- [ ] 15: remove the 1.1.2 skins and skin selection.
+- [x] 1: Direction, governance and UI plan. `CLAUDE.md` rewritten, Phase 4 closed, `docs/UI-DESIGN-SPEC.md`, the plan, and `OutputBufferingTest` independent of test order (`docs/PHASE5-TASK1-DIRECTION-20261030.md`). Accepted at `836bb84`, Modern core 41071411434 (all 12 jobs), Baseline integrity 41071411378.
+- [ ] 2: Design tokens, fonts and color codes. **In progress.** `assets/ui/tokens.css` (palette, type, spacing, all 41 color codes), self-hosted woff2 for the three families with their OFL texts, `docs/THIRD-PARTY-LICENSES.md`, the `docs/CHANGES-FROM-1.1.2.md` ledger started. Static tests: tokens equal the spec; every text token and color code clears 4.5:1 on panel and raised; every color class `appoencode()` writes is styled; font files match their recorded SHA-256 with an OFL text per family; no external resource URL under `assets/` or `templates/`. Nothing rendered changes (`docs/PHASE5-TASK2-TOKENS-20261030.md`).
+- [ ] 3: New template and base layout. `templates/resurrection.htm` and its CSS: header, three columns, footer with `{copyright}`, Credits, Source and version; popup parts; phone stacking; made the default skin (installer default and the fallbacks), old skins still selectable.
+- [ ] 4: Header and footer. Mail badge with the unread count, petition and MoTD as real links (popup as an enhancement), `{newday}` time to the next new day.
+- [ ] 5: Navigation. Nav groups, key badges, the key script as a static file with a JSON key map, 44px rows; hotkey choice unchanged.
+- [ ] 6: Character panel. HP and XP bars, stat tiles, equipment rows, race portrait slot; `addcharstat()` rows from modules still shown.
+- [ ] 7: Phone layout. Bottom tab bar, compact HP/XP header, stacking below the breakpoints.
+- [ ] 8: Forms, buttons and tables. Labels on inputs, primary and secondary buttons, table styling and scroll boxes, `appoencode()` inline styles replaced by classes.
+- [ ] 9: Commentary and battle log. Commentary list and 44px input with Add; battle rounds as an ordered list.
+- [ ] 10: Popups, admin and superuser screens. Mail, petition, MoTD and translator popups; the Grotto and editors styled.
+- [ ] 11: Image pipeline. `assets/` layout, `assets/LICENSE` (CC BY-SA 4.0) and README, `src/Ui/Art.php` lookups, fallbacks, the scene and portrait slots, alt text.
+- [ ] 12: Art: location scenes. One woodcut scene per place.
+- [ ] 13: Art: race portraits and icons. Four race portraits plus unknown, and the icon set.
+- [ ] 14: Art: creature parts kit and portraits. `kit.json` for all 288 seeded creatures, parts, type fallbacks, the generator.
+- [ ] 15: Remove the 1.1.2 skins and skin selection, each removal recorded.
+
+Every change from 1.1.2 that a player, administrator or operator can notice is recorded in [`docs/CHANGES-FROM-1.1.2.md`](docs/CHANGES-FROM-1.1.2.md).
 
 ### Public hosting
 

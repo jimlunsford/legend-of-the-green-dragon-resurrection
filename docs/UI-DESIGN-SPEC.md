@@ -7,37 +7,54 @@ Values marked **approved** are the ones Jim approved in the mockups on 2026-10-3
 **set here** were chosen in Phase 5 task 1 to complete the system; a later task may tune them, and records the change
 here when it does. Changing an approved value needs Jim.
 
+`assets/ui/tokens.css` holds every value below as a CSS custom property, and styles every color code class
+(Phase 5 task 2). `tests/tooling/test_ui_tokens.py` keeps the file and this spec equal: it reads the tables below
+(every row whose first cell is a `--token`, and the color code table), and checks contrast.
+
 ## Palette (approved)
 
-| Token | Value | Use |
+| Token | Value | Use | Text |
+|---|---|---|---|
+| `--ground` | `#12100D` | Page background | no |
+| `--header` | `#17140F` | Header bar, footer, phone tab bar | no |
+| `--panel` | `#1B1814` | Nav, content and character panels. The reference color for text contrast | no |
+| `--raised` | `#24201A` | Cards, stat tiles, inputs, hovered rows | no |
+| `--track` | `#2C2720` | Empty part of a bar (HP, XP) | no |
+| `--border` | `#3A3329` | Panel and row borders (decorative) | no |
+| `--input-border` | `#6E6452` | Input, button and key-badge outlines | no |
+| `--text` | `#ECE4D4` | Body text | yes |
+| `--muted` | `#A99F8D` | Labels, secondary text, the footer | yes |
+| `--accent` | `#D9A84E` | Ember gold: primary action fill, links, focus ring, key badges | yes |
+| `--accent-hover` | `#F0C46E` | Hover and pressed state of the accent | yes |
+| `--health` | `#7FB069` | The player's HP bar and healing | yes |
+| `--foe` | `#C9553D` | Enemies' HP bars and foe markers | no |
+| `--damage` | `#E8826A` | Damage numbers and damage text | yes |
+| `--magic` | `#8FB8D9` | Magic, buffs, specialty effects | yes |
+| `--narrative` | `#9CCB8A` | Narrative green: story highlights | yes |
+
+"Text" marks the tokens used for text. Each clears 4.5:1 on `--panel` and on `--raised` (WCAG 2.x ratio):
+
+| Token | On panel | On raised |
 |---|---|---|
-| `--ground` | `#12100D` | Page background |
-| `--header` | `#17140F` | Header bar, footer, phone tab bar |
-| `--panel` | `#1B1814` | Nav, content and character panels. The reference color for text contrast |
-| `--raised` | `#24201A` | Cards, stat tiles, inputs, hovered rows |
-| `--track` | `#2C2720` | Empty part of a bar (HP, XP) |
-| `--border` | `#3A3329` | Panel and row borders |
-| `--input-border` | `#4A4235` | Input and button outlines |
-| `--text` | `#ECE4D4` | Body text |
-| `--muted` | `#A99F8D` | Labels, secondary text, the footer |
-| `--accent` | `#D9A84E` | Ember gold: primary action fill, links, focus ring, key badges |
-| `--accent-hover` | `#F0C46E` | Hover and pressed state of the accent |
-| `--health` | `#7FB069` | The player's HP bar and healing |
-| `--foe` | `#C9553D` | Enemies' HP bars and foe markers |
-| `--damage` | `#E8826A` | Damage numbers and damage text |
-| `--magic` | `#8FB8D9` | Magic, buffs, specialty effects |
-| `--narrative` | `#9CCB8A` | Narrative green: story highlights |
+| `text` | 13.99 | 12.81 |
+| `muted` | 6.76 | 6.19 |
+| `accent` | 8.14 | 7.45 |
+| `accent-hover` | 10.80 | 9.89 |
+| `health` | 7.00 | 6.41 |
+| `damage` | 6.60 | 6.04 |
+| `magic` | 8.44 | 7.73 |
+| `narrative` | 9.54 | 8.73 |
 
-Contrast on `--panel` (WCAG 2.x ratio; computed in task 1): text 13.99, muted 6.76, accent 8.14, accent-hover 10.80,
-health 7.00, damage 6.60, magic 8.44, narrative 9.54. Text on an accent fill (`--ground` on `--accent`): 8.74.
+Text on an accent fill (`--ground` on `--accent`): 8.74. No approved value had to change to pass on `--raised`.
 
-Two approved colors are not for text:
+Not for text:
 
-- `--foe` is 4.08:1 on the panel, under 4.5. Use it for bars, fills and markers only (3.42:1 against `--track`, which
-  clears the 3:1 non-text rule). Text about damage uses `--damage`.
-- `--border` (1.42:1) and `--input-border` (1.79:1) are under the 3:1 non-text rule on their own. An input is
-  therefore never identified by its border alone: it also has the `--raised` fill, a visible label, and an accent focus
-  ring. See "Open items".
+- `--foe` is 4.08:1 on the panel, under 4.5. Jim confirmed on 2026-10-30: bars, fills and markers only (3.42:1
+  against `--track`, which clears the 3:1 non-text rule). Text about damage uses `--damage`.
+- `--input-border` was `#4A4235` (1.79:1). Jim's decision, 2026-10-30: `#6E6452`, so input, button and key-badge
+  outlines clear the 3:1 non-text rule against the panel they sit on (3.04:1; 2.78:1 against their own `--raised`
+  fill, which is the inside of the control, not its surroundings).
+- `--border` stays `#3A3329` (1.42:1): panel and row borders are decorative, never the only sign of a control.
 
 ## Type (approved)
 
@@ -50,12 +67,38 @@ The game makes no third-party font or CDN request.
 | Alegreya | 400, 500, italic | Narrative and story text: the page content `output()` produces, commentary, MoTD bodies |
 | Alegreya Sans | 400, 500, 700 | Navigation, stats, forms, buttons, tables, the footer |
 
-Fallback stacks (set here): Cinzel → `Georgia, 'Times New Roman', serif`; Alegreya → `Georgia, serif`;
-Alegreya Sans → `system-ui, -apple-system, 'Segoe UI', sans-serif`. `font-display: swap`.
+The files: `assets/fonts/<family>/`, woff2 only, latin and latin-ext subsets, each family's `OFL.txt` beside them;
+`assets/ui/fonts.css` holds the `@font-face` rules (relative URLs, `font-display: swap`). Sources, versions and
+checksums: `THIRD-PARTY-LICENSES.md`.
 
-Scale (set here): body 16px / 1.55 (Alegreya); UI text 15px / 1.4 (Alegreya Sans); small 13px (footer, key badges);
-page title 26px Cinzel 700; section heading 18px Cinzel 700; uppercase labels 12px Cinzel 500, letter-spacing 0.12em.
-Text never goes below 13px.
+Fallback stacks (set here) and weights, as tokens:
+
+| Token | Value |
+|---|---|
+| `--font-display` | `'Cinzel', Georgia, 'Times New Roman', serif` |
+| `--font-story` | `'Alegreya', Georgia, serif` |
+| `--font-ui` | `'Alegreya Sans', system-ui, -apple-system, 'Segoe UI', sans-serif` |
+| `--weight-display` | `500` |
+| `--weight-display-bold` | `700` |
+| `--weight-story` | `400` |
+| `--weight-story-medium` | `500` |
+| `--weight-ui` | `400` |
+| `--weight-ui-medium` | `500` |
+| `--weight-ui-bold` | `700` |
+
+Scale (set here). Text never goes below 13px:
+
+| Token | Value | Use |
+|---|---|---|
+| `--size-body` | `16px` | Story text (Alegreya) |
+| `--leading-body` | `1.55` | Its line height |
+| `--size-ui` | `15px` | UI text (Alegreya Sans) |
+| `--leading-ui` | `1.4` | Its line height |
+| `--size-small` | `13px` | Footer, key badges |
+| `--size-title` | `26px` | Page title, Cinzel 700 |
+| `--size-heading` | `18px` | Section heading, Cinzel 700 |
+| `--size-label` | `13px` | Uppercase labels, Cinzel 500 (task 1 said 12px, which broke the 13px floor; task 2 set 13px) |
+| `--tracking-label` | `0.12em` | Their letter spacing |
 
 ## Color codes (approved values, plus the rest set here)
 
@@ -136,8 +179,33 @@ Character, Talk, More. The page never scrolls sideways; wide admin tables scroll
 `{copyright}` tag carries, unaltered), a Credits link (`about.php`), a Source link (the `sourceurl` setting), the
 version (`Resurrection\Version::display()`), and the time to the next new day.
 
-Spacing (set here): a 4px base unit; panel padding 16px (12px on a phone); 16px gutter between columns; 16px side
-gutter on a phone; panel radius 6px.
+Sizes, as tokens (column widths approved; the rest set here). CSS custom properties cannot be used inside a media
+query, so the template writes the two breakpoints as literals equal to these tokens:
+
+| Token | Value | Use |
+|---|---|---|
+| `--space-unit` | `4px` | Base spacing unit |
+| `--space-panel` | `16px` | Panel padding |
+| `--space-panel-phone` | `12px` | Panel padding on a phone |
+| `--space-gutter` | `16px` | Gutter between columns |
+| `--space-side-phone` | `16px` | Side gutter on a phone |
+| `--radius-panel` | `6px` | Panels |
+| `--radius-control` | `4px` | Inputs, buttons, tiles |
+| `--radius-badge` | `3px` | Key badges |
+| `--width-nav-min` | `220px` | Nav column, narrowest |
+| `--width-nav-max` | `280px` | Nav column, widest |
+| `--width-character-min` | `260px` | Character column, narrowest |
+| `--width-character-max` | `320px` | Character column, widest |
+| `--breakpoint-stack` | `900px` | Below it the columns stack |
+| `--breakpoint-phone` | `600px` | Below it the phone chrome takes over |
+| `--touch-target` | `44px` | Smallest touch target, both directions |
+| `--bar-height` | `10px` | HP and XP bars |
+| `--bar-height-compact` | `6px` | Bars in the phone's compact header |
+| `--key-badge-size` | `22px` | Key badge, smallest width and height |
+| `--icon-size` | `24px` | Icon grid |
+| `--icon-stroke` | `1.8` | Icon stroke width |
+| `--focus-ring-width` | `2px` | Focus ring |
+| `--focus-ring-offset` | `2px` | Its offset |
 
 ## Components (approved)
 
@@ -179,6 +247,4 @@ short fades, none under `prefers-reduced-motion: reduce`.
 
 ## Open items
 
-- The approved `--border` and `--input-border` values are under WCAG's 3:1 contrast for component boundaries. The
-  spec compensates (raised fill, labels, focus ring). If Jim wants the outlines themselves to clear 3:1, the input
-  border would need to be about `#6E6452` or lighter (3.04:1 on the panel); that is his call.
+None. Closed on 2026-10-30: the outline contrast item (Jim chose `--input-border` `#6E6452`, see Palette).

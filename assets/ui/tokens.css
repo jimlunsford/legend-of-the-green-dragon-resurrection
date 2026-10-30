@@ -1,0 +1,162 @@
+/*
+  Resurrection UI design tokens (Phase 5 task 2).
+
+  Every value in docs/UI-DESIGN-SPEC.md as a CSS custom property, and every color code class appoencode()
+  (lib/output.php) writes. tests/tooling/test_ui_tokens.py keeps this file equal to the spec. Edit the spec and
+  this file together. One file, no build step.
+*/
+
+:root {
+  /* Palette */
+  --ground: #12100D;
+  --header: #17140F;
+  --panel: #1B1814;
+  --raised: #24201A;
+  --track: #2C2720;
+  --border: #3A3329;
+  --input-border: #6E6452;
+  --text: #ECE4D4;
+  --muted: #A99F8D;
+  --accent: #D9A84E;
+  --accent-hover: #F0C46E;
+  --health: #7FB069;
+  --foe: #C9553D;
+  --damage: #E8826A;
+  --magic: #8FB8D9;
+  --narrative: #9CCB8A;
+
+  /* Type: families and weights */
+  --font-display: 'Cinzel', Georgia, 'Times New Roman', serif;
+  --font-story: 'Alegreya', Georgia, serif;
+  --font-ui: 'Alegreya Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --weight-display: 500;
+  --weight-display-bold: 700;
+  --weight-story: 400;
+  --weight-story-medium: 500;
+  --weight-ui: 400;
+  --weight-ui-medium: 500;
+  --weight-ui-bold: 700;
+
+  /* Type: scale */
+  --size-body: 16px;
+  --leading-body: 1.55;
+  --size-ui: 15px;
+  --leading-ui: 1.4;
+  --size-small: 13px;
+  --size-title: 26px;
+  --size-heading: 18px;
+  --size-label: 13px;
+  --tracking-label: 0.12em;
+
+  /* Spacing and radii */
+  --space-unit: 4px;
+  --space-panel: 16px;
+  --space-panel-phone: 12px;
+  --space-gutter: 16px;
+  --space-side-phone: 16px;
+  --radius-panel: 6px;
+  --radius-control: 4px;
+  --radius-badge: 3px;
+
+  /* Layout */
+  --width-nav-min: 220px;
+  --width-nav-max: 280px;
+  --width-character-min: 260px;
+  --width-character-max: 320px;
+  --breakpoint-stack: 900px;
+  --breakpoint-phone: 600px;
+
+  /* Controls, bars, icons and focus */
+  --touch-target: 44px;
+  --bar-height: 10px;
+  --bar-height-compact: 6px;
+  --key-badge-size: 22px;
+  --icon-size: 24px;
+  --icon-stroke: 1.8;
+  --focus-ring-width: 2px;
+  --focus-ring-offset: 2px;
+
+  /* Color codes: one property per class appoencode() writes */
+  --code-colDkBlue: #7E9BD9;
+  --code-colLtBlue: #9CB4EA;
+  --code-colDkGreen: #6FA661;
+  --code-colLtGreen: #9CCB8A;
+  --code-colDkCyan: #5FB0A8;
+  --code-colLtCyan: #8FD3CC;
+  --code-colDkRed: #D9644A;
+  --code-colLtRed: #E8826A;
+  --code-colDkMagenta: #B98AD0;
+  --code-colLtMagenta: #D9A0C4;
+  --code-colDkYellow: #C2B05A;
+  --code-colLtYellow: #E9D27C;
+  --code-colDkWhite: #BDB4A3;
+  --code-colLtWhite: #F4EEE2;
+  --code-colLtBlack: #8F877A;
+  --code-colDkOrange: #C08650;
+  --code-colLtOrange: #E9A25A;
+  --code-colBlack: #958C7E;
+  --code-colDkRust: #B98680;
+  --code-colLtRust: #D4A39C;
+  --code-colXLtGreen: #B5E3A6;
+  --code-colMdGrey: #D6D0C4;
+  --code-colMdBlue: #8FA6E0;
+  --code-colaquamarine: #8CE0C6;
+  --code-coldarkseagreen: #9DBF9A;
+  --code-colDkLinkBlue: #6FA3D6;
+  --code-colLtLinkBlue: #7FBCF0;
+  --code-colwheat: #EAD8B5;
+  --code-coltan: #CDB08C;
+  --code-collightsalmon: #EBA486;
+  --code-colsalmon: #E58C7C;
+  --code-colRose: #E6BDE0;
+  --code-colDkBrown: #A88B6C;
+  --code-colLtBrown: #E9CF8C;
+  --code-colBlueViolet: #A98BE6;
+  --code-coliceviolet: #B3C1EA;
+  --code-colburlywood: #D9B88F;
+  --code-colbeige: #EFE8D0;
+  --code-colkhaki: #E6D99A;
+  --code-coldarkkhaki: #BDB474;
+}
+
+/* Color code classes. Class names are exactly the ones appoencode() writes (case-sensitive in standards mode). */
+.colDkBlue { color: var(--code-colDkBlue); } /* `1 */
+.colLtBlue { color: var(--code-colLtBlue); } /* `! */
+.colDkGreen { color: var(--code-colDkGreen); } /* `2 */
+.colLtGreen { color: var(--code-colLtGreen); } /* `@ */
+.colDkCyan { color: var(--code-colDkCyan); } /* `3 */
+.colLtCyan { color: var(--code-colLtCyan); } /* `# */
+.colDkRed { color: var(--code-colDkRed); } /* `4 */
+.colLtRed { color: var(--code-colLtRed); } /* `$ */
+.colDkMagenta { color: var(--code-colDkMagenta); } /* `5 */
+.colLtMagenta { color: var(--code-colLtMagenta); } /* `% */
+.colDkYellow { color: var(--code-colDkYellow); } /* `6 */
+.colLtYellow { color: var(--code-colLtYellow); } /* `^ */
+.colDkWhite { color: var(--code-colDkWhite); } /* `7 */
+.colLtWhite { color: var(--code-colLtWhite); } /* `& */
+.colLtBlack { color: var(--code-colLtBlack); } /* `) */
+.colDkOrange { color: var(--code-colDkOrange); } /* `q */
+.colLtOrange { color: var(--code-colLtOrange); } /* `Q */
+.colBlack { color: var(--code-colBlack); } /* `~ */
+.colDkRust { color: var(--code-colDkRust); } /* `e */
+.colLtRust { color: var(--code-colLtRust); } /* `E */
+.colXLtGreen { color: var(--code-colXLtGreen); } /* `g` `G */
+.colMdGrey { color: var(--code-colMdGrey); } /* `j */
+.colMdBlue { color: var(--code-colMdBlue); } /* `J */
+.colaquamarine { color: var(--code-colaquamarine); } /* `k */
+.coldarkseagreen { color: var(--code-coldarkseagreen); } /* `K */
+.colDkLinkBlue { color: var(--code-colDkLinkBlue); } /* `l */
+.colLtLinkBlue { color: var(--code-colLtLinkBlue); } /* `L */
+.colwheat { color: var(--code-colwheat); } /* `m */
+.coltan { color: var(--code-coltan); } /* `M */
+.collightsalmon { color: var(--code-collightsalmon); } /* `p */
+.colsalmon { color: var(--code-colsalmon); } /* `P */
+.colRose { color: var(--code-colRose); } /* `R */
+.colDkBrown { color: var(--code-colDkBrown); } /* `T */
+.colLtBrown { color: var(--code-colLtBrown); } /* `t */
+.colBlueViolet { color: var(--code-colBlueViolet); } /* `V */
+.coliceviolet { color: var(--code-coliceviolet); } /* `v */
+.colburlywood { color: var(--code-colburlywood); } /* `x */
+.colbeige { color: var(--code-colbeige); } /* `X */
+.colkhaki { color: var(--code-colkhaki); } /* `y */
+.coldarkkhaki { color: var(--code-coldarkkhaki); } /* `Y */
