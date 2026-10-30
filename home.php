@@ -47,9 +47,10 @@ if (getsetting("homenewestplayer", 1)) {
 		$result = db_query_cached($sql, "newest");
 		$row = db_fetch_assoc($result);
 		$name = $row['name'] ?? '';
-	} else {
-		$name = $newplayer;
 	}
+	// 1.1.2 read the setting as a string and, with none stored (""), printed nothing. The Phase 2 (int) cast
+	// (a6957a4) made that 0, which the else branch here then printed as the name: "The newest resident of the realm
+	// is: 0". With no newest player stored, the line is left out again (Phase 5 task 5).
 	if ($name != "") {
 		output("`QThe newest resident of the realm is: `&%s`0`n`n", $name);
 	}

@@ -68,3 +68,17 @@ What stays open, before any release or hosting:
 - **Whether the source link and repository satisfy the "on request" terms** for a given operator is the operator's
   responsibility; the default URL fits only an unmodified copy of this repository.
 - Rights-holder or qualified advice where any of this affects distribution or hosting plans.
+
+## 2026-10-30: Resurrection's original art
+
+Phase 5 task 5 (`PHASE5-TASK5-IMAGES-20261030.md`). An engineering record, not a legal ruling.
+
+- **Original art.** Scene banners and race portraits in `assets/scenes/` and `assets/portraits/`, original SVG drawn by
+  Claude for Phoenix 2:33 LLC and approved by Jim, committed byte for byte from the command chat with their SHA-256
+  checksums. Copyright (c) 2026 Phoenix 2:33 LLC, licensed under CC BY-SA 4.0 in `assets/LICENSE`, which names its
+  scope exactly: `assets/scenes/`, `assets/portraits/` and `assets/icons/`. It does not cover `assets/fonts/` (SIL OFL
+  1.1, `THIRD-PARTY-LICENSES.md`) or `assets/ui/` (code, under the core license). `NOTICE` and `assets/README.md`
+  state the same, with the credit "Art by Phoenix 2:33 LLC, CC BY-SA 4.0".
+- The art is a separate work shown by the game, not an adaptation of the 1.1.2 images: none of the inherited core
+  images or skins is used or traced. The inherited images and skins keep the open item above until task 15 removes
+  the skins.

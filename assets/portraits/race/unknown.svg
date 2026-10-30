@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 240">
+<title>Unknown traveller</title>
+<path d="M10 240 L10 100 A90 90 0 0 1 190 100 L190 240 Z" fill="#24201A"></path>
+<circle cx="100" cy="112" r="62" fill="#24211C"></circle>
+<path d="M20 240 C26 190 52 168 72 160 C62 140 60 108 70 88 C80 68 92 58 100 58 C108 58 120 68 130 88 C140 108 138 140 128 160 C148 168 174 190 180 240 Z" fill="#0E0C0A" stroke="#A99F8D" stroke-opacity="0.5" stroke-width="2"></path>
+<path d="M80 150 C76 128 80 104 90 94 C96 88 104 88 110 94 C120 104 124 128 120 150 Z" fill="#050403"></path>
+<ellipse cx="92" cy="122" rx="3.5" ry="2" fill="#9A917F"></ellipse>
+<ellipse cx="108" cy="122" rx="3.5" ry="2" fill="#9A917F"></ellipse>
+<path d="M10 240 L10 100 A90 90 0 0 1 190 100 L190 240" fill="none" stroke="#A99F8D" stroke-width="3"></path>
+</svg>

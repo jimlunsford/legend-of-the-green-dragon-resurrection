@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 240">
+<title>Human</title>
+<path d="M10 240 L10 100 A90 90 0 0 1 190 100 L190 240 Z" fill="#24201A"></path>
+<circle cx="100" cy="112" r="62" fill="#2A2620"></circle>
+<path d="M24 240 C34 194 64 178 100 178 C136 178 166 194 176 240 Z" fill="#0E0C0A"></path>
+<path d="M60 196 L100 232 L140 196" fill="none" stroke="#2C2720" stroke-width="4"></path>
+<rect x="91" y="148" width="18" height="34" fill="#0E0C0A"></rect>
+<path d="M72 116 C72 84 86 68 100 68 C114 68 128 84 128 116 C128 142 116 160 100 160 C84 160 72 142 72 116 Z" fill="#0E0C0A" stroke="#D9A84E" stroke-opacity="0.6" stroke-width="2"></path>
+<path d="M70 108 C68 76 84 60 100 60 C118 60 134 74 130 106 C122 92 112 86 100 86 C88 86 78 94 70 108 Z" fill="#1F1A14"></path>
+<circle cx="100" cy="206" r="6" fill="#D9A84E"></circle>
+<path d="M10 240 L10 100 A90 90 0 0 1 190 100 L190 240" fill="none" stroke="#D9A84E" stroke-width="3"></path>
+</svg>

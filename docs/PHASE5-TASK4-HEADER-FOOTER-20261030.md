@@ -281,3 +281,22 @@ Playwright from a throwaway local install (not committed; sent to Jim in the tas
 
 Pending: this commit's Modern core (both legs, all 12 jobs) and Baseline integrity runs. `ROADMAP.md` ticks task 4 only
 after CI accepts it.
+
+### Accepted (recorded 2026-10-30, Phase 5 task 5)
+
+`5752253` is accepted. Confirmed through the GitHub API before task 5 started:
+
+- Modern core [41111713295](https://github.com/jimlunsford/legend-of-the-green-dragon-resurrection/actions/runs/41111713295):
+  SUCCESS, all 12 jobs (both `checks` jobs, all eight `http` shard jobs, both `result` jobs). Shard jobs, from the
+  jobs' start and completion times:
+
+  | Leg | Shard 1 | Shard 2 | Shard 3 | Shard 4 |
+  |---|---|---|---|---|
+  | PHP 8.4 / MariaDB 11.4 | 14:14 | 19:45 | 13:46 | 16:52 |
+  | PHP 8.5 / MySQL 8.4 | 19:13 | 21:16 | 15:56 | 19:07 |
+
+- Baseline integrity [41111713278](https://github.com/jimlunsford/legend-of-the-green-dragon-resurrection/actions/runs/41111713278):
+  SUCCESS.
+
+The longest shard job (21:16) is well under the 30-minute mark, so `tests/tooling/shard-durations.json` is not
+refreshed.

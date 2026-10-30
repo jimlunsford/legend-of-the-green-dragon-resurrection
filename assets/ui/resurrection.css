@@ -216,6 +216,20 @@ pre { max-width: 100%; overflow-x: auto; }
 }
 .rz-content::after { content: ""; display: block; clear: both; }
 
+/*
+  The scene banner (Phase 5 task 5): across the top of the content card, edge to edge inside its rounded top corners,
+  --scene-height tall (--scene-height-phone on a phone), the picture cropped to fill and centered, never letterboxed.
+*/
+.rz-scene {
+  height: var(--scene-height);
+  margin: calc(-1 * var(--space-card-y)) calc(-1 * var(--space-card-x)) var(--space-card-y);
+  border-radius: calc(var(--radius-panel) - 1px) calc(var(--radius-panel) - 1px) 0 0;
+  border-bottom: 1px solid var(--border);
+  overflow: hidden;
+  background: var(--raised);
+}
+.rz-scene-img { display: block; width: 100%; max-width: none; height: 100%; object-fit: cover; object-position: center; }
+
 .rz-content h1, .rz-content h2, .rz-content h3, .rz-content h4 {
   font-family: var(--font-display);
   font-weight: var(--weight-display-bold);
@@ -326,6 +340,17 @@ input[type="checkbox"], input[type="radio"] { width: 20px; height: 20px; accent-
 }
 .rz-character-inner:empty { display: none; }
 
+/*
+  The race portrait (Phase 5 task 5): at the top of the character panel, --portrait-width wide, beside the player's
+  name and race. Below --breakpoint-phone it moves into the header, --portrait-width-phone wide, without the text.
+*/
+.rz-portrait { display: flex; align-items: center; gap: 14px; padding: var(--space-panel); min-width: 0; }
+.rz-portrait-img { display: block; flex: 0 0 auto; width: var(--portrait-width); height: auto; }
+.rz-portrait-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; overflow-wrap: anywhere; }
+.rz-portrait-name { color: var(--text); font-family: var(--font-display); font-weight: var(--weight-display-bold); }
+.rz-portrait-race { color: var(--muted); font-size: var(--size-small); }
+.rz-header-portrait { display: none; }
+
 .rz-stats { display: flex; flex-direction: column; gap: 16px; }
 .rz-stats-lead { display: none; }
 .rz-statsection { padding: var(--space-panel); }
@@ -425,6 +450,16 @@ a.hotmotd { color: var(--accent); }
     font-size: var(--size-body-phone);
     line-height: var(--leading-body-phone);
   }
+  .rz-scene { height: var(--scene-height-phone); margin: calc(-1 * var(--space-card-phone)) calc(-1 * var(--space-card-phone)) var(--space-card-phone); }
+  /* The portrait sits in the header, beside the controls, image only (its alt text names the race). */
+  .rz-header-inner { column-gap: 12px; }
+  .rz-wordmark { flex: 1 1 0; }
+  .rz-header-portrait { display: block; flex: 0 0 auto; }
+  .rz-header-portrait:empty { display: none; }
+  .rz-header-portrait .rz-portrait { padding: 0; background: none; border: 0; }
+  .rz-header-portrait .rz-portrait-img { width: var(--portrait-width-phone); }
+  .rz-header-portrait .rz-portrait-text { display: none; }
+  .rz-character .rz-portrait { display: none; }
   .rz-statsection, .rz-character-inner:not(:has(.rz-stats)) { padding: var(--space-panel-phone); }
   .rz-footer-meta { text-align: left; }
   .rz-field input { width: 100%; }

@@ -14,6 +14,7 @@
    <span class="rz-wordmark-title">Legend of the Green Dragon</span>
    <span class="rz-wordmark-sub">Resurrection</span>
   </div>
+  <div class="rz-header-portrait">{portrait}</div>
   <div class="rz-header-actions">{mail}{motd}{petition}</div>
   <div class="rz-header-staff">{petitiondisplay}</div>
   <div class="rz-header-ad">{headerad}</div>
@@ -26,12 +27,12 @@
   </nav>
   <main class="rz-main" id="rz-content">
    <h1 class="rz-title">{title}</h1>
-   <div class="rz-card rz-content">{verticalad}{bodyad}
+   <div class="rz-card rz-content">{scene}{verticalad}{bodyad}
 <!--!footer-->
    </div>
   </main>
   <aside class="rz-character" aria-label="Character">
-   <div class="rz-character-inner">{stats}</div>
+   <div class="rz-character-inner">{portrait}{stats}</div>
   </aside>
  </div>
 </div>
@@ -86,6 +87,8 @@
 <!--!navhelp--><div class="rz-navhelp">{text}</div>
 <!--!navitem--><a href="{link}" {accesskey} class="rz-navitem nav" {popup}>{text}</a>
 <!--!petitioncount--><div class="rz-petitioncount">{petitioncount}</div>
+<!--!scene--><div class="rz-scene"><img class="rz-scene-img" src="{src}" alt="{alt}" width="{width}" height="{height}"></div>
+<!--!portrait--><div class="rz-card rz-portrait"><img class="rz-portrait-img" src="{src}" alt="{alt}" width="{width}" height="{height}"><div class="rz-portrait-text"><span class="rz-portrait-name">{name}</span><span class="rz-portrait-race">{race}</span></div></div>
 <!--!adwrapper--><div class="rz-card rz-adwrapper">{content}</div>
 <!--!login--><div class="rz-login">
  <div class="rz-field"><label for="name">{username}</label><input name="name" id="name" accesskey="u" autocomplete="username"></div>

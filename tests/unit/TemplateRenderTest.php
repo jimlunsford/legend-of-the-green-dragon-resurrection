@@ -16,6 +16,12 @@ use Resurrection\Configuration\LegacyConfig;
  * secondstonextgameday() on a pinned clock; the Credits link only where about.php is allowed; and the village's page
  * title shown once, not repeated as a heading in the page.
  *
+ * Phase 5 task 5 (docs/PHASE5-TASK5-IMAGES-20261030.md) adds the art: the village scene on the signed-out home page and
+ * the village, the forest scene in a forest fight, each with its alt text, at the top of the content card; the
+ * player's race portrait (the unknown one for the default race, the dwarf's for a dwarf) in the character panel and the
+ * phone header; no scene and no portrait in the mail popup, no portrait signed out. And the home page's newest-resident
+ * line: absent with no newest player stored (1.1.2's behavior), the player's name with one.
+ *
  * The test does not depend on the order it runs in: an installed database is used as it is; an empty one is installed
  * here with scripts/install.php --modules=none and emptied again afterwards. The player it creates, its mail, the MoTD
  * item and the clock settings it changes are removed or restored.
@@ -26,6 +32,7 @@ final class TemplateRenderTest extends TestCase
     private const string COPYRIGHT = 'Game Design and Code: Copyright &copy; 2002-2005, Eric Stevens & JT Traub, &copy; 2006-2007, Dragonprime Development Team';
     private const string ATTRIBUTION = '<p class="rz-attribution">A <a href="https://phoenix233.com" target="_blank" rel="noopener">Phoenix 2:33 LLC</a>'
         . ' Project by <a href="https://jimlunsford.com" target="_blank" rel="noopener">Jim Lunsford</a></p>';
+    private const string CARD = '<div class="rz-card rz-content">';
     /** A pinned game clock: the epoch the installer writes (a UTC midnight), no offset, four game days a day. */
     private const array CLOCK = ['game_epoch' => '2026-01-01 00:00:00 +0000', 'gameoffsetseconds' => '0', 'daysperday' => '4'];
 
@@ -42,6 +49,7 @@ final class TemplateRenderTest extends TestCase
         $player = 0;
         $motd = 0;
         $clock = null;
+        $newest = null;
         try {
             foreach (scandir($root) ?: [] as $entry) {
                 if (in_array($entry, ['.', '..', '.git', 'dbconnect.php'], true)) { continue; }
@@ -68,6 +76,11 @@ final class TemplateRenderTest extends TestCase
                 $this->php($tree, 'savesetting(' . var_export($name, true) . ', ' . var_export($value, true) . ');');
             }
 
+            // No newest player stored, as on a fresh install: the setting is restored afterwards.
+            $newest = json_decode($this->php($tree, 'echo json_encode(db_query("SELECT value FROM settings WHERE setting=?", true, ["newestplayer"]));'), true);
+            $this->php($tree, 'savesetting("newestplayer", "");');
+            $villagename = $this->php($tree, 'echo getsetting("villagename", LOCATION_FIELDS);');
+
             $before = $this->newdayText($tree);
             $home = $this->render($tree, $work, 'home.php', null);
             $after = $this->newdayText($tree);
@@ -87,6 +100,10 @@ final class TemplateRenderTest extends TestCase
             self::assertStringContainsString("<a href='motd.php' target='_blank' rel='noopener' class='rz-control rz-control-motd motd' aria-label='MoTD' title='MoTD'", $home);
             self::assertStringContainsString("<a href='petition.php' target='_blank' rel='noopener' class='rz-control rz-control-petition motd' aria-label='Petition for Help'", $home);
             self::assertStringNotContainsString("window.open('motd.php'", $home);
+            // The village scene, the place's name its alt text; signed out, no portrait. No newest player: no line.
+            $this->assertScene($home, 'village', $villagename);
+            self::assertStringNotContainsString('rz-portrait', $home);
+            self::assertStringNotContainsString('newest resident', $home);
 
             // A signed-in player in the village: the account the game creates, signed in through the session the
             // forced-navigation check reads (do_forced_nav()).
@@ -111,6 +128,11 @@ final class TemplateRenderTest extends TestCase
             self::assertSame(1, substr_count($village, '<h1 class="rz-title">' . $square . '</h1>'));
             $body = substr($village, (int)strpos($village, '</head>'));
             self::assertSame(1, substr_count($body, $square), 'The village title is repeated in the page');
+            // The village scene; the default race has no portrait of its own: the unknown one, its alt the race as the
+            // character panel shows it.
+            $this->assertScene($village, 'village', $villagename);
+            $name = $this->php($tree, 'echo preg_replace("/`./", "", db_query("SELECT name FROM accounts WHERE acctid=?", true, [' . $player . '])[0]["name"]);');
+            $this->assertPortrait($village, 'unknown', 'Horrible Gelatinous Blob', $name);
 
             // Unread and read mail: the badge shows the unread count, the label the full counts, as the table holds them.
             $this->php($tree, 'foreach ([0, 0, 1] as $seen) db_query("INSERT INTO mail (msgfrom, msgto, subject, body, sent, seen) VALUES (0, ?, ?, ?, ?, ?)", true, [' . $player . ', "Render test", "Render test body", date("Y-m-d H:i:s"), $seen]);');
@@ -121,22 +143,55 @@ final class TemplateRenderTest extends TestCase
             self::assertGreaterThan(0, $motd);
             // Signed in again on the village, as before the first visit (that visit replaced the allowed navs), with an
             // MoTD last read in 2000.
-            $this->php($tree, 'db_query("UPDATE accounts SET allowednavs=?, laston=?, lasthit=?, lastmotd=? WHERE acctid=?", true, [serialize(["village.php" => true]), date("Y-m-d H:i:s"), date("Y-m-d H:i:s", time() + 60), "2000-01-01 00:00:00", ' . $player . ']);');
+            // A dwarf now: the dwarf's portrait.
+            $this->php($tree, 'db_query("UPDATE accounts SET allowednavs=?, laston=?, lasthit=?, lastmotd=?, race=? WHERE acctid=?", true, [serialize(["village.php" => true]), date("Y-m-d H:i:s"), date("Y-m-d H:i:s", time() + 60), "2000-01-01 00:00:00", "Dwarf", ' . $player . ']);');
             $village = $this->render($tree, $work, 'village.php', $session);
             $this->assertCleanPage($village, 'village.php');
             $this->assertMailLink($village, 2, 1);
             self::assertStringContainsString("<a href='motd.php' target='_blank' rel='noopener' class='rz-control rz-control-motd hotmotd' aria-label='MoTD (unread)'", $village);
             self::assertStringContainsString("<span class='rz-badge rz-badge-dot' aria-hidden='true'></span>", $village);
             self::assertStringNotContainsString("window.open('motd.php'", $village);
+            $this->assertPortrait($village, 'dwarf', 'Dwarf', $name);
+
+            // A forest fight: the forest scene, the fight below it.
+            $this->php($tree, '$e = array_merge(db_query("SELECT * FROM creatures ORDER BY creatureid LIMIT 1")[0], ["creaturename" => "Scene Test Target",'
+                . ' "creaturehealth" => 100000, "creatureattack" => 1, "creaturedefense" => 1, "creaturelevel" => 1, "playerstarthp" => 500, "diddamage" => 0]);'
+                . ' db_query("UPDATE accounts SET alive=1, hitpoints=500, maxhitpoints=1000, turns=10, specialinc=?, badguy=?, allowednavs=?, laston=?, lasthit=? WHERE acctid=?", true,'
+                . ' ["", serialize(["enemies" => [$e], "options" => ["type" => "forest"]]), serialize(["forest.php?op=fight" => true]), date("Y-m-d H:i:s"), date("Y-m-d H:i:s", time() + 60), ' . $player . ']);');
+            $fight = $this->render($tree, $work, 'forest.php', $session, 'op=fight');
+            $this->assertCleanPage($fight, 'forest.php?op=fight');
+            self::assertStringContainsString('Scene Test Target', $fight);
+            $this->assertScene($fight, 'forest', 'The Forest');
+            $this->assertPortrait($fight, 'dwarf', 'Dwarf', $name);
 
             $mail = $this->render($tree, $work, 'mail.php', $session);
             $this->assertCleanPage($mail, 'mail.php');
             self::assertStringContainsString('<body class="rz-page rz-popup">', $mail);
             self::assertStringNotContainsString('class="rz-columns"', $mail);
+            // A popup: no scene and no portrait.
+            self::assertStringNotContainsString('rz-scene', $mail);
+            self::assertStringNotContainsString('rz-portrait', $mail);
+            self::assertStringNotContainsString('assets/scenes/', $mail);
+            self::assertStringNotContainsString('assets/portraits/', $mail);
+
+            // The newest player stored: the home page names them.
+            $this->php($tree, 'savesetting("newestplayer", "' . $player . '");');
+            $home = $this->render($tree, $work, 'home.php', null);
+            $this->assertCleanPage($home, 'home.php');
+            self::assertStringContainsString('The newest resident of the realm is: ', $home);
+            self::assertSame(1, preg_match('#The newest resident of the realm is: </span><span class=\'colLtWhite\'>([^<]*)</span>#', $home, $resident), $home);
+            self::assertSame($name, $resident[1]);
         } finally {
             $cleanup = [];
             if ($motd > 0) {
                 $cleanup[] = $this->php($tree, 'db_query("DELETE FROM motd WHERE motditem=?", true, [' . $motd . ']); echo "motd removed";', false);
+            }
+            if (is_array($newest) && !$installed) {
+                $restore = 'db_query("DELETE FROM settings WHERE setting=?", true, ["newestplayer"]);';
+                foreach ($newest as $row) {
+                    $restore .= ' db_query("INSERT INTO settings (setting, value) VALUES (?, ?)", true, ["newestplayer", ' . var_export($row['value'], true) . ']);';
+                }
+                $cleanup[] = $this->php($tree, $restore . ' echo "newest restored";', false);
             }
             if ($player > 0) {
                 $cleanup[] = $this->php($tree, 'db_query("DELETE FROM mail WHERE msgto=?", true, [' . $player . ']); foreach (["accounts_output", "accounts"] as $t) db_query("DELETE FROM " . db_identifier($t) . " WHERE acctid=?", true, [' . $player . ']); echo "removed";', false);
@@ -154,7 +209,7 @@ final class TemplateRenderTest extends TestCase
             }
             $this->remove($work);
         }
-        self::assertSame(array_merge($motd > 0 ? ['motd removed'] : [], $player > 0 ? ['removed'] : [],
+        self::assertSame(array_merge($motd > 0 ? ['motd removed'] : [], is_array($newest) && !$installed ? ['newest restored'] : [], $player > 0 ? ['removed'] : [],
             is_array($clock) && !$installed ? ['clock restored'] : [], $installed ? ['empty'] : []), $cleanup);
     }
 
@@ -174,6 +229,29 @@ final class TemplateRenderTest extends TestCase
         self::assertSame(1, substr_count($page, 'Phoenix 2:33 LLC'), $script);
         self::assertGreaterThan(strpos($page, self::COPYRIGHT), strpos($page, self::ATTRIBUTION), $script);
         self::assertStringEndsWith("</html>\n", $page, $script);
+    }
+
+    /** The scene banner: first in the content card, the scene's file with the place's name as its alt text, once. */
+    private function assertScene(string $page, string $scene, string $alt): void
+    {
+        $banner = '<div class="rz-scene"><img class="rz-scene-img" src="assets/scenes/' . $scene . '.svg" alt="'
+            . htmlspecialchars($alt, ENT_QUOTES) . '" width="1200" height="320"></div>' . "\n";
+        self::assertNotSame('', trim($alt));
+        self::assertStringContainsString(self::CARD . $banner, $page, $scene);
+        self::assertSame(1, substr_count($page, 'class="rz-scene"'), $scene);
+        self::assertSame(1, substr_count($page, '<img class="rz-scene-img"'), $scene);
+    }
+
+    /** The race portrait: the race's file, the race as alt text, beside the name and race, in the panel and the phone header. */
+    private function assertPortrait(string $page, string $file, string $race, string $name): void
+    {
+        $portrait = '<div class="rz-card rz-portrait"><img class="rz-portrait-img" src="assets/portraits/race/' . $file . '.svg" alt="'
+            . htmlspecialchars($race, ENT_QUOTES) . '" width="200" height="240"><div class="rz-portrait-text"><span class="rz-portrait-name">'
+            . htmlspecialchars($name, ENT_QUOTES) . '</span><span class="rz-portrait-race">' . htmlspecialchars($race, ENT_QUOTES) . '</span></div></div>' . "\n";
+        self::assertNotSame('', trim($name));
+        self::assertStringContainsString('<div class="rz-header-portrait">' . $portrait . '</div>', $page, $file);
+        self::assertStringContainsString('<div class="rz-character-inner">' . $portrait, $page, $file);
+        self::assertSame(2, substr_count($page, '<img class="rz-portrait-img"'), $file);
     }
 
     /** The header's mail link: an envelope, the unread count as a badge (none at zero), the full sentence as its label. */
@@ -200,16 +278,19 @@ final class TemplateRenderTest extends TestCase
      *
      * @param array{acctid: int, authversion: int}|null $session
      */
-    private function render(string $tree, string $work, string $script, ?array $session): string
+    private function render(string $tree, string $work, string $script, ?array $session, string $query = ''): string
     {
+        parse_str($query, $get);
+        $uri = '/' . $script . ($query === '' ? '' : '?' . $query);
         $signin = $session === null ? '' :
             "session_save_path(" . var_export($tree . '/.sessions', true) . "); session_start();\n" .
             "\$_SESSION = ['session' => ['loggedin' => true, 'lasthit' => time(), 'allowednavs' => [], 'user' => ['acctid' => {$session['acctid']}, 'loggedin' => true]],\n" .
             "    'auth_version' => {$session['authversion']}, 'auth_privileges' => 0];\n";
         file_put_contents($work . '/page.php', "<?php\n" .
-            "\$_SERVER = ['SCRIPT_NAME' => '/$script', 'PHP_SELF' => '/$script', 'REQUEST_URI' => '/$script', 'QUERY_STRING' => '',\n" .
+            "\$_SERVER = ['SCRIPT_NAME' => '/$script', 'PHP_SELF' => '/$script', 'REQUEST_URI' => " . var_export($uri, true) . ", 'QUERY_STRING' => " . var_export($query, true) . ",\n" .
             "    'REQUEST_METHOD' => 'GET', 'SERVER_NAME' => 'localhost', 'SERVER_PORT' => '80', 'REMOTE_ADDR' => '127.0.0.1',\n" .
             "    'HTTP_HOST' => 'localhost'] + \$_SERVER;\n" .
+            "\$_GET = " . var_export($get, true) . ";\n" .
             $signin .
             "require '$script';\n");
         [$code, $out, $err] = $this->process([PHP_BINARY, '-d', 'output_buffering=0', '-d', 'display_errors=0', '-d', 'log_errors=1',

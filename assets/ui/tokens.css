@@ -89,6 +89,10 @@
   --bar-height-compact: 6px;
   --key-badge-size: 24px;
   --icon-size: 24px;
+  --scene-height: 240px;
+  --scene-height-phone: 150px;
+  --portrait-width: 64px;
+  --portrait-width-phone: 44px;
   --icon-stroke: 1.8;
   --focus-ring-width: 2px;
   --focus-ring-offset: 2px;

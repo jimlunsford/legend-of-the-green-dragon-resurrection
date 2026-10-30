@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 240">
+<title>Elf</title>
+<path d="M10 240 L10 100 A90 90 0 0 1 190 100 L190 240 Z" fill="#24201A"></path>
+<circle cx="100" cy="112" r="62" fill="#252A2C"></circle>
+<path d="M30 240 C40 196 68 180 100 180 C132 180 160 196 170 240 Z" fill="#0E0C0A"></path>
+<rect x="92" y="150" width="16" height="34" fill="#0E0C0A"></rect>
+<path d="M72 112 C66 70 88 56 100 56 C112 56 134 70 128 112 L134 196 L118 176 L120 122 C112 90 88 90 80 122 L82 176 L66 196 Z" fill="#0E0C0A"></path>
+<path d="M77 110 L50 90 L78 126 Z M123 110 L150 90 L122 126 Z" fill="#0E0C0A" stroke="#8FB8D9" stroke-opacity="0.6" stroke-width="2" stroke-linejoin="round"></path>
+<path d="M78 114 C78 86 88 72 100 72 C112 72 122 86 122 114 C122 140 112 158 100 158 C88 158 78 140 78 114 Z" fill="#0E0C0A" stroke="#8FB8D9" stroke-opacity="0.6" stroke-width="2"></path>
+<path d="M80 94 Q100 84 120 94" fill="none" stroke="#E9D27C" stroke-width="2.5"></path>
+<circle cx="100" cy="88" r="3.5" fill="#8FB8D9"></circle>
+<path d="M10 240 L10 100 A90 90 0 0 1 190 100 L190 240" fill="none" stroke="#8FB8D9" stroke-width="3"></path>
+</svg>

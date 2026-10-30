@@ -25,11 +25,13 @@ PART_KEYS = {
     'navhead': {'title'}, 'navhelp': {'text'}, 'navitem': {'text', 'link', 'accesskey', 'popup'},
     'petitioncount': {'petitioncount'}, 'login': {'username', 'password', 'button'}, 'loginfull': set(),
     'adwrapper': {'content'},
+    # The art (Phase 5 task 5): resurrection_scene_html() and resurrection_portrait_html() in lib/pageparts.php.
+    'scene': {'src', 'alt', 'width', 'height'}, 'portrait': {'src', 'alt', 'width', 'height', 'name', 'race'},
 }
 # The tags page_header(), page_footer(), popup_header() and popup_footer() fill in the frame parts, and the four ad
 # slots modules fill through the footer hooks (1.1.2's {headerad}, {navad}, {verticalad}, {bodyad}).
 FRAME_TAGS = {'title', 'headscript', 'script', 'nav', 'stats', 'petition', 'petitiondisplay', 'motd', 'mail', 'paypal',
-              'source', 'version', 'pagegen', 'copyright', 'credits', 'newday'}
+              'source', 'version', 'pagegen', 'copyright', 'credits', 'newday', 'scene', 'portrait'}
 AD_SLOTS = {'headerad', 'navad', 'verticalad', 'bodyad'}
 # page_footer() fills these in the footer part only; popup_footer() fills only {copyright}, in popupfoot.
 FOOTER_ONLY = {'copyright', 'version', 'pagegen', 'credits', 'newday'}
@@ -165,6 +167,26 @@ class TemplateTests(unittest.TestCase):
         for hidden in ('display: none', 'visibility', 'opacity', 'font-size: 0', 'clip', 'position: absolute', 'height: 0'):
             self.assertNotIn(hidden, rule.group(1))
         self.assertIn('font-size: var(--size-small)', rule.group(1))
+
+    def test_the_scene_and_portrait_slots(self):
+        # Phase 5 task 5: the scene banner first in the content card; the portrait at the top of the character panel and
+        # in the header (shown there on a phone); neither in a popup. Both are <img> with alt text and their size.
+        header, footer = self.parts['header'], self.parts['footer']
+        self.assertIn('<div class="rz-card rz-content">{scene}', header)
+        self.assertIn('<div class="rz-header-portrait">{portrait}</div>', header)
+        self.assertIn('<div class="rz-character-inner">{portrait}{stats}</div>', footer)
+        self.assertEqual((1, 0), (header.count('{scene}'), footer.count('{scene}')))
+        self.assertEqual((1, 1), (header.count('{portrait}'), footer.count('{portrait}')))
+        for part in ('popuphead', 'popupfoot'):
+            self.assertNotIn('{scene}', self.parts[part], part)
+            self.assertNotIn('{portrait}', self.parts[part], part)
+        for part in ('scene', 'portrait'):
+            image = re.findall(r'<img\b[^>]*>', self.parts[part])
+            self.assertEqual(1, len(image), part)
+            for attribute in ('src="{src}"', 'alt="{alt}"', 'width="{width}"', 'height="{height}"'):
+                self.assertIn(attribute, image[0], part)
+        self.assertIn('<div class="rz-scene">', self.parts['scene'])
+        self.assertIn('<span class="rz-portrait-name">{name}</span><span class="rz-portrait-race">{race}</span>', self.parts['portrait'])
 
     def test_page_and_popup_heads(self):
         for part in ('header', 'popuphead'):

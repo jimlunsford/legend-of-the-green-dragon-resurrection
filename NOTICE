@@ -45,6 +45,15 @@ keeps that credit, with both links, where the original authors' credit appears
 (the footer of every page) and at least as prominently. This is the credit the
 license already requires, not an added term.
 
+Art. The original art in assets/scenes/, assets/portraits/ and assets/icons/
+is Copyright (c) 2026 Phoenix 2:33 LLC and licensed under the Creative
+Commons Attribution-ShareAlike 4.0 International license
+(https://creativecommons.org/licenses/by-sa/4.0/legalcode); see assets/LICENSE
+and assets/README.md. Credit for it: "Art by Phoenix 2:33 LLC, CC BY-SA 4.0".
+That license covers those three folders only: not assets/fonts/ (the SIL Open
+Font License 1.1, see docs/THIRD-PARTY-LICENSES.md) and not assets/ui/ (code,
+under the CC BY-NC-SA 2.0 license above).
+
 This is a noncommercial project. It is not endorsed by the original authors
 or by DragonPrime.
 

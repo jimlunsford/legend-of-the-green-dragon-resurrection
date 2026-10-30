@@ -22,7 +22,7 @@ $runheaders = array();
  *		header-{scriptname}
  */
 function page_header(){
-	global $header,$SCRIPT_NAME,$session,$template, $runheaders, $nopopups;
+	global $header,$SCRIPT_NAME,$session,$template, $runheaders, $nopopups, $resurrection_page_title;
 	$nopopups["login.php"]=1;
 	$nopopups["motd.php"]=1;
 	$nopopups["index.php"]=1;
@@ -55,6 +55,8 @@ function page_header(){
 	$title = call_user_func_array("sprintf_translate", $arguments);
 	$title = holidayize($title,'title');
 	$title = sanitize($title);
+	// The page's own title, the alt text of the fallback scene (Phase 5 task 5).
+	$resurrection_page_title = $title;
 	calculate_buff_fields();
 
 	$header = $template['header'];
@@ -249,6 +251,14 @@ function page_footer($saveuser=true){
 	//output character stats
 	$footer=str_replace("{stats}",$charstats,$footer);
 	$header=str_replace("{stats}",$charstats,$header);
+	// The page's scene banner and the player's race portrait (Phase 5 task 5): through the template's scene and
+	// portrait parts; a template without them (the 1.1.2 skins) shows neither.
+	$scene = resurrection_scene_html();
+	$footer=str_replace("{scene}",$scene,$footer);
+	$header=str_replace("{scene}",$scene,$header);
+	$portrait = resurrection_portrait_html();
+	$footer=str_replace("{portrait}",$portrait,$footer);
+	$header=str_replace("{portrait}",$portrait,$header);
 	//do something -- I don't know what
 	$header=str_replace("{script}",$script,$header);
 	//output view PHP source link
@@ -830,5 +840,71 @@ function resurrection_newday_text($details=false){
 	if ($details === false) $details = gametimedetails();
 	$seconds = max(0, (int)secondstonextgameday($details) - (int)strtotime($details['now']));
 	return sprintf(translate_inline("Next new day in %sh %sm", 'common'), intdiv($seconds, 3600), intdiv($seconds % 3600, 60));
+}
+
+/**
+ * What kind of page this is, for its art (src/Ui/Art.php): an operator page (the game is not installed, has no
+ * database, or cannot run on it), a superuser or editor page (one that called check_su_access()), or a player page.
+ * Popups use popup_header() and popup_footer(), whose template parts have no scene.
+ */
+function resurrection_page_kind(){
+	global $thispage_superuser_level, $resurrection_database_state;
+	require_once __DIR__ . '/../src/Ui/Art.php';
+	if (defined("DB_NODB") || ($resurrection_database_state ?? 'current') !== 'current') return \Resurrection\Ui\Art::OPERATOR;
+	if (!empty($thispage_superuser_level)) return \Resurrection\Ui\Art::SUPERUSER;
+	return \Resurrection\Ui\Art::PLAYER;
+}
+
+/**
+ * The page's scene banner through the template's scene part, or nothing: on popups, superuser, editor and operator
+ * pages, in a template without the part, or when no scene file exists. Each scene's alt text is the place's name: the
+ * village's name, the forest, and for the fallback the page's own title. A module names its own scene for its pages
+ * through the `scene` hook.
+ */
+function resurrection_scene_html(){
+	global $template, $SCRIPT_NAME, $resurrection_page_title;
+	require_once __DIR__ . '/../src/Ui/Art.php';
+	$kind = resurrection_page_kind();
+	if (!isset($template['scene']) || $kind !== \Resurrection\Ui\Art::PLAYER) return "";
+	$names = array(
+		'village'=>getsetting("villagename", LOCATION_FIELDS),
+		'forest'=>translate_inline("The Forest", "scenes"),
+		'fallback'=>(string)($resurrection_page_title ?? ''),
+	);
+	foreach ($names as $name=>$text) $names[$name] = trim(full_sanitize((string)$text));
+	$scene = \Resurrection\Ui\Art::scene((string)$SCRIPT_NAME, $kind, $names, function ($args) { return modulehook("scene", $args); });
+	if ($scene === null) return "";
+	return templatereplace("scene", array(
+		"src"=>htmlspecialchars($scene['src'], ENT_QUOTES, "UTF-8"),
+		"alt"=>htmlspecialchars(full_sanitize($scene['alt']), ENT_QUOTES|ENT_SUBSTITUTE, "UTF-8"),
+		"width"=>(string)$scene['width'],
+		"height"=>(string)$scene['height'],
+	));
+}
+
+/**
+ * The signed-in player's race portrait beside their name and race, through the template's portrait part, or nothing
+ * (signed out, or a template without the part). The alt text is the race as the character panel shows it, and the
+ * race's name beside the portrait the same.
+ */
+function resurrection_portrait_html(){
+	global $template, $session;
+	require_once __DIR__ . '/../src/Ui/Art.php';
+	if (!isset($template['portrait']) || empty($session['user']['loggedin']) || empty($session['loggedin'])) return "";
+	$race = (string)($session['user']['race'] ?? '');
+	// No race chosen yet ('', the column's default '0', or RACE_UNKNOWN, as lib/race_onboarding.php reads it) is named
+	// as the panel names RACE_UNKNOWN.
+	if (in_array($race, array('', '0', RACE_UNKNOWN), true)) $race = RACE_UNKNOWN;
+	$racename = trim(full_sanitize(translate_inline($race, "race")));
+	$portrait = \Resurrection\Ui\Art::portrait($race, $racename);
+	if ($portrait === null) return "";
+	return templatereplace("portrait", array(
+		"src"=>htmlspecialchars($portrait['src'], ENT_QUOTES, "UTF-8"),
+		"alt"=>htmlspecialchars($portrait['alt'], ENT_QUOTES|ENT_SUBSTITUTE, "UTF-8"),
+		"width"=>(string)$portrait['width'],
+		"height"=>(string)$portrait['height'],
+		"name"=>htmlspecialchars(trim(full_sanitize((string)($session['user']['name'] ?? ''))), ENT_QUOTES|ENT_SUBSTITUTE, "UTF-8"),
+		"race"=>htmlspecialchars($racename, ENT_QUOTES|ENT_SUBSTITUTE, "UTF-8"),
+	));
 }
 ?>

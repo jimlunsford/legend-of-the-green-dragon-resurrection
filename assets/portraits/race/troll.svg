@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 240">
+<title>Troll</title>
+<path d="M10 240 L10 100 A90 90 0 0 1 190 100 L190 240 Z" fill="#24201A"></path>
+<circle cx="100" cy="112" r="62" fill="#232A20"></circle>
+<path d="M8 240 C18 188 56 174 100 174 C144 174 182 188 192 240 Z" fill="#0E0C0A"></path>
+<path d="M88 72 L92 44 L100 66 L106 40 L112 72 Z" fill="#0E0C0A"></path>
+<path d="M54 118 L26 128 L56 142 Z M146 118 L174 128 L144 142 Z" fill="#0E0C0A" stroke="#7FB069" stroke-opacity="0.6" stroke-width="2" stroke-linejoin="round"></path>
+<path d="M52 125 C52 85 75 66 100 66 C125 66 148 85 148 125 C148 158 128 176 100 176 C72 176 52 158 52 125 Z" fill="#0E0C0A" stroke="#7FB069" stroke-opacity="0.6" stroke-width="2"></path>
+<path d="M62 110 Q100 92 138 110 L138 118 Q100 102 62 118 Z" fill="#1F2A1C"></path>
+<circle cx="84" cy="124" r="4" fill="#E9D27C"></circle>
+<circle cx="116" cy="124" r="4" fill="#E9D27C"></circle>
+<path d="M80 164 L76 142 L90 160 Z M120 164 L124 142 L110 160 Z" fill="#ECE4D4"></path>
+<path d="M10 240 L10 100 A90 90 0 0 1 190 100 L190 240" fill="none" stroke="#7FB069" stroke-width="3"></path>
+</svg>

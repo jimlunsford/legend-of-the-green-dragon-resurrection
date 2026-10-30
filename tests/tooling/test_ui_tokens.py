@@ -273,6 +273,25 @@ class UiTokenTests(unittest.TestCase):
         for a, b in ((bonus, text), (penalty, text), (bonus, penalty)):
             self.assertGreater(distance(a, b), 20, (a, b))
 
+    def test_the_image_sizes(self):
+        # Jim, 2026-10-30 (task 5): the scene banner 240px tall on desktop and 150px on a phone, cropped to fill and
+        # centered, never letterboxed; the race portrait 64px wide in the character panel and 44px in the phone header.
+        expected = {'--scene-height': '240px', '--scene-height-phone': '150px',
+                    '--portrait-width': '64px', '--portrait-width-phone': '44px'}
+        for name, value in expected.items():
+            self.assertEqual(value, self.properties.get(name), name)
+        css = without_comments((ROOT / 'assets' / 'ui' / 'resurrection.css').read_text())
+        scene = re.search(r'\.rz-scene \{([^}]*)\}', css).group(1)
+        self.assertIn('height: var(--scene-height);', scene)
+        self.assertIn('overflow: hidden;', scene)
+        image = re.search(r'\.rz-scene-img \{([^}]*)\}', css).group(1)
+        for declaration in ('width: 100%;', 'height: 100%;', 'object-fit: cover;', 'object-position: center;'):
+            self.assertIn(declaration, image)
+        self.assertRegex(css, r'\.rz-portrait-img \{[^}]*width: var\(--portrait-width\);')
+        phone = css[css.index('@media (max-width: 600px)'):]
+        self.assertRegex(phone, r'\.rz-scene \{[^}]*height: var\(--scene-height-phone\);')
+        self.assertRegex(phone, r'\.rz-header-portrait \.rz-portrait-img \{[^}]*width: var\(--portrait-width-phone\);')
+
 
 def saturation(color):
     channels = [int(color[i:i + 2], 16) / 255 for i in (1, 3, 5)]

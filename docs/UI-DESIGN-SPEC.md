@@ -200,7 +200,7 @@ panel's sections sit in `--panel` cards with `--space-panel` padding. Links are 
 | Column | Width | Holds |
 |---|---|---|
 | Nav, left | 220 to 280px (`flex: 1 1 220px`) | Nav groups |
-| Content, center | the rest (`flex: 999 1 560px`, `min-width: 0`) | The scene banner, the page title, the page content |
+| Content, center | the rest (`flex: 999 1 560px`, `min-width: 0`) | The page title, then the content card with the scene banner across its top |
 | Character, right | 260 to 320px (`flex: 1 1 260px`) | Portrait, HP and XP bars, stat tiles, equipment, buffs |
 
 The columns wrap when the window is too narrow for all three, and below `--breakpoint-stack` each takes the full
@@ -247,6 +247,10 @@ query, so the template writes the two breakpoints as literals equal to these tok
 | `--bar-height-compact` | `6px` | Bars in the phone's compact header |
 | `--key-badge-size` | `24px` | Key badge, a square (mockup; was 22px) |
 | `--icon-size` | `24px` | Icon grid |
+| `--scene-height` | `240px` | Scene banner height (Jim, task 5) |
+| `--scene-height-phone` | `150px` | Scene banner height on a phone (Jim, task 5) |
+| `--portrait-width` | `64px` | Race portrait in the character panel (Jim, task 5) |
+| `--portrait-width-phone` | `44px` | Race portrait in the phone header (Jim, task 5) |
 | `--icon-stroke` | `1.8` | Icon stroke width |
 | `--focus-ring-width` | `2px` | Focus ring |
 | `--focus-ring-offset` | `2px` | Its offset |
@@ -298,14 +302,85 @@ query, so the template writes the two breakpoints as literals equal to these tok
 
 ## Art (approved)
 
-- **Scene banners** above the page content: woodcut style, layered dark silhouettes, light from windows, the moon,
-  eyes and gems; palette colors only.
+- **Scene banners** across the top of the page's content card: woodcut style, layered dark silhouettes, light from
+  windows, the moon, eyes and gems; art palette colors only (below).
 - **Portraits** in an arched frame tinted by race (players) or creature type (creatures).
 - **Icons**: line icons on a 24px grid, 1.8 stroke, colored by meaning (health green, damage, magic, gold accent).
-- **Every image slot has a fallback**: a missing scene shows a plain banner in the palette, a missing portrait a
-  generic silhouette for the race or creature type, a missing icon nothing (the text label stays).
-- All art is original SVG drawn by Claude for Jim / Phoenix 2:33 LLC, in `assets/` under CC BY-SA 4.0 with its own
-  LICENSE file (created in the art task).
+- **Every image slot has a fallback**: a page with no scene of its own shows the fallback scene, a race with no
+  portrait of its own the unknown portrait, a missing icon nothing (the text label stays). A lookup never gives a
+  broken URL: a missing file means no image.
+- All art is original SVG drawn by Claude for Jim / Phoenix 2:33 LLC, in `assets/` under CC BY-SA 4.0
+  (`assets/LICENSE`, scope `assets/scenes/`, `assets/portraits/` and `assets/icons/`; Phase 5 task 5). Credit: "Art by
+  Phoenix 2:33 LLC, CC BY-SA 4.0".
+
+### Image rules (Phase 5 task 5)
+
+- **Scene banner.** An `<img>` (the template's `scene` part) at the top of the content card, edge to edge inside its
+  rounded top corners, `--scene-height` (240px) tall on desktop and `--scene-height-phone` (150px) below
+  `--breakpoint-phone`, a 1px `--border` line under it. The picture is cropped to fill and centered
+  (`object-fit: cover`), never letterboxed. The `width` and `height` attributes are the file's own size, 1200x320.
+- **Which scene.** `src/Ui/Art.php`, by page script: `home.php` and `village.php` the village, `forest.php` the forest
+  (its fights included), every other player page the fallback. No scene on popups, on superuser and editor pages (a
+  page that called `check_su_access()`), or on the operator pages (not installed, database error, upgrade needed,
+  game unavailable). A module names its own scene for its pages through the `scene` hook: it gets `script`, `scene`
+  and `alt`, and may set `scene` to another file in `assets/scenes/` (with `alt`) or to `''` for none; a name with no
+  file is ignored.
+- **Race portrait.** An `<img>` (the template's `portrait` part) at the top of the character panel, in its own
+  `--panel` card, `--portrait-width` (64px) wide, beside the player's name (Cinzel 700, `--text`) and race (`--muted`,
+  `--size-small`). Below `--breakpoint-phone` it moves into the header beside the controls, `--portrait-width-phone`
+  (44px) wide, the image only. `width` and `height` attributes: the file's 200x240. Signed out: none. The portrait is
+  the player's race lowercased (`human`, `elf`, `dwarf`, `troll`); any other race, or none, gets `unknown`.
+- **Alt text** comes from the same data: a scene's is the place's name (the village's name, "The Forest", and for the
+  fallback the page's own title; a module's hook may give its own), a portrait's the race as the character panel
+  shows it. Plain text, escaped; an image without alt text is not shown.
+- **Files.** Plain SVG drawings: no script, no event attribute, no `foreignObject`, no `href` or other external
+  reference, every color from the art palette, each under 16 KB. `tests/tooling/test_art.py` checks them.
+
+### Art palette (Phase 5 task 5)
+
+Every color the batch 1 files use. Future art stays within it, or extends it here in the task that adds the art.
+Colors that are also UI tokens are named; transparency comes from `opacity` and `stroke-opacity`, not from new colors.
+
+| Color | Token | Use in batch 1 |
+|---|---|---|
+| `#050403` | | Unknown traveller's hood shadow |
+| `#0C130F` | | Forest, nearest trees |
+| `#0E0C0A` | | Portrait silhouettes |
+| `#101814` | | Village and fallback, near tree line |
+| `#142019` | | Forest, middle trees |
+| `#16201B` | | Forest sky |
+| `#16211B` | | Village and fallback, far tree line |
+| `#17140F` | `--header` | Ground in the village and fallback |
+| `#1B2621` | | Night sky, village and fallback; the moon's shadow |
+| `#1F1A14` | | Human's hair |
+| `#1F2A1C` | | Troll's brow |
+| `#1F2E25` | | Forest, far trees |
+| `#221C15` | | Village road |
+| `#232A20` | | Troll's halo |
+| `#24201A` | `--raised` | Portrait arch fill |
+| `#24211C` | | Unknown traveller's halo |
+| `#251E16` | | Village houses |
+| `#252A2C` | | Elf's halo |
+| `#2A2219` | | Forest path |
+| `#2A2620` | | Human's halo |
+| `#2B241D` | | Dwarf's halo |
+| `#2C2720` | `--track` | Dwarf's helm ridge, human's collar |
+| `#2E2620` | | Dwarf's beard |
+| `#30271C` | | Village roofs |
+| `#3A3329` | `--border` | Dwarf's helm, the village's stone |
+| `#6B563F` | | Inn sign bracket |
+| `#7FB069` | `--health` | Troll's frame |
+| `#8FB8D9` | `--magic` | Elf's frame and jewel |
+| `#9A917F` | `--code-colLtBlack` | Unknown traveller's eyes |
+| `#9CCB8A` | `--narrative` | Forest mist, the village's rune |
+| `#A99F8D` | `--muted` | Unknown traveller's frame |
+| `#C08650` | | Inn sign |
+| `#C4936A` | `--code-colDkOrange` | Dwarf's frame, helm band and beard rings |
+| `#D9A84E` | `--accent` | Lit windows, human's frame and brooch |
+| `#E3CF9A` | `--code-colLtYellow` | Dwarf's eyes |
+| `#E8826A` | `--damage` | Eyes in the forest |
+| `#E9D27C` | | The moon, elf's circlet, troll's eyes |
+| `#ECE4D4` | `--text` | Stars, troll's tusks |
 
 ## Accessibility (approved)
 
