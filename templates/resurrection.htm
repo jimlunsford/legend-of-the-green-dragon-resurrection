@@ -22,9 +22,7 @@
 </header>
 <div class="rz-frame">
  <div class="rz-columns">
-  <nav class="rz-nav" aria-label="Navigation">
-   <div class="rz-card rz-nav-panel">{navad}{nav}</div>
-  </nav>
+  {navstart}{navad}{nav}{navend}
   <main class="rz-main" id="rz-content">
    <h1 class="rz-title">{title}</h1>
    <div class="rz-card rz-content">{scene}{verticalad}{bodyad}
@@ -85,7 +83,9 @@
 <!--!statend--></section></div>
 <!--!navhead--><h2 class="rz-navhead">{title}</h2>
 <!--!navhelp--><div class="rz-navhelp">{text}</div>
-<!--!navitem--><a href="{link}" {accesskey} class="rz-navitem nav" {popup}>{text}</a>
+<!--!navitem--><a href="{link}" {accesskey} class="rz-navitem nav" {popup}><span class="rz-key" aria-hidden="true">{key}</span><span class="rz-navlabel">{text}</span></a>
+<!--!navstart--><nav class="rz-nav" aria-label="Navigation"><div class="rz-card rz-nav-panel">
+<!--!navend--></div></nav>
 <!--!petitioncount--><div class="rz-petitioncount">{petitioncount}</div>
 <!--!scene--><div class="rz-scene"><img class="rz-scene-img" src="{src}" alt="{alt}" width="{width}" height="{height}"></div>
 <!--!portrait--><div class="rz-card rz-portrait"><img class="rz-portrait-img" src="{src}" alt="{alt}" width="{width}" height="{height}"><div class="rz-portrait-text"><span class="rz-portrait-name">{name}</span><span class="rz-portrait-race">{race}</span></div></div>

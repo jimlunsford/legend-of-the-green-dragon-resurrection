@@ -22,6 +22,10 @@ use Resurrection\Configuration\LegacyConfig;
  * phone header; no scene and no portrait in the mail popup, no portrait signed out. And the home page's newest-resident
  * line: absent with no newest player stored (1.1.2's behavior), the player's name with one.
  *
+ * Phase 5 task 6 (docs/PHASE5-TASK6-NAVIGATION-20261030.md) adds the navigation: on the home page and the village each
+ * nav's key badge equals its accesskey and aria-keyshortcuts, the page's key map has one entry per key going where the
+ * link goes, and no inline key script is left; a forest fight, which has no nav to show, renders without the nav column.
+ *
  * The test does not depend on the order it runs in: an installed database is used as it is; an empty one is installed
  * here with scripts/install.php --modules=none and emptied again afterwards. The player it creates, its mail, the MoTD
  * item and the clock settings it changes are removed or restored.
@@ -104,6 +108,7 @@ final class TemplateRenderTest extends TestCase
             $this->assertScene($home, 'village', $villagename);
             self::assertStringNotContainsString('rz-portrait', $home);
             self::assertStringNotContainsString('newest resident', $home);
+            $this->assertNavs($home, 'home.php');
 
             // A signed-in player in the village: the account the game creates, signed in through the session the
             // forced-navigation check reads (do_forced_nav()).
@@ -133,6 +138,7 @@ final class TemplateRenderTest extends TestCase
             $this->assertScene($village, 'village', $villagename);
             $name = $this->php($tree, 'echo preg_replace("/`./", "", db_query("SELECT name FROM accounts WHERE acctid=?", true, [' . $player . '])[0]["name"]);');
             $this->assertPortrait($village, 'unknown', 'Horrible Gelatinous Blob', $name);
+            $this->assertNavs($village, 'village.php');
 
             // Unread and read mail: the badge shows the unread count, the label the full counts, as the table holds them.
             $this->php($tree, 'foreach ([0, 0, 1] as $seen) db_query("INSERT INTO mail (msgfrom, msgto, subject, body, sent, seen) VALUES (0, ?, ?, ?, ?, ?)", true, [' . $player . ', "Render test", "Render test body", date("Y-m-d H:i:s"), $seen]);');
@@ -162,6 +168,11 @@ final class TemplateRenderTest extends TestCase
             $this->assertCleanPage($fight, 'forest.php?op=fight');
             self::assertStringContainsString('Scene Test Target', $fight);
             $this->assertScene($fight, 'forest', 'The Forest');
+            // No nav to show: no nav column, no empty card, no key map; the content takes the space.
+            foreach (['<nav', 'rz-nav-panel', 'rz-navitem', 'rz-keys', 'assets/ui/keys.js'] as $absent) {
+                self::assertStringNotContainsString($absent, $fight, $absent);
+            }
+            self::assertStringContainsString('<div class="rz-columns">' . "\n  \n" . '  <main class="rz-main" id="rz-content">', $fight);
             $this->assertPortrait($fight, 'dwarf', 'Dwarf', $name);
 
             $mail = $this->render($tree, $work, 'mail.php', $session);
@@ -229,6 +240,39 @@ final class TemplateRenderTest extends TestCase
         self::assertSame(1, substr_count($page, 'Phoenix 2:33 LLC'), $script);
         self::assertGreaterThan(strpos($page, self::COPYRIGHT), strpos($page, self::ATTRIBUTION), $script);
         self::assertStringEndsWith("</html>\n", $page, $script);
+    }
+
+    /**
+     * The nav column and its hotkeys: the column once; each nav's badge, accesskey and aria-keyshortcuts the same key
+     * (none of them for a nav without a key); the key map, one entry per key, going where the link goes; and no inline
+     * key script.
+     */
+    private function assertNavs(string $page, string $script): void
+    {
+        self::assertSame(1, substr_count($page, '<nav class="rz-nav" aria-label="Navigation"><div class="rz-card rz-nav-panel">'), $script);
+        self::assertGreaterThan(0, preg_match_all('#<a href="([^"]*)"([^>]*) class="rz-navitem nav" [^>]*><span class="rz-key" aria-hidden="true">([^<]*)</span><span class="rz-navlabel">#', $page, $links, PREG_SET_ORDER), $script);
+        self::assertSame(substr_count($page, 'class="rz-navitem nav"'), count($links), $script);
+        $keyed = [];
+        foreach ($links as [, $href, $attributes, $badge]) {
+            preg_match('/ accesskey="([^"]*)"/', $attributes, $key);
+            preg_match('/ aria-keyshortcuts="([^"]*)"/', $attributes, $shortcut);
+            self::assertSame($key[1] ?? '', $badge, $href);
+            self::assertSame($key[1] ?? '', $shortcut[1] ?? '', $href);
+            if ($badge !== '') { $keyed[strtoupper(html_entity_decode($badge, ENT_QUOTES))] = html_entity_decode($href, ENT_QUOTES); }
+        }
+        self::assertNotSame([], $keyed, $script);
+        self::assertSame(1, preg_match('#<script type="application/json" id="rz-keys">([^<]*)</script>\n<script src="assets/ui/keys.js" defer></script>#', $page, $json), $script);
+        $map = json_decode($json[1], true);
+        self::assertIsArray($map);
+        self::assertSame(count($keyed), count($map), $script);
+        foreach ($map as $entry) {
+            self::assertArrayHasKey($entry[0], $keyed, $script);
+            self::assertSame($keyed[$entry[0]], $entry[2], $entry[0]);
+            self::assertContains($entry[1], ['go', 'open', 'popup'], $entry[0]);
+        }
+        foreach (['onkeypress', 'keyevent', "class='navhi'"] as $absent) {
+            self::assertStringNotContainsString($absent, $page, $script . ': ' . $absent);
+        }
     }
 
     /** The scene banner: first in the content card, the scene's file with the place's name as its alt text, once. */

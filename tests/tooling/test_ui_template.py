@@ -22,7 +22,10 @@ TEMPLATE = ROOT / 'templates' / 'resurrection.htm'
 PART_KEYS = {
     'statstart': set(), 'statend': set(),
     'stathead': {'title'}, 'statrow': {'title', 'value'}, 'statbuff': {'title', 'value'},
-    'navhead': {'title'}, 'navhelp': {'text'}, 'navitem': {'text', 'link', 'accesskey', 'popup'},
+    'navhead': {'title'}, 'navhelp': {'text'},
+    # The nav (Phase 5 task 6): private_addnav() passes {key} only to a navitem part that has it (the key badge); the
+    # nav column's wrapping parts, resurrection_nav_column() in lib/pageparts.php, take no keys.
+    'navitem': {'text', 'link', 'accesskey', 'popup', 'key'}, 'navstart': set(), 'navend': set(),
     'petitioncount': {'petitioncount'}, 'login': {'username', 'password', 'button'}, 'loginfull': set(),
     'adwrapper': {'content'},
     # The art (Phase 5 task 5): resurrection_scene_html() and resurrection_portrait_html() in lib/pageparts.php.
@@ -31,7 +34,7 @@ PART_KEYS = {
 # The tags page_header(), page_footer(), popup_header() and popup_footer() fill in the frame parts, and the four ad
 # slots modules fill through the footer hooks (1.1.2's {headerad}, {navad}, {verticalad}, {bodyad}).
 FRAME_TAGS = {'title', 'headscript', 'script', 'nav', 'stats', 'petition', 'petitiondisplay', 'motd', 'mail', 'paypal',
-              'source', 'version', 'pagegen', 'copyright', 'credits', 'newday', 'scene', 'portrait'}
+              'source', 'version', 'pagegen', 'copyright', 'credits', 'newday', 'scene', 'portrait', 'navstart', 'navend'}
 AD_SLOTS = {'headerad', 'navad', 'verticalad', 'bodyad'}
 # page_footer() fills these in the footer part only; popup_footer() fills only {copyright}, in popupfoot.
 FOOTER_ONLY = {'copyright', 'version', 'pagegen', 'credits', 'newday'}
@@ -90,6 +93,16 @@ def xor_tag(common):
         literal = re.search(r'\$' + name + r'\s*=\s*"([^"]*)";', common).group(1)
         return bytes(int(h, 16) for h in re.findall(r'\\x([0-9a-fA-F]{1,2})', literal))
     return bytes(a ^ b for a, b in zip(bytes_of('y2'), bytes_of('z2'))).decode()
+
+
+def contrast(a, b):
+    """The WCAG 2.x contrast ratio of two #RRGGBB colors."""
+    def luminance(color):
+        channels = [int(color[i:i + 2], 16) / 255 for i in (1, 3, 5)]
+        r, g, b = (c / 12.92 if c <= 0.03928 else ((c + 0.055) / 1.055) ** 2.4 for c in channels)
+        return 0.2126 * r + 0.7152 * g + 0.0722 * b
+    high, low = sorted((luminance(a), luminance(b)), reverse=True)
+    return (high + 0.05) / (low + 0.05)
 
 
 def tags(text):
@@ -188,6 +201,70 @@ class TemplateTests(unittest.TestCase):
         self.assertIn('<div class="rz-scene">', self.parts['scene'])
         self.assertIn('<span class="rz-portrait-name">{name}</span><span class="rz-portrait-race">{race}</span>', self.parts['portrait'])
 
+    def test_the_nav_and_its_key_script(self):
+        # Phase 5 task 6: the nav column is wrapped in the navstart and navend parts, which page_footer() leaves out
+        # when the page has no nav to show; each item is the key badge, hidden from assistive technology, then the label.
+        header = self.parts['header']
+        self.assertIn('<div class="rz-columns">\n  {navstart}{navad}{nav}{navend}\n  <main class="rz-main"', header)
+        self.assertNotIn('<nav', header)
+        self.assertEqual('<nav class="rz-nav" aria-label="Navigation"><div class="rz-card rz-nav-panel">\n', self.parts['navstart'])
+        self.assertEqual('</div></nav>\n', self.parts['navend'])
+        self.assertEqual('<a href="{link}" {accesskey} class="rz-navitem nav" {popup}><span class="rz-key" aria-hidden="true">{key}</span>'
+                         '<span class="rz-navlabel">{text}</span></a>\n', self.parts['navitem'])
+        # No inline script in the template or from the code that fills {script}: the key map is data, the script static.
+        self.assertNotIn('<script', self.text)
+        pageparts = (ROOT / 'lib' / 'pageparts.php').read_text(errors='replace')
+        output = (ROOT / 'lib' / 'output.php').read_text(errors='replace')
+        for inline in ('onkeypress', 'keyevent', '$quickkeys[$key]="'):
+            self.assertNotIn(inline, pageparts, inline)
+            self.assertNotIn(inline, output, inline)
+        self.assertIn('<script type=\\"application/json\\" id=\\"rz-keys\\">', pageparts)
+        self.assertIn('<script src=\\"assets/ui/keys.js\\" defer></script>', pageparts)
+        keys = (ROOT / 'assets' / 'ui' / 'keys.js').read_text()
+        self.assertTrue(keys.isascii())
+        self.assertIn("document.getElementById('rz-keys')", keys)
+        self.assertIn("document.addEventListener('keypress'", keys)
+        # 1.1.2's rule: no key while typing in an input or a textarea, or with Alt or Ctrl held.
+        self.assertIn("if (name === 'INPUT' || name === 'TEXTAREA' || e.altKey || e.ctrlKey) { return; }", keys)
+        for action in ("'go'", "'open'", "'popup'"):
+            self.assertIn(action, keys)
+        for unsafe in ('eval(', 'innerHTML', 'document.write', 'new Function', 'http:', 'https:', 'import '):
+            self.assertNotIn(unsafe, keys, unsafe)
+
+    def test_the_nav_row_and_badge_styles(self):
+        # Phase 5 task 6: 44px rows; hover and focus darken the row, so the badge outline keeps 3:1 or more; the badge
+        # sits on the nav's own background, never --raised.
+        css = (ROOT / 'assets' / 'ui' / 'resurrection.css').read_text()
+        tokens = dict(re.findall(r'(--[a-z-]+):\s*(#[0-9A-Fa-f]{6});', (ROOT / 'assets' / 'ui' / 'tokens.css').read_text()))
+
+        def rule(selector):
+            found = re.search(r'(?m)^' + re.escape(selector) + r'\s*\{([^}]*)\}', css)
+            self.assertIsNotNone(found, selector)
+            return found.group(1)
+
+        row = rule('.rz-navitem')
+        self.assertIn('min-height: var(--touch-target);', row)
+        self.assertIn('width: 100%;', row)
+        self.assertIn('border-radius: var(--radius-control);', row)
+        fill = re.search(r'background: var\((--[a-z-]+)\)', rule('.rz-navitem:hover, .rz-navitem:focus-visible')).group(1)
+        badge = rule('.rz-key')
+        for value in ('width: var(--key-badge-size);', 'height: var(--key-badge-size);', 'border: 1px solid var(--input-border);',
+                      'border-radius: var(--radius-badge);', 'background: transparent;', 'color: var(--accent);',
+                      'font-family: var(--font-ui);', 'font-weight: var(--weight-ui-bold);', 'font-size: var(--size-small);'):
+            self.assertIn(value, badge)
+        self.assertNotIn('--raised', badge)
+        self.assertNotIn('--raised', rule('.rz-navitem:hover, .rz-navitem:focus-visible'))
+        self.assertIn('border-color: transparent;', rule('.rz-key:empty'))
+        # The badge outline against every fill it sits on: the nav card and the hovered or focused row.
+        self.assertEqual('--ground', fill)
+        for behind, expected in (('--panel', 3.04), ('--ground', 3.26)):
+            ratio = contrast(tokens['--input-border'], tokens[behind])
+            self.assertGreaterEqual(ratio, 3.0, behind)
+            self.assertEqual(expected, round(ratio, 2), behind)
+        # The key and the label stay readable on the row fill.
+        self.assertGreaterEqual(contrast(tokens['--accent'], tokens[fill]), 4.5)
+        self.assertGreaterEqual(contrast(tokens['--text'], tokens[fill]), 4.5)
+
     def test_page_and_popup_heads(self):
         for part in ('header', 'popuphead'):
             head = self.parts[part]
@@ -240,6 +317,10 @@ class TemplatePartsReaderTests(unittest.TestCase):
 
     def test_the_xor_tag_is_copyright(self):
         self.assertEqual('copyright', xor_tag((ROOT / 'common.php').read_text()))
+
+    def test_contrast(self):
+        self.assertEqual(21.0, round(contrast('#FFFFFF', '#000000'), 2))
+        self.assertEqual(13.99, round(contrast('#ECE4D4', '#1B1814'), 2))
 
     def test_tags_match_the_clean_up(self):
         self.assertEqual(['a', 'b'], tags('{a} { not a tag } {b}\n{\nno}'))

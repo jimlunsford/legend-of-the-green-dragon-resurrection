@@ -72,9 +72,20 @@ function page_header(){
  * @return string
  */
 function popup($page,$size="550x300"){
+	list($name, $features) = popup_window($page, $size);
+	return "window.open('$page','$name','$features').focus()";
+}
+
+/**
+ * A popup's window name and features, as popup() opens it: the page with everything but letters and digits removed,
+ * and its size. The key map (resurrection_nav_keys()) carries them as data for assets/ui/keys.js (Phase 5 task 6).
+ *
+ * @return array{0: string, 1: string}
+ */
+function popup_window($page,$size="550x300"){
 	//$s = split("x",$size);
 	$s = explode("x",$size);
-  return "window.open('$page','".preg_replace("([^[:alnum:]])","",$page)."','scrollbars=yes,resizable=yes,width={$s[0]},height={$s[1]}').focus()";
+	return array(preg_replace("([^[:alnum:]])","",$page), "scrollbars=yes,resizable=yes,width={$s[0]},height={$s[1]}");
 }
 
 /**
@@ -162,39 +173,9 @@ function page_footer($saveuser=true){
 
 		unset($nestedtags[$key]);
 	}
-	//output keypress script
-	$script.="<script language='JavaScript'>
-	<!--
-	document.onkeypress=keyevent;
-	function keyevent(e){
-		var c;
-		var target;
-		var altKey;
-		var ctrlKey;
-		if (window.event != null) {
-			c=String.fromCharCode(window.event.keyCode).toUpperCase();
-			altKey=window.event.altKey;
-			ctrlKey=window.event.ctrlKey;
-		}else{
-			c=String.fromCharCode(e.charCode).toUpperCase();
-			altKey=e.altKey;
-			ctrlKey=e.ctrlKey;
-		}
-		if (window.event != null)
-			target=window.event.srcElement;
-		else
-			target=e.originalTarget;
-		if (target.nodeName.toUpperCase()=='INPUT' || target.nodeName.toUpperCase()=='TEXTAREA' || altKey || ctrlKey){
-		}else{";
-	reset($quickkeys);
-	while (list($key,$val)=resurrection_array_next($quickkeys)){
-		$script.="\n			if (c == '".strtoupper($key)."') { $val; return false; }";
-	}
-	$script.="
-		}
-	}
-	//-->
-	</script>";
+	// The page's hotkeys (Phase 5 task 6): 1.1.2 wrote an inline key handler script here; the page now carries
+	// its key map as data and loads the static assets/ui/keys.js, which does what that script did.
+	$script.=resurrection_nav_script();
 
 	// 1.1.2's PayPal buttons and LoGDnet registration are gone (payments and LoGDnet are disabled). The skins
 	// still carry {paypal}, so it is emptied.
@@ -203,6 +184,11 @@ function page_footer($saveuser=true){
 
 	//output the nav
 	$footer = str_replace("{".($z)."}",$$z,$footer);
+	// The nav column (Phase 5 task 6): a template with navstart and navend parts wraps the navs in them, and leaves
+	// both out when the page has no nav to show (a forest fight), so the content takes the column's space.
+	$navcolumn = resurrection_nav_column($builtnavs, isset($replacementbits['navad']) ? join("", $replacementbits['navad']) : "");
+	$header=str_replace(array("{navstart}","{navend}"),$navcolumn,$header);
+	$footer=str_replace(array("{navstart}","{navend}"),$navcolumn,$footer);
 	$header=str_replace("{nav}",$builtnavs,$header);
 	$footer=str_replace("{nav}",$builtnavs,$footer);
 	//output the motd
@@ -906,5 +892,49 @@ function resurrection_portrait_html(){
 		"name"=>htmlspecialchars(trim(full_sanitize((string)($session['user']['name'] ?? ''))), ENT_QUOTES|ENT_SUBSTITUTE, "UTF-8"),
 		"race"=>htmlspecialchars($racename, ENT_QUOTES|ENT_SUBSTITUTE, "UTF-8"),
 	));
+}
+
+/**
+ * The page's hotkeys as data, in the order the navs were added: [key, "go", url] follows the link,
+ * [key, "open", url] opens it in a new window, [key, "popup", url, name, features] opens it as popup() does. The key is
+ * uppercase, as 1.1.2's script compared it; the URL is the link's own, without HTML escaping (Phase 5 task 6).
+ *
+ * @return list<list<string>>
+ */
+function resurrection_nav_keys(){
+	global $quickkeys;
+	$keys = array();
+	foreach ($quickkeys as $key => $action) {
+		if (!is_array($action)) continue;
+		$keys[] = array_merge(array(strtoupper((string)$key)), array_map('strval', $action));
+	}
+	return $keys;
+}
+
+/**
+ * The {script} the page carries for its hotkeys: the key map as JSON data and the static key script. The map is a
+ * list of lists and any brace in a URL is written as \u007b or \u007d, so page_footer()'s clean-up of unused {tags} finds
+ * nothing to remove; the JSON escapes <, >, & and quotes, so nothing in it can end the element (Phase 5 task 6).
+ */
+function resurrection_nav_script(){
+	$keys = resurrection_nav_keys();
+	if (count($keys) == 0) return "";
+	$json = json_encode($keys, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_INVALID_UTF8_SUBSTITUTE);
+	$json = str_replace(array("{", "}"), array("\\u007b", "\\u007d"), $json);
+	return "<script type=\"application/json\" id=\"rz-keys\">".$json."</script>\n<script src=\"assets/ui/keys.js\" defer></script>";
+}
+
+/**
+ * The navstart and navend parts that wrap the nav column, or two empty strings when the page shows no nav: no item,
+ * heading or help text in its built navs, and nothing in the {navad} slot. A template without the parts gets two
+ * empty strings, and keeps its own nav markup (Phase 5 task 6).
+ *
+ * @return array{0: string, 1: string}
+ */
+function resurrection_nav_column($builtnavs, $navad = ""){
+	global $template;
+	if (!isset($template['navstart']) || !isset($template['navend'])) return array("", "");
+	if (trim($builtnavs) == "" && trim($navad) == "") return array("", "");
+	return array($template['navstart'], $template['navend']);
 }
 ?>

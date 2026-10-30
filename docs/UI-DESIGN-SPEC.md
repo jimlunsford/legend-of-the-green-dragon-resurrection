@@ -21,7 +21,7 @@ here when it does. Changing an approved value needs Jim.
 | `--ground` | `#12100D` | Page background | no |
 | `--header` | `#17140F` | Header bar, footer, phone tab bar | no |
 | `--panel` | `#1B1814` | Nav, content and character panels. The reference color for text contrast | no |
-| `--raised` | `#24201A` | Stat tiles, the fill of inputs and buttons, hovered rows | no |
+| `--raised` | `#24201A` | Stat tiles, the fill of inputs and buttons | no |
 | `--track` | `#2C2720` | Empty part of a bar (HP, XP) | no |
 | `--border` | `#3A3329` | Panel and row borders (decorative) | no |
 | `--input-border` | `#6E6452` | Input, button and key-badge outlines | no |
@@ -192,7 +192,7 @@ container at most `--width-container` wide, centered, with `--space-side` paddin
 and `--space-gutter` between columns. The content column holds the page title (Cinzel 700, `--size-title`, tracking
 `--tracking-title`) and below it the page in a `--panel` card (1px `--border`, `--radius-panel`, padding
 `--space-card-y` by `--space-card-x`, `--space-card-phone` on a phone), set as story text (Alegreya `--size-body`,
-`--leading-body`). Nav rows are 44px high with `--radius-control`, `--text`, and `--raised` on hover. The character
+`--leading-body`). Nav rows are 44px high with `--radius-control` and `--text` (see Components, "Navigation"). The character
 panel's sections sit in `--panel` cards with `--space-panel` padding. Links are `--accent`, hover `--accent-hover`.
 
 **Desktop**, three columns:
@@ -284,9 +284,26 @@ query, so the template writes the two breakpoints as literals equal to these tok
   (`.rz-statvalue`, `.rz-statbuff`), reads that wrapper as `--text`. The bonus (`` `@ ``) and penalty (`` `$ ``) codes
   `charstats()` uses, and any other code in a value, keep their own colors. No PHP change.
 
-- **Nav groups.** Each group has an uppercase Cinzel heading (`addnavheader()`). Items are full-width rows.
-- **Key badges.** Every nav link that has a hotkey shows it as a key badge: a `--key-badge-size` square, `--raised`,
-  `--radius-badge`, with an `--input-border` outline and the key in `--accent`, Alegreya Sans 700, 13px. The keyboard shortcut keeps working.
+- **Navigation** (Phase 5 task 6). The nav column is a `--panel` card (`navstart` and `navend` parts around `{navad}{nav}`)
+  holding the nav groups. Each group has an uppercase Cinzel heading (`addnavheader()`, `--muted`, `--size-label`,
+  `--tracking-nav-heading`); help text (`addnav("text", "")`) is `--muted` at `--size-small`.
+  - **Rows.** Each nav is a real link, a row at least `--touch-target` (44px) tall and the full width of the card,
+    `--radius-control` (8px), `--text`: the key badge, a 10px gap, then the label, which wraps. Hover and keyboard
+    focus darken the row to `--ground`; focus also keeps the focus ring. Never `--raised`: the badge outline is
+    3.26:1 against `--ground` and 3.04:1 against `--panel`, but would be 2.78:1 against `--raised`. The key on the
+    darkened row is 8.74:1 and the label 15.03:1.
+  - **Key badge.** A `--key-badge-size` (24px) square, `--radius-badge` (5px), 1px `--input-border` outline, no fill of
+    its own (the nav's background shows through), the key in `--accent`, Alegreya Sans 700, `--size-small` (13px),
+    shown uppercase. The badge is `aria-hidden`; the link carries `accesskey` and `aria-keyshortcuts` with the same key,
+    so its accessible name is the label alone. A nav without a key keeps an empty badge space with no outline, so the
+    labels line up. The label shows plain: no in-label highlight and no "(X) " prefix. `private_addnav()` decides
+    the key exactly as 1.1.2 did and passes it to the `navitem` part as `{key}`; a skin whose `navitem` part has no
+    `{key}` gets 1.1.2's in-label marking.
+  - **Hotkeys.** The page carries its key map as JSON data (`<script type="application/json" id="rz-keys">`) and loads
+    the static `assets/ui/keys.js`: a key goes where its nav goes (a popup nav opens its popup window), except while
+    typing in an input or a textarea, or with Alt or Ctrl held. No inline script. Every nav works without JavaScript.
+  - **No nav, no column.** A page with no nav item, heading or help text, and nothing in `{navad}` (a forest fight,
+    whose actions are forms), has no nav column at all; the content takes its space. No empty card.
 - **One primary action per screen**, gold fill (`--accent`, text `--ground`, hover `--accent-hover`). Every other
   button is secondary: `--raised` fill, `--input-border` outline, `--text` label.
 - **HP and XP bars.** Fully rounded (`--radius-bar`), `--bar-height` in the character panel and `--bar-height-fight` in

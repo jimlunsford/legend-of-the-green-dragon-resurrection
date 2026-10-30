@@ -685,6 +685,27 @@ function buildnavs(){
 
 $accesskeys=array();
 $quickkeys=array();
+
+/**
+ * A nav label as HTML for the key badge layout (Phase 5 task 6): appoencode() on the label alone, every tag it opens
+ * closed at its end, and the page's open-tag state left as it was. 1.1.2 let a color a label left open run into the
+ * next label, which then began with a stray </span>; inside the label's own element that would close the element.
+ *
+ * @param string $text
+ * @param bool $priv
+ * @return string
+ */
+function resurrection_nav_label($text, $priv=false){
+	global $nestedtags;
+	$outer = $nestedtags;
+	$nestedtags = array();
+	$html = appoencode($text, $priv);
+	foreach (array('h'=>'</em>', 'i'=>'</i>', 'b'=>'</b>', 'font'=>'</span>', 'div'=>'</div>', '<'=>'</div>', '>'=>'</div>') as $tag=>$close) {
+		if (!empty($nestedtags[$tag])) $html .= $close;
+	}
+	$nestedtags = $outer;
+	return $html;
+}
 /**
  * Private functions (Undocumented)
  *
@@ -697,7 +718,7 @@ $quickkeys=array();
  */
 function private_addnav($text,$link=false,$priv=false,$pop=false,$popsize="500x300"){
 	//don't call this directly please.  I'll break your thumbs if you do.
-	global $nav,$session,$accesskeys,$REQUEST_URI,$quickkeys,$navschema,$notranslate;
+	global $nav,$session,$accesskeys,$REQUEST_URI,$quickkeys,$navschema,$notranslate,$template;
 
 	if (is_blocked($link)) return false;
 
@@ -750,6 +771,11 @@ function private_addnav($text,$link=false,$priv=false,$pop=false,$popsize="500x3
 			}
 
 			$extra.="-".date("His");
+			// A template whose navitem part has {key} shows the hotkey as a key badge before a plain label (Phase 5
+			// task 6): no "(X) " prefix and no `H marking in the label. The key is decided below exactly as 1.1.2
+			// decides it, on the same text; a skin without {key} gets 1.1.2's marking.
+			$badge = isset($template['navitem']) && strpos($template['navitem'], "{key}") !== false;
+			$label = false;
 			//hotkey for the link.
 			$key="";
 			if ($text[1]=="?") {
@@ -785,6 +811,8 @@ function private_addnav($text,$link=false,$priv=false,$pop=false,$popsize="500x3
 					if ($found==false) {
 						//the hotkey for this link wasn't actually in the
 						//text, prepend it in parens.
+						// The badge shows the key, so the label is the text without the prefix (or its "__" place).
+						$label = str_replace("__", "", $text);
 						if (strpos($text, "__") !== false) {
 							$text=str_replace("__", "(".$key.") ", $text);
 						}else{
@@ -824,32 +852,45 @@ function private_addnav($text,$link=false,$priv=false,$pop=false,$popsize="500x3
 				$keyrep="";
 			}
 
+			if ($badge && $label === false) $label = $text;
 			if ($key=="" || $key==" "){
 			}else{
-				$pattern1 = "/^" . preg_quote($key, "/") . "/";
-				$pattern2 = "/([^`])" . preg_quote($key, "/") . "/";
-				$rep1 = "`H$key`H";
-				$rep2 = "\$1`H$key`H";
-				$text = preg_replace($pattern1, $rep1, $text, 1);
-				if (strpos($text, "`H") === false) {
-					$text = preg_replace($pattern2, $rep2, $text, 1);
+				if (!$badge) {
+					$pattern1 = "/^" . preg_quote($key, "/") . "/";
+					$pattern2 = "/([^`])" . preg_quote($key, "/") . "/";
+					$rep1 = "`H$key`H";
+					$rep2 = "\$1`H$key`H";
+					$text = preg_replace($pattern1, $rep1, $text, 1);
+					if (strpos($text, "`H") === false) {
+						$text = preg_replace($pattern2, $rep2, $text, 1);
+					}
 				}
+				// The page's key map (resurrection_nav_keys() in lib/pageparts.php, read by assets/ui/keys.js): what
+				// 1.1.2's inline key script did for this key, as data. 1.1.2 stored the script line itself.
 				if ($pop){
 					if ($popsize==""){
-						$quickkeys[$key]="window.open('$link')";
+						$quickkeys[$key]=array("open", $link);
 					}else{
-						$quickkeys[$key]=popup($link,$popsize);
+						$quickkeys[$key]=array_merge(array("popup", $link), popup_window($link,$popsize));
 					}
 				}else{
-					$quickkeys[$key]="window.location='$link$extra'";
+					$quickkeys[$key]=array("go", $link.$extra);
 				}
 			}
-			$n= templatereplace("navitem",array(
-				"text"=>appoencode($text,$priv),
+			$parts = array(
+				"text"=>$badge ? resurrection_nav_label($label,$priv) : appoencode($text,$priv),
 				"link"=>HTMLEntities($link.($pop!=true?$extra:""), ENT_COMPAT, getsetting("charset", "ISO-8859-1")),
 				"accesskey"=>$keyrep,
 				"popup"=>($pop==true ? "target='_blank'".($popsize>""?" onClick=\"".popup($link,$popsize)."; return false;\"":"") : "")
-				));
+				);
+			if ($badge) {
+				// The badge (aria-hidden in the part) shows the key; the link's name is the label alone, and
+				// aria-keyshortcuts names the key beside accesskey.
+				$shown = ($key=="" || $key==" ") ? "" : htmlspecialchars($key, ENT_QUOTES, getsetting("charset", "ISO-8859-1"));
+				$parts["key"] = $shown;
+				$parts["accesskey"] = $shown=="" ? "" : " accesskey=\"$shown\" aria-keyshortcuts=\"$shown\" ";
+			}
+			$n= templatereplace("navitem",$parts);
 			$n = str_replace("<a ",tlbutton_pop()."<a ",$n);
 			$thisnav.=$n;
 		}

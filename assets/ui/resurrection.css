@@ -178,19 +178,48 @@ pre { max-width: 100%; overflow-x: auto; }
 
 .rz-navhelp { padding: 4px 12px; color: var(--muted); font-size: var(--size-small); }
 
+/*
+  A nav row (Phase 5 task 6): 44px or taller, the full width of the nav card, the key badge then the label. Hover and
+  keyboard focus darken the row to --ground, never --raised: the badge outline keeps 3.26:1 there (3.04:1 on the
+  panel; it would be 2.78:1 on --raised). Focus also keeps the focus ring.
+*/
 .rz-navitem {
-  display: block;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
   min-height: var(--touch-target);
-  padding: 11px 12px;
+  padding: 6px 10px;
   border-radius: var(--radius-control);
   color: var(--text);
   text-decoration: none;
   line-height: 1.3;
-  overflow-wrap: anywhere;
 }
-.rz-navitem:hover { background: var(--raised); color: var(--text); }
+.rz-navitem:hover, .rz-navitem:focus-visible { background: var(--ground); color: var(--text); }
+.rz-navlabel { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
 
-/* The hotkey letter, marked by appoencode()'s `H code. Key badges replace it in task 6 (navigation). */
+/* The key badge: the nav's own background, an --input-border outline, the key in --accent. A row without a key keeps
+   the badge's space, so every label lines up. */
+.rz-key {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--key-badge-size);
+  height: var(--key-badge-size);
+  border: 1px solid var(--input-border);
+  border-radius: var(--radius-badge);
+  background: transparent;
+  color: var(--accent);
+  font-family: var(--font-ui);
+  font-weight: var(--weight-ui-bold);
+  font-size: var(--size-small);
+  line-height: 1;
+  text-transform: uppercase;
+}
+.rz-key:empty { border-color: transparent; }
+
+/* appoencode()'s `H code. The nav shows its hotkeys as badges; the code can still appear in other text. */
 .navhi { color: var(--accent); font-weight: var(--weight-ui-bold); text-decoration: underline; text-underline-offset: 3px; }
 
 /* Content */
