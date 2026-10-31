@@ -79,6 +79,9 @@ class OperatorPageTests(unittest.TestCase):
         self.assertEqual(1, body.count(COPYRIGHT), body[-3000:])
         self.assertEqual(1, body.count(LICENSE), body[-3000:])
         self.assertIn(f'Version: Resurrection {VERSION}, based on LoGD 1.1.2 Dragonprime Edition', body)
+        # No phone tab bar on an operator page (Phase 5 task 8): the page is not part of the game.
+        self.assertNotIn('rz-tabbar', body)
+        self.assertNotIn('assets/ui/tabs.js', body)
 
     def test_not_installed_page_shows_the_cli_instruction_and_footer(self):
         status, body = self.serve()

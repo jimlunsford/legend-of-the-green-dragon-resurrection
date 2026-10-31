@@ -30,11 +30,15 @@ PART_KEYS = {
     'adwrapper': {'content'},
     # The art (Phase 5 task 5): resurrection_scene_html() and resurrection_portrait_html() in lib/pageparts.php.
     'scene': {'src', 'alt', 'width', 'height'}, 'portrait': {'src', 'alt', 'width', 'height', 'name', 'race'},
+    # The phone (Phase 5 task 8): resurrection_phonehead_html() and resurrection_tabbar_html() in lib/pageparts.php.
+    'phonehead': {'portrait', 'name', 'subtitle', 'mail', 'bars'}, 'phoneportrait': {'src', 'alt', 'width', 'height'},
+    'phonebar': {'kind', 'label', 'value', 'percent'}, 'tabbar': {'tabs'}, 'tab': {'target', 'label'},
 }
 # The tags page_header(), page_footer(), popup_header() and popup_footer() fill in the frame parts, and the four ad
 # slots modules fill through the footer hooks (1.1.2's {headerad}, {navad}, {verticalad}, {bodyad}).
 FRAME_TAGS = {'title', 'headscript', 'script', 'nav', 'stats', 'petition', 'petitiondisplay', 'motd', 'mail', 'paypal',
-              'source', 'version', 'pagegen', 'copyright', 'credits', 'newday', 'scene', 'portrait', 'navstart', 'navend'}
+              'source', 'version', 'pagegen', 'copyright', 'credits', 'newday', 'scene', 'portrait', 'navstart', 'navend',
+              'phonehead', 'tabbar'}
 AD_SLOTS = {'headerad', 'navad', 'verticalad', 'bodyad'}
 # page_footer() fills these in the footer part only; popup_footer() fills only {copyright}, in popupfoot.
 FOOTER_ONLY = {'copyright', 'version', 'pagegen', 'credits', 'newday'}
@@ -105,6 +109,20 @@ def contrast(a, b):
     return (high + 0.05) / (low + 0.05)
 
 
+def media_block(css, width):
+    """The rules inside the stylesheet's one @media (max-width: <width>) block."""
+    marker = f'@media (max-width: {width}) {{'
+    if css.count(marker) != 1:
+        raise AssertionError(f'{marker} found {css.count(marker)} times')
+    start = css.index(marker) + len(marker)
+    depth = 1
+    for at in range(start, len(css)):
+        depth += {'{': 1, '}': -1}.get(css[at], 0)
+        if depth == 0:
+            return css[start:at]
+    raise AssertionError(f'{marker} is not closed')
+
+
 def tags(text):
     """The {tags} the clean-up in page_footer() and popup_footer() would remove: {[^} \\t\\n\\r]*}."""
     return re.findall(r'\{([^} \t\n\r]*)\}', text)
@@ -140,7 +158,8 @@ class TemplateTests(unittest.TestCase):
             expected = 1 if part in ('footer', 'popupfoot') else 0
             self.assertEqual(expected, self.parts[part].count('{copyright}'), part)
         for tag in FOOTER_ONLY:
-            self.assertEqual(1, self.parts['footer'].count('{' + tag + '}'), tag)
+            # {credits} twice since Phase 5 task 8: the footer's line and the phone's More section.
+            self.assertEqual(2 if tag == 'credits' else 1, self.parts['footer'].count('{' + tag + '}'), tag)
             self.assertNotIn('{' + tag + '}', self.parts['header'], tag)
         # The footer's Credits and Source links. Credits is {credits}: page_footer() writes the link only where about.php
         # is a nav the page allows (Phase 5 task 4), so the template has no fixed about.php link that could cause a bad nav.
@@ -210,7 +229,8 @@ class TemplateTests(unittest.TestCase):
         header = self.parts['header']
         self.assertIn('<div class="rz-columns">\n  {navstart}{navad}{nav}{navend}\n  <main class="rz-main"', header)
         self.assertNotIn('<nav', header)
-        self.assertEqual('<nav class="rz-nav" aria-label="Navigation"><div class="rz-card rz-nav-panel">\n', self.parts['navstart'])
+        # The nav column's id is the phone tab bar's Go target (Phase 5 task 8).
+        self.assertEqual('<nav class="rz-nav" id="rz-nav" aria-label="Navigation"><div class="rz-card rz-nav-panel">\n', self.parts['navstart'])
         self.assertEqual('</div></nav>\n', self.parts['navend'])
         self.assertEqual('<a href="{link}" {accesskey} class="rz-navitem nav" {popup}><span class="rz-key" aria-hidden="true">{key}</span>'
                          '<span class="rz-navlabel">{text}</span></a>\n', self.parts['navitem'])
@@ -267,6 +287,116 @@ class TemplateTests(unittest.TestCase):
         # The key and the label stay readable on the row fill.
         self.assertGreaterEqual(contrast(tokens['--accent'], tokens[fill]), 4.5)
         self.assertGreaterEqual(contrast(tokens['--text'], tokens[fill]), 4.5)
+
+    def test_the_phone_tab_bar(self):
+        # Phase 5 task 8: the tab bar is in the page footer only, after the footer, never in a popup; each tab an anchor on
+        # the page (forced navigation stays whole: no tab is a link to another page). The targets: the nav column, the
+        # character panel, the commentary's anchor and the More section, each id in the template or the code once.
+        footer = self.parts['footer']
+        self.assertEqual(1, self.text.count('{tabbar}'))
+        self.assertIn('</footer>\n{tabbar}\n</body>', footer)
+        self.assertEqual('<nav class="rz-tabbar" aria-label="Sections">{tabs}</nav>\n', self.parts['tabbar'])
+        self.assertEqual('<a class="rz-tab" href="#{target}">{label}</a>\n', self.parts['tab'])
+        self.assertEqual(['#{target}'], re.findall(r'href="([^"]*)"', self.parts['tabbar'] + self.parts['tab']))
+        pageparts = (ROOT / 'lib' / 'pageparts.php').read_text(errors='replace')
+        function = pageparts[pageparts.index('function resurrection_tabbar_html('):]
+        function = function[:function.index('\n}\n')]
+        self.assertEqual([('rz-nav', 'Go'), ('rz-character', 'Character'), ('rz-talk', 'Talk'), ('rz-more', 'More')],
+                         re.findall(r'\$tabs\["([a-z-]+)"\] = "([A-Za-z]+)";', function))
+        # Go only with the nav column, Character only signed in, Talk only once commentary rendered, More always.
+        self.assertIn('if ($navs) $tabs["rz-nav"] = "Go";', function)
+        self.assertIn('if (!empty($session[\'loggedin\']) && !empty($session[\'user\'][\'loggedin\'])) $tabs["rz-character"] = "Character";', function)
+        self.assertIn('if (!empty($resurrection_talk)) $tabs["rz-talk"] = "Talk";', function)
+        # Not on an operator page, nor in a template without the parts (the 1.1.2 skins).
+        self.assertIn('if (!isset($template[\'tabbar\']) || !isset($template[\'tab\'])) return "";', function)
+        self.assertIn('if (resurrection_page_kind() === \\Resurrection\\Ui\\Art::OPERATOR) return "";', function)
+        self.assertIn('$footer=str_replace("{tabbar}",resurrection_tabbar_html($navcolumn[0] !== ""),$footer);', pageparts)
+        self.assertEqual(1, self.parts['navstart'].count('id="rz-nav"'))
+        self.assertEqual(1, footer.count('<aside class="rz-character" id="rz-character"'))
+        self.assertEqual(1, footer.count('<section class="rz-more" id="rz-more" aria-label="More">'))
+        self.assertIn('return "<span class=\\"rz-talk\\" id=\\"rz-talk\\"></span>";', pageparts)
+        for target in ('rz-nav', 'rz-character', 'rz-more', 'rz-talk'):
+            self.assertEqual(0, sum(self.parts[part].count(f'id="{target}"') for part in ('header', 'popuphead', 'popupfoot')), target)
+        # Talk: the anchor is printed by viewcommentary() only, after its check that the commentary is not blocked.
+        calls = {}
+        for name, text in tracked_php().items():
+            for line in text.splitlines():
+                if 'resurrection_talk_anchor()' in line and not re.match(r'\s*(\*|//|/\*\*)', line) and 'function resurrection_talk_anchor()' not in line:
+                    calls.setdefault(name, []).append(line.strip())
+        self.assertEqual({'lib/commentary.php': ['rawoutput(resurrection_talk_anchor());']}, calls)
+        commentary = (ROOT / 'lib' / 'commentary.php').read_text(errors='replace')
+        view = commentary[commentary.index('function viewcommentary('):]
+        self.assertLess(view.index("blockcommentarea"), view.index('rawoutput(resurrection_talk_anchor());'))
+        # The More section: MoTD, Petition for Help, and Credits where allowed (the footer's {credits}, filled by the same
+        # rule), after the columns.
+        self.assertIn('<div class="rz-more-links">{motd}{petition}{credits}</div>', footer)
+        self.assertLess(footer.index('</aside>'), footer.index('<section class="rz-more"'))
+        self.assertLess(footer.index('<section class="rz-more"'), footer.index('<footer'))
+        # Popups: none of the phone's pieces.
+        for part in ('popuphead', 'popupfoot'):
+            for piece in ('{tabbar}', '{phonehead}', 'rz-more', 'rz-tab'):
+                self.assertNotIn(piece, self.parts[part], f'{part}: {piece}')
+        # The script that marks the current tab: static, ASCII, no unsafe calls.
+        self.assertIn('"<script src=\\"assets/ui/tabs.js\\" defer></script>"', function)
+        tabs = (ROOT / 'assets' / 'ui' / 'tabs.js').read_text()
+        self.assertTrue(tabs.isascii())
+        for unsafe in ('eval(', 'innerHTML', 'document.write', 'new Function', 'http:', 'https:', 'import ', 'location.'):
+            self.assertNotIn(unsafe, tabs, unsafe)
+
+    def test_the_phone_header(self):
+        # Phase 5 task 8: the compact character header is in the page header, signed in only; the stylesheet hides the
+        # header's wordmark row when it is there. Signed out the wordmark stays.
+        header = self.parts['header']
+        self.assertEqual(1, self.text.count('{phonehead}'))
+        self.assertIn('</div>\n {phonehead}\n</header>', header)
+        self.assertIn('<span class="rz-wordmark-title">Legend of the Green Dragon</span>', header)
+        head = self.parts['phonehead']
+        for piece in ('<p class="rz-phonehead-name">{name}</p>', '<p class="rz-phonehead-sub">{subtitle}</p>',
+                      '<div class="rz-phonehead-mail">{mail}</div>', '<div class="rz-phonehead-bars">{bars}</div>'):
+            self.assertIn(piece, head)
+        self.assertLess(head.index('{portrait}'), head.index('{name}'))
+        self.assertIn('<div class="rz-phonebar-fill" style="width: {percent}%"></div>', self.parts['phonebar'])
+        pageparts = (ROOT / 'lib' / 'pageparts.php').read_text(errors='replace')
+        self.assertIn('if (!isset($template[\'phonehead\']) || empty($session[\'user\'][\'loggedin\']) || empty($session[\'loggedin\'])) return "";', pageparts)
+
+    def test_the_phone_styles(self):
+        # Phase 5 task 8: the phone's pieces are hidden until the phone breakpoint; below 900px the content comes first,
+        # then the navs, then the character panel; below 600px the tab bar is fixed to the bottom with its 52px tabs, and
+        # the page is padded by the bar's height, its 1px border and the safe area, so the footer is never under it.
+        css = (ROOT / 'assets' / 'ui' / 'resurrection.css').read_text()
+        self.assertIn('\n.rz-phonehead, .rz-more, .rz-tabbar { display: none; }\n', css)
+        stack, phone = media_block(css, '900px'), media_block(css, '600px')
+        order = {name: int(value) for name, value in re.findall(r'\.rz-(main|nav|character) \{ order: (\d+); \}', stack)}
+        self.assertEqual({'main': 1, 'nav': 2, 'character': 3}, order)
+        outside = css.replace(stack, '').replace(phone, '')
+        for selector in ('.rz-tabbar {', '.rz-tab {', '.rz-phonehead {', '.rz-more {'):
+            self.assertNotIn('\n' + selector, outside, selector)
+            self.assertIn('\n  ' + selector, phone, selector)
+        bar = re.search(r'\n  \.rz-tabbar \{([^}]*)\}', phone).group(1)
+        for value in ('display: flex;', 'position: fixed;', 'bottom: 0;', 'padding-bottom: env(safe-area-inset-bottom);',
+                      'background: var(--header);', 'border-top: 1px solid var(--border);'):
+            self.assertIn(value, bar)
+        tab = re.search(r'\n  \.rz-tab \{([^}]*)\}', phone).group(1)
+        for value in ('flex: 1 1 0;', 'min-height: var(--tab-height);', 'font-weight: var(--weight-ui-bold);'):
+            self.assertIn(value, tab)
+        self.assertIn('.rz-tab:hover, .rz-tab-current { color: var(--accent); }', phone)
+        self.assertIn('.rz-page:has(.rz-tabbar) { padding-bottom: calc(var(--tab-height) + 1px + env(safe-area-inset-bottom)); }', phone)
+        self.assertIn('.rz-header:has(.rz-phonehead) .rz-header-inner { display: none; }', phone)
+        tile = re.search(r'\n  \.rz-navitem \{([^}]*)\}', phone).group(1)
+        for value in ('min-height: var(--nav-tile-height);', 'background: var(--panel);', 'border: 1px solid var(--border);',
+                      'border-radius: var(--radius-control);'):
+            self.assertIn(value, tile)
+        self.assertIn('.rz-navitem .rz-key { display: none; }', phone)
+        self.assertIn('.rz-content table { display: block; max-width: 100%; overflow-x: auto; }', phone)
+
+    def test_the_old_skins_have_no_phone_pieces(self):
+        # The 1.1.2 skins keep their markup: none has the parts or tags the phone's pieces come from.
+        skins = sorted(path for path in (ROOT / 'templates').glob('*.htm') if path.name != 'resurrection.htm')
+        self.assertEqual(18, len(skins))
+        for path in skins:
+            text = path.read_text(errors='replace')
+            for piece in ('phonehead', 'tabbar', '<!--!tab-->', 'rz-'):
+                self.assertNotIn(piece, text, f'{path.name}: {piece}')
 
     def test_page_and_popup_heads(self):
         for part in ('header', 'popuphead'):

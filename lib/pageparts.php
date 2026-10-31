@@ -245,6 +245,10 @@ function page_footer($saveuser=true){
 	$portrait = resurrection_portrait_html();
 	$footer=str_replace("{portrait}",$portrait,$footer);
 	$header=str_replace("{portrait}",$portrait,$header);
+	// The phone layout (Phase 5 task 8): the compact character header and the bottom tab bar, through the template's
+	// phonehead and tabbar parts; a template without them (the 1.1.2 skins) shows neither.
+	$header=str_replace("{phonehead}",resurrection_phonehead_html(),$header);
+	$footer=str_replace("{tabbar}",resurrection_tabbar_html($navcolumn[0] !== ""),$footer);
 	//do something -- I don't know what
 	$header=str_replace("{script}",$script,$header);
 	//output view PHP source link
@@ -1178,5 +1182,111 @@ function resurrection_charpanel_extras($standard, $section){
 		if (!isset($standard[$section]) || !array_key_exists($label, $standard[$section])) $extras[$label] = $value;
 	}
 	return $extras;
+}
+/**
+ * The compact character header a phone shows in place of the wordmark (Phase 5 task 8), through the template's
+ * phonehead part, or nothing (signed out, or a template without the part). The race portrait, the name on one line,
+ * "Level 7 Elf · 14 turns · 1,247 gold" (torments and favor when dead), the mail control, and two compact bars:
+ * hitpoints (soulpoints when dead) and experience, as the character panel reads them from the account.
+ */
+function resurrection_phonehead_html(){
+	global $template, $session;
+	require_once __DIR__ . '/experience.php';
+	require_once __DIR__ . '/sanitize.php';
+	require_once __DIR__ . '/../src/Ui/Art.php';
+	if (!isset($template['phonehead']) || empty($session['user']['loggedin']) || empty($session['loggedin'])) return "";
+	$u = $session['user'];
+	$alive = (bool)$u['alive'];
+	$plain = function ($text) { return htmlspecialchars(trim(full_sanitize((string)$text)), ENT_QUOTES|ENT_SUBSTITUTE, "UTF-8"); };
+	$count = function ($value) { return number_format((float)round((float)$value)); };
+	list($race, $racename) = resurrection_charpanel_race((string)($u['race'] ?? ''));
+	$portrait = "";
+	$art = \Resurrection\Ui\Art::portrait($race, trim(full_sanitize($racename)));
+	if ($art !== null && isset($template['phoneportrait'])) {
+		$portrait = templatereplace("phoneportrait", array(
+			"src"=>htmlspecialchars($art['src'], ENT_QUOTES, "UTF-8"),
+			"alt"=>htmlspecialchars($art['alt'], ENT_QUOTES|ENT_SUBSTITUTE, "UTF-8"),
+			"width"=>(string)$art['width'],
+			"height"=>(string)$art['height'],
+		));
+	}
+	$parts = array(sprintf(translate_inline("Level %s %s"), (int)$u['level'], $racename));
+	if ($alive) {
+		$parts[] = sprintf(translate_inline("%s turns"), $count($u['turns']));
+		$parts[] = sprintf(translate_inline("%s gold"), $count($u['gold']));
+	} else {
+		$parts[] = sprintf(translate_inline("%s torments"), $count($u['gravefights']));
+		$parts[] = sprintf(translate_inline("%s favor"), $count($u['deathpower']));
+	}
+	$subtitle = implode(" &middot; ", array_map($plain, $parts));
+
+	$num = function ($value) { return (string)round((float)$value, 1); };
+	if ($alive) {
+		$bars = array(array("health", translate_inline("HP"), $u['hitpoints'], $u['maxhitpoints']));
+	} else {
+		$bars = array(array("soul", translate_inline("Soul"), $u['soulpoints'], $u['level'] * 5 + 50));
+	}
+	if ((int)$u['level'] >= 15) $bars[] = array("experience", translate_inline("XP"), $u['experience'], null);
+	else $bars[] = array("experience", translate_inline("XP"), $u['experience'], exp_for_next_level((int)$u['level'], (int)$u['dragonkills']));
+	$barstr = "";
+	foreach ($bars as $bar) {
+		list($kind, $label, $current, $max) = $bar;
+		$barstr .= templatereplace("phonebar", array(
+			"kind"=>$kind,
+			"label"=>$plain($label),
+			// The level cap has no maximum: the experience alone over a full bar, as the panel shows it.
+			"value"=>$max === null ? $num($current) : $num($current)." / ".$num($max),
+			"percent"=>$max === null ? "100" : resurrection_charpanel_percent($current, $max),
+		));
+	}
+	return templatereplace("phonehead", array(
+		"portrait"=>$portrait,
+		"name"=>$plain($u['name']),
+		"subtitle"=>$subtitle,
+		"mail"=>maillink(),
+		"bars"=>$barstr,
+	));
+}
+
+/**
+ * The phone's bottom tab bar (Phase 5 task 8), through the template's tabbar and tab parts, or nothing: on operator
+ * pages, in a template without the parts, and on popups (their parts have no {tabbar}). Every tab is an anchor on this
+ * page, never a link to another page, so it can never break forced navigation: Go jumps to the page's navs (only when
+ * the page shows the nav column), Character to the character panel (signed in), Talk to the page's commentary (only
+ * when commentary was rendered: resurrection_talk_anchor()), More to the section with MoTD, Petition for Help and,
+ * where allowed, Credits.
+ *
+ * @param bool $navs whether the page shows its nav column
+ * @return string
+ */
+function resurrection_tabbar_html($navs){
+	global $template, $session, $resurrection_talk;
+	if (!isset($template['tabbar']) || !isset($template['tab'])) return "";
+	if (resurrection_page_kind() === \Resurrection\Ui\Art::OPERATOR) return "";
+	$tabs = array();
+	if ($navs) $tabs["rz-nav"] = "Go";
+	if (!empty($session['loggedin']) && !empty($session['user']['loggedin'])) $tabs["rz-character"] = "Character";
+	if (!empty($resurrection_talk)) $tabs["rz-talk"] = "Talk";
+	$tabs["rz-more"] = "More";
+	$out = "";
+	foreach ($tabs as $target=>$label) {
+		$out .= templatereplace("tab", array("target"=>$target,
+			"label"=>htmlspecialchars(trim(full_sanitize(translate_inline($label, "common"))), ENT_QUOTES|ENT_SUBSTITUTE, "UTF-8")));
+	}
+	// The static script that marks the tab whose section is in view; every tab works without it.
+	return templatereplace("tabbar", array("tabs"=>$out))."<script src=\"assets/ui/tabs.js\" defer></script>";
+}
+
+/**
+ * The anchor the Talk tab jumps to, printed by viewcommentary() before the page's first commentary (Phase 5 task 8):
+ * once a page, and only in a template with the tab bar (the 1.1.2 skins print nothing new).
+ *
+ * @return string
+ */
+function resurrection_talk_anchor(){
+	global $template, $resurrection_talk;
+	if (!isset($template['tabbar']) || !empty($resurrection_talk)) return "";
+	$resurrection_talk = true;
+	return "<span class=\"rz-talk\" id=\"rz-talk\"></span>";
 }
 ?>

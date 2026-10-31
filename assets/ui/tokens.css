@@ -59,6 +59,7 @@
   --size-panel-name: 20px;
   --size-panel-sub: 14px;
   --size-tile-value: 18px;
+  --size-phone-name: 17px;
 
   /* Spacing and radii */
   --space-unit: 4px;
@@ -90,6 +91,8 @@
   --bar-height: 8px;
   --bar-height-fight: 10px;
   --bar-height-compact: 6px;
+  --tab-height: 52px;
+  --nav-tile-height: 48px;
   --key-badge-size: 24px;
   --icon-size: 24px;
   --scene-height: 240px;

@@ -19,6 +19,7 @@
   <div class="rz-header-staff">{petitiondisplay}</div>
   <div class="rz-header-ad">{headerad}</div>
  </div>
+ {phonehead}
 </header>
 <div class="rz-frame">
  <div class="rz-columns">
@@ -29,10 +30,14 @@
 <!--!footer-->
    </div>
   </main>
-  <aside class="rz-character" aria-label="Character">
+  <aside class="rz-character" id="rz-character" aria-label="Character">
    <div class="rz-character-inner">{stats}</div>
   </aside>
  </div>
+ <section class="rz-more" id="rz-more" aria-label="More">
+  <h2 class="rz-more-head">More</h2>
+  <div class="rz-more-links">{motd}{petition}{credits}</div>
+ </section>
 </div>
 <footer class="rz-footer">
  <div class="rz-footer-inner">
@@ -41,6 +46,7 @@
   <p class="rz-attribution">A <a href="https://phoenix233.com" target="_blank" rel="noopener">Phoenix 2:33 LLC</a> Project by <a href="https://jimlunsford.com" target="_blank" rel="noopener">Jim Lunsford</a></p>
  </div>
 </footer>
+{tabbar}
 </body>
 </html>
 <!--!popuphead--><!DOCTYPE html>
@@ -92,7 +98,7 @@
 <!--!navhead--><h2 class="rz-navhead">{title}</h2>
 <!--!navhelp--><div class="rz-navhelp">{text}</div>
 <!--!navitem--><a href="{link}" {accesskey} class="rz-navitem nav" {popup}><span class="rz-key" aria-hidden="true">{key}</span><span class="rz-navlabel">{text}</span></a>
-<!--!navstart--><nav class="rz-nav" aria-label="Navigation"><div class="rz-card rz-nav-panel">
+<!--!navstart--><nav class="rz-nav" id="rz-nav" aria-label="Navigation"><div class="rz-card rz-nav-panel">
 <!--!navend--></div></nav>
 <!--!petitioncount--><div class="rz-petitioncount">{petitioncount}</div>
 <!--!scene--><div class="rz-scene"><img class="rz-scene-img" src="{src}" alt="{alt}" width="{width}" height="{height}"></div>
@@ -104,3 +110,8 @@
  <input type="submit" value="{button}" class="button rz-button-primary">
 </div>
 <!--!loginfull--><div class="rz-loginfull">Server Full!</div>
+<!--!phonehead--><div class="rz-phonehead"><div class="rz-phonehead-top">{portrait}<div class="rz-phonehead-id"><p class="rz-phonehead-name">{name}</p><p class="rz-phonehead-sub">{subtitle}</p></div><div class="rz-phonehead-mail">{mail}</div></div><div class="rz-phonehead-bars">{bars}</div></div>
+<!--!phoneportrait--><img class="rz-phonehead-img" src="{src}" alt="{alt}" width="{width}" height="{height}">
+<!--!phonebar--><div class="rz-phonebar rz-phonebar-{kind}"><div class="rz-phonebar-text"><span class="rz-phonebar-label">{label}</span><span class="rz-phonebar-value">{value}</span></div><div class="rz-phonebar-track" aria-hidden="true"><div class="rz-phonebar-fill" style="width: {percent}%"></div></div></div>
+<!--!tabbar--><nav class="rz-tabbar" aria-label="Sections">{tabs}</nav>
+<!--!tab--><a class="rz-tab" href="#{target}">{label}</a>

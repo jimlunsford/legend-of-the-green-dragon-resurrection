@@ -204,7 +204,8 @@ final class NavigationTest extends TestCase
     public function testAPageWithNoNavHasNoNavColumn(): void
     {
         $navs = $this->render('resurrection.htm', [['Forest', 'forest.php']]);
-        self::assertSame(['<nav class="rz-nav" aria-label="Navigation"><div class="rz-card rz-nav-panel">' . "\n", "</div></nav>\n"], $navs['column']);
+        // The nav column's id is the phone tab bar's Go target (Phase 5 task 8).
+        self::assertSame(['<nav class="rz-nav" id="rz-nav" aria-label="Navigation"><div class="rz-card rz-nav-panel">' . "\n", "</div></nav>\n"], $navs['column']);
         // Only hidden navs (a forest fight's are its forms and allowed links): no column, no empty card.
         self::assertSame(['', ''], $this->render('resurrection.htm', [['', 'forest.php?op=fight']])['column']);
         self::assertSame(['', ''], $this->render('resurrection.htm', [])['column']);

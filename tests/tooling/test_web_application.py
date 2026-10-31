@@ -7054,13 +7054,17 @@ function MODULE_dohook($hook,$args) {
             self.assertEqual(1,body.count(copyright),body[-3000:]);self.assertEqual(1,body.count(attribution),body[-3000:])
         def controls(body,signed_in):
             hrefs=re.findall(r"<a href='([^']+)' target='_blank' rel='noopener' class='rz-control ",body)
-            self.assertEqual((['mail.php'] if signed_in else [])+['motd.php','petition.php'],hrefs)
+            # The header's controls, then (Phase 5 task 8) the phone header's mail control when signed in and the More
+            # section's MoTD and Petition, the same links shown below 600px.
+            header=(['mail.php'] if signed_in else [])+['motd.php','petition.php']
+            self.assertEqual(header+(['mail.php'] if signed_in else [])+['motd.php','petition.php'],hrefs)
             self.assertNotIn("window.open('motd.php'",body.split('</head>')[0])
         def credits(body): return [html.unescape(h) for h in re.findall(r'<a href="([^"]+)" class="rz-credits">Credits</a>',body)]
         anonymous=self._security_client(login=None)
         for page in ['home.php','news.php']:
             status,body=anonymous(page);self.assertEqual(200,status,body[:2000]);footer(body);controls(body,False)
-            self.assertEqual(['about.php'],credits(body))
+            # The footer's Credits link and (Phase 5 task 8) the More section's, the same link.
+            self.assertEqual(['about.php','about.php'],credits(body))
         status,body=anonymous('about.php');self.assertEqual(200,status,body[:2000]);footer(body)
         for page in ['motd.php','petition.php']:
             status,body=anonymous(page);self.assertEqual(200,status,body[:2000]);footer(body)
@@ -7074,7 +7078,8 @@ function MODULE_dohook($hook,$args) {
             # News allows about.php: the Credits link is that exact nav, and following it is allowed.
             self._security_allow(player,'news.php');status,body=client('news.php')
             self.assertEqual(200,status,body[:2000]);footer(body);controls(body,True)
-            links=credits(body);self.assertEqual(1,len(links),body[-3000:]);self.assertRegex(links[0],r'^about\.php\?c=\d+-\d{6}$')
+            # In the footer and (Phase 5 task 8) again in the More section: the same nav.
+            links=credits(body);self.assertEqual(2,len(links),body[-3000:]);self.assertEqual(links[0],links[1]);self.assertRegex(links[0],r'^about\.php\?c=\d+-\d{6}$')
             status,body=client(links[0]);self.assertEqual(200,status,body[:2000]);self.assertNotIn('Your Navs Are Corrupted',body);footer(body)
             # The village allows no about.php nav: no Credits link, and no link to about.php at all.
             self._security_allow(player,'village.php');status,body=client('village.php')

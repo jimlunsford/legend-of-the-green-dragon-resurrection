@@ -175,6 +175,8 @@ function viewcommentary($section,$message="Interject your own commentary?",$limi
 	$args = modulehook("blockcommentarea", array("section"=>$section));
 	if (isset($args['block']) && ($args['block'] == "yes"))
 		return;
+	// The phone tab bar's Talk tab jumps here (Phase 5 task 8); nothing in a template without the tab bar.
+	rawoutput(resurrection_talk_anchor());
 
 	if ($schema === false)
 		$schema=$translation_namespace;

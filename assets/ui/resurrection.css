@@ -40,7 +40,10 @@ pre { max-width: 100%; overflow-x: auto; }
   left: var(--space-side-phone);
   top: -100px;
   z-index: 10;
-  padding: 10px 16px;
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--touch-target);
+  padding: 0 16px;
   background: var(--accent);
   color: var(--ground);
   border-radius: var(--radius-control);
@@ -520,12 +523,25 @@ a.hotmotd { color: var(--accent); }
 /* Popups: one column. */
 .rz-popup .rz-frame { padding-top: 16px; padding-bottom: 16px; }
 
-/* Below --breakpoint-stack (900px) each column takes the full width. */
+/*
+  The phone layout's pieces (Phase 5 task 8), hidden until the phone breakpoint: the compact character header, the More
+  section (MoTD, Petition for Help, Credits where allowed) and the bottom tab bar.
+*/
+.rz-phonehead, .rz-more, .rz-tabbar { display: none; }
+
+/*
+  Below --breakpoint-stack (900px) each column takes the full width, in the phone's order (Phase 5 task 8): the page's
+  content first, then its navs, then the character panel. The order is CSS only; the page keeps its desktop source
+  order (the nav before the content, with the skip link).
+*/
 @media (max-width: 900px) {
   .rz-nav, .rz-main, .rz-character { flex: 1 1 100%; max-width: none; }
+  .rz-main { order: 1; }
+  .rz-nav { order: 2; }
+  .rz-character { order: 3; }
 }
 
-/* Below --breakpoint-phone (600px): phone spacing and type. Task 8 adds the phone chrome. */
+/* Below --breakpoint-phone (600px): phone spacing and type, and the phone chrome (task 8). */
 @media (max-width: 600px) {
   .rz-header-inner, .rz-footer-inner { padding-left: var(--space-side-phone); padding-right: var(--space-side-phone); }
   /* The header controls fit one row: icons with their badges; the labels stay as aria-labels. */
@@ -545,19 +561,147 @@ a.hotmotd { color: var(--accent); }
     line-height: var(--leading-body-phone);
   }
   .rz-scene { height: var(--scene-height-phone); margin: calc(-1 * var(--space-card-phone)) calc(-1 * var(--space-card-phone)) var(--space-card-phone); }
-  /* The portrait sits in the header, beside the controls, image only (its alt text names the race). */
+  /*
+    Task 5 put the portrait in the header here, beside the wordmark; since task 8 the signed-in phone header is the
+    compact character header below, with its own portrait, and the header's portrait slot stays hidden.
+  */
   .rz-header-inner { column-gap: 12px; }
-  .rz-wordmark { flex: 1 1 0; }
-  .rz-header-portrait { display: block; flex: 0 0 auto; }
-  .rz-header-portrait:empty { display: none; }
-  .rz-header-portrait .rz-portrait { padding: 0; background: none; border: 0; }
-  .rz-header-portrait .rz-portrait-img { width: var(--portrait-width-phone); }
-  .rz-header-portrait .rz-portrait-text { display: none; }
   .rz-character .rz-portrait, .rz-statportrait { display: none; }
   .rz-statsection, .rz-statcard, .rz-character-inner:not(:has(.rz-stats)) { padding: var(--space-panel-phone); }
   .rz-footer-meta { text-align: left; }
+  /* The footer's Credits and source links are tap targets of their own on a phone. */
+  .rz-footer-credits > a { display: inline-flex; align-items: center; justify-content: center; min-width: var(--touch-target); min-height: var(--touch-target); }
+  /* The attribution's two links get a full tap target's height too: taller, never smaller (CLAUDE.md). */
+  .rz-attribution a { display: inline-flex; align-items: center; min-height: var(--touch-target); }
+  /* The commentary's paging links (First Unseen, Previous, Refresh, Next, Last Page; all carry refresh=1). Task 10
+     redesigns the commentary. */
+  .rz-content a[href*="refresh=1"] { display: inline-flex; align-items: center; justify-content: center; min-width: var(--touch-target); min-height: var(--touch-target); }
+  /* The mail popup's Inbox and Write links (task 11 restyles the mail pages). */
+  .rz-popup .rz-content td > a.motd { display: inline-flex; align-items: center; justify-content: center; min-width: var(--touch-target); min-height: var(--touch-target); }
+  /* A form's buttons (a shop's item buttons among them) are at least a tap target wide. */
+  .rz-content button, .rz-content input[type=submit], .rz-content input[type=button] { min-width: var(--touch-target); min-height: var(--touch-target); }
   .rz-field input { width: 100%; }
   .rz-field { flex: 1 1 100%; }
+
+  /* Wide tables scroll inside their own box, never the page. */
+  .rz-content table { display: block; max-width: 100%; overflow-x: auto; }
+
+  /*
+    Phone header, signed out (and popups): the wordmark on one line, shrunk to the screen's width (its width is about
+    18 times its font size), "Resurrection" and the controls on the row below.
+  */
+  .rz-header-inner { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; row-gap: 6px; }
+  .rz-wordmark { display: contents; }
+  .rz-wordmark-title { grid-column: 1 / -1; white-space: nowrap; font-size: min(var(--size-wordmark), calc((100vw - 2 * var(--space-side-phone)) / 18)); }
+  .rz-wordmark-sub { grid-column: 1; }
+  .rz-header-actions { grid-column: 2; justify-content: flex-end; }
+  .rz-header-portrait, .rz-header-staff, .rz-header-ad { grid-column: 1 / -1; }
+  .rz-header-portrait { display: none; }
+
+  /*
+    Phone header, signed in: no wordmark. The portrait, the name on one line, "Level 7 Elf, 14 turns, 1,247 gold"
+    and the mail control; under them the HP (soulpoints when dead) and XP bars, compact.
+  */
+  .rz-header:has(.rz-phonehead) .rz-header-inner { display: none; }
+  .rz-phonehead { display: flex; flex-direction: column; gap: 8px; padding: 10px var(--space-side-phone) 12px; }
+  .rz-phonehead-top { display: flex; align-items: center; gap: 10px; min-width: 0; }
+  .rz-phonehead-img { display: block; flex: 0 0 auto; width: var(--portrait-width-phone); height: auto; }
+  .rz-phonehead-id { flex: 1 1 auto; min-width: 0; }
+  .rz-phonehead-name {
+    margin: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    font-family: var(--font-display);
+    font-weight: var(--weight-display-bold);
+    font-size: var(--size-phone-name);
+    line-height: 1.3;
+    color: var(--text);
+  }
+  .rz-phonehead-sub { margin: 0; color: var(--muted); font-size: var(--size-small); line-height: 1.35; }
+  .rz-phonehead-mail { flex: 0 0 auto; }
+  .rz-phonehead-mail .rz-control { display: inline-flex; }
+  .rz-phonehead-bars { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+  .rz-phonebar { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+  .rz-phonebar-text { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; font-size: var(--size-small); }
+  .rz-phonebar-label { color: var(--muted); }
+  .rz-phonebar-value { color: var(--text); font-weight: var(--weight-ui-bold); font-variant-numeric: lining-nums; white-space: nowrap; }
+  .rz-phonebar-track { height: var(--bar-height-compact); background: var(--track); border-radius: var(--radius-bar); overflow: hidden; }
+  .rz-phonebar-fill { height: 100%; max-width: 100%; border-radius: var(--radius-bar); background: var(--health); }
+  .rz-phonebar-experience .rz-phonebar-fill { background: var(--accent); }
+
+  /* The page's navs as tiles: two columns, 48px or taller, the label wrapping, no key badge (no keyboard here). */
+  .rz-nav-panel { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; padding: 0; background: none; border: 0; }
+  .rz-navhead, .rz-navhelp { grid-column: 1 / -1; }
+  .rz-navhead { margin: 12px 0 0; }
+  .rz-navhead:first-child { margin-top: 0; }
+  .rz-navhelp { padding: 0; }
+  .rz-navitem {
+    min-height: var(--nav-tile-height);
+    padding: 8px 12px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-control);
+  }
+  .rz-navitem .rz-key { display: none; }
+
+  /* More: MoTD, Petition for Help and Credits, labelled, after the character panel. */
+  .rz-more { display: block; margin-top: var(--space-gutter); padding: var(--space-panel-phone); background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius-panel); }
+  .rz-more-head {
+    margin: 0 0 10px;
+    font-family: var(--font-display);
+    font-weight: var(--weight-display);
+    font-size: var(--size-label);
+    letter-spacing: var(--tracking-label);
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  .rz-more-links { display: flex; flex-wrap: wrap; gap: 8px; }
+  .rz-more .rz-control { width: auto; padding: 0 14px; justify-content: flex-start; }
+  .rz-more .rz-control-label { position: static; width: auto; height: auto; margin: 0; overflow: visible; clip: auto; }
+  .rz-more .rz-badge { position: static; }
+  .rz-more .rz-credits {
+    display: inline-flex;
+    align-items: center;
+    min-height: var(--touch-target);
+    padding: 0 14px;
+    border: 1px solid var(--input-border);
+    border-radius: var(--radius-control);
+    color: var(--text);
+    font-weight: var(--weight-ui-medium);
+    text-decoration: none;
+  }
+  .rz-more .rz-footer-sep { display: none; }
+
+  /*
+    The bottom tab bar: fixed, four equal tabs (fewer when a page has no navs, no commentary or no character), each an
+    anchor on this page. The page is padded so the footer is never under the bar, the safe area included.
+  */
+  .rz-tabbar {
+    display: flex;
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 5;
+    padding-bottom: env(safe-area-inset-bottom);
+    background: var(--header);
+    border-top: 1px solid var(--border);
+  }
+  .rz-tab {
+    flex: 1 1 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: var(--tab-height);
+    color: var(--muted);
+    font-size: var(--size-small);
+    font-weight: var(--weight-ui-bold);
+    text-decoration: none;
+  }
+  .rz-tab:hover, .rz-tab-current { color: var(--accent); }
+  .rz-page:has(.rz-tabbar) { padding-bottom: calc(var(--tab-height) + 1px + env(safe-area-inset-bottom)); }
+  #rz-nav, #rz-character, #rz-more, #rz-talk { scroll-margin-top: 12px; }
 }
 
 @media (prefers-reduced-motion: reduce) {

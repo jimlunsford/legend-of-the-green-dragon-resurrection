@@ -290,7 +290,8 @@ class UiTokenTests(unittest.TestCase):
         self.assertRegex(css, r'\.rz-portrait-img \{[^}]*width: var\(--portrait-width\);')
         phone = css[css.index('@media (max-width: 600px)'):]
         self.assertRegex(phone, r'\.rz-scene \{[^}]*height: var\(--scene-height-phone\);')
-        self.assertRegex(phone, r'\.rz-header-portrait \.rz-portrait-img \{[^}]*width: var\(--portrait-width-phone\);')
+        # Since Phase 5 task 8 the phone's portrait is the compact character header's.
+        self.assertRegex(phone, r'\.rz-phonehead-img \{[^}]*width: var\(--portrait-width-phone\);')
 
 
 def saturation(color):

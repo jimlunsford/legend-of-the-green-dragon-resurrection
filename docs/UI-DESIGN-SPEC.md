@@ -118,6 +118,7 @@ Scale (set here). Text never goes below 13px:
 | `--size-panel-name` | `20px` | The character's name in the character panel, Cinzel 700, `--text` (mockup, task 7) |
 | `--size-panel-sub` | `14px` | The line under it, "Level 7 Elf · Mystical Powers", `--muted` (mockup, task 7) |
 | `--size-tile-value` | `18px` | A stat tile's value, Alegreya Sans 700, `--text` (mockup, task 7) |
+| `--size-phone-name` | `17px` | The character's name in the phone header, Cinzel 700, one line (mockup, task 8) |
 
 ## Color codes (approved values, plus the rest set here)
 
@@ -209,9 +210,16 @@ panel's sections sit in `--panel` cards with `--space-panel` padding. Links are 
 The columns wrap when the window is too narrow for all three, and below `--breakpoint-stack` each takes the full
 width, with no sideways scroll.
 
-**Phone** (set here: below 900px the columns stack; below 600px the phone chrome takes over): the columns stack
-content first. A compact header shows the HP and XP bars. A bottom tab bar (`--header`) has four tabs: Village,
-Character, Talk, More. The page never scrolls sideways; wide admin tables scroll inside their own box.
+**Phone** (set here: below 900px the columns stack; below 600px the phone chrome takes over; Phase 5 task 8): the
+columns stack content first: the page title, scene, story and forms, then the page's navs, then the character panel,
+then the More section, then the footer. The order is the stylesheet's (`order` below `--breakpoint-stack`); the page's
+source keeps the desktop order, nav column first, with the skip link. Below `--breakpoint-phone` the signed-in header
+is the compact phone header, the navs are tiles, and a bottom tab bar (`--header`) has up to four tabs: Go, Character,
+Talk, More (Jim, 2026-10-31: in-page anchors, never links to other pages; see Components, "Tab bar"). The mockup's
+"Village" tab is not used: a fixed link to the village would break forced navigation in a fight, a shop or the
+graveyard. Between `--breakpoint-phone` and `--breakpoint-stack` (a tablet) the same stacking order with the desktop
+header, nav rows and no tab bar. The page never scrolls sideways at 320px or wider; wide tables scroll inside their
+own box.
 
 **Footer** (`--header`, 1px `--border` top, `--muted` text at `--size-small`): at the left the original credit line (the copyright line and license block the template's
 `{copyright}` tag carries, unaltered), the Credits link (`{credits}`, see Components), a Source link (the `sourceurl`
@@ -248,6 +256,8 @@ query, so the template writes the two breakpoints as literals equal to these tok
 | `--bar-height` | `8px` | HP and XP bars in the character panel (mockup; was 10px) |
 | `--bar-height-fight` | `10px` | HP bars in a fight (mockup) |
 | `--bar-height-compact` | `6px` | Bars in the phone's compact header |
+| `--tab-height` | `52px` | A tab of the phone's bottom tab bar, the touch target's height (mockup, task 8) |
+| `--nav-tile-height` | `48px` | A nav tile on a phone, at least (mockup, task 8) |
 | `--key-badge-size` | `24px` | Key badge, a square (mockup; was 22px) |
 | `--icon-size` | `24px` | Icon grid |
 | `--scene-height` | `240px` | Scene banner height (Jim, task 5) |
@@ -307,6 +317,40 @@ query, so the template writes the two breakpoints as literals equal to these tok
     typing in an input or a textarea, or with Alt or Ctrl held. No inline script. Every nav works without JavaScript.
   - **No nav, no column.** A page with no nav item, heading or help text, and nothing in `{navad}` (a forest fight,
     whose actions are forms), has no nav column at all; the content takes its space. No empty card.
+- **Phone header** (Phase 5 task 8). Below `--breakpoint-phone`, signed in, the header bar holds the `phonehead` part
+  in place of the wordmark row (the stylesheet hides that row when the part is there): the race portrait
+  (`phoneportrait` part, `--portrait-width-phone`, 44px), then the character's name (Cinzel 700, `--size-phone-name`
+  17px, `--text`, one line, cut with an ellipsis) over the subtitle "Level 7 Elf · 14 turns · 1,247 gold" (`--muted`,
+  `--size-small` 13px; the race as the panel names it), then the mail control with its badge (44px, the header's own
+  `maillink()`). Under them, the HP and XP bars side by side (`phonebar` part): `--bar-height-compact` (6px) tracks,
+  the label left (`--muted`) and the numbers right (`--text`, bold), `--size-small`. The numbers and fills are the
+  panel's: hitpoints against the maximum, experience against `exp_for_next_level()`, at the level cap the experience
+  alone over a full bar. Dead, the subtitle reads "Level 7 Elf · 6 torments · 40 favor" and the first bar is Soul,
+  soulpoints against level × 5 + 50. Signed out (and in popups) the header keeps the wordmark, on one line, its size
+  shrunk to fit the screen (at most `--size-wordmark`), with the MoTD and Petition controls below it at the right.
+  New translated texts: "%s turns", "%s gold", "%s torments", "%s favor", "HP", "Soul", "XP".
+- **Nav tiles** (task 8). Below `--breakpoint-phone` the nav groups lose their card and each nav is a tile in a
+  two-column grid, 8px apart: at least `--nav-tile-height` (48px) tall, `--panel` fill, 1px `--border`,
+  `--radius-control` (8px), the label wrapping, no key badge (no keyboard). Group headings and help text span both
+  columns. The label keeps the nav row's size.
+- **More section** (task 8). After the character panel, a `--panel` card (`<section id="rz-more">`, heading "More")
+  holding the MoTD and Petition for Help controls, labelled, and the Credits link where the footer's rule allows it
+  (task 4: never a bad nav), each a 44px control. Hidden above `--breakpoint-phone` (the header and footer hold them
+  there). Not in popups.
+- **Tab bar** (Jim, 2026-10-31, task 8). Below `--breakpoint-phone`, a bar fixed to the bottom of the window: `--header`
+  fill, 1px `--border` top, the safe area (`env(safe-area-inset-bottom)`) added below it. Its tabs share the width
+  equally, each `--tab-height` (52px) tall, the label `--size-small` (13px, the floor: the mockup's 12px would break it)
+  Alegreya Sans 700, `--muted`; the tab whose section is in view is `--accent` (`rz-tab-current`, `aria-current`,
+  marked by the static `assets/ui/tabs.js`; every tab works without it). The tabs are anchors on the page, so forced
+  navigation is never broken:
+  - **Go**: the page's navs (`#rz-nav`), only when the page shows the nav column (not in a forest fight).
+  - **Character**: the character panel (`#rz-character`), only signed in.
+  - **Talk**: the page's first commentary (`#rz-talk`, an empty anchor `viewcommentary()` prints before it), only when
+    the page rendered commentary.
+  - **More**: the More section (`#rz-more`), always.
+
+  The page is padded at the bottom by the bar's height, its 1px border and the safe area, so the footer is never under
+  the bar. No tab bar in popups, on operator pages (not installed, database error, upgrade needed) or in a 1.1.2 skin.
 - **One primary action per screen**, gold fill (`--accent`, text `--ground`, hover `--accent-hover`). Every other
   button is secondary: `--raised` fill, `--input-border` outline, `--text` label.
 - **Character panel** (Phase 5 task 7). `charstats()` fills the rows as 1.1.2 did; a template with the panel parts
@@ -327,8 +371,8 @@ query, so the template writes the two breakpoints as literals equal to these tok
   each, as 1.1.2 wrote them), then every row a module added to another section, or a new section, as label/value rows
   under that section's title, translated as `getcharstats()` translates them. A standard row a module changed in the
   `charstats` hook shows the module's value in its component (the bar keeps its fill); the components otherwise read
-  the account. Below `--breakpoint-phone` the panel stacks after the content as before; its portrait is hidden there
-  (the header shows it) and its padding is `--space-panel-phone`. The compact phone header is task 8's.
+  the account. Below `--breakpoint-stack` the panel stacks after the content and the navs; below `--breakpoint-phone`
+  its portrait is hidden (the phone header shows it) and its padding is `--space-panel-phone`.
   - **The dead.** Soulpoints replace hitpoints in the first bar (maximum level × 5 + 50, as 1.1.2), and the tiles are
     Torments, Spirits ("DEAD"), Psyche, Spirit, Favor and Gems: 1.1.2's meanings in the same components.
 - **HP and XP bars.** Fully rounded (`--radius-bar`), `--bar-height` in the character panel and `--bar-height-fight` in
@@ -388,8 +432,9 @@ query, so the template writes the two breakpoints as literals equal to these tok
 - **Race portrait.** An `<img>` (the template's `portrait` part) at the top of the character panel, in its own
   `--panel` card, `--portrait-width` (64px) wide, beside the player's name (Cinzel 700, `--text`) and race (`--muted`,
   `--size-small`). Since task 7 the panel's portrait is in its header card (the `statportrait` part; "Character
-  panel" above), and the `portrait` part is the phone header's. Below `--breakpoint-phone` it moves into the header beside the controls, `--portrait-width-phone`
-  (44px) wide, the image only. `width` and `height` attributes: the file's 200x240. Signed out: none. The portrait is
+  panel" above), and the `portrait` part is the header's. Below `--breakpoint-phone` (task 5) it moved into the header
+  beside the controls, `--portrait-width-phone` (44px) wide, the image only; since task 8 the signed-in phone header
+  shows it through its own `phoneportrait` part, the same size, and the header's slot stays hidden on a phone. `width` and `height` attributes: the file's 200x240. Signed out: none. The portrait is
   the player's race lowercased (`human`, `elf`, `dwarf`, `troll`); any other race, or none, gets `unknown`.
 - **Alt text** comes from the same data: a scene's is the place's name (the village's name, "The Forest", and for the
   fallback the page's own title; a module's hook may give its own), a portrait's the race as the character panel
@@ -446,7 +491,9 @@ Colors that are also UI tokens are named; transparency comes from `opacity` and 
 ## Accessibility (approved)
 
 - Text contrast 4.5:1 or better against the color behind it.
-- Touch targets 44px or more in both directions (nav rows, tabs, buttons, inputs).
+- Touch targets 44px or more in both directions (nav rows, tabs, buttons, inputs). On a phone (task 8) also the skip
+  link, the footer's Credits and source links, the attribution's two links (taller, never smaller), a form's buttons,
+  the commentary's paging links and the mail popup's Inbox and Write links.
 - Real links (`<a href>`), real buttons and labelled inputs: no click handlers on plain elements.
 - Alt text or `aria-label` on every image; decorative art gets `alt=""` and the information is in text.
 

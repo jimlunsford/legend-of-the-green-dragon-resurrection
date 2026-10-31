@@ -29,6 +29,13 @@ use Resurrection\Configuration\LegacyConfig;
  * Phase 5 task 7 (docs/PHASE5-TASK7-CHARACTER-PANEL-20261030.md) moves the panel's portrait into its header card, beside
  * the name; the phone header keeps its own. A player with no race chosen yet is named "Not chosen yet".
  *
+ * Phase 5 task 8 (docs/PHASE5-TASK8-PHONE-20261031.md) adds the phone's pieces, shown by the stylesheet below 600px:
+ * the compact character header (portrait, name, "Level 7 Dwarf, 14 turns, 1,247 gold", the mail link, the HP and XP
+ * bars; torments, favor and soulpoints when dead), only signed in; the More section (MoTD, Petition for Help, Credits
+ * where allowed); and the bottom tab bar, whose tabs are anchors on the page, each target there once: Go only with the
+ * nav column, Character only signed in, Talk only where commentary rendered, More always. The content comes before the
+ * character panel, More and the footer. The mail popup has none of them, and a 1.1.2 skin (jade.htm) none either.
+ *
  * The test does not depend on the order it runs in: an installed database is used as it is; an empty one is installed
  * here with scripts/install.php --modules=none and emptied again afterwards. The player it creates, its mail, the MoTD
  * item and the clock settings it changes are removed or restored.
@@ -95,8 +102,10 @@ final class TemplateRenderTest extends TestCase
             self::assertStringContainsString('<form action=\'login.php\' method=\'POST\'>', $home);
             self::assertStringContainsString('<input name="name" id="name"', $home);
             self::assertStringContainsString('class="rz-navitem nav"', $home);
-            // Signed out, the Credits link is always there: about.php allows anonymous visits.
-            self::assertSame(1, substr_count($home, '<a href="about.php" class="rz-credits">Credits</a>'));
+            // Signed out, the Credits link is always there: about.php allows anonymous visits. Since Phase 5 task 8 it is
+            // in the footer and again in the More section (the phone's), so twice in the page (once before).
+            self::assertSame(2, substr_count($home, '<a href="about.php" class="rz-credits">Credits</a>'));
+            self::assertSame(1, substr_count($this->more($home), '<a href="about.php" class="rz-credits">Credits</a>'));
             // The time to the next new day, as text, equal to secondstonextgameday() on the pinned clock.
             self::assertMatchesRegularExpression('/^Next new day in [0-5]h [0-5]?[0-9]m$/', $before);
             self::assertSame(1, preg_match('#<span class="rz-newday">([^<]*)</span>#', $home, $newday));
@@ -112,6 +121,12 @@ final class TemplateRenderTest extends TestCase
             self::assertStringNotContainsString('rz-portrait', $home);
             self::assertStringNotContainsString('newest resident', $home);
             $this->assertNavs($home, 'home.php');
+            // The phone: signed out, the wordmark and no character header; tabs Go and More.
+            self::assertStringContainsString('<span class="rz-wordmark-title">Legend of the Green Dragon</span>', $home);
+            $this->assertPhone($home, ['rz-nav' => 'Go', 'rz-more' => 'More'], null);
+            foreach (["href='motd.php'", "href='petition.php'"] as $link) {
+                self::assertStringContainsString($link, $this->more($home), $link);
+            }
 
             // A signed-in player in the village: the account the game creates, signed in through the session the
             // forced-navigation check reads (do_forced_nav()).
@@ -142,6 +157,9 @@ final class TemplateRenderTest extends TestCase
             $name = $this->php($tree, 'echo preg_replace("/`./", "", db_query("SELECT name FROM accounts WHERE acctid=?", true, [' . $player . '])[0]["name"]);');
             $this->assertPortrait($village, 'unknown', 'Not chosen yet', $name);
             $this->assertNavs($village, 'village.php');
+            // The phone: the village has its navs, the panel and commentary, so all four tabs; no Credits in More.
+            $this->assertPhone($village, ['rz-nav' => 'Go', 'rz-character' => 'Character', 'rz-talk' => 'Talk', 'rz-more' => 'More'], 'unknown');
+            self::assertStringNotContainsString('rz-credits', $this->more($village));
 
             // Unread and read mail: the badge shows the unread count, the label the full counts, as the table holds them.
             $this->php($tree, 'foreach ([0, 0, 1] as $seen) db_query("INSERT INTO mail (msgfrom, msgto, subject, body, sent, seen) VALUES (0, ?, ?, ?, ?, ?)", true, [' . $player . ', "Render test", "Render test body", date("Y-m-d H:i:s"), $seen]);');
@@ -152,8 +170,9 @@ final class TemplateRenderTest extends TestCase
             self::assertGreaterThan(0, $motd);
             // Signed in again on the village, as before the first visit (that visit replaced the allowed navs), with an
             // MoTD last read in 2000.
-            // A dwarf now: the dwarf's portrait.
-            $this->php($tree, 'db_query("UPDATE accounts SET allowednavs=?, laston=?, lasthit=?, lastmotd=?, race=? WHERE acctid=?", true, [serialize(["village.php" => true]), date("Y-m-d H:i:s"), date("Y-m-d H:i:s", time() + 60), "2000-01-01 00:00:00", "Dwarf", ' . $player . ']);');
+            // A dwarf now: the dwarf's portrait. Level 7, 14 turns, 1,247 gold, 63 of 70 hitpoints, 5,025 experience of
+            // the 6,641 level 7 needs with no dragon kills (lib/experience.php): the phone header's numbers.
+            $this->php($tree, 'db_query("UPDATE accounts SET allowednavs=?, laston=?, lasthit=?, lastmotd=?, race=?, level=7, turns=14, gold=1247, hitpoints=63, maxhitpoints=70, experience=5025, dragonkills=0 WHERE acctid=?", true, [serialize(["village.php" => true]), date("Y-m-d H:i:s"), date("Y-m-d H:i:s", time() + 60), "2000-01-01 00:00:00", "Dwarf", ' . $player . ']);');
             $village = $this->render($tree, $work, 'village.php', $session);
             $this->assertCleanPage($village, 'village.php');
             $this->assertMailLink($village, 2, 1);
@@ -161,6 +180,17 @@ final class TemplateRenderTest extends TestCase
             self::assertStringContainsString("<span class='rz-badge rz-badge-dot' aria-hidden='true'></span>", $village);
             self::assertStringNotContainsString("window.open('motd.php'", $village);
             $this->assertPortrait($village, 'dwarf', 'Dwarf', $name);
+            $this->assertPhone($village, ['rz-nav' => 'Go', 'rz-character' => 'Character', 'rz-talk' => 'Talk', 'rz-more' => 'More'], 'dwarf',
+                [$name, 'Level 7 Dwarf &middot; 14 turns &middot; 1,247 gold', [['health', 'HP', '63 / 70', '90'], ['experience', 'XP', '5025 / 6641', '75.7']]]);
+
+            // The same page in a 1.1.2 skin (its cookie, as the skin chooser sets it): none of the phone's pieces.
+            $this->php($tree, 'db_query("UPDATE accounts SET allowednavs=?, laston=?, lasthit=? WHERE acctid=?", true, [serialize(["village.php" => true]), date("Y-m-d H:i:s"), date("Y-m-d H:i:s", time() + 60), ' . $player . ']);');
+            $old = $this->render($tree, $work, 'village.php', $session, '', 'jade.htm');
+            self::assertStringNotContainsString('rz-page', $old);
+            self::assertStringContainsString(self::COPYRIGHT, $old);
+            foreach (['rz-tabbar', 'rz-tab', 'rz-phonehead', 'rz-talk', 'rz-more', 'assets/ui/tabs.js', '{phonehead}', '{tabbar}'] as $absent) {
+                self::assertStringNotContainsString($absent, $old, 'jade.htm: ' . $absent);
+            }
 
             // A forest fight: the forest scene, the fight below it.
             $this->php($tree, '$e = array_merge(db_query("SELECT * FROM creatures ORDER BY creatureid LIMIT 1")[0], ["creaturename" => "Scene Test Target",'
@@ -171,12 +201,27 @@ final class TemplateRenderTest extends TestCase
             $this->assertCleanPage($fight, 'forest.php?op=fight');
             self::assertStringContainsString('Scene Test Target', $fight);
             $this->assertScene($fight, 'forest', 'The Forest');
-            // No nav to show: no nav column, no empty card, no key map; the content takes the space.
-            foreach (['<nav', 'rz-nav-panel', 'rz-navitem', 'rz-keys', 'assets/ui/keys.js'] as $absent) {
+            // No nav to show: no nav column, no empty card, no key map; the content takes the space. (The page's one
+            // <nav> is the phone's tab bar since Phase 5 task 8, without a Go tab; checked below.)
+            self::assertSame(1, substr_count($fight, '<nav'));
+            foreach (['<nav class="rz-nav"', 'id="rz-nav"', 'rz-nav-panel', 'rz-navitem', 'rz-keys', 'assets/ui/keys.js'] as $absent) {
                 self::assertStringNotContainsString($absent, $fight, $absent);
             }
             self::assertStringContainsString('<div class="rz-columns">' . "\n  \n" . '  <main class="rz-main" id="rz-content">', $fight);
             $this->assertPortrait($fight, 'dwarf', 'Dwarf', $name);
+            // The phone: no nav column and no commentary, so no Go and no Talk.
+            $this->assertPhone($fight, ['rz-character' => 'Character', 'rz-more' => 'More'], 'dwarf',
+                [$name, 'Level 7 Dwarf &middot; 10 turns &middot; 1,247 gold', [['health', 'HP', '500 / 1000', '50'], ['experience', 'XP', '5025 / 6641', '75.7']]]);
+
+            // Dead, in the graveyard: torments and favor in place of turns and gold, soulpoints (of level * 5 + 50) in
+            // place of hitpoints.
+            $this->php($tree, 'db_query("UPDATE accounts SET alive=0, hitpoints=0, soulpoints=62, gravefights=6, deathpower=40, badguy=?, allowednavs=?, laston=?, lasthit=? WHERE acctid=?", true,'
+                . ' ["", serialize(["graveyard.php" => true]), date("Y-m-d H:i:s"), date("Y-m-d H:i:s", time() + 60), ' . $player . ']);');
+            $graveyard = $this->render($tree, $work, 'graveyard.php', $session);
+            $this->assertCleanPage($graveyard, 'graveyard.php');
+            $this->assertPhone($graveyard, ['rz-nav' => 'Go', 'rz-character' => 'Character', 'rz-more' => 'More'], 'dwarf',
+                [$name, 'Level 7 Dwarf &middot; 6 torments &middot; 40 favor', [['soul', 'Soul', '62 / 85', '72.9'], ['experience', 'XP', '5025 / 6641', '75.7']]]);
+            $this->php($tree, 'db_query("UPDATE accounts SET alive=1, hitpoints=63 WHERE acctid=?", true, [' . $player . ']);');
 
             $mail = $this->render($tree, $work, 'mail.php', $session);
             $this->assertCleanPage($mail, 'mail.php');
@@ -187,6 +232,10 @@ final class TemplateRenderTest extends TestCase
             self::assertStringNotContainsString('rz-portrait', $mail);
             self::assertStringNotContainsString('assets/scenes/', $mail);
             self::assertStringNotContainsString('assets/portraits/', $mail);
+            // A popup: no phone header, no More section, no tab bar.
+            foreach (['rz-tabbar', 'rz-phonehead', 'rz-more', 'assets/ui/tabs.js'] as $absent) {
+                self::assertStringNotContainsString($absent, $mail, 'mail.php: ' . $absent);
+            }
 
             // The newest player stored: the home page names them.
             $this->php($tree, 'savesetting("newestplayer", "' . $player . '");');
@@ -252,7 +301,8 @@ final class TemplateRenderTest extends TestCase
      */
     private function assertNavs(string $page, string $script): void
     {
-        self::assertSame(1, substr_count($page, '<nav class="rz-nav" aria-label="Navigation"><div class="rz-card rz-nav-panel">'), $script);
+        // The column's id is the phone tab bar's Go target (Phase 5 task 8).
+        self::assertSame(1, substr_count($page, '<nav class="rz-nav" id="rz-nav" aria-label="Navigation"><div class="rz-card rz-nav-panel">'), $script);
         self::assertGreaterThan(0, preg_match_all('#<a href="([^"]*)"([^>]*) class="rz-navitem nav" [^>]*><span class="rz-key" aria-hidden="true">([^<]*)</span><span class="rz-navlabel">#', $page, $links, PREG_SET_ORDER), $script);
         self::assertSame(substr_count($page, 'class="rz-navitem nav"'), count($links), $script);
         $keyed = [];
@@ -305,6 +355,56 @@ final class TemplateRenderTest extends TestCase
         self::assertSame(1, substr_count($page, '<img class="rz-statportrait"'), $file);
     }
 
+    /**
+     * The phone's pieces on a page of the template (Phase 5 task 8). The tab bar once, after the footer, then its script:
+     * exactly these tabs, in this order, each an anchor whose target is on the page once. The source order the stylesheet
+     * keeps: the content, the character panel, More, the footer, the tab bar. The phone header: none signed out
+     * ($portrait null); signed in, in the page header, the race portrait, then the name, the subtitle, the mail link and
+     * the bars, each [kind, label, value, fill percent], checked when $head is given.
+     *
+     * @param array<string, string> $tabs target id => label
+     * @param array{0: string, 1: string, 2: list<array{0: string, 1: string, 2: string, 3: string}>}|null $head
+     */
+    private function assertPhone(string $page, array $tabs, ?string $portrait, ?array $head = null): void
+    {
+        self::assertSame(1, substr_count($page, '<nav class="rz-tabbar"'));
+        self::assertSame(1, preg_match('#</footer>\n<nav class="rz-tabbar" aria-label="Sections">(.*?)</nav>\n<script src="assets/ui/tabs.js" defer></script>\n</body>#s', $page, $bar), 'tab bar');
+        self::assertSame(count($tabs), preg_match_all('#<a class="rz-tab" href="\#([a-z-]+)">([^<]*)</a>\n#', $bar[1], $found, PREG_SET_ORDER));
+        self::assertSame($tabs, array_combine(array_column($found, 1), array_column($found, 2)));
+        foreach (array_keys($tabs) as $target) {
+            self::assertSame(1, substr_count($page, ' id="' . $target . '"'), $target);
+        }
+        if (!isset($tabs['rz-talk'])) { self::assertStringNotContainsString('id="rz-talk"', $page); }
+        // Source order: content, panel, More, footer, tab bar (the nav column, before the content in the source, is
+        // moved after it by the stylesheet's order below 900px).
+        $at = array_map(fn (string $needle): int|false => strpos($page, $needle), ['<main class="rz-main"', '<aside class="rz-character"', '<section class="rz-more"', '<footer', '<nav class="rz-tabbar"']);
+        self::assertNotContains(false, $at);
+        $sorted = $at;
+        sort($sorted);
+        self::assertSame($sorted, $at);
+        if ($portrait === null) {
+            self::assertStringNotContainsString('rz-phonehead', $page);
+            return;
+        }
+        self::assertSame(1, substr_count($page, '<div class="rz-phonehead">'));
+        self::assertSame(1, preg_match('#<header class="rz-header">.*?<div class="rz-phonehead"><div class="rz-phonehead-top"><img class="rz-phonehead-img" src="assets/portraits/race/'
+            . $portrait . '\.svg" alt="[^"]+" width="200" height="240">\s*<div class="rz-phonehead-id"><p class="rz-phonehead-name">([^<]*)</p><p class="rz-phonehead-sub">([^<]*)</p></div>'
+            . '<div class="rz-phonehead-mail"><a href=\'mail\.php\'[^>]*class=\'rz-control rz-control-mail [^>]*>.*?</a></div></div><div class="rz-phonehead-bars">(.*?)</div></div>\s*</header>#s', $page, $phone), 'phone header');
+        if ($head === null) { return; }
+        self::assertSame($head[0], html_entity_decode($phone[1], ENT_QUOTES));
+        self::assertSame($head[1], $phone[2]);
+        preg_match_all('#<div class="rz-phonebar rz-phonebar-([a-z]+)"><div class="rz-phonebar-text"><span class="rz-phonebar-label">([^<]*)</span><span class="rz-phonebar-value">([^<]*)</span></div>'
+            . '<div class="rz-phonebar-track" aria-hidden="true"><div class="rz-phonebar-fill" style="width: ([0-9.]+)%"></div></div></div>#', $phone[3], $bars, PREG_SET_ORDER);
+        self::assertSame($head[2], array_map(fn (array $bar): array => array_slice($bar, 1), $bars));
+    }
+
+    /** The More section's links. */
+    private function more(string $page): string
+    {
+        self::assertSame(1, preg_match('#<section class="rz-more" id="rz-more" aria-label="More">\s*<h2 class="rz-more-head">More</h2>\s*<div class="rz-more-links">(.*?)</div>\s*</section>#s', $page, $more), 'More');
+        return $more[1];
+    }
+
     /** The header's mail link: an envelope, the unread count as a badge (none at zero), the full sentence as its label. */
     private function assertMailLink(string $page, int $unread, int $read): void
     {
@@ -329,7 +429,7 @@ final class TemplateRenderTest extends TestCase
      *
      * @param array{acctid: int, authversion: int}|null $session
      */
-    private function render(string $tree, string $work, string $script, ?array $session, string $query = ''): string
+    private function render(string $tree, string $work, string $script, ?array $session, string $query = '', ?string $skin = null): string
     {
         parse_str($query, $get);
         $uri = '/' . $script . ($query === '' ? '' : '?' . $query);
@@ -342,6 +442,7 @@ final class TemplateRenderTest extends TestCase
             "    'REQUEST_METHOD' => 'GET', 'SERVER_NAME' => 'localhost', 'SERVER_PORT' => '80', 'REMOTE_ADDR' => '127.0.0.1',\n" .
             "    'HTTP_HOST' => 'localhost'] + \$_SERVER;\n" .
             "\$_GET = " . var_export($get, true) . ";\n" .
+            ($skin === null ? '' : "\$_COOKIE = ['template' => " . var_export($skin, true) . "];\n") .
             $signin .
             "require '$script';\n");
         [$code, $out, $err] = $this->process([PHP_BINARY, '-d', 'output_buffering=0', '-d', 'display_errors=0', '-d', 'log_errors=1',
