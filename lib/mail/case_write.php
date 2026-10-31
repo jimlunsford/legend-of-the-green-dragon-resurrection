@@ -22,7 +22,17 @@ $_SESSION['player_mail_draft'] = $mailDraft;
 rawoutput("<form action='mail.php?op=send' method='post'>");
 rawoutput(resurrection_action_fields('player-mail', resurrection_mail_context($mailDraft)));
 if ($mailDraft['sender_label'] !== '') output('`2From: `^%s`n', $mailDraft['sender_label']);
-output('`2To: ');
+// Each field's label (Phase 5 task 9) never straddles a color span: the color is closed first and re-opened after.
+$label = static function (string $for, callable $text, string $resume): void {
+    output_notl('`0');
+    rawoutput('<label for="'.$for.'">');
+    $text();
+    output_notl('`0');
+    rawoutput('</label>');
+    output_notl($resume);
+};
+if (count($mailDraft['candidates']) > 1) $label('to', fn () => output('`2To: '), '`2');
+else output('`2To: ');
 $warnings = [];
 if (count($mailDraft['candidates']) > 1) rawoutput('<select name="to" id="to">');
 foreach ($mailDraft['candidates'] as $recipient) {
@@ -36,11 +46,11 @@ if (count($mailDraft['candidates']) > 1) rawoutput('</select>');
 rawoutput('<div id="warning" hidden>');
 output('`2Before sending: `^%s`n', $mailDraft['settings']['superuseryommessage']);
 rawoutput('</div>');
-output('`n`2Subject: ');
-rawoutput('<input name="subject" maxlength="255" value="'.$escape($subject).'"><br>');
-output('`2Body:`n');
+$label('subject', fn () => output('`n`2Subject: '), '`2');
+rawoutput('<input name="subject" id="subject" maxlength="255" value="'.$escape($subject).'"><br>');
+$label('inputbody', fn () => output('`2Body:`n'), '`2');
 require_once 'lib/forms.php';
 previewfield('body', '`^', false, false, ['type'=>'textarea','class'=>'input','cols'=>'60','rows'=>'9'], $escape($body));
 output('`nMaximum message size: %s UTF-8 bytes. Longer messages are shortened to this limit.`n', $mailDraft['settings']['mailsizelimit']);
-rawoutput('<button type="submit">'.$escape(translate_inline('Send')).'</button></form>');
+rawoutput('<button type="submit"'.(resurrection_ui() ? ' class="'.resurrection_button_class(true).'"' : '').'>'.$escape(translate_inline('Send')).'</button></form>');
 rawoutput('<script>const mailWarnings='.json_encode($warnings, JSON_HEX_TAG|JSON_HEX_AMP|JSON_HEX_APOS|JSON_HEX_QUOT).';const mailTo=document.getElementById("to");function mailWarning(){document.getElementById("warning").hidden=!mailWarnings.includes(mailTo.value);}mailTo.addEventListener("change",mailWarning);mailWarning();</script>');

@@ -47,13 +47,13 @@ try {
             output('Your account was created. Return to the login page to sign in.');
         } else {
             rawoutput('<form action="create.php?op=create" method="POST">' . resurrection_csrf_field());
-            rawoutput('<table><tr><td>Character name:</td><td><input name="name" maxlength="25" required></td></tr>');
-            rawoutput('<tr><td>Password (12 to 72 bytes):</td><td><input type="password" name="pass1" autocomplete="new-password" required></td></tr>');
-            rawoutput('<tr><td>Confirm password:</td><td><input type="password" name="pass2" autocomplete="new-password" required></td></tr>');
-            rawoutput('<tr><td>Email:</td><td><input type="email" name="email" maxlength="128"></td></tr></table>');
+            rawoutput('<table><tr><td><label for="create-name">Character name:</label></td><td><input name="name" id="create-name" maxlength="25" required></td></tr>');
+            rawoutput('<tr><td><label for="create-pass1">Password (12 to 72 bytes):</label></td><td><input type="password" name="pass1" id="create-pass1" autocomplete="new-password" required></td></tr>');
+            rawoutput('<tr><td><label for="create-pass2">Confirm password:</label></td><td><input type="password" name="pass2" id="create-pass2" autocomplete="new-password" required></td></tr>');
+            rawoutput('<tr><td><label for="create-email">Email:</label></td><td><input type="email" name="email" id="create-email" maxlength="128"></td></tr></table>');
             rawoutput('<label><input type="radio" name="sex" value="1">Female</label> <label><input type="radio" name="sex" value="0" checked>Male</label>');
             modulehook('create-form');
-            rawoutput('<input type="submit" class="button" value="Create your character"></form>');
+            rawoutput('<input type="submit" class="' . resurrection_button_class(true) . '" value="Create your character"></form>');
         }
     }
 } catch (InvalidArgumentException $error) {

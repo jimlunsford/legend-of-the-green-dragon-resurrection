@@ -84,7 +84,7 @@ if ($op==""){
 	$del = translate_inline("Del");
 	$delconfirm = translate_inline("Are you sure you wish to delete this weapon?");
 
-	rawoutput("<table border=0 cellpadding=2 cellspacing=1 bgcolor='#999999'>");
+	rawoutput("<table border=0 cellpadding=2 cellspacing=1".resurrection_presentation("grid").">");
 	rawoutput("<tr class='trhead'><td>$ops</td><td>$name</td><td>$cost</td><td>$damage</td><td>$level</td></tr>");
 	$number=db_num_rows($result);
 	for ($i=0;$i<$number;$i++){

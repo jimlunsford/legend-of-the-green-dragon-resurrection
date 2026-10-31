@@ -105,7 +105,7 @@ if ($op=="" || $op=="search"){
 	$confirm = translate_inline("Are you sure you wish to delete this creature?");
 	$del = translate_inline("Del");
 
-	rawoutput("<table border=0 cellpadding=2 cellspacing=1 bgcolor='#999999'>");
+	rawoutput("<table border=0 cellpadding=2 cellspacing=1".resurrection_presentation("grid").">");
 	rawoutput("<tr class='trhead'>");
 	rawoutput("<td>$opshead</td><td>$idhead</td><td>$name</td><td>$lev</td><td>$weapon</td><td>$winmsg</td><td>$diemsg</td><td>$author</td></tr>");
 	addnav("","creatures.php");

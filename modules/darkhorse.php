@@ -238,7 +238,7 @@ function darkhorse_runevent($type, $link, $showname=true){
 	require_once("lib/sanitize.php");
 	$iname = get_module_setting("tavernname");
 
-	rawoutput("<span style='color: #787878'>");
+	rawoutput(resurrection_presentation("grey"));
 	if ($showname) output_notl("`c`b%s`b`c",$iname);
 	$op = httpget('op');
 	switch($op){

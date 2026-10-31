@@ -5,8 +5,42 @@ require_once __DIR__ . '/../src/Compatibility/array_cursor.php';
 // mail ready
 require_once("lib/dump_item.php");
 
-function showform($layout,$row,$nosave=false,$keypref=false){
-	global $session;
+/**
+ * The id of a showform() control, for its <label for> (Phase 5 task 9): unique per form, letters, digits, - and _.
+ *
+ * @param int $form the showform() call's number on the page
+ * @param string $key the field's name
+ * @return string
+ */
+function showform_control_id($form, $key){
+	return "showform$form-" . preg_replace('/[^A-Za-z0-9_-]/', '-', (string)$key);
+}
+
+/**
+ * The form's sections as tabs in the Resurrection template (Phase 5 task 9): a tab list of buttons, the active one
+ * aria-selected, each controlling its section's table. assets/ui/showform.js shows it and switches the sections; without
+ * the script every section stays shown and the tab list hidden.
+ *
+ * @param int $form the showform() call's number on the page
+ * @param array<int, string> $sections section number => title
+ * @param int $active the section shown first
+ * @return string
+ */
+function showform_tabs($form, $sections, $active){
+	if (!isset($sections[$active])) $active = (int)array_key_first($sections);
+	$tabs = "<div class='rz-tabs' role='tablist' id='showFormSection$form' data-rz-tabs='$form' hidden>";
+	foreach ($sections as $x=>$title) {
+		$selected = $x == $active ? "true" : "false";
+		$tabs .= "<button type='button' class='rz-tab-button' role='tab' id='showFormButton$x' aria-controls='showFormTable$x' aria-selected='$selected'"
+			. ($x == $active ? "" : " tabindex='-1'") . " data-rz-tab='$x'>" . appoencode(full_sanitize($title)) . "</button>";
+	}
+	// The section to come back to after a save (showFormTabIndex) is added to the form by the script, as 1.1.2's script
+	// added it: the form's fields are the same as before.
+	return $tabs . "</div>";
+}
+
+function showform($layout,$row,$nosave=false,$keypref=false,$primary=false){
+	global $session, $output;
  	static $showform_id=0;
  	static $title_id=0;
  	$showform_id++;
@@ -14,10 +48,22 @@ function showform($layout,$row,$nosave=false,$keypref=false){
 	$returnvalues = array();
 	$extensions = array();
 	$extensions = modulehook("showformextensions",$extensions);
-	rawoutput("<table width='100%' cellpadding='0' cellspacing='0'><tr><td>");
-	rawoutput("<div id='showFormSection$showform_id'></div>");
+	// The Resurrection template (Phase 5 task 9) gets tab buttons from the server and assets/ui/showform.js, no inline
+	// script; a 1.1.2 skin keeps 1.1.2's script and markup.
+	$rz = resurrection_ui();
+	$tabsAt = 0;
+	$tabbed = !(isset($session['user']['prefs']['tabconfig']) && $session['user']['prefs']['tabconfig'] == 0);
+	$startIndex = (int)httppost("showFormTabIndex");
+	if ($startIndex == 0) $startIndex = 1;
+	rawoutput("<table width='100%' cellpadding='0' cellspacing='0'".($rz ? " class='rz-showform'" : "")."><tr><td>");
+	if ($rz) {
+		// The tab list goes here once the sections are known.
+		$tabsAt = strlen((string)$output);
+	} else {
+		rawoutput("<div id='showFormSection$showform_id'></div>");
+	}
 	rawoutput("</td></tr><tr><td>&nbsp;</td></tr><tr><td>");
-	rawoutput("<table cellpadding='2' cellspacing='0'>");
+	rawoutput("<table cellpadding='2' cellspacing='0'".($rz ? " class='rz-form-section'" : "").">");
 	$i = 0;
 	while(list($key,$val)=resurrection_array_next($layout)){
 		$pretrans = 0;
@@ -45,7 +91,7 @@ function showform($layout,$row,$nosave=false,$keypref=false){
 		 	$title_id++;
 		 	rawoutput("</table>");
 		 	$formSections[$title_id] = $info[0];
-		 	rawoutput("<table id='showFormTable$title_id' cellpadding='2' cellspacing='0'>");
+			rawoutput("<table id='showFormTable$title_id' cellpadding='2' cellspacing='0'".($rz ? " class='rz-form-section'" : "").($rz && $tabbed ? " role='tabpanel' aria-labelledby='showFormButton$title_id'" : "").">");
 			rawoutput("<tr><td colspan='2' class='trhead'>");
 			output_notl("`b%s`b", $info[0], true);
 			rawoutput("</td></tr>",true);
@@ -59,9 +105,13 @@ function showform($layout,$row,$nosave=false,$keypref=false){
 		}else{
 			if (isset($row[$key]))
 				$returnvalues[$key] = $row[$key];
-			rawoutput("<tr class='".($i%2?'trlight':'trdark')."'><td valign='top'>");
+			// One control: its label is a <label for>. A group (checkboxes, radios) labels each choice instead.
+			$single = !in_array($info[1], array("checklist", "checkpretrans", "radio", "radiopretrans", "bitfield", "bitfieldpretrans", "hidden", "viewonly"), true)
+				&& !array_key_exists($info[1], $extensions);
+			$id = $info[1] == "textarearesizeable" ? "textarea$key" : showform_control_id($showform_id, $keyout);
+			rawoutput("<tr class='".($i%2?'trlight':'trdark')."'><td valign='top'>".($single ? "<label for='$id'>" : ""));
 			output_notl("%s", $info[0],true);
-			rawoutput("</td><td valign='top'>");
+			rawoutput(($single ? "</label>" : "")."</td><td valign='top'>");
 			$i++;
 		}
 		switch ($info[1]){
@@ -89,7 +139,7 @@ function showform($layout,$row,$nosave=false,$keypref=false){
 				break;
 			}
 			natcasesort($skins); //sort them in natural order
-			rawoutput("<select name='$keyout'>");
+			rawoutput("<select name='$keyout' id='$id'>");
 			foreach($skins as $skin) {
 				if ($skin == $row[$key]) {
 					rawoutput("<option value='$skin' selected>".htmlentities(substr($skin, 0, strpos($skin, ".htm")), ENT_COMPAT, getsetting("charset", "ISO-8859-1"))."</option>");
@@ -113,7 +163,7 @@ function showform($layout,$row,$nosave=false,$keypref=false){
 			$vloc = modulehook("validlocation", $vloc);
 			unset($vloc['all']);
 			reset($vloc);
-			rawoutput("<select name='$keyout'>");
+			rawoutput("<select name='$keyout' id='$id'>");
 			foreach($vloc as $loc=>$val) {
 				if ($loc == $row[$key]) {
 					rawoutput("<option value='$loc' selected>".htmlentities($loc, ENT_COMPAT, getsetting("charset", "ISO-8859-1"))."</option>");
@@ -148,7 +198,7 @@ function showform($layout,$row,$nosave=false,$keypref=false){
 					debug("You must pass an array as the value when using a checklist.");
 					$checked=false;
 				}
-				$select.="<input type='checkbox' name='{$keyout}[{$optval}]' value='1'".($checked==$optval?" checked":"").">&nbsp;".("$optdis")."<br>";
+				$select.="<label><input type='checkbox' name='{$keyout}[{$optval}]' value='1'".($checked==$optval?" checked":"").">&nbsp;".("$optdis")."</label><br>";
 			}
 			rawoutput($select);
 			break;
@@ -165,7 +215,7 @@ function showform($layout,$row,$nosave=false,$keypref=false){
 				list($k,$v)=resurrection_array_next($info);
 				$optdis = $v;
 				if (!$pretrans) $optdis = translate_inline($optdis);
-				$select.=("<input type='radio' name='$keyout' value='$optval'".($row[$key]==$optval?" checked":"").">&nbsp;".("$optdis")."<br>");
+				$select.=("<label><input type='radio' name='$keyout' value='$optval'".($row[$key]==$optval?" checked":"").">&nbsp;".("$optdis")."</label><br>");
 			}
 			rawoutput($select);
 			break;
@@ -176,7 +226,7 @@ function showform($layout,$row,$nosave=false,$keypref=false){
 			// we should really try to avoid an infinite loop here if
 			// they define a time string which equates to 0 :/
 			$cur = $row[$key];
-			rawoutput("<select name='$keyout'>");
+			rawoutput("<select name='$keyout' id='$id'>");
 			if ($cur && $cur < date("Y-m-d H:i:s", $start))
 				rawoutput("<option value='$cur' selected>".htmlentities($cur, ENT_COMPAT, getsetting("charset", "ISO-8859-1"))."</option>");
 			for($j = $start; $j < $end; $j = strtotime($step, $j)) {
@@ -193,7 +243,7 @@ function showform($layout,$row,$nosave=false,$keypref=false){
 			$max = (int)$info[3];
 			$step = (int)(isset($info[4])?$info[4]:false);
 			if ($step == 0) $step = 1;
-			rawoutput("<select name='$keyout'>");
+			rawoutput("<select name='$keyout' id='$id'>");
 			if ($min<$max && ($max-$min)/$step>300)
 				$step=max(1,(int)(($max-$min)/300));
 			for($j = $min; $j <= $max; $j += $step) {
@@ -206,7 +256,7 @@ function showform($layout,$row,$nosave=false,$keypref=false){
 			$max = round((float)$info[3],2);
 			$step = round((float)$info[4],2);
 			if ($step==0) $step=1;
-			rawoutput("<select name='$keyout'>", true);
+			rawoutput("<select name='$keyout' id='$id'>", true);
 			$val = round((float)$row[$key], 2);
 			for($j = $min; $j <= $max; $j = round($j+$step,2)) {
 				rawoutput("<option value='$j'".($val==$j?" selected":"").">".HTMLEntities("$j", ENT_COMPAT, getsetting("charset", "ISO-8859-1"))."</option>", true);
@@ -227,13 +277,15 @@ function showform($layout,$row,$nosave=false,$keypref=false){
 			list($k,$disablemask)=resurrection_array_next($info);
 			rawoutput("<input type='hidden' name='$keyout"."[0]' value='1'>", true);
 			while (list($k,$v)=resurrection_array_next($info)){
-				rawoutput("<input type='checkbox' name='$keyout"."[$v]'"
+				rawoutput("<label><input type='checkbox' name='$keyout"."[$v]'"
 					.(isset($row[$key]) && (int)$row[$key] & (int)$v?" checked":"")
 					.($disablemask & (int)$v?"":" disabled")
 					." value='1'> ");
 				list($k,$v)=resurrection_array_next($info);
 				if (!$pretrans) $v = translate_inline($v);
-				output_notl("%s`n",$v,true);
+				output_notl("%s",$v,true);
+				rawoutput("</label>");
+				output_notl("`n");
 			}
 			break;
 		case "datelength":
@@ -259,7 +311,7 @@ function showform($layout,$row,$nosave=false,$keypref=false){
 			}
 			tlschema();
 			reset($vals);
-			rawoutput("<select name='$keyout'>");
+			rawoutput("<select name='$keyout' id='$id'>");
 			while(list($k,$v)=resurrection_array_next($vals)) {
 				rawoutput("<option value=\"".htmlentities($v, ENT_COMPAT, getsetting("charset", "ISO-8859-1"))."\"".($row[$key]==$v?" selected":"").">".htmlentities($v, ENT_COMPAT, getsetting("charset", "ISO-8859-1"))."</option>");
 			}
@@ -273,7 +325,7 @@ function showform($layout,$row,$nosave=false,$keypref=false){
 			list($k,$v)=resurrection_array_next($info);
 			list($k,$v)=resurrection_array_next($info);
 			$select="";
-			$select.=("<select name='$keyout'>");
+			$select.=("<select name='$keyout' id='$id'>");
 			while (list($k,$v)=resurrection_array_next($info)){
 				$optval = $v;
 				list($k,$v)=resurrection_array_next($info);
@@ -293,7 +345,7 @@ function showform($layout,$row,$nosave=false,$keypref=false){
 		case "password":
 			if (array_key_exists($key, $row)) $out = $row[$key];
 			else $out = "";
-			rawoutput("<input type='password' name='$keyout' value='".HTMLEntities($out, ENT_COMPAT, getsetting("charset", "ISO-8859-1"))."'>");
+			rawoutput("<input type='password' name='$keyout' id='$id' value='".HTMLEntities($out, ENT_COMPAT, getsetting("charset", "ISO-8859-1"))."'>");
 			break;
 		case "bool":
 			tlschema("showform");
@@ -303,7 +355,7 @@ function showform($layout,$row,$nosave=false,$keypref=false){
 			// A missing value (a new account's preferences) read as null in 1.1.2, under its notice-free
 			// error level: "No" is selected. PHP 8 warns, and the error handler makes warnings fatal.
 			$current = $row[$key] ?? null;
-			rawoutput("<select name='$keyout'>");
+			rawoutput("<select name='$keyout' id='$id'>");
 			rawoutput("<option value='0'".($current==0?" selected":"").">$no</option>");
 			rawoutput("<option value='1'".($current==1?" selected":"").">$yes</option>");
 			rawoutput("</select>", true);
@@ -328,20 +380,25 @@ function showform($layout,$row,$nosave=false,$keypref=false){
 				$text = $row[$key];
 			}
 			if (isset($resize) && $resize) {
-				rawoutput("<script type=\"text/javascript\">function increase(target, value){  if (target.rows + value > 3 && target.rows + value < 50) target.rows = target.rows + value;}</script>");
+				if (!$rz) rawoutput("<script type=\"text/javascript\">function increase(target, value){  if (target.rows + value > 3 && target.rows + value < 50) target.rows = target.rows + value;}</script>");
 				rawoutput("<textarea id='textarea$key' class='input' name='$keyout' cols='$cols' rows='5'>".htmlentities(str_replace("`n", "\n", $text), ENT_COMPAT, getsetting("charset", "ISO-8859-1"))."</textarea>");
-				rawoutput("<input type='button' onClick=\"increase(textarea$key,1);\" value='+' accesskey='+'><input type='button' onClick=\"increase(textarea$key,-1);\" value='-' accesskey='-'>");
+				if ($rz) {
+					// The same buttons with no inline handler: assets/ui/showform.js resizes the box.
+					rawoutput("<input type='button' class='button' data-rz-resize='textarea$key' data-rz-step='1' value='+' accesskey='+'><input type='button' class='button' data-rz-resize='textarea$key' data-rz-step='-1' value='-' accesskey='-'>");
+				} else {
+					rawoutput("<input type='button' onClick=\"increase(textarea$key,1);\" value='+' accesskey='+'><input type='button' onClick=\"increase(textarea$key,-1);\" value='-' accesskey='-'>");
+				}
 			} else {
-				rawoutput("<textarea class='input' name='$keyout' cols='$cols' rows='5'>".htmlentities(str_replace("`n", "\n", $text), ENT_COMPAT, getsetting("charset", "ISO-8859-1"))."</textarea>");
+				rawoutput("<textarea class='input' name='$keyout' id='$id' cols='$cols' rows='5'>".htmlentities(str_replace("`n", "\n", $text), ENT_COMPAT, getsetting("charset", "ISO-8859-1"))."</textarea>");
 			}
 			break;
 		case "int":
 			if (array_key_exists($key, $row)) $out = $row[$key];
 			else $out = 0;
-			rawoutput("<input name='$keyout' value=\"".HTMLEntities($out, ENT_COMPAT, getsetting("charset", "ISO-8859-1"))."\" size='5'>");
+			rawoutput("<input name='$keyout' id='$id' value=\"".HTMLEntities($out, ENT_COMPAT, getsetting("charset", "ISO-8859-1"))."\" size='5'>");
 			break;
 		case "float":
-			rawoutput("<input name='$keyout' value=\"".htmlentities($row[$key], ENT_COMPAT, getsetting("charset", "ISO-8859-1"))."\" size='8'>");
+			rawoutput("<input name='$keyout' id='$id' value=\"".htmlentities($row[$key], ENT_COMPAT, getsetting("charset", "ISO-8859-1"))."\" size='8'>");
 			break;
 		case "string":
 			$len = 50;
@@ -352,7 +409,7 @@ function showform($layout,$row,$nosave=false,$keypref=false){
 			if ($minlen > 70) $minlen = 70;
 			if (array_key_exists($key, $row)) $val = $row[$key];
 			else $val = "";
-			rawoutput("<input size='$minlen' maxlength='$len' name='$keyout' value=\"".HTMLEntities($val, ENT_COMPAT, getsetting("charset", "ISO-8859-1"))."\">");
+			rawoutput("<input size='$minlen' maxlength='$len' name='$keyout' id='$id' value=\"".HTMLEntities($val, ENT_COMPAT, getsetting("charset", "ISO-8859-1"))."\">");
 			break;
 		default:
 			if (array_key_exists($info[1],$extensions)){
@@ -363,17 +420,20 @@ function showform($layout,$row,$nosave=false,$keypref=false){
 			}else{
 				if (array_key_exists($key, $row)) $val = $row[$key];
 				else $val = "";
-				rawoutput("<input size='50' name='$keyout' value=\"".HTMLEntities($val, ENT_COMPAT, getsetting("charset", "ISO-8859-1"))."\">");
+				rawoutput("<input size='50' name='$keyout' id='$id' value=\"".HTMLEntities($val, ENT_COMPAT, getsetting("charset", "ISO-8859-1"))."\">");
 			}
 		}
 		rawoutput("</td></tr>",true);
 	}
 	rawoutput("</table><br>",true);
-	if ($showform_id==1){
-		$startIndex = (int)httppost("showFormTabIndex");
-		if ($startIndex == 0){
-			$startIndex = 1;
+	if ($rz) {
+		$sections = array();
+		foreach ($formSections as $x=>$title) $sections[(int)$x] = (string)$title;
+		if ($tabbed && $sections !== array()) {
+			$output = substr_replace((string)$output, showform_tabs($showform_id, $sections, $startIndex), $tabsAt, 0);
 		}
+		rawoutput(resurrection_form_script());
+	} elseif ($showform_id==1){
 		if (isset($session['user']['prefs']['tabconfig']) &&
 				$session['user']['prefs']['tabconfig'] == 0) {
 		} else {
@@ -425,8 +485,8 @@ function showform($layout,$row,$nosave=false,$keypref=false){
 			</script>");
 		}
 	}
-	if (isset($session['user']['prefs']['tabconfig']) &&
-			$session['user']['prefs']['tabconfig'] == 0) {
+	if ($rz || (isset($session['user']['prefs']['tabconfig']) &&
+			$session['user']['prefs']['tabconfig'] == 0)) {
 	} else {
 		rawoutput("<script language='JavaScript'>");
 		rawoutput("formSections[$showform_id] = new Array();");
@@ -443,7 +503,7 @@ function showform($layout,$row,$nosave=false,$keypref=false){
 	$save = translate_inline("Save");
 	tlschema();
 	if ($nosave) {}
-	else rawoutput("<input type='submit' class='button' value='$save'>");
+	else rawoutput("<input type='submit' class='".resurrection_button_class($primary)."' value='$save'>");
 	return $returnvalues;
 }
 ?>

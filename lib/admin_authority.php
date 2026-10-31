@@ -73,7 +73,7 @@ function resurrection_bio_form(string $op, array $row, string $label): void {
     $url = 'bios.php?op=' . $op . '&userid=' . (int)$row['acctid'];
     addnav('', $url);
     output_notl('`![');
-    rawoutput("<form method='POST' action='" . htmlspecialchars($url, ENT_QUOTES, 'UTF-8') . "' style='display:inline'>" .
+    rawoutput("<form method='POST' action='" . htmlspecialchars($url, ENT_QUOTES, 'UTF-8') . "'" . resurrection_presentation('inline-form') . ">" .
         resurrection_action_fields('bio-moderation-' . (int)$row['acctid'], resurrection_bio_context($op, $row)) .
         "<button type='submit' class='button'>" . htmlspecialchars($label, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '</button></form>');
     output_notl(']');
@@ -168,7 +168,7 @@ function resurrection_donation_form(array $row, int $amt, string $reason, string
     foreach (['amt' => (string)$amt, 'reason' => $reason, 'txnid' => $txnid] as $key => $value) {
         $hidden .= "<input type='hidden' name='$key' value='" . htmlspecialchars($value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . "'>";
     }
-    rawoutput("<form method='POST' action='" . htmlspecialchars($url, ENT_QUOTES, 'UTF-8') . "' style='display:inline'>" .
+    rawoutput("<form method='POST' action='" . htmlspecialchars($url, ENT_QUOTES, 'UTF-8') . "'" . resurrection_presentation('inline-form') . ">" .
         resurrection_action_fields('donation-add-' . (int)$row['acctid'], resurrection_donation_context($row, $amt, $reason, $txnid, $payment)) .
         $hidden . "<button type='submit' class='button'>");
     output_notl('%s (%s/%s)', $row['name'], $row['donation'], $row['donationspent']);

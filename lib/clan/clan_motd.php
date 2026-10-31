@@ -63,13 +63,13 @@
 			addnav("","clan.php?op=motd");
 			rawoutput("<form action='clan.php?op=motd' method='POST'>".resurrection_action_fields('clan-motd', resurrection_clan_text_context($claninfo, $session['user'])));
 			output("`&`bMoTD:`b `7(4096 chars)`n");
-			rawoutput("<textarea name='clanmotd' cols='50' rows='10' class='input' style='width: 66%'>".resurrection_clan_attribute($claninfo['clanmotd'])."</textarea><br>");
+			rawoutput("<textarea name='clanmotd' cols='50' rows='10' ".resurrection_presentation("clan-textarea").">".resurrection_clan_attribute($claninfo['clanmotd'])."</textarea><br>");
 			output("`n`&`bDescription:`b `7(4096 chars)`n");
 			$blocked = translate_inline("Your clan has been blocked from posting a description.`n");
 			if ((int)$claninfo['descauthor']===RESURRECTION_CLAN_DESC_BLOCKED){
 				output_notl($blocked);
 			}else{
-				rawoutput("<textarea name='clandesc' cols='50' rows='10' class='input' style='width: 66%'>".resurrection_clan_attribute($claninfo['clandesc'])."</textarea><br>");
+				rawoutput("<textarea name='clandesc' cols='50' rows='10' ".resurrection_presentation("clan-textarea").">".resurrection_clan_attribute($claninfo['clandesc'])."</textarea><br>");
 			}
 			if ($leader){
 				output("`n`&`bCustom Talk Line`b `7(blank means \"says\" -- 15 chars max)`n");

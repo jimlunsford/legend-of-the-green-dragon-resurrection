@@ -540,7 +540,7 @@ function execute_ai_script($script) {
     if (!is_string($script)) throw new DomainException('Unsupported creature behavior.');
     $stolen = \Resurrection\Game\CreatureAi::apply($script, $session['user'], $badguy, (int)e_rand(0, 7));
     if ($stolen > 0) {
-        rawoutput("<br /><b><span style='color: white'>The pickpocket takes <span style='color: gold'>$stolen gold</span>!</span></b><br /><br />");
+        rawoutput("<br /><b>".resurrection_presentation("white")."The pickpocket takes ".resurrection_presentation("gold")."$stolen gold</span>!</span></b><br /><br />");
     }
 }
 

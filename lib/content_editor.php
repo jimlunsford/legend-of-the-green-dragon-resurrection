@@ -109,8 +109,8 @@ function resurrection_content_form(string $url, string $scope, string $context, 
 /** The 1.1.2 "Del" link, with its confirmation, as a protected POST form bound to the row shown. */
 function resurrection_content_delete_form(string $url, string $scope, string $context, string $label, string $confirm): string {
     $confirm = htmlspecialchars(json_encode($confirm, JSON_THROW_ON_ERROR | JSON_INVALID_UTF8_SUBSTITUTE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT), ENT_QUOTES, 'UTF-8');
-    return resurrection_content_form($url, $scope, $context, " style='display:inline;margin:0' onsubmit='return confirm($confirm);'") .
-        "<button type='submit' style='background:none;border:0;padding:0;margin:0;font:inherit;color:inherit;cursor:pointer;text-decoration:underline'>" .
+    return resurrection_content_form($url, $scope, $context, resurrection_presentation('inline-form-flush') . " onsubmit='return confirm($confirm);'") .
+        "<button type='submit'" . resurrection_presentation('link-button') . ">" .
         htmlspecialchars($label, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '</button></form>';
 }
 

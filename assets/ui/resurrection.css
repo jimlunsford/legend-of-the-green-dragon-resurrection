@@ -278,17 +278,30 @@ pre { max-width: 100%; overflow-x: auto; }
   line-height: var(--leading-ui);
 }
 
-/* Wide tables scroll in their own box, never the page. */
+/*
+  Tables (Phase 5 task 9). A wide table scrolls in its own box, never the page; the box's edge shows where it ends.
+  Cells keep the alignment the page prints (align='right' on a number column stays right).
+*/
 .rz-content table { display: block; max-width: 100%; overflow-x: auto; border-collapse: collapse; }
 .rz-content table:not([width]) { width: fit-content; }
 .rz-content table table { display: table; overflow: visible; }
+.rz-content table:has(> tbody > tr.trhead, > tr.trhead, > thead > tr.trhead) { border: 1px solid var(--border); border-radius: var(--radius-control); }
 .rz-content td, .rz-content th { padding: 6px 10px; vertical-align: top; }
+.rz-content td[align="right"], .rz-content th[align="right"] { text-align: right; }
+.rz-content td[align="center"], .rz-content th[align="center"] { text-align: center; }
 
-/* The row classes the game prints. No row uses --raised, so a control in a row never sits on it. */
+/*
+  The row classes the game prints. A heading row is --raised with --muted small capitals; the body rows are a quiet
+  zebra of --panel and --header (text 4.5:1 or better on both); the highlighted row (the player's own) has an --accent
+  left marker. Controls sit in body rows, never on --raised.
+*/
 .trhead, .trhead td, .trhead th {
-  background: var(--header);
+  background: var(--raised);
   color: var(--muted);
+  font-size: var(--size-label);
   font-weight: var(--weight-ui-bold);
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
 }
 .trhead td, .trhead th { border-bottom: 1px solid var(--border); }
 .trlight { background: var(--panel); }
@@ -296,37 +309,71 @@ pre { max-width: 100%; overflow-x: auto; }
 .trhilight { background: var(--panel); }
 .trhilight > td:first-child, .trhilight > th:first-child { box-shadow: inset 3px 0 0 var(--accent); }
 
-/* Inputs: a --raised fill with an --input-border outline, on --panel or darker. */
+/*
+  Admin and module tables 1.1.2 drew as a grid of grey lines: a 1px --border line between cells. The about page's
+  module list keeps 1.1.2's bgcolor (its text stays verbatim), so the rule names it too.
+*/
+.rz-content table.rz-grid, .rz-content table[bgcolor="#999999"] {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  background: transparent;
+}
+.rz-grid td, .rz-grid th, table[bgcolor="#999999"] td, table[bgcolor="#999999"] th { border: 1px solid var(--border); }
+
+/*
+  Inputs (Phase 5 task 9): 44px tall (a textarea taller), a --panel fill, never --raised, an --input-border outline
+  (3:1 or better on --panel, --header and --ground), the control radius and the focus ring. Placeholder text is --muted,
+  6.76:1 on --panel.
+*/
 input:not([type]), input[type="text"], input[type="password"], input[type="number"], input[type="email"],
 input[type="search"], input[type="url"], input[type="tel"], select, textarea {
   max-width: 100%;
   min-height: var(--touch-target);
   padding: 8px 12px;
-  background: var(--raised);
+  background: var(--panel);
   color: var(--text);
   border: 1px solid var(--input-border);
   border-radius: var(--radius-control);
   font-family: var(--font-ui);
   font-size: var(--size-ui);
+  vertical-align: middle;
 }
-textarea { min-height: 88px; line-height: var(--leading-ui); }
+textarea { min-height: 88px; line-height: var(--leading-ui); vertical-align: top; }
+::placeholder { color: var(--muted); opacity: 1; }
 input[type="checkbox"], input[type="radio"] { width: 20px; height: 20px; accent-color: var(--accent); vertical-align: middle; }
+.rz-content label { cursor: pointer; }
+/* A checkbox or radio inside its label: the whole label is the tap target, 44px tall. */
+.rz-content label:has(> input[type="checkbox"]), .rz-content label:has(> input[type="radio"]) {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: var(--touch-target);
+  min-width: var(--touch-target);
+  margin-right: 8px;
+}
+.rz-wide { width: 66%; }
 
-/* Buttons: secondary by default (--raised fill, --input-border outline, --text label). */
+/*
+  Buttons (Phase 5 task 9). Secondary, the default: no fill, an --input-border outline, --text label. Primary, one per
+  form: --accent fill, --ground label, weight 700. Both 44px tall, 16px each side, the control radius and the focus
+  ring. Buttons side by side keep an 8px gap and wrap.
+*/
 .button, button, input[type="submit"], input[type="button"], input[type="reset"] {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   min-height: var(--touch-target);
-  padding: 0 18px;
-  background: var(--raised);
+  margin: 4px 8px 4px 0;
+  padding: 0 16px;
+  background: transparent;
   color: var(--text);
   border: 1px solid var(--input-border);
   border-radius: var(--radius-control);
   font-family: var(--font-ui);
   font-size: var(--size-ui);
-  font-weight: var(--weight-ui-bold);
+  font-weight: var(--weight-ui-medium);
   text-decoration: none;
+  vertical-align: middle;
   cursor: pointer;
 }
 .button:hover, button:hover, input[type="submit"]:hover, input[type="button"]:hover, input[type="reset"]:hover {
@@ -334,17 +381,57 @@ input[type="checkbox"], input[type="radio"] { width: 20px; height: 20px; accent-
   color: var(--accent-hover);
 }
 
-/* The one primary action: gold fill, --ground label. */
+/* The one primary action: gold fill, --ground label, weight 700. */
 .rz-button-primary, input.rz-button-primary {
   background: var(--accent);
   border-color: var(--accent);
   color: var(--ground);
+  font-weight: var(--weight-ui-bold);
 }
 .rz-button-primary:hover, input.rz-button-primary:hover {
   background: var(--accent-hover);
   border-color: var(--accent-hover);
   color: var(--ground);
 }
+
+/* A destructive action (preferences' delete): secondary, with a --damage outline and label. */
+.rz-button-danger, input.rz-button-danger { border-color: var(--damage); color: var(--damage); }
+.rz-button-danger:hover, input.rz-button-danger:hover { border-color: var(--damage); color: var(--text); }
+
+/* A button drawn as a link (the editors' delete): the link's look, the button's focus ring. */
+.rz-link-button, .rz-link-button:hover {
+  display: inline;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  background: none;
+  border: 0;
+  color: inherit;
+  font: inherit;
+  text-decoration: underline;
+}
+
+/*
+  showform() tabs (Phase 5 task 9): 44px buttons in a row that wraps; the chosen tab --accent with aria-selected.
+  The list stays hidden until assets/ui/showform.js shows it.
+*/
+.rz-tabs { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 8px; }
+.rz-tabs[hidden] { display: none; }
+.rz-tab-button { margin: 0; }
+.rz-tab-button[aria-selected="true"] { background: var(--accent); border-color: var(--accent); color: var(--ground); font-weight: var(--weight-ui-bold); }
+.rz-tab-button[aria-selected="true"]:hover { background: var(--accent-hover); border-color: var(--accent-hover); color: var(--ground); }
+.rz-content table[hidden] { display: none; }
+
+/* Presentation 1.1.2 printed inline (Phase 5 task 9; resurrection_presentation() in lib/output.php). */
+.rz-center { text-align: center; }
+.rz-center > table, .rz-center > form > table { margin-left: auto; margin-right: auto; }
+.rz-float-right { float: right; clear: right; }
+.rz-float-left { float: left; clear: left; }
+.rz-inline { display: inline; margin: 0; }
+.rz-larger { font-size: 1.25em; }
+.rz-typed { font-family: monospace; white-space: pre-wrap; }
+.rz-indent { padding-left: 20pt; }
+.rz-plain-link { text-decoration: none; }
 
 /* Sign-in box on the home page (the login part). */
 .rz-login {
@@ -585,6 +672,21 @@ a.hotmotd { color: var(--accent); }
 
   /* Wide tables scroll inside their own box, never the page. */
   .rz-content table { display: block; max-width: 100%; overflow-x: auto; }
+
+  /*
+    A showform() form (preferences, Phase 5 task 9) stacks on a phone: each label sits above its control, which takes
+    the full width, so the form never needs to scroll sideways.
+  */
+  .rz-content table.rz-showform, .rz-showform > tbody, .rz-showform > tbody > tr, .rz-showform > tbody > tr > td,
+  .rz-content table.rz-form-section, .rz-form-section > tbody, .rz-form-section > tbody > tr, .rz-form-section > tbody > tr > td {
+    display: block;
+    width: 100%;
+  }
+  .rz-content table.rz-form-section[hidden] { display: none; }
+  .rz-form-section > tbody > tr > td { padding: 4px 10px; }
+  .rz-form-section > tbody > tr { padding: 6px 0; }
+  .rz-form-section input:not([type="checkbox"]):not([type="radio"]):not([type="button"]):not([type="submit"]),
+  .rz-form-section select, .rz-form-section textarea { width: 100%; }
 
   /*
     Phone header, signed out (and popups): the wordmark on one line, shrunk to the screen's width (its width is about

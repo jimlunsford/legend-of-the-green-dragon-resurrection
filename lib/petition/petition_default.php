@@ -86,22 +86,31 @@ if ($op === 'submit' || count($post)>0){
 		output_notl("%s", htmlentities($session['user']['emailaddress']));
 		rawoutput("<input type='hidden' name='email' value=\"".htmlentities($session['user']['emailaddress'], ENT_COMPAT, getsetting("charset", "ISO-8859-1"))."\">");
 	} else {
+		// Each field's label (Phase 5 task 9); the plain text closes no color span.
+		output_notl("`0");
+		rawoutput("<label for='petition-charname'>");
 		output("Your Character's Name: ");
-		rawoutput("<input name='charname' value=\"".htmlentities($session['user']['name'], ENT_COMPAT, getsetting("charset", "ISO-8859-1"))."\" size='46'>");
+		rawoutput("</label>");
+		rawoutput("<input name='charname' id='petition-charname' value=\"".htmlentities($session['user']['name'], ENT_COMPAT, getsetting("charset", "ISO-8859-1"))."\" size='46'>");
+		rawoutput("<label for='petition-email'>");
 		output("`nYour email address: ");
-		rawoutput("<input name='email' value=\"".htmlentities($session['user']['emailaddress'], ENT_COMPAT, getsetting("charset", "ISO-8859-1"))."\" size='50'>");
+		rawoutput("</label>");
+		rawoutput("<input name='email' id='petition-email' value=\"".htmlentities($session['user']['emailaddress'], ENT_COMPAT, getsetting("charset", "ISO-8859-1"))."\" size='50'>");
 		$nolog = translate_inline("Character is not logged in!!");
 		rawoutput("<input name='unverified' type='hidden' value='$nolog'>");
 	}
+	output_notl("`0");
+	rawoutput("<label for='petition-description'>");
 	output("`nDescription of the problem:`n");
+	rawoutput("</label>");
     try { $problem = \Resurrection\Http\Input::string($_GET, 'problem'); }
     catch (InvalidArgumentException $error) { http_response_code(400); exit('Invalid petition.'); }
     $problem = htmlspecialchars($problem, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
     if (httpget('abuse') === 'yes') {
-        rawoutput("<textarea name='description' cols='55' rows='7' class='input'></textarea>");
+        rawoutput("<textarea name='description' id='petition-description' cols='55' rows='7' class='input'></textarea>");
         rawoutput("<input type='hidden' name='abuse' value=\"$problem\"><br><hr><pre>$problem</pre><hr><br>");
     } else {
-        rawoutput("<textarea name='description' cols='55' rows='7' class='input'>$problem</textarea>");
+        rawoutput("<textarea name='description' id='petition-description' cols='55' rows='7' class='input'>$problem</textarea>");
     }
 	modulehook("petitionform",array());
 	$submit = translate_inline("Submit");

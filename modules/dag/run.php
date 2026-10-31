@@ -8,7 +8,7 @@ function dag_run_private(){
     }
 	if (httpget('manage')!="true"){
 		page_header("Dag Durnick's Table");
-		output("<span style='color: #9900FF'>",true);
+		output(resurrection_presentation("violet"),true);
 	}else{
 		dag_manage();
 	}
@@ -28,7 +28,7 @@ function dag_run_private(){
 		// Added for new Bounty Code
 		output("`c`bThe Bounty List`b`c`n");
 		$result = db_query('SELECT bountyid,amount,target,setter,setdate FROM ' . db_prefix('bounty') . ' WHERE status=0 AND setdate<=? ORDER BY bountyid ASC',true,[date('Y-m-d H:i:s')]);
-		rawoutput("<table border=0 cellpadding=2 cellspacing=1 bgcolor='#999999'>");
+		rawoutput("<table border=0 cellpadding=2 cellspacing=1".resurrection_presentation("grid").">");
 		$amount = translate_inline("Amount");
 		$level = translate_inline("Level");
 		$name = translate_inline("Name");

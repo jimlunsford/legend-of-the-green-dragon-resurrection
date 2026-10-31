@@ -124,6 +124,92 @@ function debug($text, $force=false){
 }
 
 /**
+ * Whether the page renders in the Resurrection template (Phase 5 task 9): the loaded template has the Resurrection's
+ * own parts. A 1.1.2 skin, or no template yet (operator pages before one loads), gets 1.1.2's markup.
+ *
+ * @return bool
+ */
+function resurrection_ui(){
+	global $template;
+	return is_array($template) && isset($template['navstart'], $template['tabbar']);
+}
+
+/**
+ * The static script for the Resurrection template's forms (Phase 5 task 9: showform()'s tabs, its resizable text
+ * boxes, a button's confirmation), once a page; nothing in a 1.1.2 skin.
+ *
+ * @return string
+ */
+function resurrection_form_script(){
+	static $done = false;
+	if ($done || !resurrection_ui()) return "";
+	$done = true;
+	return "<script src=\"assets/ui/showform.js\" defer></script>";
+}
+
+/**
+ * The class of a form's button (Phase 5 task 9): "button", 1.1.2's, for every button; in the Resurrection template the
+ * form's one primary action adds "rz-button-primary". A 1.1.2 skin's button keeps its markup byte for byte.
+ *
+ * @param bool $primary whether this is the form's primary action
+ * @return string
+ */
+function resurrection_button_class($primary = false){
+	return $primary && resurrection_ui() ? "button rz-button-primary" : "button";
+}
+
+/**
+ * Presentation the game used to print inline (Phase 5 task 9): in the Resurrection template a class its stylesheet
+ * styles, in a 1.1.2 skin the exact markup 1.1.2 printed, byte for byte, until task 15 removes the skins. This map is
+ * the one place that markup is kept (tests/tooling/test_ui_forms.py allows it here only).
+ *
+ * @param string $key
+ * @return string
+ */
+function resurrection_presentation($key){
+	static $markup = array(
+		// appoencode(): `c, `> and `<.
+		"center" => array("<div class='rz-center'>", "<div align='center'>"),
+		"float-right" => array("<div class='rz-float-right'>", "<div style='float: right; clear: right;'>"),
+		"float-left" => array("<div class='rz-float-left'>", "<div style='float: left; clear: left;'>"),
+		// Admin and module tables drawn as a grid of 1px lines (cellspacing over a grey table background).
+		"grid" => array(" class='rz-grid'", " bgcolor='#999999'"),
+		// A form inside a line of text or a table cell.
+		"inline-form" => array(" class='rz-inline'", " style='display:inline'"),
+		"inline-form-dq" => array(' class="rz-inline"', ' style="display:inline"'),
+		"inline-form-flush" => array(" class='rz-inline'", " style='display:inline;margin:0'"),
+		// A button drawn as a link: the editors' delete buttons.
+		"link-button" => array(" class='rz-link-button'", " style='background:none;border:0;padding:0;margin:0;font:inherit;color:inherit;cursor:pointer;text-decoration:underline'"),
+		// The weapon and armor shops' item buttons: the shop's primary action in the Resurrection template.
+		"shop-button" => array(" class='button rz-button-primary'", " style='background:none;border:0;padding:0;margin:0;font:inherit;cursor:pointer;text-decoration:underline'"),
+		// Larger text: a heading-like line.
+		"larger" => array("<span class='rz-larger'>", "<font size='+1'>"),
+		"larger-end" => array("</span>", "</font>"),
+		// Narrators' colored lines in the inn and the bundled modules.
+		"violet" => array("<span class='colBlueViolet'>", "<span style='color: #9900FF'>"),
+		"grey" => array("<span class='colLtBlack'>", "<span style='color: #787878'>"),
+		"white" => array("<span class='colLtWhite'>", "<span style='color: white'>"),
+		"gold" => array("<span class='colLtYellow'>", "<span style='color: gold'>"),
+		// A warning on the user editor, larger.
+		"warning" => array("<span class='rz-larger'>", "<span style='font-size: 20px'>"),
+		// A petition's body, as typed.
+		"typed" => array("<span class='rz-typed'>", "<span style='font-family: fixed-width'>"),
+		"pre-wrap" => array("<pre class='rz-typed'>", '<pre style="white-space:pre-wrap">'),
+		// Nested values (showform's view-only arrays) and a clan's message of the day, indented.
+		"indent" => array("<div class='rz-indent'>", "<div style='padding-left: 20pt;'>"),
+		"clan-motd" => array("<div class='rz-indent'>", "<div style='margin-left: 15px; padding-left: 15px;'>"),
+		// A clan's message and description boxes, two thirds of the width.
+		"clan-textarea" => array("class='input rz-wide'", "class='input' style='width: 66%'"),
+		// A speaker's name in the commentary, a link without its underline.
+		"plain-link" => array(" class='rz-plain-link'", " style='text-decoration: none'"),
+		// The preferences' Delete Character cell: magenta in 1.1.2, a danger button in the Resurrection template.
+		"danger-cell" => array("", " style='background-color:#FF00FF'"),
+	);
+	if (!isset($markup[$key])) return "";
+	return $markup[$key][resurrection_ui() ? 0 : 1];
+}
+
+/**
  * Generates the appropriate output based on the LOGD coding system (ie: `b: Bold, `i: Italic)
  *
  * @param string $data The string to be output
@@ -232,7 +318,7 @@ function appoencode($data,$priv=false){
 						$nestedtags['div']=false;
 					}else{
 						$nestedtags['div']=true;
-						$out.="<div align='center'>";
+						$out.=resurrection_presentation("center");
 					}
 					break;
 				case "h":
@@ -250,7 +336,7 @@ function appoencode($data,$priv=false){
 						$out.="</div>";
 					}else{
 						$nestedtags['>']=true;
-						$out.="<div style='float: right; clear: right;'>";
+						$out.=resurrection_presentation("float-right");
 					}
 					break;
 				case "<":
@@ -259,7 +345,7 @@ function appoencode($data,$priv=false){
 						$out.="</div>";
 					}else{
 						$nestedtags['<']=true;
-						$out.="<div style='float: left; clear: left;'>";
+						$out.=resurrection_presentation("float-left");
 					}
 					break;
 				case "H":

@@ -29,10 +29,10 @@ function resurrection_service_context(string $action, string $target, array $ext
  * The protected POST form for a service; its button reads like the 1.1.2 link.
  * @param string|array<int, mixed> $label translated LoGD text, or a format array as addnav() takes it (translated here).
  */
-function resurrection_service_form(string $url, string $scope, string $context, string|array $label): void {
+function resurrection_service_form(string $url, string $scope, string $context, string|array $label, bool $primary = false): void {
     addnav('', $url);
     rawoutput("<form method='POST' action='" . htmlspecialchars($url, ENT_QUOTES, 'UTF-8') . "'>" .
-        resurrection_action_fields($scope, $context) . "<button type='submit' class='button'>");
+        resurrection_action_fields($scope, $context) . "<button type='submit' class='" . resurrection_button_class($primary) . "'>");
     if (is_array($label)) output(...$label); else output_notl('%s', $label);
     rawoutput('</button></form>');
 }

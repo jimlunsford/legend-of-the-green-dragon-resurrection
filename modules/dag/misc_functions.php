@@ -102,7 +102,7 @@ function dag_manage(){
 		output("`c`bThe Bounty List`b`c`n");
 		$sql = "SELECT bountyid,amount,target,setter,setdate FROM " . db_prefix("bounty") . " WHERE status=0 ORDER BY bountyid ASC";
 		$result = db_query($sql);
-		rawoutput("<table border=0 cellpadding=2 cellspacing=1 bgcolor='#999999'>");
+		rawoutput("<table border=0 cellpadding=2 cellspacing=1".resurrection_presentation("grid").">");
 		$amt = translate_inline("Amount");
 		$lev = translate_inline("Level");
 		$name = translate_inline("Name");
@@ -414,7 +414,7 @@ function dag_manage(){
 		}
 		$sql = "SELECT bountyid,amount,target,setter,setdate,status,winner,windate FROM " . db_prefix("bounty").$t.$s.$d;
 		$result = db_query($sql);
-		rawoutput("<table border=0 cellpadding=2 cellspacing=1 bgcolor='#999999'>");
+		rawoutput("<table border=0 cellpadding=2 cellspacing=1".resurrection_presentation("grid").">");
 		$id = translate_inline("ID");
 		$amt = translate_inline("Amt");
 		$targ = translate_inline("Target");

@@ -78,7 +78,7 @@ function getUserInfo(filename,divid){
 }
 </script>
 ");
-rawoutput("<table border=0 cellpadding=2 cellspacing=1 bgcolor='#999999'>");
+rawoutput("<table border=0 cellpadding=2 cellspacing=1".resurrection_presentation("grid").">");
 $ops = translate_inline("Ops");
 $bauth = translate_inline("Ban Author");
 $ipd = translate_inline("IP/ID");

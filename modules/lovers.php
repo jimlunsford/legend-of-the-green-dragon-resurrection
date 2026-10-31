@@ -104,7 +104,7 @@ function lovers_run(){
 	require_once("lib/villagenav.php");
 	$iname = getsetting("innname", LOCATION_INN);
 	page_header($iname);
-	rawoutput("<span style='color: #9900FF'>");
+	rawoutput(resurrection_presentation("violet"));
     try {
         $op = \Resurrection\Http\Input::choice($_GET, 'op', ['flirt','chat'], 'flirt');
         if (array_diff(array_keys($_GET), ['module','op','act','c']) !== []) throw new InvalidArgumentException('Unexpected query.');

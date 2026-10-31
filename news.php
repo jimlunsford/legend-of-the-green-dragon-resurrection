@@ -73,7 +73,7 @@ while ($row = db_fetch_assoc($result)) {
 		require_once("lib/admin_tools.php");
 		$del = htmlspecialchars(translate_inline("Del"), ENT_QUOTES, 'UTF-8');
 		$delurl = "superuser.php?op=newsdelete&newsid=".(int)$row['newsid']."&return=".URLEncode($_SERVER['REQUEST_URI']);
-		rawoutput("[ <form method='POST' action='$delurl' style='display:inline'>".resurrection_action_fields('news-delete-'.(int)$row['newsid'], resurrection_news_delete_context($row))."<button type='submit' class='button'>$del</button></form> ]&nbsp;");
+		rawoutput("[ <form method='POST' action='$delurl'".resurrection_presentation('inline-form').">".resurrection_action_fields('news-delete-'.(int)$row['newsid'], resurrection_news_delete_context($row))."<button type='submit' class='button'>$del</button></form> ]&nbsp;");
 		addnav("",$delurl);
 	}
 	if ($base_arguments === null) continue;

@@ -78,7 +78,7 @@ function motd_admin($id, $poll=false) {
 		// 1.1.2's Del link deleted on GET; it is now a protected POST bound to the item.
 		$row = resurrection_motd_row((int)$id);
 		if ($row !== null) {
-			rawoutput("<form action='motd.php?op=del&id=".(int)$id."' method='POST' style='display:inline' onSubmit=\"return confirm('".htmlspecialchars(addslashes($confirm), ENT_QUOTES, 'UTF-8')."');\">".
+			rawoutput("<form action='motd.php?op=del&id=".(int)$id."' method='POST'".resurrection_presentation('inline-form')." onSubmit=\"return confirm('".htmlspecialchars(addslashes($confirm), ENT_QUOTES, 'UTF-8')."');\">".
 				resurrection_action_fields('motd-del-'.(int)$id, resurrection_motd_context($row)).
 				"<button type='submit' class='button'>".htmlspecialchars($del, ENT_QUOTES, 'UTF-8')."</button></form> ]");
 		}

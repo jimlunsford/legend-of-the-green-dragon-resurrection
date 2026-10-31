@@ -90,9 +90,9 @@ function resurrection_equipment_purchase(array $shop, int $id): array {
 function resurrection_equipment_form_open(array $shop, int $id, int $tier): void {
     $url = $shop['page'] . '?op=buy&id=' . $id;
     addnav('', $url);
-    rawoutput("<form method='POST' action='" . htmlspecialchars($url, ENT_QUOTES, 'UTF-8') . "' style='display:inline;margin:0'>" .
+    rawoutput("<form method='POST' action='" . htmlspecialchars($url, ENT_QUOTES, 'UTF-8') . "'" . resurrection_presentation('inline-form-flush') . ">" .
         resurrection_action_fields($shop['kind'] . '-buy-' . $id, resurrection_equipment_context($shop, $id, $tier)) .
-        "<button type='submit' style='background:none;border:0;padding:0;margin:0;font:inherit;cursor:pointer;text-decoration:underline'>");
+        "<button type='submit'" . resurrection_presentation('shop-button') . ">");
 }
 
 function resurrection_equipment_form_close(): void {

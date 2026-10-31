@@ -98,7 +98,7 @@
 				$buttons .= " ]";
 				if ($allowed !== [] && $actor !== null) {
 					resurrection_clan_form("clan.php?op=membership&member=".(int)$row['acctid'], 'clan-member-'.(int)$row['acctid'],
-						resurrection_clan_context($ranks, $actor, $member), $buttons, " style='display:inline'");
+						resurrection_clan_context($ranks, $actor, $member), $buttons, resurrection_presentation('inline-form'));
 				} else rawoutput($buttons);
 				rawoutput("</td>");
 			}

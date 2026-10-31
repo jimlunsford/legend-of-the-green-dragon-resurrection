@@ -65,7 +65,7 @@ if ($op=="edit"){
 if ($op == "") {
 	$sql = "SELECT * FROM " . db_prefix("taunts");
 	$result = db_query($sql);
-	rawoutput("<table border=0 cellpadding=2 cellspacing=1 bgcolor='#999999'>");
+	rawoutput("<table border=0 cellpadding=2 cellspacing=1".resurrection_presentation("grid").">");
 	$op = translate_inline("Ops");
 	$t = translate_inline("Taunt String");
 	$auth = translate_inline("Author");

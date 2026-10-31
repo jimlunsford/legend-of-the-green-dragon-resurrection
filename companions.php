@@ -98,7 +98,7 @@ if ($op==""){
 	$deac = translate_inline("Deactivate");
 	$act = translate_inline("Activate");
 
-	rawoutput("<table border=0 cellpadding=2 cellspacing=1 bgcolor='#999999'>");
+	rawoutput("<table border=0 cellpadding=2 cellspacing=1".resurrection_presentation("grid").">");
 	rawoutput("<tr class='trhead'><td nowrap>$ops</td><td>$name</td><td>$cost</td></tr>");
 	$cat = "";
 	$count=0;

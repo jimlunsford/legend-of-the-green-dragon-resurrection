@@ -105,7 +105,7 @@ function sethsong_run(){
 	tlschema("inn");
 	page_header($iname);
 
-	rawoutput("<span style='color: #9900FF'>");
+	rawoutput(resurrection_presentation("violet"));
 	tlschema();
 
 	// Short circuit out if we've heard enough

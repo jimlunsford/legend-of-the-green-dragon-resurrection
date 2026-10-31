@@ -181,7 +181,7 @@ if ($op==""){
 		rawoutput("<td nowrap>[ ");
 		rawoutput("<a href='viewpetition.php?op=view&id=$pid'>$view</a>",true);
 		// Status changes are POST forms bound to this petition's current status.
-		rawoutput(" | <form method='POST' action='viewpetition.php?op=setstat&id=$pid' style='display:inline'>".resurrection_petition_status_fields($pid, (int)$row['status']));
+		rawoutput(" | <form method='POST' action='viewpetition.php?op=setstat&id=$pid'".resurrection_presentation('inline-form').">".resurrection_petition_status_fields($pid, (int)$row['status']));
 		rawoutput("<button type='submit' name='setstat' value='2'>".htmlspecialchars($close, ENT_QUOTES)."</button>");
 		output_notl(" | %s: ", $mark);
 		output_notl("<button type='submit' name='setstat' value='0'>`b`&U`0`b</button>/",true);
@@ -262,7 +262,7 @@ if ($op==""){
 	// Petition Ops were GET navs in 1.1.2; they are now one POST form bound to the current status.
 	addnav("","viewpetition.php?op=setstat&id=$id");
 	output("`@Petition Ops:`0 ");
-	rawoutput("<form method='POST' action='viewpetition.php?op=setstat&id=$id' style='display:inline'>".resurrection_petition_status_fields($id, (int)$row['status']));
+	rawoutput("<form method='POST' action='viewpetition.php?op=setstat&id=$id'".resurrection_presentation('inline-form').">".resurrection_petition_status_fields($id, (int)$row['status']));
 	reset($statuses);
 	while (list($key,$val)=resurrection_array_next($statuses)){
 		rawoutput("<button type='submit' name='setstat' value='".(int)$key."'>");
@@ -308,14 +308,14 @@ if ($op==""){
 	$body = htmlentities($row['body'], ENT_COMPAT, getsetting("charset", "ISO-8859-1"));
 	$body = preg_replace("'([[:alnum:]_.-]+[@][[:alnum:]_.-]{2,}([.][[:alnum:]_.-]{2,})+)'i","<a href='mailto:\\1?subject=RE: $peti&body=".str_replace("+"," ",URLEncode("\n\n----- $yourpeti -----\n".$row['body']))."'>\\1</a>",$body);
 	$body = preg_replace("'([\\[][[:alnum:]_.-]+[\\]])'i","<span class='colLtRed'>\\1</span>",$body);
-	rawoutput("<span style='font-family: fixed-width'>".nl2br($body)."</span>");
+	rawoutput(resurrection_presentation("typed").nl2br($body)."</span>");
 	commentdisplay("`n`@Commentary:`0`n", "pet-$id","Add information",200);
 	if ($viewpageinfo){
 		output("`n`n`@Page Info:`&`n");
 		$body = HTMLEntities((string)$row['pageinfo'], ENT_COMPAT, getsetting("charset", "ISO-8859-1"));
 		$body = preg_replace("'([[:alnum:]_.-]+[@][[:alnum:]_.-]{2,}([.][[:alnum:]_.-]{2,})+)'i","<a href='mailto:\\1?subject=RE: $peti&body=".str_replace("+"," ",URLEncode("\n\n----- $yourpeti -----\n".$row['body']))."'>\\1</a>",$body);
 		$body = preg_replace("'([\\[][[:alnum:]_.-]+[\\]])'i","<span class='colLtRed'>\\1</span>",$body);
-		rawoutput("<span style='font-family: fixed-width'>".nl2br($body)."</span>");
+		rawoutput(resurrection_presentation("typed").nl2br($body)."</span>");
 	}
 }
 

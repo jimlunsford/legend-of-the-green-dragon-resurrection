@@ -110,7 +110,7 @@ function cedrikspotions_run(){
 	$iname = getsetting("innname", LOCATION_INN);
 	tlschema("inn");
 	page_header($iname);
-	rawoutput("<span style='color: #9900FF'>");
+	rawoutput(resurrection_presentation("violet"));
 	tlschema();
 	$barkeep = getsetting("barkeep","`tCedrik");
 	$mincost = 0;

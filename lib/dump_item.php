@@ -11,7 +11,7 @@ function dump_item($item, $escape=false){
 	if (is_array($item)) $temp = $item;
 	else $temp = \Resurrection\Security\ScalarState::read($item);
 	if (is_array($temp)) {
-		$out .= "array(" . count($temp) . ") {<div style='padding-left: 20pt;'>";
+		$out .= "array(" . count($temp) . ") {" . resurrection_presentation("indent");
 		while(list($key, $val) = resurrection_array_next($temp)) {
 			$out .= "'" . $text($key) . "' = '" . dump_item($val, $escape) . "'`n";
 		}

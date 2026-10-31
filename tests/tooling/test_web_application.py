@@ -10620,14 +10620,15 @@ function MODULE_dohook($hook,$args) {
                 if not name or re.search(r'type=[\'"](?:submit|button)', tag): continue
                 value = re.search(r'value=([\'"])(.*?)\1', tag, re.S)
                 values[name.group(1)] = html.unescape(value.group(2)) if value else ''
-            for name, options in re.findall(r"<select name='([^']+)'>(.*?)</select>", part, re.S):
+            # A select's own attributes follow its name: showform() gives each one an id for its label (Phase 5 task 9).
+            for name, options in re.findall(r"<select name='([^']+)'[^>]*>(.*?)</select>", part, re.S):
                 chosen = re.search(r"<option value='([^']*)' selected", options) or re.search(r"<option value='([^']*)'", options)
                 values[name] = html.unescape(chosen.group(1))
             return values
         status, _, prefs_body = request(issued_link(body, 'prefs.php'))
         self.assertEqual(200, status)
         for key in ['emailonmail', 'systemmail', 'dirtyemail', 'nojump']:
-            self.assertRegex(prefs_body, r"<select name='" + key + r"'>\s*<option value='0' selected>", prefs_body[prefs_body.find("name='" + key + "'"):][:300])
+            self.assertRegex(prefs_body, r"<select name='" + key + r"' id='showform1-" + key + r"'>\s*<option value='0' selected>", prefs_body[prefs_body.find("name='" + key + "'"):][:300])
         status, _, prefs_body = request('prefs.php?op=save', browser_form(prefs_body, 'prefs.php?op=save'))
         self.assertEqual(200, status)
         self.assertIn('Settings Saved', prefs_body)

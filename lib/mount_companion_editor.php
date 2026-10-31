@@ -44,8 +44,8 @@ const RESURRECTION_COMPANION_FLAGS = ['cannotdie', 'cannotbehealed', 'allowinsha
 
 /** A 1.1.2 action link (activate, give, take, ...) as an inline protected POST form bound to the row shown. */
 function resurrection_content_button_form(string $url, string $scope, string $context, string $label): string {
-    return resurrection_content_form($url, $scope, $context, " style='display:inline;margin:0'") .
-        "<button type='submit' style='background:none;border:0;padding:0;margin:0;font:inherit;color:inherit;cursor:pointer;text-decoration:underline'>" .
+    return resurrection_content_form($url, $scope, $context, resurrection_presentation('inline-form-flush')) .
+        "<button type='submit'" . resurrection_presentation('link-button') . ">" .
         htmlspecialchars($label, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '</button></form>';
 }
 

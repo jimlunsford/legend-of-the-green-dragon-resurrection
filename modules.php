@@ -120,7 +120,7 @@ if ($op==""){
 		$inactive = translate_inline("`\$Inactive`0");
 		addnav("", $massurl);
 		rawoutput("<form action='" . $h($massurl) . "' method='POST'>" . resurrection_action_fields("module-mass-$cat", resurrection_module_context('mass', $cat, resurrection_module_list($cat))));
-		rawoutput("<table border='0' cellpadding='2' cellspacing='1' bgcolor='#999999'>",true);
+		rawoutput("<table border='0' cellpadding='2' cellspacing='1'".resurrection_presentation("grid").">",true);
 		$sorts = [];
 		foreach (['active' => [$status, 1], 'formalname' => [$mname, 1], 'moduleauthor' => [$mauth, 1], 'installdate' => [$inon, 0]] as $column => [$label, $default]) {
 			$sorturl = "modules.php?cat=$catUrl&sortby=$column&order=" . ($sortby == $column ? !$order : $default);
@@ -213,7 +213,7 @@ if ($op==""){
 		$fname = translate_inline("Filename");
 		addnav("", $massurl);
 		rawoutput("<form action='" . $h($massurl) . "' method='POST'>" . resurrection_action_fields("module-mass-", resurrection_module_context('mass', '', resurrection_module_list(''))));
-		rawoutput("<table border='0' cellpadding='2' cellspacing='1' bgcolor='#999999'>",true);
+		rawoutput("<table border='0' cellpadding='2' cellspacing='1'".resurrection_presentation("grid").">",true);
 		$sorts = [];
 		foreach (['name' => $mname, 'author' => $mauth, 'category' => $categ, 'shortname' => $fname] as $column => $label) {
 			$sorturl = "modules.php?sorting=$column&order=" . ($sorting == $column ? !$order : 0);

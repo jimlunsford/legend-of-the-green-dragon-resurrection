@@ -197,7 +197,7 @@ function resurrection_repair_page(int $userid, string $returnpetition): void {
         $shown = strlen($stored) > 4096 ? mb_strcut($stored, 0, 4096, 'UTF-8') . ' ...' : $stored;
         rawoutput('<div class="repair" id="repair-' . $field . '"><h3>' . $escape(translate_inline($label)) . '</h3>' .
             '<p>' . $escape(translate_inline('Fails its check:')) . ' ' . $escape($reason) . '</p>' .
-            '<pre style="white-space:pre-wrap">' . $escape($shown) . '</pre>');
+            resurrection_presentation('pre-wrap') . $escape($shown) . '</pre>');
         try { resurrection_repair_value($field, $row); }
         catch (DomainException $error) {
             rawoutput('<p>' . $escape(translate_inline('There is no automatic repair: the repaired value would not fit its column.')) . '</p></div>');

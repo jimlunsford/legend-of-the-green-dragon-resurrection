@@ -26,7 +26,7 @@ function drinks_run_private(){
         $drinktext=modulehook('drinks-text',$texts);
         tlschema($drinktext['schemas']['title']);
         page_header($drinktext['title']);
-        rawoutput("<span style='color: #9900FF'>");
+        rawoutput(resurrection_presentation("violet"));
         tlschema();
         if ($result===null) {
             output('Buy %s for %s gold?', $row['name'], (int)$session['user']['level']*(int)$row['costperlevel']);

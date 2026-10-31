@@ -97,9 +97,9 @@ function resurrection_badword_form(string $op, string $label, string $context): 
 	rawoutput("<input name='word'><input type='submit' class='button' value='".htmlspecialchars(translate_inline($op == "add" || $op == "addgood" ? "Add" : "Remove"), ENT_QUOTES, 'UTF-8')."'></form>");
 }
 
-output_notl("<font size='+1'>", true);
+output_notl(resurrection_presentation("larger"), true);
 output("`7`bGood Words`b`0");
-rawoutput("</font>");
+rawoutput(resurrection_presentation("larger-end"));
 output("`7 (bad word exceptions)`0`n");
 
 $good = resurrection_badword_list('good');
@@ -108,9 +108,9 @@ resurrection_badword_form('removegood', "Remove a word:", $good['context']);
 show_word_list($good['words']);
 
 output_notl("`0`n`n");
-rawoutput("<font size='+1'>");
+rawoutput(resurrection_presentation("larger"));
 output("`7`bNasty Words`b`0");
-rawoutput("</font>");
+rawoutput(resurrection_presentation("larger-end"));
 output_notl("`n");
 
 $nasty = resurrection_badword_list('nasty');

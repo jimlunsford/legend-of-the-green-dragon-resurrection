@@ -13,7 +13,7 @@
 		$descauthname = $row['name'] ?? '';
 
 		if ($claninfo['clanmotd'] != '') {
-			rawoutput("<div style='margin-left: 15px; padding-left: 15px;'>");
+			rawoutput(resurrection_presentation("clan-motd"));
 			output("`&`bCurrent MoTD:`b `#by %s`2`n",$motdauthname);
 			output_notl(nltoappon($claninfo['clanmotd'])."`n");
 			rawoutput("</div>");

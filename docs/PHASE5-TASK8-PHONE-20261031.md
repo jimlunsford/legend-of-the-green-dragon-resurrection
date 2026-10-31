@@ -191,3 +191,23 @@ the village, a forest fight, the graveyard (dead) and the signed-out home page.
 - The copyright line and license block, on every page; the attribution line and its links (taller tap targets on a
   phone only).
 - Desktop above 900px: unchanged, except the skip link's height (44px) when it is focused.
+
+## Acceptance
+
+### Accepted (recorded 2026-10-31, Phase 5 task 9)
+
+`5b3ca63` is accepted. Confirmed through the GitHub API before task 9 started:
+
+- Modern core [41159564504](https://github.com/jimlunsford/legend-of-the-green-dragon-resurrection/actions/runs/41159564504):
+  SUCCESS, all 12 jobs (both `checks` jobs, all eight `http` shard jobs, both `result` jobs), head `5b3ca63`. Shard
+  jobs, from the jobs' start and completion times:
+
+  | Leg | Shard 1 | Shard 2 | Shard 3 | Shard 4 |
+  |---|---|---|---|---|
+  | PHP 8.4 / MariaDB 11.4 | 12:25 | 19:31 | 16:53 | 19:42 |
+  | PHP 8.5 / MySQL 8.4 | 15:38 | 22:03 | 20:53 | 20:51 |
+
+- Baseline integrity [41159564474](https://github.com/jimlunsford/legend-of-the-green-dragon-resurrection/actions/runs/41159564474):
+  SUCCESS, head `5b3ca63`.
+
+No shard job passed 25 minutes; the longest was PHP 8.5 / MySQL 8.4 shard 2 at 22:03.

@@ -60,7 +60,7 @@ $skipinndesc = handle_event("inn");
 
 if (!$skipinndesc) {
 	checkday();
-	rawoutput("<span style='color: #9900FF'>");
+	rawoutput(resurrection_presentation("violet"));
 }
 
 $subop = httpget('subop');

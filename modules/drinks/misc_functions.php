@@ -147,7 +147,7 @@ function drinks_editor(){
 		$act = translate_inline("Activate");
 		$conf = translate_inline("Are you sure you wish to delete this drink?");
 		$del = translate_inline("Del");
-		rawoutput("<table border=0 cellpadding=2 cellspacing=1 bgcolor='#999999'>");
+		rawoutput("<table border=0 cellpadding=2 cellspacing=1".resurrection_presentation("grid").">");
 		rawoutput("<tr class='trhead'>");
 		rawoutput("<td>$op</td><td>$id</td><td>$nm</td><td>$dkn</td><td>$hard</td>");
 		rawoutput("</tr>");

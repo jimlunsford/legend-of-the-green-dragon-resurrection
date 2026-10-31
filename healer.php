@@ -60,7 +60,7 @@ if ($op==""){
 	if (!$posted) {
 		// 1.1.2 sold the potion on this GET; the sale is now this form's protected POST.
 		if ($session['user']['hitpoints'] < $session['user']['maxhitpoints']) {
-			resurrection_service_form("healer.php?op=buy&pct=$pct$returnline", "healer-buy-$pct", $context, is_array($potion) ? $potion : translate_inline($potion));
+			resurrection_service_form("healer.php?op=buy&pct=$pct$returnline", "healer-buy-$pct", $context, is_array($potion) ? $potion : translate_inline($potion), true);
 		}
 	} else {
 		try {

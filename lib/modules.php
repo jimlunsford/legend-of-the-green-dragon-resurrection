@@ -1119,7 +1119,7 @@ function module_display_events($eventtype, $forcescript=false) {
 	$name = translate_inline("Name");
 	$rchance = translate_inline("Raw Chance");
 	$nchance = translate_inline("Normalized Chance");
-	rawoutput("<table cellspacing='1' cellpadding='2' border='0' bgcolor='#999999'>");
+	rawoutput("<table cellspacing='1' cellpadding='2' border='0'".resurrection_presentation("grid").">");
 	rawoutput("<tr class='trhead'>");
 	rawoutput("<td>$name</td><td>$rchance</td><td>nchance</td>");
 	rawoutput("</tr>");

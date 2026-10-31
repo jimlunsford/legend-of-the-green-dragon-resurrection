@@ -307,7 +307,7 @@ function viewcommentary($section,$message="Interject your own commentary?",$limi
 			$x = strpos($row['comment'],$ft);
 			if ($x!==false){
 				if ($linkbios)
-					$op[$i] = str_replace("&amp;","&",HTMLEntities(substr($row['comment'],0,$x), ENT_COMPAT, getsetting("charset", "ISO-8859-1")))."`0<a href='$link' style='text-decoration: none'>\n`&{$row['name']}`0</a>\n`& ".str_replace("&amp;","&",HTMLEntities(substr($row['comment'],$x+strlen($ft)), ENT_COMPAT, getsetting("charset", "ISO-8859-1")))."`0`n";
+					$op[$i] = str_replace("&amp;","&",HTMLEntities(substr($row['comment'],0,$x), ENT_COMPAT, getsetting("charset", "ISO-8859-1")))."`0<a href='$link'".resurrection_presentation('plain-link').">\n`&{$row['name']}`0</a>\n`& ".str_replace("&amp;","&",HTMLEntities(substr($row['comment'],$x+strlen($ft)), ENT_COMPAT, getsetting("charset", "ISO-8859-1")))."`0`n";
 				else
 					$op[$i] = str_replace("&amp;","&",HTMLEntities(substr($row['comment'],0,$x), ENT_COMPAT, getsetting("charset", "ISO-8859-1")))."`0`&{$row['name']}`0`& ".str_replace("&amp;","&",HTMLEntities(substr($row['comment'],$x+strlen($ft)), ENT_COMPAT, getsetting("charset", "ISO-8859-1")))."`0`n";
 				$rawc[$i] = str_replace("&amp;","&",HTMLEntities(substr($row['comment'],0,$x), ENT_COMPAT, getsetting("charset", "ISO-8859-1")))."`0`&{$row['name']}`0`& ".str_replace("&amp;","&",HTMLEntities(substr($row['comment'],$x+strlen($ft)), ENT_COMPAT, getsetting("charset", "ISO-8859-1")))."`0`n";
@@ -322,7 +322,7 @@ function viewcommentary($section,$message="Interject your own commentary?",$limi
 		if (!isset($op) || !is_array($op)) $op = array();
 		if (!array_key_exists($i,$op) || $op[$i] == "")  {
 			if ($linkbios)
-				$op[$i] = "`0<a href='$link' style='text-decoration: none'>`&{$row['name']}`0</a>`3 says, \"`#".str_replace("&amp;","&",HTMLEntities($row['comment'], ENT_COMPAT, getsetting("charset", "ISO-8859-1")))."`3\"`0`n";
+				$op[$i] = "`0<a href='$link'".resurrection_presentation('plain-link').">`&{$row['name']}`0</a>`3 says, \"`#".str_replace("&amp;","&",HTMLEntities($row['comment'], ENT_COMPAT, getsetting("charset", "ISO-8859-1")))."`3\"`0`n";
 			elseif (substr($ft,0,5)=='/game' && !$row['name'])
 				$op[$i] = str_replace("&amp;","&",HTMLEntities($row['comment'], ENT_COMPAT, getsetting("charset", "ISO-8859-1")));
 			else
@@ -393,7 +393,7 @@ function viewcommentary($section,$message="Interject your own commentary?",$limi
 		}else{
 			if ($session['user']['superuser'] & SU_EDIT_COMMENTS) {
                 $action = htmlspecialchars($return, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
-                $out .= '<form action="' . $action . '" method="POST" style="display:inline">' . resurrection_csrf_field()
+                $out .= '<form action="' . $action . '" method="POST"' . resurrection_presentation('inline-form-dq') . '>' . resurrection_csrf_field()
                     . '<input type="hidden" name="removecomment" value="' . (int)$commentids[$i] . '"><button class="button" type="submit">' . htmlspecialchars($del, ENT_QUOTES, 'UTF-8') . '</button></form>';
                 addnav('', $return);
 			}
@@ -473,7 +473,13 @@ function viewcommentary($section,$message="Interject your own commentary?",$limi
 				|| !getsetting('postinglimit',1)){
 			if ($message!="X"){
 				$message="`n`@$message`n";
+				// The message labels the comment input talkform() prints next (Phase 5 task 9); the color is closed
+				// first, so the label never straddles a color span.
+				output_notl("`0");
+				rawoutput("<label for='inputinsertcommentary'>");
 				output($message);
+				output_notl("`0");
+				rawoutput("</label>");
 				talkform($section,$talkline,$limit,$schema);
 			}
 		}else{
@@ -619,7 +625,7 @@ function talkform($section,$talkline,$limit=10,$schema=false){
 		output_notl("<input type='hidden' name='section' value='$section'>",true);
 	}
 	$add = htmlentities(translate_inline("Add"), ENT_QUOTES, getsetting("charset", "ISO-8859-1"));
-	output_notl("<input type='submit' class='button' value='$add'>`n",true);
+	output_notl("<input type='submit' class='".resurrection_button_class(true)."' value='$add'>`n",true);
 	if (round($limit/2,0)-$counttoday < 3 && getsetting('postinglimit',1)){
 		output("`)(You have %s posts left today)`n`0",(round($limit/2,0)-$counttoday));
 	}

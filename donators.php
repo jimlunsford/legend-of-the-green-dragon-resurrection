@@ -103,7 +103,7 @@ if ($op==""){
 	$points = translate_inline("Points");
 	$spent = translate_inline("Spent");
 
-	rawoutput("<table border='0' cellpadding='3' cellspacing='1' bgcolor='#999999'>");
+	rawoutput("<table border='0' cellpadding='3' cellspacing='1'".resurrection_presentation("grid").">");
 	rawoutput("<tr class='trhead'><td>$name</td><td>$points</td><td>$spent</td></tr>");
 	$number=db_num_rows($result);
 	for ($i=0;$i<$number;$i++){

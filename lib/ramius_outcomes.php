@@ -1,8 +1,8 @@
 <?php
 // Historical early-resurrection effects. Only included inside the Ramius mutation.
-	rawoutput("<font size='+1'>");
+	rawoutput(resurrection_presentation("larger"));
 	output("`c`b`#It is a New Day!`0`b`c");
-	rawoutput("</font>");
+	rawoutput(resurrection_presentation("larger-end"));
 	$resurrection = 'true';
 
 	if ($session['user']['alive']!=true){

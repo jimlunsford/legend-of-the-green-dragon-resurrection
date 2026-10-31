@@ -96,9 +96,9 @@ function resurrection_inn_form(string $url, string $scope, string $context, stri
         resurrection_action_fields($scope, $context) . $buttons . '</form>');
 }
 
-function resurrection_inn_button(string $label, string $name = '', string $value = ''): string {
+function resurrection_inn_button(string $label, string $name = '', string $value = '', bool $primary = false): string {
     $escape = static fn(string $text): string => htmlspecialchars($text, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
-    return '<button class="button"' . ($name === '' ? '' : ' name="' . $escape($name) . '" value="' . $escape($value) . '"') .
+    return '<button class="' . resurrection_button_class($primary) . '"' . ($name === '' ? '' : ' name="' . $escape($name) . '" value="' . $escape($value) . '"') .
         '>' . $escape($label) . '</button> ';
 }
 

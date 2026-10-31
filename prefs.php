@@ -321,7 +321,8 @@ if ($op=="suicide" && getsetting("selfdelete",0)!=0) {
 	$prefs = array_merge($prefs, $mdata);
 	rawoutput("<form action='prefs.php?op=save' method='POST'>" . resurrection_csrf_field());
 	// 1.1.2 posted the shown values back as a serialized `oldvalues` field; the stored preferences are compared instead.
-	showform($form,$prefs);
+	// Save is the page's primary action (Phase 5 task 9).
+	showform($form,$prefs,false,false,true);
 
 	rawoutput("</form><br />");
 	addnav("","prefs.php?op=save");
@@ -332,8 +333,13 @@ if ($op=="suicide" && getsetting("selfdelete",0)!=0) {
 		rawoutput("<form action='prefs.php?op=suicide&userid={$session['user']['acctid']}' method='POST'>" . resurrection_action_fields('prefs-suicide', resurrection_suicide_context($session['user'])));
 		$deltext = translate_inline("Delete Character");
 		$conf = translate_inline("Are you sure you wish to delete your character?");
-		rawoutput("<table class='noborder' width='100%'><tr><td width='100%'></td><td style='background-color:#FF00FF' align='right'>");
-		rawoutput("<input type='submit' class='button' value='$deltext' onClick='return confirm(\"$conf\");'>");
+		rawoutput("<table class='noborder' width='100%'><tr><td width='100%'></td><td".resurrection_presentation('danger-cell')." align='right'>");
+		if (resurrection_ui()) {
+			// No inline handler: assets/ui/showform.js asks for the confirmation (Phase 5 task 9).
+			rawoutput("<input type='submit' class='button rz-button-danger' value='$deltext' data-rz-confirm=\"".htmlspecialchars($conf, ENT_QUOTES, 'UTF-8')."\">".resurrection_form_script());
+		} else {
+			rawoutput("<input type='submit' class='button' value='$deltext' onClick='return confirm(\"$conf\");'>");
+		}
 		rawoutput("</td></tr></table>");
 		rawoutput("</form>");
 		addnav("","prefs.php?op=suicide&userid={$session['user']['acctid']}");

@@ -96,7 +96,7 @@ if ($op == "") {
 	$lose = translate_inline("Lose to Master");
 	$win = translate_inline("Win against Master");
 	$weapon = translate_inline("Weapon");
-	rawoutput("<table border='0' cellpadding='2' cellspacing='1' align='center' bgcolor='#999999'>");
+	rawoutput("<table border='0' cellpadding='2' cellspacing='1' align='center'".resurrection_presentation("grid").">");
 	rawoutput("<tr class='trhead'><td>$ops</td><td>$level</td><td>$name</td><td>$weapon</td><td>$win</td><td>$lose</tr>");
 	foreach ($res as $i=>$row) {
 		$id = (int)$row['creatureid'];

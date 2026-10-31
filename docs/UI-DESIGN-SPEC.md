@@ -21,7 +21,7 @@ here when it does. Changing an approved value needs Jim.
 | `--ground` | `#12100D` | Page background | no |
 | `--header` | `#17140F` | Header bar, footer, phone tab bar | no |
 | `--panel` | `#1B1814` | Nav, content and character panels. The reference color for text contrast | no |
-| `--raised` | `#24201A` | Stat tiles, the fill of inputs and buttons | no |
+| `--raised` | `#24201A` | Stat tiles, table heading rows (labels only; task 9: inputs `--panel`, buttons unfilled) | no |
 | `--track` | `#2C2720` | Empty part of a bar (HP, XP) | no |
 | `--border` | `#3A3329` | Panel and row borders (decorative) | no |
 | `--input-border` | `#6E6452` | Input, button and key-badge outlines | no |
@@ -61,7 +61,8 @@ Not for text:
 - **Inputs and outlined controls never sit on a `--raised` fill** (Jim, 2026-10-30, task 3). `--input-border` is
   3.04:1 against `--panel` but 2.78:1 against `--raised`, so a control is placed on `--panel`, `--header` or `--ground`
   (all darker, so the outline clears 3:1), never on a stat tile, a hovered row or another raised surface. Table rows
-  therefore use no `--raised` fill: striped rows alternate `--panel` and `--header`.
+  therefore use no `--raised` fill: striped rows alternate `--panel` and `--header`. The one exception (task 9) is a
+  table's heading row (`trhead`), which holds labels only, never a control.
 
 ## Type (approved)
 
@@ -351,8 +352,49 @@ query, so the template writes the two breakpoints as literals equal to these tok
 
   The page is padded at the bottom by the bar's height, its 1px border and the safe area, so the footer is never under
   the bar. No tab bar in popups, on operator pages (not installed, database error, upgrade needed) or in a 1.1.2 skin.
-- **One primary action per screen**, gold fill (`--accent`, text `--ground`, hover `--accent-hover`). Every other
-  button is secondary: `--raised` fill, `--input-border` outline, `--text` label.
+- **Buttons** (Phase 5 task 9). Two kinds, both `--touch-target` (44px) tall, 16px padding each side,
+  `--radius-control` (8px), Alegreya Sans `--size-ui`, the focus ring:
+  - **Primary**: `--accent` fill and border, `--ground` label, weight 700; hover `--accent-hover` (`rz-button-primary`,
+    from `resurrection_button_class(true)` in `lib/output.php`). **At most one per form.**
+  - **Secondary**, every other button: no fill, 1px `--input-border` outline, `--text` label, weight 500; hover
+    `--accent` outline and `--accent-hover` label. A destructive action (preferences' Delete Character) is secondary
+    with a `--damage` outline and label (`rz-button-danger`).
+
+  Buttons side by side line up in a row 8px apart and wrap. No full-width buttons. A button drawn as a link (the
+  editors' delete, `rz-link-button`) keeps the link's look. In a 1.1.2 skin every button's markup is 1.1.2's, byte for
+  byte, until task 15 removes the skins.
+- **Primary actions** (task 9). The form's primary button is: log in; create a character; the bank's deposit, borrow
+  and withdraw; each buy button in the weapon and armor shops (one per item's form); the inn's room; the healer's
+  heal (each potion's form); commentary Add; preferences Save; mail Send. Every other button is secondary. Fight and
+  Run are task 10's.
+- **Inputs** (task 9). Text, password, number and email inputs and selects are `--touch-target` (44px) tall, a
+  textarea at least 88px; `--panel` fill (never `--raised`), 1px `--input-border` outline (3.04:1 on `--panel`, 3.16:1
+  on `--header`), `--radius-control`, `--text`, the focus ring. Placeholder text is `--muted` (6.76:1 on `--panel`).
+  Checkboxes and radios are 20px, in `--accent`, inside their label, and the label is the 44px tap target.
+  - **Labels.** Every control a player fills in has a real `<label for>` or sits inside its `<label>`. `showform()`
+    gives each control an id (`showform_control_id()`) and its row's label a `for`; a group of choices (checklist,
+    radio, bitfield) labels each choice. A label never straddles a color span: the code closes the color before the
+    label and re-opens it after.
+- **Tabs** (task 9). `showform()`'s sections, in the Resurrection template, are a tab list drawn by the server: one
+  `<button role="tab">` per section, 44px, secondary, the chosen one `--accent` filled with `--ground` text and
+  `aria-selected="true"` (the others `false` and `tabindex="-1"`), each `aria-controls` its section's table
+  (`role="tabpanel"`). The static `assets/ui/showform.js` shows the list, shows only the chosen section, and moves
+  between tabs with a click or Left, Right, Home and End. Without the script the list stays hidden and every section
+  stays shown. The tabs wrap; no inline event handler or inline script. A player who turned tabs off (`tabconfig`)
+  gets every section shown, as in 1.1.2.
+- **Tables** (task 9). A table scrolls sideways inside its own box (`overflow-x: auto`) and never makes the page
+  scroll; a table with a heading row, or a grid table, has a 1px `--border` edge and `--radius-control`, so the box's
+  end shows. The heading row (`trhead`) is `--raised` with `--muted` labels, `--size-label` (13px), uppercase,
+  `--tracking-label`, weight 700. Body rows are a quiet zebra: `trlight` `--panel`, `trdark` `--header`; text on both
+  clears 4.5:1 (`--text` 13.99:1 and 14.53:1). The highlighted row (`trhilight`, the player's own) is `--panel` with a
+  3px `--accent` marker on its left. Cells keep the alignment the page prints (`align='right'` number columns stay
+  right). On a phone a `showform()` form stacks: each label above its control, the control full width.
+- **Presentation as classes** (task 9). What 1.1.2 printed inline is a class in the Resurrection template: `` `c `` is
+  `rz-center`, `` `> `` and `` `< `` are `rz-float-right` and `rz-float-left`, grid tables are `rz-grid` (1px
+  `--border` lines), inline forms `rz-inline`, larger text `rz-larger` (1.25em), typed text `rz-typed`, nested lists
+  `rz-indent`, the narrators' colors the color code classes (`colBlueViolet`, `colLtBlack`, `colLtWhite`,
+  `colLtYellow`). `resurrection_presentation()` in `lib/output.php` is the one map from each to 1.1.2's markup, which a
+  1.1.2 skin keeps byte for byte.
 - **Character panel** (Phase 5 task 7). `charstats()` fills the rows as 1.1.2 did; a template with the panel parts
   (`statheader`, `statportrait`, `statbar`, `statbarcap`, `stattiles`, `stattile`, `equiprows`, `equiprow`) renders them
   through `resurrection_charpanel()`, a 1.1.2 skin through `getcharstats()`'s rows, unchanged. From the top, one

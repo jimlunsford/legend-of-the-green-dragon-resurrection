@@ -38,7 +38,7 @@ if (httpget("subop")==""){
 	rawoutput("<input type='submit' class='button' value='$save'>");
 	if ($row['loggedin']==1 && $row['laston']>date("Y-m-d H:i:s",strtotime("-".getsetting("LOGINTIMEOUT",900)." seconds"))){
 		output_notl("`\$");
-		rawoutput("<span style='font-size: 20px'>");
+		rawoutput(resurrection_presentation("warning"));
 		output("`\$Warning:`0");
 		rawoutput("</span>");
 		output("`\$This user is probably logged in at the moment!`0");

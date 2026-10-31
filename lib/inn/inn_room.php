@@ -52,7 +52,7 @@ if ($pay !== '' && ($_SERVER['REQUEST_METHOD'] ?? '') === 'POST'){
 		if ($session['user']['boughtroomtoday']) $label = translate_inline("Go to room");
 		elseif ($pay === '2') $label = sprintf_translate("Pay %s gold from bank", $bankexpense);
 		else $label = sprintf_translate("Give him %s gold", $expense);
-		resurrection_inn_form($roomurl, 'inn-room', resurrection_inn_room_context($pay), resurrection_inn_button($label));
+		resurrection_inn_form($roomurl, 'inn-room', resurrection_inn_room_context($pay), resurrection_inn_button($label, '', '', true));
 	}else{
 		output("\"Aah, so that's how it is,\" %s`0 says as he puts the key he had retrieved back on to its hook behind his counter.",$barkeep);
 		output("Perhaps you'd like to get sufficient funds before you attempt to engage in local commerce.");
