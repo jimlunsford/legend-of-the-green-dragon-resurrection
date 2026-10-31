@@ -7,9 +7,10 @@ use Resurrection\Configuration\LegacyConfig;
 /**
  * Forms and buttons on real pages (Phase 5 task 9, docs/PHASE5-TASK9-FORMS-20261031.md). In the Resurrection template:
  * each form has at most one primary button, and the forms task 9 names (create a character, bank deposit, borrow and
- * withdraw, the weapon and armor shops' buy, the inn's room, the healer's heal, commentary Add, preferences Save, mail
- * Send) exactly one; every control a player fills in has a bound label; preferences' sections are server-drawn tabs, one
- * aria-selected, each controlling its section, with no inline event handler or inline script in the page's content.
+ * withdraw, the inn's room, the healer's heal, commentary Add, preferences Save, mail Send) exactly one; the weapon and
+ * armor shops none, each affordable item a link (task 10, docs/PHASE5-TASK10-BATTLE-COMMENTARY-20261031.md); every
+ * control a player fills in has a bound label; preferences' sections are server-drawn tabs, one aria-selected, each
+ * controlling its section, with no inline event handler or inline script in the page's content.
  * In a 1.1.2 skin (jade.htm, its cookie as the skin chooser sets it), every button's markup is byte for byte what
  * 5b3ca63 printed for the same page and state, and no Resurrection class appears.
  *
@@ -86,15 +87,16 @@ final class FormsRenderTest extends TestCase
         ],
     ];
 
-    /** The form, by its action, whose one primary button task 9 names on each page. */
+    /**
+     * The form, by its action, whose one primary button task 9 names on each page. The weapon and armor shops have
+     * none since task 10 (Jim's review of task 9): an item the player can afford is a link, not a filled button.
+     */
     private const array PRIMARY = [
         'create.php' => ['create.php?op=create'],
         'village.php' => ['village.php?comment=1'],
         'bank.php?op=deposit' => ['bank.php?op=depositfinish'],
         'bank.php?op=withdraw' => ['bank.php?op=withdrawfinish'],
         'bank.php?op=borrow' => ['bank.php?op=withdrawfinish'],
-        'weapons.php' => ['weapons.php?op=buy'],
-        'armor.php' => ['armor.php?op=buy'],
         'inn.php?op=room&pay=1' => ['inn.php?op=room&pay=1'],
         'healer.php?op=buy&pct=100' => ['healer.php?op=buy&pct=100'],
         'prefs.php' => ['prefs.php?op=save'],
@@ -149,6 +151,7 @@ final class FormsRenderTest extends TestCase
                 $document = \Dom\HTMLDocument::createFromString($page, LIBXML_NOERROR);
                 $this->assertPrimaries($document, $url);
                 $this->assertLabelled($document, $url);
+                if (in_array($url, ['weapons.php', 'armor.php'], true)) { $this->assertShopLinks($document, $url); }
                 if ($url === 'prefs.php') { $this->assertTabs($document, $page); }
 
                 // The same page and state in a 1.1.2 skin.
@@ -202,6 +205,25 @@ final class FormsRenderTest extends TestCase
         } else {
             self::assertSame(0, $document->querySelectorAll('.rz-button-primary')->length, $url);
         }
+    }
+
+    /**
+     * The weapon and armor shops (task 10): each item the player can afford is its buy form's one button, drawn as a
+     * link (rz-shop-link), not a primary or any other button; the page has no primary.
+     */
+    private function assertShopLinks(\Dom\HTMLDocument $document, string $url): void
+    {
+        $forms = 0;
+        foreach ($document->querySelectorAll('.rz-content form') as $form) {
+            if (!str_starts_with((string)$form->getAttribute('action'), $url . '?op=buy')) { continue; }
+            $forms++;
+            $buttons = $form->querySelectorAll('button');
+            self::assertSame(1, $buttons->length, $url);
+            self::assertSame('rz-shop-link', $buttons->item(0)->getAttribute('class'), $url);
+            self::assertNotNull($form->closest('tr'), $url . ': the link sits in its row');
+        }
+        self::assertSame(9, $forms, $url . ': every item affordable at 5,000 gold');
+        self::assertSame(0, $document->querySelectorAll('.rz-button-primary, .rz-content .button')->length, $url);
     }
 
     /** Every control a player fills in, in the page's content, has a <label for> or sits inside its <label>. */

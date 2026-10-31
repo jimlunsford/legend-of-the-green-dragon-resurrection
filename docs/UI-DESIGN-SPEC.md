@@ -364,9 +364,9 @@ query, so the template writes the two breakpoints as literals equal to these tok
   editors' delete, `rz-link-button`) keeps the link's look. In a 1.1.2 skin every button's markup is 1.1.2's, byte for
   byte, until task 15 removes the skins.
 - **Primary actions** (task 9). The form's primary button is: log in; create a character; the bank's deposit, borrow
-  and withdraw; each buy button in the weapon and armor shops (one per item's form); the inn's room; the healer's
-  heal (each potion's form); commentary Add; preferences Save; mail Send. Every other button is secondary. Fight and
-  Run are task 10's.
+  and withdraw; the inn's room; the healer's heal (each potion's form); commentary Add; preferences Save; mail Send;
+  in a fight, Fight (task 10). Every other button is secondary. Task 9 also made each weapon and armor shop item a
+  primary; task 10 (Jim's review of task 9) made them links (**Buy lists**, below).
 - **Inputs** (task 9). Text, password, number and email inputs and selects are `--touch-target` (44px) tall, a
   textarea at least 88px; `--panel` fill (never `--raised`), 1px `--input-border` outline (3.04:1 on `--panel`, 3.16:1
   on `--header`), `--radius-control`, `--text`, the focus ring. Placeholder text is `--muted` (6.76:1 on `--panel`).
@@ -441,10 +441,64 @@ query, so the template writes the two breakpoints as literals equal to these tok
 - **Equipment rows.** An icon, the item name, and its value (attack or defense), one row each: weapon, armor, mount.
   Task 7 (no icons until task 13): the label left (`--muted`), the item's name right (`--text`, bold, its color codes
   kept), 8px padding, a 1px `--track` line between rows.
-- **Commentary.** A list of comments (speaker in Cinzel, text in Alegreya), and below it the input, at least 44px
-  high, with an Add button beside it.
-- **Battle log.** An ordered list, one entry per combat line, newest last. Damage numbers in `--damage`, healing in
-  `--health`, magic in `--magic`.
+- **Fighter cards** (Phase 5 task 10, `lib/battle_view.php`). At the top of every fight that runs `battle.php` (the
+  forest, PvP, graveyard torments, training masters, the Green Dragon, module fights), a grid of cards, 16px apart,
+  each at least 220px wide (one column on a phone): the player first, then each foe in the fight's order. A card is
+  `--header` with a 1px `--border` edge, `--radius-control`, 16px padding. The name is Cinzel 700 `--size-heading`
+  (`--text` for the player, `--damage` for a foe), plain text (color codes dropped); under it, `--muted`
+  `--size-small`, "Level N" (`battle` namespace, "Level %s"), and for a foe " · " and the weapon in italics (`--text`).
+  Then the hitpoints: the label left (`--muted`; "HP", or "Soul" for a dead player and their torment, `common`) and
+  "current / max" right (`--text`, 700, lining figures), over a `--bar-height-fight` (10px) `--track` bar filled
+  `--health` (the player) or `--foe` (a foe); the fill is current ÷ max, one decimal, held between 0% and 100%. A foe's
+  card has a 1px `--foe` border.
+  - **The foe's maximum.** Recorded when the fight starts as `creaturemaxhealth` (forest and Green Dragon, since task
+    10), or the route's own record (`trainingmaxhp` for a master, `pvpmaxhp` for a PvP victim), or for a graveyard
+    torment the value 1.1.2 always gave it (level × 5 + 50). When none is known (a fight stored before task 10, a foe
+    a script added during the fight), the card shows the number with no bar (`rz-fighterbar-nobar`). A module's
+    `hidehitpoints` shows "???" with no bar.
+  - **The fallen and the target.** A dead foe's card reads "0 / max · DEAD" ("DEFEATED" in the graveyard) in
+    `--muted`, its bar empty. With more than one foe, the target's card has a 3px `--accent` marker on its left and a
+    "Target" label (`battle` namespace) after its name.
+- **Battle action bar** (task 10). Under the cards: Fight (the one primary) and Run (secondary) in a row, 8px apart;
+  then each group of secondary buttons under a small uppercase Cinzel heading in `--muted`: "Automatic Fighting" (5
+  rounds, 10 rounds, until the end, where the settings offer them), "Special Abilities" (the specialty's skills, with
+  "N uses left" under the heading, `battle` namespace "%s uses left"), and a superuser's actions. The headings are
+  `fightnav()`'s, in its `fightnav` namespace. Each button is the route's own form, with the same name, field, action
+  token and target as before; only its place and class are new. A fight that has no Run (training) shows Fight alone.
+  A module fight that uses `fightnav()` keeps its links in the nav column and gets the cards, log and result.
+- **Battle log** (task 10). Under the actions, after a 1px `--border` line: the lines `battle.php` prints before its
+  first round ("You have encountered … which lunges at you with …!" first, then a surprise attack or a skill's text),
+  each its own row; then an ordered list, one item per round fought in this request, each headed "Round N" (`battle`
+  namespace, "Round %s"; Cinzel 500, `--size-label`, uppercase, `--muted`) with each line of the round in its own row,
+  in the colors its codes give. Rounds are counted per request: Fight is one round, "For 5 Rounds" up to five. A round
+  that printed nothing keeps its number but shows no item. 1.1.2's "~ ~ ~ Fight ~ ~ ~" divider, "Next round:" and
+  "End of Round:" (with its hitpoint list) are left out: the page title, the cards and the round headings say them.
+  The list's name for assistive technology is "Battle log".
+- **Battle result** (task 10). What the fight printed after its last round, when it ended: a `--header` box with a 1px
+  `--border` edge and `--radius-control`, headed "Victory" (`--accent`, with a 3px `--accent` marker) or "Defeat"
+  (`--damage`, with a `--damage` marker), each line a row: the creature's last words, "You have slain …", the gold,
+  experience and gems, the flawless bonus, or the death text and what it cost. Lines printed after the rounds of a
+  fight that goes on sit in the same box without a heading. What a route prints after the fight (the graveyard's page,
+  the Dragon's epilogue) follows the battle screen as ordinary content. What a page printed before the fight ("You
+  failed to flee") stays above the cards.
+- **Commentary** (task 10, `lib/commentary.php`). The comments are a list (`rz-comments`), one item per comment with a
+  1px `--border` line between: the moderator's Del button first when the viewer may delete, then the time stamp
+  (when the player shows them), the new-comment marker, the author's name in Cinzel 700 in its colors with the clan
+  tag before it, then "says," and the quoted text, or the emote (`:`, `::`, `/me`), exactly as 1.1.2 wrote them, in
+  their colors. The `viewcommentary` module hook still gets and may change each line. The moderation screen (`moderate.php`, all
+  sections) keeps 1.1.2's lines until task 11. The talk form: its label (the page's message, for example "Speak" in
+  the village) on its own line, then the 44px input and Add (primary) in a row that wraps. 1.1.2's draft-saving script
+  is gone (`CHANGES-FROM-1.1.2.md`).
+- **Commentary pager** (task 10). "<< First Unseen", "< Previous", "Refresh", "Next >", "Last Page >>" as a row of
+  44px secondary buttons, 8px apart, wrapping; each an `<a class="button">` with 1.1.2's link, key and target. A page
+  that does not exist is the same label as a `<span>` with `aria-disabled="true"`, `--muted` with a `--border`
+  outline. The row is a `<nav>` named "Comment pages". None is primary (Add is the page's primary).
+- **Buy lists** (task 10, Jim's review of task 9). In the weapon and armor shops an item the player can afford is its
+  buy form's button drawn as a link: `--accent` text, weight 700, no fill or outline (`rz-shop-link`); its tap area is
+  the whole table row, at least `--touch-target` (44px) tall, and the row darkens to `--ground` on hover. The form,
+  its action token and target are unchanged. An item the player cannot afford is plain text, as before. No primary on
+  the page. The stables' and mercenary camp's lists, and the healer's potions, are navs or one form each, not buy
+  tables, and are unchanged.
 
 ## Art (approved)
 

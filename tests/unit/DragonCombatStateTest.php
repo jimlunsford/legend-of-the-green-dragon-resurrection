@@ -25,6 +25,18 @@ final class DragonCombatStateTest extends TestCase
         self::assertSame($state,DragonCombatState::read(serialize($state)));
     }
 
+    /** The Dragon's starting hitpoints (Phase 5 task 10): optional, a number from 1. */
+    public function testRecordedMaximumHitpoints(): void
+    {
+        $state = ['enemies'=>[$this->enemy() + ['creaturemaxhealth'=>300]],'options'=>['type'=>'dragon']];
+        self::assertSame($state,DragonCombatState::read(serialize($state)));
+        foreach ([0,-1,'x',null,[]] as $bad) {
+            $state['enemies'][0]['creaturemaxhealth'] = $bad;
+            try { DragonCombatState::read(serialize($state)); self::fail(var_export($bad,true)); }
+            catch (\DomainException) { self::addToAssertionCount(1); }
+        }
+    }
+
     public function testMalformedForeignAndTerminalEncountersReject(): void
     {
         $enemy = $this->enemy(); $cases = [false,[],['enemies'=>[$enemy,$enemy],'options'=>['type'=>'dragon']]];

@@ -47,6 +47,8 @@ function resurrection_dragon_create(): void {
 	$badguy['creaturehealth']+=$hpflux;
 
 	$badguy = modulehook("buffdragon", $badguy);
+	// The battle screen's foe card shows the Dragon's hitpoints against this starting value (Phase 5 task 10).
+	$badguy['creaturemaxhealth']=$badguy['creaturehealth'];
 
 	$session['user']['badguy']=createstring($badguy);
 

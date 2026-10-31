@@ -607,6 +607,152 @@ div.debug { color: var(--muted); font-size: var(--size-small); }
 a.motd { color: var(--text); }
 a.hotmotd { color: var(--accent); }
 
+/*
+  The battle screen (Phase 5 task 10, lib/battle_view.php). From the top: the fighter cards, the action bar, the battle
+  log and the result block. The player's card has a --health bar, a foe's a --foe bar and a 1px --foe border; the
+  bars are --bar-height-fight (10px) with "current / max" beside their label.
+*/
+.rz-fighters { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin: 0 0 20px; }
+.rz-fighter {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  padding: 16px;
+  background: var(--header);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  font-family: var(--font-ui);
+  font-size: var(--size-ui);
+  line-height: var(--leading-ui);
+}
+.rz-fighter-foe { border-color: var(--foe); }
+.rz-content .rz-fighter-name {
+  margin: 0;
+  font-family: var(--font-display);
+  font-weight: var(--weight-display-bold);
+  font-size: var(--size-heading);
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+.rz-fighter-foe .rz-fighter-name { color: var(--damage); }
+.rz-fighter-sub { margin: 0; color: var(--muted); font-size: var(--size-small); overflow-wrap: anywhere; }
+.rz-fighter-sub i { color: var(--text); }
+.rz-fighter-mark {
+  margin-left: 6px;
+  color: var(--accent);
+  font-family: var(--font-ui);
+  font-size: var(--size-small);
+  font-weight: var(--weight-ui-bold);
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+  vertical-align: middle;
+}
+.rz-fighter-target { box-shadow: inset 3px 0 0 var(--accent); }
+.rz-fighterbar { display: flex; flex-direction: column; gap: 6px; margin-top: 4px; }
+.rz-fighterbar-text { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+.rz-fighterbar-label { color: var(--muted); }
+.rz-fighterbar-value { color: var(--text); font-weight: var(--weight-ui-bold); font-variant-numeric: lining-nums; text-align: right; }
+.rz-fighterbar-track { height: var(--bar-height-fight); background: var(--track); border-radius: var(--radius-bar); overflow: hidden; }
+.rz-fighterbar-fill { height: 100%; max-width: 100%; border-radius: var(--radius-bar); background: var(--health); }
+.rz-fighter-foe .rz-fighterbar-fill { background: var(--foe); }
+.rz-fighter-down .rz-fighterbar-value { color: var(--muted); }
+
+/* The action bar: Fight (the one primary) and Run in a row, then each labelled group of secondary buttons. */
+.rz-battle-actions { margin: 0 0 24px; }
+.rz-battle-buttons { display: flex; flex-wrap: wrap; gap: 8px; }
+.rz-battle-buttons form { margin: 0; }
+.rz-battle-buttons .button { margin: 0; }
+.rz-content .rz-battle-grouphead {
+  margin: 16px 0 8px;
+  color: var(--muted);
+  font-family: var(--font-display);
+  font-size: var(--size-label);
+  font-weight: var(--weight-display-bold);
+  letter-spacing: var(--tracking-nav-heading);
+  text-transform: uppercase;
+}
+.rz-battle-note { margin: -4px 0 8px; color: var(--muted); font-family: var(--font-ui); font-size: var(--size-small); }
+
+/* The battle log: the encounter lines, then one item per round, each line a row. */
+.rz-battle-log { padding-top: 16px; border-top: 1px solid var(--border); font-size: var(--size-ui); line-height: 1.45; }
+.rz-battle-intro { padding-bottom: 8px; }
+.rz-battle-rounds { margin: 0; padding: 0; list-style: none; }
+.rz-battle-round { padding: 10px 0; border-top: 1px solid var(--border); }
+.rz-battle-intro + .rz-battle-rounds > .rz-battle-round:first-child, .rz-battle-rounds:first-child > .rz-battle-round:first-child { border-top: 0; }
+.rz-content .rz-battle-roundlabel {
+  margin: 0 0 4px;
+  color: var(--muted);
+  font-family: var(--font-display);
+  font-size: var(--size-label);
+  font-weight: var(--weight-display);
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+}
+.rz-battle-line { padding: 2px 0; overflow-wrap: anywhere; }
+
+/* The result block: what followed the last round, headed Victory (--accent) or Defeat (--damage). */
+.rz-battle-result, .rz-battle-after {
+  margin-top: 16px;
+  padding: 16px;
+  background: var(--header);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  font-size: var(--size-ui);
+  line-height: 1.45;
+}
+.rz-battle-result-victory { box-shadow: inset 3px 0 0 var(--accent); }
+.rz-battle-result-defeat { box-shadow: inset 3px 0 0 var(--damage); }
+.rz-content .rz-battle-resulthead { margin: 0 0 6px; font-family: var(--font-display); font-size: var(--size-heading); }
+.rz-battle-result-victory .rz-battle-resulthead { color: var(--accent); }
+.rz-battle-result-defeat .rz-battle-resulthead { color: var(--damage); }
+
+/*
+  Commentary (Phase 5 task 10, lib/commentary.php): the comments as a list, the speaker in Cinzel, the text in
+  Alegreya; the pager a row of 44px secondary buttons; the talk form's label above the input and Add.
+*/
+.rz-comments { margin: 0 0 12px; padding: 0; list-style: none; }
+.rz-comment { padding: 8px 0; border-bottom: 1px solid var(--border); overflow-wrap: anywhere; }
+.rz-comment:last-child { border-bottom: 0; }
+.rz-comment .rz-plain-link { font-family: var(--font-display); font-weight: var(--weight-display-bold); }
+.rz-comment form.rz-inline { margin-right: 8px; }
+.rz-comment form.rz-inline .button { margin: 0; }
+.rz-pager { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
+.rz-pager .button { margin: 0; }
+.rz-pager .rz-pager-off, .rz-pager .rz-pager-off:hover { color: var(--muted); border-color: var(--border); cursor: default; }
+.rz-content label[for="inputinsertcommentary"] { display: block; margin: 16px 0 8px; }
+.rz-content label[for="inputinsertcommentary"] br { display: none; }
+.rz-talkform { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.rz-talkform #inputinsertcommentary { flex: 1 1 160px; min-width: 0; }
+.rz-talkform .button { margin: 0; }
+.rz-talkform [id^="charsleft"], .rz-talkform [id^="previewtext"] { flex: 1 1 100%; }
+.rz-talkform [id^="charsleft"]:empty, .rz-talkform [id^="previewtext"]:empty { display: none; }
+
+/*
+  Shop lists (Phase 5 task 10, Jim's review of task 9): an item the player can afford is a link, --accent and bold,
+  whose tap area is its whole row, at least 44px tall; not a filled button. Items out of reach stay as they were.
+*/
+.rz-content tr:has(.rz-shop-link) { position: relative; }
+.rz-content tr:has(.rz-shop-link) > td { height: var(--touch-target); vertical-align: middle; }
+.rz-content .rz-shop-link, .rz-content .rz-shop-link:hover {
+  display: inline;
+  min-width: 0;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  background: none;
+  border: 0;
+  color: var(--accent);
+  font: inherit;
+  font-weight: var(--weight-ui-bold);
+  text-align: left;
+  cursor: pointer;
+}
+.rz-content .rz-shop-link:hover { color: var(--accent-hover); text-decoration: underline; }
+.rz-shop-link span { color: inherit; }
+.rz-shop-link::after { content: ""; position: absolute; inset: 0; }
+.rz-content tr:has(.rz-shop-link:hover) { background: var(--ground); }
+
 /* Popups: one column. */
 .rz-popup .rz-frame { padding-top: 16px; padding-bottom: 16px; }
 
@@ -660,9 +806,6 @@ a.hotmotd { color: var(--accent); }
   .rz-footer-credits > a { display: inline-flex; align-items: center; justify-content: center; min-width: var(--touch-target); min-height: var(--touch-target); }
   /* The attribution's two links get a full tap target's height too: taller, never smaller (CLAUDE.md). */
   .rz-attribution a { display: inline-flex; align-items: center; min-height: var(--touch-target); }
-  /* The commentary's paging links (First Unseen, Previous, Refresh, Next, Last Page; all carry refresh=1). Task 10
-     redesigns the commentary. */
-  .rz-content a[href*="refresh=1"] { display: inline-flex; align-items: center; justify-content: center; min-width: var(--touch-target); min-height: var(--touch-target); }
   /* The mail popup's Inbox and Write links (task 11 restyles the mail pages). */
   .rz-popup .rz-content td > a.motd { display: inline-flex; align-items: center; justify-content: center; min-width: var(--touch-target); min-height: var(--touch-target); }
   /* A form's buttons (a shop's item buttons among them) are at least a tap target wide. */

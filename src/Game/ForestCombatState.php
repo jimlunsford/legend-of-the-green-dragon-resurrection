@@ -47,7 +47,10 @@ final class ForestCombatState
             $numeric = ['creatureid','creaturelevel','creaturehealth','creatureattack','creaturedefense','creaturegold','creatureexp','playerstarthp'];
             $text = ['creaturename','creatureweapon','creaturelose','creaturewin','createdby','creatureaiscript','type','denyflawless'];
             $flags = ['dead','istarget','diddamage','expgained','killedplayer','alwaysattacks','hidehitpoints','forest','graveyard','cannotbetarget','essentialleader','fleesifalone','spellpoints'];
-            if (array_diff(array_keys($enemy), [...$numeric,...$text,...$flags]) !== []) throw new \DomainException('Unexpected combat field.');
+            // creaturemaxhealth: the foe's starting hitpoints, recorded since Phase 5 task 10 for the battle screen's foe card;
+            // a fight started before then has none.
+            if (array_diff(array_keys($enemy), [...$numeric,...$text,...$flags,'creaturemaxhealth']) !== []) throw new \DomainException('Unexpected combat field.');
+            if (array_key_exists('creaturemaxhealth',$enemy)) self::number($enemy['creaturemaxhealth'],1,2147483647);
             // The shipped doppleganger has no database identity. Its producer supplies
             // starting HP and damage accounting just like a creature row.
             if (!array_key_exists('creatureid',$enemy)) {

@@ -328,3 +328,14 @@ tiling preferences (with its tabs), the bank's deposit, the weapon shop and crea
 - The 1.1.2 skins: every button's markup and every converted inline style's markup byte for byte (tests above); they
   gain only the new `<label>` elements.
 - The copyright line and license block on every page; the attribution line and its links.
+
+## Acceptance (recorded in task 10, 2026-10-31)
+
+`cf139295812d61908cf07244f97b7a3a9732f62e` is accepted. Checked by the command chat and confirmed through the GitHub
+Actions API in task 10:
+
+- Modern core 41196666950: SUCCESS, all 12 jobs. Shard jobs, shards 1 to 4: PHP 8.4 / MariaDB 11.4 14:16, 19:18,
+  18:12, 14:38; PHP 8.5 / MySQL 8.4 15:11, 14:59, 20:43, 22:06.
+- Baseline integrity 41196666832: SUCCESS.
+
+`ROADMAP.md` ticks task 9 in task 10's commit.

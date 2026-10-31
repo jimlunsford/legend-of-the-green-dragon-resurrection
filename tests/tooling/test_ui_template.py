@@ -33,6 +33,13 @@ PART_KEYS = {
     # The phone (Phase 5 task 8): resurrection_phonehead_html() and resurrection_tabbar_html() in lib/pageparts.php.
     'phonehead': {'portrait', 'name', 'subtitle', 'mail', 'bars'}, 'phoneportrait': {'src', 'alt', 'width', 'height'},
     'phonebar': {'kind', 'label', 'value', 'percent'}, 'tabbar': {'tabs'}, 'tab': {'target', 'label'},
+    # The battle screen (Phase 5 task 10): lib/battle_view.php.
+    'battle': {'screen'}, 'fighters': {'cards'}, 'fighter': {'kind', 'state', 'name', 'sub', 'hp'},
+    'fighterbar': {'label', 'value', 'percent'}, 'fighterhp': {'label', 'value'}, 'battleactions': {'main', 'groups'},
+    'battlemain': {'buttons'}, 'battlegroup': {'id', 'title', 'note', 'buttons'}, 'battlenote': {'text'},
+    'battlelog': {'label', 'intro', 'rounds'}, 'battleintro': {'lines'}, 'battlerounds': {'rounds'},
+    'battleround': {'label', 'lines'}, 'battleline': {'text'}, 'battleresult': {'kind', 'title', 'lines'},
+    'battleafter': {'lines'},
 }
 # The tags page_header(), page_footer(), popup_header() and popup_footer() fill in the frame parts, and the four ad
 # slots modules fill through the footer hooks (1.1.2's {headerad}, {navad}, {verticalad}, {bodyad}).

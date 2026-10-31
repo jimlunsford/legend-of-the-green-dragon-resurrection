@@ -50,19 +50,21 @@ function resurrection_forest_context(bool $entry = false): string {
     return $context;
 }
 
-function resurrection_forest_form(string $op,string $label,string $context,string $fields=''): void {
+/** A Forest form; a fight's action joins the battle screen's $group (Phase 5 task 10), the same form either way. */
+function resurrection_forest_form(string $op,string $label,string $context,string $fields='',string $group='',bool $primary=false): void {
     $url='forest.php?op='.$op; addnav('',$url);
-    rawoutput('<form method="POST" action="'.$url.'">'.resurrection_action_fields('forest-'.$op,$context).$fields.
-        '<button class="button">'.htmlspecialchars(translate_inline($label),ENT_QUOTES|ENT_SUBSTITUTE,'UTF-8').'</button></form>');
+    $html='<form method="POST" action="'.$url.'">'.resurrection_action_fields('forest-'.$op,$context).$fields.
+        '<button class="'.resurrection_button_class($primary).'">'.htmlspecialchars(translate_inline($label),ENT_QUOTES|ENT_SUBSTITUTE,'UTF-8').'</button></form>';
+    if ($group==='') rawoutput($html); else resurrection_battle_action($group,$html);
 }
 
 function resurrection_forest_forms(): void {
     $context=resurrection_forest_context();
-    resurrection_forest_form('fight','Fight',$context);
-    resurrection_forest_form('run','Run',$context);
+    resurrection_forest_form('fight','Fight',$context,'','main',true);
+    resurrection_forest_form('run','Run',$context,'','main');
     if (getsetting('autofight',0)) {
-        foreach (['five'=>'For 5 Rounds','ten'=>'For 10 Rounds'] as $rounds=>$label) resurrection_forest_form('fight',$label,$context,'<input type="hidden" name="rounds" value="'.$rounds.'">');
-        if (getsetting('autofightfull',0)==1) resurrection_forest_form('fight','Until current enemy dies',$context,'<input type="hidden" name="rounds" value="full">');
+        foreach (['five'=>'For 5 Rounds','ten'=>'For 10 Rounds'] as $rounds=>$label) resurrection_forest_form('fight',$label,$context,'<input type="hidden" name="rounds" value="'.$rounds.'">','auto');
+        if (getsetting('autofightfull',0)==1) resurrection_forest_form('fight','Until current enemy dies',$context,'<input type="hidden" name="rounds" value="full">','auto');
     }
     resurrection_combat_forms();
 }

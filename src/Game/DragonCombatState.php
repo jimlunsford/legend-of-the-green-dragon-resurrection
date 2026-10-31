@@ -27,7 +27,7 @@ final class DragonCombatState
         $enemy = $state['enemies'][0];
         if (!is_array($enemy) || array_diff(array_keys($enemy), ['creaturename','creatureweapon',
             'creaturelevel','creatureattack','creaturedefense','creaturehealth','diddamage','type',
-            'dead','istarget','playerstarthp','killedplayer']) !== []) throw new \DomainException('Invalid Dragon fields.');
+            'dead','istarget','playerstarthp','killedplayer','creaturemaxhealth']) !== []) throw new \DomainException('Invalid Dragon fields.');
         foreach (['creaturename','creatureweapon'] as $key) {
             if (!is_string($enemy[$key] ?? null) || $enemy[$key] === '' || strlen($enemy[$key]) > 4096) {
                 throw new \DomainException('Invalid Dragon text.');
@@ -42,6 +42,8 @@ final class DragonCombatState
         self::flag($enemy['diddamage'] ?? null);
         foreach (['dead','istarget','killedplayer'] as $key) if (array_key_exists($key,$enemy)) self::flag($enemy[$key]);
         if (array_key_exists('playerstarthp',$enemy)) self::number($enemy['playerstarthp'], 1);
+        // The Dragon's starting hitpoints, recorded since Phase 5 task 10 for the battle screen's foe card.
+        if (array_key_exists('creaturemaxhealth',$enemy)) self::number($enemy['creaturemaxhealth'], 1);
         if (!empty($enemy['dead']) || !empty($enemy['killedplayer'])) throw new \DomainException('Terminal Dragon.');
         return $state;
     }

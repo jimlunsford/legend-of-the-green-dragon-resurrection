@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/specialty_onboarding.php';
+require_once __DIR__ . '/battle_view.php';
 require_once __DIR__ . '/../src/Game/ForestCombatState.php';
 require_once __DIR__ . '/../src/Game/DragonCombatState.php';
 require_once __DIR__ . '/../src/Game/TransmutationState.php';
@@ -61,10 +62,14 @@ function resurrection_combat_forms(string $type = 'forest'): void {
     // Bind the committed-form state, after battle has serialized buffs/companions.
     $context = $type === 'dragon' ? resurrection_dragon_context($specialty) : resurrection_combat_context($specialty);
     $url = $type . '.php?op=specialty'; addnav('',$url);
+    // The battle screen's Special Abilities group says how many uses are left (Phase 5 task 10).
+    tlschema('battle');
+    resurrection_battle_note('special', sprintf_translate('%s uses left', $specialty['uses']));
+    tlschema();
     foreach ($labels[$session['user']['specialty']] as $level=>$label) {
         if ($specialty['skill'] < $level || $specialty['uses'] < $level) continue;
-        rawoutput('<form method="POST" action="'.$url.'">'.resurrection_action_fields($type.'-specialty',$context).
-            '<input type="hidden" name="level" value="'.$level.'"><button class="button">'.
+        resurrection_battle_action('special', '<form method="POST" action="'.$url.'">'.resurrection_action_fields($type.'-specialty',$context).
+            '<input type="hidden" name="level" value="'.$level.'"><button class="'.resurrection_button_class().'">'.
             htmlspecialchars(translate_inline($label),ENT_QUOTES|ENT_SUBSTITUTE,'UTF-8').' ('.$level.')</button></form>');
     }
 }

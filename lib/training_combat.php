@@ -92,11 +92,13 @@ function resurrection_training_context(): string {
     } finally { calculate_buff_fields(); }
 }
 
-function resurrection_training_form(string $op,string $label,string $context,string $rounds=''): void {
+/** A Training form; a master fight's action joins the battle screen's $group (Phase 5 task 10), the same form either way. */
+function resurrection_training_form(string $op,string $label,string $context,string $rounds='',string $group='',bool $primary=false): void {
     $url='train.php?op='.$op; addnav('',$url);
-    rawoutput('<form method="POST" action="'.$url.'">'.resurrection_action_fields('training-'.$op,$context).
+    $html='<form method="POST" action="'.$url.'">'.resurrection_action_fields('training-'.$op,$context).
         ($rounds!==''?'<input type="hidden" name="rounds" value="'.$rounds.'">':'').
-        '<button class="button">'.htmlspecialchars(translate_inline($label),ENT_QUOTES|ENT_SUBSTITUTE,'UTF-8').'</button></form>');
+        '<button class="'.resurrection_button_class($primary).'">'.htmlspecialchars(translate_inline($label),ENT_QUOTES|ENT_SUBSTITUTE,'UTF-8').'</button></form>';
+    if ($group==='') rawoutput($html); else resurrection_battle_action($group,$html);
 }
 
 /** GET never heals, starts a fight, spends a daily challenge or settles advancement. */
@@ -184,10 +186,10 @@ function resurrection_training(): never {
         }
         if ($state['combat']!==[]) {
             $GLOBALS['enemycounter']=1; show_enemies($state['combat']['enemies']);
-            resurrection_training_form('fight','Fight',$context);
+            resurrection_training_form('fight','Fight',$context,'','main',true);
             if (getsetting('autofight',0)) {
-                foreach (['five'=>'For 5 Rounds','ten'=>'For 10 Rounds'] as $rounds=>$label) resurrection_training_form('fight',$label,$context,$rounds);
-                if (getsetting('autofightfull',0)) resurrection_training_form('fight','Until End',$context,'full');
+                foreach (['five'=>'For 5 Rounds','ten'=>'For 10 Rounds'] as $rounds=>$label) resurrection_training_form('fight',$label,$context,$rounds,'auto');
+                if (getsetting('autofightfull',0)) resurrection_training_form('fight','Until End',$context,'full','auto');
             }
         } else {
             $required=exp_for_next_level($session['user']['level'],$session['user']['dragonkills']);

@@ -180,8 +180,9 @@ function resurrection_presentation($key){
 		"inline-form-flush" => array(" class='rz-inline'", " style='display:inline;margin:0'"),
 		// A button drawn as a link: the editors' delete buttons.
 		"link-button" => array(" class='rz-link-button'", " style='background:none;border:0;padding:0;margin:0;font:inherit;color:inherit;cursor:pointer;text-decoration:underline'"),
-		// The weapon and armor shops' item buttons: the shop's primary action in the Resurrection template.
-		"shop-button" => array(" class='button rz-button-primary'", " style='background:none;border:0;padding:0;margin:0;font:inherit;cursor:pointer;text-decoration:underline'"),
+		// The weapon and armor shops' item buttons: in the Resurrection template a link in --accent whose tap area is its
+		// row (Phase 5 task 10, Jim's review of task 9; task 9 drew them as filled primary buttons).
+		"shop-button" => array(" class='rz-shop-link'", " style='background:none;border:0;padding:0;margin:0;font:inherit;cursor:pointer;text-decoration:underline'"),
 		// Larger text: a heading-like line.
 		"larger" => array("<span class='rz-larger'>", "<font size='+1'>"),
 		"larger-end" => array("</span>", "</font>"),

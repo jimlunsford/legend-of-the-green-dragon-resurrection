@@ -786,3 +786,17 @@ Removed: the one read in `src/Security/PaymentInfo.php` (`:21`, recorded CLOSED 
 the file leaves the file count. `paylog.php` held no site of its own since part 5 (its two reads went through
 `PaymentInfo::read`). `PaymentInfoTest` is removed with the class. The `paylog` table stays in the installer and
 schema, unread. **No site is OPEN.** ScalarState limits are unchanged.
+
+## Recount after the battle screen, 2026-10-31
+
+Phase 5 task 10 (`PHASE5-TASK10-BATTLE-COMMENTARY-20261031.md`) records each forest foe's and the Green Dragon's
+starting hitpoints as `creaturemaxhealth` in the stored fight (`lib/forest_encounter.php`, `lib/dragon_outcomes.php`),
+and `ForestCombatState` and `DragonCombatState` accept it as an optional number from 1 to 2147483647. It is one more
+key in an array an existing writer serializes; no serialize, `ScalarState::read` or unserialize call was added or
+removed. The same token recount (tracked PHP outside `tests/`, `scripts/` and `lab/`, comments excluded) gives the
+same numbers at `cf13929` and after the task:
+
+**83 sites / 43 files / 38 serialize writers-checks / 44 ScalarState reads / one centralized unserialize**.
+
+A fight stored before the task has no `creaturemaxhealth` and still passes both schemas. **No site is OPEN.**
+ScalarState limits are unchanged.

@@ -15,6 +15,7 @@ parameters:
         - lib/training_combat.php
         - lib/pvp_combat.php
         - lib/dragon_combat.php
+        - lib/battle_view.php
         - lib/typed_editor.php
         - lib/darkhorse_game.php
         - lib/darkhorse_entry.php
@@ -74,6 +75,7 @@ parameters:
         - lib/addnews.php
         - lib/translator.php
         - lib/pageparts.php
+        - lib/template.php
         - modules/goldmine.php
         - lib/su_access.php
         - lib/gamelog.php

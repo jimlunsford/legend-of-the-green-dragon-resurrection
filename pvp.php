@@ -6,6 +6,7 @@ try { require_once 'common.php'; }
 catch (DomainException) { http_response_code(409); exit('Invalid stored PvP state. Stored state was preserved.'); }
 catch (Throwable) { http_response_code(500); exit('PvP could not be loaded. Stored state was preserved.'); }
 require_once("lib/fightnav.php");
+require_once("lib/battle_view.php");
 require_once("lib/pvpwarning.php");
 require_once("lib/pvplist.php");
 require_once("lib/pvpsupport.php");
@@ -44,7 +45,7 @@ if ($op === '' && $act === '') {
     if ($session['user']['badguy'] !== '') {
         try { \Resurrection\Security\PvpState::read($session['user']['badguy'],(int)$session['user']['acctid']); }
         catch (DomainException $error) { http_response_code(409); exit('A different or invalid combat is pending.'); }
-        resurrection_pvp_form('pvp.php?op=fight','pvp-round',resurrection_pvp_context(),'Fight');
+        resurrection_pvp_form('pvp.php?op=fight','pvp-round',resurrection_pvp_context(),'Fight','main',true);
     } else {
         checkday(); pvpwarning();
         $args = modulehook('pvpstart',['atkmsg'=>'`4You head out to the fields. You have `^%s`4 PvP fights left today.`n','schemas'=>['atkmsg'=>'pvp']]);
@@ -62,7 +63,8 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'GET') {
         try { \Resurrection\Security\PvpState::read($session['user']['badguy'],(int)$session['user']['acctid']); }
         catch (DomainException $error) { http_response_code(409); exit('No active PvP combat.'); }
     }
-    resurrection_pvp_form($url,$scope,$context,$act === 'attack' ? 'Attack' : 'Fight');
+    if ($act === 'attack') resurrection_pvp_form($url,$scope,$context,'Attack');
+    else resurrection_pvp_form($url,$scope,$context,'Fight','main',true);
     page_footer();
 }
 resurrection_consume_action($scope,$context);
@@ -177,18 +179,20 @@ foreach ($notifications as $notification) {
 if (!$victory && !$defeat) {
     $extra = httpget('inn') === '1' ? '&inn=1' : '';
     $context = resurrection_pvp_context();
-    resurrection_pvp_form('pvp.php?op=fight'.$extra,'pvp-round',$context,'Fight');
+    resurrection_pvp_form('pvp.php?op=fight'.$extra,'pvp-round',$context,'Fight','main',true);
     if (getsetting('autofight',0)) {
         foreach (['five'=>'For 5 Rounds','ten'=>'For 10 Rounds'] as $auto=>$label) {
-            resurrection_pvp_form('pvp.php?op=fight'.$extra.'&auto='.$auto,'pvp-round',$context,$label);
+            resurrection_pvp_form('pvp.php?op=fight'.$extra.'&auto='.$auto,'pvp-round',$context,$label,'auto');
         }
-        if (getsetting('autofightfull',0)) resurrection_pvp_form('pvp.php?op=fight'.$extra.'&auto=full','pvp-round',$context,'Until End');
+        if (getsetting('autofightfull',0)) resurrection_pvp_form('pvp.php?op=fight'.$extra.'&auto=full','pvp-round',$context,'Until End','auto');
     }
 }
 page_footer();
 
-function resurrection_pvp_form(string $url, string $scope, string $context, string $label): void {
+/** A PvP form; a fight's action joins the battle screen's $group (Phase 5 task 10), the same form either way. */
+function resurrection_pvp_form(string $url, string $scope, string $context, string $label, string $group = '', bool $primary = false): void {
     addnav('',$url);
-    rawoutput('<form method="POST" action="'.htmlspecialchars($url,ENT_QUOTES,'UTF-8').'">'.
-        resurrection_action_fields($scope,$context).'<button class="button">'.$label.'</button></form>');
+    $html = '<form method="POST" action="'.htmlspecialchars($url,ENT_QUOTES,'UTF-8').'">'.
+        resurrection_action_fields($scope,$context).'<button class="'.resurrection_button_class($primary).'">'.$label.'</button></form>';
+    if ($group === '') rawoutput($html); else resurrection_battle_action($group, $html);
 }

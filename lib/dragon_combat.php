@@ -30,34 +30,38 @@ function resurrection_dragon_authority(string $op): void {
     }
 }
 
-function resurrection_dragon_form(string $op, string $label, string $extra = ''): void {
+/** A Dragon form; a fight's action joins the battle screen's $group (Phase 5 task 10), the same form either way. */
+function resurrection_dragon_form(string $op, string $label, string $extra = '', string $group = '', bool $primary = false): void {
     $url = 'dragon.php?op='.$op;
     addnav('', $url);
-    rawoutput('<form method="POST" action="'.$url.'">'.resurrection_action_fields('dragon-'.$op,resurrection_dragon_context()).
-        $extra.'<button class="button">'.htmlspecialchars(translate_inline($label), ENT_QUOTES|ENT_SUBSTITUTE, 'UTF-8').'</button></form>');
+    $html = '<form method="POST" action="'.$url.'">'.resurrection_action_fields('dragon-'.$op,resurrection_dragon_context()).
+        $extra.'<button class="'.resurrection_button_class($primary).'">'.htmlspecialchars(translate_inline($label), ENT_QUOTES|ENT_SUBSTITUTE, 'UTF-8').'</button></form>';
+    if ($group === '') rawoutput($html); else resurrection_battle_action($group, $html);
 }
 
 function resurrection_dragon_forms(): void {
     global $session;
     try {
         resurrection_dragon_authority('prologue1');
+        // The Dragon is slain: its epilogue form follows the battle screen.
+        resurrection_battle_close();
         addnav('Continue','dragon.php?op=prologue1');
         resurrection_dragon_form('prologue1','Continue');
         return;
     } catch (DomainException) { /* Live combat is a different validated state. */ }
     if (empty($session['user']['alive'])) { addnav('Daily news','news.php'); return; }
     resurrection_dragon_authority('fight');
-    resurrection_dragon_form('fight','Fight');
+    resurrection_dragon_form('fight','Fight','','main',true);
     if (getsetting('autofight',0)) {
         foreach (['five'=>'For 5 Rounds','ten'=>'For 10 Rounds'] as $auto=>$label) {
-            resurrection_dragon_form('fight',$label,'<input type="hidden" name="auto" value="'.$auto.'">');
+            resurrection_dragon_form('fight',$label,'<input type="hidden" name="auto" value="'.$auto.'">','auto');
         }
-        if (getsetting('autofightfull',0)) resurrection_dragon_form('fight','Until End','<input type="hidden" name="auto" value="full">');
+        if (getsetting('autofightfull',0)) resurrection_dragon_form('fight','Until End','<input type="hidden" name="auto" value="full">','auto');
     }
     resurrection_combat_forms('dragon');
     if ($session['user']['superuser'] & SU_DEVELOPER) {
-        resurrection_dragon_form('godmode','GOD MODE');
-        resurrection_dragon_form('restart','Restart encounter');
+        resurrection_dragon_form('godmode','GOD MODE','','other');
+        resurrection_dragon_form('restart','Restart encounter','','other');
     }
 }
 

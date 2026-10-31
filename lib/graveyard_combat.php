@@ -48,11 +48,13 @@ function resurrection_graveyard_context(): string {
         return hash('sha256',json_encode(resurrection_forest_canonical([$state,$player,$buffs,$ordered,$settings,$prefs]),JSON_THROW_ON_ERROR));
     } finally { calculate_buff_fields(); }
 }
-function resurrection_graveyard_form(string $op,string $label,string $context,string $rounds=''): void {
+/** A Graveyard form; a torment's action joins the battle screen's $group (Phase 5 task 10), the same form either way. */
+function resurrection_graveyard_form(string $op,string $label,string $context,string $rounds='',string $group='',bool $primary=false): void {
     $url='graveyard.php?op='.$op; addnav('',$url);
-    rawoutput('<form method="POST" action="'.$url.'">'.resurrection_action_fields('graveyard-'.$op,$context).
+    $html='<form method="POST" action="'.$url.'">'.resurrection_action_fields('graveyard-'.$op,$context).
         ($rounds!==''?'<input type="hidden" name="rounds" value="'.$rounds.'">':'').
-        '<button class="button">'.htmlspecialchars(translate_inline($label),ENT_QUOTES|ENT_SUBSTITUTE,'UTF-8').'</button></form>');
+        '<button class="'.resurrection_button_class($primary).'">'.htmlspecialchars(translate_inline($label),ENT_QUOTES|ENT_SUBSTITUTE,'UTF-8').'</button></form>';
+    if ($group==='') rawoutput($html); else resurrection_battle_action($group,$html);
 }
 /** Combat GETs render only. Noncombat mausoleum and event routes retain their ownership. */
 function resurrection_graveyard_combat(): never {
@@ -142,12 +144,14 @@ function resurrection_graveyard_combat(): never {
         }
         if ($state!==[]) {
             $GLOBALS['enemycounter']=1; show_enemies($state['enemies']);
-            resurrection_graveyard_form('fight','Fight',$context); resurrection_graveyard_form('run','Run',$context);
+            resurrection_graveyard_form('fight','Fight',$context,'','main',true); resurrection_graveyard_form('run','Run',$context,'','main');
             if (getsetting('autofight',0)) {
-                foreach (['five'=>'For 5 Rounds','ten'=>'For 10 Rounds'] as $rounds=>$label) resurrection_graveyard_form('fight',$label,$context,$rounds);
-                if (getsetting('autofightfull',0)) resurrection_graveyard_form('fight','Until End',$context,'full');
+                foreach (['five'=>'For 5 Rounds','ten'=>'For 10 Rounds'] as $rounds=>$label) resurrection_graveyard_form('fight',$label,$context,$rounds,'auto');
+                if (getsetting('autofightfull',0)) resurrection_graveyard_form('fight','Until End',$context,'full','auto');
             }
         } else {
+            // After a torment's last round, the graveyard's own page follows the battle screen.
+            resurrection_battle_close();
             $skipgraveyardtext=false; $deathoverlord=getsetting('deathoverlord','`$Ramius');
             $graveyardCombatContext=$context;
             require __DIR__.'/graveyard/case_default.php';

@@ -3,6 +3,7 @@
 // mail ready
 // translation ready
 //
+require_once __DIR__ . '/battle_view.php';
 
 /**
  * Outputs a list of all enemies and the player.
@@ -11,6 +12,9 @@
  */
 function show_enemies($enemies) {
 	global $enemycounter, $session;
+	// The Resurrection template shows them on the battle screen's fighter cards (Phase 5 task 10, lib/battle_view.php);
+	// a 1.1.2 skin lists them as 1.1.2 did.
+	if (resurrection_battle_ui()) { resurrection_battle_enemies($enemies); return; }
 	foreach ($enemies as $index => $badguy) {
 		if ((isset($badguy['istarget']) && $badguy['istarget'] == true) && $enemycounter > 1)
 			$ccode = "`#";

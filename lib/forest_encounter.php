@@ -214,6 +214,8 @@ if ($op=="search"){
 				}
 			}
 			calculate_buff_fields();
+			// The battle screen's foe cards show each foe's hitpoints against this starting value (Phase 5 task 10).
+			foreach ($stack as $index=>$enemy) $stack[$index]['creaturemaxhealth']=$enemy['creaturehealth'];
 			$attackstack = array(
 				"enemies"=>$stack,
 				"options"=>array(

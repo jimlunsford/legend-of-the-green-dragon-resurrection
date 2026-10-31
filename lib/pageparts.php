@@ -167,6 +167,8 @@ function page_footer($saveuser=true){
 	if (!isset($session['user']['name'])) $session['user']['name']="";
 	if (!isset($session['user']['login'])) $session['user']['login']="";
 
+	// A page with a battle screen (Phase 5 task 10): its cards, actions, log and result in their order.
+	if (function_exists('resurrection_battle_assemble')) resurrection_battle_assemble();
 	//clean up unclosed output tags.
 	while (list($key,$val)=resurrection_array_next($nestedtags)){
 		if ($nestedtags[$key] === true) $output.="</$key>";

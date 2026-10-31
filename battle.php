@@ -16,6 +16,7 @@ require_once("lib/battle-buffs.php");
 require_once("lib/battle-skills.php");
 require_once("lib/buffs.php");
 require_once("lib/extended-battle.php");
+require_once("lib/battle_view.php");
 
 //just in case we're called from within a function.Yuck is this ugly.
 global $badguy,$enemies,$newenemies,$session,$creatureattack,$creatureatkmod, $beta;
@@ -67,6 +68,11 @@ $newtarget = httpget('newtarget');
 if ($newtarget != "") $op = "newtarget";
 //if (!$targetted) $op = "newtarget";
 
+// The Resurrection template's battle screen (Phase 5 task 10, lib/battle_view.php) sorts what this fight prints into
+// its cards, log and result. A 1.1.2 skin prints exactly what it always did.
+$rzbattle = resurrection_battle_ui();
+if ($rzbattle) resurrection_battle_begin();
+
 if ($op=="fight"){
 	apply_skill($skill,$l);
 } else if ($op=="newtarget") {
@@ -98,8 +104,11 @@ if ($op=="fight"){
 $victory = false;
 $defeat = false;
 
+// The battle screen's log opens with the encounter lines; what a skill or a target change printed follows them.
+if ($rzbattle) resurrection_battle_hold();
 if ($enemycounter > 0) {
-	output ("`\$`c`b~ ~ ~ Fight ~ ~ ~`b`c`0");
+	// The battle screen drops this divider: the page title and the fighter cards say it.
+	if (!$rzbattle) output ("`\$`c`b~ ~ ~ Fight ~ ~ ~`b`c`0");
 	modulehook("battle", $enemies);
 	foreach ($enemies as $index=>$badguy) {
 		if ($badguy['creaturehealth']>0 && $session['user']['hitpoints']>0) {
@@ -109,6 +118,7 @@ if ($enemycounter > 0) {
 	output_notl("`n");
 	show_enemies($enemies);
 }
+if ($rzbattle) resurrection_battle_release();
 
 suspend_buffs((($options['type'] == 'pvp')?"allowinpvp":false));
 suspend_companions((($options['type'] == 'pvp')?"allowinpvp":false));
@@ -159,6 +169,8 @@ if ($op != "newtarget") {
 	// Run through as many rounds as needed.
     $pvpRounds=0;
 	do {
+		// Each pass is one round: one item of the battle screen's log.
+		if ($rzbattle) resurrection_battle_round();
         if ($options['type']==='pvp' && ++$pvpRounds>1000) throw new DomainException('PvP automatic combat cannot finish safely.');
 		//we need to restore and calculate here to reflect changes that happen throughout the course of multiple rounds.
 		restore_buff_fields();
@@ -369,7 +381,7 @@ if ($op != "newtarget") {
 		$creaturedmg=0;
 		$selfdmg=0;
 
-		if (($count != 1 || ($needtostopfighting && $count > 1)) && $session['user']['hitpoints'] > 0 && count($enemies) > 0) {
+		if (!$rzbattle && ($count != 1 || ($needtostopfighting && $count > 1)) && $session['user']['hitpoints'] > 0 && count($enemies) > 0) {
 			output("`2`bNext round:`b`n");
 		}
 
@@ -480,10 +492,15 @@ if ($op != "newtarget") {
 } else {
 	$newenemies = $enemies;
 }
+// What follows the last round is the battle screen's result block.
+if ($rzbattle) resurrection_battle_rounds_end($victory, $defeat);
 
 $newenemies = autosettarget($newenemies);
 
-if ($session['user']['hitpoints']>0 && count($newenemies)>0 && ($op=="fight" || $op=="run")){
+// The battle screen's cards show the foes as the rounds left them; a 1.1.2 skin lists them after the last round.
+if ($rzbattle) {
+	resurrection_battle_enemies($newenemies);
+} elseif ($session['user']['hitpoints']>0 && count($newenemies)>0 && ($op=="fight" || $op=="run")){
 	output("`2`bEnd of Round:`b`n");
 	show_enemies($newenemies);
 }
@@ -505,7 +522,7 @@ if ($victory || $defeat){
 	if (is_array($newenemies)) {
 		foreach ($newenemies as $index => $badguy) {
 			global $output;
-			$badguy['fightoutput'] = $output;
+			$badguy['fightoutput'] = $rzbattle ? resurrection_battle_fightoutput() : $output;
 			// legacy support. Will be removed in one of the following versions!
 			// Please update all modules, that use the following hook to use the
 			// $options array instead of the $args array for their code.

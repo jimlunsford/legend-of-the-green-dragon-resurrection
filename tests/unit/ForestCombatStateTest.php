@@ -36,6 +36,21 @@ final class ForestCombatStateTest extends TestCase
         $state['enemies'][1]['spellpoints']=0;
         self::assertSame($state,ForestCombatState::read(serialize($state)));
     }
+    /** The foe's starting hitpoints (Phase 5 task 10): optional, a number from 1; a fight stored without it still reads. */
+    public function testRecordedMaximumHitpoints(): void
+    {
+        $state=$this->state();
+        self::assertSame($state,ForestCombatState::read(serialize($state)));
+        $state['enemies'][0]['creaturemaxhealth']=1000;
+        self::assertSame($state,ForestCombatState::read(serialize($state)));
+        $state['enemies'][0]['creaturemaxhealth']='63';
+        self::assertSame($state,ForestCombatState::read(serialize($state)));
+        foreach ([0,-5,'abc',null,[],2147483648] as $bad) {
+            $state['enemies'][0]['creaturemaxhealth']=$bad;
+            try { ForestCombatState::read(serialize($state)); self::fail(var_export($bad,true)); }
+            catch (\DomainException) { self::addToAssertionCount(1); }
+        }
+    }
     public function testInvalidRewardsOptionsAndStructure(): void
     {
         $base=$this->state(); $cases=[[],false,'invalid', ['enemies'=>[],'options'=>['type'=>'forest']]];
