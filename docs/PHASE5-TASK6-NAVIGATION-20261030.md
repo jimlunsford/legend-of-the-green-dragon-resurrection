@@ -280,3 +280,22 @@ modules (not committed; sent to Jim in the task report).
 
 Pending: this commit's Modern core (both legs, all 12 jobs) and Baseline integrity runs. `ROADMAP.md` ticks task 6 only
 after CI accepts it.
+
+### Accepted (recorded 2026-10-30, Phase 5 task 7)
+
+`d0f9415` is accepted. Confirmed through the GitHub API before task 7 started:
+
+- Modern core [41129318951](https://github.com/jimlunsford/legend-of-the-green-dragon-resurrection/actions/runs/41129318951):
+  SUCCESS, all 12 jobs (both `checks` jobs, all eight `http` shard jobs, both `result` jobs), head `d0f9415`. Shard
+  jobs, from the jobs' start and completion times:
+
+  | Leg | Shard 1 | Shard 2 | Shard 3 | Shard 4 |
+  |---|---|---|---|---|
+  | PHP 8.4 / MariaDB 11.4 | 16:19 | 19:56 | 18:06 | 18:28 |
+  | PHP 8.5 / MySQL 8.4 | 17:56 | 17:10 | 20:35 | 18:51 |
+
+- Baseline integrity [41129318835](https://github.com/jimlunsford/legend-of-the-green-dragon-resurrection/actions/runs/41129318835):
+  SUCCESS, head `d0f9415`.
+
+The longest shard job (20:35) is well under the 30-minute mark, so `tests/tooling/shard-durations.json` is not
+refreshed.

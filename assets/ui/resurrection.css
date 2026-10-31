@@ -415,6 +415,71 @@ input[type="checkbox"], input[type="radio"] { width: 20px; height: 20px; accent-
 */
 .rz-statvalue .colLtYellow, .rz-statbuff .colLtYellow { color: var(--text); }
 
+/*
+  The character panel (Phase 5 task 7): one card from the top, holding the header (portrait, name, "Level N Race,
+  Specialty"), the HP (soulpoints when dead) and XP bars, six stat tiles in two columns and the equipment rows; then
+  buffs, companions and the rows modules added, each in its own card as above. Bars and tiles show numbers as text, so
+  no meaning rides on color alone; a bar's fill never passes 100%.
+*/
+.rz-statcard { display: flex; flex-direction: column; gap: 16px; padding: var(--space-panel); min-width: 0; }
+.rz-statid { display: flex; align-items: center; gap: 14px; min-width: 0; }
+.rz-statportrait { display: block; flex: 0 0 auto; width: var(--portrait-width); height: auto; }
+.rz-statid-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; overflow-wrap: anywhere; }
+.rz-statname {
+  margin: 0;
+  font-family: var(--font-display);
+  font-weight: var(--weight-display-bold);
+  font-size: var(--size-panel-name);
+  line-height: 1.25;
+  color: var(--text);
+}
+.rz-statsub { margin: 0; color: var(--muted); font-size: var(--size-panel-sub); }
+
+.rz-statbar { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.rz-statbar-text { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+.rz-statbar-label { color: var(--muted); }
+.rz-statbar-value { color: var(--text); font-weight: var(--weight-ui-bold); text-align: right; overflow-wrap: anywhere; min-width: 0; }
+.rz-statbar-track { height: var(--bar-height); background: var(--track); border-radius: var(--radius-bar); overflow: hidden; }
+.rz-statbar-fill { height: 100%; max-width: 100%; border-radius: var(--radius-bar); background: var(--health); }
+.rz-statbar-experience .rz-statbar-fill { background: var(--accent); }
+.rz-statbar-caption { color: var(--muted); font-size: var(--size-small); }
+.rz-statbar-caption:empty { display: none; }
+
+.rz-stattiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.rz-stattile {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  padding: 10px 12px;
+  background: var(--raised);
+  border-radius: var(--radius-control);
+}
+.rz-stattile-label {
+  font-family: var(--font-display);
+  font-weight: var(--weight-display);
+  font-size: var(--size-label);
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.rz-stattile-value { color: var(--text); font-size: var(--size-tile-value); font-weight: var(--weight-ui-bold); overflow-wrap: anywhere; }
+/* Alegreya Sans's default figures are old-style; numbers in bars and tiles use lining figures, so 12 reads at the size of High. */
+.rz-statbar-value, .rz-stattile-value, .rz-equiprow-value { font-variant-numeric: lining-nums; }
+
+.rz-equiprows { display: flex; flex-direction: column; }
+.rz-equiprow {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  padding: 8px 0;
+  border-top: 1px solid var(--track);
+}
+.rz-equiprow:first-child { border-top: 0; padding-top: 0; }
+.rz-equiprow-label { color: var(--muted); }
+.rz-equiprow-value { color: var(--text); font-weight: var(--weight-ui-bold); text-align: right; overflow-wrap: anywhere; min-width: 0; }
+
 /* Footer */
 
 .rz-footer {
@@ -488,8 +553,8 @@ a.hotmotd { color: var(--accent); }
   .rz-header-portrait .rz-portrait { padding: 0; background: none; border: 0; }
   .rz-header-portrait .rz-portrait-img { width: var(--portrait-width-phone); }
   .rz-header-portrait .rz-portrait-text { display: none; }
-  .rz-character .rz-portrait { display: none; }
-  .rz-statsection, .rz-character-inner:not(:has(.rz-stats)) { padding: var(--space-panel-phone); }
+  .rz-character .rz-portrait, .rz-statportrait { display: none; }
+  .rz-statsection, .rz-statcard, .rz-character-inner:not(:has(.rz-stats)) { padding: var(--space-panel-phone); }
   .rz-footer-meta { text-align: left; }
   .rz-field input { width: 100%; }
   .rz-field { flex: 1 1 100%; }

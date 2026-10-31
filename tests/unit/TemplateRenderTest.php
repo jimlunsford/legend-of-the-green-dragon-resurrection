@@ -26,6 +26,9 @@ use Resurrection\Configuration\LegacyConfig;
  * nav's key badge equals its accesskey and aria-keyshortcuts, the page's key map has one entry per key going where the
  * link goes, and no inline key script is left; a forest fight, which has no nav to show, renders without the nav column.
  *
+ * Phase 5 task 7 (docs/PHASE5-TASK7-CHARACTER-PANEL-20261030.md) moves the panel's portrait into its header card, beside
+ * the name; the phone header keeps its own. A player with no race chosen yet is named "Not chosen yet".
+ *
  * The test does not depend on the order it runs in: an installed database is used as it is; an empty one is installed
  * here with scripts/install.php --modules=none and emptied again afterwards. The player it creates, its mail, the MoTD
  * item and the clock settings it changes are removed or restored.
@@ -133,11 +136,11 @@ final class TemplateRenderTest extends TestCase
             self::assertSame(1, substr_count($village, '<h1 class="rz-title">' . $square . '</h1>'));
             $body = substr($village, (int)strpos($village, '</head>'));
             self::assertSame(1, substr_count($body, $square), 'The village title is repeated in the page');
-            // The village scene; the default race has no portrait of its own: the unknown one, its alt the race as the
-            // character panel shows it.
+            // The village scene; no race chosen yet: the unknown portrait, its alt the race as the character panel shows
+            // it, "Not chosen yet" since Phase 5 task 7 (RACE_UNKNOWN, "Horrible Gelatinous Blob", before).
             $this->assertScene($village, 'village', $villagename);
             $name = $this->php($tree, 'echo preg_replace("/`./", "", db_query("SELECT name FROM accounts WHERE acctid=?", true, [' . $player . '])[0]["name"]);');
-            $this->assertPortrait($village, 'unknown', 'Horrible Gelatinous Blob', $name);
+            $this->assertPortrait($village, 'unknown', 'Not chosen yet', $name);
             $this->assertNavs($village, 'village.php');
 
             // Unread and read mail: the badge shows the unread count, the label the full counts, as the table holds them.
@@ -286,7 +289,7 @@ final class TemplateRenderTest extends TestCase
         self::assertSame(1, substr_count($page, '<img class="rz-scene-img"'), $scene);
     }
 
-    /** The race portrait: the race's file, the race as alt text, beside the name and race, in the panel and the phone header. */
+    /** The race portrait: the race's file, the race as alt text, beside the name, in the panel's header card and the phone header. */
     private function assertPortrait(string $page, string $file, string $race, string $name): void
     {
         $portrait = '<div class="rz-card rz-portrait"><img class="rz-portrait-img" src="assets/portraits/race/' . $file . '.svg" alt="'
@@ -294,8 +297,12 @@ final class TemplateRenderTest extends TestCase
             . htmlspecialchars($name, ENT_QUOTES) . '</span><span class="rz-portrait-race">' . htmlspecialchars($race, ENT_QUOTES) . '</span></div></div>' . "\n";
         self::assertNotSame('', trim($name));
         self::assertStringContainsString('<div class="rz-header-portrait">' . $portrait . '</div>', $page, $file);
-        self::assertStringContainsString('<div class="rz-character-inner">' . $portrait, $page, $file);
-        self::assertSame(2, substr_count($page, '<img class="rz-portrait-img"'), $file);
+        self::assertSame(1, substr_count($page, '<img class="rz-portrait-img"'), $file);
+        // The character panel's header card (Phase 5 task 7): the same file and alt text, beside the name.
+        self::assertSame(1, preg_match('#<div class="rz-character-inner"><div class="rz-stats">.*?<div class="rz-statid"><img class="rz-statportrait" src="assets/portraits/race/'
+            . $file . '\.svg" alt="' . preg_quote(htmlspecialchars($race, ENT_QUOTES), '#') . '" width="200" height="240">\s*<div class="rz-statid-text"><h2 class="rz-statname">(.*?)</h2>#s', $page, $card), $file);
+        self::assertSame($name, trim(strip_tags($card[1])), $file);
+        self::assertSame(1, substr_count($page, '<img class="rz-statportrait"'), $file);
     }
 
     /** The header's mail link: an envelope, the unread count as a badge (none at zero), the full sentence as its label. */

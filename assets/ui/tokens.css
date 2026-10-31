@@ -56,6 +56,9 @@
   --tracking-wordmark: 0.06em;
   --size-wordmark-sub: 13px;
   --tracking-wordmark-sub: 0.2em;
+  --size-panel-name: 20px;
+  --size-panel-sub: 14px;
+  --size-tile-value: 18px;
 
   /* Spacing and radii */
   --space-unit: 4px;

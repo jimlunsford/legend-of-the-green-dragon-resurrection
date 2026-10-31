@@ -485,7 +485,7 @@ function getcharstat_value($section,$title){
  * @return array The current stats for this character or the list of online players
  */
 function charstats(){
-	global $session, $playermount, $companions;
+	global $session, $playermount, $companions, $charstat_info;
 
 	wipe_charstats();
 
@@ -542,6 +542,8 @@ function charstats(){
 
 		$atk = round($atk, 2);
 		$def = round($def, 2);
+		// Attack and defense with the buffs, as numbers, for the new template's panel.
+		$modded = array("attack"=>$atk, "defense"=>$def);
 		if ($atk < $u['attack']){
 			$atk = round($u['attack'],1)."`\$".round($atk-$u['attack'],1);
 		}else if($atk > $u['attack']){
@@ -616,9 +618,17 @@ function charstats(){
 		if ($u['hashorse'])
 			addcharstat("Creature", $playermount['mountname'] . "`0");
 
+		// The new template's panel (Phase 5 task 7) renders from the numbers; it needs the rows as charstats() set
+		// them, to tell the rows a module added or changed from its own.
+		$standard = $charstat_info;
+
 		modulehook("charstats");
 
-		$charstat = getcharstats($buffs);
+		if (resurrection_charpanel_template()) {
+			$charstat = resurrection_charpanel($standard, $buffs, $spirits, $modded);
+		} else {
+			$charstat = getcharstats($buffs);
+		}
 
 		if (!is_array($session['bufflist'])) $session['bufflist']=array();
 		return $charstat;
@@ -877,11 +887,8 @@ function resurrection_portrait_html(){
 	global $template, $session;
 	require_once __DIR__ . '/../src/Ui/Art.php';
 	if (!isset($template['portrait']) || empty($session['user']['loggedin']) || empty($session['loggedin'])) return "";
-	$race = (string)($session['user']['race'] ?? '');
-	// No race chosen yet ('', the column's default '0', or RACE_UNKNOWN, as lib/race_onboarding.php reads it) is named
-	// as the panel names RACE_UNKNOWN.
-	if (in_array($race, array('', '0', RACE_UNKNOWN), true)) $race = RACE_UNKNOWN;
-	$racename = trim(full_sanitize(translate_inline($race, "race")));
+	list($race, $racename) = resurrection_charpanel_race((string)($session['user']['race'] ?? ''));
+	$racename = trim(full_sanitize($racename));
 	$portrait = \Resurrection\Ui\Art::portrait($race, $racename);
 	if ($portrait === null) return "";
 	return templatereplace("portrait", array(
@@ -936,5 +943,240 @@ function resurrection_nav_column($builtnavs, $navad = ""){
 	if (!isset($template['navstart']) || !isset($template['navend'])) return array("", "");
 	if (trim($builtnavs) == "" && trim($navad) == "") return array("", "");
 	return array($template['navstart'], $template['navend']);
+}
+/**
+ * A player's race as the character panel names it: [race, name]. No race chosen yet ('', the column's default '0',
+ * or RACE_UNKNOWN, as lib/race_onboarding.php reads it) is RACE_UNKNOWN, named "Not chosen yet" (Phase 5 task 7; 1.1.2
+ * named it RACE_UNKNOWN, "Horrible Gelatinous Blob"); any other race is its translated name.
+ *
+ * @return array{0: string, 1: string}
+ */
+function resurrection_charpanel_race($race){
+	if (in_array($race, array('', '0', RACE_UNKNOWN), true)) return array(RACE_UNKNOWN, translate_inline("Not chosen yet"));
+	return array($race, translate_inline($race, "race"));
+}
+
+/**
+ * Whether the page's template has the character panel's parts (the new template does, the 1.1.2 skins do not: they
+ * keep getcharstats()'s label/value rows).
+ */
+function resurrection_charpanel_template(){
+	global $template;
+	foreach (array("statheader", "statbar", "statbarcap", "stattile", "stattiles", "equiprow", "equiprows") as $part) {
+		if (!isset($template[$part])) return false;
+	}
+	return true;
+}
+
+/**
+ * A bar's fill, as a percentage of its width: $current against $max, never below 0 and never above 100 (hitpoints
+ * above the maximum, or experience past what the next level needs, fill the bar and no more). A bar with no maximum
+ * is empty. One decimal at most.
+ */
+function resurrection_charpanel_percent($current, $max){
+	if ($max <= 0) return "0";
+	$percent = round(max(0, min(100, $current / $max * 100)), 1);
+	return (string)$percent;
+}
+
+/**
+ * The value a module changed a standard row to in the charstats hook, or null when the row is as charstats() set it.
+ * A module's value replaces the number the component shows (the bar keeps its fill), so nothing a module sets is lost.
+ */
+function resurrection_charpanel_changed($standard, $section, $label){
+	global $charstat_info;
+	if (!isset($standard[$section]) || !array_key_exists($label, $standard[$section])) return null;
+	if (!isset($charstat_info[$section]) || !array_key_exists($label, $charstat_info[$section])) return null;
+	if ($charstat_info[$section][$label] === $standard[$section][$label]) return null;
+	return (string)$charstat_info[$section][$label];
+}
+
+/**
+ * The character panel for the new template (Phase 5 task 7): a header card with the race portrait, the name and
+ * "Level N Race &middot; Specialty"; the hitpoints (soulpoints when dead) and experience bars; six stat tiles (turns or
+ * torments, spirits, attack or psyche, defense or spirit, gold or favor, gems); the equipment rows; then buffs,
+ * companions and every row a module added, as label/value rows in their sections. Bars and tiles get numbers from
+ * the account; the bonus, penalty and temporary-stat notes keep charstats()'s color codes.
+ *
+ * @param array<string, array<string, mixed>> $standard the rows as charstats() set them, before the charstats hook
+ * @param string $buffs the buff list, as charstats() built it
+ * @param array<int|string, string> $spirits spirit level => name, as charstats() built it
+ * @param array{attack: float|int, defense: float|int} $modded attack and defense with the buffs, as charstats() worked them out
+ * @return string
+ */
+function resurrection_charpanel($standard, $buffs, $spirits, $modded){
+	global $session, $playermount, $charstat_info;
+	require_once __DIR__ . '/experience.php';
+	require_once __DIR__ . '/sanitize.php';
+	require_once __DIR__ . '/../src/Ui/Art.php';
+	$u = $session['user'];
+	$alive = (bool)$u['alive'];
+	$num = function ($value) { return (string)round((float)$value, 1); };
+	$changed = function ($section, $label) use ($standard) { return resurrection_charpanel_changed($standard, $section, $label); };
+
+	// The header card: portrait, name, and level, race and specialty.
+	list($race, $racename) = resurrection_charpanel_race((string)($u['race'] ?? ''));
+	if (($v = $changed("Vital Info", "Race")) !== null) $racename = $v;
+	$level = $u['level'].check_temp_stat("level",1);
+	if (($v = $changed("Vital Info", "Level")) !== null) $level = $v;
+	$subtitle = sprintf(translate_inline("Level %s %s"), $level, $racename);
+	$specialty = (string)($u['specialty'] ?? '');
+	if ($specialty !== '') {
+		$names = modulehook("specialtynames", array());
+		if (is_array($names) && isset($names[$specialty]) && trim((string)$names[$specialty]) !== '') {
+			$subtitle .= " &middot; ".$names[$specialty];
+		}
+	}
+	$name = $u['name'];
+	if (($v = $changed("Vital Info", "Name")) !== null) $name = $v;
+	$portrait = "";
+	$art = \Resurrection\Ui\Art::portrait($race, trim(full_sanitize($racename)));
+	if ($art !== null) {
+		$portrait = templatereplace("statportrait", array(
+			"src"=>htmlspecialchars($art['src'], ENT_QUOTES, "UTF-8"),
+			"alt"=>htmlspecialchars($art['alt'], ENT_QUOTES|ENT_SUBSTITUTE, "UTF-8"),
+			"width"=>(string)$art['width'],
+			"height"=>(string)$art['height'],
+		));
+	}
+	$str = templatereplace("statstart");
+	$str .= templatereplace("statheader", array("portrait"=>$portrait, "name"=>$name."`0", "subtitle"=>$subtitle."`0"));
+
+	// The bars: hitpoints (soulpoints when dead), then experience.
+	if ($alive) {
+		$label = "Hitpoints";
+		$current = $u['hitpoints'];
+		$max = $u['maxhitpoints'];
+		$note = check_temp_stat("hitpoints",1).check_temp_stat("maxhitpoints",1);
+	} else {
+		$label = "Soulpoints";
+		$current = $u['soulpoints'];
+		$max = $u['level'] * 5 + 50;
+		$note = check_temp_stat("soulpoints",1);
+	}
+	$bar = array("kind"=>$alive ? "health" : "soul", "label"=>translate_inline($label),
+		"current"=>$num($current), "max"=>$num($max), "percent"=>resurrection_charpanel_percent($current, $max), "note"=>$note);
+	if (($v = $changed("Vital Info", $label)) !== null) { $bar['current'] = $v; unset($bar['max']); }
+	$str .= resurrection_charpanel_bar($bar);
+
+	$exp = $u['experience'];
+	$expnote = check_temp_stat("experience",1);
+	if ((int)$u['level'] >= 15) {
+		// The level cap: no level follows, so the bar is full and says what the game says there.
+		if ($alive && empty($u['seendragon'])) $caption = translate_inline("Seek Out the Green Dragon", "forest");
+		else $caption = translate_inline("None in the land are mightier than you!", "train");
+		$xp = array("kind"=>"experience", "label"=>translate_inline("Experience"), "current"=>$num($exp), "percent"=>"100",
+			"note"=>$expnote, "caption"=>$caption);
+		if (($v = $changed("Personal Info", "Experience")) !== null) $xp['current'] = $v;
+		$str .= resurrection_charpanel_bar($xp);
+	} else {
+		$next = exp_for_next_level((int)$u['level'], (int)$u['dragonkills']);
+		$xp = array("kind"=>"experience", "label"=>translate_inline("Experience"), "current"=>$num($exp), "max"=>$num($next),
+			"percent"=>resurrection_charpanel_percent($exp, $next), "note"=>$expnote);
+		if (($v = $changed("Personal Info", "Experience")) !== null) { $xp['current'] = $v; unset($xp['max']); }
+		$str .= resurrection_charpanel_bar($xp);
+	}
+
+	// The tiles: a number each (spirits a word), with the bonus, penalty or temporary-stat note beside it.
+	// As charstats() writes them: the stored value and the buffs' difference beside it, or the value alone.
+	$modified = function ($base, $value) use ($num) {
+		if ($value < $base) return array($num($base), "`\$".round($value-$base,1));
+		if ($value > $base) return array($num($base), "`@+".round($value-$base,1));
+		return array($num($value), "");
+	};
+	$tiles = array();
+	if ($alive) {
+		$tiles[] = array("Vital Info", "Turns", $num($u['turns']), check_temp_stat("turns",1));
+	} else {
+		$tiles[] = array("Vital Info", "Torments", $num($u['gravefights']), check_temp_stat("gravefights",1));
+	}
+	$tiles[] = array("Vital Info", "Spirits", translate_inline($spirits[(int)$u['spirits']] ?? (string)$u['spirits']), "");
+	if ($alive) {
+		list($value, $note) = $modified($u['attack'], $modded['attack']);
+		$tiles[] = array("Vital Info", "Attack", $value, $note.check_temp_stat("attack",1));
+		list($value, $note) = $modified($u['defense'], $modded['defense']);
+		$tiles[] = array("Vital Info", "Defense", $value, $note.check_temp_stat("defense",1));
+		$tiles[] = array("Personal Info", "Gold", $num($u['gold']), check_temp_stat("gold",1));
+	} else {
+		$tiles[] = array("Vital Info", "Psyche", $num(10+round(($u['level']-1)*1.5)), "");
+		$tiles[] = array("Vital Info", "Spirit", $num(10+round(($u['level']-1)*1.5)), "");
+		$tiles[] = array("Personal Info", "Favor", $num($u['deathpower']), check_temp_stat("deathpower",1));
+	}
+	$tiles[] = array("Personal Info", "Gems", $num($u['gems']), check_temp_stat("gems",1));
+	$tilestr = "";
+	foreach ($tiles as $tile) {
+		list($section, $label, $value, $note) = $tile;
+		if (($v = $changed($section, $label)) !== null) { $value = $v; $note = ""; }
+		$tilestr .= templatereplace("stattile", array("label"=>translate_inline($label), "value"=>$value."`0", "note"=>$note."`0"));
+	}
+	$str .= templatereplace("stattiles", array("tiles"=>$tilestr));
+
+	// The equipment rows, and any row a module added to Equipment Info.
+	$equipment = array(array("Weapon", "Weapon", $u['weapon']), array("Armor", "Armor", $u['armor']));
+	if ($u['hashorse']) $equipment[] = array("Creature", "Mount", ($playermount['mountname'] ?? '')."`0");
+	$rows = "";
+	foreach ($equipment as $item) {
+		list($row, $label, $value) = $item;
+		if (($v = $changed("Equipment Info", $row)) !== null) $value = $v;
+		$rows .= templatereplace("equiprow", array("label"=>translate_inline($label), "value"=>$value."`0"));
+	}
+	foreach (resurrection_charpanel_extras($standard, "Equipment Info") as $label=>$value) {
+		// The label translated as getcharstats() translates it; the value in the row's own color, as the weapon's is.
+		$rows .= templatereplace("equiprow", array("label"=>translate_inline("`&$label`0"), "value"=>"$value`0"));
+	}
+	$str .= templatereplace("equiprows", array("rows"=>$rows));
+
+	// Buffs, companions, then the rows modules added, each section as getcharstats() renders it.
+	$str .= templatereplace("statbuff", array("title"=>translate_inline("`0Buffs"), "value"=>$buffs));
+	$sections = array();
+	if (isset($charstat_info["Companions"])) $sections["Companions"] = $charstat_info["Companions"];
+	foreach ($charstat_info as $section=>$rows) {
+		if ($section == "Companions" || $section == "Equipment Info") continue;
+		$extras = resurrection_charpanel_extras($standard, $section);
+		if (count($extras)) $sections[$section] = $extras;
+	}
+	foreach ($sections as $section=>$rows) {
+		if (!count($rows)) continue;
+		$head = templatereplace("stathead", array("title"=>translate_inline($section)));
+		foreach ($rows as $label=>$value) {
+			if ($label == $section) {
+				$str .= templatereplace("statbuff", array("title"=>translate_inline("`0$label"), "value"=>"`^$value`0"));
+			} else {
+				$str .= $head.templatereplace("statrow", array("title"=>translate_inline("`&$label`0"), "value"=>"`^$value`0"));
+				$head = "";
+			}
+		}
+	}
+	$str .= templatereplace("statend");
+	return appoencode($str, true);
+}
+
+/**
+ * One bar of the panel: the statbar part ("current / max") when it has a maximum, otherwise the statbarcap part (the
+ * value alone, with a caption under the bar: the level cap's wording, or nothing).
+ *
+ * @param array{kind: string, label: string, current: string, max?: string, percent: string, note: string, caption?: string} $bar
+ */
+function resurrection_charpanel_bar($bar){
+	if (isset($bar['max'])) {
+		unset($bar['caption']);
+		return templatereplace("statbar", $bar);
+	}
+	return templatereplace("statbarcap", $bar + array("caption"=>""));
+}
+
+/**
+ * The rows of a section that a module added in the charstats hook (charstats() did not set them), in order.
+ *
+ * @param array<string, array<string, mixed>> $standard the rows as charstats() set them
+ * @return array<string, mixed>
+ */
+function resurrection_charpanel_extras($standard, $section){
+	global $charstat_info;
+	$extras = array();
+	foreach ($charstat_info[$section] ?? array() as $label=>$value) {
+		if (!isset($standard[$section]) || !array_key_exists($label, $standard[$section])) $extras[$label] = $value;
+	}
+	return $extras;
 }
 ?>

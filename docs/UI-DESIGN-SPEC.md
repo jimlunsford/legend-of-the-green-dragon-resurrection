@@ -115,6 +115,9 @@ Scale (set here). Text never goes below 13px:
 | `--tracking-wordmark` | `0.06em` | Its letter spacing (mockup) |
 | `--size-wordmark-sub` | `13px` | "RESURRECTION" under it, Cinzel 500, uppercase, `--accent` (mockup) |
 | `--tracking-wordmark-sub` | `0.2em` | Its letter spacing (mockup) |
+| `--size-panel-name` | `20px` | The character's name in the character panel, Cinzel 700, `--text` (mockup, task 7) |
+| `--size-panel-sub` | `14px` | The line under it, "Level 7 Elf · Mystical Powers", `--muted` (mockup, task 7) |
+| `--size-tile-value` | `18px` | A stat tile's value, Alegreya Sans 700, `--text` (mockup, task 7) |
 
 ## Color codes (approved values, plus the rest set here)
 
@@ -306,12 +309,52 @@ query, so the template writes the two breakpoints as literals equal to these tok
     whose actions are forms), has no nav column at all; the content takes its space. No empty card.
 - **One primary action per screen**, gold fill (`--accent`, text `--ground`, hover `--accent-hover`). Every other
   button is secondary: `--raised` fill, `--input-border` outline, `--text` label.
+- **Character panel** (Phase 5 task 7). `charstats()` fills the rows as 1.1.2 did; a template with the panel parts
+  (`statheader`, `statportrait`, `statbar`, `statbarcap`, `stattiles`, `stattile`, `equiprows`, `equiprow`) renders them
+  through `resurrection_charpanel()`, a 1.1.2 skin through `getcharstats()`'s rows, unchanged. From the top, one
+  `--panel` card (`--space-panel` padding, 16px between its parts):
+  1. **Header.** The race portrait (`--portrait-width`, 64px; `alt` the race as the subtitle names it), beside the
+     character's name (Cinzel 700, `--size-panel-name` 20px, `--text`, its color codes kept) and the subtitle
+     "Level 7 Elf · Mystical Powers": level, race, then " · " and the specialty's name from the `specialtynames` hook
+     when the player has one (`--muted`, `--size-panel-sub` 14px). A race not chosen yet (`''`, `0` or `RACE_UNKNOWN`)
+     reads "Not chosen yet", with the unknown portrait.
+  2. **Bars**, below.
+  3. **Stat tiles**, below: two columns, 8px apart. Alive: Turns, Spirits, Attack, Defense, Gold, Gems.
+  4. **Equipment rows**, below: Weapon, Armor, and Mount when the player has one, then any row a module added to
+     "Equipment Info".
+
+  Then, each in its own card as the 1.1.2 sections were (`stathead`, `statrow`, `statbuff`): Buffs, Companions (a row
+  each, as 1.1.2 wrote them), then every row a module added to another section, or a new section, as label/value rows
+  under that section's title, translated as `getcharstats()` translates them. A standard row a module changed in the
+  `charstats` hook shows the module's value in its component (the bar keeps its fill); the components otherwise read
+  the account. Below `--breakpoint-phone` the panel stacks after the content as before; its portrait is hidden there
+  (the header shows it) and its padding is `--space-panel-phone`. The compact phone header is task 8's.
+  - **The dead.** Soulpoints replace hitpoints in the first bar (maximum level × 5 + 50, as 1.1.2), and the tiles are
+    Torments, Spirits ("DEAD"), Psyche, Spirit, Favor and Gems: 1.1.2's meanings in the same components.
 - **HP and XP bars.** Fully rounded (`--radius-bar`), `--bar-height` in the character panel and `--bar-height-fight` in
   a fight. `--track` behind, the fill in `--health` for the player and `--foe` for enemies; the two fills
   also differ in lightness (relative luminance 0.366 and 0.193), so they read apart without color. XP uses `--accent`.
   Each bar shows its numbers as text (for example "34 / 50"), so a bar never carries meaning by color alone.
+  - In the character panel (task 7) each bar has its label left (`--muted`) and "current / max" right (`--text`,
+    Alegreya Sans 700, lining figures) above the track, 6px apart. Hitpoints (soulpoints when dead) against the
+    maximum; experience against `exp_for_next_level()` for the player's level and dragon kills. The numbers are the
+    stored ones (hitpoints rounded, as `charstats()` rounds them); the fill is their ratio, one decimal, never below 0%
+    and never above 100%: hitpoints above the maximum (buffs, healing) and experience past the next level (before
+    training) print as they are over a full bar. A temporary stat's note (`check_temp_stat()`) follows the numbers in
+    its codes' colors.
+  - **The level cap.** At level 15 no level follows, so the experience bar is full and shows the experience alone, with
+    a caption under the track (`--muted`, `--size-small`): "Seek Out the Green Dragon" (the forest's nav) while the
+    player is alive and has not sought the dragon today, otherwise "None in the land are mightier than you!" (what
+    `train.php` says on reaching level 15). 1.1.2 showed only the experience number, at every level.
 - **Stat tiles.** A `--raised` tile with an uppercase Cinzel label (`--muted`) over the value (Alegreya Sans 700).
+  In the character panel (task 7): `--radius-control` (8px), 10px by 12px padding; the label Cinzel 500,
+  `--size-label` (13px, the floor: the mockup's 12px would break it), `--tracking-label`, uppercase; the value
+  `--size-tile-value` (18px), `--text`, lining figures. Attack and defense show the stored value with the buffs'
+  difference beside it in the bonus (`` `@ ``) or penalty (`` `$ ``) color, and a temporary stat's note in its colors,
+  as `charstats()` writes them. Spirits is a word ("Normal", "DEAD").
 - **Equipment rows.** An icon, the item name, and its value (attack or defense), one row each: weapon, armor, mount.
+  Task 7 (no icons until task 13): the label left (`--muted`), the item's name right (`--text`, bold, its color codes
+  kept), 8px padding, a 1px `--track` line between rows.
 - **Commentary.** A list of comments (speaker in Cinzel, text in Alegreya), and below it the input, at least 44px
   high, with an Add button beside it.
 - **Battle log.** An ordered list, one entry per combat line, newest last. Damage numbers in `--damage`, healing in
@@ -344,7 +387,8 @@ query, so the template writes the two breakpoints as literals equal to these tok
   file is ignored.
 - **Race portrait.** An `<img>` (the template's `portrait` part) at the top of the character panel, in its own
   `--panel` card, `--portrait-width` (64px) wide, beside the player's name (Cinzel 700, `--text`) and race (`--muted`,
-  `--size-small`). Below `--breakpoint-phone` it moves into the header beside the controls, `--portrait-width-phone`
+  `--size-small`). Since task 7 the panel's portrait is in its header card (the `statportrait` part; "Character
+  panel" above), and the `portrait` part is the phone header's. Below `--breakpoint-phone` it moves into the header beside the controls, `--portrait-width-phone`
   (44px) wide, the image only. `width` and `height` attributes: the file's 200x240. Signed out: none. The portrait is
   the player's race lowercased (`human`, `elf`, `dwarf`, `troll`); any other race, or none, gets `unknown`.
 - **Alt text** comes from the same data: a scene's is the place's name (the village's name, "The Forest", and for the

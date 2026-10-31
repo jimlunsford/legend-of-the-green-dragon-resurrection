@@ -30,7 +30,7 @@
    </div>
   </main>
   <aside class="rz-character" aria-label="Character">
-   <div class="rz-character-inner">{portrait}{stats}</div>
+   <div class="rz-character-inner">{stats}</div>
   </aside>
  </div>
 </div>
@@ -81,6 +81,14 @@
 <!--!statrow--><div class="rz-statrow"><span class="rz-statlabel">{title}</span><span class="rz-statvalue">{value}</span></div>
 <!--!statbuff--></section><section class="rz-card rz-statsection"><h2 class="rz-stathead">{title}</h2><div class="rz-statbuff">{value}</div>
 <!--!statend--></section></div>
+<!--!statheader--></section><section class="rz-card rz-statcard"><div class="rz-statid">{portrait}<div class="rz-statid-text"><h2 class="rz-statname">{name}</h2><p class="rz-statsub">{subtitle}</p></div></div>
+<!--!statportrait--><img class="rz-statportrait" src="{src}" alt="{alt}" width="{width}" height="{height}">
+<!--!statbar--><div class="rz-statbar rz-statbar-{kind}"><div class="rz-statbar-text"><span class="rz-statbar-label">{label}</span><span class="rz-statbar-value">{current} / {max}{note}</span></div><div class="rz-statbar-track" aria-hidden="true"><div class="rz-statbar-fill" style="width: {percent}%"></div></div></div>
+<!--!statbarcap--><div class="rz-statbar rz-statbar-{kind}"><div class="rz-statbar-text"><span class="rz-statbar-label">{label}</span><span class="rz-statbar-value">{current}{note}</span></div><div class="rz-statbar-track" aria-hidden="true"><div class="rz-statbar-fill" style="width: {percent}%"></div></div><div class="rz-statbar-caption">{caption}</div></div>
+<!--!stattiles--><div class="rz-stattiles">{tiles}</div>
+<!--!stattile--><div class="rz-stattile"><span class="rz-stattile-label">{label}</span><span class="rz-stattile-value">{value}{note}</span></div>
+<!--!equiprows--><div class="rz-equiprows">{rows}</div>
+<!--!equiprow--><div class="rz-equiprow"><span class="rz-equiprow-label">{label}</span><span class="rz-equiprow-value">{value}</span></div>
 <!--!navhead--><h2 class="rz-navhead">{title}</h2>
 <!--!navhelp--><div class="rz-navhelp">{text}</div>
 <!--!navitem--><a href="{link}" {accesskey} class="rz-navitem nav" {popup}><span class="rz-key" aria-hidden="true">{key}</span><span class="rz-navlabel">{text}</span></a>

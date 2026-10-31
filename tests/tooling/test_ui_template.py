@@ -187,13 +187,16 @@ class TemplateTests(unittest.TestCase):
         header, footer = self.parts['header'], self.parts['footer']
         self.assertIn('<div class="rz-card rz-content">{scene}', header)
         self.assertIn('<div class="rz-header-portrait">{portrait}</div>', header)
-        self.assertIn('<div class="rz-character-inner">{portrait}{stats}</div>', footer)
+        # Phase 5 task 7: the character panel's portrait is in its header card (the statheader part, through the
+        # statportrait part), so the panel's column holds {stats} alone.
+        self.assertIn('<div class="rz-character-inner">{stats}</div>', footer)
+        self.assertIn('{portrait}', self.parts['statheader'])
         self.assertEqual((1, 0), (header.count('{scene}'), footer.count('{scene}')))
-        self.assertEqual((1, 1), (header.count('{portrait}'), footer.count('{portrait}')))
+        self.assertEqual((1, 0), (header.count('{portrait}'), footer.count('{portrait}')))
         for part in ('popuphead', 'popupfoot'):
             self.assertNotIn('{scene}', self.parts[part], part)
             self.assertNotIn('{portrait}', self.parts[part], part)
-        for part in ('scene', 'portrait'):
+        for part in ('scene', 'portrait', 'statportrait'):
             image = re.findall(r'<img\b[^>]*>', self.parts[part])
             self.assertEqual(1, len(image), part)
             for attribute in ('src="{src}"', 'alt="{alt}"', 'width="{width}"', 'height="{height}"'):
