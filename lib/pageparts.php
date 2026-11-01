@@ -229,7 +229,7 @@ function page_footer($saveuser=true){
 			addnav("", "viewpetition.php");
 		}
 		$p .= " `\${$petitions[5]}`0|`^{$petitions[4]}`0|`b{$petitions[0]}`b|{$petitions[1]}|`!{$petitions[3]}`0|`#{$petitions[7]}`0|`%{$petitions[6]}`0|`i{$petitions[2]}`i";
-		$pcount = templatereplace("petitioncount", array("petitioncount"=>appoencode($p, true)));
+		$pcount = templatereplace("petitioncount", array("petitioncount"=>resurrection_ui() ? resurrection_petition_badges($petitions, ($session['user']['superuser'] & SU_EDIT_USERS) != 0) : appoencode($p, true)));
 		$footer = str_replace("{petitiondisplay}", $pcount, $footer);
 		$header = str_replace("{petitiondisplay}", $pcount, $header);
 	} else {
@@ -292,6 +292,31 @@ function page_footer($saveuser=true){
 	//session_write_close();
 	echo $output;
 	exit();
+}
+
+/**
+ * The staff's petition counts in the Resurrection template's header (Phase 5 task 11): the User Editor and Petitions
+ * links, then one compact badge a status, in 1.1.2's order (Top Level, Escalated, Unhandled, In-Progress, Informational,
+ * Awaiting Points, Bug, Closed). Unhandled petitions, the ones nobody has read, are an --accent badge; the others are
+ * outlined. Each badge names its status to a screen reader and on hover. 1.1.2 printed the counts as coloured text
+ * separated by bars.
+ *
+ * @param array<int, int|string> $petitions the count of each status
+ * @param bool $useredit whether the User Editor link shows
+ * @return string
+ */
+function resurrection_petition_badges(array $petitions, $useredit){
+	$names = [5 => "Top Level", 4 => "Escalated", 0 => "Unhandled", 1 => "In-Progress", 3 => "Informational",
+		7 => "Awaiting Points", 6 => "Bug", 2 => "Closed"];
+	$links = ($useredit ? "<a href='user.php' class='rz-staff-link'>" . resurrection_plain_text(translate_inline("User Editor")) . "</a>" : "")
+		. "<a href='viewpetition.php' class='rz-staff-link'>" . resurrection_plain_text(translate_inline("Petitions")) . "</a>";
+	$badges = "";
+	foreach ($names as $status => $name) {
+		$count = (int)($petitions[$status] ?? 0);
+		$label = resurrection_plain_text(translate_inline($name));
+		$badges .= "<span class='rz-badge rz-petition-badge" . ($status === 0 ? " rz-petition-unhandled" : "") . "' title='$label: $count'><span class='rz-sr'>$label: </span>$count</span>";
+	}
+	return "<span class='rz-staff-links'>$links</span> <span class='rz-petition-badges'>$badges</span>";
 }
 
 /**

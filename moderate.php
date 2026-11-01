@@ -58,11 +58,15 @@ if ($op==""){
 	rawoutput("<input type='submit' class='button' value='$refresh'>");
 	rawoutput("</form>");
 	addnav("", "$link");
+	// The talk form's box has no label text here; the Resurrection template names it for screen readers (Phase 5 task 11).
+	$talklabel = resurrection_label_for('inputinsertcommentary', "Comment");
 	if ($area==""){
+		if (resurrection_ui()) rawoutput($talklabel);
 		talkform("X","says");
 		commentdisplay("", "__all__","X",100);
 	}else{
 		commentdisplay("", $area,"X",100);
+		if (resurrection_ui()) rawoutput($talklabel);
 		talkform($area,"says");
 	}
 }elseif ($op=="audit"){
@@ -119,7 +123,7 @@ if ($op==""){
 		// A snapshot that fails its schema is listed without its comment and cannot be restored.
 		try { $comment = \Resurrection\Security\CommentSnapshot::read($row['comment']); }
 		catch (DomainException $error) { $comment = null; }
-		rawoutput("<td>".($comment === null ? "" : "<input type='checkbox' name='mod[{$row['modid']}]' value='1'>")."</td>");
+		rawoutput("<td>".($comment === null ? "" : "<input type='checkbox' name='mod[{$row['modid']}]'".resurrection_control_id("mod-{$row['modid']}")." value='1'>".resurrection_label_for("mod-{$row['modid']}", "Select this comment"))."</td>");
 		rawoutput("<td>");
 		output_notl("%s", $row['name']);
 		rawoutput("</td>");

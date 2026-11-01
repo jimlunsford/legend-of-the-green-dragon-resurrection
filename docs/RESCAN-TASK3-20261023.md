@@ -396,7 +396,8 @@ are not listed.
 | `lib/mail/case_default.php` | `$mail` | 2 | server | `db_prefix('mail')`. |
 | `lib/mail/case_default.php` | `$session['user']['acctid']` | 1 | server | Integer `acctid` of the signed-in account row. |
 | `lib/mail/case_read.php` | `$accounts` | 3 | server | `db_prefix('accounts')`. |
-| `lib/mail/case_read.php` | `$mail` | 5 | server | `db_prefix('mail')`. |
+| `lib/mail/case_read.php` | `$mail` | 6 | server | `db_prefix('mail')` (one more site from Phase 5 task 11's read view). |
+| `lib/mail/case_read.php` | `$where` | 1 | server | One of two fixed clauses from a literal array (the previous or the next message, Phase 5 task 11's read view); the account and the message ID are bound. |
 | `lib/mail_security.php` | `$operation === 'unread' ? 'UPDATE ' . db_prefix('mail') . ' SET seen=0' : 'DELETE FROM ' . db_prefix('mail')` | 1 | server | One of two fixed statements chosen by the checked operation. |
 | `lib/mail_security.php` | `implode(',', array_fill(0, count($ids), '?'))` | 1 | server | Placeholders; the checked message IDs are bound. |
 | `lib/modules.php` | `$Pmodule_hooks` | 9 | server | `db_prefix('module_hooks')`. |
@@ -428,6 +429,8 @@ are not listed.
 | `lib/newday/newday_runonce.php` | `date("Y-m-d H:i:s",strtotime("-".getsetting("oldmail",14)."days"))` | 1 | server | `date()` output. |
 | `lib/newday/newday_runonce.php` | `date("Y-m-d")` | 1 | server | `date()` output. |
 | `lib/newday_daily.php` | `$suffix` | 6 | server | Empty or the fixed ` FOR UPDATE`. |
+| `lib/output.php` | `$legacy` | 1 | not SQL | An HTML `id` attribute (`resurrection_control_id()`, Phase 5 task 11): a literal id the caller passes for a 1.1.2 skin, not a query. |
+| `lib/output.php` | `htmlspecialchars((string)$id, ENT_QUOTES, 'UTF-8')` | 1 | not SQL | An escaped HTML `id` attribute (`resurrection_control_id()`, Phase 5 task 11), not a query. |
 | `lib/pageparts.php` | `$session['user']['acctid']` | 1 | server | Integer `acctid` of the signed-in account row. |
 | `lib/pageparts.php` | `date("Y-m-d H:i:s",strtotime("-".getsetting("LOGINTIMEOUT",900)." seconds"))` | 1 | server | `date()` output. |
 | `lib/partner.php` | `$session['user']['marriedto']` | 1 | server | Integer `marriedto` column of the signed-in account row. |

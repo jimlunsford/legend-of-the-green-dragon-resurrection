@@ -203,52 +203,76 @@ function companionform($companion, $context){
 	rawoutput("<input type='hidden' name='companion[companionactive]' value=\"".(int)$companion['companionactive']."\">");
 	rawoutput("<table width='100%'>");
 	rawoutput("<tr><td nowrap>");
+	resurrection_label_open('companion-name');
 	output("Companion Name:");
-	rawoutput("</td><td><input name='companion[name]' value=\"".htmlentities($companion['name'], ENT_COMPAT, getsetting("charset", "ISO-8859-1"))."\" maxlength='50'></td></tr>");
+	resurrection_label_close();
+	rawoutput("</td><td><input name='companion[name]'".resurrection_control_id('companion-name')." value=\"".htmlentities($companion['name'], ENT_COMPAT, getsetting("charset", "ISO-8859-1"))."\" maxlength='50'></td></tr>");
 	rawoutput("<tr><td nowrap>");
+	resurrection_label_open('companion-dyingtext');
 	output("Companion Dyingtext:");
-	rawoutput("</td><td><input name='companion[dyingtext]' value=\"".htmlentities($companion['dyingtext'], ENT_COMPAT, getsetting("charset", "ISO-8859-1"))."\"></td></tr>");
+	resurrection_label_close();
+	rawoutput("</td><td><input name='companion[dyingtext]'".resurrection_control_id('companion-dyingtext')." value=\"".htmlentities($companion['dyingtext'], ENT_COMPAT, getsetting("charset", "ISO-8859-1"))."\"></td></tr>");
 	rawoutput("<tr><td nowrap>");
+	resurrection_label_open('companion-description');
 	output("Companion Description:");
-	rawoutput("</td><td><textarea cols='25' rows='5' name='companion[description]'>".htmlentities($companion['description'], ENT_COMPAT, getsetting("charset", "ISO-8859-1"))."</textarea></td></tr>");
+	resurrection_label_close();
+	rawoutput("</td><td><textarea cols='25' rows='5' name='companion[description]'".resurrection_control_id('companion-description').">".htmlentities($companion['description'], ENT_COMPAT, getsetting("charset", "ISO-8859-1"))."</textarea></td></tr>");
 	rawoutput("<tr><td nowrap>");
+	resurrection_label_open('companion-jointext');
 	output("Companion join text:");
-	rawoutput("</td><td><textarea cols='25' rows='5' name='companion[jointext]'>".htmlentities($companion['jointext'], ENT_COMPAT, getsetting("charset", "ISO-8859-1"))."</textarea></td></tr>");
+	resurrection_label_close();
+	rawoutput("</td><td><textarea cols='25' rows='5' name='companion[jointext]'".resurrection_control_id('companion-jointext').">".htmlentities($companion['jointext'], ENT_COMPAT, getsetting("charset", "ISO-8859-1"))."</textarea></td></tr>");
 	rawoutput("<tr><td nowrap>");
+	resurrection_label_open('companion-category');
 	output("Companion Category:");
-	rawoutput("</td><td><input name='companion[category]' value=\"".htmlentities($companion['category'], ENT_COMPAT, getsetting("charset", "ISO-8859-1"))."\" maxlength='50'></td></tr>");
+	resurrection_label_close();
+	rawoutput("</td><td><input name='companion[category]'".resurrection_control_id('companion-category')." value=\"".htmlentities($companion['category'], ENT_COMPAT, getsetting("charset", "ISO-8859-1"))."\" maxlength='50'></td></tr>");
 	rawoutput("<tr><td nowrap>");
+	resurrection_label_open('companion-companionlocation');
 	output("Companion Availability:");
+	resurrection_label_close();
 	rawoutput("</td><td nowrap>");
 	// Run a modulehook to find out where camps are located.  By default
 	// they are located in 'Degolburg' (ie, getgamesetting('villagename'));
 	// Some later module can remove them however.
 	$locs = resurrection_object_locations("camplocs");
-	rawoutput("<select name='companion[companionlocation]'>");
+	rawoutput("<select name='companion[companionlocation]'".resurrection_control_id('companion-companionlocation').">");
 	foreach($locs as $loc=>$name) {
 		rawoutput("<option value='".htmlspecialchars((string)$loc, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8')."'".($companion['companionlocation']==$loc?" selected":"").">".htmlspecialchars((string)$name, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8')."</option>");
 	}
 	rawoutput("</select></td></tr>");
 
 	rawoutput("<tr><td nowrap>");
+	resurrection_label_open('companion-maxhitpoints');
 	output("Maxhitpoints / Bonus per level:");
-	rawoutput("</td><td><input name='companion[maxhitpoints]' value=\"".htmlentities($companion['maxhitpoints'], ENT_COMPAT, getsetting("charset", "ISO-8859-1"))."\"> / <input name='companion[maxhitpointsperlevel]' value=\"".htmlentities($companion['maxhitpointsperlevel'], ENT_COMPAT, getsetting("charset", "ISO-8859-1"))."\"></td></tr>");
+	resurrection_label_close();
+	rawoutput("</td><td><input name='companion[maxhitpoints]'".resurrection_control_id('companion-maxhitpoints')." value=\"".htmlentities($companion['maxhitpoints'], ENT_COMPAT, getsetting("charset", "ISO-8859-1"))."\"> / ".resurrection_label_for('companion-maxhitpointsperlevel', "Bonus per level")."<input name='companion[maxhitpointsperlevel]'".resurrection_control_id('companion-maxhitpointsperlevel')." value=\"".htmlentities($companion['maxhitpointsperlevel'], ENT_COMPAT, getsetting("charset", "ISO-8859-1"))."\"></td></tr>");
 	rawoutput("<tr><td nowrap>");
+	resurrection_label_open('companion-attack');
 	output("Attack / Bonus per level:");
-	rawoutput("</td><td><input name='companion[attack]' value=\"".htmlentities($companion['attack'], ENT_COMPAT, getsetting("charset", "ISO-8859-1"))."\"> / <input name='companion[attackperlevel]' value=\"".htmlentities($companion['attackperlevel'], ENT_COMPAT, getsetting("charset", "ISO-8859-1"))."\"></td></tr>");
+	resurrection_label_close();
+	rawoutput("</td><td><input name='companion[attack]'".resurrection_control_id('companion-attack')." value=\"".htmlentities($companion['attack'], ENT_COMPAT, getsetting("charset", "ISO-8859-1"))."\"> / ".resurrection_label_for('companion-attackperlevel', "Bonus per level")."<input name='companion[attackperlevel]'".resurrection_control_id('companion-attackperlevel')." value=\"".htmlentities($companion['attackperlevel'], ENT_COMPAT, getsetting("charset", "ISO-8859-1"))."\"></td></tr>");
 	rawoutput("<tr><td nowrap>");
+	resurrection_label_open('companion-defense');
 	output("Defense / Bonus per level:");
-	rawoutput("</td><td><input name='companion[defense]' value=\"".htmlentities($companion['defense'], ENT_COMPAT, getsetting("charset", "ISO-8859-1"))."\"> / <input name='companion[defenseperlevel]' value=\"".htmlentities($companion['defenseperlevel'], ENT_COMPAT, getsetting("charset", "ISO-8859-1"))."\"></td></tr>");
+	resurrection_label_close();
+	rawoutput("</td><td><input name='companion[defense]'".resurrection_control_id('companion-defense')." value=\"".htmlentities($companion['defense'], ENT_COMPAT, getsetting("charset", "ISO-8859-1"))."\"> / ".resurrection_label_for('companion-defenseperlevel', "Bonus per level")."<input name='companion[defenseperlevel]'".resurrection_control_id('companion-defenseperlevel')." value=\"".htmlentities($companion['defenseperlevel'], ENT_COMPAT, getsetting("charset", "ISO-8859-1"))."\"></td></tr>");
 
 	rawoutput("<tr><td nowrap>");
+	resurrection_label_open('fighter');
 	output("Fighter?:");
+	resurrection_label_close();
 	rawoutput("</td><td><input id='fighter' type='checkbox' name='companion[abilities][fight]' value='1'".($companion['abilities']['fight']==true?" checked":"")." onClick='document.getElementById(\"defender\").disabled=document.getElementById(\"fighter\").checked; if(document.getElementById(\"defender\").disabled==true) document.getElementById(\"defender\").checked=false;'></td></tr>");
 	rawoutput("<tr><td nowrap>");
+	resurrection_label_open('defender');
 	output("Defender?:");
+	resurrection_label_close();
 	rawoutput("</td><td><input id='defender' type='checkbox' name='companion[abilities][defend]' value='1'".($companion['abilities']['defend']==true?" checked":"")." onClick='document.getElementById(\"fighter\").disabled=document.getElementById(\"defender\").checked; if(document.getElementById(\"fighter\").disabled==true) document.getElementById(\"fighter\").checked=false;'></td></tr>");
 	rawoutput("<tr><td nowrap>");
+	resurrection_label_open('companion-abilities-heal');
 	output("Healer level:");
-	rawoutput("</td><td valign='top'><select name='companion[abilities][heal]'>");
+	resurrection_label_close();
+	rawoutput("</td><td valign='top'><select name='companion[abilities][heal]'".resurrection_control_id('companion-abilities-heal').">");
 	for($i=0;$i<=30;$i++) {
 		rawoutput("<option value='$i'".($companion['abilities']['heal']==$i?" selected":"").">$i</option>");
 	}
@@ -257,8 +281,10 @@ function companionform($companion, $context){
 	output("`iThis value determines the maximum amount of HP healed per round`i");
 	rawoutput("</td></tr>");
 	rawoutput("<tr><td nowrap>");
+	resurrection_label_open('companion-abilities-magic');
 	output("Magician?:");
-	rawoutput("</td><td valign='top'><select name='companion[abilities][magic]'>");
+	resurrection_label_close();
+	rawoutput("</td><td valign='top'><select name='companion[abilities][magic]'".resurrection_control_id('companion-abilities-magic').">");
 	for($i=0;$i<=30;$i++) {
 		rawoutput("<option value='$i'".($companion['abilities']['magic']==$i?" selected":"").">$i</option>");
 	}
@@ -268,30 +294,46 @@ function companionform($companion, $context){
 	rawoutput("</td></tr>");
 
 	rawoutput("<tr><td nowrap>");
+	resurrection_label_open('companion-cannotdie');
 	output("Companion cannot die:");
-	rawoutput("</td><td><input type='checkbox' name='companion[cannotdie]' value='1'".($companion['cannotdie']==true?" checked":"")."></td></tr>");
+	resurrection_label_close();
+	rawoutput("</td><td><input type='checkbox' name='companion[cannotdie]'".resurrection_control_id('companion-cannotdie')." value='1'".($companion['cannotdie']==true?" checked":"")."></td></tr>");
 	rawoutput("<tr><td nowrap>");
+	resurrection_label_open('companion-cannotbehealed');
 	output("Companion cannot be healed:");
-	rawoutput("</td><td><input type='checkbox' name='companion[cannotbehealed]' value='1'".($companion['cannotbehealed']==true?" checked":"")."></td></tr>");
+	resurrection_label_close();
+	rawoutput("</td><td><input type='checkbox' name='companion[cannotbehealed]'".resurrection_control_id('companion-cannotbehealed')." value='1'".($companion['cannotbehealed']==true?" checked":"")."></td></tr>");
 	rawoutput("<tr><td nowrap>");
 
+	resurrection_label_open('companion-companioncostdks');
 	output("Companion Cost (DKs):");
-	rawoutput("</td><td><input name='companion[companioncostdks]' value=\"".htmlentities((int)$companion['companioncostdks'], ENT_COMPAT, getsetting("charset", "ISO-8859-1"))."\"></td></tr>");
+	resurrection_label_close();
+	rawoutput("</td><td><input name='companion[companioncostdks]'".resurrection_control_id('companion-companioncostdks')." value=\"".htmlentities((int)$companion['companioncostdks'], ENT_COMPAT, getsetting("charset", "ISO-8859-1"))."\"></td></tr>");
 	rawoutput("<tr><td nowrap>");
+	resurrection_label_open('companion-companioncostgems');
 	output("Companion Cost (Gems):");
-	rawoutput("</td><td><input name='companion[companioncostgems]' value=\"".htmlentities((int)$companion['companioncostgems'], ENT_COMPAT, getsetting("charset", "ISO-8859-1"))."\"></td></tr>");
+	resurrection_label_close();
+	rawoutput("</td><td><input name='companion[companioncostgems]'".resurrection_control_id('companion-companioncostgems')." value=\"".htmlentities((int)$companion['companioncostgems'], ENT_COMPAT, getsetting("charset", "ISO-8859-1"))."\"></td></tr>");
 	rawoutput("<tr><td nowrap>");
+	resurrection_label_open('companion-companioncostgold');
 	output("Companion Cost (Gold):");
-	rawoutput("</td><td><input name='companion[companioncostgold]' value=\"".htmlentities((int)$companion['companioncostgold'], ENT_COMPAT, getsetting("charset", "ISO-8859-1"))."\"></td></tr>");
+	resurrection_label_close();
+	rawoutput("</td><td><input name='companion[companioncostgold]'".resurrection_control_id('companion-companioncostgold')." value=\"".htmlentities((int)$companion['companioncostgold'], ENT_COMPAT, getsetting("charset", "ISO-8859-1"))."\"></td></tr>");
 	rawoutput("<tr><td nowrap>");
+	resurrection_label_open('companion-allowinshades');
 	output("Allow in shades:");
-	rawoutput("</td><td><input type='checkbox' name='companion[allowinshades]' value='1'".($companion['allowinshades']==true?" checked":"")."></td></tr>");
+	resurrection_label_close();
+	rawoutput("</td><td><input type='checkbox' name='companion[allowinshades]'".resurrection_control_id('companion-allowinshades')." value='1'".($companion['allowinshades']==true?" checked":"")."></td></tr>");
 	rawoutput("<tr><td nowrap>");
+	resurrection_label_open('companion-allowinpvp');
 	output("Allow in PvP:");
-	rawoutput("</td><td><input type='checkbox' name='companion[allowinpvp]' value='1'".($companion['allowinpvp']==true?" checked":"")."></td></tr>");
+	resurrection_label_close();
+	rawoutput("</td><td><input type='checkbox' name='companion[allowinpvp]'".resurrection_control_id('companion-allowinpvp')." value='1'".($companion['allowinpvp']==true?" checked":"")."></td></tr>");
 	rawoutput("<tr><td nowrap>");
+	resurrection_label_open('companion-allowintrain');
 	output("Allow in train:");
-	rawoutput("</td><td><input type='checkbox' name='companion[allowintrain]' value='1'".($companion['allowintrain']==true?" checked":"")."></td></tr>");
+	resurrection_label_close();
+	rawoutput("</td><td><input type='checkbox' name='companion[allowintrain]'".resurrection_control_id('companion-allowintrain')." value='1'".($companion['allowintrain']==true?" checked":"")."></td></tr>");
 	rawoutput("</table>");
 	$save = translate_inline("Save");
 	rawoutput("<input type='submit' class='button' value='$save'></form>");

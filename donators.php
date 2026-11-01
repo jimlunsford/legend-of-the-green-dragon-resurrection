@@ -46,12 +46,18 @@ if ($reason == "") $reason = translate_inline("manual donation entry");
 
 
 output("`bAdd Donation Points:`b`n");
+resurrection_label_open('donation-name');
 output("Character: ");
-rawoutput("<input name='name' value=\"".htmlentities($name, ENT_COMPAT, getsetting("charset", "ISO-8859-1"))."\">");
+resurrection_label_close();
+rawoutput("<input name='name'".resurrection_control_id('donation-name')." value=\"".htmlentities($name, ENT_COMPAT, getsetting("charset", "ISO-8859-1"))."\">");
+resurrection_label_open('donation-amt');
 output("`nPoints: ");
-rawoutput("<input name='amt' size='3' value=\"".htmlentities($amt, ENT_COMPAT, getsetting("charset", "ISO-8859-1"))."\">");
+resurrection_label_close();
+rawoutput("<input name='amt'".resurrection_control_id('donation-amt')." size='3' value=\"".htmlentities($amt, ENT_COMPAT, getsetting("charset", "ISO-8859-1"))."\">");
+resurrection_label_open('donation-reason');
 output("`nReason: ");
-rawoutput("<input name='reason' size='30' value=\"".htmlentities($reason, ENT_COMPAT, getsetting("charset", "ISO-8859-1"))."\">");
+resurrection_label_close();
+rawoutput("<input name='reason'".resurrection_control_id('donation-reason')." size='30' value=\"".htmlentities($reason, ENT_COMPAT, getsetting("charset", "ISO-8859-1"))."\">");
 rawoutput("<input type='hidden' name='txnid' value=\"".htmlentities($txnid, ENT_COMPAT, getsetting("charset", "ISO-8859-1"))."\">");
 output_notl("`n");
 if ($txnid>"") output("For transaction: %s`n",$txnid);

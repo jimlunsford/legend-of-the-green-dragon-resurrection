@@ -45,10 +45,10 @@ ALLOWED = [
 HAND_FIXED = [('create.php', None), ('bank.php', None), ('prefs.php', None), ('lib/commentary.php', 'talkform'),
               ('lib/mail/case_write.php', None), ('lib/mail/case_address.php', None), ('lib/petition/petition_default.php', None),
               ('lib/inn/inn_room.php', None), ('healer.php', None), ('lib/equipment_authority.php', None)]
-# Operator controls inside a hand-fixed page, left for task 11 (admin and editor forms) with the others it lists.
-OPERATOR = {
-    ('lib/commentary.php', "<select name='section'>"): "talkform()'s section chooser, only in moderate.php's all-sections view",
-}
+# Operator controls inside a hand-fixed page, left for task 11 (admin and editor forms) with the others it lists. Task 11
+# labelled the last one (talkform()'s section chooser, in moderate.php's all-sections view); the admin pages are checked
+# in test_ui_popups_admin.py.
+OPERATOR = {}
 # Controls that need no label of their own: buttons say what they do, hidden inputs show nothing.
 UNLABELLED_TYPES = {'hidden', 'submit', 'button', 'reset', 'image'}
 
@@ -127,6 +127,10 @@ class LabelTest(unittest.TestCase):
         missing = []
         for tag in controls(text):
             if (rel, tag) in OPERATOR:
+                continue
+            # Task 11's helpers (lib/output.php): the id resurrection_control_id() gives and the label naming it.
+            helper = re.search(r'''resurrection_control_id\(('[^']*'|"[^"]*")''', tag)
+            if helper and (f'resurrection_label_open({helper.group(1)})' in text or f'resurrection_label_for({helper.group(1)},' in text):
                 continue
             control = re.search(r'''\bid=["']?([A-Za-z0-9_$\-{}]+)''', tag)
             if control is None:

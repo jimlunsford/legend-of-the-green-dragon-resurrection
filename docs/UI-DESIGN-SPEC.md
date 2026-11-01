@@ -500,6 +500,75 @@ query, so the template writes the two breakpoints as literals equal to these tok
   the page. The stables' and mercenary camp's lists, and the healer's potions, are navs or one form each, not buy
   tables, and are unchanged.
 
+### Popups and staff screens (Phase 5 task 11)
+
+The popups (mail, petition, MoTD, the translator tool) use the same frame, cards and buttons as every page, in one column.
+The 1.1.2 credit line (`{copyright}`) and the attribution line stay in `popupfoot`. A 1.1.2 skin is unchanged.
+
+### Tabs in popups
+
+Mail's Inbox and Write are tabs (`nav.rz-mailtabs`, a `role="tablist"` list): real links (`mail.php`,
+`mail.php?op=address`), each a 44px secondary tab button (`rz-tab-button`), the current one `--accent` filled with
+`aria-selected="true"`, the other `false`. They wrap. Reading a letter keeps Inbox current; the address and write forms
+keep Write current. They need no script: each tab is a page.
+
+### The inbox
+
+- A heading ("Mail Box", plain), then a list (`ul.rz-inbox`), unread first and then newest first, as 1.1.2 ordered it.
+- Each row: a labelled checkbox in a 44px square (its label, for screen readers only, is "Select: " and the subject);
+  then the subject as the row's link (`--text`, weight 500, bold while unread); then the sender and the date on a line
+  under it in `--muted`, `--size-small`, a middle dot between. An unread row has a small New badge before the subject:
+  20px tall, transparent, a 1px `--accent` outline and `--accent` text. The New and Old scroll GIFs are gone.
+- Check All (`data-rz-checkall="msg[]"`, `assets/ui/showform.js`) and Delete Checked are secondary buttons in a row;
+  the inbox has no primary action. The form, its fields and its target are 1.1.2's.
+- The note under the list (how many letters, the inbox limit, the days they keep) is a plain `--muted` paragraph,
+  `--size-small`; an empty inbox says so in `--muted`. Nothing in the popup is italic.
+- A letter: its subject as the heading (with New while unread), a `--muted` line with "From:" and the sender, "Sent:" and
+  the date, the body between two 1px `--border` lines, then the actions: Reply (the one primary, only on a player's
+  letter), Delete and Mark Unread (secondary forms), Report to Admin (secondary, not on the game's own letters), then
+  Previous and Next as secondary buttons (an end with no letter is the same label marked unavailable).
+- The write form keeps task 9's labels; Send is its one primary.
+
+### MoTD items
+
+- Each item is an `article.rz-motd`, a 1px `--border` line under each but the last. Its title in Cinzel
+  (`--font-display`, `--size-heading`); for staff, Edit and Del as secondary buttons (Del asks first, `data-rz-confirm`);
+  the author and the date on a `--muted` line, `--size-small`, a middle dot between; the body in Alegreya
+  (`--font-story`), its line breaks kept.
+- A poll is the same item with "Poll:" in `--accent` before its title. Its question is the legend of a fieldset; each
+  choice is a radio with its label (the choice and its count, as 1.1.2 wrote them), at least 44px tall, and a bar
+  under it: a 6px `progress`, `--accent` on `--raised`, fully rounded, its share of 400 as 1.1.2's image was (no
+  `rule.gif`). Vote is the poll's one primary. At most 480px wide.
+- Opening the MoTD clears its unread mark as 1.1.2 did (the account's `lastmotd` becomes the newest item's date).
+- The petition popup is a labelled form with Submit as its one primary; its FAQ pages are plain readable text.
+- The translator tool (staff with the translator's flag only) has visible labels for its namespace, text and
+  translation; Save & Close is its one primary, Save No Close secondary.
+
+### Admin tables
+
+- Every admin and editor table scrolls sideways in its own box (task 9's `overflow-x: auto`); the box also holds
+  anything positioned inside it (`position: relative`), so a screen-reader-only label never widens the page. No admin
+  page scrolls sideways on a 390px phone.
+- `showform()` forms (the creature, user, mount and other editors) use task 9's tabs. The settings editors drawn by
+  `lib/typed_editor.php` (Game Settings, `configuration.php`) use the same tabs, one panel a section, each panel headed by
+  its section's name, each setting's label above its control; their tab list carries `data-rz-tabs-noindex`, so the
+  script adds no `showFormTabIndex` field (those forms take only the settings they declare). Save stays secondary.
+- Every admin and editor control has a label: visible where the page prints label text, for screen readers only where
+  it prints none (a row's checkbox, the second box of a pair). The helpers in `lib/output.php`
+  (`resurrection_control_id()`, `resurrection_label_open()`, `resurrection_label_close()`, `resurrection_label_for()`)
+  print nothing in a 1.1.2 skin.
+- The moderation page (`moderate.php`) uses the commentary list (task 10) with each comment's checkbox labelled ("Select
+  this comment") and its Ban link and section links as before.
+
+### Petition badges
+
+In the header's staff row (`{petitiondisplay}`), the User Editor and Petitions links, then one compact badge a petition
+status, in 1.1.2's order: Top Level, Escalated, Unhandled, In-Progress, Informational, Awaiting Points, Bug, Closed. Each
+badge shows the count; its name is in its `title` and, for screen readers, before the count. Unhandled (unread) is an
+`--accent` badge with `--ground` text; the others are transparent with a 1px `--input-border` outline and `--text`
+count. The row wraps and stays in the line on a phone; on a game page with the phone header (task 8) the staff row is
+not shown there, as before.
+
 ## Art (approved)
 
 - **Scene banners** across the top of the page's content card: woodcut style, layered dark silhouettes, light from

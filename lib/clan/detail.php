@@ -77,10 +77,14 @@
 		rawoutput("<form action='$url' method='POST'>".resurrection_action_fields('clan-detail', resurrection_clan_text_context($row1, $session['user'])));
 		addnav("",$url);
 		output("Superuser / Moderator renaming:`n");
+		resurrection_label_open('clan-rename-clanname');
 		output("Long Name: ");
-		rawoutput("<input name='clanname' value=\"".resurrection_clan_attribute($row1['clanname'])."\" maxlength=50 size=50>");
+		resurrection_label_close();
+		rawoutput("<input name='clanname'".resurrection_control_id('clan-rename-clanname')." value=\"".resurrection_clan_attribute($row1['clanname'])."\" maxlength=50 size=50>");
+		resurrection_label_open('clan-rename-clanshort');
 		output("`nShort Name: ");
-		rawoutput("<input name='clanshort' value=\"".resurrection_clan_attribute($row1['clanshort'])."\" maxlength=5 size=5>");
+		resurrection_label_close();
+		rawoutput("<input name='clanshort'".resurrection_control_id('clan-rename-clanshort')." value=\"".resurrection_clan_attribute($row1['clanshort'])."\" maxlength=5 size=5>");
 		output_notl("`n");
 		$save = resurrection_clan_attribute(translate_inline("Save"));
 		rawoutput("<input type='submit' class='button' value=\"$save\">");

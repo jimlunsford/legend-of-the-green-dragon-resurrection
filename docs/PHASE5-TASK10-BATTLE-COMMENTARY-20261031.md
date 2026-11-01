@@ -299,3 +299,18 @@ ahead of the real clock and do not pin the game clock, so a run that crosses a g
 
 One desktop shot (1440x1000), not committed, attached to the reply: a forest fight after "For 5 Rounds", five round
 items with dividers and no round numbers.
+
+## Acceptance (recorded in task 11, 2026-11-01)
+
+Task 10 is accepted through `5dafec87cb0b6e2677822a41f9b1878b4639c9a5` (the task 10 fix). Checked by the command chat
+and confirmed through the GitHub Actions API in task 11:
+
+- Modern core 41261243410: SUCCESS, all 12 jobs. Shard jobs, shards 1 to 4: PHP 8.4 / MariaDB 11.4 13:50, 23:24,
+  14:07, 20:47; PHP 8.5 / MySQL 8.4 14:46, 22:34, 13:38, 17:57.
+- Baseline integrity 41261243423: SUCCESS.
+
+`a9901d1`'s Modern core run 41222167193 failed (PHP 8.4, the test helpers' PHP 8.5-only DOM property) and stays on
+record; it is not acceptance. The midnight failures noted above are fixed in task 11 (the page-rendering tests pin the
+game clock; `docs/PHASE5-TASK11-POPUPS-ADMIN-20261101.md`, "Midnight").
+
+`ROADMAP.md` ticks task 10 in task 11's commit.

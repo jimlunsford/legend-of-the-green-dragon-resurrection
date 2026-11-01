@@ -8,10 +8,16 @@
   to the same section. Click a tab, or use Left, Right, Home and End on the focused tab.
   Without the script the list stays hidden and every section stays shown, so the form still works.
 
+  The settings editors (lib/typed_editor.php, Phase 5 task 11) use the same tabs, without the index field: their forms
+  take only the settings they declare.
+
   Resize: a resizeable textarea's + and - buttons (data-rz-resize, data-rz-step) change its rows, between 4 and 49
   as 1.1.2's increase() did.
 
   Confirm: a submit button with data-rz-confirm asks first, and the form is not sent unless the player agrees.
+
+  Check all (Phase 5 task 11, the mail inbox): a button with data-rz-checkall ticks every checkbox of that name in its
+  form, as 1.1.2's inline Check All did.
 */
 (function () {
   'use strict';
@@ -19,10 +25,14 @@
   function setUpTabs(list) {
     var tabs = Array.prototype.slice.call(list.querySelectorAll('[role="tab"]'));
     if (tabs.length === 0) { return; }
-    var index = document.createElement('input');
-    index.type = 'hidden';
-    index.name = 'showFormTabIndex';
-    list.parentNode.insertBefore(index, list.nextSibling);
+    // A form that takes only its declared fields (the settings editors, data-rz-tabs-noindex) gets no index field.
+    var index = null;
+    if (!list.hasAttribute('data-rz-tabs-noindex')) {
+      index = document.createElement('input');
+      index.type = 'hidden';
+      index.name = 'showFormTabIndex';
+      list.parentNode.insertBefore(index, list.nextSibling);
+    }
     var panels = tabs.map(function (tab) { return document.getElementById(tab.getAttribute('aria-controls')); });
 
     function select(chosen, focus) {
@@ -32,7 +42,7 @@
         tab.tabIndex = on ? 0 : -1;
         if (panels[n]) { panels[n].hidden = !on; }
       });
-      index.value = tabs[chosen].getAttribute('data-rz-tab');
+      if (index) { index.value = tabs[chosen].getAttribute('data-rz-tab'); }
       if (focus) { tabs[chosen].focus(); }
     }
 
@@ -62,6 +72,16 @@
       var box = document.getElementById(button.getAttribute('data-rz-resize'));
       var step = parseInt(button.getAttribute('data-rz-step'), 10) || 0;
       if (box && box.rows + step > 3 && box.rows + step < 50) { box.rows = box.rows + step; }
+    });
+  });
+
+  Array.prototype.forEach.call(document.querySelectorAll('[data-rz-checkall]'), function (button) {
+    button.addEventListener('click', function () {
+      var name = button.getAttribute('data-rz-checkall');
+      var scope = button.form || document;
+      Array.prototype.forEach.call(scope.querySelectorAll('input[type="checkbox"]'), function (box) {
+        if (box.name === name) { box.checked = true; }
+      });
     });
   });
 

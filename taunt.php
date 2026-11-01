@@ -39,8 +39,10 @@ if ($op=="edit"){
 		$row = array('tauntid'=>0, 'taunt'=>"");
 		rawoutput(resurrection_content_form("taunt.php?op=save&tauntid=", "taunt-edit-0", resurrection_content_context('add', [])));
 	}
+	resurrection_label_open('taunt-text');
 	output("Taunt: ");
-	rawoutput("<input name='taunt' value=\"".HTMLEntities((string)$row['taunt'], ENT_COMPAT, getsetting("charset", "ISO-8859-1"))."\" size='70'><br>");
+	resurrection_label_close();
+	rawoutput("<input name='taunt'".resurrection_control_id('taunt-text')." value=\"".HTMLEntities((string)$row['taunt'], ENT_COMPAT, getsetting("charset", "ISO-8859-1"))."\" size='70'><br>");
 	output("The following codes are supported (case matters):`n");
 	output("%w = The player's name (also can be specified as {goodguy}`n");
 	output("%x = The player's weapon (also can be specified as {weapon}`n");

@@ -121,11 +121,65 @@ function resurrection_settings_save(string $namespace,array $schema): void {
 }
 
 /**
+ * The settings in the sections their layout declares ("Game Setup,title" and so on), in order: section title => keys.
+ * Settings before the first title go in a section of their own.
+ *
+ * @param array<int|string,mixed> $layout
  * @param array<string,array<string,mixed>> $schema
- * @param array<string,mixed> $values */
-function resurrection_editor_form(string $url,string $scope,string $context,array $schema,array $values): void {
+ * @return list<array{title:string,keys:list<string>}>
+ */
+function resurrection_editor_sections(array $layout, array $schema): array {
+    $sections=[]; $current=null;
+    foreach ($layout as $key=>$declaration) {
+        if (is_array($declaration)) $declaration=$declaration[0] ?? '';
+        if (!is_string($key)) {
+            $parts=array_map('trim', explode(',', (string)$declaration));
+            if (($parts[1] ?? '')==='title') { $sections[]=['title'=>$parts[0],'keys'=>[]]; $current=count($sections)-1; }
+            continue;
+        }
+        if (!isset($schema[$key])) continue;
+        if ($current===null) { $sections[]=['title'=>'Settings','keys'=>[]]; $current=count($sections)-1; }
+        $sections[$current]['keys'][]=$key;
+    }
+    return array_values(array_filter($sections, static fn($section)=>$section['keys']!==[]));
+}
+
+/**
+ * @param array<string,array<string,mixed>> $schema
+ * @param array<string,mixed> $values
+ * @param array<int|string,mixed> $layout the declarations the schema came from: in the Resurrection template their
+ *   sections become tabs (Phase 5 task 11), as showform() drew them in 1.1.2; a 1.1.2 skin keeps the one list. */
+function resurrection_editor_form(string $url,string $scope,string $context,array $schema,array $values,array $layout=[]): void {
     $escape=static fn($v)=>htmlspecialchars((string)$v,ENT_QUOTES|ENT_SUBSTITUTE,'UTF-8');
     rawoutput('<form method="POST" action="'.$escape($url).'">'.resurrection_action_fields($scope,$context));
+    $sections=resurrection_ui() ? resurrection_editor_sections($layout, $schema) : [];
+    if (count($sections)>1) {
+        // showform()'s tabs (Phase 5 task 9) without the index field: the editor takes only the settings it declares.
+        require_once __DIR__.'/showform.php';
+        $titles=[];
+        foreach ($sections as $n=>$section) $titles[$n+1]=translate_inline($section['title']);
+        rawoutput(str_replace(" data-rz-tabs=", " data-rz-tabs-noindex data-rz-tabs=", showform_tabs('settings', $titles, 1)));
+        foreach ($sections as $n=>$section) {
+            $x=$n+1;
+            rawoutput("<div id='showFormTable$x' class='rz-form-section' role='tabpanel' aria-labelledby='showFormButton$x'>"
+                ."<h2 class='rz-form-section-title'>".resurrection_plain_text($titles[$x])."</h2>");
+            resurrection_editor_fields(array_intersect_key($schema, array_flip($section['keys'])), $values);
+            rawoutput('</div>');
+        }
+        rawoutput('<button class="button">Save</button></form>'.resurrection_form_script());
+        return;
+    }
+    resurrection_editor_fields($schema, $values);
+    rawoutput('<button class="button">Save</button></form>');
+}
+
+/**
+ * Each setting's row: its label around its control.
+ *
+ * @param array<string,array<string,mixed>> $schema
+ * @param array<string,mixed> $values */
+function resurrection_editor_fields(array $schema,array $values): void {
+    $escape=static fn($v)=>htmlspecialchars((string)$v,ENT_QUOTES|ENT_SUBSTITUTE,'UTF-8');
     foreach ($schema as $key=>$descriptor) {
         $value=$values[$key] ?? $descriptor['default'];
         rawoutput('<p><label>'.$escape($descriptor['label']).' ');
@@ -137,7 +191,6 @@ function resurrection_editor_form(string $url,string $scope,string $context,arra
         } else rawoutput('<input name="'.$escape($key).'" value="'.$escape($value).'">');
         rawoutput('</label></p>');
     }
-    rawoutput('<button class="button">Save</button></form>');
 }
 
 /**

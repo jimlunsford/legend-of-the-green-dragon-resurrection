@@ -148,6 +148,90 @@ function resurrection_form_script(){
 }
 
 /**
+ * Stored text with its colour and format codes, closed inside itself (Phase 5 task 11): a code the text leaves open (an
+ * italic, a colour) ends with the text instead of running on over the rest of the page, as appoencode()'s shared state
+ * lets it in 1.1.2. HTML in the text is escaped. For the Resurrection template's mail bodies and MoTD items.
+ *
+ * @param string $text
+ * @return string
+ */
+function resurrection_appoencode_closed($text){
+	global $nestedtags;
+	$saved = $nestedtags;
+	$nestedtags = [];
+	$html = appoencode((string)$text, false);
+	foreach (['font' => 'span', 'b' => 'b', 'i' => 'i'] as $key => $tag) {
+		if (!empty($nestedtags[$key])) $html .= "</$tag>";
+	}
+	$nestedtags = $saved;
+	return $html;
+}
+
+/**
+ * Translated or stored text as plain text for HTML (Phase 5 task 11): its colour and format codes dropped, escaped.
+ *
+ * @param string $text
+ * @return string
+ */
+function resurrection_plain_text($text){
+	return htmlspecialchars(full_sanitize((string)$text), ENT_QUOTES, 'UTF-8');
+}
+
+/**
+ * An operator control's id (Phase 5 task 11): " id='$id'" in the Resurrection template, where the control's label names
+ * it (resurrection_label_open($id), or resurrection_label_for($id, ...)); nothing in a 1.1.2 skin, which keeps 1.1.2's
+ * markup byte for byte.
+ *
+ * A 1.1.2 control that had an id of its own keeps it there ($legacy): the masters editor gave three boxes the same one.
+ *
+ * @param string $id
+ * @param string $legacy the id 1.1.2 printed, if any
+ * @return string
+ */
+function resurrection_control_id($id, $legacy = ""){
+	if (!resurrection_ui()) return $legacy === "" ? "" : " id='$legacy'";
+	return " id='" . htmlspecialchars((string)$id, ENT_QUOTES, 'UTF-8') . "'";
+}
+
+/**
+ * Opens the label of the control resurrection_control_id($id) names, around the label text the page prints next, in the
+ * Resurrection template; nothing in a 1.1.2 skin. A label never straddles an open colour span (Phase 5 task 9): the
+ * colour closes first.
+ *
+ * @param string $id
+ */
+function resurrection_label_open($id){
+	if (!resurrection_ui()) return;
+	output_notl("`0");
+	rawoutput("<label for='" . htmlspecialchars((string)$id, ENT_QUOTES, 'UTF-8') . "'>");
+}
+
+/** Closes resurrection_label_open()'s label; nothing in a 1.1.2 skin. */
+function resurrection_label_close(){
+	if (!resurrection_ui()) return;
+	output_notl("`0");
+	rawoutput("</label>");
+}
+
+/**
+ * A whole label for the control resurrection_control_id($id) names, as text to print: for a control with no label text
+ * of its own (the second box of a pair, a row's checkbox), read by screen readers only unless $visible. Nothing in a
+ * 1.1.2 skin.
+ *
+ * @param string $id
+ * @param string $text plain text, translated here (a 1.1.2 skin never asks for it)
+ * @param bool $visible
+ * @param string $detail what the row is (a module's name), after the text, not translated
+ * @return string
+ */
+function resurrection_label_for($id, $text, $visible = false, $detail = ""){
+	if (!resurrection_ui()) return "";
+	$label = full_sanitize(translate_inline((string)$text)) . ($detail === "" ? "" : ": " . full_sanitize((string)$detail));
+	return "<label for='" . htmlspecialchars((string)$id, ENT_QUOTES, 'UTF-8') . "'" . ($visible ? "" : " class='rz-sr'") . ">"
+		. htmlspecialchars($label, ENT_QUOTES, 'UTF-8') . "</label>";
+}
+
+/**
  * The class of a form's button (Phase 5 task 9): "button", 1.1.2's, for every button; in the Resurrection template the
  * form's one primary action adds "rz-button-primary". A 1.1.2 skin's button keeps its markup byte for byte.
  *

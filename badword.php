@@ -75,8 +75,10 @@ output("`7Here you can edit the words that the game filters.  Using * at the sta
 $test = htmlspecialchars(translate_inline("Test"), ENT_QUOTES, 'UTF-8');
 rawoutput("<form action='badword.php?op=test' method='POST'>".resurrection_csrf_field());
 addnav("","badword.php?op=test");
+resurrection_label_open('badword-test');
 output("`7Test a word:`0");
-rawoutput("<input name='word'><input type='submit' class='button' value='$test'></form>");
+resurrection_label_close();
+rawoutput("<input name='word'".resurrection_control_id('badword-test')."><input type='submit' class='button' value='$test'></form>");
 if ($op=="test"){
 	// Writes nothing; a POST with CSRF, as the form is.
 	resurrection_require_post();
@@ -93,8 +95,10 @@ if ($op=="test"){
 function resurrection_badword_form(string $op, string $label, string $context): void {
 	rawoutput("<form action='badword.php?op=$op' method='POST'>".resurrection_action_fields('badword-' . $op, $context));
 	addnav("","badword.php?op=$op");
+	resurrection_label_open("badword-$op");
 	output("`7$label`0");
-	rawoutput("<input name='word'><input type='submit' class='button' value='".htmlspecialchars(translate_inline($op == "add" || $op == "addgood" ? "Add" : "Remove"), ENT_QUOTES, 'UTF-8')."'></form>");
+	resurrection_label_close();
+	rawoutput("<input name='word'".resurrection_control_id("badword-$op")."><input type='submit' class='button' value='".htmlspecialchars(translate_inline($op == "add" || $op == "addgood" ? "Add" : "Remove"), ENT_QUOTES, 'UTF-8')."'></form>");
 }
 
 output_notl(resurrection_presentation("larger"), true);

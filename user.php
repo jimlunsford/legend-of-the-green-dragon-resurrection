@@ -59,7 +59,9 @@ $m = httpget("module");
 if ($m !== false && $m !== '' && (!is_string($m) || !preg_match('/\A[A-Za-z][A-Za-z0-9_]*\z/', $m))) { http_response_code(400); exit('Invalid module.'); }
 if ($m) $m = "&module=$m&subop=module";
 rawoutput("<form action='user.php?op=search$m' method='POST'>");
+resurrection_label_open('q');
 output("Search by any field below: ");
+resurrection_label_close();
 rawoutput("<input name='q' id='q'>");
 $se = translate_inline("Search");
 rawoutput("<input type='submit' class='button' value='$se'>");

@@ -114,7 +114,7 @@ if ($op === 'submit' || count($post)>0){
     }
 	modulehook("petitionform",array());
 	$submit = translate_inline("Submit");
-	rawoutput("<br/><input type='submit' class='button' value='$submit'><br/>");
+	rawoutput("<br/><input type='submit' class='" . resurrection_button_class(true) . "' value='$submit'><br/>");
 	output("Please be as descriptive as possible in your petition.");
 	output("If you have questions about how the game works, please check out the <a href='petition.php?op=faq'>FAQ</a>.", true);
 	output("Petitions about game mechanics will more than likely not be answered unless they have something to do with a bug.");

@@ -373,10 +373,10 @@ function viewcommentary($section,$message="Interject your own commentary?",$limi
 		$out="";
 		if ($moderating){
 			if ($session['user']['superuser'] & SU_EDIT_USERS){
-				$out.="`0[ <input type='checkbox' name='comment[{$commentids[$i]}]'> | <a href='user.php?op=setupban&userid=".$auth[$i]."&reason=".rawurlencode($rawc[$i])."'>Ban</a> ]&nbsp;";
+				$out.="`0[ <input type='checkbox' name='comment[{$commentids[$i]}]'".resurrection_control_id("comment-{$commentids[$i]}")."> ".resurrection_label_for("comment-{$commentids[$i]}", "Select this comment")."| <a href='user.php?op=setupban&userid=".$auth[$i]."&reason=".rawurlencode($rawc[$i])."'>Ban</a> ]&nbsp;";
 				addnav("","user.php?op=setupban&userid=$auth[$i]&reason=".rawurlencode($rawc[$i]));
 			}else{
-				$out.="`0[ <input type='checkbox' name='comment[{$commentids[$i]}]'> ]&nbsp;";
+				$out.="`0[ <input type='checkbox' name='comment[{$commentids[$i]}]'".resurrection_control_id("comment-{$commentids[$i]}")."> ".resurrection_label_for("comment-{$commentids[$i]}", "Select this comment")."]&nbsp;";
 			}
 			$matches=array();
 			preg_match("/[(]([^)]*)[)]/",$op[$i],$matches);
@@ -417,7 +417,7 @@ function viewcommentary($section,$message="Interject your own commentary?",$limi
 		rawoutput(resurrection_csrf_field());
 		output_notl("<input type='submit' class='button' value=\"$mod_Del1\">",true);
 		output_notl("<input type='submit' class='button' name='delnban' value=\"$mod_Del2\" onClick=\"return confirm('$mod_Del_confirm');\">",true);
-		output_notl("`n$mod_reason <input name='reason0' size='40' value=\"$mod_reason_desc\" onChange=\"document.getElementById('reason').value=this.value;\">",true);
+		output_notl("`n".(resurrection_ui() ? resurrection_label_for('reason0', "Reason:", true) : $mod_reason)." <input name='reason0'".resurrection_control_id('reason0')." size='40' value=\"$mod_reason_desc\" onChange=\"document.getElementById('reason').value=this.value;\">",true);
 	}
 
 
@@ -428,8 +428,9 @@ function viewcommentary($section,$message="Interject your own commentary?",$limi
 	$needclose = 0;
 	// The Resurrection template prints the comments as a list (Phase 5 task 10): one item per comment, each as 1.1.2
 	// wrote it (speaker, "says," or the emote, the text, time stamp, clan tag, a moderator's Del). The moderation
-	// screen's sections keep 1.1.2's lines until task 11; a 1.1.2 skin prints exactly what it did.
-	$commentlist = resurrection_ui() && !$moderating;
+	// screen (moderate.php) uses the same list since task 11: each item keeps its checkbox and Ban link, each section
+	// its heading link. A 1.1.2 skin prints exactly what it did.
+	$commentlist = resurrection_ui();
 
 	while (list($sec,$v)=resurrection_array_next($outputcomments)){
 		if ($sec!="x") {
@@ -474,7 +475,14 @@ function viewcommentary($section,$message="Interject your own commentary?",$limi
 		output_notl("`n");
 		rawoutput("<input type='submit' class='button' value=\"$mod_Del1\">");
 		rawoutput("<input type='submit' class='button' name='delnban' value=\"$mod_Del2\" onClick=\"return confirm('$mod_Del_confirm');\">");
-		output_notl("`n%s ", $mod_reason);
+		if (resurrection_ui()) {
+			output_notl("`n");
+			resurrection_label_open('reason');
+			output_notl("%s", $mod_reason);
+			resurrection_label_close();
+		} else {
+			output_notl("`n%s ", $mod_reason);
+		}
 		rawoutput("<input name='reason' size='40' id='reason' value=\"$mod_reason_desc\">");
 		rawoutput("</form>");
 		output_notl("`n");
@@ -663,7 +671,8 @@ function talkform($section,$talkline,$limit=10,$schema=false){
 		$iname = getsetting("innname", LOCATION_INN);
 		$sections = commentarylocs();
 		reset ($sections);
-		output_notl("<select name='section'>",true);
+		if (resurrection_ui()) rawoutput(resurrection_label_for('commentary-section', "Section:", true));
+		output_notl("<select name='section'".resurrection_control_id('commentary-section').">",true);
 		while (list($key,$val)=resurrection_array_next($sections)){
             $_SESSION['commentary_sections'][$key] = ['talkline' => $talkline, 'schema' => $schema];
 			output_notl("<option value='$key'>$val</option>",true);

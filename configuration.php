@@ -20,7 +20,7 @@ try {
     module_editor_navs('settings', 'configuration.php?op=modulesettings&module=');
     $url = $namespace === 'core' ? 'configuration.php?op=save' : 'configuration.php?op=modulesettings&module='.rawurlencode($namespace).'&save=1';
     addnav('', $url);
-    resurrection_editor_form($url, 'settings-'.$namespace, resurrection_editor_context($schema, $values), $schema, $values);
+    resurrection_editor_form($url, 'settings-'.$namespace, resurrection_editor_context($schema, $values), $schema, $values, $layout);
     page_footer();
 } catch (InvalidArgumentException|DomainException $error) {
     http_response_code(400); exit('Invalid or stale settings.');

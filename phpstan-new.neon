@@ -16,6 +16,7 @@ parameters:
         - lib/pvp_combat.php
         - lib/dragon_combat.php
         - lib/battle_view.php
+        - lib/mail_view.php
         - lib/typed_editor.php
         - lib/darkhorse_game.php
         - lib/darkhorse_entry.php
@@ -93,6 +94,7 @@ parameters:
         - lib/names.php
         - lib/titles.php
         - lib/censor.php
+        - lib/showform.php
         - user.php
     tmpDir: .phpstan-cache/new
     parallel:

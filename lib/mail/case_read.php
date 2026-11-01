@@ -16,11 +16,26 @@ if (db_num_rows($result)>0){
 	    $row['name'] = $row['msgfrom'];
 	}
 
-	if (!$row['seen']) {
+	if (resurrection_ui()) {
+		// Phase 5 task 11: the Resurrection template's read view (lib/mail_view.php). The same message is marked read,
+		// with the same actions and the same Previous and Next.
+		require_once __DIR__ . '/../mail_view.php';
+		db_query("UPDATE " . db_prefix("mail") . " SET seen=1 WHERE msgto=? AND messageid=?",true,[$session['user']['acctid'],$id]);
+		invalidatedatacache("mail-{$session['user']['acctid']}");
+		$problem = "Abusive Email Report:\nFrom: {$row['name']}\nSubject: {$row['subject']}\nSent: {$row['sent']}\nID: {$row['messageid']}\nBody:\n{$row['body']}";
+		$near = [];
+		foreach (['pid' => "messageid < ? ORDER BY messageid DESC", 'nid' => "messageid > ? ORDER BY messageid"] as $key => $where) {
+			$nearresult = db_query("SELECT messageid FROM $mail WHERE msgto=? AND $where LIMIT 1", true, [(int)$session['user']['acctid'], (int)$id]);
+			$nearrow = db_fetch_assoc($nearresult);
+			$near[$key] = $nearrow ? (int)$nearrow['messageid'] : 0;
+		}
+		resurrection_mail_read($row, $problem, $near['pid'], $near['nid']);
+	}elseif (!$row['seen']) {
 		output("`b`#NEW`b`n");
 	}else{
 		output("`n");
 	}
+	if (!resurrection_ui()) {
 	output("`b`2From:`b `^%s`n",$row['name']);
 	output("`b`2Subject:`b `^%s`n",$row['subject']);
 	output("`b`2Sent:`b `^%s`n",$row['sent']);
@@ -88,6 +103,7 @@ if (db_num_rows($result)>0){
 	}
 	rawoutput("</td>");
 	rawoutput("</tr></table>");
+	}
 }else{
 	output("Eek, no such message was found!");
 }

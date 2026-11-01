@@ -47,8 +47,6 @@ final class TemplateRenderTest extends TestCase
     private const string ATTRIBUTION = '<p class="rz-attribution">A <a href="https://phoenix233.com" target="_blank" rel="noopener">Phoenix 2:33 LLC</a>'
         . ' Project by <a href="https://jimlunsford.com" target="_blank" rel="noopener">Jim Lunsford</a></p>';
     private const string CARD = '<div class="rz-card rz-content">';
-    /** A pinned game clock: the epoch the installer writes (a UTC midnight), no offset, four game days a day. */
-    private const array CLOCK = ['game_epoch' => '2026-01-01 00:00:00 +0000', 'gameoffsetseconds' => '0', 'daysperday' => '4'];
 
     public function testTheDefaultTemplateRendersAPageASignedInPageAndAPopup(): void
     {
@@ -86,7 +84,10 @@ final class TemplateRenderTest extends TestCase
 
             // The clock the footer's countdown is read from, pinned for the test and restored afterwards.
             $clock = json_decode($this->php($tree, 'echo json_encode(db_query("SELECT setting, value FROM settings WHERE setting IN (?, ?, ?)", true, ["game_epoch", "gameoffsetseconds", "daysperday"]));'), true);
-            foreach (self::CLOCK as $name => $value) {
+            // Until Phase 5 task 11 the pinned epoch was a UTC midnight (2026-01-01), which kept the real 00:00, 06:00, 12:00
+            // and 18:00 UTC boundaries: a run that crossed one sent village.php to a new day. GameClock starts the game
+            // day a minute ago, as the web shards do, and leaves a whole game day of headroom.
+            foreach (GameClock::settings() as $name => $value) {
                 $this->php($tree, 'savesetting(' . var_export($name, true) . ', ' . var_export($value, true) . ');');
             }
 

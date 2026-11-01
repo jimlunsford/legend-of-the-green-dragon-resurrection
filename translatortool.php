@@ -55,12 +55,12 @@ if ($op==""){
 	$savenotclose = htmlentities(translate_inline("Save No Close"), ENT_QUOTES, $charset);
 	rawoutput("<form action='translatortool.php?op=save' method='POST'>");
 	rawoutput(resurrection_action_fields(resurrection_translatortool_scope($uri, $text), resurrection_translatortool_context($uri, $text, resurrection_translatortool_rows($uri, $text))));
-	rawoutput("$namespace <input name='uri' value=\"".htmlentities($uri, ENT_QUOTES, $charset)."\" readonly><br/>");
-	rawoutput("$texta<br>");
-	rawoutput("<textarea name='text' cols='60' rows='5' readonly>".htmlentities($text, ENT_QUOTES, $charset)."</textarea><br/>");
-	rawoutput("$translation<br>");
-	rawoutput("<textarea name='trans' cols='60' rows='5'>".htmlentities($trans, ENT_QUOTES, $charset)."</textarea><br/>");
-	rawoutput("<input type='submit' value=\"$saveclose\" class='button'>");
+	rawoutput((resurrection_ui() ? resurrection_label_for('translator-uri', "Namespace:", true) : $namespace)." <input name='uri'".resurrection_control_id('translator-uri')." value=\"".htmlentities($uri, ENT_QUOTES, $charset)."\" readonly><br/>");
+	rawoutput((resurrection_ui() ? resurrection_label_for('translator-text', "Text:", true) : $texta)."<br>");
+	rawoutput("<textarea name='text'".resurrection_control_id('translator-text')." cols='60' rows='5' readonly>".htmlentities($text, ENT_QUOTES, $charset)."</textarea><br/>");
+	rawoutput((resurrection_ui() ? resurrection_label_for('translator-trans', "Translation:", true) : $translation)."<br>");
+	rawoutput("<textarea name='trans'".resurrection_control_id('translator-trans')." cols='60' rows='5'>".htmlentities($trans, ENT_QUOTES, $charset)."</textarea><br/>");
+	rawoutput("<input type='submit' value=\"$saveclose\" class='".resurrection_button_class(true)."'>");
 	rawoutput("<input type='submit' value=\"$savenotclose\" class='button' name='savenotclose'>");
 	rawoutput("</form>");
 	popup_footer();
@@ -130,8 +130,10 @@ if ($op==""){
 	$result = db_query($sql, true, [LANGUAGE]);
 	rawoutput("<form action='translatortool.php' method='GET'>");
 	rawoutput("<input type='hidden' name='op' value='list'>");
+	resurrection_label_open('translator-list-u');
 	output("Known Namespaces:");
-	rawoutput("<select name='u'>");
+	resurrection_label_close();
+	rawoutput("<select name='u'".resurrection_control_id('translator-list-u').">");
 	while ($row = db_fetch_assoc($result)){
 		// The option sends the namespace itself (1.1.2 sent it URL-encoded, which then matched no row).
 		rawoutput("<option value=\"".htmlentities($row['uri'], ENT_QUOTES, $charset)."\">".htmlentities($row['uri'], ENT_QUOTES, $charset)." ({$row['c']})</option>",true);

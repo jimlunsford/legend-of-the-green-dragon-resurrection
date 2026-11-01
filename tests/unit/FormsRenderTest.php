@@ -101,6 +101,8 @@ final class FormsRenderTest extends TestCase
         'healer.php?op=buy&pct=100' => ['healer.php?op=buy&pct=100'],
         'prefs.php' => ['prefs.php?op=save'],
         'mail.php?op=write&to=' . self::LOGIN => ['mail.php?op=send'],
+        // Phase 5 task 11: the petition's Submit is its form's primary action.
+        'petition.php' => ['petition.php?op=submit'],
     ];
 
     public function testFormsHaveOnePrimaryLabelledInputsAndOldSkinsKeepTheirButtons(): void
@@ -114,7 +116,7 @@ final class FormsRenderTest extends TestCase
         mkdir($tree . '/.sessions', 0700, true);
         $installed = false;
         $player = 0;
-        $selfdelete = null;
+        $saved = null;
         try {
             foreach (scandir($root) ?: [] as $entry) {
                 if (in_array($entry, ['.', '..', '.git', 'dbconnect.php'], true)) { continue; }
@@ -134,8 +136,11 @@ final class FormsRenderTest extends TestCase
             }
 
             // Players may delete their character (selfdelete), so preferences shows its delete button; restored afterwards.
-            $selfdelete = json_decode($this->php($tree, 'echo json_encode(db_query("SELECT value FROM settings WHERE setting=?", true, ["selfdelete"]));'), true);
-            $this->php($tree, 'savesetting("selfdelete", "1");');
+            // The game clock is pinned too (GameClock, Phase 5 task 11), so a run that crosses a game-day boundary does not
+            // send the signed-in pages to a new day.
+            $pinned = ['selfdelete' => '1'] + GameClock::settings();
+            $saved = json_decode($this->php($tree, '$s = []; foreach (' . var_export(array_keys($pinned), true) . ' as $n) $s[$n] = db_query("SELECT value FROM settings WHERE setting=?", true, [$n]); echo json_encode($s);'), true);
+            foreach ($pinned as $name => $value) { $this->php($tree, 'savesetting(' . var_export($name, true) . ', ' . var_export($value, true) . ');'); }
 
             $player = (int)$this->php($tree, 'require_once "lib/accounts.php"; $id = resurrection_create_account(' . var_export(self::LOGIN, true) . ', ' . var_export(self::PASSWORD, true) . ');'
                 . ' db_query("UPDATE accounts SET loggedin=1, level=7, gold=5000, goldinbank=2000, hitpoints=30, maxhitpoints=70, turns=10, weaponvalue=0, armorvalue=0, boughtroomtoday=0 WHERE acctid=?", true, [$id]); echo $id;');
@@ -170,19 +175,22 @@ final class FormsRenderTest extends TestCase
             if ($player > 0) {
                 $cleanup[] = $this->php($tree, 'db_query("DELETE FROM mail WHERE msgto=? OR msgfrom=?", true, [' . $player . ', ' . $player . ']); foreach (["accounts_output", "accounts"] as $t) db_query("DELETE FROM " . db_identifier($t) . " WHERE acctid=?", true, [' . $player . ']); echo "removed";', false);
             }
-            if (is_array($selfdelete) && !$installed) {
-                $restore = 'db_query("DELETE FROM settings WHERE setting=?", true, ["selfdelete"]);';
-                foreach ($selfdelete as $row) {
-                    $restore .= ' db_query("INSERT INTO settings (setting, value) VALUES (?, ?)", true, ["selfdelete", ' . var_export($row['value'], true) . ']);';
+            if (is_array($saved) && !$installed) {
+                $restore = '';
+                foreach ($saved as $name => $rows) {
+                    $restore .= 'db_query("DELETE FROM settings WHERE setting=?", true, [' . var_export($name, true) . ']);';
+                    foreach ($rows as $row) {
+                        $restore .= ' db_query("INSERT INTO settings (setting, value) VALUES (?, ?)", true, [' . var_export($name, true) . ', ' . var_export($row['value'], true) . ']);';
+                    }
                 }
-                $cleanup[] = $this->php($tree, $restore . ' echo "selfdelete restored";', false);
+                $cleanup[] = $this->php($tree, $restore . ' echo "settings restored";', false);
             }
             if ($installed) {
                 $cleanup[] = $this->php($tree, 'foreach (array_column(db_query("SHOW TABLES"), "Tables_in_resurrection_test") as $t) db_query("DROP TABLE " . db_identifier($t)); echo resurrection_install_state();', false);
             }
             $this->remove($work);
         }
-        self::assertSame(array_merge($player > 0 ? ['removed'] : [], is_array($selfdelete) && !$installed ? ['selfdelete restored'] : [],
+        self::assertSame(array_merge($player > 0 ? ['removed'] : [], is_array($saved) && !$installed ? ['settings restored'] : [],
             $installed ? ['empty'] : []), $cleanup);
     }
 

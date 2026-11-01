@@ -73,7 +73,9 @@ if ($op=="" || $op=="search"){
 	// Search form
 	$search = translate_inline("Search");
 	rawoutput("<form action='creatures.php?op=search' method='POST'>");
+	resurrection_label_open('q');
 	output("Search by field: ");
+	resurrection_label_close();
 	rawoutput("<input name='q' id='q'>");
 	rawoutput("<input type='submit' class='button' value='$search'>");
 	rawoutput("</form>");

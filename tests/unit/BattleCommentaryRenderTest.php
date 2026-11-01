@@ -70,9 +70,12 @@ final class BattleCommentaryRenderTest extends TestCase
         } elseif ($state !== 'installed') {
             throw new \RuntimeException('The disposable test database must be empty or installed, not ' . $state);
         }
-        $names = var_export(array_keys(self::SETTINGS), true);
+        // The game clock is pinned too (GameClock, Phase 5 task 11): a run that crosses a game-day boundary (00:00, 06:00,
+        // 12:00 or 18:00 UTC on the installer's clock) no longer sends the fights to a new day.
+        $settings = self::SETTINGS + GameClock::settings();
+        $names = var_export(array_keys($settings), true);
         self::$saved = json_decode(self::php('$s = []; foreach (' . $names . ' as $n) $s[$n] = db_query("SELECT value FROM settings WHERE setting=?", true, [$n]); echo json_encode($s);'), true);
-        foreach (self::SETTINGS as $name => $value) { self::php('savesetting(' . var_export($name, true) . ', ' . var_export($value, true) . ');'); }
+        foreach ($settings as $name => $value) { self::php('savesetting(' . var_export($name, true) . ', ' . var_export($value, true) . ');'); }
     }
 
     public static function tearDownAfterClass(): void

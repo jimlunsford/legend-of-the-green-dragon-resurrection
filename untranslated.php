@@ -81,8 +81,10 @@ if ($op == "list") {
 	$sql = "SELECT namespace,count(*) AS c FROM " . db_prefix("untranslated") . " WHERE language=? GROUP BY namespace ORDER BY namespace ASC";
 	$result = db_query($sql, true, [$language]);
 	rawoutput("<input type='hidden' name='op' value='list'>");
+	resurrection_label_open('untranslated-ns');
 	output("Known Namespaces:");
-	rawoutput("<select name='ns'>");
+	resurrection_label_close();
+	rawoutput("<select name='ns'".resurrection_control_id('untranslated-ns').">");
 	while ($row = db_fetch_assoc($result)){
 		rawoutput("<option value=\"".htmlentities($row['namespace'], ENT_QUOTES, $charset)."\"".(($row['namespace'] == $namespace) ? "selected" : "").">".htmlentities($row['namespace'], ENT_QUOTES, $charset)." ({$row['c']})</option>");
 	}
@@ -91,10 +93,10 @@ if ($op == "list") {
 	rawoutput("<br>");
 
 	if ($mode == "edit") {
-		rawoutput(translate_inline("Text:"). "<br>");
-		rawoutput("<textarea name='intext' cols='60' rows='5' readonly>".htmlentities($intext, ENT_QUOTES, $charset)."</textarea><br/>");
-		rawoutput(translate_inline("Translation:"). "<br>");
-		rawoutput("<textarea name='outtext' cols='60' rows='5'></textarea><br/>");
+		rawoutput((resurrection_ui() ? resurrection_label_for('untranslated-intext', "Text:", true) : translate_inline("Text:")). "<br>");
+		rawoutput("<textarea name='intext'".resurrection_control_id('untranslated-intext')." cols='60' rows='5' readonly>".htmlentities($intext, ENT_QUOTES, $charset)."</textarea><br/>");
+		rawoutput((resurrection_ui() ? resurrection_label_for('untranslated-outtext', "Translation:", true) : translate_inline("Translation:")). "<br>");
+		rawoutput("<textarea name='outtext'".resurrection_control_id('untranslated-outtext')." cols='60' rows='5'></textarea><br/>");
 		rawoutput("<input type='submit' value='". htmlentities(translate_inline("Save"), ENT_QUOTES, $charset) ."' class='button'>");
 	} else {
 		rawoutput("<table border='0' cellpadding='2' cellspacing='0'>");
@@ -157,8 +159,8 @@ if ($op == "list") {
 			rawoutput("</td><td></td></tr>");
 			// Escaped, and read-only: the translation is saved for the text shown. 1.1.2 printed the stored text as HTML
 			// and its hidden `id` (a column the table does not have) was an undefined value.
-			rawoutput("<tr><td width='30%'><textarea cols='35' rows='4' name='intext' readonly>".htmlentities($row['intext'], ENT_QUOTES, $charset)."</textarea></td>");
-			rawoutput("<td width='30%'><textarea cols='25' rows='4' name='outtext'></textarea></td></tr></table>");
+			rawoutput("<tr><td width='30%'>".resurrection_label_for('untranslated-row-intext', "Text:")."<textarea cols='35' rows='4' name='intext'".resurrection_control_id('untranslated-row-intext')." readonly>".htmlentities($row['intext'], ENT_QUOTES, $charset)."</textarea></td>");
+			rawoutput("<td width='30%'>".resurrection_label_for('untranslated-row-outtext', "Translation:")."<textarea cols='25' rows='4' name='outtext'".resurrection_control_id('untranslated-row-outtext')."></textarea></td></tr></table>");
 			rawoutput("<input type='hidden' name='language' value=\"".htmlentities($row['language'], ENT_QUOTES, $charset)."\">");
 			rawoutput("<input type='hidden' name='namespace' value=\"".htmlentities($row['namespace'], ENT_QUOTES, $charset)."\">");
 			rawoutput("<input type='submit' value='$submit' class='button'>");

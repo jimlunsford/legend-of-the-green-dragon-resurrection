@@ -8,7 +8,8 @@ require_once("lib/dump_item.php");
 /**
  * The id of a showform() control, for its <label for> (Phase 5 task 9): unique per form, letters, digits, - and _.
  *
- * @param int $form the showform() call's number on the page
+ * @param int|string $form the form's name on the page: the showform() call's number, or a settings editor's name
+ *   (lib/typed_editor.php, Phase 5 task 11)
  * @param string $key the field's name
  * @return string
  */
@@ -21,7 +22,8 @@ function showform_control_id($form, $key){
  * aria-selected, each controlling its section's table. assets/ui/showform.js shows it and switches the sections; without
  * the script every section stays shown and the tab list hidden.
  *
- * @param int $form the showform() call's number on the page
+ * @param int|string $form the form's name on the page: the showform() call's number, or a settings editor's name
+ *   (lib/typed_editor.php, Phase 5 task 11)
  * @param array<int, string> $sections section number => title
  * @param int $active the section shown first
  * @return string
