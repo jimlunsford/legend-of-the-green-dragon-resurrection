@@ -468,12 +468,12 @@ query, so the template writes the two breakpoints as literals equal to these tok
   A module fight that uses `fightnav()` keeps its links in the nav column and gets the cards, log and result.
 - **Battle log** (task 10). Under the actions, after a 1px `--border` line: the lines `battle.php` prints before its
   first round ("You have encountered … which lunges at you with …!" first, then a surprise attack or a skill's text),
-  each its own row; then an ordered list, one item per round fought in this request, each headed "Round N" (`battle`
-  namespace, "Round %s"; Cinzel 500, `--size-label`, uppercase, `--muted`) with each line of the round in its own row,
-  in the colors its codes give. Rounds are counted per request: Fight is one round, "For 5 Rounds" up to five. A round
-  that printed nothing keeps its number but shows no item. 1.1.2's "~ ~ ~ Fight ~ ~ ~" divider, "Next round:" and
-  "End of Round:" (with its hitpoint list) are left out: the page title, the cards and the round headings say them.
-  The list's name for assistive technology is "Battle log".
+  each its own row; then an ordered list, one item per round fought in this request, with no label (Jim, task 10
+  fix: no "Round N"), each line of the round in its own row, in the colors its codes give. A quiet divider, a 1px
+  `--border` line with 10px above and below, separates one round from the next; the first round has none. Fight is
+  one round, "For 5 Rounds" up to five items, drawn the same way. A round that printed nothing shows no item.
+  1.1.2's "~ ~ ~ Fight ~ ~ ~" divider, "Next round:" and "End of Round:" (with its hitpoint list) are left out: the
+  page title, the cards and the dividers say them. The list's name for assistive technology is "Battle log".
 - **Battle result** (task 10). What the fight printed after its last round, when it ended: a `--header` box with a 1px
   `--border` edge and `--radius-control`, headed "Victory" (`--accent`, with a 3px `--accent` marker) or "Defeat"
   (`--damage`, with a `--damage` marker), each line a row: the creature's last words, "You have slain …", the gold,

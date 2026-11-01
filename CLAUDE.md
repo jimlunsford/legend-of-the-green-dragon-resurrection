@@ -144,6 +144,7 @@ Recompute only if serialized-state source changes. Never change counts by assump
 - Composer dist downloads may need GitHub auth. Fall back to source installs.
 - Local MariaDB 10.11 works as a disposable test database. Supporting evidence only.
 - PHPUnit expects an empty database, as in CI. Recreate the disposable DB before a full PHPUnit run.
+- Whenever a task adds or changes tests, PHPUnit must pass locally on both supported PHP versions, 8.4 and 8.5, before publishing (install the 8.4 build beside 8.5 and run `php8.4 vendor/bin/phpunit`). Task 10's tests passed on 8.5 and failed on 8.4 in CI: they used `Dom\ParentNode::$children`, which exists only from PHP 8.5.
 - Move temporary fixture/config leftovers out of the repo before lint and commit.
 - Remove each local MySQL container's data volume with the container (`docker rm -f -v`). Leftover volumes filled the session disk and stopped MySQL from starting.
 

@@ -58,6 +58,11 @@ class BattleScreenStyleTests(unittest.TestCase):
     def test_battle_log_and_result(self):
         self.assertIn('list-style: none;', self.rule('.rz-battle-rounds'))
         self.assertIn('border-top: 1px solid var(--border);', self.rule('.rz-battle-round'))
+        # Jim, task 10 fix: no "Round N" label; each round is its own item, a quiet divider between rounds.
+        self.assertNotIn('rz-battle-roundlabel', self.css)
+        template = (ROOT / 'templates' / 'resurrection.htm').read_text()
+        self.assertIn('<!--!battleround--><li class="rz-battle-round">{lines}</li>\n', template)
+        self.assertNotIn("'Round %s'", (ROOT / 'lib' / 'battle_view.php').read_text())
         self.assertIn('box-shadow: inset 3px 0 0 var(--accent);', self.rule('.rz-battle-result-victory'))
         self.assertIn('box-shadow: inset 3px 0 0 var(--damage);', self.rule('.rz-battle-result-defeat'))
         self.assertIn('color: var(--accent);', self.rule('.rz-battle-result-victory .rz-battle-resulthead'))
@@ -132,6 +137,8 @@ class SpecTests(unittest.TestCase):
                      '**Buy lists** (task 10'):
             self.assertIn(name, spec, name)
         self.assertNotIn('one entry per combat line', spec)
+        self.assertNotIn('"Round %s"', spec)
+        self.assertIn('with no label (Jim, task 10\n  fix: no "Round N")', spec)
 
 
 if __name__ == '__main__':

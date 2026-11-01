@@ -38,7 +38,7 @@ PART_KEYS = {
     'fighterbar': {'label', 'value', 'percent'}, 'fighterhp': {'label', 'value'}, 'battleactions': {'main', 'groups'},
     'battlemain': {'buttons'}, 'battlegroup': {'id', 'title', 'note', 'buttons'}, 'battlenote': {'text'},
     'battlelog': {'label', 'intro', 'rounds'}, 'battleintro': {'lines'}, 'battlerounds': {'rounds'},
-    'battleround': {'label', 'lines'}, 'battleline': {'text'}, 'battleresult': {'kind', 'title', 'lines'},
+    'battleround': {'lines'}, 'battleline': {'text'}, 'battleresult': {'kind', 'title', 'lines'},
     'battleafter': {'lines'},
 }
 # The tags page_header(), page_footer(), popup_header() and popup_footer() fill in the frame parts, and the four ad

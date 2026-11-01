@@ -118,8 +118,8 @@ final class BattleCommentaryRenderTest extends TestCase
             }
             $document = $this->document($pages['fight 3']);
             $rounds = $this->rounds($document);
-            self::assertSame(['Round 1'], array_keys($rounds), 'one Fight, one round');
-            self::assertNotSame([], $rounds['Round 1']);
+            self::assertCount(1, $rounds, 'one Fight, one round');
+            self::assertNotSame([], $rounds[0]);
             // The encounter page's log opens with the encounter line, and no Fight divider is left.
             $entry = $this->document($pages['encounter']);
             $intro = $entry->querySelector('.rz-battle-log .rz-battle-intro .rz-battle-line');
@@ -134,7 +134,7 @@ final class BattleCommentaryRenderTest extends TestCase
         });
     }
 
-    /** "For 5 Rounds": the log is an ordered list, one item per round fought, labelled Round 1 to Round 5. */
+    /** "For 5 Rounds": the log is an ordered list, one item per round fought, with no round label. */
     public function testAutomaticFightingLogsEachRoundAsAListItem(): void
     {
         $this->withPlayer('RzAuto', ['level' => 5, 'hitpoints' => 500, 'maxhitpoints' => 500, 'attack' => 1, 'defense' => 12], function (array $s): void {
@@ -143,10 +143,10 @@ final class BattleCommentaryRenderTest extends TestCase
             $document = $this->document($page);
             $list = $document->querySelector('.rz-battle-log ol.rz-battle-rounds');
             self::assertNotNull($list);
-            $labels = array_keys($this->rounds($document));
-            self::assertSame(['Round 1', 'Round 2', 'Round 3', 'Round 4', 'Round 5'], $labels);
-            self::assertSame(5, $list->children->length);
-            foreach ($list->children as $item) {
+            self::assertCount(5, $this->rounds($document));
+            $items = $this->elements($list);
+            self::assertCount(5, $items);
+            foreach ($items as $item) {
                 self::assertSame('LI', $item->tagName);
                 self::assertGreaterThan(0, $item->querySelectorAll('.rz-battle-line')->length);
             }
@@ -206,7 +206,7 @@ final class BattleCommentaryRenderTest extends TestCase
             self::assertNotSame('', $state['badguy'], 'the torment goes on');
             $this->assertCards($document, $state, 'torment');
             $this->assertActionBar($document, true, 'torment');
-            self::assertSame(['Round 1'], array_keys($this->rounds($document)));
+            self::assertCount(1, $this->rounds($document));
             $foe = $state['enemies'][0];
             self::assertSame($foe['creatureweapon'], trim((string)$document->querySelector('.rz-fighter-foe .rz-fighter-sub i')?->textContent));
             $entry = $this->document($pages['encounter']);
@@ -225,7 +225,7 @@ final class BattleCommentaryRenderTest extends TestCase
             self::assertNotSame('', $state['badguy'], 'the master fight goes on');
             $this->assertCards($document, $state, 'training');
             $this->assertActionBar($document, false, 'training');
-            self::assertSame(['Round 1'], array_keys($this->rounds($document)));
+            self::assertCount(1, $this->rounds($document));
             $foe = $document->querySelector('.rz-fighter-foe');
             self::assertNotNull($foe);
             self::assertSame($state['enemies'][0]['trainingmaxhp'], $this->hp($foe)[1]);
@@ -245,7 +245,7 @@ final class BattleCommentaryRenderTest extends TestCase
                 $list = $document->querySelector('.rz-content ul.rz-comments');
                 self::assertNotNull($list);
                 $items = [];
-                foreach ($list->children as $child) {
+                foreach ($this->elements($list) as $child) {
                     self::assertSame('rz-comment', $child->getAttribute('class'));
                     $items[] = $child;
                 }
@@ -273,7 +273,7 @@ final class BattleCommentaryRenderTest extends TestCase
                 self::assertNotNull($pager);
                 self::assertSame('Comment pages', $pager->getAttribute('aria-label'));
                 $labels = [];
-                foreach ($pager->children as $child) { $labels[] = [$child->tagName, trim($child->textContent)]; }
+                foreach ($this->elements($pager) as $child) { $labels[] = [$child->tagName, trim($child->textContent)]; }
                 self::assertSame([['SPAN', '<< First Unseen'], ['A', '< Previous'], ['A', 'Refresh'], ['SPAN', 'Next >'], ['SPAN', 'Last Page >>']], $labels);
                 foreach ($pager->querySelectorAll('a') as $link) {
                     self::assertSame('button', $link->getAttribute('class'));
@@ -460,20 +460,35 @@ final class BattleCommentaryRenderTest extends TestCase
         self::assertSame(0, $auto->querySelectorAll('.rz-button-primary')->length, $label);
         // The cards, the actions, the log: in that order.
         $order = [];
-        foreach ($document->querySelector('.rz-battle')?->children ?? [] as $child) { $order[] = explode(' ', (string)$child->getAttribute('class'))[0]; }
+        foreach ($this->elements($document->querySelector('.rz-battle')) as $child) { $order[] = explode(' ', (string)$child->getAttribute('class'))[0]; }
         self::assertSame(['rz-fighters', 'rz-battle-actions', 'rz-battle-log'], $order, $label);
     }
 
-    /** @return array<string, list<string>> each round's label and its lines' text */
+    /** @return list<list<string>> each round's lines' text; no round carries a label */
     private function rounds(\Dom\HTMLDocument $document): array
     {
         $rounds = [];
         foreach ($document->querySelectorAll('.rz-battle-log > ol.rz-battle-rounds > li.rz-battle-round') as $item) {
+            self::assertNull($item->querySelector('.rz-battle-roundlabel, h1, h2, h3, h4, h5, h6'), 'no round label');
+            self::assertDoesNotMatchRegularExpression('/\bRound \d/', $item->textContent, 'no "Round N"');
             $lines = [];
             foreach ($item->querySelectorAll('.rz-battle-line') as $line) { $lines[] = trim($line->textContent); }
-            $rounds[trim((string)$item->querySelector('.rz-battle-roundlabel')?->textContent)] = $lines;
+            $rounds[] = $lines;
         }
         return $rounds;
+    }
+
+    /**
+     * The element's child elements, in order. Dom\ParentNode::$children exists only from PHP 8.5; this walks
+     * firstElementChild and nextElementSibling, which PHP 8.4 has too.
+     *
+     * @return list<\Dom\Element>
+     */
+    private function elements(?\Dom\Element $parent): array
+    {
+        $children = [];
+        for ($child = $parent?->firstElementChild; $child !== null; $child = $child->nextElementSibling) { $children[] = $child; }
+        return $children;
     }
 
     /** @return list<int> the card's "current / max" */

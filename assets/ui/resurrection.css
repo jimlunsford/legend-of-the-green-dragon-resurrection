@@ -674,21 +674,12 @@ a.hotmotd { color: var(--accent); }
 }
 .rz-battle-note { margin: -4px 0 8px; color: var(--muted); font-family: var(--font-ui); font-size: var(--size-small); }
 
-/* The battle log: the encounter lines, then one item per round, each line a row. */
+/* The battle log: the encounter lines, then one item per round (no label; a quiet divider between rounds), each line a row. */
 .rz-battle-log { padding-top: 16px; border-top: 1px solid var(--border); font-size: var(--size-ui); line-height: 1.45; }
 .rz-battle-intro { padding-bottom: 8px; }
 .rz-battle-rounds { margin: 0; padding: 0; list-style: none; }
 .rz-battle-round { padding: 10px 0; border-top: 1px solid var(--border); }
 .rz-battle-intro + .rz-battle-rounds > .rz-battle-round:first-child, .rz-battle-rounds:first-child > .rz-battle-round:first-child { border-top: 0; }
-.rz-content .rz-battle-roundlabel {
-  margin: 0 0 4px;
-  color: var(--muted);
-  font-family: var(--font-display);
-  font-size: var(--size-label);
-  font-weight: var(--weight-display);
-  letter-spacing: var(--tracking-label);
-  text-transform: uppercase;
-}
 .rz-battle-line { padding: 2px 0; overflow-wrap: anywhere; }
 
 /* The result block: what followed the last round, headed Victory (--accent) or Defeat (--damage). */

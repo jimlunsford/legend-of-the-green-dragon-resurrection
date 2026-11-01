@@ -329,15 +329,12 @@ function resurrection_battle_log(): string {
 	global $resurrection_battle;
 	$intro = resurrection_battle_rows($resurrection_battle['intro']);
 	$rounds = '';
-	$n = 0;
 	tlschema('battle');
 	foreach ($resurrection_battle['rounds'] as $round) {
-		$n++;
 		$rows = resurrection_battle_rows($round);
-		// A round that printed nothing (a foe past its attacks) keeps its number but shows no item.
+		// A round that printed nothing (a foe past its attacks) shows no item.
 		if ($rows === '') continue;
-		$rounds .= templatereplace('battleround', array('lines'=>$rows,
-			'label'=>htmlspecialchars(sprintf_translate('Round %s', $n), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8')));
+		$rounds .= templatereplace('battleround', array('lines'=>$rows));
 	}
 	$label = translate_inline('Battle log');
 	tlschema();
