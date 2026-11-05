@@ -58,7 +58,9 @@ What stays open, before any release or hosting:
 - **Archive modules.** The 187-entry module archive has no blanket license grant; each module needs the component
   record above before admission. None is imported.
 - **Images, skins and templates.** The inherited core images and the 18 skins (`templates/`) have no asset-level
-  ledger. Their authorship and terms are not established beyond the core's distribution context.
+  ledger. Their authorship and terms are not established beyond the core's distribution context. (2026-11-05: the
+  skins part is closed: Phase 5 task 15 removed the skins, see below. The inherited core images in `images/` stay
+  open.)
 - **Third-party material inside the 1.1.2 tree** that is not a Composer package (module code by credited authors,
   any embedded script or artwork) has not been reviewed file by file.
 - **Text removed with the disabled surfaces.** 1.1.2's `source.php` and `logdnet.php` pages carried text about the
@@ -82,3 +84,16 @@ Phase 5 task 5 (`PHASE5-TASK5-IMAGES-20261030.md`). An engineering record, not a
 - The art is a separate work shown by the game, not an adaptation of the 1.1.2 images: none of the inherited core
   images or skins is used or traced. The inherited images and skins keep the open item above until task 15 removes
   the skins.
+
+## 2026-11-05: the 1.1.2 skins removed
+
+Phase 5 task 15 (`PHASE5-TASK15-REMOVE-SKINS-20261105.md`). An engineering record, not a legal ruling.
+
+- **The skins rights item is closed.** The 18 skins (each `.htm`, its stylesheet and its image folder: 124 files) are
+  removed from `templates/`, and skin selection with them. Resurrection ships one template, `templates/resurrection.htm`,
+  its own work under the core license. No 1.1.2 skin, stylesheet or skin image is shipped, so their unestablished
+  authorship and terms no longer bear on what the repository distributes.
+- The skins remain byte for byte, with their designers' credits, at `historical-source-1.1.2`; the tag is unchanged.
+  `NOTICE` names each skin's credited designer and says where they remain.
+- Still open: the inherited core images in `images/` (the task lists the ones nothing references any more; none is
+  deleted), and the other items above.

@@ -68,10 +68,9 @@ $newtarget = httpget('newtarget');
 if ($newtarget != "") $op = "newtarget";
 //if (!$targetted) $op = "newtarget";
 
-// The Resurrection template's battle screen (Phase 5 task 10, lib/battle_view.php) sorts what this fight prints into
-// its cards, log and result. A 1.1.2 skin prints exactly what it always did.
-$rzbattle = resurrection_battle_ui();
-if ($rzbattle) resurrection_battle_begin();
+// The battle screen (Phase 5 task 10, lib/battle_view.php) sorts what this fight prints into its cards, log and
+// result. 1.1.2's printing, kept for the 1.1.2 skins until Phase 5 task 15, went with them.
+resurrection_battle_begin();
 
 if ($op=="fight"){
 	apply_skill($skill,$l);
@@ -105,10 +104,9 @@ $victory = false;
 $defeat = false;
 
 // The battle screen's log opens with the encounter lines; what a skill or a target change printed follows them.
-if ($rzbattle) resurrection_battle_hold();
+resurrection_battle_hold();
 if ($enemycounter > 0) {
-	// The battle screen drops this divider: the page title and the fighter cards say it.
-	if (!$rzbattle) output ("`\$`c`b~ ~ ~ Fight ~ ~ ~`b`c`0");
+	// The battle screen drops 1.1.2's "~ ~ ~ Fight ~ ~ ~" divider: the page title and the fighter cards say it.
 	modulehook("battle", $enemies);
 	foreach ($enemies as $index=>$badguy) {
 		if ($badguy['creaturehealth']>0 && $session['user']['hitpoints']>0) {
@@ -118,7 +116,7 @@ if ($enemycounter > 0) {
 	output_notl("`n");
 	show_enemies($enemies);
 }
-if ($rzbattle) resurrection_battle_release();
+resurrection_battle_release();
 
 suspend_buffs((($options['type'] == 'pvp')?"allowinpvp":false));
 suspend_companions((($options['type'] == 'pvp')?"allowinpvp":false));
@@ -170,7 +168,7 @@ if ($op != "newtarget") {
     $pvpRounds=0;
 	do {
 		// Each pass is one round: one item of the battle screen's log.
-		if ($rzbattle) resurrection_battle_round();
+		resurrection_battle_round();
         if ($options['type']==='pvp' && ++$pvpRounds>1000) throw new DomainException('PvP automatic combat cannot finish safely.');
 		//we need to restore and calculate here to reflect changes that happen throughout the course of multiple rounds.
 		restore_buff_fields();
@@ -381,9 +379,7 @@ if ($op != "newtarget") {
 		$creaturedmg=0;
 		$selfdmg=0;
 
-		if (!$rzbattle && ($count != 1 || ($needtostopfighting && $count > 1)) && $session['user']['hitpoints'] > 0 && count($enemies) > 0) {
-			output("`2`bNext round:`b`n");
-		}
+		// 1.1.2 printed "Next round:" here; the battle screen's log numbers its rounds.
 
 		if (count($newenemies) > 0) {
 			$verynewenemies = array();
@@ -493,17 +489,12 @@ if ($op != "newtarget") {
 	$newenemies = $enemies;
 }
 // What follows the last round is the battle screen's result block.
-if ($rzbattle) resurrection_battle_rounds_end($victory, $defeat);
+resurrection_battle_rounds_end($victory, $defeat);
 
 $newenemies = autosettarget($newenemies);
 
-// The battle screen's cards show the foes as the rounds left them; a 1.1.2 skin lists them after the last round.
-if ($rzbattle) {
-	resurrection_battle_enemies($newenemies);
-} elseif ($session['user']['hitpoints']>0 && count($newenemies)>0 && ($op=="fight" || $op=="run")){
-	output("`2`bEnd of Round:`b`n");
-	show_enemies($newenemies);
-}
+// The battle screen's cards show the foes as the rounds left them (1.1.2 listed them under "End of Round:").
+resurrection_battle_enemies($newenemies);
 
 if ($session['user']['hitpoints'] < 0) $session['user']['hitpoints'] = 0;
 
@@ -522,7 +513,7 @@ if ($victory || $defeat){
 	if (is_array($newenemies)) {
 		foreach ($newenemies as $index => $badguy) {
 			global $output;
-			$badguy['fightoutput'] = $rzbattle ? resurrection_battle_fightoutput() : $output;
+			$badguy['fightoutput'] = resurrection_battle_fightoutput();
 			// legacy support. Will be removed in one of the following versions!
 			// Please update all modules, that use the following hook to use the
 			// $options array instead of the $args array for their code.

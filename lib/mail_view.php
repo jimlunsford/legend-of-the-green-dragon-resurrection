@@ -4,10 +4,10 @@
 // mail ready
 
 /*
- * The mail popup in the Resurrection template (Phase 5 task 11, docs/PHASE5-TASK11-POPUPS-ADMIN-20261101.md): the inbox
- * as a list, a message as subject, sender, date, body and its actions. lib/mail/case_default.php and case_read.php call
- * these only when resurrection_ui() is true; a 1.1.2 skin keeps 1.1.2's tables byte for byte. What each page does is
- * unchanged: the same rows, the same links, the same forms posting the same fields.
+ * The mail popup (Phase 5 task 11, docs/PHASE5-TASK11-POPUPS-ADMIN-20261101.md): the inbox as a list, a message as
+ * subject, sender, date, body and its actions, drawn by lib/mail/case_default.php and case_read.php. What each page does
+ * is unchanged from 1.1.2: the same rows, the same links, the same forms posting the same fields. (1.1.2's tables were
+ * kept for the 1.1.2 skins until Phase 5 task 15.)
  */
 
 require_once __DIR__ . '/sanitize.php';

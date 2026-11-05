@@ -18,7 +18,7 @@ function showform_control_id($form, $key){
 }
 
 /**
- * The form's sections as tabs in the Resurrection template (Phase 5 task 9): a tab list of buttons, the active one
+ * The form's sections as tabs (Phase 5 task 9): a tab list of buttons, the active one
  * aria-selected, each controlling its section's table. assets/ui/showform.js shows it and switches the sections; without
  * the script every section stays shown and the tab list hidden.
  *
@@ -50,22 +50,17 @@ function showform($layout,$row,$nosave=false,$keypref=false,$primary=false){
 	$returnvalues = array();
 	$extensions = array();
 	$extensions = modulehook("showformextensions",$extensions);
-	// The Resurrection template (Phase 5 task 9) gets tab buttons from the server and assets/ui/showform.js, no inline
-	// script; a 1.1.2 skin keeps 1.1.2's script and markup.
-	$rz = resurrection_ui();
+	// Tab buttons from the server and assets/ui/showform.js, no inline script (Phase 5 task 9). 1.1.2's tab script and
+	// markup were kept for the 1.1.2 skins until Phase 5 task 15.
 	$tabsAt = 0;
 	$tabbed = !(isset($session['user']['prefs']['tabconfig']) && $session['user']['prefs']['tabconfig'] == 0);
 	$startIndex = (int)httppost("showFormTabIndex");
 	if ($startIndex == 0) $startIndex = 1;
-	rawoutput("<table width='100%' cellpadding='0' cellspacing='0'".($rz ? " class='rz-showform'" : "")."><tr><td>");
-	if ($rz) {
-		// The tab list goes here once the sections are known.
-		$tabsAt = strlen((string)$output);
-	} else {
-		rawoutput("<div id='showFormSection$showform_id'></div>");
-	}
+	rawoutput("<table width='100%' cellpadding='0' cellspacing='0' class='rz-showform'><tr><td>");
+	// The tab list goes here once the sections are known.
+	$tabsAt = strlen((string)$output);
 	rawoutput("</td></tr><tr><td>&nbsp;</td></tr><tr><td>");
-	rawoutput("<table cellpadding='2' cellspacing='0'".($rz ? " class='rz-form-section'" : "").">");
+	rawoutput("<table cellpadding='2' cellspacing='0' class='rz-form-section'>");
 	$i = 0;
 	while(list($key,$val)=resurrection_array_next($layout)){
 		$pretrans = 0;
@@ -93,7 +88,7 @@ function showform($layout,$row,$nosave=false,$keypref=false,$primary=false){
 		 	$title_id++;
 		 	rawoutput("</table>");
 		 	$formSections[$title_id] = $info[0];
-			rawoutput("<table id='showFormTable$title_id' cellpadding='2' cellspacing='0'".($rz ? " class='rz-form-section'" : "").($rz && $tabbed ? " role='tabpanel' aria-labelledby='showFormButton$title_id'" : "").">");
+			rawoutput("<table id='showFormTable$title_id' cellpadding='2' cellspacing='0' class='rz-form-section'".($tabbed ? " role='tabpanel' aria-labelledby='showFormButton$title_id'" : "").">");
 			rawoutput("<tr><td colspan='2' class='trhead'>");
 			output_notl("`b%s`b", $info[0], true);
 			rawoutput("</td></tr>",true);
@@ -120,36 +115,6 @@ function showform($layout,$row,$nosave=false,$keypref=false,$primary=false){
 		case "title":
 		case "note":
 		case "invisible":
-			break;
-		case "theme":
-			// A generic way of allowing a theme to be selected.
-			$skins = array();
-		    $handle = @opendir("templates");
-			// Template directory open failed
-			if (!$handle) {
-				output("None available");
-				break;
-			}
-			while (false != ($file = @readdir($handle))) {
-				if (strpos($file,".htm") > 0) {
-					array_push($skins, $file);
-				}
-			}
-			// No templates installed!
-			if (count($skins) == 0) {
-				output("None available");
-				break;
-			}
-			natcasesort($skins); //sort them in natural order
-			rawoutput("<select name='$keyout' id='$id'>");
-			foreach($skins as $skin) {
-				if ($skin == $row[$key]) {
-					rawoutput("<option value='$skin' selected>".htmlentities(substr($skin, 0, strpos($skin, ".htm")), ENT_COMPAT, getsetting("charset", "ISO-8859-1"))."</option>");
-				} else {
-					rawoutput("<option value='$skin'>".htmlentities(substr($skin, 0, strpos($skin, ".htm")), ENT_COMPAT, getsetting("charset", "ISO-8859-1"))."</option>");
-				}
-			}
-			rawoutput("</select>");
 			break;
 		case "location":
 			// A generic way of allowing the location to be specified for
@@ -382,14 +347,9 @@ function showform($layout,$row,$nosave=false,$keypref=false,$primary=false){
 				$text = $row[$key];
 			}
 			if (isset($resize) && $resize) {
-				if (!$rz) rawoutput("<script type=\"text/javascript\">function increase(target, value){  if (target.rows + value > 3 && target.rows + value < 50) target.rows = target.rows + value;}</script>");
 				rawoutput("<textarea id='textarea$key' class='input' name='$keyout' cols='$cols' rows='5'>".htmlentities(str_replace("`n", "\n", $text), ENT_COMPAT, getsetting("charset", "ISO-8859-1"))."</textarea>");
-				if ($rz) {
-					// The same buttons with no inline handler: assets/ui/showform.js resizes the box.
-					rawoutput("<input type='button' class='button' data-rz-resize='textarea$key' data-rz-step='1' value='+' accesskey='+'><input type='button' class='button' data-rz-resize='textarea$key' data-rz-step='-1' value='-' accesskey='-'>");
-				} else {
-					rawoutput("<input type='button' onClick=\"increase(textarea$key,1);\" value='+' accesskey='+'><input type='button' onClick=\"increase(textarea$key,-1);\" value='-' accesskey='-'>");
-				}
+				// The same buttons with no inline handler: assets/ui/showform.js resizes the box.
+				rawoutput("<input type='button' class='button' data-rz-resize='textarea$key' data-rz-step='1' value='+' accesskey='+'><input type='button' class='button' data-rz-resize='textarea$key' data-rz-step='-1' value='-' accesskey='-'>");
 			} else {
 				rawoutput("<textarea class='input' name='$keyout' id='$id' cols='$cols' rows='5'>".htmlentities(str_replace("`n", "\n", $text), ENT_COMPAT, getsetting("charset", "ISO-8859-1"))."</textarea>");
 			}
@@ -428,78 +388,12 @@ function showform($layout,$row,$nosave=false,$keypref=false,$primary=false){
 		rawoutput("</td></tr>",true);
 	}
 	rawoutput("</table><br>",true);
-	if ($rz) {
-		$sections = array();
-		foreach ($formSections as $x=>$title) $sections[(int)$x] = (string)$title;
-		if ($tabbed && $sections !== array()) {
-			$output = substr_replace((string)$output, showform_tabs($showform_id, $sections, $startIndex), $tabsAt, 0);
-		}
-		rawoutput(resurrection_form_script());
-	} elseif ($showform_id==1){
-		if (isset($session['user']['prefs']['tabconfig']) &&
-				$session['user']['prefs']['tabconfig'] == 0) {
-		} else {
-		 	rawoutput("
-		 	<script language='JavaScript'>
-		 	function prepare_form(id){
-		 		var theTable;
-		 		var theDivs='';
-		 		var x=0;
-		 		var weight='';
-		 		for (x in formSections[id]){
-		 			theTable = document.getElementById('showFormTable'+x);
-		 			if (x != $startIndex ){
-			 			theTable.style.visibility='hidden';
-			 			theTable.style.display='none';
-			 			weight='';
-			 		}else{
-			 			theTable.style.visibility='visible';
-			 			theTable.style.display='inline';
-			 			weight='color: yellow;';
-			 		}
-			 		theDivs += \"<div id='showFormButton\"+x+\"' class='trhead' style='\"+weight+\"float: left; cursor: pointer; cursor: hand; padding: 5px; border: 1px solid #000000;' onClick='showFormTabClick(\"+id+\",\"+x+\");'>\"+formSections[id][x]+\"</div>\";
-		 		}
-		 		theDivs += \"<div style='display: block;'>&nbsp;</div>\";
-				theDivs += \"<input type='hidden' name='showFormTabIndex' value='$startIndex' id='showFormTabIndex'>\";
-		 		document.getElementById('showFormSection'+id).innerHTML = theDivs;
-		 	}
-		 	function showFormTabClick(formid,sectionid){
-		 		var theTable;
-		 		var theButton;
-		 		for (x in formSections[formid]){
-		 			theTable = document.getElementById('showFormTable'+x);
-		 			theButton = document.getElementById('showFormButton'+x);
-		 			if (x == sectionid){
-		 				theTable.style.visibility='visible';
-		 				theTable.style.display='inline';
-		 				theButton.style.fontWeight='normal';
-		 				theButton.style.color='yellow';
-						document.getElementById('showFormTabIndex').value = sectionid;
-		 			}else{
-		 				theTable.style.visibility='hidden';
-		 				theTable.style.display='none';
-		 				theButton.style.fontWeight='normal';
-		 				theButton.style.color='';
-		 			}
-		 		}
-		 	}
-		 	formSections = new Array();
-			</script>");
-		}
+	$sections = array();
+	foreach ($formSections as $x=>$title) $sections[(int)$x] = (string)$title;
+	if ($tabbed && $sections !== array()) {
+		$output = substr_replace((string)$output, showform_tabs($showform_id, $sections, $startIndex), $tabsAt, 0);
 	}
-	if ($rz || (isset($session['user']['prefs']['tabconfig']) &&
-			$session['user']['prefs']['tabconfig'] == 0)) {
-	} else {
-		rawoutput("<script language='JavaScript'>");
-		rawoutput("formSections[$showform_id] = new Array();");
-		reset($formSections);
-		while (list($key,$val)=resurrection_array_next($formSections)){
-			rawoutput("formSections[$showform_id][$key] = '".addslashes($val)."';");
-		}
-		rawoutput("
-		prepare_form($showform_id);
-		</script>");
-	}
+	rawoutput(resurrection_form_script());
 	rawoutput("</td></tr></table>");
 	tlschema("showform");
 	$save = translate_inline("Save");

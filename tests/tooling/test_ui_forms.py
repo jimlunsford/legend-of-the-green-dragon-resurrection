@@ -3,13 +3,13 @@
 Static: runs wherever the suite runs (Baseline integrity too). It checks that
 
 - no page or bundled module prints presentation inline (<font>, bgcolor=, style=) except the allow-listed places, each
-  with its reason: resurrection_presentation() in lib/output.php keeps 1.1.2's markup for the old skins until task 15
-  removes them, and so on;
+  with its reason (until Phase 5 task 15 resurrection_presentation() in lib/output.php and showform()'s tab script
+  kept 1.1.2's markup for the old skins; the skins are gone, and so are those places);
 - every input the hand-fixed pages print, and every one showform() prints, has a bound label;
 - showform()'s tabs in the Resurrection template carry no inline event handler, and assets/ui/showform.js does the work;
 - the stylesheet draws buttons, inputs, tabs and tables as docs/UI-DESIGN-SPEC.md says.
 
-The rendered pages (one primary per form, old skins' button markup byte for byte, the tabs' aria-selected) are checked
+The rendered pages (one primary per form, the tabs' aria-selected) are checked
 in tests/unit/FormsRenderTest.php.
 """
 from pathlib import Path
@@ -20,17 +20,11 @@ ROOT = Path(__file__).resolve().parents[2]
 CSS = ROOT / 'assets' / 'ui' / 'resurrection.css'
 SCRIPT = ROOT / 'assets' / 'ui' / 'showform.js'
 INLINE = re.compile(r'<font|bgcolor=|style=', re.I)
-# Not game pages: Composer's packages, the tests, and the 1.1.2 skins (removed whole by task 15).
-SKIPPED = ('vendor', 'tests', 'templates', '.git')
+# Not game pages: Composer's packages and the tests. (The 1.1.2 skins were skipped too, until task 15 removed them.)
+SKIPPED = ('vendor', 'tests', '.git')
 
 # Each place inline presentation may stay, with why. (file, text on the line, reason)
 ALLOWED = [
-    ('lib/output.php', None,
-     "resurrection_presentation(): the one map that keeps 1.1.2's markup for a 1.1.2 skin, byte for byte, until task 15"),
-    ('lib/showform.php', "class='trhead' style='\\\"+weight+\\\"float: left;",
-     "showform()'s 1.1.2 tab script, printed only in a 1.1.2 skin; the Resurrection template gets server-drawn tabs"),
-    ('lib/showform.php', "<div style='display: block;'>&nbsp;</div>",
-     "the same 1.1.2 tab script's spacer, only in a 1.1.2 skin"),
     ('lib/about/about_listmodules.php', "bgcolor='#999999'",
      "the about page's 1.1.2 strings stay verbatim (\"original text from the about page must be preserved\", "
      "test_license_text.py); the stylesheet draws its grid as rz-grid's (table[bgcolor='#999999'])"),
@@ -88,16 +82,11 @@ class InlinePresentationTest(unittest.TestCase):
             for number, line in enumerate(text.split('\n'), 1):
                 if not INLINE.search(line):
                     continue
-                offset = sum(len(l) + 1 for l in text.split('\n')[:number - 1])
                 allowed = None
                 for n, (path, needle, _) in enumerate(ALLOWED):
                     if path != rel:
                         continue
-                    if needle is None:
-                        start, end = function_body(text, 'resurrection_presentation') if 'function resurrection_presentation(' in text else (-1, -1)
-                        if start <= offset <= end:
-                            allowed = n
-                    elif needle in line:
+                    if needle in line:
                         allowed = n
                 if allowed is None:
                     found.append(f'{rel}:{number}: {line.strip()[:120]}')
@@ -107,19 +96,21 @@ class InlinePresentationTest(unittest.TestCase):
         # No stale entry: each allowed place is still there.
         self.assertEqual(set(range(len(ALLOWED))), used)
 
-    def test_the_old_skin_markup_lives_only_in_the_map(self):
-        # appoencode()'s `c, `> and `< go through the map; the legacy tab script is only in the 1.1.2 branch of showform().
+    def test_appoencode_goes_through_the_map_and_the_old_tab_script_is_gone(self):
+        # appoencode()'s `c, `> and `< go through the map, one class each. Until Phase 5 task 15 the map kept each entry's
+        # 1.1.2 markup for a 1.1.2 skin, and showform() 1.1.2's tab script; the skins are gone, and so are both.
         output = (ROOT / 'lib' / 'output.php').read_text()
         start, end = function_body(output, 'resurrection_presentation')
-        self.assertIn('return $markup[$key][resurrection_ui() ? 0 : 1];', output[start:end])
+        self.assertTrue(output[start:end].endswith('\treturn $markup[$key];'))
+        self.assertNotIn('function resurrection_ui(', output)
         appo = output[output.index('function appoencode('):]
         for key in ('center', 'float-right', 'float-left'):
             self.assertIn(f'resurrection_presentation("{key}")', appo, key)
         self.assertNotIn("<div align='center'>", appo)
         showform = (ROOT / 'lib' / 'showform.php').read_text()
-        legacy = showform.index('} elseif ($showform_id==1){')
-        for needle in ("class='trhead' style=", "<div style='display: block;'>"):
-            self.assertGreater(showform.index(needle), legacy, needle)
+        for needle in ('function prepare_form(', 'showFormTabClick', "class='trhead' style=", "<div style='display: block;'>",
+                       'function increase(', 'case "theme"'):
+            self.assertNotIn(needle, showform, needle)
 
 
 class LabelTest(unittest.TestCase):
@@ -184,7 +175,7 @@ class TabsTest(unittest.TestCase):
         self.assertIn("role='tabpanel' aria-labelledby='showFormButton$title_id'", showform)
         output = (ROOT / 'lib' / 'output.php').read_text()
         script = output[slice(*function_body(output, 'resurrection_form_script'))]
-        self.assertIn('if ($done || !resurrection_ui()) return "";', script)
+        self.assertIn('if ($done) return "";', script)
         self.assertIn('return "<script src=\\"assets/ui/showform.js\\" defer></script>";', script)
 
     def test_the_form_script(self):
@@ -252,7 +243,7 @@ class StylesheetTest(unittest.TestCase):
         output = (ROOT / 'lib' / 'output.php').read_text()
         start, end = function_body(output, 'resurrection_presentation')
         classes = set()
-        for markup in re.findall(r'array\("([^"]*)", ', output[start:end]):
+        for markup in re.findall(r'''\t\t"[a-z-]+" => ("[^"]*"|'[^']*'),''', output[start:end]):
             for names in re.findall(r"""class=['"]([^'"]+)['"]""", markup):
                 # The game's own classes (rz-) and the color codes' (col); "button" and "input" are 1.1.2's.
                 classes.update(name for name in names.split() if name.startswith(('rz-', 'col')))

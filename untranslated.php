@@ -93,9 +93,9 @@ if ($op == "list") {
 	rawoutput("<br>");
 
 	if ($mode == "edit") {
-		rawoutput((resurrection_ui() ? resurrection_label_for('untranslated-intext', "Text:", true) : translate_inline("Text:")). "<br>");
+		rawoutput(resurrection_label_for('untranslated-intext', "Text:", true). "<br>");
 		rawoutput("<textarea name='intext'".resurrection_control_id('untranslated-intext')." cols='60' rows='5' readonly>".htmlentities($intext, ENT_QUOTES, $charset)."</textarea><br/>");
-		rawoutput((resurrection_ui() ? resurrection_label_for('untranslated-outtext', "Translation:", true) : translate_inline("Translation:")). "<br>");
+		rawoutput(resurrection_label_for('untranslated-outtext', "Translation:", true). "<br>");
 		rawoutput("<textarea name='outtext'".resurrection_control_id('untranslated-outtext')." cols='60' rows='5'></textarea><br/>");
 		rawoutput("<input type='submit' value='". htmlentities(translate_inline("Save"), ENT_QUOTES, $charset) ."' class='button'>");
 	} else {

@@ -124,25 +124,15 @@ function debug($text, $force=false){
 }
 
 /**
- * Whether the page renders in the Resurrection template (Phase 5 task 9): the loaded template has the Resurrection's
- * own parts. A 1.1.2 skin, or no template yet (operator pages before one loads), gets 1.1.2's markup.
- *
- * @return bool
- */
-function resurrection_ui(){
-	global $template;
-	return is_array($template) && isset($template['navstart'], $template['tabbar']);
-}
-
-/**
- * The static script for the Resurrection template's forms (Phase 5 task 9: showform()'s tabs, its resizable text
- * boxes, a button's confirmation), once a page; nothing in a 1.1.2 skin.
+ * The static script for the template's forms (Phase 5 task 9: showform()'s tabs, its resizable text boxes, a button's
+ * confirmation), once a page. (Until Phase 5 task 15, resurrection_ui() told the Resurrection template from a 1.1.2
+ * skin, which got none of this; the skins and that check are gone.)
  *
  * @return string
  */
 function resurrection_form_script(){
 	static $done = false;
-	if ($done || !resurrection_ui()) return "";
+	if ($done) return "";
 	$done = true;
 	return "<script src=\"assets/ui/showform.js\" defer></script>";
 }
@@ -178,74 +168,64 @@ function resurrection_plain_text($text){
 }
 
 /**
- * An operator control's id (Phase 5 task 11): " id='$id'" in the Resurrection template, where the control's label names
- * it (resurrection_label_open($id), or resurrection_label_for($id, ...)); nothing in a 1.1.2 skin, which keeps 1.1.2's
- * markup byte for byte.
- *
- * A 1.1.2 control that had an id of its own keeps it there ($legacy): the masters editor gave three boxes the same one.
+ * An operator control's id (Phase 5 task 11): " id='$id'", where the control's label names it
+ * (resurrection_label_open($id), or resurrection_label_for($id, ...)).
  *
  * @param string $id
- * @param string $legacy the id 1.1.2 printed, if any
  * @return string
  */
-function resurrection_control_id($id, $legacy = ""){
-	if (!resurrection_ui()) return $legacy === "" ? "" : " id='$legacy'";
+function resurrection_control_id($id){
 	return " id='" . htmlspecialchars((string)$id, ENT_QUOTES, 'UTF-8') . "'";
 }
 
 /**
- * Opens the label of the control resurrection_control_id($id) names, around the label text the page prints next, in the
- * Resurrection template; nothing in a 1.1.2 skin. A label never straddles an open colour span (Phase 5 task 9): the
- * colour closes first.
+ * Opens the label of the control resurrection_control_id($id) names, around the label text the page prints next. A
+ * label never straddles an open colour span (Phase 5 task 9): the colour closes first.
  *
  * @param string $id
  */
 function resurrection_label_open($id){
-	if (!resurrection_ui()) return;
 	output_notl("`0");
 	rawoutput("<label for='" . htmlspecialchars((string)$id, ENT_QUOTES, 'UTF-8') . "'>");
 }
 
-/** Closes resurrection_label_open()'s label; nothing in a 1.1.2 skin. */
+/** Closes resurrection_label_open()'s label. */
 function resurrection_label_close(){
-	if (!resurrection_ui()) return;
 	output_notl("`0");
 	rawoutput("</label>");
 }
 
 /**
  * A whole label for the control resurrection_control_id($id) names, as text to print: for a control with no label text
- * of its own (the second box of a pair, a row's checkbox), read by screen readers only unless $visible. Nothing in a
- * 1.1.2 skin.
+ * of its own (the second box of a pair, a row's checkbox), read by screen readers only unless $visible.
  *
  * @param string $id
- * @param string $text plain text, translated here (a 1.1.2 skin never asks for it)
+ * @param string $text plain text, translated here
  * @param bool $visible
  * @param string $detail what the row is (a module's name), after the text, not translated
  * @return string
  */
 function resurrection_label_for($id, $text, $visible = false, $detail = ""){
-	if (!resurrection_ui()) return "";
 	$label = full_sanitize(translate_inline((string)$text)) . ($detail === "" ? "" : ": " . full_sanitize((string)$detail));
 	return "<label for='" . htmlspecialchars((string)$id, ENT_QUOTES, 'UTF-8') . "'" . ($visible ? "" : " class='rz-sr'") . ">"
 		. htmlspecialchars($label, ENT_QUOTES, 'UTF-8') . "</label>";
 }
 
 /**
- * The class of a form's button (Phase 5 task 9): "button", 1.1.2's, for every button; in the Resurrection template the
- * form's one primary action adds "rz-button-primary". A 1.1.2 skin's button keeps its markup byte for byte.
+ * The class of a form's button (Phase 5 task 9): "button", 1.1.2's, for every button; the form's one primary action
+ * adds "rz-button-primary".
  *
  * @param bool $primary whether this is the form's primary action
  * @return string
  */
 function resurrection_button_class($primary = false){
-	return $primary && resurrection_ui() ? "button rz-button-primary" : "button";
+	return $primary ? "button rz-button-primary" : "button";
 }
 
 /**
- * Presentation the game used to print inline (Phase 5 task 9): in the Resurrection template a class its stylesheet
- * styles, in a 1.1.2 skin the exact markup 1.1.2 printed, byte for byte, until task 15 removes the skins. This map is
- * the one place that markup is kept (tests/tooling/test_ui_forms.py allows it here only).
+ * Presentation the game used to print inline (Phase 5 task 9): a class the template's stylesheet styles. Until Phase 5
+ * task 15 the map also kept the markup 1.1.2 printed, for the 1.1.2 skins; the skins and that markup are gone
+ * (docs/CHANGES-FROM-1.1.2.md lists each entry's 1.1.2 markup). Modules call it too, so it stays.
  *
  * @param string $key
  * @return string
@@ -253,45 +233,45 @@ function resurrection_button_class($primary = false){
 function resurrection_presentation($key){
 	static $markup = array(
 		// appoencode(): `c, `> and `<.
-		"center" => array("<div class='rz-center'>", "<div align='center'>"),
-		"float-right" => array("<div class='rz-float-right'>", "<div style='float: right; clear: right;'>"),
-		"float-left" => array("<div class='rz-float-left'>", "<div style='float: left; clear: left;'>"),
+		"center" => "<div class='rz-center'>",
+		"float-right" => "<div class='rz-float-right'>",
+		"float-left" => "<div class='rz-float-left'>",
 		// Admin and module tables drawn as a grid of 1px lines (cellspacing over a grey table background).
-		"grid" => array(" class='rz-grid'", " bgcolor='#999999'"),
+		"grid" => " class='rz-grid'",
 		// A form inside a line of text or a table cell.
-		"inline-form" => array(" class='rz-inline'", " style='display:inline'"),
-		"inline-form-dq" => array(' class="rz-inline"', ' style="display:inline"'),
-		"inline-form-flush" => array(" class='rz-inline'", " style='display:inline;margin:0'"),
+		"inline-form" => " class='rz-inline'",
+		"inline-form-dq" => ' class="rz-inline"',
+		"inline-form-flush" => " class='rz-inline'",
 		// A button drawn as a link: the editors' delete buttons.
-		"link-button" => array(" class='rz-link-button'", " style='background:none;border:0;padding:0;margin:0;font:inherit;color:inherit;cursor:pointer;text-decoration:underline'"),
-		// The weapon and armor shops' item buttons: in the Resurrection template a link in --accent whose tap area is its
-		// row (Phase 5 task 10, Jim's review of task 9; task 9 drew them as filled primary buttons).
-		"shop-button" => array(" class='rz-shop-link'", " style='background:none;border:0;padding:0;margin:0;font:inherit;cursor:pointer;text-decoration:underline'"),
+		"link-button" => " class='rz-link-button'",
+		// The weapon and armor shops' item buttons: a link in --accent whose tap area is its row (Phase 5 task 10, Jim's
+		// review of task 9; task 9 drew them as filled primary buttons).
+		"shop-button" => " class='rz-shop-link'",
 		// Larger text: a heading-like line.
-		"larger" => array("<span class='rz-larger'>", "<font size='+1'>"),
-		"larger-end" => array("</span>", "</font>"),
+		"larger" => "<span class='rz-larger'>",
+		"larger-end" => "</span>",
 		// Narrators' colored lines in the inn and the bundled modules.
-		"violet" => array("<span class='colBlueViolet'>", "<span style='color: #9900FF'>"),
-		"grey" => array("<span class='colLtBlack'>", "<span style='color: #787878'>"),
-		"white" => array("<span class='colLtWhite'>", "<span style='color: white'>"),
-		"gold" => array("<span class='colLtYellow'>", "<span style='color: gold'>"),
+		"violet" => "<span class='colBlueViolet'>",
+		"grey" => "<span class='colLtBlack'>",
+		"white" => "<span class='colLtWhite'>",
+		"gold" => "<span class='colLtYellow'>",
 		// A warning on the user editor, larger.
-		"warning" => array("<span class='rz-larger'>", "<span style='font-size: 20px'>"),
+		"warning" => "<span class='rz-larger'>",
 		// A petition's body, as typed.
-		"typed" => array("<span class='rz-typed'>", "<span style='font-family: fixed-width'>"),
-		"pre-wrap" => array("<pre class='rz-typed'>", '<pre style="white-space:pre-wrap">'),
+		"typed" => "<span class='rz-typed'>",
+		"pre-wrap" => "<pre class='rz-typed'>",
 		// Nested values (showform's view-only arrays) and a clan's message of the day, indented.
-		"indent" => array("<div class='rz-indent'>", "<div style='padding-left: 20pt;'>"),
-		"clan-motd" => array("<div class='rz-indent'>", "<div style='margin-left: 15px; padding-left: 15px;'>"),
+		"indent" => "<div class='rz-indent'>",
+		"clan-motd" => "<div class='rz-indent'>",
 		// A clan's message and description boxes, two thirds of the width.
-		"clan-textarea" => array("class='input rz-wide'", "class='input' style='width: 66%'"),
+		"clan-textarea" => "class='input rz-wide'",
 		// A speaker's name in the commentary, a link without its underline.
-		"plain-link" => array(" class='rz-plain-link'", " style='text-decoration: none'"),
-		// The preferences' Delete Character cell: magenta in 1.1.2, a danger button in the Resurrection template.
-		"danger-cell" => array("", " style='background-color:#FF00FF'"),
+		"plain-link" => " class='rz-plain-link'",
+		// The preferences' Delete Character cell: magenta in 1.1.2, a danger button in the template.
+		"danger-cell" => "",
 	);
 	if (!isset($markup[$key])) return "";
-	return $markup[$key][resurrection_ui() ? 0 : 1];
+	return $markup[$key];
 }
 
 /**
@@ -889,7 +869,7 @@ function resurrection_nav_label($text, $priv=false){
  */
 function private_addnav($text,$link=false,$priv=false,$pop=false,$popsize="500x300"){
 	//don't call this directly please.  I'll break your thumbs if you do.
-	global $nav,$session,$accesskeys,$REQUEST_URI,$quickkeys,$navschema,$notranslate,$template;
+	global $nav,$session,$accesskeys,$REQUEST_URI,$quickkeys,$navschema,$notranslate;
 
 	if (is_blocked($link)) return false;
 
@@ -942,10 +922,9 @@ function private_addnav($text,$link=false,$priv=false,$pop=false,$popsize="500x3
 			}
 
 			$extra.="-".date("His");
-			// A template whose navitem part has {key} shows the hotkey as a key badge before a plain label (Phase 5
-			// task 6): no "(X) " prefix and no `H marking in the label. The key is decided below exactly as 1.1.2
-			// decides it, on the same text; a skin without {key} gets 1.1.2's marking.
-			$badge = isset($template['navitem']) && strpos($template['navitem'], "{key}") !== false;
+			// The template's navitem part shows the hotkey as a key badge before a plain label (Phase 5 task 6): no
+			// "(X) " prefix and no `H marking in the label. The key is decided below exactly as 1.1.2 decides it, on the
+			// same text. 1.1.2's marking, for a skin without {key}, went with the skins (Phase 5 task 15).
 			$label = false;
 			//hotkey for the link.
 			$key="";
@@ -1023,19 +1002,9 @@ function private_addnav($text,$link=false,$priv=false,$pop=false,$popsize="500x3
 				$keyrep="";
 			}
 
-			if ($badge && $label === false) $label = $text;
+			if ($label === false) $label = $text;
 			if ($key=="" || $key==" "){
 			}else{
-				if (!$badge) {
-					$pattern1 = "/^" . preg_quote($key, "/") . "/";
-					$pattern2 = "/([^`])" . preg_quote($key, "/") . "/";
-					$rep1 = "`H$key`H";
-					$rep2 = "\$1`H$key`H";
-					$text = preg_replace($pattern1, $rep1, $text, 1);
-					if (strpos($text, "`H") === false) {
-						$text = preg_replace($pattern2, $rep2, $text, 1);
-					}
-				}
 				// The page's key map (resurrection_nav_keys() in lib/pageparts.php, read by assets/ui/keys.js): what
 				// 1.1.2's inline key script did for this key, as data. 1.1.2 stored the script line itself.
 				if ($pop){
@@ -1049,18 +1018,16 @@ function private_addnav($text,$link=false,$priv=false,$pop=false,$popsize="500x3
 				}
 			}
 			$parts = array(
-				"text"=>$badge ? resurrection_nav_label($label,$priv) : appoencode($text,$priv),
+				"text"=>resurrection_nav_label($label,$priv),
 				"link"=>HTMLEntities($link.($pop!=true?$extra:""), ENT_COMPAT, getsetting("charset", "ISO-8859-1")),
 				"accesskey"=>$keyrep,
 				"popup"=>($pop==true ? "target='_blank'".($popsize>""?" onClick=\"".popup($link,$popsize)."; return false;\"":"") : "")
 				);
-			if ($badge) {
-				// The badge (aria-hidden in the part) shows the key; the link's name is the label alone, and
-				// aria-keyshortcuts names the key beside accesskey.
-				$shown = ($key=="" || $key==" ") ? "" : htmlspecialchars($key, ENT_QUOTES, getsetting("charset", "ISO-8859-1"));
-				$parts["key"] = $shown;
-				$parts["accesskey"] = $shown=="" ? "" : " accesskey=\"$shown\" aria-keyshortcuts=\"$shown\" ";
-			}
+			// The badge (aria-hidden in the part) shows the key; the link's name is the label alone, and
+			// aria-keyshortcuts names the key beside accesskey.
+			$shown = ($key=="" || $key==" ") ? "" : htmlspecialchars($key, ENT_QUOTES, getsetting("charset", "ISO-8859-1"));
+			$parts["key"] = $shown;
+			$parts["accesskey"] = $shown=="" ? "" : " accesskey=\"$shown\" aria-keyshortcuts=\"$shown\" ";
 			$n= templatereplace("navitem",$parts);
 			$n = str_replace("<a ",tlbutton_pop()."<a ",$n);
 			$thisnav.=$n;

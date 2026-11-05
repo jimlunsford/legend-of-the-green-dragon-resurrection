@@ -6,7 +6,7 @@
  * the stand-ins below. Used by tests/unit/CharacterPanelTest.php (Phase 5 task 7), in its own PHP process, from the
  * root of the tree under test.
  *
- * Reads JSON on stdin: {"template": "jade.htm", "user": {...account fields...}, "bufflist": {...}, "companions": {...},
+ * Reads JSON on stdin: {"user": {...account fields...}, "bufflist": {...}, "companions": {...},
  * "mount": {"mountname": ...}, "tempstats": {"attack": 2}, "translations": {"Text": "Translated"},
  * "specialties": {"MP": "Mystical Powers"}, "module": [["addcharstat", "Label"], ["addcharstat", "Label", "value"],
  * ["setcharstat", "Section", "Label", "value"]]}. The "module" calls run in the charstats hook, as a module's would.
@@ -57,7 +57,8 @@ foreach ($input['tempstats'] ?? [] as $name => $value) {
     apply_temp_stat($name, $value);
 }
 
-$template = loadtemplate((string)$input['template']);
+// The one template, templates/resurrection.htm (Phase 5 task 15: the old skins this fixture also rendered are gone).
+$template = loadtemplate();
 $hooks = [];
 ob_start();
 $html = charstats();

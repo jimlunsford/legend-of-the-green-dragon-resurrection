@@ -6,36 +6,14 @@
 require_once __DIR__ . '/battle_view.php';
 
 /**
- * Outputs a list of all enemies and the player.
+ * Shows all enemies and the player: the battle screen's fighter cards.
  *
  * @param array $enemies The enemies to be displayed.
  */
 function show_enemies($enemies) {
-	global $enemycounter, $session;
-	// The Resurrection template shows them on the battle screen's fighter cards (Phase 5 task 10, lib/battle_view.php);
-	// a 1.1.2 skin lists them as 1.1.2 did.
-	if (resurrection_battle_ui()) { resurrection_battle_enemies($enemies); return; }
-	foreach ($enemies as $index => $badguy) {
-		if ((isset($badguy['istarget']) && $badguy['istarget'] == true) && $enemycounter > 1)
-			$ccode = "`#";
-		else
-			$ccode = "`2";
-		if (isset($badguy['hidehitpoints']) && $badguy['hidehitpoints'] == true) {
-			$health = "???";
-		} else {
-			$health = $badguy['creaturehealth'];
-		}
-		if ($session['user']['alive']){
-			output("%s%s%s%s's Hitpoints%s (Level %s): `6%s`0`n",$ccode,(isset($badguy['istarget'])&&$badguy['istarget']&&$enemycounter>1)?"*":"", $badguy['creaturename'],$ccode,$ccode, $badguy['creaturelevel'],$badguy['creaturehealth']>0?$health:translate_inline("`7DEAD`0"));
-		}else{
-			output("`2%s`2's Soulpoints: `6%s`0`n",$badguy['creaturename'],$badguy['creaturehealth']>0?$health:translate_inline("`7DEFEATED`0"));
-		}
-	}
-	if ($session['user']['alive']){
-		output("`2YOUR Hitpoints: `6%s`0`n",$session['user']['hitpoints']);
-	}else{
-		output("`2YOUR Soulpoints: `6%s`0`n",$session['user']['hitpoints']);
-	}
+	// The battle screen shows them on its fighter cards (Phase 5 task 10, lib/battle_view.php). 1.1.2's list of each
+	// foe's hitpoints and the player's, kept for the 1.1.2 skins, went with them (Phase 5 task 15).
+	resurrection_battle_enemies($enemies);
 }
 
 /**

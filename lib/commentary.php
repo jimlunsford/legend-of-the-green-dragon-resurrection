@@ -175,7 +175,7 @@ function viewcommentary($section,$message="Interject your own commentary?",$limi
 	$args = modulehook("blockcommentarea", array("section"=>$section));
 	if (isset($args['block']) && ($args['block'] == "yes"))
 		return;
-	// The phone tab bar's Talk tab jumps here (Phase 5 task 8); nothing in a template without the tab bar.
+	// The phone tab bar's Talk tab jumps here (Phase 5 task 8).
 	rawoutput(resurrection_talk_anchor());
 
 	if ($schema === false)
@@ -417,7 +417,7 @@ function viewcommentary($section,$message="Interject your own commentary?",$limi
 		rawoutput(resurrection_csrf_field());
 		output_notl("<input type='submit' class='button' value=\"$mod_Del1\">",true);
 		output_notl("<input type='submit' class='button' name='delnban' value=\"$mod_Del2\" onClick=\"return confirm('$mod_Del_confirm');\">",true);
-		output_notl("`n".(resurrection_ui() ? resurrection_label_for('reason0', "Reason:", true) : $mod_reason)." <input name='reason0'".resurrection_control_id('reason0')." size='40' value=\"$mod_reason_desc\" onChange=\"document.getElementById('reason').value=this.value;\">",true);
+		output_notl("`n".resurrection_label_for('reason0', "Reason:", true)." <input name='reason0'".resurrection_control_id('reason0')." size='40' value=\"$mod_reason_desc\" onChange=\"document.getElementById('reason').value=this.value;\">",true);
 	}
 
 
@@ -426,11 +426,10 @@ function viewcommentary($section,$message="Interject your own commentary?",$limi
 	reset($outputcomments);
 	$sections = commentarylocs();
 	$needclose = 0;
-	// The Resurrection template prints the comments as a list (Phase 5 task 10): one item per comment, each as 1.1.2
-	// wrote it (speaker, "says," or the emote, the text, time stamp, clan tag, a moderator's Del). The moderation
-	// screen (moderate.php) uses the same list since task 11: each item keeps its checkbox and Ban link, each section
-	// its heading link. A 1.1.2 skin prints exactly what it did.
-	$commentlist = resurrection_ui();
+	// The comments are a list (Phase 5 task 10): one item per comment, each as 1.1.2 wrote it (speaker, "says," or the
+	// emote, the text, time stamp, clan tag, a moderator's Del). The moderation screen (moderate.php) uses the same list
+	// since task 11: each item keeps its checkbox and Ban link, each section its heading link. 1.1.2's lines one after
+	// another, kept for the 1.1.2 skins, went with them (Phase 5 task 15).
 
 	while (list($sec,$v)=resurrection_array_next($outputcomments)){
 		if ($sec!="x") {
@@ -445,7 +444,7 @@ function viewcommentary($section,$message="Interject your own commentary?",$limi
 			$needclose = 1;
 		}
 		reset($v);
-		if ($commentlist && count($v)) {
+		if (count($v)) {
 			// A color the lines before left open ends before the list, so no span holds it.
 			output_notl("`0");
 			rawoutput("<ul class='rz-comments'>");
@@ -454,16 +453,12 @@ function viewcommentary($section,$message="Interject your own commentary?",$limi
 			$args = array('commentline'=>$val);
 			$args = modulehook("viewcommentary", $args);
 			$val = $args['commentline'];
-			if ($commentlist) {
-				// The item ends the line, so its closing line break goes; an open color ends with the item.
-				rawoutput("<li class='rz-comment'>");
-				output_notl(preg_replace('/`n\s*\z/', '', (string)$val)."`0", true);
-				rawoutput("</li>");
-			} else {
-				output_notl($val, true);
-			}
+			// The item ends the line, so its closing line break goes; an open color ends with the item.
+			rawoutput("<li class='rz-comment'>");
+			output_notl(preg_replace('/`n\s*\z/', '', (string)$val)."`0", true);
+			rawoutput("</li>");
 		}
-		if ($commentlist && count($v)) rawoutput("</ul>");
+		if (count($v)) rawoutput("</ul>");
 	}
 
 	if ($moderating && $needclose) {
@@ -475,14 +470,10 @@ function viewcommentary($section,$message="Interject your own commentary?",$limi
 		output_notl("`n");
 		rawoutput("<input type='submit' class='button' value=\"$mod_Del1\">");
 		rawoutput("<input type='submit' class='button' name='delnban' value=\"$mod_Del2\" onClick=\"return confirm('$mod_Del_confirm');\">");
-		if (resurrection_ui()) {
-			output_notl("`n");
-			resurrection_label_open('reason');
-			output_notl("%s", $mod_reason);
-			resurrection_label_close();
-		} else {
-			output_notl("`n%s ", $mod_reason);
-		}
+		output_notl("`n");
+		resurrection_label_open('reason');
+		output_notl("%s", $mod_reason);
+		resurrection_label_close();
 		rawoutput("<input name='reason' size='40' id='reason' value=\"$mod_reason_desc\">");
 		rawoutput("</form>");
 		output_notl("`n");
@@ -524,9 +515,9 @@ function viewcommentary($section,$message="Interject your own commentary?",$limi
 	$ref = translate_inline("Refresh");
 	$next = translate_inline("Next &gt;");
 	$lastu = translate_inline("Last Page &gt;&gt;");
-	// The Resurrection template draws the pager as a row of 44px secondary buttons, the same links, keys and targets
-	// (Phase 5 task 10): resurrection_comment_pager() collects them; a 1.1.2 skin prints 1.1.2's line of links.
-	$pager = resurrection_ui() ? array() : null;
+	// The pager is a row of 44px secondary buttons, the same links, keys and targets (Phase 5 task 10):
+	// resurrection_comment_pager() collects them. 1.1.2's line of links, kept for the 1.1.2 skins, went with them.
+	$pager = array();
 	if ($rowcount>=$limit || $cid>0){
 		$sql = "SELECT count(commentid) AS c FROM " . db_prefix("commentary") . " WHERE $sectionWhere AND postdate > ?";
 		$r = db_query($sql, true, [...$sectionParameters, $session['user']['recentcomments'] ?? '1970-01-01 00:00:00']);
@@ -540,12 +531,10 @@ function viewcommentary($section,$message="Interject your own commentary?",$limi
 			if ($jump) {
 				$first .= "#$section";
 			}
-			if ($pager !== null) $pager[] = array($firstu, $first);
-			else output_notl("<a href=\"$first\">$firstu</a>",true);
+			$pager[] = array($firstu, $first);
 			addnav("",$first);
 		}else{
-			if ($pager !== null) $pager[] = array($firstu, null);
-			else output_notl($firstu,true);
+			$pager[] = array($firstu, null);
 		}
 		$req = comscroll_sanitize($REQUEST_URI)."&comscroll=".($com+1);
 		$req = str_replace("?&","?",$req);
@@ -554,12 +543,10 @@ function viewcommentary($section,$message="Interject your own commentary?",$limi
 		if ($jump) {
 			$req .= "#$section";
 		}
-		if ($pager !== null) $pager[] = array($prev, $req);
-		else output_notl("<a href=\"$req\">$prev</a>",true);
+		$pager[] = array($prev, $req);
 		addnav("",$req);
 	}else{
-		if ($pager !== null) { $pager[] = array($firstu, null); $pager[] = array($prev, null); }
-		else output_notl("$firstu $prev",true);
+		$pager[] = array($firstu, null); $pager[] = array($prev, null);
 	}
 	$last = appendlink(comscroll_sanitize($REQUEST_URI),"refresh=1");
 
@@ -575,8 +562,7 @@ function viewcommentary($section,$message="Interject your own commentary?",$limi
 	}
 	//if (!strpos($last,"?")) $last = str_replace("&","?",$last);
 	//debug($last);
-	if ($pager !== null) $pager[] = array($ref, $last);
-	else output_notl("&nbsp;<a href=\"$last\">$ref</a>&nbsp;",true);
+	$pager[] = array($ref, $last);
 	addnav("",$last);
 	if ($com>0 || ($cid > 0 && $newadded > $limit)){
 		$req = comscroll_sanitize($REQUEST_URI)."&comscroll=".($com-1);
@@ -586,24 +572,19 @@ function viewcommentary($section,$message="Interject your own commentary?",$limi
 		if ($jump) {
 			$req .= "#$section";
 		}
-		if ($pager !== null) { $pager[] = array($next, $req); $pager[] = array($lastu, $last); }
-		else {
-			output_notl(" <a href=\"$req\">$next</a>",true);
-			output_notl(" <a href=\"$last\">$lastu</a>",true);
-		}
+		$pager[] = array($next, $req); $pager[] = array($lastu, $last);
 		addnav("",$req);
 	}else{
-		if ($pager !== null) { $pager[] = array($next, null); $pager[] = array($lastu, null); }
-		else output_notl("$next $lastu",true);
+		$pager[] = array($next, null); $pager[] = array($lastu, null);
 	}
-	if ($pager !== null) rawoutput(resurrection_comment_pager($pager));
+	rawoutput(resurrection_comment_pager($pager));
 	if (!$cc) db_free_result($result);
 	tlschema();
 	if ($needclose) modulehook("}collapse");
 }
 
 /**
- * The commentary's pager in the Resurrection template (Phase 5 task 10): First Unseen, Previous, Refresh, Next and Last
+ * The commentary's pager (Phase 5 task 10): First Unseen, Previous, Refresh, Next and Last
  * Page as a row of 44px secondary buttons, each the link 1.1.2 printed; a page that does not exist is the same label,
  * not a link, marked unavailable.
  *
@@ -656,8 +637,8 @@ function talkform($section,$talkline,$limit=10,$schema=false){
 		$req .= "#$section";
 	}
 	addnav("",$req);
-	// The Resurrection template lays the form out as its label, then the input and Add in a row (Phase 5 task 10).
-	output_notl("<form action=\"$req\" method='POST' autocomplete='false'".(resurrection_ui() ? " class='rz-talkform'" : "").">",true);
+	// The form is laid out as its label, then the input and Add in a row (Phase 5 task 10).
+	output_notl("<form action=\"$req\" method='POST' autocomplete='false' class='rz-talkform'>",true);
     rawoutput(resurrection_csrf_field());
     $_SESSION['commentary_sections'][$section] = ['talkline' => $talkline, 'schema' => $schema];
 	previewfield("insertcommentary", $session['user']['name'], $talkline, true, array("size"=>"40", "maxlength"=>200-$tll));
@@ -671,7 +652,7 @@ function talkform($section,$talkline,$limit=10,$schema=false){
 		$iname = getsetting("innname", LOCATION_INN);
 		$sections = commentarylocs();
 		reset ($sections);
-		if (resurrection_ui()) rawoutput(resurrection_label_for('commentary-section', "Section:", true));
+		rawoutput(resurrection_label_for('commentary-section', "Section:", true));
 		output_notl("<select name='section'".resurrection_control_id('commentary-section').">",true);
 		while (list($key,$val)=resurrection_array_next($sections)){
             $_SESSION['commentary_sections'][$key] = ['talkline' => $talkline, 'schema' => $schema];

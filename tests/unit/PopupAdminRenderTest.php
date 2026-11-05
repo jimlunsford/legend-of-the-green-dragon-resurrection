@@ -10,8 +10,9 @@ use Resurrection\Configuration\LegacyConfig;
  *
  * A staff account with every editor's flag reads its mail (unread, read and system mail), the MoTD with a poll, the
  * petition pages, and the Grotto and its editors. In the Resurrection template each page is checked for its new
- * components; in a 1.1.2 skin (jade.htm, by its cookie) every page is byte for byte what 5dafec8 printed
- * (tests/fixtures/popup-admin-old-skin.json), tokens and ids normalized.
+ * components. Until Phase 5 task 15 every page was also rendered in a 1.1.2 skin (jade.htm, by its cookie) and compared
+ * byte for byte with what 5dafec8 printed (tests/fixtures/popup-admin-old-skin.json); the skins are gone, and so are
+ * that test and its fixture (docs/PHASE5-TASK15-REMOVE-SKINS-20261105.md).
  *
  * Rendering is the other render tests': the PHP CLI over a symlinked tree, one PHP session kept across the pages. The
  * pages list what the whole database holds (players, petitions, comments, modules), so the class always works on its own
@@ -23,9 +24,6 @@ use Resurrection\Configuration\LegacyConfig;
 final class PopupAdminRenderTest extends TestCase
 {
     private const string ROOT = __DIR__ . '/../..';
-    private const string PINS = __DIR__ . '/../fixtures/popup-admin-old-skin.json';
-    /** When the pins were recorded (task 11, from 5dafec8): the fixture's fixed times are near it. */
-    private const string PINNED_AT = '2026-11-01 12:00:00 UTC';
     private const string PASSWORD = 'Synthetic popup render player password';
     /** Every editor's flag, without the debug output, the source viewer, the SQL console, the payment log or the
      * translator's (which puts a translate link before every string); the translator tool's page adds that one. */
@@ -151,31 +149,6 @@ final class PopupAdminRenderTest extends TestCase
     {
         if (getenv('RESURRECTION_TEST_DB_HOST') === false) { self::markTestSkipped('Requires disposable CI database.'); }
         self::assertSame('resurrection_test', getenv('RESURRECTION_TEST_DB_NAME'));
-    }
-
-    /**
-     * In a 1.1.2 skin every popup and admin page is byte for byte what 5dafec8 printed, tokens and ids normalized.
-     * With RESURRECTION_RECORD_PINS set to a path, the pages are written there as JSON instead.
-     */
-    public function testOldSkinPopupsAndAdminScreensAreUnchanged(): void
-    {
-        // The lists (players, petitions, comments, modules) show the whole database: the pins hold this class's own install.
-        $pinned = [];
-        foreach (self::POPUPS as $label => $url) { $pinned[$label] = $this->normalize($this->popupContent($this->page($url, 'jade.htm'))); }
-        foreach (self::ADMIN as $label => $url) { $pinned[$label] = $this->normalize($this->content($this->page($url, 'jade.htm'))); }
-        $pinned['petition counts'] = $this->normalize($this->petitionCount($this->page('superuser.php', 'jade.htm')));
-        $record = getenv('RESURRECTION_RECORD_PINS');
-        if ($record !== false && $record !== '') {
-            file_put_contents($record, json_encode($pinned, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR) . "\n");
-            self::markTestIncomplete('Pins recorded to ' . $record);
-        }
-        /** @var array<string, string> $expected */
-        $expected = json_decode((string)file_get_contents(self::PINS), true, 512, JSON_THROW_ON_ERROR);
-        self::assertSame(array_keys($expected), array_keys($pinned));
-        foreach ($expected as $label => $html) {
-            self::assertSame($html, $pinned[$label], $label);
-            self::assertStringNotContainsString('rz-', $pinned[$label], $label);
-        }
     }
 
     /**
@@ -511,7 +484,7 @@ final class PopupAdminRenderTest extends TestCase
      * One GET in the staff session, with the URL as the account's one allowed navigation. The translator's pages (the
      * tool and the untranslated texts) run in a second session of the same account with the translator's flag added.
      */
-    private function page(string $url, ?string $skin = null): string
+    private function page(string $url): string
     {
         $url = strtr($url, array_combine(array_map(fn ($k) => '{' . $k . '}', array_keys(self::$ids)), array_values(self::$ids)));
         $s = self::$staff;
@@ -528,7 +501,6 @@ final class PopupAdminRenderTest extends TestCase
             "    'HTTP_HOST' => 'localhost'] + \$_SERVER;\n" .
             "\$_GET = " . var_export($get, true) . ";\n" .
             "\$_POST = [];\n" .
-            ($skin === null ? '' : "\$_COOKIE = ['template' => " . var_export($skin, true) . "];\n") .
             "session_save_path(" . var_export(self::$tree . '/.sessions', true) . "); session_id(" . var_export($s['id'], true) . "); session_start();\n" .
             "if (!isset(\$_SESSION['session'])) \$_SESSION = ['session' => ['loggedin' => true, 'lasthit' => time(), 'allowednavs' => [], 'user' => ['acctid' => {$s['acctid']}, 'loggedin' => true]],\n" .
             "    'auth_version' => {$s['authversion']}, 'auth_privileges' => {$s['superuser']}];\n" .
@@ -540,7 +512,7 @@ final class PopupAdminRenderTest extends TestCase
         self::assertSame('', $err, $url);
         self::assertStringContainsString('</html>', $out, $url . ': ' . substr($out, 0, 2000));
         if (getenv('RESURRECTION_POPUP_RENDER_DUMP')) {
-            file_put_contents(getenv('RESURRECTION_POPUP_RENDER_DUMP') . '/' . preg_replace('/[^a-z0-9]+/i', '-', $url) . ($skin ? '-old' : '') . '.html', $out);
+            file_put_contents(getenv('RESURRECTION_POPUP_RENDER_DUMP') . '/' . preg_replace('/[^a-z0-9]+/i', '-', $url) . '.html', $out);
         }
         return $out;
     }
@@ -548,42 +520,6 @@ final class PopupAdminRenderTest extends TestCase
     private function document(string $page): \Dom\HTMLDocument
     {
         return \Dom\HTMLDocument::createFromString($page, LIBXML_NOERROR);
-    }
-
-    /** A jade.htm page's content: from the forced navigation comment to the cell its footer part closes. */
-    private function content(string $page): string
-    {
-        $start = strpos($page, "<!--\nAllowAnonymous");
-        self::assertNotFalse($start, substr($page, 0, 2000));
-        self::assertSame(1, preg_match_all("#\\s*</td>\\s*<td valign=top width='120'>#", $page, $found, PREG_OFFSET_CAPTURE));
-        return substr($page, $start, $found[0][0][1] - $start);
-    }
-
-    /** A jade.htm popup: the whole page (its frame has nothing that changes from run to run but what normalize() masks). */
-    private function popupContent(string $page): string
-    {
-        return $page;
-    }
-
-    /** jade.htm's staff petition counts in the header. */
-    private function petitionCount(string $page): string
-    {
-        self::assertSame(1, preg_match('#<a href=\'viewpetition.php\'>.*?<br>#s', $page, $found), 'the petition counts');
-        return $found[0];
-    }
-
-    /** Tokens, the session's page counter, ids and times, which differ from run to run. */
-    private function normalize(string $html): string
-    {
-        // Times within five days of now (the account's last hit, the fixture's petitions) and their ages. The fixture's own
-        // fixed times (2026-10-29 to 2026-10-31) were within five days of the run that recorded the pins and are matched
-        // against that run's time, PINNED_AT: until Phase 5 task 12 they were matched against the clock, so from
-        // 2026-11-04 08:15 UTC the oldest mail's date fell out of the window and the test failed on any commit.
-        $html = (string)preg_replace_callback('/\b(\d{4}-\d\d-\d\d \d\d:\d\d:\d\d)\b/',
-            fn ($m) => abs(strtotime($m[1]) - time()) < 5 * 86400 || abs(strtotime($m[1]) - strtotime(self::PINNED_AT)) < 5 * 86400 ? 'NOW' : $m[1], $html);
-        return (string)preg_replace(['/name=(["\'])(csrf_token|action_token)\1 value=(["\'])[^"\']*\3/', '/value=(["\'])[^"\']*\1( name=(["\'])(csrf_token|action_token)\3)/',
-            '/([?&;]c=)\d+(-\d+)?/', '/\b[0-9a-f]{32}\b/', '/>(\d+d)?(\d+h)?(\d+m)?(\d+s)?</', '/\b\d+(\.\d+)? seconds\b/', '/(last: )[0-9dhms]+/'],
-            ['name=$1$2$1 value=$3TOKEN$3', 'value=$1TOKEN$1$2', '${1}N', 'HASH', '>$1<', 'N seconds', '${1}AGE'], $html);
     }
 
     // Checks.

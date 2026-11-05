@@ -179,8 +179,8 @@ function page_footer($saveuser=true){
 	// its key map as data and loads the static assets/ui/keys.js, which does what that script did.
 	$script.=resurrection_nav_script();
 
-	// 1.1.2's PayPal buttons and LoGDnet registration are gone (payments and LoGDnet are disabled). The skins
-	// still carry {paypal}, so it is emptied.
+	// 1.1.2's PayPal buttons and LoGDnet registration are gone (payments and LoGDnet are disabled). The template
+	// still carries {paypal} (a required tag), so it is emptied.
 	$footer = str_replace('{paypal}', '', $footer);
 	$header = str_replace('{paypal}', '', $header);
 
@@ -217,19 +217,12 @@ function page_footer($saveuser=true){
 		while ($row = db_fetch_assoc($result)) {
 			$petitions[(int)$row['status']] = $row['c'];
 		}
-		$pet = translate_inline("`0`bPetitions:`b");
-		$ued = translate_inline("`0`bUser Editor`b");
 		db_free_result($result);
-		if ($session['user']['superuser'] & SU_EDIT_USERS){
-			$p = "<a href='user.php'>$ued</a>|<a href='viewpetition.php'>$pet</a>";
-			addnav("", "user.php");
-			addnav("", "viewpetition.php");
-		} else {
-			$p = "<a href='viewpetition.php'>$pet</a>";
-			addnav("", "viewpetition.php");
-		}
-		$p .= " `\${$petitions[5]}`0|`^{$petitions[4]}`0|`b{$petitions[0]}`b|{$petitions[1]}|`!{$petitions[3]}`0|`#{$petitions[7]}`0|`%{$petitions[6]}`0|`i{$petitions[2]}`i";
-		$pcount = templatereplace("petitioncount", array("petitioncount"=>resurrection_ui() ? resurrection_petition_badges($petitions, ($session['user']['superuser'] & SU_EDIT_USERS) != 0) : appoencode($p, true)));
+		// The staff links and a badge per status (Phase 5 task 11). 1.1.2's "Petitions: 0|0|0..." line of colored
+		// counts, kept for the 1.1.2 skins, went with them (Phase 5 task 15).
+		if ($session['user']['superuser'] & SU_EDIT_USERS) addnav("", "user.php");
+		addnav("", "viewpetition.php");
+		$pcount = templatereplace("petitioncount", array("petitioncount"=>resurrection_petition_badges($petitions, ($session['user']['superuser'] & SU_EDIT_USERS) != 0)));
 		$footer = str_replace("{petitiondisplay}", $pcount, $footer);
 		$header = str_replace("{petitiondisplay}", $pcount, $header);
 	} else {
@@ -240,7 +233,7 @@ function page_footer($saveuser=true){
 	$footer=str_replace("{stats}",$charstats,$footer);
 	$header=str_replace("{stats}",$charstats,$header);
 	// The page's scene banner and the player's race portrait (Phase 5 task 5): through the template's scene and
-	// portrait parts; a template without them (the 1.1.2 skins) shows neither.
+	// portrait parts.
 	$scene = resurrection_scene_html();
 	$footer=str_replace("{scene}",$scene,$footer);
 	$header=str_replace("{scene}",$scene,$header);
@@ -248,7 +241,7 @@ function page_footer($saveuser=true){
 	$footer=str_replace("{portrait}",$portrait,$footer);
 	$header=str_replace("{portrait}",$portrait,$header);
 	// The phone layout (Phase 5 task 8): the compact character header and the bottom tab bar, through the template's
-	// phonehead and tabbar parts; a template without them (the 1.1.2 skins) shows neither.
+	// phonehead and tabbar parts.
 	$header=str_replace("{phonehead}",resurrection_phonehead_html(),$header);
 	$footer=str_replace("{tabbar}",resurrection_tabbar_html($navcolumn[0] !== ""),$footer);
 	//do something -- I don't know what
@@ -655,11 +648,9 @@ function charstats(){
 
 		modulehook("charstats");
 
-		if (resurrection_charpanel_template()) {
-			$charstat = resurrection_charpanel($standard, $buffs, $spirits, $modded);
-		} else {
-			$charstat = getcharstats($buffs);
-		}
+		// The panel (Phase 5 task 7). 1.1.2's label and value rows (getcharstats(), which stays for modules) were kept
+		// for the 1.1.2 skins until Phase 5 task 15.
+		$charstat = resurrection_charpanel($standard, $buffs, $spirits, $modded);
 
 		if (!is_array($session['bufflist'])) $session['bufflist']=array();
 		return $charstat;
@@ -695,21 +686,17 @@ function charstats(){
 	}
 }
 /**
- * Loads the template into the current session.  If the template doesn't
- * exist - uses the default (admin-defined) template, and then falls back
- * to resurrection.htm (1.1.2: jade.htm)
+ * Loads the template: templates/resurrection.htm, the game's one template (Phase 5 task 15). 1.1.2 loaded the named
+ * skin, falling back to the defaultskin setting and then jade.htm; the skins are gone, so the name is not read. The
+ * parameter stays for callers (modules) that pass one.
  *
- * @param string $templatename The template name (minus the path)
+ * @param string $templatename Ignored (1.1.2: the skin's file name)
  * @return array The template split into the sections defined by <!--!
  * @see Templates
  * @todo Template Help
  */
-function loadtemplate($templatename){
-	if ($templatename=="" || !file_exists("templates/$templatename") || substr($templatename, -4) != '.htm')
-		$templatename=getsetting("defaultskin", "resurrection.htm");
-	if ($templatename=="" || !file_exists("templates/$templatename"))
-		$templatename="resurrection.htm";
-	$fulltemplate = file_get_contents("templates/$templatename");
+function loadtemplate($templatename = "resurrection.htm"){
+	$fulltemplate = file_get_contents("templates/resurrection.htm");
 	$fulltemplate = explode("<!--!",$fulltemplate);
 	while (list($key,$val)=resurrection_array_next($fulltemplate)){
 		$fieldname=substr($val,0,strpos($val,"-->"));
@@ -884,16 +871,16 @@ function resurrection_page_kind(){
 
 /**
  * The page's scene banner through the template's scene part, or nothing: on popups, superuser, editor and operator
- * pages, in a template without the part, or when no scene file exists. Each scene's alt text is the place's name: the
+ * pages, or when no scene file exists. Each scene's alt text is the place's name: the
  * village's and the inn's from their settings, the other places' names translated (schema "scenes"), and for the
  * fallback the page's own title (Phase 5 task 12). On runmodule.php the scene is the running module's place. A module
  * names its own scene for its pages through the `scene` hook.
  */
 function resurrection_scene_html(){
-	global $template, $SCRIPT_NAME, $resurrection_page_title, $resurrection_running_module;
+	global $SCRIPT_NAME, $resurrection_page_title, $resurrection_running_module;
 	require_once __DIR__ . '/../src/Ui/Art.php';
 	$kind = resurrection_page_kind();
-	if (!isset($template['scene']) || $kind !== \Resurrection\Ui\Art::PLAYER) return "";
+	if ($kind !== \Resurrection\Ui\Art::PLAYER) return "";
 	$title = (string)($resurrection_page_title ?? '');
 	$names = function ($scene) use ($title) {
 		$name = \Resurrection\Ui\Art::name((string)$scene,
@@ -915,13 +902,13 @@ function resurrection_scene_html(){
 
 /**
  * The signed-in player's race portrait beside their name and race, through the template's portrait part, or nothing
- * (signed out, or a template without the part). The alt text is the race as the character panel shows it, and the
+ * (signed out). The alt text is the race as the character panel shows it, and the
  * race's name beside the portrait the same.
  */
 function resurrection_portrait_html(){
-	global $template, $session;
+	global $session;
 	require_once __DIR__ . '/../src/Ui/Art.php';
-	if (!isset($template['portrait']) || empty($session['user']['loggedin']) || empty($session['loggedin'])) return "";
+	if (empty($session['user']['loggedin']) || empty($session['loggedin'])) return "";
 	list($race, $racename) = resurrection_charpanel_race((string)($session['user']['race'] ?? ''));
 	$racename = trim(full_sanitize($racename));
 	$portrait = \Resurrection\Ui\Art::portrait($race, $racename);
@@ -968,14 +955,12 @@ function resurrection_nav_script(){
 
 /**
  * The navstart and navend parts that wrap the nav column, or two empty strings when the page shows no nav: no item,
- * heading or help text in its built navs, and nothing in the {navad} slot. A template without the parts gets two
- * empty strings, and keeps its own nav markup (Phase 5 task 6).
+ * heading or help text in its built navs, and nothing in the {navad} slot (Phase 5 task 6).
  *
  * @return array{0: string, 1: string}
  */
 function resurrection_nav_column($builtnavs, $navad = ""){
 	global $template;
-	if (!isset($template['navstart']) || !isset($template['navend'])) return array("", "");
 	if (trim($builtnavs) == "" && trim($navad) == "") return array("", "");
 	return array($template['navstart'], $template['navend']);
 }
@@ -989,18 +974,6 @@ function resurrection_nav_column($builtnavs, $navad = ""){
 function resurrection_charpanel_race($race){
 	if (in_array($race, array('', '0', RACE_UNKNOWN), true)) return array(RACE_UNKNOWN, translate_inline("Not chosen yet"));
 	return array($race, translate_inline($race, "race"));
-}
-
-/**
- * Whether the page's template has the character panel's parts (the new template does, the 1.1.2 skins do not: they
- * keep getcharstats()'s label/value rows).
- */
-function resurrection_charpanel_template(){
-	global $template;
-	foreach (array("statheader", "statbar", "statbarcap", "stattile", "stattiles", "equiprow", "equiprows") as $part) {
-		if (!isset($template[$part])) return false;
-	}
-	return true;
 }
 
 /**
@@ -1191,17 +1164,14 @@ function resurrection_charpanel($standard, $buffs, $spirits, $modded){
 /**
  * The icon beside a label of the character panel or the phone header (Phase 5 task 13), through the template's
  * labelicon part: when the label, its color codes dropped, is one of the standard stats' (Art::ICONS, the English
- * label lowercased) and its file exists. Otherwise nothing: a module's own row, a missing file, or a template without
- * the part. The label stays beside it and carries the meaning, so the image has alt="" and aria-hidden.
+ * label lowercased) and its file exists. Otherwise nothing: a module's own row, or a missing file. The label stays beside it and carries the meaning, so the image has alt="" and aria-hidden.
  *
  * @param string $label the English label, before translation
  * @return string
  */
 function resurrection_icon_html($label){
-	global $template;
 	require_once __DIR__ . '/sanitize.php';
 	require_once __DIR__ . '/../src/Ui/Art.php';
-	if (!isset($template['labelicon'])) return "";
 	$name = \Resurrection\Ui\Art::iconName(full_sanitize((string)$label));
 	$icon = $name === null ? null : \Resurrection\Ui\Art::icon($name);
 	if ($icon === null) return "";
@@ -1243,16 +1213,16 @@ function resurrection_charpanel_extras($standard, $section){
 }
 /**
  * The compact character header a phone shows in place of the wordmark (Phase 5 task 8), through the template's
- * phonehead part, or nothing (signed out, or a template without the part). The race portrait, the name on one line,
+ * phonehead part, or nothing (signed out). The race portrait, the name on one line,
  * "Level 7 Elf · 14 turns · 1,247 gold" (torments and favor when dead), the mail control, and two compact bars:
  * hitpoints (soulpoints when dead) and experience, as the character panel reads them from the account.
  */
 function resurrection_phonehead_html(){
-	global $template, $session;
+	global $session;
 	require_once __DIR__ . '/experience.php';
 	require_once __DIR__ . '/sanitize.php';
 	require_once __DIR__ . '/../src/Ui/Art.php';
-	if (!isset($template['phonehead']) || empty($session['user']['loggedin']) || empty($session['loggedin'])) return "";
+	if (empty($session['user']['loggedin']) || empty($session['loggedin'])) return "";
 	$u = $session['user'];
 	$alive = (bool)$u['alive'];
 	$plain = function ($text) { return htmlspecialchars(trim(full_sanitize((string)$text)), ENT_QUOTES|ENT_SUBSTITUTE, "UTF-8"); };
@@ -1260,7 +1230,7 @@ function resurrection_phonehead_html(){
 	list($race, $racename) = resurrection_charpanel_race((string)($u['race'] ?? ''));
 	$portrait = "";
 	$art = \Resurrection\Ui\Art::portrait($race, trim(full_sanitize($racename)));
-	if ($art !== null && isset($template['phoneportrait'])) {
+	if ($art !== null) {
 		$portrait = templatereplace("phoneportrait", array(
 			"src"=>htmlspecialchars($art['src'], ENT_QUOTES, "UTF-8"),
 			"alt"=>htmlspecialchars($art['alt'], ENT_QUOTES|ENT_SUBSTITUTE, "UTF-8"),
@@ -1310,7 +1280,7 @@ function resurrection_phonehead_html(){
 
 /**
  * The phone's bottom tab bar (Phase 5 task 8), through the template's tabbar and tab parts, or nothing: on operator
- * pages, in a template without the parts, and on popups (their parts have no {tabbar}). Every tab is an anchor on this
+ * pages, and on popups (their parts have no {tabbar}). Every tab is an anchor on this
  * page, never a link to another page, so it can never break forced navigation: Go jumps to the page's navs (only when
  * the page shows the nav column), Character to the character panel (signed in), Talk to the page's commentary (only
  * when commentary was rendered: resurrection_talk_anchor()), More to the section with MoTD, Petition for Help and,
@@ -1320,8 +1290,7 @@ function resurrection_phonehead_html(){
  * @return string
  */
 function resurrection_tabbar_html($navs){
-	global $template, $session, $resurrection_talk;
-	if (!isset($template['tabbar']) || !isset($template['tab'])) return "";
+	global $session, $resurrection_talk;
 	if (resurrection_page_kind() === \Resurrection\Ui\Art::OPERATOR) return "";
 	$tabs = array();
 	if ($navs) $tabs["rz-nav"] = "Go";
@@ -1339,13 +1308,13 @@ function resurrection_tabbar_html($navs){
 
 /**
  * The anchor the Talk tab jumps to, printed by viewcommentary() before the page's first commentary (Phase 5 task 8):
- * once a page, and only in a template with the tab bar (the 1.1.2 skins print nothing new).
+ * once a page.
  *
  * @return string
  */
 function resurrection_talk_anchor(){
-	global $template, $resurrection_talk;
-	if (!isset($template['tabbar']) || !empty($resurrection_talk)) return "";
+	global $resurrection_talk;
+	if (!empty($resurrection_talk)) return "";
 	$resurrection_talk = true;
 	return "<span class=\"rz-talk\" id=\"rz-talk\"></span>";
 }

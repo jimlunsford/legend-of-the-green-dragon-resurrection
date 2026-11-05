@@ -11,8 +11,11 @@ use Resurrection\Configuration\LegacyConfig;
  * armor shops none, each affordable item a link (task 10, docs/PHASE5-TASK10-BATTLE-COMMENTARY-20261031.md); every
  * control a player fills in has a bound label; preferences' sections are server-drawn tabs, one aria-selected, each
  * controlling its section, with no inline event handler or inline script in the page's content.
- * In a 1.1.2 skin (jade.htm, its cookie as the skin chooser sets it), every button's markup is byte for byte what
- * 5b3ca63 printed for the same page and state, and no Resurrection class appears.
+ * Preferences has no Skin control (Phase 5 task 15: the skins and skin selection are gone).
+ *
+ * Until Phase 5 task 15 each page was also rendered in a 1.1.2 skin (jade.htm, by its cookie), every button's markup
+ * byte for byte what 5b3ca63 printed (OLD_SKIN_BUTTONS); the skins are gone, and so is that pin
+ * (docs/PHASE5-TASK15-REMOVE-SKINS-20261105.md).
  *
  * Pages are rendered by the PHP CLI as TemplateRenderTest renders them. The test does not depend on the order it runs
  * in: an installed database is used as it is; an empty one is installed here with scripts/install.php --modules=none
@@ -24,68 +27,10 @@ final class FormsRenderTest extends TestCase
     private const string LOGIN = 'FormsRender';
     private const string PASSWORD = 'Synthetic forms render player password';
 
-    /**
-     * Each page's button markup in jade.htm at 5b3ca63, in page order, for the state set here (level 7, 5,000 gold,
-     * 2,000 in the bank, 30 of 70 hitpoints, no weapon or armor value).
-     */
-    private const array OLD_SKIN_BUTTONS = [
-        'create.php' => [
-            "<input type=\"submit\" class=\"button\" value=\"Create your character\">",
-        ],
-        'petition.php' => [
-            "<input type='submit' class='button' value='Submit'>",
-        ],
-        'village.php' => [
-            "<input type='submit' class='button' value='Add'>",
-        ],
-        'bank.php?op=deposit' => [
-            "<input type='submit' class='button' value='Deposit'>",
-        ],
-        'bank.php?op=withdraw' => [
-            "<input type='submit' class='button' value='Withdraw'>",
-        ],
-        'bank.php?op=borrow' => [
-            "<input type='submit' class='button' value='Borrow'>",
-        ],
-        'weapons.php' => [
-            "<button type='submit' style='background:none;border:0;padding:0;margin:0;font:inherit;cursor:pointer;text-decoration:underline'>\n</span><span class='colLtWhite'>Rake</span>\n</button>",
-            "<button type='submit' style='background:none;border:0;padding:0;margin:0;font:inherit;cursor:pointer;text-decoration:underline'>\n<span class='colLtWhite'>Trowel</span>\n</button>",
-            "<button type='submit' style='background:none;border:0;padding:0;margin:0;font:inherit;cursor:pointer;text-decoration:underline'>\n<span class='colLtWhite'>Spade</span>\n</button>",
-            "<button type='submit' style='background:none;border:0;padding:0;margin:0;font:inherit;cursor:pointer;text-decoration:underline'>\n<span class='colLtWhite'>Adze</span>\n</button>",
-            "<button type='submit' style='background:none;border:0;padding:0;margin:0;font:inherit;cursor:pointer;text-decoration:underline'>\n<span class='colLtWhite'>Gardening Hoe</span>\n</button>",
-            "<button type='submit' style='background:none;border:0;padding:0;margin:0;font:inherit;cursor:pointer;text-decoration:underline'>\n<span class='colLtWhite'>Torch</span>\n</button>",
-            "<button type='submit' style='background:none;border:0;padding:0;margin:0;font:inherit;cursor:pointer;text-decoration:underline'>\n<span class='colLtWhite'>Pitchfork</span>\n</button>",
-            "<button type='submit' style='background:none;border:0;padding:0;margin:0;font:inherit;cursor:pointer;text-decoration:underline'>\n<span class='colLtWhite'>Shovel</span>\n</button>",
-            "<button type='submit' style='background:none;border:0;padding:0;margin:0;font:inherit;cursor:pointer;text-decoration:underline'>\n<span class='colLtWhite'>Hedge Trimmers</span>\n</button>",
-        ],
-        'armor.php' => [
-            "<button type='submit' style='background:none;border:0;padding:0;margin:0;font:inherit;cursor:pointer;text-decoration:underline'>\n<span class='colLtWhite'>Fuzzy Slippers</span>\n</button>",
-            "<button type='submit' style='background:none;border:0;padding:0;margin:0;font:inherit;cursor:pointer;text-decoration:underline'>\n<span class='colLtWhite'>Flannel Pajamas</span>\n</button>",
-            "<button type='submit' style='background:none;border:0;padding:0;margin:0;font:inherit;cursor:pointer;text-decoration:underline'>\n<span class='colLtWhite'>Homespun Longjohns</span>\n</button>",
-            "<button type='submit' style='background:none;border:0;padding:0;margin:0;font:inherit;cursor:pointer;text-decoration:underline'>\n<span class='colLtWhite'>Homespun Undershirt</span>\n</button>",
-            "<button type='submit' style='background:none;border:0;padding:0;margin:0;font:inherit;cursor:pointer;text-decoration:underline'>\n<span class='colLtWhite'>Knitted Socks</span>\n</button>",
-            "<button type='submit' style='background:none;border:0;padding:0;margin:0;font:inherit;cursor:pointer;text-decoration:underline'>\n<span class='colLtWhite'>Knitted Gloves</span>\n</button>",
-            "<button type='submit' style='background:none;border:0;padding:0;margin:0;font:inherit;cursor:pointer;text-decoration:underline'>\n<span class='colLtWhite'>Old Leather Boots</span>\n</button>",
-            "<button type='submit' style='background:none;border:0;padding:0;margin:0;font:inherit;cursor:pointer;text-decoration:underline'>\n<span class='colLtWhite'>Homespun Pants</span>\n</button>",
-            "<button type='submit' style='background:none;border:0;padding:0;margin:0;font:inherit;cursor:pointer;text-decoration:underline'>\n<span class='colLtWhite'>Homespun Tunic</span>\n</button>",
-        ],
-        'inn.php?op=room&pay=1' => [
-            "<button class=\"button\">Give him 84 gold</button>",
-        ],
-        'healer.php?op=buy&pct=100' => [
-            "<button type='submit' class='button'>\n<span class='colLtYellow'>Complete Healing</span>\n</button>",
-        ],
-        'prefs.php' => [
-            "<input type='submit' class='button' value='Save'>",
-            "<input type='submit' class='button' value='Delete Character' onClick='return confirm(\"Are you sure you wish to delete your character?\");'>",
-        ],
-        'mail.php?op=address' => [
-            "<button type=\"submit\">Search</button>",
-        ],
-        'mail.php?op=write&to=' . self::LOGIN => [
-            "<button type=\"submit\">Send</button>",
-        ],
-    ];
+    /** The pages, each in the state set here (level 7, 5,000 gold, 2,000 in the bank, 30 of 70 hitpoints). */
+    private const array PAGES = ['create.php', 'petition.php', 'village.php', 'bank.php?op=deposit', 'bank.php?op=withdraw',
+        'bank.php?op=borrow', 'weapons.php', 'armor.php', 'inn.php?op=room&pay=1', 'healer.php?op=buy&pct=100', 'prefs.php',
+        'mail.php?op=address', 'mail.php?op=write&to=' . self::LOGIN];
 
     /**
      * The form, by its action, whose one primary button task 9 names on each page. The weapon and armor shops have
@@ -105,7 +50,7 @@ final class FormsRenderTest extends TestCase
         'petition.php' => ['petition.php?op=submit'],
     ];
 
-    public function testFormsHaveOnePrimaryLabelledInputsAndOldSkinsKeepTheirButtons(): void
+    public function testFormsHaveOnePrimaryAndLabelledInputs(): void
     {
         $host = getenv('RESURRECTION_TEST_DB_HOST');
         if ($host === false) { self::markTestSkipped('Requires disposable CI database.'); }
@@ -148,26 +93,21 @@ final class FormsRenderTest extends TestCase
             $version = (int)$this->php($tree, 'echo db_fetch_assoc(db_query("SELECT authversion FROM accounts WHERE acctid=?", true, [' . $player . ']))["authversion"];');
             $session = ['acctid' => $player, 'authversion' => $version];
 
-            foreach (array_keys(self::OLD_SKIN_BUTTONS) as $url) {
+            foreach (self::PAGES as $url) {
                 $signedIn = !in_array($url, ['create.php', 'petition.php'], true);
-                // The Resurrection template, the default.
-                $page = $this->visit($tree, $work, $url, $signedIn ? $session : null, $player, null);
+                $page = $this->visit($tree, $work, $url, $signedIn ? $session : null, $player);
                 self::assertStringContainsString('<link rel="stylesheet" href="assets/ui/resurrection.css">', $page, $url);
                 $document = \Dom\HTMLDocument::createFromString($page, LIBXML_NOERROR);
                 $this->assertPrimaries($document, $url);
                 $this->assertLabelled($document, $url);
                 if (in_array($url, ['weapons.php', 'armor.php'], true)) { $this->assertShopLinks($document, $url); }
-                if ($url === 'prefs.php') { $this->assertTabs($document, $page); }
-
-                // The same page and state in a 1.1.2 skin.
-                $old = $this->visit($tree, $work, $url, $signedIn ? $session : null, $player, 'jade.htm');
-                self::assertStringNotContainsString('rz-page', $old, $url);
-                self::assertStringNotContainsString('rz-button-primary', $old, $url);
-                self::assertSame(self::OLD_SKIN_BUTTONS[$url], $this->buttons($old), $url);
                 if ($url === 'prefs.php') {
-                    self::assertStringContainsString('function prepare_form(id){', $old);
-                    self::assertStringNotContainsString('rz-tabs', $old);
-                    self::assertStringNotContainsString('assets/ui/showform.js', $old);
+                    $this->assertTabs($document, $page);
+                    // No Skin row (1.1.2's "Skin" select of templates/*.htm), and no other control named template.
+                    self::assertSame(0, $document->querySelectorAll('[name="template"]')->length);
+                    self::assertSame(0, $document->querySelectorAll('option[value$=".htm"]')->length);
+                    // 1.1.2's tab script is gone with the skins; the tabs come from the server.
+                    self::assertStringNotContainsString('function prepare_form(id){', $page);
                 }
             }
         } finally {
@@ -297,26 +237,15 @@ final class FormsRenderTest extends TestCase
         self::assertNotNull($document->querySelector('.rz-content input.rz-button-danger[data-rz-confirm]'));
     }
 
-    /**
-     * Every button's markup in a page, in order: each <button> element whole, each submit, button or reset <input>.
-     *
-     * @return list<string>
-     */
-    private function buttons(string $page): array
-    {
-        preg_match_all('#<button\b[^>]*>.*?</button>|<input\b[^>]*\btype=(["\']?)(?:submit|button|reset)\1[^>]*>#is', $page, $found);
-        return $found[0];
-    }
-
     /** One GET as the player (or signed out), the account's allowed navs and clock set so the page is the one asked for. */
-    private function visit(string $tree, string $work, string $url, ?array $session, int $player, ?string $skin): string
+    private function visit(string $tree, string $work, string $url, ?array $session, int $player): string
     {
         if ($session !== null) {
             $this->php($tree, 'db_query("UPDATE accounts SET allowednavs=?, laston=?, lasthit=?, restorepage=? WHERE acctid=?", true, [serialize([' . var_export($url, true) . ' => true]),'
                 . ' date("Y-m-d H:i:s"), date("Y-m-d H:i:s", time() + 60), "", ' . $player . ']);');
         }
         [$script, $query] = array_pad(explode('?', $url, 2), 2, '');
-        return $this->render($tree, $work, $script, $session, $query, $skin);
+        return $this->render($tree, $work, $script, $session, $query);
     }
 
     /**
@@ -324,7 +253,7 @@ final class FormsRenderTest extends TestCase
      *
      * @param array{acctid: int, authversion: int}|null $session
      */
-    private function render(string $tree, string $work, string $script, ?array $session, string $query = '', ?string $skin = null): string
+    private function render(string $tree, string $work, string $script, ?array $session, string $query = ''): string
     {
         parse_str($query, $get);
         $uri = '/' . $script . ($query === '' ? '' : '?' . $query);
@@ -337,7 +266,6 @@ final class FormsRenderTest extends TestCase
             "    'REQUEST_METHOD' => 'GET', 'SERVER_NAME' => 'localhost', 'SERVER_PORT' => '80', 'REMOTE_ADDR' => '127.0.0.1',\n" .
             "    'HTTP_HOST' => 'localhost'] + \$_SERVER;\n" .
             "\$_GET = " . var_export($get, true) . ";\n" .
-            ($skin === null ? '' : "\$_COOKIE = ['template' => " . var_export($skin, true) . "];\n") .
             $signin .
             "require '$script';\n");
         [$code, $out, $err] = $this->process([PHP_BINARY, '-d', 'output_buffering=0', '-d', 'display_errors=0', '-d', 'log_errors=1',

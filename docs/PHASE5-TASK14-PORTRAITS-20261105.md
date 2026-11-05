@@ -177,3 +177,15 @@ Every portrait loaded (`naturalWidth` above 0), had its alt text and was 80px wi
 - The art palette, `assets/LICENSE`, the copyright line and license block, the attribution line and its links.
 - Translation keys (the alt text is the fight's own name).
 - The 60-minute job timeout, the shard runner and the duration table.
+
+## Acceptance (recorded in task 15, 2026-11-05)
+
+Task 14 is accepted at `e3d265c374ebb9a3d9f90d7e4bd952e39994fe05`. Checked by the command chat and confirmed through the
+GitHub Actions API in task 15:
+
+- Modern core 42055783450: SUCCESS, all 12 jobs (both legs' checks, four shards and result). Shard jobs, shards 1 to 4:
+  PHP 8.4 / MariaDB 11.4 17:34, 18:28, 17:12, 16:40; PHP 8.5 / MySQL 8.4 14:04, 15:34, 23:22, 15:20.
+- Baseline integrity 42055783444: SUCCESS.
+
+The shard steps inside those jobs (the `tooling-shards.py` step alone), shards 1 to 4: PHP 8.4 15:18, 16:38, 15:25,
+14:54; PHP 8.5 12:17, 13:40, 20:33, 13:25. The longest job, PHP 8.5 shard 3, is 23:22, under 30 minutes.

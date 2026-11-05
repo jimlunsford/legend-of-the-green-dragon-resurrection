@@ -52,5 +52,5 @@ $label('inputbody', fn () => output('`2Body:`n'), '`2');
 require_once 'lib/forms.php';
 previewfield('body', '`^', false, false, ['type'=>'textarea','class'=>'input','cols'=>'60','rows'=>'9'], $escape($body));
 output('`nMaximum message size: %s UTF-8 bytes. Longer messages are shortened to this limit.`n', $mailDraft['settings']['mailsizelimit']);
-rawoutput('<button type="submit"'.(resurrection_ui() ? ' class="'.resurrection_button_class(true).'"' : '').'>'.$escape(translate_inline('Send')).'</button></form>');
+rawoutput('<button type="submit" class="'.resurrection_button_class(true).'">'.$escape(translate_inline('Send')).'</button></form>');
 rawoutput('<script>const mailWarnings='.json_encode($warnings, JSON_HEX_TAG|JSON_HEX_AMP|JSON_HEX_APOS|JSON_HEX_QUOT).';const mailTo=document.getElementById("to");function mailWarning(){document.getElementById("warning").hidden=!mailWarnings.includes(mailTo.value);}mailTo.addEventListener("change",mailWarning);mailWarning();</script>');

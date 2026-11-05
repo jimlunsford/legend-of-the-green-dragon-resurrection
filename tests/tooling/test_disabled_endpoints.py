@@ -91,11 +91,15 @@ class DisabledEndpointTests(unittest.TestCase):
 class ShippedLinkTests(unittest.TestCase):
     # Static: runs wherever the suite runs, with or without a supported PHP.
     def test_no_shipped_file_links_a_removed_file(self):
-        # The removed endpoints and 1.1.2's PayPal buttons: no page, library, module or skin links them (a quoted name,
+        # The removed endpoints and 1.1.2's PayPal buttons: no page, library, module or template links them (a quoted name,
         # path or attribute value); comments that tell their history may still name them.
         removed = re.compile(r'''(?<=["'/=])(?:rawsql|logdnet|payment|source|paylog)\.php\b|(?<=["'/=])paypal[123]\.gif\b''', re.I)
         shipped = [p for p in ROOT.rglob('*') if p.is_file() and p.suffix.lower() in {'.php', '.htm', '.html', '.css', '.js'}
                    and not set(p.relative_to(ROOT).parts[:1]) & {'tests', 'lab', 'docs', 'vendor', 'scripts', '.git'}]
         self.assertGreater(len(shipped), 300)
+        # Phase 5 task 15: the one template is the only template file the scan reads (the 1.1.2 skins and their
+        # stylesheets are gone).
+        self.assertEqual(['templates/resurrection.htm'],
+                         sorted(str(p.relative_to(ROOT)) for p in shipped if p.relative_to(ROOT).parts[0] == 'templates'))
         found = [f'{p.relative_to(ROOT)}: {m.group(0)}' for p in shipped for m in removed.finditer(p.read_text(errors='replace'))]
         self.assertEqual([], found)

@@ -71,66 +71,34 @@ function motd_admin($id, $poll=false) {
 		$ed = translate_inline("Edit");
 		$del = translate_inline("Del");
 		$confirm = translate_inline("Are you sure you want to delete this item?");
-		if (resurrection_ui()) {
-			// Phase 5 task 11: the item's controls as a row of secondary buttons; the confirmation through
-			// assets/ui/showform.js (data-rz-confirm) instead of an inline handler. The same link and the same POST.
-			rawoutput("<div class='rz-motd-admin'>");
-			if (!$poll) rawoutput("<a href='motd.php?op=add&id=$id' class='button'>" . htmlspecialchars($ed, ENT_QUOTES, 'UTF-8') . "</a>");
-			$row = resurrection_motd_row((int)$id);
-			if ($row !== null) {
-				rawoutput("<form action='motd.php?op=del&id=".(int)$id."' method='POST' class='rz-inline'>".
-					resurrection_action_fields('motd-del-'.(int)$id, resurrection_motd_context($row)).
-					"<button type='submit' class='button' data-rz-confirm=\"".htmlspecialchars($confirm, ENT_QUOTES, 'UTF-8')."\">".htmlspecialchars($del, ENT_QUOTES, 'UTF-8')."</button></form>");
-			}
-			rawoutput("</div>" . resurrection_form_script());
-			return;
-		}
-		output_notl("[ ");
-		if (!$poll) {
-			rawoutput("<a href='motd.php?op=add".($poll?"poll":"")."&id=$id'>$ed</a> | ");
-		}
-		// 1.1.2's Del link deleted on GET; it is now a protected POST bound to the item.
+		// Phase 5 task 11: the item's controls as a row of secondary buttons; the confirmation through
+		// assets/ui/showform.js (data-rz-confirm) instead of an inline handler. The same link and the same POST.
+		// (1.1.2's "[ Edit | Del ]" line, with Del as the same protected POST, was kept for the 1.1.2 skins until Phase 5
+		// task 15. 1.1.2's Del link deleted on GET.)
+		rawoutput("<div class='rz-motd-admin'>");
+		if (!$poll) rawoutput("<a href='motd.php?op=add&id=$id' class='button'>" . htmlspecialchars($ed, ENT_QUOTES, 'UTF-8') . "</a>");
 		$row = resurrection_motd_row((int)$id);
 		if ($row !== null) {
-			rawoutput("<form action='motd.php?op=del&id=".(int)$id."' method='POST'".resurrection_presentation('inline-form')." onSubmit=\"return confirm('".htmlspecialchars(addslashes($confirm), ENT_QUOTES, 'UTF-8')."');\">".
+			rawoutput("<form action='motd.php?op=del&id=".(int)$id."' method='POST' class='rz-inline'>".
 				resurrection_action_fields('motd-del-'.(int)$id, resurrection_motd_context($row)).
-				"<button type='submit' class='button'>".htmlspecialchars($del, ENT_QUOTES, 'UTF-8')."</button></form> ]");
+				"<button type='submit' class='button' data-rz-confirm=\"".htmlspecialchars($confirm, ENT_QUOTES, 'UTF-8')."\">".htmlspecialchars($del, ENT_QUOTES, 'UTF-8')."</button></form>");
 		}
+		rawoutput("</div>" . resurrection_form_script());
 	}
 }
 
 function motditem($subject,$body,$author,$date,$id){
-	if (resurrection_ui()) {
-		// Phase 5 task 11: an item is its title (Cinzel), its author and date (--muted), then its body (Alegreya).
-		rawoutput("<article class='rz-motd'" . ($date ? " id='motd".date("YmdHis",strtotime($date))."'" : "") . ">");
-		rawoutput("<h2 class='rz-motd-title'>" . resurrection_plain_text($subject) . "</h2>");
-		if ($id > "") motd_admin($id);
-		if ($date || $author) {
-			rawoutput("<p class='rz-motd-meta'>" . ($author > "" ? "<span class='rz-motd-author'>" . resurrection_plain_text($author) . "</span> " : "")
-				. ($date > "" ? "<span class='rz-motd-date'>" . htmlspecialchars((string)$date, ENT_QUOTES, 'UTF-8') . "</span>" : "") . "</p>");
-		}
-		rawoutput("<div class='rz-motd-body'>" . resurrection_appoencode_closed(nltoappon($body)) . "</div>");
-		rawoutput("</article>");
-		return;
+	// Phase 5 task 11: an item is its title (Cinzel), its author and date (--muted), then its body (Alegreya). (1.1.2's
+	// bold title, author and date line, colored body and rule were kept for the 1.1.2 skins until Phase 5 task 15.)
+	rawoutput("<article class='rz-motd'" . ($date ? " id='motd".date("YmdHis",strtotime($date))."'" : "") . ">");
+	rawoutput("<h2 class='rz-motd-title'>" . resurrection_plain_text($subject) . "</h2>");
+	if ($id > "") motd_admin($id);
+	if ($date || $author) {
+		rawoutput("<p class='rz-motd-meta'>" . ($author > "" ? "<span class='rz-motd-author'>" . resurrection_plain_text($author) . "</span> " : "")
+			. ($date > "" ? "<span class='rz-motd-date'>" . htmlspecialchars((string)$date, ENT_QUOTES, 'UTF-8') . "</span>" : "") . "</p>");
 	}
-	if ($date)
-		rawoutput("<a name='motd".date("YmdHis",strtotime($date))."'>");
-	output_notl("`b`^%s`0`b", $subject);
-	if ($id > "") {
-		motd_admin($id);
-	}
-	if ($date || $author) output_notl("`n");
-	if ($author > "") {
-		output_notl("`3%s`0", $author);
-	}
-	if ($date>"")
-		output_notl("`0 &#150; `#%s`0", $date, true);
-	if ($date || $author) output_notl("`n");
-
-	// Colour and format codes as in 1.1.2; HTML in the stored text is shown as text.
-	output_notl("`2%s`0", nltoappon($body));
-	if ($date) rawoutput("</a>");
-	rawoutput("<hr>");
+	rawoutput("<div class='rz-motd-body'>" . resurrection_appoencode_closed(nltoappon($body)) . "</div>");
+	rawoutput("</article>");
 }
 
 function pollitem($id,$subject,$body,$author,$date,$showpoll=true){
@@ -146,14 +114,9 @@ function pollitem($id,$subject,$body,$author,$date,$showpoll=true){
 	$showform = $session['user']['loggedin'] && $showpoll && $body !== null;
 
 	$poll = translate_inline("Poll:");
-	// Phase 5 task 11: in the Resurrection template a poll is an item like the others; its question is the ballot's
-	// legend, and each choice's radio button has its label. A 1.1.2 skin keeps 1.1.2's markup byte for byte.
-	$rz = resurrection_ui();
-	if ($rz) {
-		rawoutput("<article class='rz-motd rz-motd-poll'><h2 class='rz-motd-title'><span class='rz-motd-kind'>" . resurrection_plain_text($poll) . "</span> " . resurrection_plain_text($subject) . "</h2>");
-	} else {
-		output_notl("`b`&%s `^%s`0`b", $poll, $subject);
-	}
+	// Phase 5 task 11: a poll is an item like the others; its question is the ballot's legend, and each choice's radio
+	// button has its label. (1.1.2's markup, with its rule image bars, was kept for the 1.1.2 skins until Phase 5 task 15.)
+	rawoutput("<article class='rz-motd rz-motd-poll'><h2 class='rz-motd-title'><span class='rz-motd-kind'>" . resurrection_plain_text($poll) . "</span> " . resurrection_plain_text($subject) . "</h2>");
 	if ($showpoll) motd_admin($id, true);
 	// The ballot opens after the admin controls: the Del form cannot sit inside it.
 	if ($showform) {
@@ -161,21 +124,12 @@ function pollitem($id,$subject,$body,$author,$date,$showpoll=true){
 		rawoutput(resurrection_action_fields('motd-vote-'.$id, resurrection_motd_context(resurrection_motd_row($id))));
 		rawoutput("<input type='hidden' name='motditem' value='$id'>",true);
 	}
-	if ($rz) {
-		rawoutput("<p class='rz-motd-meta'><span class='rz-motd-author'>" . resurrection_plain_text($author) . "</span> <span class='rz-motd-date'>" . htmlspecialchars((string)$date, ENT_QUOTES, 'UTF-8') . "</span></p>");
-	} else {
-		output_notl("`n`3%s`0", $author);
-		output_notl(" &#150; `#%s`0`n", $date, true);
-	}
+	rawoutput("<p class='rz-motd-meta'><span class='rz-motd-author'>" . resurrection_plain_text($author) . "</span> <span class='rz-motd-date'>" . htmlspecialchars((string)$date, ENT_QUOTES, 'UTF-8') . "</span></p>");
 	if ($body === null) {
-		rawoutput($rz ? "</article>" : "<hr>",true);
+		rawoutput("</article>",true);
 		return;
 	}
-	if ($rz) {
-		rawoutput("<fieldset class='rz-poll'><legend class='rz-poll-question'>" . resurrection_appoencode_closed(stripslashes($body['body'])) . "</legend>");
-	} else {
-		output_notl("`2%s`0`n", stripslashes($body['body']));
-	}
+	rawoutput("<fieldset class='rz-poll'><legend class='rz-poll-question'>" . resurrection_appoencode_closed(stripslashes($body['body'])) . "</legend>");
 	$sql = "SELECT count(resultid) AS c, choice FROM " . db_prefix("pollresults") . " WHERE motditem=? GROUP BY choice ORDER BY choice";
 	$result = db_query_cached($sql,"poll-$id", 900, [$id]);
 	$choices=array();
@@ -193,19 +147,14 @@ function pollitem($id,$subject,$body,$author,$date,$showpoll=true){
 			if(isset($choices[$key])) {
 				$percent = round($choices[$key] / $totalanswers * 100,1);
 			}
-			if ($rz) rawoutput("<div class='rz-poll-option'>");
+			rawoutput("<div class='rz-poll-option'>");
 			if ($showform) {
 				rawoutput("<input type='radio' name='choice' value='$key'".($choice==$key?" checked":"").resurrection_control_id("motd-$id-choice-$key").">");
 				resurrection_label_open("motd-$id-choice-$key");
 			}
-			if ($rz) {
-				// The same text as 1.1.2 ("choice (count - percent%)", its color codes kept), each tag it opens closed.
-				rawoutput("<span class='rz-poll-text'>" . resurrection_appoencode_closed(sprintf("%s (%s - %s%%)", stripslashes($val),
-					(isset($choices[$key])?(int)$choices[$key]:0), $percent)) . "</span>");
-			} else {
-				output_notl("%s (%s - %s%%)`n", stripslashes($val),
-						(isset($choices[$key])?(int)$choices[$key]:0), $percent);
-			}
+			// The same text as 1.1.2 ("choice (count - percent%)", its color codes kept), each tag it opens closed.
+			rawoutput("<span class='rz-poll-text'>" . resurrection_appoencode_closed(sprintf("%s (%s - %s%%)", stripslashes($val),
+				(isset($choices[$key])?(int)$choices[$key]:0), $percent)) . "</span>");
 			if ($showform) resurrection_label_close();
 			if ($maxitem==0 || !isset($choices[$key])){
 				$width=1;
@@ -213,20 +162,16 @@ function pollitem($id,$subject,$body,$author,$date,$showpoll=true){
 				$width = round(($choices[$key]/$maxitem) * 400,0);
 			}
 			$width = max($width,1);
-			if ($rz) {
-				// The bar's length is the 1.1.2 rule's: the votes as a share of the most any choice has (400px there).
-				rawoutput("<progress class='rz-poll-bar' max='400' value='$width' aria-hidden='true'></progress></div>");
-			} else {
-				rawoutput("<img src='images/rule.gif' width='$width' height='2' alt='$percent'><br>");
-			}
+			// The bar's length is the 1.1.2 rule's: the votes as a share of the most any choice has (400px there).
+			rawoutput("<progress class='rz-poll-bar' max='400' value='$width' aria-hidden='true'></progress></div>");
 		}
 	}
-	if ($rz) rawoutput("</fieldset>");
+	rawoutput("</fieldset>");
 	if ($showform) {
 		$vote = translate_inline("Vote");
 		rawoutput("<input type='submit' class='" . resurrection_button_class(true) . "' value='$vote'></form>");
 	}
-	rawoutput($rz ? "</article>" : "<hr>",true);
+	rawoutput("</article>",true);
 }
 
 /**
@@ -430,8 +375,8 @@ function motd_poll_form() {
 		rawoutput("<textarea class='input' name='body'".resurrection_control_id('motd-poll-body')." cols='37' rows='5'>".HTMLEntities($body, ENT_COMPAT, getsetting("charset", "ISO-8859-1"))."</textarea><br/>");
 		$option = translate_inline("Option");
 		output("Choices:`n");
-		// Each choice's box inside its label in the Resurrection template (Phase 5 task 11); 1.1.2's markup otherwise.
-		$pollitem = (resurrection_ui() ? "<label>" : "")."$option <input name='opt[]'>".(resurrection_ui() ? "</label>" : "")."<br/>";
+		// Each choice's box inside its label (Phase 5 task 11).
+		$pollitem = "<label>$option <input name='opt[]'></label><br/>";
 		rawoutput($pollitem);
 		rawoutput($pollitem);
 		rawoutput($pollitem);

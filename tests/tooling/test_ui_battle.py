@@ -10,7 +10,7 @@ Static: runs wherever the suite runs (Baseline integrity too). It checks that
 - the spec describes each new component.
 
 The rendered pages (cards with their numbers and bar widths, the log as a list, the result block, the commentary list
-and pager, the old skins byte for byte) are checked in tests/unit/BattleCommentaryRenderTest.php, and the shops' links
+and pager) are checked in tests/unit/BattleCommentaryRenderTest.php, and the shops' links
 in tests/unit/FormsRenderTest.php.
 """
 from pathlib import Path
@@ -104,7 +104,7 @@ class BattleScreenStyleTests(unittest.TestCase):
         self.assertIn('position: relative;', self.rule('.rz-content tr:has(.rz-shop-link)'))
         self.assertIn('inset: 0;', self.rule('.rz-shop-link::after'))
         output = (ROOT / 'lib' / 'output.php').read_text()
-        self.assertIn('"shop-button" => array(" class=\'rz-shop-link\'"', output)
+        self.assertIn('"shop-button" => " class=\'rz-shop-link\'",', output)
         self.assertNotIn("rz-button-primary'\", \" style='background:none;border:0;padding:0;margin:0;font:inherit;cursor:pointer", output)
 
 
@@ -127,11 +127,13 @@ class BattleActionTests(unittest.TestCase):
         self.assertIn("'main',true", pvp)
         self.assertIn("resurrection_battle_action('special'", (ROOT / 'lib/specialty_combat.php').read_text())
 
-    def test_battle_php_drops_the_divider_only_in_the_new_screen(self):
+    def test_battle_php_drops_the_divider(self):
+        # The battle screen has no "~ ~ ~ Fight ~ ~ ~" divider, nor 1.1.2's "Next round:" and "End of Round:" lines; until
+        # Phase 5 task 15 the 1.1.2 skins kept them (the $rzbattle switch), and the skins are gone.
         battle = (ROOT / 'battle.php').read_text()
-        self.assertIn('~ ~ ~ Fight ~ ~ ~', battle, 'old skins keep the divider')
-        divider = battle.index('~ ~ ~ Fight ~ ~ ~')
-        self.assertIn('if (!$rzbattle)', battle[divider - 200:divider])
+        code = '\n'.join(line for line in battle.splitlines() if not line.lstrip().startswith('//'))
+        for gone in ('~ ~ ~ Fight ~ ~ ~', '$rzbattle', 'resurrection_battle_ui', 'Next round:', 'End of Round:'):
+            self.assertNotIn(gone, code, gone)
 
 
 class DraftScriptTests(unittest.TestCase):

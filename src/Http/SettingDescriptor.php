@@ -32,13 +32,10 @@ final class SettingDescriptor
                     $descriptor['max'] = (float)($parts[3] ?? 0);
                 }
                 $descriptor['default'] ??= (string)max(0, $descriptor['min']);
-            } elseif ($type === 'enum' || $type === 'enumpretrans' || $type === 'theme') {
+            } elseif ($type === 'enum' || $type === 'enumpretrans') {
+                // 1.1.2's theme type (a select of the skins in templates/) went with the skins (Phase 5 task 15).
                 $descriptor['type'] = 'enum'; $options = [];
-                if ($type === 'theme') {
-                    foreach (glob('templates/*.htm') ?: [] as $file) $options[basename($file)] = basename($file);
-                } else {
-                    for ($i=2; $i+1<count($parts); $i+=2) $options[$parts[$i]] = $parts[$i+1];
-                }
+                for ($i=2; $i+1<count($parts); $i+=2) $options[$parts[$i]] = $parts[$i+1];
                 $descriptor['options'] = $options;
                 $descriptor['default'] ??= (string)array_key_first($options);
             } else {

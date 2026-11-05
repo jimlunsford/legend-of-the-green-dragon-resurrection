@@ -16,94 +16,20 @@ if (db_num_rows($result)>0){
 	    $row['name'] = $row['msgfrom'];
 	}
 
-	if (resurrection_ui()) {
-		// Phase 5 task 11: the Resurrection template's read view (lib/mail_view.php). The same message is marked read,
-		// with the same actions and the same Previous and Next.
-		require_once __DIR__ . '/../mail_view.php';
-		db_query("UPDATE " . db_prefix("mail") . " SET seen=1 WHERE msgto=? AND messageid=?",true,[$session['user']['acctid'],$id]);
-		invalidatedatacache("mail-{$session['user']['acctid']}");
-		$problem = "Abusive Email Report:\nFrom: {$row['name']}\nSubject: {$row['subject']}\nSent: {$row['sent']}\nID: {$row['messageid']}\nBody:\n{$row['body']}";
-		$near = [];
-		foreach (['pid' => "messageid < ? ORDER BY messageid DESC", 'nid' => "messageid > ? ORDER BY messageid"] as $key => $where) {
-			$nearresult = db_query("SELECT messageid FROM $mail WHERE msgto=? AND $where LIMIT 1", true, [(int)$session['user']['acctid'], (int)$id]);
-			$nearrow = db_fetch_assoc($nearresult);
-			$near[$key] = $nearrow ? (int)$nearrow['messageid'] : 0;
-		}
-		resurrection_mail_read($row, $problem, $near['pid'], $near['nid']);
-	}elseif (!$row['seen']) {
-		output("`b`#NEW`b`n");
-	}else{
-		output("`n");
-	}
-	if (!resurrection_ui()) {
-	output("`b`2From:`b `^%s`n",$row['name']);
-	output("`b`2Subject:`b `^%s`n",$row['subject']);
-	output("`b`2Sent:`b `^%s`n",$row['sent']);
-	output_notl("<img src='images/uscroll.GIF' width='182px' height='11px' alt='' align='center'>`n",true);
-	output_notl(str_replace("\n","`n",$row['body']));
-	output_notl("`n<img src='images/lscroll.GIF' width='182px' height='11px' alt='' align='center'>`n",true);
-	$sql = "UPDATE " . db_prefix("mail") . " SET seen=1 WHERE msgto=? AND messageid=?";
-	db_query($sql,true,[$session['user']['acctid'],$id]);
+	// Phase 5 task 11: the read view (lib/mail_view.php). The same message is marked read, with the same actions and the
+	// same Previous and Next. (1.1.2's From, Subject and Sent lines between scroll images, and its table of actions,
+	// were kept for the 1.1.2 skins until Phase 5 task 15.)
+	require_once __DIR__ . '/../mail_view.php';
+	db_query("UPDATE " . db_prefix("mail") . " SET seen=1 WHERE msgto=? AND messageid=?",true,[$session['user']['acctid'],$id]);
 	invalidatedatacache("mail-{$session['user']['acctid']}");
-	$reply = translate_inline("Reply");
-	$del = translate_inline("Delete");
-	$unread = translate_inline("Mark Unread");
-	$report = translate_inline("Report to Admin");
 	$problem = "Abusive Email Report:\nFrom: {$row['name']}\nSubject: {$row['subject']}\nSent: {$row['sent']}\nID: {$row['messageid']}\nBody:\n{$row['body']}";
-	rawoutput("<table width='50%' border='0' cellpadding='0' cellspacing='5'><tr>");
-	if ($row['msgfrom'] > 0 && is_numeric($row['msgfrom'])) {
-		rawoutput("<td><a href='mail.php?op=write&replyto={$row['messageid']}' class='motd'>$reply</a></td>");
-	} else {
-		rawoutput("<td>&nbsp;</td>");
+	$near = [];
+	foreach (['pid' => "messageid < ? ORDER BY messageid DESC", 'nid' => "messageid > ? ORDER BY messageid"] as $key => $where) {
+		$nearresult = db_query("SELECT messageid FROM $mail WHERE msgto=? AND $where LIMIT 1", true, [(int)$session['user']['acctid'], (int)$id]);
+		$nearrow = db_fetch_assoc($nearresult);
+		$near[$key] = $nearrow ? (int)$nearrow['messageid'] : 0;
 	}
-    foreach (['del'=>$del, 'unread'=>$unread] as $action=>$label) {
-        rawoutput("<td><form action='mail.php?op=$action' method='post'>");
-        rawoutput(resurrection_csrf_field());
-        rawoutput("<input type='hidden' name='id' value='{$row['messageid']}'>");
-        rawoutput("<button type='submit'>" . htmlspecialchars($label, ENT_QUOTES, 'UTF-8') . '</button></form></td>');
-    }
-
-	// Don't allow reporting of system messages as abuse.
-	if ((string)$row['msgfrom'] !== '0') {
-		rawoutput("<td><a href=\"petition.php?problem=".rawurlencode($problem)."&abuse=yes\" class='motd'>$report</a></td>");
-	} else {
-		rawoutput("<td>&nbsp;</td>");
-	}
-	rawoutput("</tr><tr>");
-	// Bound: the message ID comes from the request (as an integer).
-	$sql = "SELECT messageid FROM $mail WHERE msgto=? AND messageid < ? ORDER BY messageid DESC LIMIT 1";
-	$result = db_query($sql, true, [(int)$session['user']['acctid'], (int)$id]);
-	if (db_num_rows($result)>0){
-		$row = db_fetch_assoc($result);
-		$pid = $row['messageid'];
-	}else{
-		$pid = 0;
-	}
-	$sql = "SELECT messageid FROM $mail WHERE msgto=? AND messageid > ? ORDER BY messageid  LIMIT 1";
-	$result = db_query($sql, true, [(int)$session['user']['acctid'], (int)$id]);
-	if (db_num_rows($result)>0){
-		$row = db_fetch_assoc($result);
-		$nid = $row['messageid'];
-	}else{
-		$nid = 0;
-	}
-	$prev = translate_inline("< Previous");
-	$next = translate_inline("Next >");
-	rawoutput("<td nowrap='true'>");
-	if ($pid > 0) {
-		rawoutput("<a href='mail.php?op=read&id=$pid' class='motd'>".htmlentities($prev, ENT_COMPAT, getsetting("charset", "ISO-8859-1"))."</a>");
-	}else{
-		rawoutput(htmlentities($prev), ENT_COMPAT, getsetting("charset", "ISO-8859-1"));
-	}
-	rawoutput("</td><td nowrap='true'>");
-	if ($nid > 0){
-		rawoutput("<a href='mail.php?op=read&id=$nid' class='motd'>".htmlentities($next, ENT_COMPAT, getsetting("charset", "ISO-8859-1"))."</a>");
-	}else{
-		rawoutput(htmlentities($next), ENT_COMPAT, getsetting("charset", "ISO-8859-1"));
-	}
-	rawoutput("</td>");
-	rawoutput("</tr></table>");
-	}
+	resurrection_mail_read($row, $problem, $near['pid'], $near['nid']);
 }else{
 	output("Eek, no such message was found!");
 }

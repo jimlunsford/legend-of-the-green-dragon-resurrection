@@ -13,9 +13,10 @@ use Resurrection\Configuration\LegacyConfig;
  *
  * In the Resurrection template: the fighter cards (the player, then the foe) with the numbers and bar widths of the
  * state the page saved; Fight as the one primary with Run beside it; the battle log as an ordered list, one item per
- * round, each labelled; the victory or defeat result block. In a 1.1.2 skin (jade.htm, by its cookie), the content of
- * every battle and commentary page is byte for byte what cf13929 printed (tests/fixtures/battle-commentary-old-skin.json),
- * except the commentary's draft script, which task 10 removed.
+ * round, each labelled; the victory or defeat result block. Until Phase 5 task 15 every battle and commentary page was
+ * also rendered in a 1.1.2 skin (jade.htm, by its cookie) and compared byte for byte with what cf13929 printed
+ * (tests/fixtures/battle-commentary-old-skin.json); the skins are gone, and so are that test and its fixture
+ * (docs/PHASE5-TASK15-REMOVE-SKINS-20261105.md).
  *
  * Rendering is TemplateRenderTest's and FormsRenderTest's: the PHP CLI over a symlinked tree. An installed database is
  * used as it is; an empty one is installed here with scripts/install.php --modules=none and emptied again afterwards.
@@ -24,20 +25,14 @@ use Resurrection\Configuration\LegacyConfig;
  * Phase 5 task 14 (docs/PHASE5-TASK14-PORTRAITS-20261105.md): every foe card shows the foe's portrait, 200x240 with
  * the foe's name as its alt text, and the player's card none: a forest or graveyard creature its own (by creatureid), a
  * training master the master's (by masterid), the Green Dragon its own, a PvP victim their race portrait; with two
- * foes, each card its own. The old skins show none (the pins).
+ * foes, each card its own.
  */
 final class BattleCommentaryRenderTest extends TestCase
 {
     private const string ROOT = __DIR__ . '/../..';
-    private const string PINS = __DIR__ . '/../fixtures/battle-commentary-old-skin.json';
     private const string PASSWORD = 'Synthetic battle render player password';
     /** Settings for the fights: automatic fighting offered, no forest or graveyard event in place of a fight. */
     private const array SETTINGS = ['autofight' => '1', 'autofightfull' => '1', 'forestchance' => '0', 'gravechance' => '0'];
-    /** 1.1.2's draft-saving script, which previewfield() printed after the comment input until task 10 (lib/forms.php is CRLF),
-     * with the line break rawoutput() adds. */
-    private const string DRAFT_SCRIPT = "\r\n\t\t<script language='JavaScript'>\r\n\t\t\tinputinsertcommentary.addEvent('keyup', function(){\r\n"
-        . "\t\t\t\twindow.localStorage['value'] = inputinsertcommentary.value;\r\n\t\t\t\twindow.localStorage['timestamp'] = (new Date()). getTime();\r\n"
-        . "\t\t\t}, false);\r\n\t\t\tinputinsertcommentary.value = window.localStorage['value'];\r\n\t\t</script>\r\n\t\n";
 
     private static string $tree = '';
     private static string $work = '';
@@ -147,7 +142,7 @@ final class BattleCommentaryRenderTest extends TestCase
     {
         $this->withPlayer('RzAuto', ['level' => 5, 'hitpoints' => 500, 'maxhitpoints' => 500, 'attack' => 1, 'defense' => 12], function (array $s): void {
             $this->forestFight($s, null, 0);
-            $page = $this->submit($s, 'forest.php?op=fight', null, 'five');
+            $page = $this->submit($s, 'forest.php?op=fight', 'five');
             $document = $this->document($page);
             $list = $document->querySelector('.rz-battle-log ol.rz-battle-rounds');
             self::assertNotNull($list);
@@ -264,7 +259,7 @@ final class BattleCommentaryRenderTest extends TestCase
     public function testGreenDragonShowsItsPortrait(): void
     {
         $this->withPlayer('RzDragon', ['level' => 15, 'hitpoints' => 5000, 'maxhitpoints' => 5000, 'attack' => 1, 'defense' => 100], function (array $s): void {
-            $this->page($s, 'dragon.php', null, null, true);
+            $this->page($s, 'dragon.php', null, true);
             $page = $this->submit($s, 'dragon.php?op=begin');
             $state = $this->state($s);
             self::assertNotSame('', $state['badguy'], 'the dragon fight goes on');
@@ -287,8 +282,8 @@ final class BattleCommentaryRenderTest extends TestCase
                 $this->withPlayer('RzAttacker', $fields, function (array $s) use ($victim): void {
                     // The attack form is bound to both accounts as they are: a first page view first, which fills a new
                     // account's preferences, so the form's view does not change the attacker it was issued for.
-                    $this->page($s, 'village.php', null, null, true);
-                    $this->page($s, 'pvp.php?act=attack&name=' . $victim, null, null, true);
+                    $this->page($s, 'village.php', null, true);
+                    $this->page($s, 'pvp.php?act=attack&name=' . $victim, null, true);
                     $page = $this->submit($s, 'pvp.php?act=attack');
                     $state = $this->state($s);
                     self::assertNotSame('', $state['badguy'], 'the PvP fight goes on');
@@ -367,63 +362,6 @@ final class BattleCommentaryRenderTest extends TestCase
         });
     }
 
-    /**
-     * In a 1.1.2 skin the battle and commentary pages are byte for byte what cf13929 printed, tokens and ids normalized.
-     * With RESURRECTION_RECORD_PINS set to a path, the pages are written there as JSON instead: the fixture was recorded so
-     * at cf13929, with this test copied into a cf13929 worktree.
-     */
-    public function testOldSkinBattleAndCommentaryAreUnchanged(): void
-    {
-        $active = (int)self::php('$r = db_query("SELECT COUNT(*) AS c FROM modules WHERE active=1"); echo $r[0]["c"];');
-        if ($active !== 0) { self::markTestSkipped('The pins are recorded with no active module.'); }
-        $pages = [];
-        $this->withPlayer('RzOldForest', ['level' => 5, 'hitpoints' => 500, 'maxhitpoints' => 500, 'attack' => 1, 'defense' => 12], function (array $s) use (&$pages): void {
-            foreach ($this->forestFight($s, null, 3, 'jade.htm') as $label => $page) { $pages['forest ' . $label] = $page; }
-            $pages['forest five rounds'] = $this->submit($s, 'forest.php?op=fight', 'jade.htm', 'five');
-        });
-        $this->withPlayer('RzOldWin', ['level' => 1, 'hitpoints' => 500, 'maxhitpoints' => 500, 'attack' => 400, 'defense' => 50], function (array $s) use (&$pages): void {
-            $won = $this->forestFight($s, 'victory', 6, 'jade.htm');
-            $pages['forest win'] = end($won);
-        });
-        $this->withPlayer('RzOldLoss', ['level' => 5, 'hitpoints' => 1, 'maxhitpoints' => 50, 'attack' => 1, 'defense' => 0], function (array $s) use (&$pages): void {
-            $lost = $this->forestFight($s, 'defeat', 6, 'jade.htm');
-            $pages['forest loss'] = end($lost);
-        });
-        $this->withPlayer('RzOldGrave', ['level' => 3, 'alive' => 0, 'hitpoints' => 0, 'soulpoints' => 65, 'gravefights' => 10, 'deathpower' => 0], function (array $s) use (&$pages): void {
-            foreach ($this->graveyardFight($s, 2, 'jade.htm') as $label => $page) { $pages['graveyard ' . $label] = $page; }
-        });
-        $this->withPlayer('RzOldTrain', ['level' => 1, 'experience' => 200, 'seenmaster' => 0, 'hitpoints' => 300, 'maxhitpoints' => 300, 'attack' => 1, 'defense' => 30], function (array $s) use (&$pages): void {
-            foreach ($this->trainingFight($s, 2, 'jade.htm') as $label => $page) { $pages['training ' . $label] = $page; }
-        });
-        $this->withPlayer('RzOldTalk', ['superuser' => 16], function (array $s) use (&$pages): void {
-            $this->withComments($s, function () use ($s, &$pages): void {
-                $pages['village commentary'] = $this->commentary($this->page($s, 'village.php', null, 'jade.htm'));
-            });
-        });
-        $pinned = [];
-        foreach ($pages as $label => $page) {
-            $pinned[$label] = $label === 'village commentary' ? $page : $this->normalize($this->content($page));
-        }
-        $record = getenv('RESURRECTION_RECORD_PINS');
-        if ($record !== false && $record !== '') {
-            file_put_contents($record, json_encode($pinned, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR) . "\n");
-            self::markTestIncomplete('Pins recorded to ' . $record);
-        }
-        /** @var array<string, string> $expected */
-        $expected = json_decode((string)file_get_contents(self::PINS), true, 512, JSON_THROW_ON_ERROR);
-        self::assertSame(array_keys($expected), array_keys($pinned));
-        foreach ($expected as $label => $html) {
-            if ($label === 'village commentary') {
-                // The one change task 10 makes in a 1.1.2 skin: the draft script is gone (CHANGES-FROM-1.1.2.md).
-                self::assertSame(1, substr_count($html, self::DRAFT_SCRIPT), 'the pin holds the draft script once');
-                $html = str_replace(self::DRAFT_SCRIPT, '', $html);
-            }
-            self::assertSame($html, $pinned[$label], $label);
-            self::assertStringNotContainsString('rz-', $pinned[$label], $label);
-        }
-        self::assertStringNotContainsString('addEvent', $pinned['village commentary']);
-    }
-
     // The fights.
 
     /**
@@ -433,15 +371,15 @@ final class BattleCommentaryRenderTest extends TestCase
      * @param array<string, mixed> $s
      * @return array<string, string>
      */
-    private function forestFight(array $s, ?string $until, int $presses, ?string $skin = null): array
+    private function forestFight(array $s, ?string $until, int $presses): array
     {
         $this->states = [];
-        $pages = ['forest entry' => $this->page($s, 'forest.php?op=search', null, $skin, true)];
-        $pages['encounter'] = $this->submit($s, 'forest.php?op=search', $skin);
+        $pages = ['forest entry' => $this->page($s, 'forest.php?op=search', null, true)];
+        $pages['encounter'] = $this->submit($s, 'forest.php?op=search');
         $this->states['encounter'] = $this->state($s);
         for ($i = 1; $i <= $presses; $i++) {
             if ($until !== null && $this->ended($s, $until)) { break; }
-            $pages['fight ' . $i] = $this->submit($s, 'forest.php?op=fight', $skin);
+            $pages['fight ' . $i] = $this->submit($s, 'forest.php?op=fight');
             $this->states['fight ' . $i] = $this->state($s);
         }
         if ($until !== null) { self::assertTrue($this->ended($s, $until), 'the fight ended in ' . $until); }
@@ -449,22 +387,22 @@ final class BattleCommentaryRenderTest extends TestCase
     }
 
     /** @param array<string, mixed> $s @return array<string, string> */
-    private function graveyardFight(array $s, int $presses, ?string $skin = null): array
+    private function graveyardFight(array $s, int $presses): array
     {
         $this->states = [];
-        $pages = ['entry' => $this->page($s, 'graveyard.php', null, $skin, true)];
-        $pages['encounter'] = $this->submit($s, 'graveyard.php?op=search', $skin);
-        for ($i = 1; $i <= $presses; $i++) { $pages['fight ' . $i] = $this->submit($s, 'graveyard.php?op=fight', $skin); $this->states['fight ' . $i] = $this->state($s); }
+        $pages = ['entry' => $this->page($s, 'graveyard.php', null, true)];
+        $pages['encounter'] = $this->submit($s, 'graveyard.php?op=search');
+        for ($i = 1; $i <= $presses; $i++) { $pages['fight ' . $i] = $this->submit($s, 'graveyard.php?op=fight'); $this->states['fight ' . $i] = $this->state($s); }
         return $pages;
     }
 
     /** @param array<string, mixed> $s @return array<string, string> */
-    private function trainingFight(array $s, int $presses, ?string $skin = null): array
+    private function trainingFight(array $s, int $presses): array
     {
         $this->states = [];
-        $pages = ['entry' => $this->page($s, 'train.php', null, $skin, true)];
-        $pages['encounter'] = $this->submit($s, 'train.php?op=challenge', $skin);
-        for ($i = 1; $i <= $presses; $i++) { $pages['fight ' . $i] = $this->submit($s, 'train.php?op=fight', $skin); $this->states['fight ' . $i] = $this->state($s); }
+        $pages = ['entry' => $this->page($s, 'train.php', null, true)];
+        $pages['encounter'] = $this->submit($s, 'train.php?op=challenge');
+        for ($i = 1; $i <= $presses; $i++) { $pages['fight ' . $i] = $this->submit($s, 'train.php?op=fight'); $this->states['fight ' . $i] = $this->state($s); }
         return $pages;
     }
 
@@ -708,7 +646,7 @@ final class BattleCommentaryRenderTest extends TestCase
      *
      * @param array<string, mixed> $s
      */
-    private function submit(array $s, string $action, ?string $skin = null, ?string $rounds = null): string
+    private function submit(array $s, string $action, ?string $rounds = null): string
     {
         $last = (string)file_get_contents(self::$work . '/last-' . $s['id'] . '.html');
         $document = $this->document($last);
@@ -717,9 +655,9 @@ final class BattleCommentaryRenderTest extends TestCase
             $fields = [];
             foreach ($form->querySelectorAll('input[type="hidden"]') as $input) { $fields[(string)$input->getAttribute('name')] = (string)$input->getAttribute('value'); }
             if (($fields['rounds'] ?? null) !== $rounds) { continue; }
-            return $this->page($s, (string)$form->getAttribute('action'), $fields, $skin);
+            return $this->page($s, (string)$form->getAttribute('action'), $fields);
         }
-        self::fail('No form ' . $action . ($rounds === null ? '' : ' (' . $rounds . ')') . " on the last page:\n" . substr($this->content($last), 0, 3000));
+        self::fail('No form ' . $action . ($rounds === null ? '' : ' (' . $rounds . ')') . " on the last page:\n" . substr($last, 0, 3000));
     }
 
     /**
@@ -729,7 +667,7 @@ final class BattleCommentaryRenderTest extends TestCase
      * @param array<string, mixed> $s
      * @param array<string, string>|null $post
      */
-    private function page(array $s, string $url, ?array $post = null, ?string $skin = null, bool $allow = false): string
+    private function page(array $s, string $url, ?array $post = null, bool $allow = false): string
     {
         if ($allow || !is_file(self::$work . '/last-' . $s['id'] . '.html')) {
             self::php('db_query("UPDATE accounts SET allowednavs=?, restorepage=? WHERE acctid=?", true, [serialize([' . var_export($url, true) . ' => true]), "", ' . $s['acctid'] . ']);');
@@ -747,7 +685,6 @@ final class BattleCommentaryRenderTest extends TestCase
             "    'HTTP_HOST' => 'localhost'] + \$_SERVER;\n" .
             "\$_GET = " . var_export($get, true) . ";\n" .
             "\$_POST = " . var_export($post ?? [], true) . ";\n" .
-            ($skin === null ? '' : "\$_COOKIE = ['template' => " . var_export($skin, true) . "];\n") .
             "session_save_path(" . var_export(self::$tree . '/.sessions', true) . "); session_id(" . var_export($s['id'], true) . "); session_start();\n" .
             "if (!isset(\$_SESSION['session'])) \$_SESSION = ['session' => ['loggedin' => true, 'lasthit' => time(), 'allowednavs' => [], 'user' => ['acctid' => {$s['acctid']}, 'loggedin' => true]],\n" .
             "    'auth_version' => {$s['authversion']}, 'auth_privileges' => {$s['superuser']}];\n" .
@@ -760,7 +697,7 @@ final class BattleCommentaryRenderTest extends TestCase
         self::assertStringContainsString('</html>', $out, $url . ': ' . substr($out, 0, 2000));
         file_put_contents(self::$work . '/last-' . $s['id'] . '.html', $out);
         if (getenv('RESURRECTION_BATTLE_RENDER_DUMP')) {
-            file_put_contents(getenv('RESURRECTION_BATTLE_RENDER_DUMP') . '/' . sprintf('%03d', self::$sequence) . '-' . preg_replace('/[^a-z0-9]+/i', '-', $url) . ($skin ? '-old' : '') . '.html', $out);
+            file_put_contents(getenv('RESURRECTION_BATTLE_RENDER_DUMP') . '/' . sprintf('%03d', self::$sequence) . '-' . preg_replace('/[^a-z0-9]+/i', '-', $url) . '.html', $out);
         }
         return $out;
     }
@@ -784,39 +721,6 @@ final class BattleCommentaryRenderTest extends TestCase
     private function document(string $page): \Dom\HTMLDocument
     {
         return \Dom\HTMLDocument::createFromString($page, LIBXML_NOERROR);
-    }
-
-    /**
-     * The page's content: what page_footer() put between jade.htm's header part and its footer part, from the forced
-     * navigation comment every page prints first to the cell the footer part closes.
-     */
-    private function content(string $page): string
-    {
-        $start = strpos($page, "<!--\nAllowAnonymous");
-        if ($start === false) { return $page; }
-        self::assertSame(1, preg_match_all("#\\s*</td>\\s*<td valign=top width='120'>#", $page, $found, PREG_OFFSET_CAPTURE));
-        return substr($page, $start, $found[0][0][1] - $start);
-    }
-
-    /** The commentary's part of a page: from its anchor, through the comments and the talk form, to the pager's end. */
-    private function commentary(string $page): string
-    {
-        $content = $this->content($page);
-        $start = strpos($content, "<a name='village'></a>");
-        $end = strrpos($content, 'Last Page &gt;&gt;');
-        self::assertNotFalse($start);
-        self::assertNotFalse($end);
-        $end += strlen('Last Page &gt;&gt;');
-        if (substr($content, $end, 4) === '</a>') { $end += 4; }
-        return $this->normalize(substr($content, $start, $end - $start));
-    }
-
-    /** Tokens, the session's page counter, and account and comment ids, which differ from run to run. */
-    private function normalize(string $html): string
-    {
-        return (string)preg_replace(['/name=(["\'])(csrf_token|action_token)\1 value=(["\'])[^"\']*\3/', '/value=(["\'])[^"\']*\1( name=(["\'])(csrf_token|action_token)\3)/',
-            '/([?&;]c=)\d+(-\d+)?/', '/(char=)\d+/', '/(name="removecomment" value=")\d+/', "/(name='counter' value=')\\d+/"],
-            ['name=$1$2$1 value=$3TOKEN$3', 'value=$1TOKEN$1$2', '${1}N', '${1}N', '${1}N', '${1}N'], $html);
     }
 
     // Processes.

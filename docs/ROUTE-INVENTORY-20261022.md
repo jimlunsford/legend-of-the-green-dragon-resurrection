@@ -99,7 +99,7 @@ with `check_su_access()`. Short names in the evidence column: `CRS` is `CORE-ROU
 | `healer.php?op=buy\|companion` | player | gold, hit points, companion | CLOSED | This task: GET asks; POST + CSRF + intent; potion size from a fixed list; server price (the URL's `compcost` is ignored); locked transaction; `test_healer_potion_and_companion_authority_http`. |
 | `hof.php` | player | no | READ-ONLY | This task: `op`, `subop` and `page` checked; the page LIMIT bound; `test_list_hall_of_fame_and_news_bound_requests_http`. |
 | `hof.php?op=kills\|money\|gems\|charm\|tough\|resurrects\|days&subop=most\|least` | player | no | READ-ONLY | Same; the order and comparison come from the fixed `subop`. |
-| `home.php` | anonymous | skin cookie | READ-ONLY | The skin choice is POST + CSRF and sets only the visitor's own cookie; the online count is cached from server values. |
+| `home.php` | anonymous | no | READ-ONLY | The online count is cached from server values. Until Phase 5 task 15 a skin choice (POST + CSRF) set the visitor's own `template` cookie; the chooser is removed and a posted `template` field is ignored (`PHASE5-TASK15-REMOVE-SKINS-20261105.md`). |
 | `home.php?op=timeout` | anonymous | no | READ-ONLY | The timeout notice. |
 | `index.php` | anyone | no | READ-ONLY | Redirects to `home.php` with the same query. |
 | `index.php?op=timeout` | anyone | no | READ-ONLY | Same. |
@@ -461,3 +461,10 @@ Three 1.1.2 links to optional pages 1.1.2 never shipped are recorded in the test
 hidden `retitle.php` nav).
 
 Counts: CLOSED 88, DISABLED 3, READ-ONLY 69, OPEN 0, total 160.
+
+## The 1.1.2 skins removed, 2026-11-05
+
+Phase 5 task 15 (`PHASE5-TASK15-REMOVE-SKINS-20261105.md`). No entry point is added or removed. `home.php` no longer
+changes anything (its skin chooser and the `template` cookie it set are removed; its row above says so), and
+`prefs.php?op=save` no longer sets the cookie. `test_route_inventory.py`'s dead-link scan reads the one template,
+`templates/resurrection.htm`, in place of the 18 skins (`test_the_link_scan_reads_the_one_template`).

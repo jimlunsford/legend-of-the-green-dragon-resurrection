@@ -21,11 +21,9 @@ function resurrection_core_layout(): array {
 		"motditems"=>"How many items should be shown on the motdlist,int",
 
 		"Main Page Display,title",
-		"homeskinselect"=>"Should the skin selection widget be shown?,bool",
 		"homecurtime"=>"Should the current realm time be shown?,bool",
 		"homenewdaytime"=>"Should the time till newday be shown?,bool",
 		"homenewestplayer"=>"Should the newest player be shown?,bool",
-		"defaultskin"=>"What skin should be the default?,theme",
 		"impressum"=>"Tell the world something about the person running this server. (e.g. name and address),textarea",
 
 		"Source Code,title",

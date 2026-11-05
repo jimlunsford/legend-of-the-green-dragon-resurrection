@@ -147,12 +147,12 @@ function resurrection_editor_sections(array $layout, array $schema): array {
 /**
  * @param array<string,array<string,mixed>> $schema
  * @param array<string,mixed> $values
- * @param array<int|string,mixed> $layout the declarations the schema came from: in the Resurrection template their
- *   sections become tabs (Phase 5 task 11), as showform() drew them in 1.1.2; a 1.1.2 skin keeps the one list. */
+ * @param array<int|string,mixed> $layout the declarations the schema came from: their sections become tabs (Phase 5
+ *   task 11), as showform() drew them in 1.1.2. (The one list was kept for the 1.1.2 skins until Phase 5 task 15.) */
 function resurrection_editor_form(string $url,string $scope,string $context,array $schema,array $values,array $layout=[]): void {
     $escape=static fn($v)=>htmlspecialchars((string)$v,ENT_QUOTES|ENT_SUBSTITUTE,'UTF-8');
     rawoutput('<form method="POST" action="'.$escape($url).'">'.resurrection_action_fields($scope,$context));
-    $sections=resurrection_ui() ? resurrection_editor_sections($layout, $schema) : [];
+    $sections=resurrection_editor_sections($layout, $schema);
     if (count($sections)>1) {
         // showform()'s tabs (Phase 5 task 9) without the index field: the editor takes only the settings it declares.
         require_once __DIR__.'/showform.php';

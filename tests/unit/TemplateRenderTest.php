@@ -34,7 +34,14 @@ use Resurrection\Configuration\LegacyConfig;
  * bars; torments, favor and soulpoints when dead), only signed in; the More section (MoTD, Petition for Help, Credits
  * where allowed); and the bottom tab bar, whose tabs are anchors on the page, each target there once: Go only with the
  * nav column, Character only signed in, Talk only where commentary rendered, More always. The content comes before the
- * character panel, More and the footer. The mail popup has none of them, and a 1.1.2 skin (jade.htm) none either.
+ * character panel, More and the footer. The mail popup has none of them.
+ *
+ * Phase 5 task 15 (docs/PHASE5-TASK15-REMOVE-SKINS-20261105.md) removes the 1.1.2 skins and skin selection: a fresh
+ * install stores no defaultskin or homeskinselect setting; a request carrying an old template cookie (jade.htm), with a
+ * stored defaultskin of jade.htm and homeskinselect of 1 as an older install has them, renders the Resurrection UI,
+ * signed out and signed in; the home page has no skin chooser. And the copyright enforcement still refuses a template
+ * without {copyright}: in a tree whose templates/resurrection.htm lacks it, the page says so. (Until task 15 the village
+ * was rendered in jade.htm too, by its cookie, and had none of the phone's pieces.)
  *
  * The test does not depend on the order it runs in: an installed database is used as it is; an empty one is installed
  * here with scripts/install.php --modules=none and emptied again afterwards. The player it creates, its mail, the MoTD
@@ -62,6 +69,7 @@ final class TemplateRenderTest extends TestCase
         $motd = 0;
         $clock = null;
         $newest = null;
+        $skinrows = false;
         try {
             foreach (scandir($root) ?: [] as $entry) {
                 if (in_array($entry, ['.', '..', '.git', 'dbconnect.php'], true)) { continue; }
@@ -79,8 +87,9 @@ final class TemplateRenderTest extends TestCase
                 self::assertSame(0, $code, $err . $out);
                 $installed = true;
             }
-            // The game's own default, as a fresh install stores it.
-            self::assertSame('resurrection.htm', $this->php($tree, 'echo getsetting("defaultskin", "unset");'));
+            // No skin settings: a fresh install stores neither (1.1.2 stored defaultskin "jade.htm" and homeskinselect 1;
+            // tasks 3 to 14 stored defaultskin "resurrection.htm"). No getsetting() here: it would store its default.
+            self::assertSame('0', $this->php($tree, 'echo count(db_query("SELECT setting FROM settings WHERE setting IN (?, ?)", true, ["defaultskin", "homeskinselect"]));'));
 
             // The clock the footer's countdown is read from, pinned for the test and restored afterwards.
             $clock = json_decode($this->php($tree, 'echo json_encode(db_query("SELECT setting, value FROM settings WHERE setting IN (?, ?, ?)", true, ["game_epoch", "gameoffsetseconds", "daysperday"]));'), true);
@@ -100,6 +109,10 @@ final class TemplateRenderTest extends TestCase
             $home = $this->render($tree, $work, 'home.php', null);
             $after = $this->newdayText($tree);
             $this->assertCleanPage($home, 'home.php');
+            // No skin chooser: 1.1.2's "Choose a different display skin" form posted a template field back to home.php.
+            self::assertStringNotContainsString('display skin', $home);
+            self::assertStringNotContainsString("name='template'", $home);
+            self::assertStringNotContainsString("action='home.php'", $home);
             self::assertStringContainsString('<form action=\'login.php\' method=\'POST\'>', $home);
             self::assertStringContainsString('<input name="name" id="name"', $home);
             self::assertStringContainsString('class="rz-navitem nav"', $home);
@@ -184,14 +197,56 @@ final class TemplateRenderTest extends TestCase
             $this->assertPhone($village, ['rz-nav' => 'Go', 'rz-character' => 'Character', 'rz-talk' => 'Talk', 'rz-more' => 'More'], 'dwarf',
                 [$name, 'Level 7 Dwarf &middot; 14 turns &middot; 1,247 gold', [['health', 'hitpoints', 'HP', '63 / 70', '90'], ['experience', 'experience', 'XP', '5025 / 6641', '75.7']]]);
 
-            // The same page in a 1.1.2 skin (its cookie, as the skin chooser sets it): none of the phone's pieces.
+            // An old skin's cookie (jade.htm, as 1.1.2's skin chooser set it), and the skin settings an older install
+            // stored (defaultskin jade.htm, homeskinselect 1): nothing reads them, so the page is the Resurrection UI, the
+            // same page as without them. The two rows are removed afterwards.
+            $skinrows = true;
+            $this->php($tree, 'savesetting("defaultskin", "jade.htm"); savesetting("homeskinselect", "1");');
+            self::assertSame('jade.htm,1', $this->php($tree, '$r = db_query("SELECT setting, value FROM settings WHERE setting IN (?, ?) ORDER BY setting", true, ["defaultskin", "homeskinselect"]); echo $r[0]["value"], ",", $r[1]["value"];'));
             $this->php($tree, 'db_query("UPDATE accounts SET allowednavs=?, laston=?, lasthit=? WHERE acctid=?", true, [serialize(["village.php" => true]), date("Y-m-d H:i:s"), date("Y-m-d H:i:s", time() + 60), ' . $player . ']);');
             $old = $this->render($tree, $work, 'village.php', $session, '', 'jade.htm');
-            self::assertStringNotContainsString('rz-page', $old);
-            self::assertStringContainsString(self::COPYRIGHT, $old);
-            foreach (['rz-tabbar', 'rz-tab', 'rz-phonehead', 'rz-talk', 'rz-more', 'assets/ui/tabs.js', '{phonehead}', '{tabbar}'] as $absent) {
-                self::assertStringNotContainsString($absent, $old, 'jade.htm: ' . $absent);
+            $this->assertCleanPage($old, 'village.php with a jade.htm cookie');
+            self::assertStringContainsString('<body class="rz-page">', $old);
+            self::assertStringNotContainsString('jade', $old);
+            $this->assertPhone($old, ['rz-nav' => 'Go', 'rz-character' => 'Character', 'rz-talk' => 'Talk', 'rz-more' => 'More'], 'dwarf',
+                [$name, 'Level 7 Dwarf &middot; 14 turns &middot; 1,247 gold', [['health', 'hitpoints', 'HP', '63 / 70', '90'], ['experience', 'experience', 'XP', '5025 / 6641', '75.7']]]);
+            $oldhome = $this->render($tree, $work, 'home.php', null, '', 'jade.htm');
+            $this->assertCleanPage($oldhome, 'home.php with a jade.htm cookie');
+            self::assertStringNotContainsString('jade', $oldhome);
+            self::assertStringNotContainsString('display skin', $oldhome);
+            $this->assertScene($oldhome, 'village', $villagename);
+            // The stored defaultskin alone, no cookie: the same.
+            $stored = $this->render($tree, $work, 'home.php', null);
+            $this->assertCleanPage($stored, 'home.php with defaultskin jade.htm stored');
+            self::assertStringNotContainsString('jade', $stored);
+            $this->php($tree, 'db_query("DELETE FROM settings WHERE setting IN (?, ?)", true, ["defaultskin", "homeskinselect"]);');
+            $skinrows = false;
+
+            // The copyright enforcement (prepare_template(): the required tags, {copyright} named by the XOR of $y2 and
+            // $z2) still refuses a template without {copyright}: a tree whose templates/resurrection.htm lacks it, every
+            // other file the same, prints the refusal on the page, and no copyright line.
+            $broken = $work . '/broken';
+            mkdir($broken . '/templates', 0700, true);
+            mkdir($broken . '/.sessions', 0700);
+            foreach (scandir($root) ?: [] as $entry) {
+                if (in_array($entry, ['.', '..', '.git', 'dbconnect.php', 'templates'], true)) { continue; }
+                symlink($root . '/' . $entry, $broken . '/' . $entry);
             }
+            copy($tree . '/dbconnect.php', $broken . '/dbconnect.php');
+            $source = (string)file_get_contents($root . '/templates/resurrection.htm');
+            // In the footer and the popup footer.
+            self::assertSame(2, substr_count($source, '{copyright}'));
+            file_put_contents($broken . '/templates/resurrection.htm', str_replace('{copyright}', '', $source));
+            $refused = $this->render($broken, $work, 'home.php', null);
+            self::assertStringContainsString('<b>You have one or more errors in your template page!</b><br>', $refused);
+            // Twice, as in 1.1.2: once for "copyright" in the list of tags that must appear, once for the tag the check
+            // adds to that list as the XOR of $y2 and $z2. Nothing else is missing.
+            self::assertSame(2, substr_count($refused, 'You do not have {copyright} defined in either your header or footer<br />'));
+            self::assertSame(2, substr_count($refused, 'You do not have '), 'only {copyright} is missing');
+            self::assertStringNotContainsString(self::COPYRIGHT, $refused);
+            // The same tree with the tag in place renders the page.
+            file_put_contents($broken . '/templates/resurrection.htm', $source);
+            $this->assertCleanPage($this->render($broken, $work, 'home.php', null), 'home.php in the copied tree');
 
             // A forest fight: the forest scene, the fight below it.
             $this->php($tree, '$e = array_merge(db_query("SELECT * FROM creatures ORDER BY creatureid LIMIT 1")[0], ["creaturename" => "Scene Test Target",'
@@ -247,6 +302,9 @@ final class TemplateRenderTest extends TestCase
             self::assertSame($name, $resident[1]);
         } finally {
             $cleanup = [];
+            if ($skinrows) {
+                $cleanup[] = $this->php($tree, 'db_query("DELETE FROM settings WHERE setting IN (?, ?)", true, ["defaultskin", "homeskinselect"]); echo "skin rows removed";', false);
+            }
             if ($motd > 0) {
                 $cleanup[] = $this->php($tree, 'db_query("DELETE FROM motd WHERE motditem=?", true, [' . $motd . ']); echo "motd removed";', false);
             }
@@ -273,7 +331,7 @@ final class TemplateRenderTest extends TestCase
             }
             $this->remove($work);
         }
-        self::assertSame(array_merge($motd > 0 ? ['motd removed'] : [], is_array($newest) && !$installed ? ['newest restored'] : [], $player > 0 ? ['removed'] : [],
+        self::assertSame(array_merge($skinrows ? ['skin rows removed'] : [], $motd > 0 ? ['motd removed'] : [], is_array($newest) && !$installed ? ['newest restored'] : [], $player > 0 ? ['removed'] : [],
             is_array($clock) && !$installed ? ['clock restored'] : [], $installed ? ['empty'] : []), $cleanup);
     }
 

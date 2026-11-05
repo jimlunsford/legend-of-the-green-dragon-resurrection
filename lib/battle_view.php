@@ -1,9 +1,9 @@
 <?php
 /**
- * The battle screen of the Resurrection template (Phase 5 task 10, docs/PHASE5-TASK10-BATTLE-COMMENTARY-20261031.md).
+ * The battle screen (Phase 5 task 10, docs/PHASE5-TASK10-BATTLE-COMMENTARY-20261031.md).
  *
- * battle.php and the combat routes print as they always did; in the Resurrection template this file sorts what they
- * print into the screen's parts and page_footer() puts them back in this order:
+ * battle.php and the combat routes print as they always did; this file sorts what they print into the screen's parts
+ * and page_footer() puts them back in this order:
  *
  *  1. the fighter cards: the player, then each foe, with their hitpoint bars (show_enemies() registers the foes);
  *  2. the actions: Fight (the one primary) and Run in a row, then automatic fighting, the specialty skills and the
@@ -12,16 +12,11 @@
  *  4. the result block: what was printed after the last round (victory or defeat, gold, experience, gems, death).
  *
  * What the page printed before the fight comes first, as it was; what a route prints after resurrection_battle_close()
- * comes last. In a 1.1.2 skin none of this runs: every function here returns at once (or prints as 1.1.2 did) and
- * battle.php's output is byte for byte what it was, until task 15 removes the skins.
+ * comes last. Until Phase 5 task 15 a 1.1.2 skin got battle.php's output as 1.1.2 printed it (resurrection_battle_ui()
+ * was false there); the skins and that check are gone.
  */
 
 $resurrection_battle = null;
-
-/** Whether the battle screen is built: the page renders in the Resurrection template. */
-function resurrection_battle_ui(): bool {
-	return function_exists('resurrection_ui') && resurrection_ui();
-}
 
 /**
  * Starts the battle screen on this page, once: what the page printed so far is kept before it, and the page buffer
@@ -123,7 +118,7 @@ function resurrection_battle_close(): void {
 
 /**
  * Everything the fight has printed so far, in print order, for the battle-victory and battle-defeat hooks' fightoutput
- * (a module reads the page as 1.1.2 printed it). In a 1.1.2 skin the page buffer itself.
+ * (a module reads the page as 1.1.2 printed it). With no battle screen open, the page buffer itself.
  */
 function resurrection_battle_fightoutput(): string {
 	global $resurrection_battle, $output;
@@ -133,26 +128,23 @@ function resurrection_battle_fightoutput(): string {
 }
 
 /**
- * One of the fight's action forms. In the Resurrection template it joins its group in the action bar: 'main' (Fight
- * and Run, in a row), 'auto' (automatic fighting), 'special' (specialty skills) or 'other' (superuser actions). In a
- * 1.1.2 skin it is printed where it always was.
+ * One of the fight's action forms: it joins its group in the action bar: 'main' (Fight and Run, in a row), 'auto'
+ * (automatic fighting), 'special' (specialty skills) or 'other' (superuser actions).
  */
 function resurrection_battle_action(string $group, string $html): void {
 	global $resurrection_battle;
-	if (!resurrection_battle_ui()) { rawoutput($html); return; }
 	resurrection_battle_open();
 	$resurrection_battle['actions'][$group][] = $html;
 }
 
-/** A line under a group's heading (the specialty's uses left). Nothing in a 1.1.2 skin. */
+/** A line under a group's heading (the specialty's uses left). */
 function resurrection_battle_note(string $group, string $text): void {
 	global $resurrection_battle;
-	if (!resurrection_battle_ui()) return;
 	resurrection_battle_open();
 	$resurrection_battle['notes'][$group] = $text;
 }
 
-/** A form's button class: the one primary action (Fight) and every other, secondary. 1.1.2's "button" in an old skin. */
+/** A form's button class: the one primary action (Fight) and every other, secondary. */
 function resurrection_battle_button(bool $primary = false): string {
 	return resurrection_button_class($primary);
 }
@@ -266,10 +258,8 @@ function resurrection_battle_hp(string $label, int|float|string $current, ?float
  * @param array<array-key, mixed> $enemy
  */
 function resurrection_battle_portrait(array $enemy, string $fight): string {
-	global $template;
 	require_once __DIR__ . '/sanitize.php';
 	require_once __DIR__ . '/../src/Ui/Art.php';
-	if (!isset($template['fighterportrait'])) return '';
 	$alt = trim(full_sanitize((string)($enemy['creaturename'] ?? '')));
 	$art = \Resurrection\Ui\Art::foe($enemy, $fight, $alt, function (array $args) { return modulehook('creatureportrait', $args); });
 	if ($art === null) return '';
@@ -391,7 +381,7 @@ function resurrection_battle_result(): string {
  */
 function resurrection_battle_assemble(): void {
 	global $resurrection_battle, $output, $nestedtags;
-	if ($resurrection_battle === null || !resurrection_battle_ui()) return;
+	if ($resurrection_battle === null) return;
 	resurrection_battle_flush();
 	$prefix = resurrection_battle_lines($resurrection_battle['prefix'], false)[0];
 	$tail = resurrection_battle_lines($resurrection_battle['tail'], false)[0];

@@ -1,7 +1,8 @@
 # Resurrection UI design spec
 
 The design contract every Phase 5 UI task builds to. One dark fantasy UI replaces all 1.1.2 skins
-(`PHASE5-TASK1-DIRECTION-20261030.md`). The plan and the order of work are in `PHASE5-UI-PLAN-20261030.md`.
+(`PHASE5-TASK1-DIRECTION-20261030.md`); from Phase 5 task 15 it is the only template, and the skins and skin selection
+are gone (see "One template" under Components). The plan and the order of work are in `PHASE5-UI-PLAN-20261030.md`.
 
 Values marked **approved** are the ones Jim approved in the mockups on 2026-10-30. Use them exactly. Phase 5 task 3
 (2026-10-30) corrected the values that had drifted from the approved mockup: the radii, the page title, the story text,
@@ -313,8 +314,8 @@ query, so the template writes the two breakpoints as literals equal to these tok
     shown uppercase. The badge is `aria-hidden`; the link carries `accesskey` and `aria-keyshortcuts` with the same key,
     so its accessible name is the label alone. A nav without a key keeps an empty badge space with no outline, so the
     labels line up. The label shows plain: no in-label highlight and no "(X) " prefix. `private_addnav()` decides
-    the key exactly as 1.1.2 did and passes it to the `navitem` part as `{key}`; a skin whose `navitem` part has no
-    `{key}` gets 1.1.2's in-label marking.
+    the key exactly as 1.1.2 did and passes it to the `navitem` part as `{key}`. (Until task 15 a skin whose `navitem`
+    part had no `{key}` got 1.1.2's in-label marking.)
   - **Hotkeys.** The page carries its key map as JSON data (`<script type="application/json" id="rz-keys">`) and loads
     the static `assets/ui/keys.js`: a key goes where its nav goes (a popup nav opens its popup window), except while
     typing in an input or a textarea, or with Alt or Ctrl held. No inline script. Every nav works without JavaScript.
@@ -354,7 +355,7 @@ query, so the template writes the two breakpoints as literals equal to these tok
   - **More**: the More section (`#rz-more`), always.
 
   The page is padded at the bottom by the bar's height, its 1px border and the safe area, so the footer is never under
-  the bar. No tab bar in popups, on operator pages (not installed, database error, upgrade needed) or in a 1.1.2 skin.
+  the bar. No tab bar in popups or on operator pages (not installed, database error, upgrade needed).
 - **Buttons** (Phase 5 task 9). Two kinds, both `--touch-target` (44px) tall, 16px padding each side,
   `--radius-control` (8px), Alegreya Sans `--size-ui`, the focus ring:
   - **Primary**: `--accent` fill and border, `--ground` label, weight 700; hover `--accent-hover` (`rz-button-primary`,
@@ -364,8 +365,7 @@ query, so the template writes the two breakpoints as literals equal to these tok
     with a `--damage` outline and label (`rz-button-danger`).
 
   Buttons side by side line up in a row 8px apart and wrap. No full-width buttons. A button drawn as a link (the
-  editors' delete, `rz-link-button`) keeps the link's look. In a 1.1.2 skin every button's markup is 1.1.2's, byte for
-  byte, until task 15 removes the skins.
+  editors' delete, `rz-link-button`) keeps the link's look. (Until task 15 a 1.1.2 skin kept 1.1.2's button markup.)
 - **Primary actions** (task 9). The form's primary button is: log in; create a character; the bank's deposit, borrow
   and withdraw; the inn's room; the healer's heal (each potion's form); commentary Add; preferences Save; mail Send;
   in a fight, Fight (task 10). Every other button is secondary. Task 9 also made each weapon and armor shop item a
@@ -396,11 +396,12 @@ query, so the template writes the two breakpoints as literals equal to these tok
   `rz-center`, `` `> `` and `` `< `` are `rz-float-right` and `rz-float-left`, grid tables are `rz-grid` (1px
   `--border` lines), inline forms `rz-inline`, larger text `rz-larger` (1.25em), typed text `rz-typed`, nested lists
   `rz-indent`, the narrators' colors the color code classes (`colBlueViolet`, `colLtBlack`, `colLtWhite`,
-  `colLtYellow`). `resurrection_presentation()` in `lib/output.php` is the one map from each to 1.1.2's markup, which a
-  1.1.2 skin keeps byte for byte.
-- **Character panel** (Phase 5 task 7). `charstats()` fills the rows as 1.1.2 did; a template with the panel parts
-  (`statheader`, `statportrait`, `statbar`, `statbarcap`, `stattiles`, `stattile`, `equiprows`, `equiprow`) renders them
-  through `resurrection_charpanel()`, a 1.1.2 skin through `getcharstats()`'s rows, unchanged. From the top, one
+  `colLtYellow`). `resurrection_presentation()` in `lib/output.php` is the one map from each to its class. (Until task 15 the
+  map also held each entry's 1.1.2 markup for a 1.1.2 skin; `CHANGES-FROM-1.1.2.md` lists it.)
+- **Character panel** (Phase 5 task 7). `charstats()` fills the rows as 1.1.2 did; the template's panel parts
+  (`statheader`, `statportrait`, `statbar`, `statbarcap`, `stattiles`, `stattile`, `equiprows`, `equiprow`) render them
+  through `resurrection_charpanel()`. (Until task 15 a 1.1.2 skin got `getcharstats()`'s rows, unchanged;
+  `getcharstats()` stays for modules.) From the top, one
   `--panel` card (`--space-panel` padding, 16px between its parts):
   1. **Header.** The race portrait (`--portrait-width`, 64px; `alt` the race as the subtitle names it), beside the
      character's name (Cinzel 700, `--size-panel-name` 20px, `--text`, its color codes kept) and the subtitle
@@ -428,8 +429,8 @@ query, so the template writes the two breakpoints as literals equal to these tok
     is decorative: `<img alt="" aria-hidden="true">` with `width` and `height` 16, since the label beside it carries
     the meaning (and is translated as before). The icon is chosen by the label's English text, color codes dropped,
     lowercased (`Art::iconName()`), so a row a module adds has none unless its label is a standard stat's (a module
-    row named "Gold" gets the gold icon; "Charm", "Clan" or "Ring" none). A missing file or a template without the part
-    gives no image, never a broken one. The 1.1.2 skins show none.
+    row named "Gold" gets the gold icon; "Charm", "Clan" or "Ring" none). A missing file gives no image, never a broken
+    one.
 
     | Icon | Color | Where |
     |---|---|---|
@@ -539,10 +540,20 @@ query, so the template writes the two breakpoints as literals equal to these tok
   the page. The stables' and mercenary camp's lists, and the healer's potions, are navs or one form each, not buy
   tables, and are unchanged.
 
+### One template (Phase 5 task 15)
+
+`templates/resurrection.htm` is the game's only template (`PHASE5-TASK15-REMOVE-SKINS-20261105.md`). The 18 1.1.2 skins
+and skin selection are removed: `prepare_template()` and `loadtemplate()` load this file and no other; the template
+cookie is neither read nor set, so an old one is ignored; there is no skin chooser on the home page or in Preferences;
+the `defaultskin` and `homeskinselect` settings and the `theme` field type are gone, and stored rows on an older
+install are ignored. Every component in this spec is drawn on every page; no code path keeps 1.1.2's markup for a
+template without a part. The required tags, the copyright tag enforcement and its XOR check, the license block and the
+attribution line are as before: a template without `{copyright}` is still refused.
+
 ### Popups and staff screens (Phase 5 task 11)
 
 The popups (mail, petition, MoTD, the translator tool) use the same frame, cards and buttons as every page, in one column.
-The 1.1.2 credit line (`{copyright}`) and the attribution line stay in `popupfoot`. A 1.1.2 skin is unchanged.
+The 1.1.2 credit line (`{copyright}`) and the attribution line stay in `popupfoot`.
 
 ### Tabs in popups
 
@@ -595,7 +606,7 @@ keep Write current. They need no script: each tab is a page.
 - Every admin and editor control has a label: visible where the page prints label text, for screen readers only where
   it prints none (a row's checkbox, the second box of a pair). The helpers in `lib/output.php`
   (`resurrection_control_id()`, `resurrection_label_open()`, `resurrection_label_close()`, `resurrection_label_for()`)
-  print nothing in a 1.1.2 skin.
+  print their label or id on every page (until task 15 they printed nothing in a 1.1.2 skin).
 - The moderation page (`moderate.php`) uses the commentary list (task 10) with each comment's checkbox labelled ("Select
   this comment") and its Ban link and section links as before.
 
@@ -683,7 +694,8 @@ The rules:
 - **Never a broken URL.** Every lookup returns a file that exists, or nothing; an empty alt text means no image. A
   missing fallback falls back to unknown.
 - **Alt text** is the foe's name as the card shows it, plain text, escaped.
-- **Old skins.** Only the Resurrection template has the slot; a 1.1.2 skin's battle pages are byte for byte as before.
+- **Old skins.** Until task 15 only the Resurrection template had the slot, and a 1.1.2 skin's battle pages were byte
+  for byte as before; the skins are gone.
 
 ### Location scenes (Phase 5 task 12)
 

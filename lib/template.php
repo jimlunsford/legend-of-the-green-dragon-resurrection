@@ -30,16 +30,10 @@ function prepare_template($force=false){
 	}
 
  	global $templatename, $templatemessage, $template, $session, $y, $z, $y2, $z2, $copyright, $lc, $x, $templatetags;
-	 if (!isset($_COOKIE['template'])) $_COOKIE['template']="";
-	$templatename="";
+	// The one template (Phase 5 task 15). 1.1.2 chose a skin by the template cookie, then the defaultskin setting, then
+	// jade.htm; the skins and skin selection are gone, so neither the cookie nor the setting is read.
+	$templatename="resurrection.htm";
 	$templatemessage="";
-	if (is_string($_COOKIE['template']) && preg_match('/\\A[A-Za-z0-9_-]+\\.htm\\z/', $_COOKIE['template']))
-		$templatename=$_COOKIE['template'];
-	// 1.1.2 fell back to jade.htm; the Resurrection UI is the default now (Phase 5 task 3). Old skins stay selectable.
-	if ($templatename=="" || !file_exists("templates/$templatename"))
-		$templatename=getsetting("defaultskin", "resurrection.htm");
-	if ($templatename=="" || !file_exists("templates/$templatename"))
-		$templatename="resurrection.htm";
 	$template = loadtemplate($templatename);
 	if ($session['templatename'] == $templatename &&
 			$session['templatemtime']==filemtime("templates/$templatename")){

@@ -11,7 +11,7 @@ Static: runs wherever the suite runs (Baseline integrity too). It checks that
 - the spec and the changes ledger describe them.
 
 The rendered pages (the mail popup with no italics, petition, MoTD, the translator tool, the Grotto, the settings tabs,
-the creature editor's table, the petition badges' counts, and every page in a 1.1.2 skin byte for byte) are checked in
+the creature editor's table, the petition badges' counts) are checked in
 tests/unit/PopupAdminRenderTest.php.
 """
 from pathlib import Path
@@ -79,13 +79,17 @@ class AdminLabelTests(unittest.TestCase):
         self.assertEqual([], unlabelled("rawoutput('<p><label>Word ');\nrawoutput('<input name=\"word\">');"))
         self.assertEqual(["<input name=\"word\">"], unlabelled("rawoutput('<label>Word</label>');\nrawoutput('<input name=\"word\">');"))
 
-    def test_the_label_helpers_print_nothing_in_an_old_skin(self):
+    def test_the_label_helpers_always_print_their_label(self):
+        # Until Phase 5 task 15 the helpers printed nothing in a 1.1.2 skin (resurrection_ui()), and resurrection_control_id()
+        # the 1.1.2 id there; the skins are gone, and each helper prints its label or id on every page.
         output = (ROOT / 'lib' / 'output.php').read_text()
+        self.assertNotIn('function resurrection_ui(', output)
         for name in ('resurrection_control_id', 'resurrection_label_open', 'resurrection_label_close', 'resurrection_label_for'):
             start = output.index('function ' + name + '(')
             body = output[start:output.index('\n}\n', start)]
-            self.assertIn('resurrection_ui()', body, name)
-        self.assertIn('''if (!resurrection_ui()) return $legacy === "" ? "" : " id='$legacy'";''', output)
+            self.assertNotIn('resurrection_ui()', body, name)
+            self.assertIn('<label' if name != 'resurrection_label_close' else '</label>', body.replace(" id='", '<label'), name)
+        self.assertIn('function resurrection_control_id($id){\n\treturn " id=\'"', output)
 
 
 class ScriptTests(unittest.TestCase):

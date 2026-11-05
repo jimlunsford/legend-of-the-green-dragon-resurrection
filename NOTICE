@@ -54,6 +54,17 @@ That license covers those three folders only: not assets/fonts/ (the SIL Open
 Font License 1.1, see docs/THIRD-PARTY-LICENSES.md) and not assets/ui/ (code,
 under the CC BY-NC-SA 2.0 license above).
 
+The 1.1.2 skins. LoGD 1.1.2 shipped 18 skins in templates/, credited in
+their own footers and stylesheets: Jade (Josh Canning, 2004, of HFS); Mer
+(Shannon Brown, 2005, based on Jade); Mourn and Volcano (JT Traub, based on
+Jade); amber, blarg and vcpp (Ben Wong); ailean and aileans (Ben Wong, based
+on a concept by Ailean); Red (Red Yates, based on amber); Desert (Juergen
+Buschbaum, 2005, The DIVISION Dubai); Aware (layout by Duplex of Aware
+Entertainment, Inc.); yarbrough and yar2 (Chris Yarbrough); and Classic,
+Cupertino, redmond and teksolo, which name no designer. Resurrection does not
+ship them: its one template, templates/resurrection.htm, replaces them. They
+remain, byte for byte with their credits, in the historical-source-1.1.2 tag.
+
 This is a noncommercial project. It is not endorsed by the original authors
 or by DragonPrime.
 

@@ -58,15 +58,15 @@ if ($op==""){
 	rawoutput("<input type='submit' class='button' value='$refresh'>");
 	rawoutput("</form>");
 	addnav("", "$link");
-	// The talk form's box has no label text here; the Resurrection template names it for screen readers (Phase 5 task 11).
+	// The talk form's box has no label text here; it is named for screen readers (Phase 5 task 11).
 	$talklabel = resurrection_label_for('inputinsertcommentary', "Comment");
 	if ($area==""){
-		if (resurrection_ui()) rawoutput($talklabel);
+		rawoutput($talklabel);
 		talkform("X","says");
 		commentdisplay("", "__all__","X",100);
 	}else{
 		commentdisplay("", $area,"X",100);
-		if (resurrection_ui()) rawoutput($talklabel);
+		rawoutput($talklabel);
 		talkform($area,"says");
 	}
 }elseif ($op=="audit"){

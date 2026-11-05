@@ -5,7 +5,7 @@
  * translation tables are replaced by the stand-ins below. Used by tests/unit/NavigationTest.php (Phase 5 task 6), in
  * its own PHP process, from the root of the tree under test.
  *
- * Reads JSON on stdin: {"template": "jade.htm", "translator": false, "translations": {"Text": "Translated"},
+ * Reads JSON on stdin: {"translator": false, "translations": {"Text": "Translated"},
  * "navs": [["Heading"], ["Label", "link.php"], ["Label", "link.php", false, true, "550x300"], ...]}; each entry is the
  * arguments of one addnav() call. Prints JSON: the built navs, the access keys used, the key map the page emits (when
  * the code has one) with the {script} that carries it, the nav column's wrapping parts, and the allowed navs.
@@ -29,7 +29,8 @@ require 'lib/output.php';
 require 'lib/template.php';
 require 'lib/pageparts.php';
 
-$template = loadtemplate((string)$input['template']);
+// The one template, templates/resurrection.htm (Phase 5 task 15: the old skins this fixture also rendered are gone).
+$template = loadtemplate();
 foreach ($input['navs'] as $args) {
     call_user_func_array('addnav', $args);
 }

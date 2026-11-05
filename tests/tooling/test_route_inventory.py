@@ -111,6 +111,11 @@ def links(text):
     return found
 
 
+def templates():
+    """The template files the link scan reads: from Phase 5 task 15 templates/resurrection.htm only."""
+    return sorted((ROOT / 'templates').glob('*.htm'))
+
+
 def dead_links():
     """Links in shipped files to a page that does not exist (404) or to an entry the inventory lists as DISABLED."""
     pages = {path.name for path in ROOT.glob('*.php')}
@@ -123,7 +128,7 @@ def dead_links():
         ops = set(query.get('op', '').split('|'))
         (disabled if cells[3] == 'DISABLED' else enabled).setdefault(match.group('page'), set()).update(ops)
     dead = []
-    for path in [*shipped(), *sorted((ROOT / 'templates').glob('*.htm'))]:
+    for path in [*shipped(), *templates()]:
         for page, op, module in links(path.read_text(errors='replace')):
             where = str(path.relative_to(ROOT))
             if page not in pages and (where, page) not in UNSHIPPED:
@@ -240,6 +245,13 @@ class RouteInventoryTests(unittest.TestCase):
             with self.subTest(unshipped=page):
                 self.assertFalse((ROOT / page).exists(), page + ' now ships: drop it from UNSHIPPED')
                 self.assertIn(page, [link[0] for link in links((ROOT / where).read_text())], where)
+        self.assertEqual([], dead_links())
+
+    def test_the_link_scan_reads_the_one_template(self):
+        # Phase 5 task 15: the 1.1.2 skins (which linked pages themselves) are gone; the scan reads the one template, which
+        # links no page itself (its navigation, petition, MoTD and mail links are the code's, filled into its tags).
+        self.assertEqual([ROOT / 'templates' / 'resurrection.htm'], templates())
+        self.assertEqual([], links(templates()[0].read_text()))
         self.assertEqual([], dead_links())
 
     def test_link_scan_finds_known_links(self):

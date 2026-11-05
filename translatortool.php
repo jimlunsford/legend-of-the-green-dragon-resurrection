@@ -48,17 +48,14 @@ if ($op==""){
 		$trans = $translation[$text];
 	else
 		$trans = "";
-	$namespace = translate_inline("Namespace:");
-	$texta = translate_inline("Text:");
-	$translation = translate_inline("Translation:");
 	$saveclose = htmlentities(translate_inline("Save & Close"), ENT_QUOTES, $charset);
 	$savenotclose = htmlentities(translate_inline("Save No Close"), ENT_QUOTES, $charset);
 	rawoutput("<form action='translatortool.php?op=save' method='POST'>");
 	rawoutput(resurrection_action_fields(resurrection_translatortool_scope($uri, $text), resurrection_translatortool_context($uri, $text, resurrection_translatortool_rows($uri, $text))));
-	rawoutput((resurrection_ui() ? resurrection_label_for('translator-uri', "Namespace:", true) : $namespace)." <input name='uri'".resurrection_control_id('translator-uri')." value=\"".htmlentities($uri, ENT_QUOTES, $charset)."\" readonly><br/>");
-	rawoutput((resurrection_ui() ? resurrection_label_for('translator-text', "Text:", true) : $texta)."<br>");
+	rawoutput(resurrection_label_for('translator-uri', "Namespace:", true)." <input name='uri'".resurrection_control_id('translator-uri')." value=\"".htmlentities($uri, ENT_QUOTES, $charset)."\" readonly><br/>");
+	rawoutput(resurrection_label_for('translator-text', "Text:", true)."<br>");
 	rawoutput("<textarea name='text'".resurrection_control_id('translator-text')." cols='60' rows='5' readonly>".htmlentities($text, ENT_QUOTES, $charset)."</textarea><br/>");
-	rawoutput((resurrection_ui() ? resurrection_label_for('translator-trans', "Translation:", true) : $translation)."<br>");
+	rawoutput(resurrection_label_for('translator-trans', "Translation:", true)."<br>");
 	rawoutput("<textarea name='trans'".resurrection_control_id('translator-trans')." cols='60' rows='5'>".htmlentities($trans, ENT_QUOTES, $charset)."</textarea><br/>");
 	rawoutput("<input type='submit' value=\"$saveclose\" class='".resurrection_button_class(true)."'>");
 	rawoutput("<input type='submit' value=\"$savenotclose\" class='button' name='savenotclose'>");

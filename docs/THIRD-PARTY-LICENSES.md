@@ -64,8 +64,10 @@ copy of each package was also checked locally: see "Installed license files" bel
 
 - PHP itself and its extensions (PHP License and others) are the operator's platform, not bundled.
 - The MySQL or MariaDB server, the web server and CI actions are not bundled either.
-- Third-party material inside the inherited 1.1.2 tree (module code by credited authors, images, skins, any embedded
-  script) is not a Composer package. Its rights are an open item in `LICENSING-AND-PROVENANCE.md`.
+- Third-party material inside the inherited 1.1.2 tree (module code by credited authors, images, any embedded script)
+  is not a Composer package. Its rights are an open item in `LICENSING-AND-PROVENANCE.md`. The 1.1.2 skins, by their
+  credited designers, are no longer shipped (Phase 5 task 15, 2026-11-05); they remain at `historical-source-1.1.2`,
+  and `NOTICE` credits them.
 
 ## Installed license files
 

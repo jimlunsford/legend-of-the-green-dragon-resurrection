@@ -35,3 +35,11 @@ above described Phases 1 to 4. From Phase 5 on, gameplay, balance, text and the 
 prompt says so, each change recorded with the old behavior, the new behavior and why. One new UI replaces the original
 templates; they stay byte for byte at `historical-source-1.1.2`. "Modernize deliberately", "Security and fidelity"
 and the release gate still apply. No framework adoption is implied unless a task prompt says so.
+
+## The 1.1.2 skins removed, 2026-11-05
+
+Phase 5 task 15 (`PHASE5-TASK15-REMOVE-SKINS-20261105.md`): the 18 1.1.2 skins and skin selection are removed. The one
+template, `templates/resurrection.htm`, is the theme/template concept kept from "Preserve initially": the game still
+renders through a template's parts and tags, with its required tags and the copyright tag enforced as in 1.1.2, but
+there is one template and no choosing. The original templates are retained as evidence at `historical-source-1.1.2`,
+not in the shipped tree.

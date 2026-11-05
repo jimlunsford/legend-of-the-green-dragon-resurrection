@@ -11,8 +11,10 @@ use PHPUnit\Framework\TestCase;
  * The hotkeys are pinned from 98fb6ec, the code before the key badges, whose private_addnav() is 1.1.2's: a label with
  * its key up front ("X?Label", with the key in the label, not in it, already taken, lowercase), a label whose first
  * letter is taken, labels with no free letter or digit, a translated label, labels with color codes, an entity and
- * HTML, popups, and a page that runs out of keys. The new code must give every item the same key, in the new template
- * and in an old skin, and the old skin's navs must render byte for byte as at 98fb6ec.
+ * HTML, popups, and a page that runs out of keys. The new code must give every item the same key.
+ *
+ * Until Phase 5 task 15 the old skins (jade.htm and Classic.htm) were rendered too, jade.htm's navs byte for byte as at
+ * 98fb6ec; the skins are gone, and so is that pin (docs/PHASE5-TASK15-REMOVE-SKINS-20261105.md).
  *
  * In the new template each key shows as a badge equal to the link's accesskey and aria-keyshortcuts, the badge hidden
  * from assistive technology so the link's name is the label alone; the page's key map (read by assets/ui/keys.js)
@@ -94,35 +96,17 @@ final class NavigationTest extends TestCase
     /** The access keys the page used (the $accesskeys global), in the order taken, as 98fb6ec took them. */
     private const array PINNED_ACCESSKEYS = ['d', 'q', 'u', '(', '!', 't', 'f', 'i', 'b', 'y', 'g', 'm', 'h', 'a', 'o', 'r', 'w', 'e',
         'j', 'k', 'l', 'n', 'c', 'p', 's', 'v', 'x', 'z', '9', '0', '4', '1', '2', '3', '5', '6', '7', '8'];
-    /** The old skin jade.htm's navs as 98fb6ec rendered them, the time in each link written as HHMMSS: SHA-256 and length. */
-    private const string PINNED_JADE_SHA256 = '6dd157864acc856d886e604bd3889895c8c3221411e138e9e85ac34c7e332116';
-    private const int PINNED_JADE_LENGTH = 5991;
 
     public function testEveryNavKeepsTheKey98fb6ecGaveIt(): void
     {
-        foreach (['resurrection.htm', 'jade.htm', 'Classic.htm'] as $template) {
-            $page = $this->render($template);
-            self::assertSame(self::PINNED_KEYS, array_column($this->items($page['html']), 'accesskey'), $template);
-            self::assertSame(self::PINNED_ACCESSKEYS, $page['accesskeys'], $template);
-        }
-    }
-
-    public function testAnOldSkinRendersItsNavsAsBefore(): void
-    {
-        $html = (string)preg_replace('/c=7-\d{6}/', 'c=7-HHMMSS', $this->render('jade.htm')['html']);
-        self::assertSame(self::PINNED_JADE_LENGTH, strlen($html));
-        self::assertSame(self::PINNED_JADE_SHA256, hash('sha256', $html));
-        // 1.1.2's in-label marking: the key highlighted in the label, or "(X) " before it.
-        self::assertStringContainsString(">Talk to <span class='navhi'>D</span>ag Durnick</a>", $html);
-        self::assertStringContainsString(">(<span class='navhi'>Q</span>) Return to the Village</a>", $html);
-        self::assertStringContainsString("&#149; (<span class='navhi'>!</span>) GOD MODE</a>", $html);
-        self::assertStringNotContainsString('rz-key', $html);
-        self::assertStringNotContainsString('aria-keyshortcuts', $html);
+        $page = $this->render();
+        self::assertSame(self::PINNED_KEYS, array_column($this->items($page['html']), 'accesskey'));
+        self::assertSame(self::PINNED_ACCESSKEYS, $page['accesskeys']);
     }
 
     public function testEachKeyShowsAsABadgeBeforeAPlainLabel(): void
     {
-        $page = $this->render('resurrection.htm');
+        $page = $this->render();
         $items = $this->items($page['html']);
         self::assertCount(47, $items);
         foreach ($items as $item) {
@@ -158,7 +142,7 @@ final class NavigationTest extends TestCase
 
     public function testTheKeyMapHasOneEntryPerKeyGoingWhereTheLinkGoes(): void
     {
-        $page = $this->render('resurrection.htm');
+        $page = $this->render();
         $items = array_values(array_filter($this->items($page['html']), fn (array $item) => $item['accesskey'] !== null));
         self::assertIsArray($page['keys']);
         self::assertCount(count($items), $page['keys']);
@@ -183,19 +167,19 @@ final class NavigationTest extends TestCase
         }
         // page_footer() removes every {tag} left in the page; the map has none for it to remove.
         self::assertSame($script, preg_replace("/{[^} \t\n\r]*}/i", '', $script));
-        $braces = $this->render('resurrection.htm', [['Brace', 'brace.php?x={y}']]);
+        $braces = $this->render([['Brace', 'brace.php?x={y}']]);
         self::assertSame($braces['script'], preg_replace("/{[^} \t\n\r]*}/i", '', (string)$braces['script']));
         self::assertStringContainsString('brace.php?x=\\u007by\\u007d', (string)$braces['script']);
         self::assertSame([['B', 'go', 'brace.php?x={y}&c=7-' . substr($braces['keys'][0][2], -6)]], $braces['keys']);
         // No key, no map and no script.
-        $none = $this->render('resurrection.htm', [['!!!', 'bang.php'], ['', 'hidden.php']]);
+        $none = $this->render([['!!!', 'bang.php'], ['', 'hidden.php']]);
         self::assertSame([], $none['keys']);
         self::assertSame('', $none['script']);
     }
 
     public function testTranslatorButtonsStayBeforeTheLink(): void
     {
-        $page = $this->render('resurrection.htm', [['Forest', 'forest.php'], ['Bank', 'bank.php']], true);
+        $page = $this->render([['Forest', 'forest.php'], ['Bank', 'bank.php']], true);
         self::assertSame(2, substr_count($page['html'], "<a href='translatortool.php' class='t-button'>T</a><a href=\""));
         // The translated Bank label ("`^Ye Olde `2Bank") takes its key from the translation.
         self::assertSame(['F', 'Y'], array_column($this->items($page['html']), 'accesskey'));
@@ -203,16 +187,14 @@ final class NavigationTest extends TestCase
 
     public function testAPageWithNoNavHasNoNavColumn(): void
     {
-        $navs = $this->render('resurrection.htm', [['Forest', 'forest.php']]);
+        $navs = $this->render([['Forest', 'forest.php']]);
         // The nav column's id is the phone tab bar's Go target (Phase 5 task 8).
         self::assertSame(['<nav class="rz-nav" id="rz-nav" aria-label="Navigation"><div class="rz-card rz-nav-panel">' . "\n", "</div></nav>\n"], $navs['column']);
         // Only hidden navs (a forest fight's are its forms and allowed links): no column, no empty card.
-        self::assertSame(['', ''], $this->render('resurrection.htm', [['', 'forest.php?op=fight']])['column']);
-        self::assertSame(['', ''], $this->render('resurrection.htm', [])['column']);
+        self::assertSame(['', ''], $this->render([['', 'forest.php?op=fight']])['column']);
+        self::assertSame(['', ''], $this->render([])['column']);
         // Something in the {navad} slot shows the column.
-        self::assertSame($navs['column'], $this->render('resurrection.htm', [], false, '<div>ad</div>')['column']);
-        // An old skin has no column parts and keeps its own markup.
-        self::assertSame(['', ''], $this->render('jade.htm', [['Forest', 'forest.php']])['column']);
+        self::assertSame($navs['column'], $this->render([], false, '<div>ad</div>')['column']);
     }
 
     /**
@@ -221,9 +203,9 @@ final class NavigationTest extends TestCase
      * @param list<list<mixed>>|null $navs
      * @return array{html: string, accesskeys: list<string>, keys: list<list<string>>|null, script: string|null, column: list<string>|null, allowednavs: list<string>, output: string}
      */
-    private function render(string $template, ?array $navs = null, bool $translator = false, string $navad = ''): array
+    private function render(?array $navs = null, bool $translator = false, string $navad = ''): array
     {
-        $input = json_encode(['template' => $template, 'translator' => $translator, 'translations' => self::TRANSLATIONS,
+        $input = json_encode(['translator' => $translator, 'translations' => self::TRANSLATIONS,
             'navs' => $navs ?? self::NAVS, 'navad' => $navad], JSON_THROW_ON_ERROR);
         $process = proc_open([PHP_BINARY, '-d', 'display_errors=stderr', 'tests/fixtures/nav-render.php'], [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes, (string)realpath(self::ROOT));
         self::assertIsResource($process);

@@ -1,4 +1,5 @@
-"""The Resurrection UI's template, templates/resurrection.htm, and its place as the default skin (Phase 5 task 3).
+"""The Resurrection UI's template, templates/resurrection.htm (Phase 5 task 3), and from Phase 5 task 15 the one template:
+the 1.1.2 skins and skin selection are gone (docs/PHASE5-TASK15-REMOVE-SKINS-20261105.md).
 
 loadtemplate() (lib/pageparts.php) splits a template into parts at each "<!--!name-->" marker, and templatereplace()
 (lib/template.php) prints a warning into the page when the code asks for a part, or fills a key, that the template
@@ -321,8 +322,9 @@ class TemplateTests(unittest.TestCase):
         self.assertIn('if ($navs) $tabs["rz-nav"] = "Go";', function)
         self.assertIn('if (!empty($session[\'loggedin\']) && !empty($session[\'user\'][\'loggedin\'])) $tabs["rz-character"] = "Character";', function)
         self.assertIn('if (!empty($resurrection_talk)) $tabs["rz-talk"] = "Talk";', function)
-        # Not on an operator page, nor in a template without the parts (the 1.1.2 skins).
-        self.assertIn('if (!isset($template[\'tabbar\']) || !isset($template[\'tab\'])) return "";', function)
+        # Not on an operator page. (Until Phase 5 task 15 nor in a template without the parts, the 1.1.2 skins; the one
+        # template has them, checked above.)
+        self.assertNotIn('isset($template', function)
         self.assertIn('if (resurrection_page_kind() === \\Resurrection\\Ui\\Art::OPERATOR) return "";', function)
         self.assertIn('$footer=str_replace("{tabbar}",resurrection_tabbar_html($navcolumn[0] !== ""),$footer);', pageparts)
         self.assertEqual(1, self.parts['navstart'].count('id="rz-nav"'))
@@ -371,7 +373,7 @@ class TemplateTests(unittest.TestCase):
         self.assertLess(head.index('{portrait}'), head.index('{name}'))
         self.assertIn('<div class="rz-phonebar-fill" style="width: {percent}%"></div>', self.parts['phonebar'])
         pageparts = (ROOT / 'lib' / 'pageparts.php').read_text(errors='replace')
-        self.assertIn('if (!isset($template[\'phonehead\']) || empty($session[\'user\'][\'loggedin\']) || empty($session[\'loggedin\'])) return "";', pageparts)
+        self.assertIn('if (empty($session[\'user\'][\'loggedin\']) || empty($session[\'loggedin\'])) return "";', pageparts)
 
     def test_the_phone_styles(self):
         # Phase 5 task 8: the phone's pieces are hidden until the phone breakpoint; below 900px the content comes first,
@@ -403,15 +405,6 @@ class TemplateTests(unittest.TestCase):
         self.assertIn('.rz-navitem .rz-key { display: none; }', phone)
         self.assertIn('.rz-content table { display: block; max-width: 100%; overflow-x: auto; }', phone)
 
-    def test_the_old_skins_have_no_phone_pieces(self):
-        # The 1.1.2 skins keep their markup: none has the parts or tags the phone's pieces come from.
-        skins = sorted(path for path in (ROOT / 'templates').glob('*.htm') if path.name != 'resurrection.htm')
-        self.assertEqual(18, len(skins))
-        for path in skins:
-            text = path.read_text(errors='replace')
-            for piece in ('phonehead', 'tabbar', '<!--!tab-->', 'rz-'):
-                self.assertNotIn(piece, text, f'{path.name}: {piece}')
-
     def test_page_and_popup_heads(self):
         for part in ('header', 'popuphead'):
             head = self.parts[part]
@@ -441,19 +434,28 @@ class TemplateTests(unittest.TestCase):
             self.assertIn(f'{token}: {width};', tokens)
             self.assertIn(f'@media (max-width: {width})', css)
 
-    def test_it_is_the_default_skin(self):
-        defaults = (ROOT / 'lib' / 'installer' / 'installer_default_settings.php').read_text()
-        self.assertRegex(defaults, r'"defaultskin"=>"resurrection\.htm",')
-        for name, count in (('lib/template.php', 1), ('lib/pageparts.php', 1), ('home.php', 1), ('prefs.php', 1)):
-            source = (ROOT / name).read_text()
-            self.assertEqual(count, source.count('getsetting("defaultskin", "resurrection.htm")'), name)
-            self.assertNotIn('"jade.htm"', source, name)
-        for name in ('lib/template.php', 'lib/pageparts.php'):
-            source = (ROOT / name).read_text()
-            self.assertIn('$templatename="resurrection.htm";', source, name)
-        self.assertIn('$template=loadtemplate("resurrection.htm");', (ROOT / 'lib' / 'template.php').read_text())
-        # The old skins stay selectable until Phase 5 task 15.
-        self.assertTrue((ROOT / 'templates' / 'jade.htm').is_file())
+    def test_it_is_the_one_template(self):
+        # Phase 5 task 15: prepare_template() and loadtemplate() load templates/resurrection.htm and nothing else (1.1.2
+        # chose a skin by its template cookie, then the defaultskin setting, then jade.htm; tasks 3 to 14 by the same,
+        # with resurrection.htm the default). The fallback for a template with errors is the same file.
+        template = (ROOT / 'lib' / 'template.php').read_text()
+        self.assertIn('$templatename="resurrection.htm";', template)
+        self.assertIn('$template = loadtemplate($templatename);', template)
+        self.assertIn('$template=loadtemplate("resurrection.htm");', template)
+        pageparts = (ROOT / 'lib' / 'pageparts.php').read_text(errors='replace')
+        self.assertIn('$fulltemplate = file_get_contents("templates/resurrection.htm");', pageparts)
+        for name in ('lib/template.php', 'lib/pageparts.php', 'home.php', 'prefs.php', 'lib/installer/installer_default_settings.php'):
+            source = code(name)
+            for gone in ('defaultskin', 'homeskinselect', "_COOKIE['template']", '"jade.htm"'):
+                self.assertNotIn(gone, source, f'{name}: {gone}')
+        self.assertEqual([TEMPLATE], sorted((ROOT / 'templates').glob('*.htm')))
+
+
+def code(name):
+    """A PHP file's text without its comments (the comments that tell a removal's history may name what was removed)."""
+    text = (ROOT / name).read_text(errors='replace')
+    text = re.sub(r'/\*.*?\*/', '', text, flags=re.S)
+    return re.sub(r'(?m)(^|[ \t;{}])(//|#).*$', r'\1', text)
 
 
 class TemplatePartsReaderTests(unittest.TestCase):

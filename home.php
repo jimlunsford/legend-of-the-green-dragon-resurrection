@@ -6,15 +6,7 @@
 define("ALLOW_ANONYMOUS",true);
 require_once("common.php");
 require_once("lib/http.php");
-if (isset($_POST['template'])) {
-    resurrection_require_post();
-    $skin = \Resurrection\Http\Input::string($_POST, 'template');
-    if (!preg_match('/\A[A-Za-z0-9_-]+\.htm\z/', $skin) || !is_file('templates/' . $skin)) { http_response_code(400); exit('Invalid skin.'); }
-    setcookie('template', $skin, ['expires' => time() + 3888000, 'httponly' => true, 'samesite' => 'Lax']);
-    $_COOKIE['template'] = $skin;
-}
-
-
+// 1.1.2's skin chooser posted here and set the template cookie; the skins and the chooser are gone (Phase 5 task 15).
 
 if (!isset($session['loggedin'])) $session['loggedin']=false;
 if ($session['loggedin']){
@@ -115,20 +107,6 @@ $session['message']="";
 // 1.1.2 showed $logd_version; the server now runs Resurrection, which credits that base (src/Version.php).
 require_once 'src/Version.php';
 output("`c`2Game server running version: `@%s`0`c", \Resurrection\Version::display());
-
-if (getsetting("homeskinselect", 1)) {
-	rawoutput("<form action='home.php' method='POST'>" . resurrection_csrf_field());
-	rawoutput("<table align='center'><tr><td>");
-	$form = array("template"=>"Choose a different display skin:,theme");
-	$prefs['template'] = $_COOKIE['template'] ?? '';
-	if ($prefs['template'] == "")
-		$prefs['template'] = getsetting("defaultskin", "resurrection.htm");
-	require_once("lib/showform.php");
-	showform($form, $prefs, true);
-	$submit = translate_inline("Choose");
-	rawoutput("</td><td><br>&nbsp;<input type='submit' class='button' value='$submit'></td>");
-	rawoutput("</tr></table></form>");
-}
 
 page_footer();
 ?>

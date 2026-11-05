@@ -37,13 +37,8 @@ foreach ($_POST as $field => $value) {
     // future modules fail-closed until their value descriptor has a typed parser.
     http_response_code(400); exit('Unsupported user preference descriptor.');
 }
-if (isset($_POST['template'])) {
-    $skin = $_POST['template'];
-    if (!preg_match('/\A[A-Za-z0-9_-]+\.htm\z/', $skin) || !is_file('templates/' . $skin)) { http_response_code(400); exit('Invalid skin.'); }
-    setcookie('template', $skin, ['expires' => time() + 3888000, 'httponly' => true, 'samesite' => 'Lax']);
-    $_COOKIE['template'] = $skin;
-}
-
+// 1.1.2's Skin preference posted here and set the template cookie; the skins and the preference are gone (Phase 5
+// task 15). A page rendered before this change may still post the old field; it is never read (see below).
 
 require_once("lib/is_email.php");
 require_once("lib/showform.php");
@@ -90,8 +85,9 @@ if ($op=="suicide" && getsetting("selfdelete",0)!=0) {
     $oldvalues = $session['user']['prefs'];
 
 	$post = httpallpost();
-	// A page rendered before this release may still post the old hidden field; it is never read.
-	unset($post['oldvalues']);
+	// A page rendered before this release may still post the old hidden field; it is never read. Nor is the Skin
+	// field such a page posts (Phase 5 task 15).
+	unset($post['oldvalues'], $post['template']);
 
 	if (count($post)==0){
 	}else{
@@ -101,7 +97,6 @@ if ($op=="suicide" && getsetting("selfdelete",0)!=0) {
             "pass1"=>1,
 			"pass2"=>1,
 			"email"=>1,
-			"template"=>1,
 			"bio"=>1
 		);
 		// Check the preferences this post would store before anything is changed.
@@ -197,7 +192,6 @@ if ($op=="suicide" && getsetting("selfdelete",0)!=0) {
 		"pass2"=>"Retype,password",
 		"email"=>"Email Address",
 		"Display Preferences,title",
-		"template"=>"Skin,theme",
 		"language"=>"Language,enum,".getsetting("serverlanguages","en,English,de,Deutsch,fr,Fran�ais,dk,Danish,es,Espa�ol,it,Italian"),
 		"tabconfig"=>"Show config sections in tabs,bool",
 		"Game Behavior Preferences,title",
@@ -218,9 +212,6 @@ if ($op=="suicide" && getsetting("selfdelete",0)!=0) {
 	);
 	$prefs = $session['user']['prefs'];
 	$prefs['bio'] = $session['user']['bio'];
-	$prefs['template'] = ($_COOKIE['template'] ?? '');
-	if ($prefs['template'] == "")
-		$prefs['template'] = getsetting("defaultskin", "resurrection.htm");
 	$prefs['email'] = $session['user']['emailaddress'];
 	// Default tabbed config to true
 	if (!isset($prefs['tabconfig'])) $prefs['tabconfig'] = 1;
@@ -334,12 +325,9 @@ if ($op=="suicide" && getsetting("selfdelete",0)!=0) {
 		$deltext = translate_inline("Delete Character");
 		$conf = translate_inline("Are you sure you wish to delete your character?");
 		rawoutput("<table class='noborder' width='100%'><tr><td width='100%'></td><td".resurrection_presentation('danger-cell')." align='right'>");
-		if (resurrection_ui()) {
-			// No inline handler: assets/ui/showform.js asks for the confirmation (Phase 5 task 9).
-			rawoutput("<input type='submit' class='button rz-button-danger' value='$deltext' data-rz-confirm=\"".htmlspecialchars($conf, ENT_QUOTES, 'UTF-8')."\">".resurrection_form_script());
-		} else {
-			rawoutput("<input type='submit' class='button' value='$deltext' onClick='return confirm(\"$conf\");'>");
-		}
+		// No inline handler: assets/ui/showform.js asks for the confirmation (Phase 5 task 9; 1.1.2's onClick confirm
+		// was kept for the 1.1.2 skins until Phase 5 task 15).
+		rawoutput("<input type='submit' class='button rz-button-danger' value='$deltext' data-rz-confirm=\"".htmlspecialchars($conf, ENT_QUOTES, 'UTF-8')."\">".resurrection_form_script());
 		rawoutput("</td></tr></table>");
 		rawoutput("</form>");
 		addnav("","prefs.php?op=suicide&userid={$session['user']['acctid']}");
