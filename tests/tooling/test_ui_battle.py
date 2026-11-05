@@ -39,6 +39,22 @@ class BattleScreenStyleTests(unittest.TestCase):
         self.assertIn('color: var(--damage);', self.rule('.rz-fighter-foe .rz-fighter-name'))
         self.assertIn('color: var(--text);', self.rule('.rz-fighter-sub i'))
 
+    def test_foe_portrait(self):
+        # Phase 5 task 14: a foe's portrait, 80px wide at every width, beside its name and level.
+        self.assertIn('display: flex;', self.rule('.rz-fighter-id'))
+        portrait = self.rule('.rz-fighter-portrait')
+        self.assertIn('width: var(--portrait-width-foe);', portrait)
+        self.assertIn('height: auto;', portrait)
+        self.assertIn('flex: 0 0 auto;', portrait)
+        self.assertEqual(1, self.css.count('.rz-fighter-portrait'), 'no phone rule resizes it')
+        tokens = (ROOT / 'assets' / 'ui' / 'tokens.css').read_text()
+        self.assertIn('--portrait-width-foe: 80px;', tokens)
+        template = (ROOT / 'templates' / 'resurrection.htm').read_text()
+        self.assertIn('<!--!fighter--><section class="rz-fighter rz-fighter-{kind}{state}"><div class="rz-fighter-id">{portrait}'
+                      '<div class="rz-fighter-text"><h2 class="rz-fighter-name">{name}</h2><p class="rz-fighter-sub">{sub}</p></div></div>{hp}</section>\n', template)
+        self.assertIn('<!--!fighterportrait--><img class="rz-fighter-portrait" src="{src}" alt="{alt}" width="{width}" height="{height}">\n', template)
+        self.assertNotIn('assets/portraits/', template)
+
     def test_fight_bars(self):
         track = self.rule('.rz-fighterbar-track')
         self.assertIn('height: var(--bar-height-fight);', track)
@@ -134,7 +150,7 @@ class SpecTests(unittest.TestCase):
         spec = (ROOT / 'docs' / 'UI-DESIGN-SPEC.md').read_text()
         for name in ('**Fighter cards** (Phase 5 task 10', '**Battle action bar** (task 10)', '**Battle log** (task 10)',
                      '**Battle result** (task 10)', '**Commentary** (task 10', '**Commentary pager** (task 10)',
-                     '**Buy lists** (task 10'):
+                     '**Buy lists** (task 10', '**Foe portraits** (Phase 5 task 14'):
             self.assertIn(name, spec, name)
         self.assertNotIn('one entry per combat line', spec)
         self.assertNotIn('"Round %s"', spec)

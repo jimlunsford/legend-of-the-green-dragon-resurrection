@@ -661,6 +661,13 @@ a.hotmotd { color: var(--accent); }
   line-height: var(--leading-ui);
 }
 .rz-fighter-foe { border-color: var(--foe); }
+/*
+  The fighter's name and level (task 14): a foe's portrait (--portrait-width-foe, 80px, at every width) stands beside
+  them, as in the approved mockup; the player's card has none (the character panel shows the race portrait).
+*/
+.rz-fighter-id { display: flex; align-items: center; gap: 14px; min-width: 0; }
+.rz-fighter-portrait { display: block; flex: 0 0 auto; width: var(--portrait-width-foe); height: auto; }
+.rz-fighter-text { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 .rz-content .rz-fighter-name {
   margin: 0;
   font-family: var(--font-display);

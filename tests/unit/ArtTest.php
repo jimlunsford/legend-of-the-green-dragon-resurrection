@@ -13,6 +13,10 @@ use Resurrection\Ui\Art;
  * module whose pages happen in a place show its scene, the alt text the place's name (the village's and the inn's from
  * their settings, the others translated); unmapped pages and modules the fallback; popups, superuser pages and the
  * drink editor none.
+ *
+ * Phase 5 task 14 (docs/PHASE5-TASK14-PORTRAITS-20261105.md) adds the foe portraits: a seeded creature's by creatureid,
+ * a seeded master's by masterid, the Green Dragon's, a PvP victim's race portrait, and for any other creature the
+ * fallback of the type a module names through the `creatureportrait` hook, or the unknown one.
  */
 final class ArtTest extends TestCase
 {
@@ -277,5 +281,87 @@ final class ArtTest extends TestCase
         foreach (['Charm', 'Clan', 'Clan Info', 'Vital Info', 'Ring', 'Hit points', 'Gold pieces', 'HP', 'XP', '', 'Gems!'] as $label) {
             self::assertNull(Art::iconName($label), $label);
         }
+    }
+
+    /** The foe portraits (Phase 5 task 14). */
+    private const array PORTRAIT = ['width' => 200, 'height' => 240];
+
+    public function testASeededCreatureGetsItsOwnPortrait(): void
+    {
+        self::assertSame(['src' => 'assets/portraits/creature/1.svg', 'alt' => 'Thieving Kender'] + self::PORTRAIT, Art::creature(1, 'Thieving Kender'));
+        // By id, as the creatures table gives it (a string) or as an int; the alt text is the name the fight shows.
+        self::assertSame(['src' => 'assets/portraits/creature/320.svg', 'alt' => 'Elite Gypsy Bandit'] + self::PORTRAIT, Art::creature('320', 'Elite Gypsy Bandit'));
+        // A renamed seeded creature keeps its id's portrait; the type a module names is not even asked.
+        $asked = false;
+        self::assertSame('assets/portraits/creature/3.svg', Art::creature(3, 'Renamed Unicorn', function () use (&$asked) { $asked = true; return 'demon'; })['src'] ?? null);
+        self::assertFalse($asked);
+        foreach ([1, 135, 219, 320] as $id) { self::assertFileExists(Art::ASSETS . "/portraits/creature/$id.svg"); }
+        // No alt text, no image.
+        self::assertNull(Art::creature(1, ' '));
+    }
+
+    public function testAnUnknownCreatureGetsTheUnknownFallback(): void
+    {
+        $unknown = ['src' => 'assets/portraits/creature/fallback/unknown.svg', 'alt' => 'Mystery'] + self::PORTRAIT;
+        // An editor's creature (an id past the seeds, or one of the seeds' gaps), a module's (no id), the doppelganger.
+        foreach ([321, 132, '133', 0, -1, null, '', '01', '1.0', '1 ', 'green-dragon', '../master/1', 1.0, [1], true, '99999999999'] as $id) {
+            self::assertSame($unknown, Art::creature($id, 'Mystery'), var_export($id, true));
+        }
+        self::assertSame($unknown, Art::master(15, 'Mystery'));
+        self::assertSame($unknown, Art::master(null, 'Mystery'));
+    }
+
+    public function testAModuleNamedTypeGetsItsFallback(): void
+    {
+        self::assertSame(10, count(Art::CREATURE_TYPES));
+        foreach (Art::CREATURE_TYPES as $type) {
+            self::assertSame("assets/portraits/creature/fallback/$type.svg", Art::creature(999, 'A thing', fn () => $type)['src'] ?? null, $type);
+            self::assertFileExists(Art::ASSETS . "/portraits/creature/fallback/$type.svg");
+            self::assertSame($type, Art::creatureType($type));
+        }
+        // Anything else is unknown: a type that does not exist, another case, a path, not a string.
+        foreach (['', 'Beast', 'dog', 'race', 'human', '../race/elf', 'fallback/beast', 'green-dragon', null, 3, ['beast'], false] as $type) {
+            self::assertSame('assets/portraits/creature/fallback/unknown.svg', Art::creature(999, 'A thing', fn () => $type)['src'] ?? null, var_export($type, true));
+            self::assertSame('unknown', Art::creatureType($type));
+        }
+        // Through the hook, as the battle screen asks it: the foe, the fight's type, and unknown to change.
+        $seen = null;
+        $hook = function (array $args) use (&$seen) { $seen = $args; return ['type' => 'undead'] + $args; };
+        $foe = ['creaturename' => 'Bone Collector', 'creaturelevel' => 4];
+        self::assertSame(['src' => 'assets/portraits/creature/fallback/undead.svg', 'alt' => 'Bone Collector'] + self::PORTRAIT,
+            Art::foe($foe, 'forest', 'Bone Collector', $hook));
+        self::assertSame(['creature' => $foe, 'fight' => 'forest', 'type' => 'unknown'], $seen);
+        // A hook that gives nothing back, or no type, leaves unknown; it is not asked for a seeded creature.
+        self::assertSame('assets/portraits/creature/fallback/unknown.svg', Art::foe($foe, 'forest', 'x', fn (array $a) => null)['src'] ?? null);
+        self::assertSame('assets/portraits/creature/fallback/unknown.svg', Art::foe($foe, 'forest', 'x', fn (array $a) => $a)['src'] ?? null);
+        $seen = null;
+        self::assertSame('assets/portraits/creature/9.svg', Art::foe(['creatureid' => '9'] + $foe, 'graveyard', 'x', $hook)['src'] ?? null);
+        self::assertNull($seen);
+    }
+
+    public function testAMasterGetsItsOwnPortrait(): void
+    {
+        for ($id = 1; $id <= 14; $id++) {
+            self::assertSame(['src' => "assets/portraits/master/$id.svg", 'alt' => 'Master'] + self::PORTRAIT, Art::master($id, 'Master'), (string)$id);
+        }
+        // A training fight's foe is the master with that id, not the creature: the two tables share their ids.
+        self::assertSame('assets/portraits/master/1.svg', Art::foe(['creatureid' => '1', 'creaturename' => 'Mireraband'], 'train', 'Mireraband')['src'] ?? null);
+        self::assertSame('assets/portraits/creature/1.svg', Art::foe(['creatureid' => '1', 'creaturename' => 'Thieving Kender'], 'forest', 'Thieving Kender')['src'] ?? null);
+    }
+
+    public function testTheGreenDragonGetsItsPortrait(): void
+    {
+        $dragon = ['src' => 'assets/portraits/creature/green-dragon.svg', 'alt' => 'The Green Dragon'] + self::PORTRAIT;
+        self::assertSame($dragon, Art::dragon('The Green Dragon'));
+        self::assertSame($dragon, Art::foe(['creaturename' => '`@The Green Dragon`0', 'type' => 'dragon'], 'dragon', 'The Green Dragon'));
+        self::assertNull(Art::dragon(''));
+    }
+
+    public function testAPvpVictimGetsTheirRacePortrait(): void
+    {
+        self::assertSame(['src' => 'assets/portraits/race/elf.svg', 'alt' => 'Violet'] + self::PORTRAIT,
+            Art::foe(['creatureid' => 1, 'race' => 'Elf', 'creaturename' => 'Violet'], 'pvp', 'Violet'));
+        self::assertSame('assets/portraits/race/unknown.svg', Art::foe(['race' => 'Gnome'], 'pvp', 'Gnome Player')['src'] ?? null);
+        self::assertSame('assets/portraits/race/unknown.svg', Art::foe([], 'pvp', 'No Race')['src'] ?? null);
     }
 }

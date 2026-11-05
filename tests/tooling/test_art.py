@@ -1,7 +1,8 @@
 """The game's original art in assets/ (Phase 5 task 5, docs/PHASE5-TASK5-IMAGES-20261030.md).
 
 The art comes from the command chat with its SHA-256 checksums and is committed byte for byte: every file under
-assets/scenes/, assets/portraits/ and assets/icons/ must be one of the files below, unchanged. Every SVG under assets/ must stay a
+assets/scenes/, assets/portraits/ and assets/icons/ must be one of the files below, unchanged (batch 4's portraits:
+the ones assets/portraits/SHA256SUMS lists, Phase 5 task 14). Every SVG under assets/ must stay a
 plain drawing (no script, no event attribute, no foreignObject, no href or other external reference), use only the art
 palette in docs/UI-DESIGN-SPEC.md, and stay under 16 KB. assets/LICENSE licenses exactly three folders under
 CC BY-SA 4.0.
@@ -18,7 +19,7 @@ ASSETS = ROOT / 'assets'
 SPEC = ROOT / 'docs' / 'UI-DESIGN-SPEC.md'
 SIZE_LIMIT = 16 * 1024
 
-# Batch 1, as the command chat supplied it (Jim, 2026-10-30), then batches 2 and 3. A change to the art is a new file from the
+# Batch 1, as the command chat supplied it (Jim, 2026-10-30), then batches 2 and 3 (batch 4 in PORTRAIT_KIT, below). A change to the art is a new file from the
 # command chat, added here with its checksum.
 CHECKSUMS = {
     'portraits/race/dwarf.svg': '93373dcde21447afd1780e1bb999e6c88d729bf24535f205f354e63a759568d3',
@@ -67,7 +68,25 @@ CHECKSUMS = {
     'icons/turns.svg': '261ba7b4b15f476a47bb7f28b1f89900ae42328b456b40daa9cf7e4e0c83fc13',
     'icons/weapon.svg': 'c5535706a49bf59fd0be6f29f4d634c9d91ee918fb791adca490676f034eeadc',
 }
+# Batch 4, the foe portraits (Jim, approved 2026-11-05; Phase 5 task 14, docs/PHASE5-TASK14-PORTRAITS-20261105.md): 313
+# SVGs drawn from the parts kit, too many to list here. Their checksums are assets/portraits/SHA256SUMS, itself pinned
+# here with the kit; tests/tooling/test_portraits.py checks the files against it, the kit and the generator.
+PORTRAIT_KIT = {
+    'portraits/SHA256SUMS': '1662a4cfa1d7b8ef5218fe4cd991908a1138fedd448f850028b25a27ce714687',
+    'portraits/creature/kit.json': 'a3234d759c889721ff96b1dda8d7877781993ef33ee9e96133ce1ddc52f32fc1',
+}
 SVG_NAMESPACE = 'http://www.w3.org/2000/svg'
+
+
+def portrait_sums():
+    """assets/portraits/SHA256SUMS as {path under assets/: checksum}."""
+    sums = {}
+    for line in (ASSETS / 'portraits' / 'SHA256SUMS').read_text().splitlines():
+        found = re.fullmatch(r'([0-9a-f]{64})  \./(portraits/[a-z0-9/-]+\.svg)', line)
+        if found is None:
+            raise AssertionError('Not a SHA256SUMS line: ' + line)
+        sums[found.group(2)] = found.group(1)
+    return sums
 # Attributes that carry a color; their values must be a palette color or none.
 COLOR_ATTRIBUTE = re.compile(r'''(?<![\w-])(fill|stroke|stop-color|flood-color|lighting-color|color)\s*=\s*(["'])(.*?)\2''', re.I | re.S)
 COLOR_PROPERTY = re.compile(r'''(?<![\w-])(fill|stroke|stop-color|flood-color|lighting-color|color)\s*:\s*([^;"'>]+)''', re.I)
@@ -123,13 +142,21 @@ class ArtTests(unittest.TestCase):
     def test_every_file_is_the_one_supplied(self):
         on_disk = sorted(str(p.relative_to(ASSETS)) for folder in ('scenes', 'portraits', 'icons')
                          for p in (ASSETS / folder).rglob('*') if p.is_file())
-        self.assertEqual(sorted(CHECKSUMS), on_disk, 'Every file under assets/scenes, assets/portraits and assets/icons is listed')
-        self.assertEqual(18, sum(1 for name in CHECKSUMS if name.startswith('icons/')))
-        for name, expected in CHECKSUMS.items():
+        # Batch 4's portraits are listed in assets/portraits/SHA256SUMS, which is pinned with the kit (PORTRAIT_KIT).
+        for name, expected in PORTRAIT_KIT.items():
             self.assertEqual(expected, hashlib.sha256((ASSETS / name).read_bytes()).hexdigest(), name)
-        # The README's table is the same list.
+        sums = portrait_sums()
+        self.assertEqual(313, len(sums))
+        self.assertEqual([], sorted(set(sums) & set(CHECKSUMS)))
+        self.assertEqual(sorted({**CHECKSUMS, **sums, **PORTRAIT_KIT}), on_disk,
+                         'Every file under assets/scenes, assets/portraits and assets/icons is listed')
+        self.assertEqual(18, sum(1 for name in CHECKSUMS if name.startswith('icons/')))
+        for name, expected in {**CHECKSUMS, **sums}.items():
+            self.assertEqual(expected, hashlib.sha256((ASSETS / name).read_bytes()).hexdigest(), name)
+        # The README's table is the same list, with the kit and its checksums beside it.
         readme = (ASSETS / 'README.md').read_text()
         self.assertEqual(CHECKSUMS, dict(re.findall(r'^\| `([a-z/]+\.svg)` \| `([0-9a-f]{64})` \|', readme, re.M)))
+        self.assertEqual(PORTRAIT_KIT, dict(re.findall(r'^\| `(portraits/(?:SHA256SUMS|creature/kit\.json))` \| `([0-9a-f]{64})` \|', readme, re.M)))
 
     def test_every_icon_the_code_names_exists(self):
         # Phase 5 task 13: the names in Art::ICONS, and every label the panel and the phone header pass to
@@ -160,7 +187,9 @@ class ArtTests(unittest.TestCase):
         self.assertNotIn('assets/icons/', template)
 
     def test_every_svg_is_a_plain_drawing(self):
-        self.assertGreaterEqual(len(self.svgs), len(CHECKSUMS))
+        # Every SVG under assets/, batch 4's 313 portraits included (Phase 5 task 14).
+        self.assertGreaterEqual(len(self.svgs), len(CHECKSUMS) + 313)
+        self.assertTrue(set(portrait_sums()) <= {str(p.relative_to(ASSETS)) for p in self.svgs})
         found = []
         for path in self.svgs:
             text = path.read_text(encoding='utf-8')

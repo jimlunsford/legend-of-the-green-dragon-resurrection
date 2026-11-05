@@ -5,7 +5,7 @@ namespace Resurrection\Ui;
 /**
  * The game's art in assets/ (CC BY-SA 4.0, assets/LICENSE): which scene banner a page shows and which portrait a race
  * gets (Phase 5 task 5, docs/PHASE5-TASK5-IMAGES-20261030.md; the location scenes, Phase 5 task 12,
- * docs/PHASE5-TASK12-SCENES-20261105.md). Every lookup returns a file that exists, with its alt text and size, or null:
+ * docs/PHASE5-TASK12-SCENES-20261105.md; the foe portraits, Phase 5 task 14, docs/PHASE5-TASK14-PORTRAITS-20261105.md). Every lookup returns a file that exists, with its alt text and size, or null:
  * never a broken URL. The URLs are relative to the game's root, as the stylesheet's is.
  */
 final class Art
@@ -70,6 +70,19 @@ final class Art
     /** The races with their own portrait: the bundled race modules' races, lowercased. Any other race is unknown. */
     public const array RACES = ['human', 'elf', 'dwarf', 'troll'];
     public const string UNKNOWN = 'unknown';
+
+    /**
+     * The foe portraits (Phase 5 task 14, docs/PHASE5-TASK14-PORTRAITS-20261105.md), drawn from the parts kit
+     * assets/portraits/creature/kit.json: assets/portraits/creature/<creatureid>.svg for each seeded creature,
+     * assets/portraits/master/<masterid>.svg for each seeded training master (the masters table's creatureid), the Green
+     * Dragon's, and one fallback per creature type (assets/portraits/creature/fallback/<type>.svg), unknown the last.
+     */
+    public const array CREATURE_TYPES = ['humanoid', 'beast', 'undead', 'spirit', 'monster', 'demon', 'construct', 'plant', 'dragon', self::UNKNOWN];
+    public const string GREEN_DRAGON = 'green-dragon';
+    /** The fights' types (battle.php's $options['type']) whose foes are not creatures from the creatures table. */
+    public const string FIGHT_TRAINING = 'train';
+    public const string FIGHT_PVP = 'pvp';
+    public const string FIGHT_DRAGON = 'dragon';
 
     /** The intrinsic sizes, from the files' viewBox: the scenes are 1200x320, the portraits 200x240. */
     public const array SCENE_SIZE = [1200, 320];
@@ -171,6 +184,93 @@ final class Art
     public static function portrait(string $race, string $alt): ?array
     {
         $src = self::file('portraits/race', self::portraitName($race));
+        if ($src === null || trim($alt) === '') { return null; }
+        return ['src' => $src, 'alt' => $alt, 'width' => self::PORTRAIT_SIZE[0], 'height' => self::PORTRAIT_SIZE[1]];
+    }
+
+    /**
+     * A creature's portrait: its own, by creatureid, for a seeded creature (a file the kit drew); for any other creature
+     * (one added in the editor, a module's, a fight's doppelganger) the fallback of the type $type names, or the
+     * unknown fallback. $type is asked only for a creature with no portrait of its own, and may name any of
+     * CREATURE_TYPES; anything else is unknown. A renamed seeded creature keeps its id's portrait. Null only when the
+     * alt text is empty or the files are missing.
+     *
+     * @param (callable(): mixed)|null $type
+     * @return array{src: string, alt: string, width: int, height: int}|null
+     */
+    public static function creature(mixed $id, string $alt, ?callable $type = null): ?array
+    {
+        return self::portraitFile(self::own('portraits/creature', $id) ?? self::fallback($type), $alt);
+    }
+
+    /**
+     * A training master's portrait, by masterid (the masters table's creatureid), for a seeded master; any other master
+     * gets a fallback as any other creature does (creature()).
+     *
+     * @param (callable(): mixed)|null $type
+     * @return array{src: string, alt: string, width: int, height: int}|null
+     */
+    public static function master(mixed $id, string $alt, ?callable $type = null): ?array
+    {
+        return self::portraitFile(self::own('portraits/master', $id) ?? self::fallback($type), $alt);
+    }
+
+    /**
+     * The Green Dragon's portrait.
+     * @return array{src: string, alt: string, width: int, height: int}|null
+     */
+    public static function dragon(string $alt): ?array
+    {
+        return self::portraitFile(self::file('portraits/creature', self::GREEN_DRAGON), $alt);
+    }
+
+    /**
+     * The portrait of a foe on the battle screen's card, by the fight's type ($options['type']): a PvP victim the
+     * player's race portrait (portrait(), by the victim's race), the Green Dragon its own, a training master the
+     * master's (by its creatureid), every other foe the creature's (by its creatureid). $hook is the
+     * `creatureportrait` module hook: for a foe with no portrait of its own it gets ['creature' => the foe,
+     * 'fight' => the fight's type, 'type' => 'unknown'] and may set `type` to one of CREATURE_TYPES.
+     *
+     * @param array<array-key, mixed> $enemy
+     * @param (callable(array{creature: array<array-key, mixed>, fight: string, type: string}): mixed)|null $hook
+     * @return array{src: string, alt: string, width: int, height: int}|null
+     */
+    public static function foe(array $enemy, string $fight, string $alt, ?callable $hook = null): ?array
+    {
+        if ($fight === self::FIGHT_PVP) { return self::portrait(is_scalar($enemy['race'] ?? null) ? (string)$enemy['race'] : '', $alt); }
+        if ($fight === self::FIGHT_DRAGON) { return self::dragon($alt); }
+        $type = $hook === null ? null : static function () use ($hook, $enemy, $fight): mixed {
+            $args = $hook(['creature' => $enemy, 'fight' => $fight, 'type' => self::UNKNOWN]);
+            return is_array($args) ? ($args['type'] ?? null) : null;
+        };
+        $id = $enemy['creatureid'] ?? null;
+        return $fight === self::FIGHT_TRAINING ? self::master($id, $alt, $type) : self::creature($id, $alt, $type);
+    }
+
+    /** The creature type a name gives: one of CREATURE_TYPES, or unknown for anything else. */
+    public static function creatureType(mixed $type): string
+    {
+        return is_string($type) && in_array($type, self::CREATURE_TYPES, true) ? $type : self::UNKNOWN;
+    }
+
+    /** assets/<folder>/<id>.svg for an id that is a whole number above 0 (as an int or its digits), or null. */
+    private static function own(string $folder, mixed $id): ?string
+    {
+        if (is_int($id)) { $id = (string)$id; }
+        if (!is_string($id) || preg_match('/\A[1-9][0-9]{0,9}\z/', $id) !== 1) { return null; }
+        return self::file($folder, $id);
+    }
+
+    /** @param (callable(): mixed)|null $type */
+    private static function fallback(?callable $type): ?string
+    {
+        $name = $type === null ? self::UNKNOWN : self::creatureType($type());
+        return self::file('portraits/creature/fallback', $name) ?? self::file('portraits/creature/fallback', self::UNKNOWN);
+    }
+
+    /** @return array{src: string, alt: string, width: int, height: int}|null */
+    private static function portraitFile(?string $src, string $alt): ?array
+    {
         if ($src === null || trim($alt) === '') { return null; }
         return ['src' => $src, 'alt' => $alt, 'width' => self::PORTRAIT_SIZE[0], 'height' => self::PORTRAIT_SIZE[1]];
     }

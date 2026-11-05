@@ -39,8 +39,9 @@ PART_KEYS = {
     'statbarcap': {'kind', 'icon', 'label', 'current', 'note', 'percent', 'caption'},
     'stattile': {'icon', 'label', 'value', 'note'}, 'equiprow': {'icon', 'label', 'value'},
     'labelicon': {'src', 'width', 'height'},
-    # The battle screen (Phase 5 task 10): lib/battle_view.php.
-    'battle': {'screen'}, 'fighters': {'cards'}, 'fighter': {'kind', 'state', 'name', 'sub', 'hp'},
+    # The battle screen (Phase 5 task 10): lib/battle_view.php; a foe's portrait on its card (Phase 5 task 14).
+    'battle': {'screen'}, 'fighters': {'cards'}, 'fighter': {'kind', 'state', 'name', 'sub', 'hp', 'portrait'},
+    'fighterportrait': {'src', 'alt', 'width', 'height'},
     'fighterbar': {'label', 'value', 'percent'}, 'fighterhp': {'label', 'value'}, 'battleactions': {'main', 'groups'},
     'battlemain': {'buttons'}, 'battlegroup': {'id', 'title', 'note', 'buttons'}, 'battlenote': {'text'},
     'battlelog': {'label', 'intro', 'rounds'}, 'battleintro': {'lines'}, 'battlerounds': {'rounds'},

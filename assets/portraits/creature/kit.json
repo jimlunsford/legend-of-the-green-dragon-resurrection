@@ -1,0 +1,3754 @@
+{
+ "about": "Creature and master portraits: one recipe per seeded creature (by creatureid) and master (by masterid). scripts/art/build_creature_portraits.py draws them. Art: Phoenix 2:33 LLC, CC BY-SA 4.0.",
+ "paths": {
+  "creature": "portraits/creature/{key}.svg",
+  "master": "portraits/master/{key}.svg",
+  "fallback": "portraits/creature/fallback/{key}.svg",
+  "special": "portraits/creature/{key}.svg"
+ },
+ "creature": {
+  "1": {
+   "name": "Thieving Kender",
+   "level": 1,
+   "weapon": "Whirling Hoopak",
+   "recipe": {
+    "type": "humanoid",
+    "headgear": "hood",
+    "ears": "pointed",
+    "held": "staff",
+    "eyes": "dots",
+    "eye_color": "gold",
+    "collar": "bronze"
+   }
+  },
+  "2": {
+   "name": "Rude Student",
+   "level": 1,
+   "weapon": "Worn Textbook",
+   "recipe": {
+    "type": "humanoid",
+    "held": "book",
+    "eyes": "dots",
+    "eye_color": "gold",
+    "hair_color": "dark",
+    "collar": "pale"
+   }
+  },
+  "3": {
+   "name": "Baby Unicorn",
+   "level": 1,
+   "weapon": "Blunt Horn",
+   "recipe": {
+    "type": "beast",
+    "horns": "unicorn",
+    "eyes": "dots",
+    "eye_color": "pale"
+   }
+  },
+  "4": {
+   "name": "Small Purple Mouse",
+   "level": 1,
+   "weapon": "Lashing pink tail",
+   "recipe": {
+    "type": "beast",
+    "ears": "round",
+    "eyes": "dots",
+    "eye_color": "moon"
+   }
+  },
+  "5": {
+   "name": "Grunting Piggy",
+   "level": 1,
+   "weapon": "Wiggly Snout",
+   "recipe": {
+    "type": "beast",
+    "ears": "round",
+    "mouth": "tusks",
+    "eyes": "dots",
+    "eye_color": "gold"
+   }
+  },
+  "6": {
+   "name": "Dumb Old Eyesore",
+   "level": 2,
+   "weapon": "Nagging complaints",
+   "recipe": {
+    "type": "monster",
+    "eyes": "cyclops",
+    "eye_color": "moon"
+   }
+  },
+  "7": {
+   "name": "Pygmy Marmoset",
+   "level": 2,
+   "weapon": "Pieces of treebark",
+   "recipe": {
+    "type": "beast",
+    "ears": "round",
+    "eyes": "dots",
+    "eye_color": "moon"
+   }
+  },
+  "8": {
+   "name": "Burly Man",
+   "level": 15,
+   "weapon": "Amazing Absorbency",
+   "recipe": {
+    "type": "humanoid",
+    "eyes": "dots",
+    "eye_color": "leaf",
+    "hair": "short",
+    "hair_color": "blond",
+    "collar": "leaf"
+   }
+  },
+  "9": {
+   "name": "Screaming Banshee",
+   "level": 2,
+   "weapon": "Hauntingly Beautiful Voice",
+   "recipe": {
+    "type": "undead",
+    "eyes": "glow",
+    "eye_color": "ember"
+   }
+  },
+  "10": {
+   "name": "Ursa Minor",
+   "level": 2,
+   "weapon": "Twinkling Lights",
+   "recipe": {
+    "type": "beast",
+    "eyes": "dots",
+    "eye_color": "moon"
+   }
+  },
+  "11": {
+   "name": "Stone Troll",
+   "level": 2,
+   "weapon": "Gaping  Maw",
+   "recipe": {
+    "type": "monster",
+    "mouth": "tusks",
+    "eyes": "dots",
+    "eye_color": "moon",
+    "tint": "copper"
+   }
+  },
+  "12": {
+   "name": "Slithering Asp",
+   "level": 2,
+   "weapon": "Hypnotic eyes",
+   "recipe": {
+    "type": "beast",
+    "eyes": "slits",
+    "eye_color": "ember"
+   }
+  },
+  "13": {
+   "name": "Windan The Barbarian",
+   "level": 2,
+   "weapon": "Feathered Spear",
+   "recipe": {
+    "type": "humanoid",
+    "headgear": "helmet",
+    "horns": "horns",
+    "mouth": "darkbeard",
+    "eyes": "dots",
+    "eye_color": "leaf",
+    "collar": "bronze"
+   }
+  },
+  "14": {
+   "name": "Studious Young Sorceror",
+   "level": 2,
+   "weapon": "Newly memorized spells",
+   "recipe": {
+    "type": "humanoid",
+    "headgear": "hat",
+    "mouth": "beard",
+    "held": "staff",
+    "eyes": "dots",
+    "eye_color": "leaf",
+    "collar": "leaf"
+   }
+  },
+  "15": {
+   "name": "Four and Twenty Blackbirds",
+   "level": 3,
+   "weapon": "Freshly Baked Pies",
+   "recipe": {
+    "type": "beast",
+    "wings": true,
+    "eyes": "dots",
+    "eye_color": "gold"
+   }
+  },
+  "16": {
+   "name": "Amazon",
+   "level": 3,
+   "weapon": "Bow and Arrow",
+   "recipe": {
+    "type": "humanoid",
+    "headgear": "helmet",
+    "held": "bow",
+    "eyes": "dots",
+    "eye_color": "pale",
+    "collar": "leaf"
+   }
+  },
+  "17": {
+   "name": "Overbearing Mother",
+   "level": 3,
+   "weapon": "9pm Curfew",
+   "recipe": {
+    "type": "humanoid",
+    "eyes": "dots",
+    "eye_color": "pale",
+    "hair_color": "dark",
+    "collar": "magic"
+   }
+  },
+  "18": {
+   "name": "Huge Bald Programmer",
+   "level": 3,
+   "weapon": "Shining Forehead",
+   "recipe": {
+    "type": "humanoid",
+    "mouth": "darkbeard",
+    "eyes": "dots",
+    "eye_color": "gold",
+    "hair": "short",
+    "hair_color": "dark",
+    "collar": "magic"
+   }
+  },
+  "19": {
+   "name": "Someone's Grandfather",
+   "level": 3,
+   "weapon": "Stories that go nowhere",
+   "recipe": {
+    "type": "humanoid",
+    "mouth": "beard",
+    "eyes": "dots",
+    "eye_color": "pale",
+    "hair": "long",
+    "hair_color": "grey",
+    "collar": "gold"
+   }
+  },
+  "20": {
+   "name": "Juvenile Delinquent",
+   "level": 3,
+   "weapon": "Poor Attitude",
+   "recipe": {
+    "type": "humanoid",
+    "eyes": "dots",
+    "eye_color": "magic",
+    "hair_color": "red",
+    "collar": "bronze"
+   }
+  },
+  "21": {
+   "name": "Beautiful Woodland Sprite",
+   "level": 3,
+   "weapon": "Kindness and tranquility",
+   "recipe": {
+    "type": "spirit",
+    "headgear": "leaves",
+    "ears": "pointed",
+    "wings": true,
+    "eyes": "glow",
+    "eye_color": "moon"
+   }
+  },
+  "22": {
+   "name": "Society Belle",
+   "level": 3,
+   "weapon": "Southern Charm",
+   "recipe": {
+    "type": "humanoid",
+    "eyes": "dots",
+    "eye_color": "magic",
+    "hair": "long",
+    "hair_color": "brown",
+    "collar": "pale"
+   }
+  },
+  "23": {
+   "name": "Giant Goldfish Cracker",
+   "level": 3,
+   "weapon": "Annoying Commercial Jingles",
+   "recipe": {
+    "type": "construct",
+    "eyes": "square",
+    "eye_color": "gold",
+    "tint": "gold"
+   }
+  },
+  "24": {
+   "name": "Angry Mob",
+   "level": 4,
+   "weapon": "Torches",
+   "recipe": {
+    "type": "humanoid",
+    "eyes": "dots",
+    "eye_color": "magic",
+    "hair": "bun",
+    "hair_color": "dark",
+    "collar": "gold"
+   }
+  },
+  "25": {
+   "name": "Polar Bear",
+   "level": 4,
+   "weapon": "Terrible claws",
+   "recipe": {
+    "type": "beast",
+    "ears": "round",
+    "eyes": "dots",
+    "eye_color": "ember",
+    "tint": "bone"
+   }
+  },
+  "26": {
+   "name": "Decaying Skeleton",
+   "level": 4,
+   "weapon": "Rusty Sword",
+   "recipe": {
+    "type": "undead",
+    "held": "sword",
+    "eyes": "sockets",
+    "eye_color": "ember"
+   }
+  },
+  "27": {
+   "name": "Willie the Wonder Hampster",
+   "level": 4,
+   "weapon": "Nuclear Sunflower Seeds",
+   "recipe": {
+    "type": "beast",
+    "ears": "round",
+    "eyes": "dots",
+    "eye_color": "moon"
+   }
+  },
+  "28": {
+   "name": "Winged Demon Of Death",
+   "level": 4,
+   "weapon": "Red Glare",
+   "recipe": {
+    "type": "demon",
+    "headgear": "hood",
+    "horns": "horns",
+    "wings": true,
+    "eyes": "glow",
+    "eye_color": "ember"
+   }
+  },
+  "29": {
+   "name": "Small Dragon",
+   "level": 4,
+   "weapon": "Hot air",
+   "recipe": {
+    "type": "dragon",
+    "wings": true,
+    "eyes": "dots",
+    "eye_color": "gold"
+   }
+  },
+  "30": {
+   "name": "Monstrous Dustbunny",
+   "level": 4,
+   "weapon": "Sneezing fits",
+   "recipe": {
+    "type": "beast",
+    "ears": "rabbit",
+    "eyes": "dots",
+    "eye_color": "pale"
+   }
+  },
+  "31": {
+   "name": "Small Rabbit",
+   "level": 4,
+   "weapon": "Sharp Pointy Teeth",
+   "recipe": {
+    "type": "beast",
+    "ears": "rabbit",
+    "eyes": "dots",
+    "eye_color": "ember"
+   }
+  },
+  "32": {
+   "name": "Mature Unicorn",
+   "level": 5,
+   "weapon": "Powerful Horn",
+   "recipe": {
+    "type": "beast",
+    "horns": "unicorn",
+    "eyes": "dots",
+    "eye_color": "ember"
+   }
+  },
+  "33": {
+   "name": "Gnome Necromancer",
+   "level": 5,
+   "weapon": "Skeleton Familiar",
+   "recipe": {
+    "type": "humanoid",
+    "headgear": "hood",
+    "mouth": "beard",
+    "eyes": "glow",
+    "eye_color": "leaf",
+    "collar": "bronze"
+   }
+  },
+  "34": {
+   "name": "Purple Dinosaur",
+   "level": 5,
+   "weapon": "Helpful Nature",
+   "recipe": {
+    "type": "beast",
+    "eyes": "dots",
+    "eye_color": "ember"
+   }
+  },
+  "35": {
+   "name": "Orc Emmisary",
+   "level": 5,
+   "weapon": "Diplomacy",
+   "recipe": {
+    "type": "monster",
+    "mouth": "tusks",
+    "eyes": "dots",
+    "eye_color": "ember"
+   }
+  },
+  "36": {
+   "name": "Dark Spiritling",
+   "level": 5,
+   "weapon": "Dark Magic",
+   "recipe": {
+    "type": "spirit",
+    "held": "staff",
+    "eyes": "glow",
+    "eye_color": "moon"
+   }
+  },
+  "37": {
+   "name": "Enchanted Toilet",
+   "level": 5,
+   "weapon": "Ninja Flushing Action",
+   "recipe": {
+    "type": "construct",
+    "eyes": "square",
+    "eye_color": "gold"
+   }
+  },
+  "38": {
+   "name": "Giant Water Elemental",
+   "level": 5,
+   "weapon": "Torrential Downpours",
+   "recipe": {
+    "type": "spirit",
+    "eyes": "glow",
+    "eye_color": "bone",
+    "tint": "magic"
+   }
+  },
+  "39": {
+   "name": "Violins",
+   "level": 5,
+   "weapon": "Off-Key notes",
+   "recipe": {
+    "type": "construct",
+    "eyes": "square",
+    "eye_color": "ember"
+   }
+  },
+  "40": {
+   "name": "Whirled Peas",
+   "level": 5,
+   "weapon": "Green Slime",
+   "recipe": {
+    "type": "construct",
+    "eyes": "square",
+    "eye_color": "moon"
+   }
+  },
+  "41": {
+   "name": "Magic Mushroom",
+   "level": 6,
+   "weapon": "Swirling Colors",
+   "recipe": {
+    "type": "plant",
+    "headgear": "leaves",
+    "eyes": "dots",
+    "eye_color": "moon"
+   }
+  },
+  "42": {
+   "name": "Invisible Man",
+   "level": 6,
+   "weapon": "Something Invisible and Sharp",
+   "recipe": {
+    "type": "spirit",
+    "eyes": "glow",
+    "eye_color": "magic"
+   }
+  },
+  "43": {
+   "name": "Clown of Death",
+   "level": 6,
+   "weapon": "Balloon Animals from Beyond",
+   "recipe": {
+    "type": "humanoid",
+    "headgear": "hood",
+    "mouth": "grin",
+    "eyes": "dots",
+    "eye_color": "pale",
+    "collar": "pale"
+   }
+  },
+  "44": {
+   "name": "Heart of Stone",
+   "level": 6,
+   "weapon": "Unromantic Thoughts",
+   "recipe": {
+    "type": "construct",
+    "eyes": "square",
+    "eye_color": "ember",
+    "tint": "copper"
+   }
+  },
+  "45": {
+   "name": "Troll Warrior",
+   "level": 6,
+   "weapon": "Steel Broadsword",
+   "recipe": {
+    "type": "monster",
+    "headgear": "helmet",
+    "mouth": "tusks",
+    "held": "sword",
+    "eyes": "dots",
+    "eye_color": "pale"
+   }
+  },
+  "46": {
+   "name": "Bettie the Amazing Kung-Fu Butterfly",
+   "level": 6,
+   "weapon": "Stupendous Kung-Fu Wings",
+   "recipe": {
+    "type": "beast",
+    "wings": true,
+    "eyes": "dots",
+    "eye_color": "gold"
+   }
+  },
+  "47": {
+   "name": "Golden Goose",
+   "level": 6,
+   "weapon": "14 Karat Gold Eggs",
+   "recipe": {
+    "type": "beast",
+    "wings": true,
+    "eyes": "dots",
+    "eye_color": "ember",
+    "tint": "gold"
+   }
+  },
+  "48": {
+   "name": "Black Tiger",
+   "level": 6,
+   "weapon": "Claws",
+   "recipe": {
+    "type": "beast",
+    "ears": "cat",
+    "mouth": "fangs",
+    "eyes": "slits",
+    "eye_color": "moon"
+   }
+  },
+  "49": {
+   "name": "Lambert the Sheepish Lion",
+   "level": 6,
+   "weapon": "Timid Growling",
+   "recipe": {
+    "type": "beast",
+    "ears": "cat",
+    "eyes": "slits",
+    "eye_color": "pale"
+   }
+  },
+  "50": {
+   "name": "Marsha of the Jungle",
+   "level": 7,
+   "weapon": "Trained Monkeys",
+   "recipe": {
+    "type": "humanoid",
+    "eyes": "dots",
+    "eye_color": "gold",
+    "hair": "bun",
+    "hair_color": "brown",
+    "collar": "bronze"
+   }
+  },
+  "51": {
+   "name": "Moe",
+   "level": 7,
+   "weapon": "Two Knives",
+   "recipe": {
+    "type": "humanoid",
+    "eyes": "dots",
+    "eye_color": "gold",
+    "hair": "long",
+    "hair_color": "brown",
+    "collar": "gold"
+   }
+  },
+  "52": {
+   "name": "Coffin",
+   "level": 7,
+   "weapon": "Terrifying Premonitions",
+   "recipe": {
+    "type": "undead",
+    "eyes": "sockets",
+    "eye_color": "green"
+   }
+  },
+  "53": {
+   "name": "Green Alligator",
+   "level": 7,
+   "weapon": "Crushing Jaws",
+   "recipe": {
+    "type": "beast",
+    "mouth": "fangs",
+    "eyes": "slits",
+    "eye_color": "pale"
+   }
+  },
+  "54": {
+   "name": "Lindsey, Daughter of Erin the Ninja Squirrel",
+   "level": 7,
+   "weapon": "A Peanut Shooter",
+   "recipe": {
+    "type": "beast",
+    "ears": "round",
+    "eyes": "dots",
+    "eye_color": "pale"
+   }
+  },
+  "55": {
+   "name": "Wizarding School Senior Student",
+   "level": 7,
+   "weapon": "Memory Charm",
+   "recipe": {
+    "type": "humanoid",
+    "headgear": "hat",
+    "mouth": "beard",
+    "held": "staff",
+    "eyes": "dots",
+    "eye_color": "pale",
+    "collar": "gold"
+   }
+  },
+  "56": {
+   "name": "Enchanted Laundry Basket",
+   "level": 7,
+   "weapon": "Stinky Socks of Terror",
+   "recipe": {
+    "type": "construct",
+    "eyes": "square",
+    "eye_color": "ember"
+   }
+  },
+  "57": {
+   "name": "Carrot Top",
+   "level": 7,
+   "weapon": "Phone Company Slogans",
+   "recipe": {
+    "type": "plant",
+    "headgear": "leaves",
+    "eyes": "dots",
+    "eye_color": "ember"
+   }
+  },
+  "58": {
+   "name": "Macintosh Computer",
+   "level": 7,
+   "weapon": "Amazingly Bright Colors",
+   "recipe": {
+    "type": "construct",
+    "eyes": "cyclops",
+    "eye_color": "gold"
+   }
+  },
+  "59": {
+   "name": "Interior Designer",
+   "level": 8,
+   "weapon": "Color-coordinating Sword and Shield",
+   "recipe": {
+    "type": "humanoid",
+    "held": "sword",
+    "eyes": "dots",
+    "eye_color": "leaf",
+    "hair_color": "stone",
+    "collar": "leaf"
+   }
+  },
+  "60": {
+   "name": "Daughter of the Devil",
+   "level": 8,
+   "weapon": "Sinfully Good Looks",
+   "recipe": {
+    "type": "demon",
+    "horns": "horns",
+    "wings": true,
+    "eyes": "glow",
+    "eye_color": "green"
+   }
+  },
+  "61": {
+   "name": "Wild Horses",
+   "level": 8,
+   "weapon": "Dragging",
+   "recipe": {
+    "type": "beast",
+    "eyes": "dots",
+    "eye_color": "ember"
+   }
+  },
+  "62": {
+   "name": "Steam Elemental",
+   "level": 8,
+   "weapon": "Scalding jets of air",
+   "recipe": {
+    "type": "spirit",
+    "headgear": "flame",
+    "eyes": "glow",
+    "eye_color": "magic",
+    "tint": "bone"
+   }
+  },
+  "63": {
+   "name": "Gordon the Cheese Eater",
+   "level": 8,
+   "weapon": "Odiferous Nature",
+   "recipe": {
+    "type": "humanoid",
+    "eyes": "dots",
+    "eye_color": "pale",
+    "hair": "short",
+    "hair_color": "blond",
+    "collar": "ash"
+   }
+  },
+  "64": {
+   "name": "Narcoleptic",
+   "level": 8,
+   "weapon": "Drowsiness",
+   "recipe": {
+    "type": "humanoid",
+    "eyes": "dots",
+    "eye_color": "gold",
+    "hair": "spiky",
+    "hair_color": "dark",
+    "collar": "magic"
+   }
+  },
+  "65": {
+   "name": "Swarm of Bees",
+   "level": 8,
+   "weapon": "Stinging",
+   "recipe": {
+    "type": "beast",
+    "wings": true,
+    "eyes": "dots",
+    "eye_color": "ember"
+   }
+  },
+  "66": {
+   "name": "Halfling Mage",
+   "level": 8,
+   "weapon": "Painful Spells",
+   "recipe": {
+    "type": "humanoid",
+    "headgear": "hat",
+    "ears": "pointed",
+    "held": "staff",
+    "eyes": "dots",
+    "eye_color": "gold",
+    "collar": "gold"
+   }
+  },
+  "67": {
+   "name": "Citizen of Eythgim Village",
+   "level": 9,
+   "weapon": "Slurs",
+   "recipe": {
+    "type": "humanoid",
+    "eyes": "dots",
+    "eye_color": "pale",
+    "hair": "spiky",
+    "hair_color": "stone",
+    "collar": "pale"
+   }
+  },
+  "68": {
+   "name": "Old Hag",
+   "level": 9,
+   "weapon": "Red Red Rose",
+   "recipe": {
+    "type": "humanoid",
+    "headgear": "hood",
+    "eyes": "dots",
+    "eye_color": "gold",
+    "collar": "ember"
+   }
+  },
+  "69": {
+   "name": "Charging Buffalo",
+   "level": 9,
+   "weapon": "Stampeding Hoofs",
+   "recipe": {
+    "type": "beast",
+    "horns": "horns",
+    "eyes": "dots",
+    "eye_color": "moon"
+   }
+  },
+  "70": {
+   "name": "Pawn",
+   "level": 9,
+   "weapon": "Simple Tactics",
+   "recipe": {
+    "type": "construct",
+    "eyes": "square",
+    "eye_color": "gold"
+   }
+  },
+  "71": {
+   "name": "Romulan",
+   "level": 9,
+   "weapon": "Wrong-Genre Confusion",
+   "recipe": {
+    "type": "humanoid",
+    "eyes": "dots",
+    "eye_color": "gold",
+    "hair": "long",
+    "hair_color": "dark",
+    "collar": "magic"
+   }
+  },
+  "72": {
+   "name": "Large Griffon",
+   "level": 9,
+   "weapon": "Beak and Claws",
+   "recipe": {
+    "type": "beast",
+    "wings": true,
+    "eyes": "dots",
+    "eye_color": "ember"
+   }
+  },
+  "73": {
+   "name": "Cliche Bond Movie Villain",
+   "level": 9,
+   "weapon": "Cell-phone of Death",
+   "recipe": {
+    "type": "humanoid",
+    "eyes": "dots",
+    "eye_color": "gold",
+    "hair": "long",
+    "hair_color": "red",
+    "collar": "gold"
+   }
+  },
+  "74": {
+   "name": "Fuzzy Ferret",
+   "level": 9,
+   "weapon": "Disarming Cuteness",
+   "recipe": {
+    "type": "beast",
+    "ears": "round",
+    "eyes": "dots",
+    "eye_color": "gold"
+   }
+  },
+  "75": {
+   "name": "Starving Artist",
+   "level": 9,
+   "weapon": "Pointy Paintbrushes",
+   "recipe": {
+    "type": "humanoid",
+    "eyes": "dots",
+    "eye_color": "pale",
+    "hair_color": "stone",
+    "collar": "bronze"
+   }
+  },
+  "76": {
+   "name": "Guard from Eythgim Village",
+   "level": 10,
+   "weapon": "Rapier",
+   "recipe": {
+    "type": "humanoid",
+    "headgear": "helmet",
+    "eyes": "dots",
+    "eye_color": "magic",
+    "collar": "gold"
+   }
+  },
+  "77": {
+   "name": "Garden Gnome",
+   "level": 10,
+   "weapon": "Painful Tackiness",
+   "recipe": {
+    "type": "humanoid",
+    "headgear": "hat",
+    "mouth": "beard",
+    "held": "staff",
+    "eyes": "dots",
+    "eye_color": "gold",
+    "collar": "gold"
+   }
+  },
+  "78": {
+   "name": "Chicken",
+   "level": 10,
+   "weapon": "Squawking",
+   "recipe": {
+    "type": "beast",
+    "wings": true,
+    "eyes": "dots",
+    "eye_color": "pale"
+   }
+  },
+  "79": {
+   "name": "Marksman",
+   "level": 10,
+   "weapon": "Deadly Aim",
+   "recipe": {
+    "type": "humanoid",
+    "headgear": "helmet",
+    "held": "bow",
+    "eyes": "dots",
+    "eye_color": "pale",
+    "collar": "pale"
+   }
+  },
+  "80": {
+   "name": "Enchanted Tissue Box",
+   "level": 10,
+   "weapon": "Cold Germs",
+   "recipe": {
+    "type": "construct",
+    "eyes": "square",
+    "eye_color": "gold"
+   }
+  },
+  "81": {
+   "name": "Ghostly Woodsman",
+   "level": 10,
+   "weapon": "Phantom Axe",
+   "recipe": {
+    "type": "undead",
+    "mouth": "darkbeard",
+    "held": "axe",
+    "eyes": "glow",
+    "eye_color": "pale"
+   }
+  },
+  "82": {
+   "name": "Zombie",
+   "level": 10,
+   "weapon": "Rotting Flesh",
+   "recipe": {
+    "type": "undead",
+    "eyes": "sockets",
+    "eye_color": "magic"
+   }
+  },
+  "83": {
+   "name": "Fortula the Plains Cat",
+   "level": 10,
+   "weapon": "Claws and Teeth",
+   "recipe": {
+    "type": "beast",
+    "ears": "cat",
+    "eyes": "slits",
+    "eye_color": "pale"
+   }
+  },
+  "84": {
+   "name": "Erin the Ninja Squirrel",
+   "level": 10,
+   "weapon": "Acorn Tossing Madness",
+   "recipe": {
+    "type": "beast",
+    "ears": "round",
+    "eyes": "dots",
+    "eye_color": "gold"
+   }
+  },
+  "85": {
+   "name": "Bluebird of Happiness",
+   "level": 11,
+   "weapon": "Uplifting Melody",
+   "recipe": {
+    "type": "beast",
+    "headgear": "halo",
+    "wings": true,
+    "eyes": "dots",
+    "eye_color": "gold"
+   }
+  },
+  "86": {
+   "name": "Potato Newscaster",
+   "level": 11,
+   "weapon": "Personal Opinions",
+   "recipe": {
+    "type": "construct",
+    "eyes": "square",
+    "eye_color": "magic"
+   }
+  },
+  "87": {
+   "name": "Pygmy Dragon",
+   "level": 11,
+   "weapon": "Fire Breath",
+   "recipe": {
+    "type": "dragon",
+    "wings": true,
+    "eyes": "dots",
+    "eye_color": "gold"
+   }
+  },
+  "88": {
+   "name": "Zealous Photographer",
+   "level": 11,
+   "weapon": "Flashing Lights",
+   "recipe": {
+    "type": "humanoid",
+    "eyes": "dots",
+    "eye_color": "pale",
+    "hair": "short",
+    "hair_color": "stone",
+    "collar": "magic"
+   }
+  },
+  "89": {
+   "name": "Gary Larson",
+   "level": 11,
+   "weapon": "Strange Cartoons",
+   "recipe": {
+    "type": "humanoid",
+    "eyes": "dots",
+    "eye_color": "pale",
+    "hair": "long",
+    "hair_color": "brown",
+    "collar": "magic"
+   }
+  },
+  "90": {
+   "name": "Soldier from Eythgim Village",
+   "level": 11,
+   "weapon": "Battle Cry",
+   "recipe": {
+    "type": "humanoid",
+    "headgear": "helmet",
+    "eyes": "dots",
+    "eye_color": "pale",
+    "collar": "gold"
+   }
+  },
+  "91": {
+   "name": "80's Glam Rocker",
+   "level": 11,
+   "weapon": "Blinding Makeup",
+   "recipe": {
+    "type": "humanoid",
+    "mouth": "grin",
+    "eyes": "dots",
+    "eye_color": "magic",
+    "hair": "long",
+    "hair_color": "brown",
+    "collar": "gold"
+   }
+  },
+  "92": {
+   "name": "Vigilante",
+   "level": 11,
+   "weapon": "Sack of Doorknobs",
+   "recipe": {
+    "type": "humanoid",
+    "headgear": "helmet",
+    "eyes": "dots",
+    "eye_color": "magic",
+    "collar": "gold"
+   }
+  },
+  "93": {
+   "name": "The Devil",
+   "level": 11,
+   "weapon": "Eternal Damnation",
+   "recipe": {
+    "type": "demon",
+    "horns": "horns",
+    "wings": true,
+    "eyes": "glow",
+    "eye_color": "green"
+   }
+  },
+  "94": {
+   "name": "Mercenary",
+   "level": 12,
+   "weapon": "Blood-chilling Stare",
+   "recipe": {
+    "type": "humanoid",
+    "headgear": "helmet",
+    "eyes": "dots",
+    "eye_color": "pale",
+    "collar": "gold"
+   }
+  },
+  "95": {
+   "name": "Magic Mirror",
+   "level": 12,
+   "weapon": "Flattering Remarks",
+   "recipe": {
+    "type": "construct",
+    "eyes": "cyclops",
+    "eye_color": "magic"
+   }
+  },
+  "96": {
+   "name": "Broadway Extra",
+   "level": 12,
+   "weapon": "Memorable Showtunes",
+   "recipe": {
+    "type": "humanoid",
+    "held": "sword",
+    "eyes": "dots",
+    "eye_color": "magic",
+    "hair": "short",
+    "hair_color": "dark",
+    "collar": "pale"
+   }
+  },
+  "97": {
+   "name": "Butter the Sprite",
+   "level": 12,
+   "weapon": "Magic Pixie Dust",
+   "recipe": {
+    "type": "spirit",
+    "ears": "pointed",
+    "wings": true,
+    "held": "staff",
+    "eyes": "glow",
+    "eye_color": "magic"
+   }
+  },
+  "98": {
+   "name": "Father Time",
+   "level": 12,
+   "weapon": "Old Age",
+   "recipe": {
+    "type": "humanoid",
+    "mouth": "beard",
+    "held": "scythe",
+    "eyes": "dots",
+    "eye_color": "leaf",
+    "hair": "long",
+    "hair_color": "grey",
+    "collar": "ember"
+   }
+  },
+  "99": {
+   "name": "Eythgim Village Archers",
+   "level": 12,
+   "weapon": "Flaming Arrows",
+   "recipe": {
+    "type": "humanoid",
+    "headgear": "helmet",
+    "held": "bow",
+    "eyes": "dots",
+    "eye_color": "magic",
+    "collar": "leaf"
+   }
+  },
+  "100": {
+   "name": "Animate Stormcloud",
+   "level": 12,
+   "weapon": "Lightning",
+   "recipe": {
+    "type": "spirit",
+    "eyes": "glow",
+    "eye_color": "bone",
+    "tint": "bone"
+   }
+  },
+  "101": {
+   "name": "Three Toed Sloth",
+   "level": 12,
+   "weapon": "Slow Responses",
+   "recipe": {
+    "type": "beast",
+    "ears": "round",
+    "eyes": "dots",
+    "eye_color": "gold"
+   }
+  },
+  "102": {
+   "name": "Death",
+   "level": 12,
+   "weapon": "Cold Grasp",
+   "recipe": {
+    "type": "undead",
+    "headgear": "hood",
+    "eyes": "sockets",
+    "eye_color": "pale"
+   }
+  },
+  "103": {
+   "name": "Cerberus",
+   "level": 13,
+   "weapon": "Three Drooling Maws",
+   "recipe": {
+    "type": "demon",
+    "horns": "horns",
+    "mouth": "fangs",
+    "eyes": "glow",
+    "eye_color": "gold"
+   }
+  },
+  "104": {
+   "name": "Man from deep, deep, dark, dark, deep, dark woods",
+   "level": 13,
+   "weapon": "Snarling and Biting",
+   "recipe": {
+    "type": "humanoid",
+    "eyes": "glow",
+    "eye_color": "leaf",
+    "hair": "bun",
+    "hair_color": "brown",
+    "collar": "magic"
+   }
+  },
+  "105": {
+   "name": "Devil in a Blue Dress",
+   "level": 13,
+   "weapon": "Alluring Promises",
+   "recipe": {
+    "type": "demon",
+    "horns": "horns",
+    "eyes": "glow",
+    "eye_color": "gold"
+   }
+  },
+  "106": {
+   "name": "Giant",
+   "level": 13,
+   "weapon": "Smashing Club",
+   "recipe": {
+    "type": "monster",
+    "held": "club",
+    "eyes": "dots",
+    "eye_color": "moon"
+   }
+  },
+  "107": {
+   "name": "Commander of the Eythgim Army",
+   "level": 13,
+   "weapon": "Winning Tactics",
+   "recipe": {
+    "type": "humanoid",
+    "headgear": "helmet",
+    "eyes": "dots",
+    "eye_color": "magic",
+    "collar": "leaf"
+   }
+  },
+  "108": {
+   "name": "Ice Dragon",
+   "level": 13,
+   "weapon": "Frost Breath",
+   "recipe": {
+    "type": "dragon",
+    "wings": true,
+    "eyes": "dots",
+    "eye_color": "green",
+    "tint": "magic"
+   }
+  },
+  "109": {
+   "name": "Pushmi Pullyew",
+   "level": 13,
+   "weapon": "Conflictory Arguments",
+   "recipe": {
+    "type": "beast",
+    "horns": "horns",
+    "eyes": "dots",
+    "eye_color": "pale"
+   }
+  },
+  "110": {
+   "name": "Whale",
+   "level": 13,
+   "weapon": "Tail",
+   "recipe": {
+    "type": "beast",
+    "eyes": "dots",
+    "eye_color": "pale",
+    "tint": "magic"
+   }
+  },
+  "111": {
+   "name": "Gorma The Leper",
+   "level": 13,
+   "weapon": "Contagious Disease",
+   "recipe": {
+    "type": "undead",
+    "eyes": "dots",
+    "eye_color": "magic"
+   }
+  },
+  "112": {
+   "name": "Samurai Master",
+   "level": 14,
+   "weapon": "Daisho",
+   "recipe": {
+    "type": "humanoid",
+    "headgear": "helmet",
+    "eyes": "dots",
+    "eye_color": "gold",
+    "collar": "bronze"
+   }
+  },
+  "113": {
+   "name": "Bartender",
+   "level": 14,
+   "weapon": "Duck",
+   "recipe": {
+    "type": "humanoid",
+    "mouth": "darkbeard",
+    "eyes": "dots",
+    "eye_color": "gold",
+    "hair": "short",
+    "hair_color": "brown",
+    "collar": "gold"
+   }
+  },
+  "114": {
+   "name": "Prince of Eythgim Village",
+   "level": 14,
+   "weapon": "Bribes of Gold",
+   "recipe": {
+    "type": "humanoid",
+    "headgear": "crown",
+    "eyes": "dots",
+    "eye_color": "pale",
+    "hair": "short",
+    "hair_color": "blond",
+    "collar": "ember"
+   }
+  },
+  "115": {
+   "name": "Loch Ness Monster",
+   "level": 14,
+   "weapon": "Shocking Appearance",
+   "recipe": {
+    "type": "monster",
+    "eyes": "dots",
+    "eye_color": "ember"
+   }
+  },
+  "116": {
+   "name": "Fuzzie Wuzzie",
+   "level": 14,
+   "weapon": "Male Pattern Baldness",
+   "recipe": {
+    "type": "beast",
+    "ears": "round",
+    "eyes": "dots",
+    "eye_color": "ember"
+   }
+  },
+  "117": {
+   "name": "Princess of Eythgim Village",
+   "level": 15,
+   "weapon": "Beguiling Words",
+   "recipe": {
+    "type": "humanoid",
+    "headgear": "crown",
+    "eyes": "dots",
+    "eye_color": "magic",
+    "hair": "short",
+    "hair_color": "stone",
+    "collar": "ember"
+   }
+  },
+  "118": {
+   "name": "Ugly Harpy",
+   "level": 14,
+   "weapon": "Poisonous Breath",
+   "recipe": {
+    "type": "monster",
+    "wings": true,
+    "eyes": "dots",
+    "eye_color": "moon"
+   }
+  },
+  "119": {
+   "name": "Field Mouse",
+   "level": 14,
+   "weapon": "Chewing",
+   "recipe": {
+    "type": "beast",
+    "ears": "round",
+    "eyes": "dots",
+    "eye_color": "moon"
+   }
+  },
+  "120": {
+   "name": "Monarch of Eythgim Village",
+   "level": 16,
+   "weapon": "Royal Commands",
+   "recipe": {
+    "type": "humanoid",
+    "headgear": "crown",
+    "mouth": "beard",
+    "eyes": "dots",
+    "eye_color": "gold",
+    "hair": "short",
+    "hair_color": "dark",
+    "collar": "ash"
+   }
+  },
+  "121": {
+   "name": "Cyclops Warrior",
+   "level": 15,
+   "weapon": "Fire Eye",
+   "recipe": {
+    "type": "monster",
+    "headgear": "helmet",
+    "eyes": "cyclops",
+    "eye_color": "ember"
+   }
+  },
+  "122": {
+   "name": "Cupid",
+   "level": 15,
+   "weapon": "Pink Arrows of Love",
+   "recipe": {
+    "type": "spirit",
+    "headgear": "halo",
+    "wings": true,
+    "held": "bow",
+    "eyes": "glow",
+    "eye_color": "magic"
+   }
+  },
+  "123": {
+   "name": "Tabloid Writer",
+   "level": 15,
+   "weapon": "Far-fetched Stories",
+   "recipe": {
+    "type": "humanoid",
+    "eyes": "dots",
+    "eye_color": "magic",
+    "hair": "long",
+    "hair_color": "red",
+    "collar": "magic"
+   }
+  },
+  "124": {
+   "name": "Evil Wizard",
+   "level": 15,
+   "weapon": "Tormented Souls",
+   "recipe": {
+    "type": "humanoid",
+    "headgear": "hat",
+    "mouth": "beard",
+    "held": "staff",
+    "eyes": "glow",
+    "eye_color": "magic",
+    "collar": "ash"
+   }
+  },
+  "125": {
+   "name": "Artemis, Goddess of the Hunt",
+   "level": 15,
+   "weapon": "Winged Stags",
+   "recipe": {
+    "type": "humanoid",
+    "held": "bow",
+    "eyes": "dots",
+    "eye_color": "pale",
+    "hair": "short",
+    "hair_color": "dark",
+    "collar": "pale"
+   }
+  },
+  "126": {
+   "name": "Centaur Archer",
+   "level": 15,
+   "weapon": "Deadly Marksmanship",
+   "recipe": {
+    "type": "humanoid",
+    "held": "bow",
+    "eyes": "dots",
+    "eye_color": "magic",
+    "hair_color": "stone",
+    "collar": "pale"
+   }
+  },
+  "127": {
+   "name": "Mime",
+   "level": 15,
+   "weapon": "Something Imaginary",
+   "recipe": {
+    "type": "humanoid",
+    "mouth": "grin",
+    "eyes": "dots",
+    "eye_color": "gold",
+    "hair": "long",
+    "hair_color": "red",
+    "collar": "ember"
+   }
+  },
+  "128": {
+   "name": "Chili Chef",
+   "level": 15,
+   "weapon": "Insanity Peppers",
+   "recipe": {
+    "type": "humanoid",
+    "mouth": "darkbeard",
+    "eyes": "dots",
+    "eye_color": "magic",
+    "hair": "bun",
+    "hair_color": "brown",
+    "collar": "magic"
+   }
+  },
+  "129": {
+   "name": "Brownie",
+   "level": 16,
+   "weapon": "Miniscule weapons",
+   "recipe": {
+    "type": "spirit",
+    "ears": "pointed",
+    "eyes": "glow",
+    "eye_color": "green"
+   }
+  },
+  "130": {
+   "name": "Darkness",
+   "level": 16,
+   "weapon": "Self-induced Terror",
+   "recipe": {
+    "type": "spirit",
+    "eyes": "glow",
+    "eye_color": "green"
+   }
+  },
+  "131": {
+   "name": "Mountain King",
+   "level": 16,
+   "weapon": "God-like Fury",
+   "recipe": {
+    "type": "monster",
+    "headgear": "crown",
+    "horns": "antlers",
+    "mouth": "beard",
+    "eyes": "dots",
+    "eye_color": "ember"
+   }
+  },
+  "134": {
+   "name": "Loneliness",
+   "level": 17,
+   "weapon": "Silence",
+   "recipe": {
+    "type": "spirit",
+    "eyes": "glow",
+    "eye_color": "bone"
+   }
+  },
+  "135": {
+   "name": "Loneliness",
+   "level": 18,
+   "weapon": "Silence",
+   "recipe": {
+    "type": "spirit",
+    "eyes": "glow",
+    "eye_color": "bone"
+   }
+  },
+  "136": {
+   "name": "Le Chat dans le chapeau",
+   "level": 15,
+   "weapon": "Rhyming Nonsense",
+   "recipe": {
+    "type": "beast",
+    "ears": "cat",
+    "eyes": "slits",
+    "eye_color": "ember"
+   }
+  },
+  "138": {
+   "name": "Whopper With Cheese",
+   "level": 8,
+   "weapon": "Abundant Cholesterol",
+   "recipe": {
+    "type": "construct",
+    "eyes": "square",
+    "eye_color": "ember"
+   }
+  },
+  "139": {
+   "name": "Swarming Ladybugs",
+   "level": 3,
+   "weapon": "Stinking Residue",
+   "recipe": {
+    "type": "beast",
+    "wings": true,
+    "eyes": "dots",
+    "eye_color": "moon"
+   }
+  },
+  "140": {
+   "name": "Football Fan",
+   "level": 6,
+   "weapon": "Raucous Cheers",
+   "recipe": {
+    "type": "humanoid",
+    "eyes": "dots",
+    "eye_color": "pale",
+    "hair": "long",
+    "hair_color": "brown",
+    "collar": "ash"
+   }
+  },
+  "141": {
+   "name": "King Agrippa",
+   "level": 13,
+   "weapon": "Flaming Wingnuts",
+   "recipe": {
+    "type": "humanoid",
+    "headgear": "crown",
+    "mouth": "beard",
+    "eyes": "dots",
+    "eye_color": "gold",
+    "hair": "short",
+    "hair_color": "stone",
+    "collar": "magic"
+   }
+  },
+  "142": {
+   "name": "Cherubically Charming Child",
+   "level": 1,
+   "weapon": "Curious Questions",
+   "recipe": {
+    "type": "humanoid",
+    "headgear": "halo",
+    "eyes": "dots",
+    "eye_color": "leaf",
+    "hair": "spiky",
+    "hair_color": "brown",
+    "collar": "leaf"
+   }
+  },
+  "143": {
+   "name": "Haberdasher",
+   "level": 5,
+   "weapon": "Heavy Hat",
+   "recipe": {
+    "type": "humanoid",
+    "mouth": "darkbeard",
+    "eyes": "dots",
+    "eye_color": "gold",
+    "hair": "long",
+    "hair_color": "dark",
+    "collar": "ash"
+   }
+  },
+  "144": {
+   "name": "Rush Hour Driver",
+   "level": 11,
+   "weapon": "Road Rage",
+   "recipe": {
+    "type": "humanoid",
+    "eyes": "dots",
+    "eye_color": "gold",
+    "hair": "long",
+    "hair_color": "brown",
+    "collar": "leaf"
+   }
+  },
+  "145": {
+   "name": "Sorority Girl in Nightie",
+   "level": 7,
+   "weapon": "Pillow Fighting Action",
+   "recipe": {
+    "type": "humanoid",
+    "eyes": "dots",
+    "eye_color": "leaf",
+    "hair_color": "dark",
+    "collar": "bronze"
+   }
+  },
+  "146": {
+   "name": "Ulysses Wulfgang",
+   "level": 14,
+   "weapon": "Ridiculous Lies",
+   "recipe": {
+    "type": "humanoid",
+    "eyes": "dots",
+    "eye_color": "magic",
+    "hair": "short",
+    "hair_color": "brown",
+    "collar": "gold"
+   }
+  },
+  "147": {
+   "name": "Crazy Audrey",
+   "level": 9,
+   "weapon": "Ravenous Kittens",
+   "recipe": {
+    "type": "humanoid",
+    "mouth": "grin",
+    "eyes": "dots",
+    "eye_color": "gold",
+    "hair": "long",
+    "hair_color": "red",
+    "collar": "magic"
+   }
+  },
+  "148": {
+   "name": "Shining Happy People",
+   "level": 5,
+   "weapon": "Hand Holding Terror",
+   "recipe": {
+    "type": "humanoid",
+    "headgear": "halo",
+    "eyes": "dots",
+    "eye_color": "gold",
+    "hair": "long",
+    "hair_color": "dark",
+    "collar": "magic"
+   }
+  },
+  "149": {
+   "name": "Elsabutt",
+   "level": 8,
+   "weapon": "Gravitational Pull",
+   "recipe": {
+    "type": "humanoid",
+    "eyes": "dots",
+    "eye_color": "pale",
+    "hair_color": "dark",
+    "collar": "leaf"
+   }
+  },
+  "150": {
+   "name": "Mr. Bear",
+   "level": 2,
+   "weapon": "Overwhelming Sleepiness",
+   "recipe": {
+    "type": "beast",
+    "ears": "round",
+    "eyes": "dots",
+    "eye_color": "pale"
+   }
+  },
+  "151": {
+   "name": "Everquest Junkie",
+   "level": 12,
+   "weapon": "1337 Sp34k",
+   "recipe": {
+    "type": "humanoid",
+    "eyes": "dots",
+    "eye_color": "gold",
+    "hair": "spiky",
+    "hair_color": "dark",
+    "collar": "ash"
+   }
+  },
+  "152": {
+   "name": "Little Cocobean",
+   "level": 4,
+   "weapon": "Her Special Roast",
+   "recipe": {
+    "type": "humanoid",
+    "eyes": "dots",
+    "eye_color": "leaf",
+    "hair": "long",
+    "hair_color": "dark",
+    "collar": "leaf"
+   }
+  },
+  "153": {
+   "name": "Humongous Hairball",
+   "level": 5,
+   "weapon": "Incredible Drain-Clogging Power",
+   "recipe": {
+    "type": "monster",
+    "eyes": "dots",
+    "eye_color": "moon"
+   }
+  },
+  "154": {
+   "name": "Iron Chef",
+   "level": 4,
+   "weapon": "Sizzling Eel Flambe!",
+   "recipe": {
+    "type": "humanoid",
+    "mouth": "darkbeard",
+    "eyes": "dots",
+    "eye_color": "magic",
+    "hair": "bun",
+    "hair_color": "dark",
+    "collar": "magic",
+    "tint": "copper"
+   }
+  },
+  "155": {
+   "name": "The Government",
+   "level": 7,
+   "weapon": "Taxes",
+   "recipe": {
+    "type": "construct",
+    "eyes": "square",
+    "eye_color": "green"
+   }
+  },
+  "156": {
+   "name": "Bar Fly",
+   "level": 1,
+   "weapon": "Alcoholism",
+   "recipe": {
+    "type": "humanoid",
+    "eyes": "dots",
+    "eye_color": "magic",
+    "hair": "short",
+    "hair_color": "dark",
+    "collar": "gold"
+   }
+  },
+  "157": {
+   "name": "Methane Man",
+   "level": 7,
+   "weapon": "Unfriendly Gasses",
+   "recipe": {
+    "type": "spirit",
+    "eyes": "glow",
+    "eye_color": "magic"
+   }
+  },
+  "158": {
+   "name": "Wooly Mammoth",
+   "level": 8,
+   "weapon": "Wildebeest Sidekick",
+   "recipe": {
+    "type": "beast",
+    "horns": "horns",
+    "mouth": "tusks",
+    "eyes": "dots",
+    "eye_color": "gold"
+   }
+  },
+  "159": {
+   "name": "Nasty Nevin",
+   "level": 10,
+   "weapon": "Bossy Mom",
+   "recipe": {
+    "type": "humanoid",
+    "eyes": "dots",
+    "eye_color": "gold",
+    "hair": "short",
+    "hair_color": "red",
+    "collar": "ember"
+   }
+  },
+  "160": {
+   "name": "The Gar Man",
+   "level": 3,
+   "weapon": "Jar of Cotton Balls",
+   "recipe": {
+    "type": "monster",
+    "eyes": "dots",
+    "eye_color": "moon"
+   }
+  },
+  "161": {
+   "name": "Hiker",
+   "level": 1,
+   "weapon": "Walking Stick",
+   "recipe": {
+    "type": "humanoid",
+    "eyes": "dots",
+    "eye_color": "leaf",
+    "hair": "short",
+    "hair_color": "dark",
+    "collar": "gold"
+   }
+  },
+  "162": {
+   "name": "Camper",
+   "level": 2,
+   "weapon": "Marshmallow-roasting Stick",
+   "recipe": {
+    "type": "humanoid",
+    "eyes": "dots",
+    "eye_color": "pale",
+    "hair": "spiky",
+    "hair_color": "stone",
+    "collar": "ash"
+   }
+  },
+  "163": {
+   "name": "Forest Ranger",
+   "level": 3,
+   "weapon": "Hunting Rifle",
+   "recipe": {
+    "type": "humanoid",
+    "headgear": "helmet",
+    "eyes": "dots",
+    "eye_color": "magic",
+    "collar": "gold"
+   }
+  },
+  "164": {
+   "name": "Tree-Hugger",
+   "level": 4,
+   "weapon": "Propaganda Leaflets",
+   "recipe": {
+    "type": "humanoid",
+    "headgear": "leaves",
+    "eyes": "dots",
+    "eye_color": "gold",
+    "hair": "spiky",
+    "hair_color": "brown",
+    "collar": "ember"
+   }
+  },
+  "165": {
+   "name": "Forest Dwelling Hermit",
+   "level": 5,
+   "weapon": "Hand-Made Sling",
+   "recipe": {
+    "type": "humanoid",
+    "headgear": "hood",
+    "mouth": "beard",
+    "eyes": "dots",
+    "eye_color": "magic",
+    "collar": "magic"
+   }
+  },
+  "166": {
+   "name": "Member of Dragon Lovers Anonymous",
+   "level": 6,
+   "weapon": "Stuffed Dragon Toy",
+   "recipe": {
+    "type": "humanoid",
+    "eyes": "dots",
+    "eye_color": "pale",
+    "hair": "long",
+    "hair_color": "brown",
+    "collar": "pale"
+   }
+  },
+  "167": {
+   "name": "Initiate Dragon Watcher",
+   "level": 7,
+   "weapon": "Binoculars",
+   "recipe": {
+    "type": "humanoid",
+    "eyes": "dots",
+    "eye_color": "pale",
+    "hair_color": "dark",
+    "collar": "ember"
+   }
+  },
+  "168": {
+   "name": "Dragon Watcher, Junior Class",
+   "level": 8,
+   "weapon": "Annoyance",
+   "recipe": {
+    "type": "humanoid",
+    "eyes": "dots",
+    "eye_color": "pale",
+    "hair": "spiky",
+    "hair_color": "dark",
+    "collar": "magic"
+   }
+  },
+  "169": {
+   "name": "Dragon-watcher Senior Class",
+   "level": 9,
+   "weapon": "Spelunking Equipment",
+   "recipe": {
+    "type": "humanoid",
+    "eyes": "dots",
+    "eye_color": "pale",
+    "hair": "bun",
+    "hair_color": "stone",
+    "collar": "ember"
+   }
+  },
+  "170": {
+   "name": "Master Dragon Watcher",
+   "level": 10,
+   "weapon": "Stealth",
+   "recipe": {
+    "type": "humanoid",
+    "eyes": "dots",
+    "eye_color": "gold",
+    "hair": "long",
+    "hair_color": "red",
+    "collar": "ash"
+   }
+  },
+  "171": {
+   "name": "Initiate Dragon Tamer",
+   "level": 11,
+   "weapon": "10-foot dragon pole",
+   "recipe": {
+    "type": "humanoid",
+    "eyes": "dots",
+    "eye_color": "gold",
+    "hair": "spiky",
+    "hair_color": "dark",
+    "collar": "ember"
+   }
+  },
+  "172": {
+   "name": "Junior Dragon Tamer",
+   "level": 12,
+   "weapon": "Large Whip",
+   "recipe": {
+    "type": "humanoid",
+    "eyes": "dots",
+    "eye_color": "magic",
+    "hair": "long",
+    "hair_color": "dark",
+    "collar": "gold"
+   }
+  },
+  "173": {
+   "name": "Senior Dragon Tamer",
+   "level": 13,
+   "weapon": "Very Large Hoop",
+   "recipe": {
+    "type": "humanoid",
+    "eyes": "dots",
+    "eye_color": "pale",
+    "hair": "long",
+    "hair_color": "dark",
+    "collar": "leaf"
+   }
+  },
+  "174": {
+   "name": "Master Dragon Tamer",
+   "level": 14,
+   "weapon": "Tame Dragon",
+   "recipe": {
+    "type": "humanoid",
+    "eyes": "dots",
+    "eye_color": "gold",
+    "hair": "short",
+    "hair_color": "dark",
+    "collar": "ember"
+   }
+  },
+  "175": {
+   "name": "Dragon Rider in Training",
+   "level": 15,
+   "weapon": "Mechanical Bull",
+   "recipe": {
+    "type": "humanoid",
+    "eyes": "dots",
+    "eye_color": "pale",
+    "hair": "long",
+    "hair_color": "blond",
+    "collar": "ember"
+   }
+  },
+  "176": {
+   "name": "Dragon Rider",
+   "level": 16,
+   "weapon": "Flying Dragon",
+   "recipe": {
+    "type": "humanoid",
+    "eyes": "dots",
+    "eye_color": "magic",
+    "hair": "long",
+    "hair_color": "brown",
+    "collar": "ash"
+   }
+  },
+  "177": {
+   "name": "Batling",
+   "level": 1,
+   "weapon": "Tiny flapping wings",
+   "recipe": {
+    "type": "beast",
+    "ears": "bat",
+    "wings": true,
+    "eyes": "dots",
+    "eye_color": "ember"
+   }
+  },
+  "178": {
+   "name": "Small Bat",
+   "level": 2,
+   "weapon": "Slightly venomous fangs",
+   "recipe": {
+    "type": "beast",
+    "ears": "bat",
+    "wings": true,
+    "eyes": "dots",
+    "eye_color": "moon"
+   }
+  },
+  "179": {
+   "name": "Medium Sized Bat",
+   "level": 3,
+   "weapon": "Screeching Cries",
+   "recipe": {
+    "type": "beast",
+    "ears": "bat",
+    "wings": true,
+    "eyes": "dots",
+    "eye_color": "pale"
+   }
+  },
+  "180": {
+   "name": "Large Bat",
+   "level": 4,
+   "weapon": "Guano",
+   "recipe": {
+    "type": "beast",
+    "ears": "bat",
+    "wings": true,
+    "eyes": "dots",
+    "eye_color": "pale"
+   }
+  },
+  "181": {
+   "name": "Giant Bat",
+   "level": 5,
+   "weapon": "Clinging and Biting",
+   "recipe": {
+    "type": "beast",
+    "ears": "bat",
+    "wings": true,
+    "eyes": "dots",
+    "eye_color": "gold"
+   }
+  },
+  "182": {
+   "name": "Vampire Batling",
+   "level": 6,
+   "weapon": "Pricking teeth",
+   "recipe": {
+    "type": "undead",
+    "ears": "bat",
+    "mouth": "fangs",
+    "wings": true,
+    "eyes": "glow",
+    "eye_color": "ember"
+   }
+  },
+  "183": {
+   "name": "Small Vampire Bat",
+   "level": 7,
+   "weapon": "Deadly Fangs",
+   "recipe": {
+    "type": "undead",
+    "ears": "bat",
+    "mouth": "fangs",
+    "wings": true,
+    "eyes": "glow",
+    "eye_color": "magic"
+   }
+  },
+  "184": {
+   "name": "Medium Sized Vampire Bat",
+   "level": 8,
+   "weapon": "Echoing Sounds",
+   "recipe": {
+    "type": "undead",
+    "ears": "bat",
+    "mouth": "fangs",
+    "wings": true,
+    "eyes": "glow",
+    "eye_color": "pale"
+   }
+  },
+  "185": {
+   "name": "Huge Vampire Bat",
+   "level": 9,
+   "weapon": "Blood-Sucking",
+   "recipe": {
+    "type": "undead",
+    "ears": "bat",
+    "mouth": "fangs",
+    "wings": true,
+    "eyes": "glow",
+    "eye_color": "magic"
+   }
+  },
+  "186": {
+   "name": "Vampire in Bat Form",
+   "level": 10,
+   "weapon": "Bad Romanian Accent",
+   "recipe": {
+    "type": "undead",
+    "ears": "bat",
+    "mouth": "fangs",
+    "wings": true,
+    "eyes": "glow",
+    "eye_color": "pale"
+   }
+  },
+  "187": {
+   "name": "Vampire-Bat Prince",
+   "level": 11,
+   "weapon": "Death Grip",
+   "recipe": {
+    "type": "undead",
+    "headgear": "crown",
+    "ears": "bat",
+    "mouth": "fangs",
+    "wings": true,
+    "eyes": "glow",
+    "eye_color": "ember"
+   }
+  },
+  "188": {
+   "name": "Vampire Bat King",
+   "level": 12,
+   "weapon": "Red Eyes",
+   "recipe": {
+    "type": "undead",
+    "headgear": "crown",
+    "ears": "bat",
+    "mouth": "fangs",
+    "wings": true,
+    "eyes": "glow",
+    "eye_color": "green"
+   }
+  },
+  "189": {
+   "name": "Sorcerous Vampire",
+   "level": 13,
+   "weapon": "Petrifying Spells",
+   "recipe": {
+    "type": "undead",
+    "headgear": "hat",
+    "mouth": "fangs",
+    "held": "staff",
+    "eyes": "glow",
+    "eye_color": "ember"
+   }
+  },
+  "219": {
+   "name": "Seductive Vampiress",
+   "level": 14,
+   "weapon": "Sultry Moves",
+   "recipe": {
+    "type": "undead",
+    "mouth": "fangs",
+    "eyes": "glow",
+    "eye_color": "green"
+   }
+  },
+  "220": {
+   "name": "Frenzied vampire bats",
+   "level": 15,
+   "weapon": "Numerous attacks",
+   "recipe": {
+    "type": "undead",
+    "ears": "bat",
+    "mouth": "fangs",
+    "wings": true,
+    "eyes": "glow",
+    "eye_color": "magic"
+   }
+  },
+  "221": {
+   "name": "Vampirus,the Bat God",
+   "level": 16,
+   "weapon": "Godly Power",
+   "recipe": {
+    "type": "undead",
+    "ears": "bat",
+    "mouth": "fangs",
+    "wings": true,
+    "eyes": "glow",
+    "eye_color": "ember"
+   }
+  },
+  "222": {
+   "name": "Old Man Winter",
+   "level": 9,
+   "weapon": "Bitter Cold",
+   "recipe": {
+    "type": "spirit",
+    "horns": "antlers",
+    "mouth": "beard",
+    "eyes": "glow",
+    "eye_color": "moon",
+    "tint": "bone"
+   }
+  },
+  "223": {
+   "name": "Deranged Gnome",
+   "level": 1,
+   "weapon": "A Cloth Draped Mirror",
+   "recipe": {
+    "type": "humanoid",
+    "headgear": "hat",
+    "mouth": "beard",
+    "held": "staff",
+    "eyes": "dots",
+    "eye_color": "gold",
+    "collar": "gold"
+   }
+  },
+  "224": {
+   "name": "Water Sprite",
+   "level": 1,
+   "weapon": "Burst of Water",
+   "recipe": {
+    "type": "spirit",
+    "ears": "pointed",
+    "wings": true,
+    "eyes": "glow",
+    "eye_color": "moon",
+    "tint": "magic"
+   }
+  },
+  "225": {
+   "name": "Water Nymph",
+   "level": 3,
+   "weapon": "A torrent of water",
+   "recipe": {
+    "type": "spirit",
+    "eyes": "glow",
+    "eye_color": "bone",
+    "tint": "magic"
+   }
+  },
+  "226": {
+   "name": "Lady of the Lake",
+   "level": 10,
+   "weapon": "Excalibur",
+   "recipe": {
+    "type": "spirit",
+    "eyes": "glow",
+    "eye_color": "green",
+    "tint": "magic"
+   }
+  },
+  "227": {
+   "name": "Cunning Sapling",
+   "level": 1,
+   "weapon": "Arrrr!",
+   "recipe": {
+    "type": "plant",
+    "headgear": "leaves",
+    "eyes": "dots",
+    "eye_color": "green"
+   }
+  },
+  "228": {
+   "name": "Pirate Tree",
+   "level": 5,
+   "weapon": "A loud ARRRRR!",
+   "recipe": {
+    "type": "plant",
+    "headgear": "leaves",
+    "eyes": "dots",
+    "eye_color": "ember"
+   }
+  },
+  "229": {
+   "name": "Undead Centurion",
+   "level": 5,
+   "weapon": "Bronze Spear",
+   "recipe": {
+    "type": "undead",
+    "headgear": "helmet",
+    "eyes": "sockets",
+    "eye_color": "green"
+   }
+  },
+  "230": {
+   "name": "Insane Bard",
+   "level": 2,
+   "weapon": "Iambic Pentameter",
+   "recipe": {
+    "type": "humanoid",
+    "mouth": "grin",
+    "eyes": "dots",
+    "eye_color": "gold",
+    "hair": "bun",
+    "hair_color": "blond",
+    "collar": "gold"
+   }
+  },
+  "231": {
+   "name": "Twig Man",
+   "level": 1,
+   "weapon": "Brambles and Briars",
+   "recipe": {
+    "type": "plant",
+    "headgear": "leaves",
+    "eyes": "dots",
+    "eye_color": "moon"
+   }
+  },
+  "232": {
+   "name": "Rabid Mouse",
+   "level": 1,
+   "weapon": "Little Bitty Teeth",
+   "recipe": {
+    "type": "beast",
+    "ears": "round",
+    "mouth": "fangs",
+    "eyes": "dots",
+    "eye_color": "pale"
+   }
+  },
+  "233": {
+   "name": "Stray Cat",
+   "level": 1,
+   "weapon": "A Midnight Serenade",
+   "recipe": {
+    "type": "beast",
+    "ears": "cat",
+    "eyes": "slits",
+    "eye_color": "ember"
+   }
+  },
+  "234": {
+   "name": "Big Hairy Spider",
+   "level": 1,
+   "weapon": "Sticky stringy webs",
+   "recipe": {
+    "type": "beast",
+    "eyes": "many",
+    "eye_color": "gold"
+   }
+  },
+  "235": {
+   "name": "Goblin Lackey",
+   "level": 1,
+   "weapon": "Dull Knife",
+   "recipe": {
+    "type": "monster",
+    "headgear": "hood",
+    "ears": "pointed",
+    "mouth": "tusks",
+    "held": "dagger",
+    "eyes": "dots",
+    "eye_color": "gold"
+   }
+  },
+  "236": {
+   "name": "Crazy Chihuahua",
+   "level": 1,
+   "weapon": "Fast food cravings",
+   "recipe": {
+    "type": "beast",
+    "ears": "pointed",
+    "mouth": "grin",
+    "eyes": "dots",
+    "eye_color": "gold"
+   }
+  },
+  "237": {
+   "name": "Looney Rabbit",
+   "level": 1,
+   "weapon": "Wisecracks",
+   "recipe": {
+    "type": "beast",
+    "ears": "rabbit",
+    "mouth": "grin",
+    "eyes": "dots",
+    "eye_color": "pale"
+   }
+  },
+  "238": {
+   "name": "Undead Oarsman",
+   "level": 1,
+   "weapon": "Rotten Oar",
+   "recipe": {
+    "type": "undead",
+    "headgear": "helmet",
+    "eyes": "sockets",
+    "eye_color": "pale"
+   }
+  },
+  "239": {
+   "name": "Lost Ghostling",
+   "level": 2,
+   "weapon": "Sad Weeping",
+   "recipe": {
+    "type": "undead",
+    "eyes": "glow",
+    "eye_color": "green"
+   }
+  },
+  "240": {
+   "name": "Angry Titmouse",
+   "level": 2,
+   "weapon": "Incessant Chattering",
+   "recipe": {
+    "type": "beast",
+    "ears": "round",
+    "wings": true,
+    "eyes": "dots",
+    "eye_color": "moon"
+   }
+  },
+  "241": {
+   "name": "Fabianist Youth Member",
+   "level": 2,
+   "weapon": "Marxist Doctrine",
+   "recipe": {
+    "type": "humanoid",
+    "eyes": "dots",
+    "eye_color": "pale",
+    "hair": "bun",
+    "hair_color": "dark",
+    "collar": "pale"
+   }
+  },
+  "242": {
+   "name": "Little Bogeyman",
+   "level": 2,
+   "weapon": "Noises in the Dark",
+   "recipe": {
+    "type": "spirit",
+    "eyes": "glow",
+    "eye_color": "magic"
+   }
+  },
+  "243": {
+   "name": "Big Bogeyman",
+   "level": 3,
+   "weapon": "Fingers poking you as you sleep.",
+   "recipe": {
+    "type": "spirit",
+    "eyes": "glow",
+    "eye_color": "moon"
+   }
+  },
+  "244": {
+   "name": "Coblynau",
+   "level": 2,
+   "weapon": "Ill tempered tricks",
+   "recipe": {
+    "type": "spirit",
+    "ears": "pointed",
+    "eyes": "glow",
+    "eye_color": "green"
+   }
+  },
+  "245": {
+   "name": "Jack O'Lantern",
+   "level": 2,
+   "weapon": "Eternal Wandering",
+   "recipe": {
+    "type": "plant",
+    "headgear": "leaves",
+    "held": "staff",
+    "eyes": "dots",
+    "eye_color": "gold"
+   }
+  },
+  "246": {
+   "name": "Fresh Ghoul",
+   "level": 2,
+   "weapon": "Long Pointed Nails",
+   "recipe": {
+    "type": "undead",
+    "mouth": "fangs",
+    "eyes": "sockets",
+    "eye_color": "magic"
+   }
+  },
+  "247": {
+   "name": "Dry Skeleton",
+   "level": 2,
+   "weapon": "a Rusty Dagger",
+   "recipe": {
+    "type": "undead",
+    "held": "dagger",
+    "eyes": "sockets",
+    "eye_color": "pale"
+   }
+  },
+  "248": {
+   "name": "Newly Dead Zombie",
+   "level": 2,
+   "weapon": "Fists",
+   "recipe": {
+    "type": "undead",
+    "eyes": "sockets",
+    "eye_color": "pale"
+   }
+  },
+  "249": {
+   "name": "Faerie hound",
+   "level": 2,
+   "weapon": "Glowing Eyes",
+   "recipe": {
+    "type": "spirit",
+    "ears": "pointed",
+    "mouth": "fangs",
+    "wings": true,
+    "eyes": "glow",
+    "eye_color": "moon"
+   }
+  },
+  "250": {
+   "name": "Apprentice Necromancer",
+   "level": 3,
+   "weapon": "Life Draining Spells",
+   "recipe": {
+    "type": "humanoid",
+    "headgear": "hood",
+    "held": "staff",
+    "eyes": "glow",
+    "eye_color": "pale",
+    "collar": "magic"
+   }
+  },
+  "251": {
+   "name": "Doppleganger",
+   "level": 3,
+   "weapon": "Shape changing",
+   "recipe": {
+    "type": "spirit",
+    "eyes": "glow",
+    "eye_color": "magic"
+   }
+  },
+  "252": {
+   "name": "Forest Thief",
+   "level": 3,
+   "weapon": "Poisoned Short Sword",
+   "recipe": {
+    "type": "humanoid",
+    "headgear": "hood",
+    "held": "sword",
+    "eyes": "dots",
+    "eye_color": "pale",
+    "collar": "ember"
+   }
+  },
+  "253": {
+   "name": "Mouldy Skeleton",
+   "level": 3,
+   "weapon": "Rotten Fists",
+   "recipe": {
+    "type": "undead",
+    "eyes": "sockets",
+    "eye_color": "pale"
+   }
+  },
+  "254": {
+   "name": "Angry Fairy",
+   "level": 3,
+   "weapon": "Furious Fairy Dust",
+   "recipe": {
+    "type": "spirit",
+    "ears": "pointed",
+    "wings": true,
+    "eyes": "glow",
+    "eye_color": "magic"
+   }
+  },
+  "255": {
+   "name": "Goblin Hunter",
+   "level": 3,
+   "weapon": "a Shortbow",
+   "recipe": {
+    "type": "monster",
+    "horns": "antlers",
+    "ears": "pointed",
+    "mouth": "tusks",
+    "eyes": "dots",
+    "eye_color": "ember"
+   }
+  },
+  "256": {
+   "name": "Bobcat Cub",
+   "level": 3,
+   "weapon": "Sharp Claws",
+   "recipe": {
+    "type": "beast",
+    "ears": "cat",
+    "eyes": "slits",
+    "eye_color": "ember"
+   }
+  },
+  "257": {
+   "name": "Animate Junkheap",
+   "level": 3,
+   "weapon": "Stench of 1000 rotten potatoes",
+   "recipe": {
+    "type": "construct",
+    "eyes": "square",
+    "eye_color": "green"
+   }
+  },
+  "258": {
+   "name": "Necromancer",
+   "level": 4,
+   "weapon": "Strength Draining Touch",
+   "recipe": {
+    "type": "humanoid",
+    "headgear": "hood",
+    "eyes": "glow",
+    "eye_color": "leaf",
+    "collar": "ash"
+   }
+  },
+  "259": {
+   "name": "Reed Golem",
+   "level": 4,
+   "weapon": "Fists of Thorns",
+   "recipe": {
+    "type": "plant",
+    "headgear": "leaves",
+    "eyes": "dots",
+    "eye_color": "green"
+   }
+  },
+  "260": {
+   "name": "Goblin Shaman",
+   "level": 4,
+   "weapon": "Primitive Magic",
+   "recipe": {
+    "type": "monster",
+    "ears": "pointed",
+    "mouth": "tusks",
+    "held": "staff",
+    "eyes": "dots",
+    "eye_color": "ember"
+   }
+  },
+  "261": {
+   "name": "Steam Spirit",
+   "level": 4,
+   "weapon": "Scalding Steam",
+   "recipe": {
+    "type": "spirit",
+    "headgear": "flame",
+    "eyes": "glow",
+    "eye_color": "green",
+    "tint": "bone"
+   }
+  },
+  "262": {
+   "name": "Restless Zombie",
+   "level": 4,
+   "weapon": "Broken Longsword",
+   "recipe": {
+    "type": "undead",
+    "eyes": "sockets",
+    "eye_color": "ember"
+   }
+  },
+  "263": {
+   "name": "Zombie Soldier",
+   "level": 4,
+   "weapon": "Rusted Spear",
+   "recipe": {
+    "type": "undead",
+    "headgear": "helmet",
+    "eyes": "sockets",
+    "eye_color": "pale"
+   }
+  },
+  "264": {
+   "name": "Dark Imp",
+   "level": 4,
+   "weapon": "Nagging Doubts",
+   "recipe": {
+    "type": "demon",
+    "horns": "horns",
+    "ears": "pointed",
+    "eyes": "glow",
+    "eye_color": "moon"
+   }
+  },
+  "265": {
+   "name": "Giant Spider",
+   "level": 4,
+   "weapon": "Fangs that glisten with poison",
+   "recipe": {
+    "type": "beast",
+    "eyes": "many",
+    "eye_color": "pale"
+   }
+  },
+  "266": {
+   "name": "Undead Kitten",
+   "level": 4,
+   "weapon": "Mews of Doom",
+   "recipe": {
+    "type": "undead",
+    "ears": "cat",
+    "eyes": "sockets",
+    "eye_color": "green"
+   }
+  },
+  "267": {
+   "name": "Flying Dagger",
+   "level": 4,
+   "weapon": "Sharpened Steel Point",
+   "recipe": {
+    "type": "construct",
+    "eyes": "square",
+    "eye_color": "magic"
+   }
+  },
+  "268": {
+   "name": "Goblin Warrior",
+   "level": 5,
+   "weapon": "Bent Short Sword",
+   "recipe": {
+    "type": "monster",
+    "headgear": "helmet",
+    "ears": "pointed",
+    "mouth": "tusks",
+    "held": "sword",
+    "eyes": "dots",
+    "eye_color": "pale"
+   }
+  },
+  "269": {
+   "name": "Experienced Necromancer",
+   "level": 5,
+   "weapon": "a small group of Zombies",
+   "recipe": {
+    "type": "humanoid",
+    "headgear": "hood",
+    "eyes": "glow",
+    "eye_color": "leaf",
+    "collar": "gold"
+   }
+  },
+  "270": {
+   "name": "Flame Sprite",
+   "level": 5,
+   "weapon": "Searing Flame",
+   "recipe": {
+    "type": "spirit",
+    "headgear": "flame",
+    "ears": "pointed",
+    "wings": true,
+    "eyes": "glow",
+    "eye_color": "bone",
+    "tint": "ember"
+   }
+  },
+  "271": {
+   "name": "Mud Man",
+   "level": 5,
+   "weapon": "Enchanted Mud",
+   "recipe": {
+    "type": "construct",
+    "eyes": "square",
+    "eye_color": "gold",
+    "tint": "copper"
+   }
+  },
+  "272": {
+   "name": "Lupe the Hypnotic Chihuahua",
+   "level": 5,
+   "weapon": "The stare of doom",
+   "recipe": {
+    "type": "beast",
+    "ears": "pointed",
+    "eyes": "dots",
+    "eye_color": "pale"
+   }
+  },
+  "273": {
+   "name": "Ghoul",
+   "level": 5,
+   "weapon": "Hunger for Flesh",
+   "recipe": {
+    "type": "undead",
+    "mouth": "fangs",
+    "eyes": "sockets",
+    "eye_color": "green"
+   }
+  },
+  "274": {
+   "name": "Seedy Cutthroat",
+   "level": 5,
+   "weapon": "Sharpened Daggers",
+   "recipe": {
+    "type": "humanoid",
+    "headgear": "hood",
+    "held": "dagger",
+    "eyes": "dots",
+    "eye_color": "leaf",
+    "collar": "ember"
+   }
+  },
+  "275": {
+   "name": "Ogre",
+   "level": 5,
+   "weapon": "Broken treebranch",
+   "recipe": {
+    "type": "monster",
+    "mouth": "tusks",
+    "eyes": "dots",
+    "eye_color": "moon"
+   }
+  },
+  "276": {
+   "name": "Crazy Woodsman",
+   "level": 5,
+   "weapon": "Dull axe",
+   "recipe": {
+    "type": "humanoid",
+    "mouth": "darkbeard",
+    "held": "axe",
+    "eyes": "dots",
+    "eye_color": "magic",
+    "hair": "short",
+    "hair_color": "blond",
+    "collar": "magic"
+   }
+  },
+  "277": {
+   "name": "Flying Drakeling",
+   "level": 5,
+   "weapon": "a Lashing Tail",
+   "recipe": {
+    "type": "dragon",
+    "wings": true,
+    "eyes": "dots",
+    "eye_color": "gold"
+   }
+  },
+  "278": {
+   "name": "Forest Cat",
+   "level": 6,
+   "weapon": "Menacing Claws",
+   "recipe": {
+    "type": "beast",
+    "ears": "cat",
+    "eyes": "slits",
+    "eye_color": "moon"
+   }
+  },
+  "279": {
+   "name": "Journeyman Necromancer",
+   "level": 6,
+   "weapon": "An Undead Giant",
+   "recipe": {
+    "type": "humanoid",
+    "headgear": "hood",
+    "eyes": "glow",
+    "eye_color": "leaf",
+    "collar": "bronze"
+   }
+  },
+  "280": {
+   "name": "Frigid Skeleton",
+   "level": 6,
+   "weapon": "The Cold of the Grave",
+   "recipe": {
+    "type": "undead",
+    "eyes": "sockets",
+    "eye_color": "magic",
+    "tint": "magic"
+   }
+  },
+  "281": {
+   "name": "Frost Spirit",
+   "level": 6,
+   "weapon": "Bone Chilling Cold",
+   "recipe": {
+    "type": "spirit",
+    "eyes": "glow",
+    "eye_color": "moon",
+    "tint": "magic"
+   }
+  },
+  "282": {
+   "name": "Dragon Slayer's ghost",
+   "level": 6,
+   "weapon": "Warnings of Doom",
+   "recipe": {
+    "type": "undead",
+    "eyes": "glow",
+    "eye_color": "pale"
+   }
+  },
+  "283": {
+   "name": "Ettin Mage",
+   "level": 6,
+   "weapon": "Double threat spells",
+   "recipe": {
+    "type": "monster",
+    "headgear": "hat",
+    "horns": "horns",
+    "held": "staff",
+    "eyes": "dots",
+    "eye_color": "ember"
+   }
+  },
+  "284": {
+   "name": "Insane Brownie",
+   "level": 6,
+   "weapon": "Faerie spells",
+   "recipe": {
+    "type": "spirit",
+    "ears": "pointed",
+    "mouth": "grin",
+    "held": "staff",
+    "eyes": "glow",
+    "eye_color": "magic"
+   }
+  },
+  "285": {
+   "name": "Ghostly Wolfpack",
+   "level": 6,
+   "weapon": "Ghostly Howls",
+   "recipe": {
+    "type": "undead",
+    "ears": "pointed",
+    "eyes": "glow",
+    "eye_color": "ember"
+   }
+  },
+  "286": {
+   "name": "Wood Golem",
+   "level": 6,
+   "weapon": "Oaken Fists",
+   "recipe": {
+    "type": "construct",
+    "eyes": "square",
+    "eye_color": "green"
+   }
+  },
+  "287": {
+   "name": "Diseased Ent",
+   "level": 6,
+   "weapon": "Twisted Branches",
+   "recipe": {
+    "type": "plant",
+    "headgear": "leaves",
+    "eyes": "dots",
+    "eye_color": "ember"
+   }
+  },
+  "288": {
+   "name": "Dark Druid",
+   "level": 7,
+   "weapon": "Corrupted Nature",
+   "recipe": {
+    "type": "humanoid",
+    "headgear": "hood",
+    "eyes": "glow",
+    "eye_color": "leaf",
+    "collar": "ember"
+   }
+  },
+  "289": {
+   "name": "Lizard Man Scout",
+   "level": 7,
+   "weapon": "Marginal Archery",
+   "recipe": {
+    "type": "monster",
+    "held": "bow",
+    "eyes": "dots",
+    "eye_color": "gold"
+   }
+  },
+  "290": {
+   "name": "Diabolic Footman",
+   "level": 7,
+   "weapon": "A Demon Forged Mace",
+   "recipe": {
+    "type": "demon",
+    "headgear": "helmet",
+    "horns": "horns",
+    "held": "club",
+    "eyes": "glow",
+    "eye_color": "gold"
+   }
+  },
+  "291": {
+   "name": "Gargantuan Tree Spider",
+   "level": 7,
+   "weapon": "Projectile Webbing",
+   "recipe": {
+    "type": "beast",
+    "eyes": "many",
+    "eye_color": "moon"
+   }
+  },
+  "292": {
+   "name": "Flaming Zombie",
+   "level": 7,
+   "weapon": "Fists covered in Flame",
+   "recipe": {
+    "type": "undead",
+    "headgear": "flame",
+    "eyes": "sockets",
+    "eye_color": "ember",
+    "tint": "ember"
+   }
+  },
+  "293": {
+   "name": "Eldritch Wizard",
+   "level": 7,
+   "weapon": "Spells of Darkness",
+   "recipe": {
+    "type": "humanoid",
+    "headgear": "hat",
+    "mouth": "beard",
+    "held": "staff",
+    "eyes": "dots",
+    "eye_color": "gold",
+    "collar": "pale"
+   }
+  },
+  "294": {
+   "name": "Master Necromancer",
+   "level": 7,
+   "weapon": "An Army of the Dead",
+   "recipe": {
+    "type": "humanoid",
+    "headgear": "hood",
+    "eyes": "glow",
+    "eye_color": "leaf",
+    "collar": "bronze"
+   }
+  },
+  "295": {
+   "name": "Animate Darkness",
+   "level": 7,
+   "weapon": "The Darkness of a Thousand Nights",
+   "recipe": {
+    "type": "spirit",
+    "eyes": "glow",
+    "eye_color": "moon"
+   }
+  },
+  "296": {
+   "name": "Temple Guardian Statue",
+   "level": 7,
+   "weapon": "Marble Fists",
+   "recipe": {
+    "type": "construct",
+    "headgear": "helmet",
+    "eyes": "square",
+    "eye_color": "magic"
+   }
+  },
+  "297": {
+   "name": "Owlbear",
+   "level": 7,
+   "weapon": "Claws and a bearhug",
+   "recipe": {
+    "type": "monster",
+    "mouth": "tusks",
+    "eyes": "dots",
+    "eye_color": "pale"
+   }
+  },
+  "298": {
+   "name": "The Man In Black",
+   "level": 8,
+   "weapon": "Necromantic Spells",
+   "recipe": {
+    "type": "humanoid",
+    "headgear": "hood",
+    "held": "staff",
+    "eyes": "dots",
+    "eye_color": "leaf",
+    "collar": "magic"
+   }
+  },
+  "299": {
+   "name": "Gnome Illusionist",
+   "level": 8,
+   "weapon": "Fearsome Illusions",
+   "recipe": {
+    "type": "humanoid",
+    "headgear": "hat",
+    "mouth": "beard",
+    "held": "staff",
+    "eyes": "dots",
+    "eye_color": "magic",
+    "collar": "ash"
+   }
+  },
+  "300": {
+   "name": "Demon Skeleton",
+   "level": 8,
+   "weapon": "Diabolic Runes",
+   "recipe": {
+    "type": "demon",
+    "horns": "horns",
+    "wings": true,
+    "eyes": "glow",
+    "eye_color": "moon"
+   }
+  },
+  "301": {
+   "name": "Insane Master Druid",
+   "level": 8,
+   "weapon": "The land Itself",
+   "recipe": {
+    "type": "humanoid",
+    "headgear": "hood",
+    "mouth": "grin",
+    "eyes": "dots",
+    "eye_color": "gold",
+    "collar": "magic"
+   }
+  },
+  "302": {
+   "name": "Water Elementalist",
+   "level": 8,
+   "weapon": "Water Based Spells",
+   "recipe": {
+    "type": "humanoid",
+    "headgear": "hat",
+    "held": "staff",
+    "eyes": "dots",
+    "eye_color": "leaf",
+    "collar": "magic",
+    "tint": "magic"
+   }
+  },
+  "303": {
+   "name": "Earth Elementalist",
+   "level": 8,
+   "weapon": "Earth Based Spells",
+   "recipe": {
+    "type": "humanoid",
+    "headgear": "hat",
+    "held": "staff",
+    "eyes": "dots",
+    "eye_color": "gold",
+    "collar": "leaf",
+    "tint": "copper"
+   }
+  },
+  "304": {
+   "name": "Ettin Warrior",
+   "level": 8,
+   "weapon": "Two Clubs of Iron",
+   "recipe": {
+    "type": "monster",
+    "headgear": "helmet",
+    "horns": "horns",
+    "held": "club",
+    "eyes": "dots",
+    "eye_color": "moon"
+   }
+  },
+  "305": {
+   "name": "Forest Giant",
+   "level": 8,
+   "weapon": "An Uprooted Tree",
+   "recipe": {
+    "type": "monster",
+    "horns": "antlers",
+    "eyes": "dots",
+    "eye_color": "pale"
+   }
+  },
+  "306": {
+   "name": "Demoniac Knight",
+   "level": 8,
+   "weapon": "A Diabolic Lance",
+   "recipe": {
+    "type": "demon",
+    "headgear": "helmet",
+    "horns": "horns",
+    "wings": true,
+    "eyes": "glow",
+    "eye_color": "moon"
+   }
+  },
+  "307": {
+   "name": "Giant Zombie",
+   "level": 8,
+   "weapon": "Gigantic Fists",
+   "recipe": {
+    "type": "undead",
+    "eyes": "sockets",
+    "eye_color": "magic"
+   }
+  },
+  "308": {
+   "name": "Frost Spectre",
+   "level": 9,
+   "weapon": "The Chill Touch of the Grave",
+   "recipe": {
+    "type": "undead",
+    "eyes": "glow",
+    "eye_color": "green",
+    "tint": "magic"
+   }
+  },
+  "309": {
+   "name": "Small Forest Dragon",
+   "level": 9,
+   "weapon": "Snapping Jaws",
+   "recipe": {
+    "type": "dragon",
+    "wings": true,
+    "eyes": "dots",
+    "eye_color": "magic"
+   }
+  },
+  "310": {
+   "name": "A Pack of Carnivorous Lemurs",
+   "level": 9,
+   "weapon": "Hoots and Howls",
+   "recipe": {
+    "type": "beast",
+    "ears": "cat",
+    "mouth": "fangs",
+    "eyes": "dots",
+    "eye_color": "moon"
+   }
+  },
+  "311": {
+   "name": "Albino Crypt Bear",
+   "level": 9,
+   "weapon": "Foul Stench and Claws",
+   "recipe": {
+    "type": "beast",
+    "ears": "round",
+    "eyes": "dots",
+    "eye_color": "moon",
+    "tint": "bone"
+   }
+  },
+  "312": {
+   "name": "Black Knight of The Vale",
+   "level": 9,
+   "weapon": "Ebony Sword",
+   "recipe": {
+    "type": "humanoid",
+    "headgear": "helmet",
+    "held": "sword",
+    "eyes": "dots",
+    "eye_color": "gold",
+    "collar": "magic"
+   }
+  },
+  "313": {
+   "name": "Elmearian Spy",
+   "level": 9,
+   "weapon": "Small Dagger",
+   "recipe": {
+    "type": "humanoid",
+    "headgear": "hood",
+    "held": "dagger",
+    "eyes": "dots",
+    "eye_color": "pale",
+    "collar": "gold"
+   }
+  },
+  "314": {
+   "name": "Stalking Shadow",
+   "level": 9,
+   "weapon": "Fingers of Darkness",
+   "recipe": {
+    "type": "spirit",
+    "eyes": "glow",
+    "eye_color": "bone"
+   }
+  },
+  "315": {
+   "name": "Necromantic Archmagus",
+   "level": 9,
+   "weapon": "Screams of a Thousand Souls",
+   "recipe": {
+    "type": "humanoid",
+    "headgear": "hood",
+    "mouth": "beard",
+    "eyes": "dots",
+    "eye_color": "pale",
+    "collar": "gold"
+   }
+  },
+  "316": {
+   "name": "Iron Golem",
+   "level": 9,
+   "weapon": "Rusted Fists",
+   "recipe": {
+    "type": "construct",
+    "eyes": "square",
+    "eye_color": "ember",
+    "tint": "copper"
+   }
+  },
+  "317": {
+   "name": "A Hell Hound",
+   "level": 9,
+   "weapon": "Fiery Breath",
+   "recipe": {
+    "type": "demon",
+    "horns": "horns",
+    "ears": "pointed",
+    "mouth": "fangs",
+    "eyes": "glow",
+    "eye_color": "gold",
+    "tint": "ember"
+   }
+  },
+  "318": {
+   "name": "Corporate Lackey",
+   "level": 7,
+   "weapon": "Buzzwords",
+   "recipe": {
+    "type": "humanoid",
+    "headgear": "hood",
+    "eyes": "dots",
+    "eye_color": "pale",
+    "collar": "ash"
+   }
+  },
+  "319": {
+   "name": "SCO Lawyer",
+   "level": 8,
+   "weapon": "Court Papers",
+   "recipe": {
+    "type": "humanoid",
+    "eyes": "dots",
+    "eye_color": "pale",
+    "hair": "bun",
+    "hair_color": "brown",
+    "collar": "leaf"
+   }
+  },
+  "320": {
+   "name": "Gypsy Bandit",
+   "level": 14,
+   "weapon": "Gemmed Dagger",
+   "recipe": {
+    "type": "humanoid",
+    "headgear": "hood",
+    "held": "dagger",
+    "eyes": "dots",
+    "eye_color": "pale",
+    "collar": "leaf"
+   }
+  }
+ },
+ "master": {
+  "1": {
+   "name": "Mireraband",
+   "level": 1,
+   "weapon": "Small Dagger",
+   "recipe": {
+    "type": "humanoid",
+    "held": "dagger",
+    "eyes": "dots",
+    "eye_color": "leaf",
+    "hair": "bun",
+    "hair_color": "stone",
+    "collar": "gold"
+   }
+  },
+  "2": {
+   "name": "Fie",
+   "level": 2,
+   "weapon": "Short Sword",
+   "recipe": {
+    "type": "humanoid",
+    "held": "sword",
+    "eyes": "dots",
+    "eye_color": "pale",
+    "hair": "spiky",
+    "hair_color": "dark",
+    "collar": "ash"
+   }
+  },
+  "3": {
+   "name": "Glynyc",
+   "level": 3,
+   "weapon": "Hugely Spiked Mace",
+   "recipe": {
+    "type": "humanoid",
+    "mouth": "darkbeard",
+    "held": "club",
+    "eyes": "dots",
+    "eye_color": "gold",
+    "hair_color": "dark",
+    "collar": "gold"
+   }
+  },
+  "4": {
+   "name": "Guth",
+   "level": 4,
+   "weapon": "Spiked Club",
+   "recipe": {
+    "type": "humanoid",
+    "mouth": "darkbeard",
+    "held": "club",
+    "eyes": "dots",
+    "eye_color": "gold",
+    "hair": "spiky",
+    "hair_color": "red",
+    "collar": "magic"
+   }
+  },
+  "5": {
+   "name": "Unélith",
+   "level": 5,
+   "weapon": "Thought Control",
+   "recipe": {
+    "type": "humanoid",
+    "eyes": "glow",
+    "eye_color": "leaf",
+    "hair_color": "brown",
+    "collar": "bronze"
+   }
+  },
+  "6": {
+   "name": "Adwares",
+   "level": 6,
+   "weapon": "Dwarven Battle Axe",
+   "recipe": {
+    "type": "humanoid",
+    "mouth": "beard",
+    "held": "axe",
+    "eyes": "dots",
+    "eye_color": "gold",
+    "hair": "long",
+    "hair_color": "stone",
+    "collar": "magic",
+    "headgear": "helmet"
+   }
+  },
+  "7": {
+   "name": "Gerrard",
+   "level": 7,
+   "weapon": "Battle Bow",
+   "recipe": {
+    "type": "humanoid",
+    "held": "bow",
+    "eyes": "dots",
+    "eye_color": "leaf",
+    "hair": "long",
+    "hair_color": "stone",
+    "collar": "leaf"
+   }
+  },
+  "8": {
+   "name": "Ceiloth",
+   "level": 8,
+   "weapon": "Orkos Broadsword",
+   "recipe": {
+    "type": "humanoid",
+    "held": "sword",
+    "eyes": "dots",
+    "eye_color": "magic",
+    "hair": "short",
+    "hair_color": "brown",
+    "collar": "pale"
+   }
+  },
+  "9": {
+   "name": "Dwiredan",
+   "level": 9,
+   "weapon": "Twin Swords",
+   "recipe": {
+    "type": "humanoid",
+    "held": "sword",
+    "eyes": "dots",
+    "eye_color": "magic",
+    "hair": "short",
+    "hair_color": "blond",
+    "collar": "gold"
+   }
+  },
+  "10": {
+   "name": "Sensei Noetha",
+   "level": 10,
+   "weapon": "Martial Arts Skills",
+   "recipe": {
+    "type": "humanoid",
+    "eyes": "dots",
+    "eye_color": "gold",
+    "hair": "short",
+    "hair_color": "red",
+    "collar": "magic"
+   }
+  },
+  "11": {
+   "name": "Celith",
+   "level": 11,
+   "weapon": "Throwing Halos",
+   "recipe": {
+    "type": "humanoid",
+    "headgear": "halo",
+    "eyes": "dots",
+    "eye_color": "magic",
+    "hair": "short",
+    "hair_color": "brown",
+    "collar": "magic"
+   }
+  },
+  "12": {
+   "name": "Gadriel the Elven Ranger",
+   "level": 12,
+   "weapon": "Elven Long Bow",
+   "recipe": {
+    "type": "humanoid",
+    "headgear": "helmet",
+    "ears": "pointed",
+    "held": "bow",
+    "eyes": "dots",
+    "eye_color": "leaf",
+    "collar": "leaf"
+   }
+  },
+  "13": {
+   "name": "Adoawyr",
+   "level": 13,
+   "weapon": "Gargantuan Broad Sword",
+   "recipe": {
+    "type": "humanoid",
+    "held": "sword",
+    "eyes": "dots",
+    "eye_color": "leaf",
+    "hair": "long",
+    "hair_color": "brown",
+    "collar": "gold"
+   }
+  },
+  "14": {
+   "name": "Yoresh",
+   "level": 14,
+   "weapon": "Death Touch",
+   "recipe": {
+    "type": "humanoid",
+    "headgear": "hood",
+    "held": "scythe",
+    "eyes": "glow",
+    "eye_color": "magic",
+    "collar": "ember"
+   }
+  }
+ },
+ "fallback": {
+  "humanoid": {
+   "name": "Unknown humanoid",
+   "recipe": {
+    "type": "humanoid",
+    "eyes": "dots",
+    "eye_color": "gold"
+   }
+  },
+  "beast": {
+   "name": "Unknown beast",
+   "recipe": {
+    "type": "beast",
+    "eyes": "dots",
+    "eye_color": "gold"
+   }
+  },
+  "undead": {
+   "name": "Unknown undead",
+   "recipe": {
+    "type": "undead",
+    "eyes": "sockets",
+    "eye_color": "ember"
+   }
+  },
+  "spirit": {
+   "name": "Unknown spirit",
+   "recipe": {
+    "type": "spirit",
+    "eyes": "glow",
+    "eye_color": "magic"
+   }
+  },
+  "monster": {
+   "name": "Unknown monster",
+   "recipe": {
+    "type": "monster",
+    "eyes": "dots",
+    "eye_color": "ember"
+   }
+  },
+  "demon": {
+   "name": "Unknown demon",
+   "recipe": {
+    "type": "demon",
+    "eyes": "glow",
+    "eye_color": "ember",
+    "horns": "horns"
+   }
+  },
+  "construct": {
+   "name": "Unknown construct",
+   "recipe": {
+    "type": "construct",
+    "eyes": "square",
+    "eye_color": "magic"
+   }
+  },
+  "plant": {
+   "name": "Unknown plant",
+   "recipe": {
+    "type": "plant",
+    "eyes": "dots",
+    "eye_color": "gold"
+   }
+  },
+  "dragon": {
+   "name": "Unknown dragon",
+   "recipe": {
+    "type": "dragon",
+    "eyes": "dots",
+    "eye_color": "green",
+    "wings": true
+   }
+  },
+  "unknown": {
+   "name": "Unknown foe",
+   "recipe": {
+    "type": "unknown",
+    "eyes": "dots",
+    "eye_color": "ash"
+   }
+  }
+ },
+ "special": {
+  "green-dragon": {
+   "name": "The Green Dragon",
+   "recipe": {
+    "type": "dragon",
+    "tint": "green",
+    "eye_color": "moon",
+    "wings": true,
+    "horns": "horns",
+    "mouth": "fangs"
+   }
+  }
+ }
+}

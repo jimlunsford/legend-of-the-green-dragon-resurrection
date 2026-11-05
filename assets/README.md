@@ -30,6 +30,12 @@ assets/
   README.md                   this file
   scenes/<place>.svg          scene banners, 1200x320: village, forest, fallback, and the 17 places of batch 2
   portraits/race/<race>.svg   race portraits, 200x240: human, elf, dwarf, troll, unknown
+  portraits/creature/<id>.svg            foe portraits, 200x240, batch 4: each seeded creature, by creatureid
+  portraits/creature/green-dragon.svg    the Green Dragon
+  portraits/creature/fallback/<type>.svg one per creature type, plus unknown
+  portraits/creature/kit.json            the parts kit: one recipe per portrait, the source of batch 4
+  portraits/master/<id>.svg              each seeded training master, by masterid
+  portraits/SHA256SUMS                   the SHA-256 of batch 4's 313 SVGs (paths relative to assets/)
   icons/<name>.svg            line icons on a 24px grid: the 18 character panel icons of batch 3
   fonts/<family>/             woff2 faces and OFL.txt (SIL OFL 1.1)
   ui/                         tokens.css, fonts.css, resurrection.css
@@ -41,7 +47,9 @@ fields, and so on; a bundled module's page the scene of the place it happens in,
 example; every other player page the fallback; popups, superuser, editor and operator pages none; a module can name its
 own scene with the `scene` hook), and the portrait by race (the race lowercased; any other race, or none, gets
 `unknown`), and since Phase 5 task 13 the character panel's icons by name (`Art::icon()`: one of the 18 names below,
-otherwise nothing). `docs/UI-DESIGN-SPEC.md` has the image rules, the icon list and where each is used, the scene list with its mapping rules, and the art palette.
+otherwise nothing), and since Phase 5 task 14 a foe's portrait on its battle card (a seeded creature's by creatureid,
+a seeded master's by masterid, the Green Dragon's, a PvP victim's race portrait; any other creature the fallback of
+the type a module names with the `creatureportrait` hook, or `unknown`). `docs/UI-DESIGN-SPEC.md` has the image rules, the icon list and where each is used, the scene list with its mapping rules, and the art palette.
 
 ## Batch 1 (Phase 5 task 5)
 
@@ -107,7 +115,52 @@ English label it stands beside, lowercased. They use only colors already in the 
 | `icons/turns.svg` | `261ba7b4b15f476a47bb7f28b1f89900ae42328b456b40daa9cf7e4e0c83fc13` |
 | `icons/weapon.svg` | `c5535706a49bf59fd0be6f29f4d634c9d91ee918fb791adca490676f034eeadc` |
 
-`tests/tooling/test_art.py` checks every file under `scenes/`, `portraits/` and `icons/` against these tables.
+## Batch 4 (Phase 5 task 14)
+
+The foe portraits, approved by Jim on 2026-11-05: 313 SVGs, 200x240 like the race portraits, in an arched frame
+tinted by creature type. 288 are the seeded creatures (`portraits/creature/<creatureid>.svg`), 14 the seeded training
+masters (`portraits/master/<masterid>.svg`), one the Green Dragon (`portraits/creature/green-dragon.svg`) and 10 the
+fallbacks (`portraits/creature/fallback/<type>.svg`: humanoid, beast, undead, spirit, monster, demon, construct,
+plant, dragon and unknown). They use only colors already in the art palette.
+
+Too many to list here, their checksums are in `portraits/SHA256SUMS` (run `sha256sum -c portraits/SHA256SUMS` in
+this folder), and these two files are pinned:
+
+| File | SHA-256 |
+|---|---|
+| `portraits/SHA256SUMS` | `1662a4cfa1d7b8ef5218fe4cd991908a1138fedd448f850028b25a27ce714687` |
+| `portraits/creature/kit.json` | `a3234d759c889721ff96b1dda8d7877781993ef33ee9e96133ce1ddc52f32fc1` |
+
+### The parts kit and the generator
+
+The portraits are not drawn one by one: each is layered from parts by `scripts/art/build_creature_portraits.py` (code,
+under the core license like the other scripts), from its recipe in `portraits/creature/kit.json`. The kit has five
+groups, keyed as the files are: `creature` (by creatureid, with the creature's seeded name, level and weapon),
+`master` (by masterid, with the same), `special` (`green-dragon`), `fallback` (by type), and `paths`, where each
+group's files go. A recipe names a `type` (the body, the frame's tint and the eyes' height) and, each optional, the
+parts: `headgear` (crown, hood, hat, helmet, flame, leaves, halo), `ears` (bat, rabbit, cat, pointed, round), `horns`
+(horns, unicorn, antlers), `wings`, `eyes` (dots, glow, slits, cyclops, sockets, many, square) with `eye_color`,
+`mouth` (tusks, fangs, beard, darkbeard, grin), `hair` (short, long, bun, spiky) with `hair_color`, `collar` (a
+color), `held` (sword, staff, bow, club, dagger, scythe, axe, book, mug) and `tint` (a color in place of the type's).
+The `name` is the SVG's title. The generator only draws: the same kit gives the same bytes.
+
+To add a creature's portrait (a creature a fresh install seeds, which the kit must then hold), or to change one:
+
+1. add or change its recipe in `portraits/creature/kit.json`, keyed by its creatureid, with its seeded name, level and
+   weapon; no two recipes at the same level may be the same;
+2. rebuild into an empty folder and copy the result here:
+   `python3 -I scripts/art/build_creature_portraits.py assets/portraits/creature/kit.json /tmp/portraits`;
+3. regenerate `portraits/SHA256SUMS`, in `assets/`:
+   `find ./portraits/creature ./portraits/master -name '*.svg' | LC_ALL=C sort | xargs sha256sum > portraits/SHA256SUMS`,
+   and update the two pins above and in `tests/tooling/test_art.py`;
+4. as with all art, the new drawing is Jim's to approve first.
+
+`tests/tooling/test_portraits.py` rebuilds the kit into a temporary folder and checks the result is the committed
+files byte for byte, that the kit holds exactly the seeded creatures and masters, and every file against
+`portraits/SHA256SUMS`.
+
+`tests/tooling/test_art.py` checks every file under `scenes/`, `portraits/` and `icons/` against these tables (batch 4
+through `portraits/SHA256SUMS`).
 
 ## Adding or changing art
 

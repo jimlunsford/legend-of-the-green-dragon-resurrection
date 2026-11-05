@@ -20,6 +20,11 @@ use Resurrection\Configuration\LegacyConfig;
  * Rendering is TemplateRenderTest's and FormsRenderTest's: the PHP CLI over a symlinked tree. An installed database is
  * used as it is; an empty one is installed here with scripts/install.php --modules=none and emptied again afterwards.
  * The settings changed for the fights, the players, their mail, news and comments, and the clan are restored or removed.
+ *
+ * Phase 5 task 14 (docs/PHASE5-TASK14-PORTRAITS-20261105.md): every foe card shows the foe's portrait, 200x240 with
+ * the foe's name as its alt text, and the player's card none: a forest or graveyard creature its own (by creatureid), a
+ * training master the master's (by masterid), the Green Dragon its own, a PvP victim their race portrait; with two
+ * foes, each card its own. The old skins show none (the pins).
  */
 final class BattleCommentaryRenderTest extends TestCase
 {
@@ -207,7 +212,7 @@ final class BattleCommentaryRenderTest extends TestCase
             $document = $this->document($pages['fight 2']);
             $state = $this->state($s);
             self::assertNotSame('', $state['badguy'], 'the torment goes on');
-            $this->assertCards($document, $state, 'torment');
+            $this->assertCards($document, $state, 'torment', 'graveyard');
             $this->assertActionBar($document, true, 'torment');
             self::assertCount(1, $this->rounds($document));
             $foe = $state['enemies'][0];
@@ -226,12 +231,75 @@ final class BattleCommentaryRenderTest extends TestCase
             $document = $this->document($pages['fight 2']);
             $state = $this->state($s);
             self::assertNotSame('', $state['badguy'], 'the master fight goes on');
-            $this->assertCards($document, $state, 'training');
+            $this->assertCards($document, $state, 'training', 'train');
             $this->assertActionBar($document, false, 'training');
             self::assertCount(1, $this->rounds($document));
             $foe = $document->querySelector('.rz-fighter-foe');
             self::assertNotNull($foe);
             self::assertSame($state['enemies'][0]['trainingmaxhp'], $this->hp($foe)[1]);
+        });
+    }
+
+    /** Phase 5 task 14: a forest fight with two foes shows two cards, each with its own creature's portrait. */
+    public function testTwoForestFoesShowTwoPortraits(): void
+    {
+        $multi = ['multifightdk' => '0', 'multichance' => '100', 'multibasemin' => '2', 'multibasemax' => '2', 'allowpackofmonsters' => '0'];
+        $this->withSettings($multi, function (): void {
+            $this->withPlayer('RzPair', ['level' => 5, 'hitpoints' => 500, 'maxhitpoints' => 500, 'attack' => 1, 'defense' => 12], function (array $s): void {
+                $pages = $this->forestFight($s, null, 1);
+                $state = $this->states['fight 1'];
+                self::assertCount(2, $state['enemies'], 'two foes');
+                self::assertNotSame($state['enemies'][0]['creatureid'], $state['enemies'][1]['creatureid']);
+                $document = $this->document($pages['fight 1']);
+                $this->assertCards($document, $state, 'two foes');
+                $sources = [];
+                foreach ($document->querySelectorAll('.rz-fighter-foe img.rz-fighter-portrait') as $image) { $sources[] = $image->getAttribute('src'); }
+                self::assertCount(2, array_unique($sources));
+                $this->assertCards($this->document($pages['encounter']), $this->states['encounter'], 'two foes, encounter');
+            });
+        });
+    }
+
+    /** Phase 5 task 14: the Green Dragon's card shows its portrait. */
+    public function testGreenDragonShowsItsPortrait(): void
+    {
+        $this->withPlayer('RzDragon', ['level' => 15, 'hitpoints' => 5000, 'maxhitpoints' => 5000, 'attack' => 1, 'defense' => 100], function (array $s): void {
+            $this->page($s, 'dragon.php', null, null, true);
+            $page = $this->submit($s, 'dragon.php?op=begin');
+            $state = $this->state($s);
+            self::assertNotSame('', $state['badguy'], 'the dragon fight goes on');
+            self::assertSame('The Green Dragon', $state['enemies'][0]['plainname']);
+            $this->assertCards($this->document($page), $state, 'dragon', 'dragon');
+            $page = $this->submit($s, 'dragon.php?op=fight');
+            $this->assertCards($this->document($page), $this->state($s), 'dragon round', 'dragon');
+        });
+    }
+
+    /** Phase 5 task 14: a PvP victim's card shows their race portrait. */
+    public function testPvpFightShowsTheVictimsRacePortrait(): void
+    {
+        $this->withSettings(['pvp' => '1', 'pvpimmunity' => '5'], function (): void {
+            $victim = (int)self::php('require_once "lib/accounts.php"; $id = resurrection_create_account("RzVictim", ' . var_export(self::PASSWORD, true) . ');'
+                . ' db_query("UPDATE accounts SET level=5, maxhitpoints=10000, hitpoints=250, attack=40, defense=20, alive=1, loggedin=0, locked=0, slaydragon=0, age=20, dragonkills=0, pk=0, pvpflag=?, location=?, race=?, badguy=? WHERE acctid=?", true, ["2000-01-01 00:00:00", "Degolburg", "Elf", "", $id]); echo $id;');
+            self::assertGreaterThan(0, $victim);
+            try {
+                $fields = ['level' => 5, 'hitpoints' => 500, 'maxhitpoints' => 500, 'attack' => 1, 'defense' => 20, 'playerfights' => 10, 'location' => 'Degolburg', 'age' => 20];
+                $this->withPlayer('RzAttacker', $fields, function (array $s) use ($victim): void {
+                    // The attack form is bound to both accounts as they are: a first page view first, which fills a new
+                    // account's preferences, so the form's view does not change the attacker it was issued for.
+                    $this->page($s, 'village.php', null, null, true);
+                    $this->page($s, 'pvp.php?act=attack&name=' . $victim, null, null, true);
+                    $page = $this->submit($s, 'pvp.php?act=attack');
+                    $state = $this->state($s);
+                    self::assertNotSame('', $state['badguy'], 'the PvP fight goes on');
+                    self::assertSame('Elf', $state['enemies'][0]['race']);
+                    $this->assertCards($this->document($page), $state, 'pvp', 'pvp');
+                    self::assertSame('assets/portraits/race/elf.svg', $this->document($page)->querySelector('.rz-fighter-foe img')?->getAttribute('src'));
+                });
+            } finally {
+                self::php('foreach (["mail" => "msgto=? OR msgfrom=?", "news" => "accountid=? OR accountid=?"] as $t => $w) db_query("DELETE FROM " . db_identifier($t) . " WHERE " . $w, true, [' . $victim . ', ' . $victim . ']);'
+                    . ' foreach (["accounts_output", "accounts"] as $t) db_query("DELETE FROM " . db_identifier($t) . " WHERE acctid=?", true, [' . $victim . ']);');
+            }
         });
     }
 
@@ -416,7 +484,7 @@ final class BattleCommentaryRenderTest extends TestCase
      *
      * @param array<string, mixed> $state
      */
-    private function assertCards(\Dom\HTMLDocument $document, array $state, string $label): void
+    private function assertCards(\Dom\HTMLDocument $document, array $state, string $label, string $fight = 'forest'): void
     {
         $cards = $document->querySelectorAll('.rz-battle > .rz-fighters > section.rz-fighter');
         self::assertSame(1 + count($state['enemies']), $cards->length, $label);
@@ -429,19 +497,58 @@ final class BattleCommentaryRenderTest extends TestCase
         self::assertSame($alive ? 'HP' : 'Soul', trim((string)$player->querySelector('.rz-fighterbar-label')?->textContent), $label);
         self::assertSame($mine, $this->hp($player), $label);
         self::assertSame($this->width($mine[0], $mine[1]), $this->bar($player), $label);
+        // Phase 5 task 14: the player's card has no portrait; each foe's has its own.
+        self::assertNull($player->querySelector('img'), $label);
         foreach ($state['enemies'] as $index => $enemy) {
             $card = $cards->item($index + 1);
             self::assertStringContainsString('rz-fighter-foe', (string)$card->getAttribute('class'), $label);
-            self::assertSame($enemy['plainname'], trim((string)$card->querySelector('.rz-fighter-name')?->textContent), $label);
+            // With more than one foe, the target's name is followed by its "Target" mark (task 10).
+            $mark = $card->querySelector('.rz-fighter-name > .rz-fighter-mark') !== null ? ' Target' : '';
+            self::assertSame($mark !== '', count($state['enemies']) > 1 && !empty($enemy['istarget']), $label);
+            self::assertSame($enemy['plainname'] . $mark, trim((string)$card->querySelector('.rz-fighter-name')?->textContent), $label);
             $sub = $card->querySelector('.rz-fighter-sub');
             self::assertNotNull($sub);
             self::assertStringStartsWith('Level ' . $enemy['creaturelevel'], trim($sub->textContent), $label);
             self::assertSame($enemy['plainweapon'], trim((string)$sub->querySelector('i')?->textContent), $label);
-            $max = $enemy['creaturemaxhealth'] ?? $enemy['trainingmaxhp'] ?? ($alive ? null : (int)$state['level'] * 5 + 50);
+            $max = $enemy['creaturemaxhealth'] ?? $enemy['trainingmaxhp'] ?? $enemy['pvpmaxhp'] ?? ($alive ? null : (int)$state['level'] * 5 + 50);
             self::assertNotNull($max, $label . ': the foe\'s maximum is known');
-            self::assertSame([(int)round($enemy['creaturehealth']), (int)round($max)], $this->hp($card), $label);
-            self::assertSame($this->width($enemy['creaturehealth'], $max), $this->bar($card), $label);
+            // A PvP victim's numbers are the accounts table's, stored as text.
+            [$health, $max] = [(float)$enemy['creaturehealth'], (float)$max];
+            self::assertSame([(int)round($health), (int)round($max)], $this->hp($card), $label);
+            self::assertSame($this->width($health, $max), $this->bar($card), $label);
+            $this->assertPortrait($card, $this->portraitFor($enemy, $fight), $enemy['plainname'], $label);
         }
+    }
+
+    /**
+     * The portrait a foe's card must show, worked out here from the foe as the state stores it, not from Art: a forest
+     * or graveyard creature's by creatureid, a master's by masterid, the Green Dragon's, a PvP victim's race portrait.
+     *
+     * @param array<string, mixed> $enemy
+     */
+    private function portraitFor(array $enemy, string $fight): string
+    {
+        $path = match ($fight) {
+            'forest', 'graveyard' => 'assets/portraits/creature/' . (int)$enemy['creatureid'] . '.svg',
+            'train' => 'assets/portraits/master/' . (int)$enemy['creatureid'] . '.svg',
+            'dragon' => 'assets/portraits/creature/green-dragon.svg',
+            'pvp' => 'assets/portraits/race/' . strtolower((string)$enemy['race']) . '.svg',
+        };
+        self::assertFileExists(self::ROOT . '/' . $path);
+        return $path;
+    }
+
+    /** The card's one portrait: beside the name and level, 200x240, the foe's name as it shows as the alt text. */
+    private function assertPortrait(\Dom\Element $card, string $src, string $alt, string $label): void
+    {
+        $images = $card->querySelectorAll('img');
+        self::assertSame(1, $images->length, $label);
+        $image = $card->querySelector('.rz-fighter-id > img.rz-fighter-portrait');
+        self::assertNotNull($image, $label);
+        self::assertSame([$src, $alt, '200', '240'], [$image->getAttribute('src'), $image->getAttribute('alt'),
+            $image->getAttribute('width'), $image->getAttribute('height')], $label);
+        self::assertNotSame('', trim($alt), $label);
+        self::assertSame($image->nextElementSibling, $card->querySelector('.rz-fighter-id > .rz-fighter-text'), $label);
     }
 
     /** Fight, the one primary, with Run beside it (when the fight has Run), then the automatic fighting group. */
@@ -538,6 +645,30 @@ final class BattleCommentaryRenderTest extends TestCase
             self::php('foreach (["mail" => "msgto=? OR msgfrom=?", "news" => "accountid=? OR accountid=?", "commentary" => "author=? OR author=?"] as $t => $w) db_query("DELETE FROM " . db_identifier($t) . " WHERE " . $w, true, [' . $id . ', ' . $id . ']);'
                 . ' foreach (["accounts_output", "accounts"] as $t) db_query("DELETE FROM " . db_identifier($t) . " WHERE acctid=?", true, [' . $id . ']);');
             foreach (glob(self::$tree . '/.sessions/sess_' . $s['id']) ?: [] as $file) { unlink($file); }
+        }
+    }
+
+    /**
+     * Runs $test with these settings, then puts back what each was (or removes it).
+     *
+     * @param array<string, string> $settings
+     */
+    private function withSettings(array $settings, callable $test): void
+    {
+        $names = var_export(array_keys($settings), true);
+        $saved = json_decode(self::php('$s = []; foreach (' . $names . ' as $n) $s[$n] = db_query("SELECT value FROM settings WHERE setting=?", true, [$n]); echo json_encode($s);'), true);
+        foreach ($settings as $name => $value) { self::php('savesetting(' . var_export($name, true) . ', ' . var_export($value, true) . ');'); }
+        try {
+            $test();
+        } finally {
+            $restore = '';
+            foreach ($saved as $name => $rows) {
+                $restore .= 'db_query("DELETE FROM settings WHERE setting=?", true, [' . var_export($name, true) . ']);';
+                foreach ($rows as $row) {
+                    $restore .= ' db_query("INSERT INTO settings (setting, value) VALUES (?, ?)", true, [' . var_export($name, true) . ', ' . var_export($row['value'], true) . ']);';
+                }
+            }
+            self::php($restore);
         }
     }
 

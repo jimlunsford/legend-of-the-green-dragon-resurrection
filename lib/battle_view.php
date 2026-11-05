@@ -32,7 +32,7 @@ function resurrection_battle_open(): void {
 	if ($resurrection_battle !== null) return;
 	$resurrection_battle = array(
 		'prefix'=>(string)$output, 'phase'=>'after', 'intro'=>'', 'rounds'=>array(), 'after'=>'', 'tail'=>'',
-		'enemies'=>null, 'counter'=>1, 'actions'=>array(), 'notes'=>array(), 'victory'=>false, 'defeat'=>false,
+		'enemies'=>null, 'fight'=>'', 'counter'=>1, 'actions'=>array(), 'notes'=>array(), 'victory'=>false, 'defeat'=>false,
 	);
 	$output = '';
 }
@@ -54,9 +54,11 @@ function resurrection_battle_flush(): void {
  * @param array<int|string, array<string, mixed>> $enemies
  */
 function resurrection_battle_enemies(array $enemies): void {
-	global $resurrection_battle, $enemycounter;
+	global $resurrection_battle, $enemycounter, $options;
 	resurrection_battle_open();
 	$resurrection_battle['enemies'] = $enemies;
+	// The fight's type picks each foe's portrait (Phase 5 task 14): battle.php's $options, as the route stored them.
+	$resurrection_battle['fight'] = is_array($options ?? null) && is_string($options['type'] ?? null) ? $options['type'] : '';
 	$resurrection_battle['counter'] = (int)($enemycounter ?? count($enemies));
 }
 
@@ -255,6 +257,30 @@ function resurrection_battle_hp(string $label, int|float|string $current, ?float
 		'value'=>$num(max(0, (float)$current)).' / '.$num($max)));
 }
 
+/**
+ * A foe's portrait on its card (Phase 5 task 14), through the template's fighterportrait part, or nothing: by the
+ * fight's type, the creature's, the master's, the Green Dragon's or a PvP victim's race portrait (Art::foe()); a
+ * creature with no portrait of its own gets the fallback of the type a module names through the `creatureportrait`
+ * hook, or the unknown one. The alt text is the foe's name as the card shows it, its color codes dropped.
+ *
+ * @param array<array-key, mixed> $enemy
+ */
+function resurrection_battle_portrait(array $enemy, string $fight): string {
+	global $template;
+	require_once __DIR__ . '/sanitize.php';
+	require_once __DIR__ . '/../src/Ui/Art.php';
+	if (!isset($template['fighterportrait'])) return '';
+	$alt = trim(full_sanitize((string)($enemy['creaturename'] ?? '')));
+	$art = \Resurrection\Ui\Art::foe($enemy, $fight, $alt, function (array $args) { return modulehook('creatureportrait', $args); });
+	if ($art === null) return '';
+	return templatereplace('fighterportrait', array(
+		'src'=>htmlspecialchars($art['src'], ENT_QUOTES, 'UTF-8'),
+		'alt'=>htmlspecialchars($art['alt'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'),
+		'width'=>(string)$art['width'],
+		'height'=>(string)$art['height'],
+	));
+}
+
 /** The fighter cards: the player, then each foe, as the fight left them. */
 function resurrection_battle_cards(): string {
 	global $resurrection_battle, $session;
@@ -268,7 +294,7 @@ function resurrection_battle_cards(): string {
 			? resurrection_battle_hp(translate_inline('HP', 'common'), $u['hitpoints'], (float)$u['maxhitpoints'])
 			: resurrection_battle_hp(translate_inline('Soul', 'common'), $u['soulpoints'], (float)($u['level'] * 5 + 50));
 		$cards .= templatereplace('fighter', array('kind'=>'player', 'state'=>'', 'sub'=>htmlspecialchars($level($u['level']), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'),
-			'hp'=>$hp, 'name'=>resurrection_battle_plain($u['name'])));
+			'hp'=>$hp, 'name'=>resurrection_battle_plain($u['name']), 'portrait'=>''));
 	}
 	foreach ($resurrection_battle['enemies'] ?? array() as $enemy) {
 		if (!is_array($enemy)) continue;
@@ -292,7 +318,8 @@ function resurrection_battle_cards(): string {
 		}
 		$cards .= templatereplace('fighter', array('kind'=>'foe', 'state'=>$state, 'sub'=>$sub,
 			'hp'=>resurrection_battle_hp($label, $enemy['creaturehealth'] ?? 0, $max, $text),
-			'name'=>resurrection_battle_plain($enemy['creaturename'] ?? '').$target));
+			'name'=>resurrection_battle_plain($enemy['creaturename'] ?? '').$target,
+			'portrait'=>resurrection_battle_portrait($enemy, (string)$resurrection_battle['fight'])));
 	}
 	tlschema();
 	return $cards === '' ? '' : templatereplace('fighters', array('cards'=>$cards));

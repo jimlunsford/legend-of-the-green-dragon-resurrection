@@ -235,3 +235,16 @@ sideways.
 - The art palette, `assets/LICENSE`, the copyright line and license block, the attribution line and its links.
 - Translation keys (the icons are chosen by the English label; no text is added).
 - The 60-minute job timeout and the shard runner; the shard lists are not edited by hand.
+
+## Acceptance (recorded in task 14, 2026-11-05)
+
+Task 13 is accepted at `6e2f55b44421bf8de56504578dee82359f773b14`. Checked by the command chat and confirmed through the
+GitHub Actions API in task 14:
+
+- Modern core 42029166571: SUCCESS, all 12 jobs (both legs' checks, four shards and result). Shard jobs, shards 1 to 4:
+  PHP 8.4 / MariaDB 11.4 19:48, 17:22, 20:36, 20:13; PHP 8.5 / MySQL 8.4 16:59, 23:14, 16:25, 20:50.
+- Baseline integrity 42029165803: SUCCESS.
+
+The shard steps inside those jobs (the `tooling-shards.py` step alone), shards 1 to 4: PHP 8.4 17:49, 15:20, 18:42,
+18:14; PHP 8.5 15:08, 20:57, 14:37, 18:40. With the refreshed table the PHP 8.4 jobs are within 3:14 of each other
+(task 12: 6:03); on PHP 8.5 shard 2, now the 161 short tests, is the longest at 23:14, under 30 minutes.

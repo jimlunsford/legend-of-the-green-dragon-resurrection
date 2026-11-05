@@ -266,6 +266,7 @@ query, so the template writes the two breakpoints as literals equal to these tok
 | `--scene-height-phone` | `150px` | Scene banner height on a phone (Jim, task 5) |
 | `--portrait-width` | `64px` | Race portrait in the character panel (Jim, task 5) |
 | `--portrait-width-phone` | `44px` | Race portrait in the phone header (Jim, task 5) |
+| `--portrait-width-foe` | `80px` | A foe's portrait on its fighter card, every width (mockup, task 14) |
 | `--icon-stroke` | `1.8` | Icon stroke width |
 | `--focus-ring-width` | `2px` | Focus ring |
 | `--focus-ring-offset` | `2px` | Its offset |
@@ -492,6 +493,11 @@ query, so the template writes the two breakpoints as literals equal to these tok
   - **The fallen and the target.** A dead foe's card reads "0 / max · DEAD" ("DEFEATED" in the graveyard) in
     `--muted`, its bar empty. With more than one foe, the target's card has a 3px `--accent` marker on its left and a
     "Target" label (`battle` namespace) after its name.
+  - **Foe portraits** (Phase 5 task 14). A foe's card opens with its portrait (the `fighterportrait` part, an
+    `<img>`), `--portrait-width-foe` (80px) wide at every width, its height from the file's 200x240, beside the name
+    and the level line, 14px apart, centered on them; the hitpoints follow under both. The alt text is the foe's name as
+    the card shows it (color codes dropped, no "Target" mark). The player's card has no portrait (the character panel
+    shows the race portrait). Which portrait: Art, "Foe portraits" below.
 - **Battle action bar** (task 10). Under the cards: Fight (the one primary) and Run (secondary) in a row, 8px apart;
   then each group of secondary buttons under a small uppercase Cinzel heading in `--muted`: "Automatic Fighting" (5
   rounds, 10 rounds, until the end, where the settings offer them), "Special Abilities" (the specialty's skills, with
@@ -606,12 +612,14 @@ not shown there, as before.
 
 - **Scene banners** across the top of the page's content card: woodcut style, layered dark silhouettes, light from
   windows, the moon, eyes and gems; art palette colors only (below).
-- **Portraits** in an arched frame tinted by race (players) or creature type (creatures).
+- **Portraits** in an arched frame tinted by race (players) or creature type (creatures; Phase 5 task 14, "Foe
+  portraits" below).
 - **Icons**: line icons on a 24px grid, 1.8 stroke, colored by meaning (health green, damage, magic, gold accent).
   The character panel's 18 (`assets/icons/`, Phase 5 task 13) are drawn at 16px beside their labels; the list and
   where each is used are under Character panel, Icons.
 - **Every image slot has a fallback**: a page with no scene of its own shows the fallback scene, a race with no
-  portrait of its own the unknown portrait, a missing icon nothing (the text label stays). A lookup never gives a
+  portrait of its own the unknown portrait, a foe with no portrait of its own its type's fallback or the unknown one, a
+  missing icon nothing (the text label stays). A lookup never gives a
   broken URL: a missing file means no image.
 - All art is original SVG drawn by Claude for Jim / Phoenix 2:33 LLC, in `assets/` under CC BY-SA 4.0
   (`assets/LICENSE`, scope `assets/scenes/`, `assets/portraits/` and `assets/icons/`; Phase 5 task 5). Credit: "Art by
@@ -643,6 +651,39 @@ not shown there, as before.
   shows it. Plain text, escaped; an image without alt text is not shown.
 - **Files.** Plain SVG drawings: no script, no event attribute, no `foreignObject`, no `href` or other external
   reference, every color from the art palette, each under 16 KB. `tests/tooling/test_art.py` checks them.
+
+### Foe portraits (Phase 5 task 14)
+
+Batch 4, approved by Jim on 2026-11-05: 313 portraits, 200x240 like the race portraits, each an arched frame tinted
+by creature type, drawn from the parts kit `assets/portraits/creature/kit.json` by
+`scripts/art/build_creature_portraits.py` (`assets/README.md` has the kit, the generator and how to rebuild). The
+battle screen's foe cards show them ("Fighter cards" above). `Art::foe()` picks one by the fight's type (battle.php's
+`$options['type']`, as the route stored it):
+
+| Fight | Portrait | File |
+|---|---|---|
+| `pvp` | the victim's race portrait, by the victim's race (task 5's lookup: human, elf, dwarf, troll, else unknown) | `portraits/race/<race>.svg` |
+| `dragon` | the Green Dragon's | `portraits/creature/green-dragon.svg` |
+| `train` | the master's, by its `creatureid` (the masters table's id, the masterid: 1 to 14 seeded) | `portraits/master/<masterid>.svg` |
+| any other (`forest`, `graveyard`, a module's) | the creature's, by its `creatureid` (288 seeded, 1 to 320 with gaps) | `portraits/creature/<creatureid>.svg` |
+
+The rules:
+
+- **By id, not by name.** A creature or master has its own portrait when its id is one the kit drew: a seeded one.
+  A seeded creature renamed in the editor keeps its id's portrait, and so does a forest foe whose name the fight
+  prefixes ("Elite", "Savage" and the others). The masters and the creatures share ids (both tables start at 1), so
+  the fight's type decides which folder: a training fight's foe is a master.
+- **Fallbacks.** A foe with no portrait of its own (a creature added in the creature editor, a module's creature with
+  no id or an id the kit does not have, a master added in the masters editor, the forest's "evil doppleganger" when no
+  creature fits the level) gets the fallback of its creature type, `portraits/creature/fallback/<type>.svg`: humanoid,
+  beast, undead, spirit, monster, demon, construct, plant, dragon, or unknown (the hooded traveller). The type comes
+  from the `creatureportrait` module hook: it gets `creature` (the foe as the fight stores it), `fight` (the fight's
+  type) and `type` (`unknown`), and may set `type` to one of the nine; anything else, or no module, is unknown. The hook
+  is asked only for a foe with no portrait of its own, once per card.
+- **Never a broken URL.** Every lookup returns a file that exists, or nothing; an empty alt text means no image. A
+  missing fallback falls back to unknown.
+- **Alt text** is the foe's name as the card shows it, plain text, escaped.
+- **Old skins.** Only the Resurrection template has the slot; a 1.1.2 skin's battle pages are byte for byte as before.
 
 ### Location scenes (Phase 5 task 12)
 
@@ -692,7 +733,8 @@ The rules:
 ### Art palette (Phase 5 task 5)
 
 Every color the batch 1 files use. Future art stays within it, or extends it here in the task that adds the art.
-Batch 2 (the location scenes, task 12) and batch 3 (the character panel's icons, task 13) use only these colors.
+Batch 2 (the location scenes, task 12), batch 3 (the character panel's icons, task 13) and batch 4 (the foe
+portraits, task 14) use only these colors.
 Colors that are also UI tokens are named; transparency comes from `opacity` and `stroke-opacity`, not from new colors.
 
 | Color | Token | Use in batch 1 |
