@@ -885,21 +885,25 @@ function resurrection_page_kind(){
 /**
  * The page's scene banner through the template's scene part, or nothing: on popups, superuser, editor and operator
  * pages, in a template without the part, or when no scene file exists. Each scene's alt text is the place's name: the
- * village's name, the forest, and for the fallback the page's own title. A module names its own scene for its pages
- * through the `scene` hook.
+ * village's and the inn's from their settings, the other places' names translated (schema "scenes"), and for the
+ * fallback the page's own title (Phase 5 task 12). On runmodule.php the scene is the running module's place. A module
+ * names its own scene for its pages through the `scene` hook.
  */
 function resurrection_scene_html(){
-	global $template, $SCRIPT_NAME, $resurrection_page_title;
+	global $template, $SCRIPT_NAME, $resurrection_page_title, $resurrection_running_module;
 	require_once __DIR__ . '/../src/Ui/Art.php';
 	$kind = resurrection_page_kind();
 	if (!isset($template['scene']) || $kind !== \Resurrection\Ui\Art::PLAYER) return "";
-	$names = array(
-		'village'=>getsetting("villagename", LOCATION_FIELDS),
-		'forest'=>translate_inline("The Forest", "scenes"),
-		'fallback'=>(string)($resurrection_page_title ?? ''),
-	);
-	foreach ($names as $name=>$text) $names[$name] = trim(full_sanitize((string)$text));
-	$scene = \Resurrection\Ui\Art::scene((string)$SCRIPT_NAME, $kind, $names, function ($args) { return modulehook("scene", $args); });
+	$title = (string)($resurrection_page_title ?? '');
+	$names = function ($scene) use ($title) {
+		$name = \Resurrection\Ui\Art::name((string)$scene,
+			function ($setting) { return getsetting($setting, $setting === 'innname' ? LOCATION_INN : LOCATION_FIELDS); },
+			function ($text) { return translate_inline($text, "scenes"); },
+			$title);
+		return trim(full_sanitize($name));
+	};
+	$scene = \Resurrection\Ui\Art::scene((string)$SCRIPT_NAME, $kind, $names, function ($args) { return modulehook("scene", $args); },
+		(string)($resurrection_running_module ?? ''), $_GET);
 	if ($scene === null) return "";
 	return templatereplace("scene", array(
 		"src"=>htmlspecialchars($scene['src'], ENT_QUOTES, "UTF-8"),

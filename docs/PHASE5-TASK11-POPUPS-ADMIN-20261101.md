@@ -256,3 +256,14 @@ width equals the viewport (no sideways scroll).
 - The copyright line and license block on every page and popup; the attribution line and its links in `footer` and
   `popupfoot`.
 - The 60-minute job timeout.
+
+## Acceptance (recorded in task 12, 2026-11-05)
+
+Task 11 is accepted at `28a3936fa426d2fa35e28343731694560f1219aa`. Checked by the command chat and confirmed through the
+GitHub Actions API in task 12:
+
+- Modern core 41311953273: SUCCESS, all 12 jobs (both legs' checks, four shards and result). Shard jobs, shards 1 to 4:
+  PHP 8.4 / MariaDB 11.4 10:37, 20:09, 17:42, 15:36; PHP 8.5 / MySQL 8.4 21:36, 21:08, 19:06, 19:53.
+- Baseline integrity 41311953262: SUCCESS.
+
+The longest shard job, 21:36, is under the 30-minute mark; the refreshed split held (predicted 20.3 to 20.5 minutes).

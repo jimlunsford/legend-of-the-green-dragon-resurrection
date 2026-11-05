@@ -24,6 +24,8 @@ final class PopupAdminRenderTest extends TestCase
 {
     private const string ROOT = __DIR__ . '/../..';
     private const string PINS = __DIR__ . '/../fixtures/popup-admin-old-skin.json';
+    /** When the pins were recorded (task 11, from 5dafec8): the fixture's fixed times are near it. */
+    private const string PINNED_AT = '2026-11-01 12:00:00 UTC';
     private const string PASSWORD = 'Synthetic popup render player password';
     /** Every editor's flag, without the debug output, the source viewer, the SQL console, the payment log or the
      * translator's (which puts a translate link before every string); the translator tool's page adds that one. */
@@ -573,8 +575,12 @@ final class PopupAdminRenderTest extends TestCase
     /** Tokens, the session's page counter, ids and times, which differ from run to run. */
     private function normalize(string $html): string
     {
-        // Times within a day of now (the account's last hit, the fixture's petitions) and their ages.
-        $html = (string)preg_replace_callback('/\b(\d{4}-\d\d-\d\d \d\d:\d\d:\d\d)\b/', fn ($m) => abs(strtotime($m[1]) - time()) < 5 * 86400 ? 'NOW' : $m[1], $html);
+        // Times within five days of now (the account's last hit, the fixture's petitions) and their ages. The fixture's own
+        // fixed times (2026-10-29 to 2026-10-31) were within five days of the run that recorded the pins and are matched
+        // against that run's time, PINNED_AT: until Phase 5 task 12 they were matched against the clock, so from
+        // 2026-11-04 08:15 UTC the oldest mail's date fell out of the window and the test failed on any commit.
+        $html = (string)preg_replace_callback('/\b(\d{4}-\d\d-\d\d \d\d:\d\d:\d\d)\b/',
+            fn ($m) => abs(strtotime($m[1]) - time()) < 5 * 86400 || abs(strtotime($m[1]) - strtotime(self::PINNED_AT)) < 5 * 86400 ? 'NOW' : $m[1], $html);
         return (string)preg_replace(['/name=(["\'])(csrf_token|action_token)\1 value=(["\'])[^"\']*\3/', '/value=(["\'])[^"\']*\1( name=(["\'])(csrf_token|action_token)\3)/',
             '/([?&;]c=)\d+(-\d+)?/', '/\b[0-9a-f]{32}\b/', '/>(\d+d)?(\d+h)?(\d+m)?(\d+s)?</', '/\b\d+(\.\d+)? seconds\b/', '/(last: )[0-9dhms]+/'],
             ['name=$1$2$1 value=$3TOKEN$3', 'value=$1TOKEN$1$2', '${1}N', 'HASH', '>$1<', 'N seconds', '${1}AGE'], $html);

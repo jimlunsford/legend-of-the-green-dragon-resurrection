@@ -33,6 +33,9 @@ if (injectmodule($module, false)){
 	do_forced_nav($allowanonymous,$override_forced_nav);
 
 	$starttime = getmicrotime();
+	// The module whose page this is, for its scene (lib/pageparts.php, Phase 5 task 12): hooks run later move
+	// $mostrecentmodule to other modules.
+	$resurrection_running_module = $mostrecentmodule;
 	$fname = $mostrecentmodule."_run";
 	tlschema("module-$mostrecentmodule");
 	$fname();

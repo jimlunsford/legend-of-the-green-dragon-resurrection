@@ -589,7 +589,8 @@ not shown there, as before.
   `--breakpoint-phone`, a 1px `--border` line under it. The picture is cropped to fill and centered
   (`object-fit: cover`), never letterboxed. The `width` and `height` attributes are the file's own size, 1200x320.
 - **Which scene.** `src/Ui/Art.php`, by page script: `home.php` and `village.php` the village, `forest.php` the forest
-  (its fights included), every other player page the fallback. No scene on popups, on superuser and editor pages (a
+  (its fights included), each place's own page its place and a bundled module's page the place it happens in (task 12,
+  "Location scenes" below), every other player page the fallback. No scene on popups, on superuser and editor pages (a
   page that called `check_su_access()`), or on the operator pages (not installed, database error, upgrade needed,
   game unavailable). A module names its own scene for its pages through the `scene` hook: it gets `script`, `scene`
   and `alt`, and may set `scene` to another file in `assets/scenes/` (with `alt`) or to `''` for none; a name with no
@@ -601,15 +602,62 @@ not shown there, as before.
   beside the controls, `--portrait-width-phone` (44px) wide, the image only; since task 8 the signed-in phone header
   shows it through its own `phoneportrait` part, the same size, and the header's slot stays hidden on a phone. `width` and `height` attributes: the file's 200x240. Signed out: none. The portrait is
   the player's race lowercased (`human`, `elf`, `dwarf`, `troll`); any other race, or none, gets `unknown`.
-- **Alt text** comes from the same data: a scene's is the place's name (the village's name, "The Forest", and for the
-  fallback the page's own title; a module's hook may give its own), a portrait's the race as the character panel
+- **Alt text** comes from the same data: a scene's is the place's name (the village's and the inn's names from their
+  settings, the other places' names translated, and for the fallback the page's own title; a module's hook may give its
+  own), a portrait's the race as the character panel
   shows it. Plain text, escaped; an image without alt text is not shown.
 - **Files.** Plain SVG drawings: no script, no event attribute, no `foreignObject`, no `href` or other external
   reference, every color from the art palette, each under 16 KB. `tests/tooling/test_art.py` checks them.
 
+### Location scenes (Phase 5 task 12)
+
+Batch 2, approved by Jim on 2026-11-01: 17 scenes, one per place, 1200x320 like batch 1, in the art palette's colors.
+With batch 1's village, forest and fallback, these are all the scenes (`assets/scenes/<scene>.svg`):
+
+| Scene | Page | Alt text (the place's name) |
+|---|---|---|
+| `village` | `home.php`, `village.php` | the `villagename` setting (default "Degolburg") |
+| `forest` | `forest.php`, its fights and forest specials | "The Forest" |
+| `inn` | `inn.php` | the `innname` setting (default "The Boar's Head Inn") |
+| `bank` | `bank.php` | "Ye Olde Bank" |
+| `weapons` | `weapons.php` | "MightyE's Weaponry" |
+| `armor` | `armor.php` | "Pegasus Armor" |
+| `healer` | `healer.php` | "Healer's Hut" |
+| `gardens` | `gardens.php` | "The Gardens" |
+| `rock` | `rock.php` (the Veteran's Club too) | "Curious Looking Rock" |
+| `train` | `train.php` | "Bluspring's Warrior Training" |
+| `stables` | `stables.php` | "Merick's Stables" |
+| `mercenarycamp` | `mercenarycamp.php` | "Mercenary Camp" |
+| `gypsy` | `gypsy.php` (the seance too) | "Ze Gypsy Tent" |
+| `lodge` | `lodge.php` | "JCP's Hunter Lodge" |
+| `clan` | `clan.php` | "Clan Halls" |
+| `graveyard` | `graveyard.php` | "The Graveyard" |
+| `shades` | `shades.php` | "Land of the Shades" |
+| `dragon` | `dragon.php` (the fight in the lair; the approach is `forest.php`, so the forest) | "The Green Dragon's Lair" |
+| `fields` | `pvp.php` | "The Fields" |
+| `fallback` | every other player page | the page's own title |
+
+The rules:
+
+- **By page script** (`Art::PLACES`). The names are the village's own: the inn and the village by the settings an
+  administrator sets (a renamed inn is named anew everywhere its scene shows, the module pages at the inn included);
+  the others are the village's nav labels, translated with the `scenes` schema as "The Forest" is. Color codes are
+  left out.
+- **Module pages** (`runmodule.php`) take the scene of the place the module's page happens in, by a static map of the
+  bundled modules (`Art::MODULES`): Cedrik's potions, Dag Durnick's bounties, the drinks, Violet and Seth (`lovers`)
+  and Seth's song at the inn; Crazy Audrey's visit in the village square; the outhouses in the forest. The module is
+  the one `runmodule.php` ran, recorded before its run function, so a hook that loads another module does not change
+  it. The drink editor (`act=editor`) is an editor page and shows none, also for a player with the module's own edit
+  preference, who never passes `check_su_access()`. Every other module page shows the fallback, named by its title.
+- **Third-party modules** keep the `scene` hook: it is asked with the scene the static maps chose and may name another.
+- **Forest specials** (the fairy, the gem and gold finds, the foil wench, the glowing stream, the gold mine, Crazy
+  Audrey's forest visit, the Dark Horse's encounter) run inside `forest.php` and show the forest.
+- **No scene** on popups, superuser, editor and operator pages, whatever the script.
+
 ### Art palette (Phase 5 task 5)
 
 Every color the batch 1 files use. Future art stays within it, or extends it here in the task that adds the art.
+Batch 2 (the location scenes, task 12) uses only these colors.
 Colors that are also UI tokens are named; transparency comes from `opacity` and `stroke-opacity`, not from new colors.
 
 | Color | Token | Use in batch 1 |

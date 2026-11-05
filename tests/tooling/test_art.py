@@ -18,8 +18,8 @@ ASSETS = ROOT / 'assets'
 SPEC = ROOT / 'docs' / 'UI-DESIGN-SPEC.md'
 SIZE_LIMIT = 16 * 1024
 
-# Batch 1, as the command chat supplied it (Jim, 2026-10-30). A change to the art is a new file from the command chat,
-# added here with its checksum.
+# Batch 1, as the command chat supplied it (Jim, 2026-10-30), then batch 2. A change to the art is a new file from the
+# command chat, added here with its checksum.
 CHECKSUMS = {
     'portraits/race/dwarf.svg': '93373dcde21447afd1780e1bb999e6c88d729bf24535f205f354e63a759568d3',
     'portraits/race/elf.svg': 'c19dcaaf65be923458b48bc12329bef80ba12f26d013237f22e584c4ddeb8927',
@@ -29,6 +29,24 @@ CHECKSUMS = {
     'scenes/fallback.svg': '9869c11fa1588d16db2e5c05774b824e3402409e1f820fa4a891d91a2a6541d5',
     'scenes/forest.svg': '26c9d2b6e12e37030d18de04cf0ff6fb2ecf16dda54df51353c6ca34739389e3',
     'scenes/village.svg': '5113b4c2d7256e9466f72742d1bd41630757f5904b3dd653eb9db1073eda2e06',
+    # Batch 2, the location scenes (Jim, approved 2026-11-01; Phase 5 task 12, docs/PHASE5-TASK12-SCENES-20261105.md).
+    'scenes/armor.svg': '115ead5d1ababe762134c2cb6c653b54a00c7e287f628d8b6209897ef7d96f38',
+    'scenes/bank.svg': '256923ca0f8cc396c610b6eb825d9a1e2d4be8caaff8bfc7d925afef2573e9d6',
+    'scenes/clan.svg': 'b2368ffeb7e15003d7d649094e30ed67bbfc0593419313ac399c8252c890b0ef',
+    'scenes/dragon.svg': '5d71224de2d40dcd9bf74a262832906e4aaab992391ce11f503ccb7dce5a2770',
+    'scenes/fields.svg': 'fe0528561d41f815efb3caa61db3aae4acd2e6ef896ccf1cfee2e45f3313987e',
+    'scenes/gardens.svg': '0c854fbac31e7b3890e205f635b8acd5fe32d4c75f4dc6a3fbf1d127e014a5f1',
+    'scenes/graveyard.svg': '2fc1c01c44c5c28b8b20d69bdd6babc9e5f0fceec0db357484b7195d08f08914',
+    'scenes/gypsy.svg': '9316f3b8e37847acb090fddde8cf7cd15b8f06fbd5a5c90722be0500d84dec25',
+    'scenes/healer.svg': '53b7fa5bd9b6ec97103880443c553bf682f0f12052d69c9c49b3f19624aafc26',
+    'scenes/inn.svg': '326d401485cad52a2962f9f3c53baa39cf7f66577242a2e3d766535eea3e665d',
+    'scenes/lodge.svg': '8ad19edc6e51efd9e9516e2d2cb8a9f9d2aaf1b27d001e1492a6baa44ab8e29b',
+    'scenes/mercenarycamp.svg': '2ec7e4d4b7b95b67afb02cf4717815f434c5f3e9e3da59faa614547cc0980a3b',
+    'scenes/rock.svg': '57e8a5c154725409741de15373a9f4a0972b3a4319d97182aee4bfd85729e280',
+    'scenes/shades.svg': 'aeec36eeeb740d4f6cb2c22fd3df46806710926024f0e1670f548926c54ebcdc',
+    'scenes/stables.svg': 'e316875b62d063d0ea7b708a7a38e82aa8bc29a6bb3c43b9d684bf6be8bbe48e',
+    'scenes/train.svg': '78c2371f80af364d3e1ed01d6edfa0d9c51841fa6e8c28734e98885524b82133',
+    'scenes/weapons.svg': '97417d9d10db40dea471030074a08e6d60b719e44c96b32d00129d040fb1d1cf',
 }
 SVG_NAMESPACE = 'http://www.w3.org/2000/svg'
 # Attributes that carry a color; their values must be a palette color or none.
