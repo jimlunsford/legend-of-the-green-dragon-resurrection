@@ -8,7 +8,9 @@ Legend of the Green Dragon - Resurrection. A modern continuation of LoGD 1.1.2 D
 
 Phase 3 is complete, merged into `main` at `0d078dff49e790339e0ab0aefdf5b35478bf6419` (PR #1, normal merge commit, 2026-10-23). Phase 4, Release foundation, is complete: its last item, the output buffering fix, was accepted at `8b33edfc8b9cf2f04661d5023011e704a21b485f` (Modern core 40958421349, all 12 jobs; Baseline integrity 40958422672).
 
-Current phase: **Phase 5, Resurrection UI**. Goal: one new dark fantasy UI with original art replaces all 1.1.2 skins. Tasks and status in `ROADMAP.md`; the plan in `docs/PHASE5-UI-PLAN-20261030.md`; the design contract every UI task builds to in `docs/UI-DESIGN-SPEC.md`. Work only on the task a task prompt names.
+Current phase: Phase 5 complete on acceptance of the close-out commit; the next phase is Jim's to choose. Work only on what a task prompt names.
+
+Phase 5, Resurrection UI (2026-10-30 to 2026-11-05), replaced all 1.1.2 skins with one dark fantasy UI and original art: what it changed, task by task, in `docs/PHASE5-SUMMARY-20261105.md`; tasks and status in `ROADMAP.md`; the design contract any UI change builds to in `docs/UI-DESIGN-SPEC.md`.
 
 Direction (Jim, 2026-10-30; `docs/PHASE5-TASK1-DIRECTION-20261030.md`):
 
@@ -28,6 +30,7 @@ The release itself (hosting, tags, GitHub releases, an image, archive-module rig
 - **Open question for Jim and a lawyer:** AGPL code bundled in this repository and run inside the NC core may leave hosts unable to satisfy both licenses. Until Jim decides, label no file AGPL.
 - Fonts and other third-party files keep their own licenses (for example SIL OFL for the UI fonts), recorded in `docs/THIRD-PARTY-LICENSES.md`.
 - The Resurrection attribution line, "A Phoenix 2:33 LLC Project by Jim Lunsford" (links to https://phoenix233.com and https://jimlunsford.com), stays in the template's `footer` and `popupfoot`, on its own line under the 1.1.2 credit line. No task removes, hides, shrinks or weakens it or its links. `NOTICE` ("Resurrection") states the credit; the wording is pending legal review before release.
+- `prepare_template()` checks the template on every change of the file: 1.1.2's required tags, its XOR copyright tag enforcement and `common.php`'s `$copyright` / `$license` XOR checks (kept exactly; never weaken or rename them), and the attribution line with both exact links in both `footer` and `popupfoot`. A template that is missing, unreadable or fails any check is replaced by the safe frame in `src/Ui/SafeFrame.php`, which carries the credit line, the license block and the attribution line; the notice goes to superusers and the error log (`docs/PHASE5-CLOSEOUT-20261105.md`). Keep the safe frame in code, not under `templates/`, and keep it passing those checks.
 
 ## Working branch
 

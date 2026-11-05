@@ -437,11 +437,13 @@ class TemplateTests(unittest.TestCase):
     def test_it_is_the_one_template(self):
         # Phase 5 task 15: prepare_template() and loadtemplate() load templates/resurrection.htm and nothing else (1.1.2
         # chose a skin by its template cookie, then the defaultskin setting, then jade.htm; tasks 3 to 14 by the same,
-        # with resurrection.htm the default). The fallback for a template with errors is the same file.
+        # with resurrection.htm the default). Until the Phase 5 close-out the fallback for a template with errors was the
+        # same file; it is the built-in safe frame now (test_safe_frame.py), and a missing file is never loaded.
         template = (ROOT / 'lib' / 'template.php').read_text()
         self.assertIn('$templatename="resurrection.htm";', template)
-        self.assertIn('$template = loadtemplate($templatename);', template)
-        self.assertIn('$template=loadtemplate("resurrection.htm");', template)
+        self.assertIn('$template = $readable ? loadtemplate($templatename) : array();', template)
+        self.assertIn('$template=\\Resurrection\\Ui\\SafeFrame::parts();', template)
+        self.assertNotIn('loadtemplate("', template)
         pageparts = (ROOT / 'lib' / 'pageparts.php').read_text(errors='replace')
         self.assertIn('$fulltemplate = file_get_contents("templates/resurrection.htm");', pageparts)
         for name in ('lib/template.php', 'lib/pageparts.php', 'home.php', 'prefs.php', 'lib/installer/installer_default_settings.php'):

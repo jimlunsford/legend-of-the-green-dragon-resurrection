@@ -240,3 +240,14 @@ page has a skin control.
 - The images under `images/` (listed above, none deleted).
 - The 60-minute job timeout, the shard runner and the duration table.
 - Version strings.
+
+## Acceptance (recorded in the Phase 5 close-out, 2026-11-05)
+
+Confirmed through the GitHub API for `5dfc36335c3e713c27e7ef05f218a3b57baeb054`:
+
+- Modern core 42088078461: SUCCESS, all 12 jobs (both legs' checks, four shards and result). Shard jobs, shards 1 to 4:
+  PHP 8.4 / MariaDB 11.4 20:53, 17:12, 19:42, 18:33; PHP 8.5 / MySQL 8.4 22:05, 21:29, 20:29, 21:24.
+- Baseline integrity 42088078447: SUCCESS.
+
+The shard steps inside those jobs (the `tooling-shards.py` step alone), shards 1 to 4: PHP 8.4 19:20, 15:50, 18:08,
+17:05; PHP 8.5 20:13, 19:45, 18:43, 19:33. The longest job, PHP 8.5 shard 1, is 22:05, under 30 minutes.

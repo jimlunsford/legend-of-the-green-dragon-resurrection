@@ -31,6 +31,11 @@ ALLOWED = [
     ('lib/installer/installer_sqlstatements.php', "'Gypsy Bandit'",
      "data: the Gypsy Bandit's stored creature script, which CreatureAi::supported() recognizes by its SHA-256; the "
      "pickpocket's output is printed by lib/extended-battle.php, which uses classes"),
+    ('src/Ui/SafeFrame.php', 'class="rz-statbar-fill" style="width: {percent}%"',
+     "the safe frame's copies of the template's bar parts (the Phase 5 close-out): a bar's fill width is its "
+     "value, as in templates/resurrection.htm, which this scan does not read"),
+    ('src/Ui/SafeFrame.php', 'class="rz-phonebar-fill" style="width: {percent}%"', 'the same, for the phone header\'s bars'),
+    ('src/Ui/SafeFrame.php', 'class="rz-fighterbar-fill" style="width: {percent}%"', 'the same, for the fight\'s bars'),
 ]
 
 # The pages task 9 fixes by hand: every input they print has a bound label (<label for> or a wrapping <label>). The

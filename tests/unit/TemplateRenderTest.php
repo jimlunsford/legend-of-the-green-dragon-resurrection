@@ -39,9 +39,15 @@ use Resurrection\Configuration\LegacyConfig;
  * Phase 5 task 15 (docs/PHASE5-TASK15-REMOVE-SKINS-20261105.md) removes the 1.1.2 skins and skin selection: a fresh
  * install stores no defaultskin or homeskinselect setting; a request carrying an old template cookie (jade.htm), with a
  * stored defaultskin of jade.htm and homeskinselect of 1 as an older install has them, renders the Resurrection UI,
- * signed out and signed in; the home page has no skin chooser. And the copyright enforcement still refuses a template
- * without {copyright}: in a tree whose templates/resurrection.htm lacks it, the page says so. (Until task 15 the village
- * was rendered in jade.htm too, by its cookie, and had none of the phone's pieces.)
+ * signed out and signed in; the home page has no skin chooser. (Until task 15 the village was rendered in jade.htm too,
+ * by its cookie, and had none of the phone's pieces.)
+ *
+ * The Phase 5 close-out (docs/PHASE5-CLOSEOUT-20261105.md) adds the safe frame: in a tree whose
+ * templates/resurrection.htm lacks {copyright}, lacks the attribution line, has a changed attribution link, or is
+ * missing, the home page, the MoTD popup and the village render in the built-in safe frame with the 1.1.2 credit line,
+ * the license block and the attribution line each exactly once; the refusal is written to the error log once; a
+ * superuser sees the notice with its reasons, a player and a signed-out visitor do not. The valid template renders with
+ * no safe frame, no notice and nothing logged.
  *
  * The test does not depend on the order it runs in: an installed database is used as it is; an empty one is installed
  * here with scripts/install.php --modules=none and emptied again afterwards. The player it creates, its mail, the MoTD
@@ -54,6 +60,8 @@ final class TemplateRenderTest extends TestCase
     private const string ATTRIBUTION = '<p class="rz-attribution">A <a href="https://phoenix233.com" target="_blank" rel="noopener">Phoenix 2:33 LLC</a>'
         . ' Project by <a href="https://jimlunsford.com" target="_blank" rel="noopener">Jim Lunsford</a></p>';
     private const string CARD = '<div class="rz-card rz-content">';
+    /** lib/constants.php's SU_EDIT_CONFIG, which this process does not load. */
+    private const int SU_EDIT_CONFIG = 128;
 
     public function testTheDefaultTemplateRendersAPageASignedInPageAndAPopup(): void
     {
@@ -222,9 +230,13 @@ final class TemplateRenderTest extends TestCase
             $this->php($tree, 'db_query("DELETE FROM settings WHERE setting IN (?, ?)", true, ["defaultskin", "homeskinselect"]);');
             $skinrows = false;
 
-            // The copyright enforcement (prepare_template(): the required tags, {copyright} named by the XOR of $y2 and
-            // $z2) still refuses a template without {copyright}: a tree whose templates/resurrection.htm lacks it, every
-            // other file the same, prints the refusal on the page, and no copyright line.
+            // The safe frame (Phase 5 close-out, docs/PHASE5-CLOSEOUT-20261105.md). The copyright enforcement
+            // (prepare_template(): the required tags, {copyright} named by the XOR of $y2 and $z2) still refuses a template
+            // without {copyright}, and so does the new check a template without the attribution line, both links exact,
+            // in its footer and popup footer; a missing template is refused too. Each refused page is the safe frame
+            // (\Resurrection\Ui\SafeFrame) with the 1.1.2 credit line, the license block and the attribution line
+            // once each; the reasons go to the error log, and into the page for a superuser only. A copy of the tree with
+            // its own templates/ and every other file the same.
             $broken = $work . '/broken';
             mkdir($broken . '/templates', 0700, true);
             mkdir($broken . '/.sessions', 0700);
@@ -236,17 +248,63 @@ final class TemplateRenderTest extends TestCase
             $source = (string)file_get_contents($root . '/templates/resurrection.htm');
             // In the footer and the popup footer.
             self::assertSame(2, substr_count($source, '{copyright}'));
-            file_put_contents($broken . '/templates/resurrection.htm', str_replace('{copyright}', '', $source));
-            $refused = $this->render($broken, $work, 'home.php', null);
-            self::assertStringContainsString('<b>You have one or more errors in your template page!</b><br>', $refused);
-            // Twice, as in 1.1.2: once for "copyright" in the list of tags that must appear, once for the tag the check
-            // adds to that list as the XOR of $y2 and $z2. Nothing else is missing.
-            self::assertSame(2, substr_count($refused, 'You do not have {copyright} defined in either your header or footer<br />'));
-            self::assertSame(2, substr_count($refused, 'You do not have '), 'only {copyright} is missing');
-            self::assertStringNotContainsString(self::COPYRIGHT, $refused);
-            // The same tree with the tag in place renders the page.
+            self::assertSame(2, substr_count($source, self::ATTRIBUTION));
+            $log = $work . '/php-error.log';
+            $variants = [
+                'no {copyright}' => str_replace('{copyright}', '', $source),
+                'no attribution line' => str_replace(self::ATTRIBUTION, '', $source),
+                'a changed attribution link' => preg_replace('#https://phoenix233\.com#', 'https://phoenix233.example', $source, 1),
+                'no template file' => null,
+            ];
+            $reasons = [
+                'no {copyright}' => ['You do not have {copyright} defined in either your header or footer', 2],
+                'no attribution line' => ['You do not have the Resurrection attribution line, with both its links, in both your footer and popupfoot', 1],
+                'a changed attribution link' => ['You do not have the Resurrection attribution line, with both its links, in both your footer and popupfoot', 1],
+                'no template file' => ['The template file templates/resurrection.htm is missing or cannot be read', 1],
+            ];
+            foreach ($variants as $label => $text) {
+                // No @: an earlier test's error handler may still throw on a suppressed warning.
+                if (is_file($broken . '/templates/resurrection.htm')) { unlink($broken . '/templates/resurrection.htm'); }
+                if ($text !== null) { file_put_contents($broken . '/templates/resurrection.htm', $text); }
+                // A player's (signed-out) page, a popup, and a superuser's page.
+                if (is_file($log)) { unlink($log); }
+                $page = $this->render($broken, $work, 'home.php', null, '', null, $log);
+                $this->assertSafeFrame($page, 'home.php, ' . $label, false);
+                self::assertStringNotContainsString('errors in your template page', $page, $label);
+                [$reason, $times] = $reasons[$label];
+                $logged = is_file($log) ? (string)file_get_contents($log) : '';
+                self::assertSame(1, substr_count($logged, 'Resurrection: templates/resurrection.htm was refused; the safe frame is used: '), $label);
+                // Twice for {copyright}, as in 1.1.2: once for "copyright" in the list of tags that must appear, once
+                // for the tag the check adds to that list as the XOR of $y2 and $z2. Nothing else is missing.
+                self::assertSame($times, substr_count($logged, $reason), $label);
+                self::assertSame($times, substr_count($logged, 'You do not have ') + substr_count($logged, 'The template file '), $label . ': only that is missing');
+                $popup = $this->render($broken, $work, 'motd.php', null, '', null, $log);
+                $this->assertSafeFrame($popup, 'motd.php, ' . $label, true);
+                self::assertStringNotContainsString('errors in your template page', $popup, $label);
+                $this->php($tree, 'db_query("UPDATE accounts SET superuser=?, allowednavs=?, laston=?, lasthit=? WHERE acctid=?", true, [' . self::SU_EDIT_CONFIG . ', serialize(["village.php" => true]), date("Y-m-d H:i:s"), date("Y-m-d H:i:s", time() + 60), ' . $player . ']);');
+                $staff = $this->render($broken, $work, 'village.php', $session, '', null, $log, self::SU_EDIT_CONFIG);
+                $this->php($tree, 'db_query("UPDATE accounts SET superuser=0 WHERE acctid=?", true, [' . $player . ']);');
+                $this->assertSafeFrame($staff, 'village.php as a superuser, ' . $label, false);
+                self::assertSame(1, substr_count($staff, '<div class="rz-template-notice" role="alert"><b>You have one or more errors in your template page!</b><br>'), $label);
+                // The braces as entities: page_header() would otherwise strip "{copyright}" as an unused tag.
+                self::assertSame($times, substr_count($staff, str_replace(['{', '}'], ['&#123;', '&#125;'], htmlspecialchars($reason, ENT_QUOTES, 'UTF-8'))), $label);
+                // Inside the page: after the frame's content card opens.
+                self::assertGreaterThan(strpos($staff, self::CARD), strpos($staff, 'rz-template-notice'), $label);
+            }
+            // The same tree with the template restored renders the template itself: no safe frame, no notice, nothing
+            // logged, for a player or a superuser.
             file_put_contents($broken . '/templates/resurrection.htm', $source);
-            $this->assertCleanPage($this->render($broken, $work, 'home.php', null), 'home.php in the copied tree');
+            if (is_file($log)) { unlink($log); }
+            $restored = $this->render($broken, $work, 'home.php', null, '', null, $log);
+            $this->assertCleanPage($restored, 'home.php in the copied tree');
+            self::assertStringNotContainsString('rz-safe-frame', $restored);
+            $this->php($tree, 'db_query("UPDATE accounts SET superuser=?, allowednavs=?, laston=?, lasthit=? WHERE acctid=?", true, [' . self::SU_EDIT_CONFIG . ', serialize(["village.php" => true]), date("Y-m-d H:i:s"), date("Y-m-d H:i:s", time() + 60), ' . $player . ']);');
+            $staff = $this->render($broken, $work, 'village.php', $session, '', null, $log, self::SU_EDIT_CONFIG);
+            $this->php($tree, 'db_query("UPDATE accounts SET superuser=0 WHERE acctid=?", true, [' . $player . ']);');
+            $this->assertCleanPage($staff, 'village.php as a superuser in the copied tree');
+            self::assertStringNotContainsString('rz-safe-frame', $staff);
+            self::assertStringNotContainsString('rz-template-notice', $staff);
+            self::assertFalse(is_file($log) && filesize($log) > 0, 'nothing logged: ' . (is_file($log) ? (string)file_get_contents($log) : ''));
 
             // A forest fight: the forest scene, the fight below it.
             $this->php($tree, '$e = array_merge(db_query("SELECT * FROM creatures ORDER BY creatureid LIMIT 1")[0], ["creaturename" => "Scene Test Target",'
@@ -351,6 +409,27 @@ final class TemplateRenderTest extends TestCase
         self::assertSame(1, substr_count($page, 'Phoenix 2:33 LLC'), $script);
         self::assertGreaterThan(strpos($page, self::COPYRIGHT), strpos($page, self::ATTRIBUTION), $script);
         self::assertStringEndsWith("</html>\n", $page, $script);
+    }
+
+    /**
+     * A page in the safe frame (Phase 5 close-out): the frame's body class; the 1.1.2 credit line, the license block and
+     * the attribution line once each, the attribution after the credit line; no missing-part warning; the stylesheet
+     * linked, and the frame's own small style block.
+     */
+    private function assertSafeFrame(string $page, string $label, bool $popup): void
+    {
+        self::assertStringStartsWith("<!DOCTYPE html>\n<html lang=\"en\">", $page, $label);
+        self::assertStringContainsString($popup ? '<body class="rz-page rz-popup rz-safe-frame">' : '<body class="rz-page rz-safe-frame">', $page, $label);
+        self::assertStringContainsString('<link rel="stylesheet" href="assets/ui/resurrection.css">', $page, $label);
+        self::assertStringContainsString("<style>img { max-width: 100%; height: auto }</style>\n<link rel=\"stylesheet\" href=\"assets/ui/resurrection.css\">", $page, $label);
+        self::assertStringNotContainsString('template part was not found', $page, $label);
+        self::assertStringNotContainsString('piece was not found', $page, $label);
+        self::assertStringNotContainsString('Runtime error', $page, $label);
+        self::assertSame(1, substr_count($page, self::COPYRIGHT), $label);
+        self::assertSame(1, substr_count($page, 'Creative Commons License</a>'), $label);
+        self::assertSame(1, substr_count($page, self::ATTRIBUTION), $label);
+        self::assertGreaterThan(strpos($page, self::COPYRIGHT), strpos($page, self::ATTRIBUTION), $label);
+        self::assertStringEndsWith("</html>\n", $page, $label);
     }
 
     /**
@@ -489,14 +568,15 @@ final class TemplateRenderTest extends TestCase
      *
      * @param array{acctid: int, authversion: int}|null $session
      */
-    private function render(string $tree, string $work, string $script, ?array $session, string $query = '', ?string $skin = null): string
+    private function render(string $tree, string $work, string $script, ?array $session, string $query = '', ?string $skin = null,
+        ?string $errorLog = null, int $privileges = 0): string
     {
         parse_str($query, $get);
         $uri = '/' . $script . ($query === '' ? '' : '?' . $query);
         $signin = $session === null ? '' :
             "session_save_path(" . var_export($tree . '/.sessions', true) . "); session_start();\n" .
             "\$_SESSION = ['session' => ['loggedin' => true, 'lasthit' => time(), 'allowednavs' => [], 'user' => ['acctid' => {$session['acctid']}, 'loggedin' => true]],\n" .
-            "    'auth_version' => {$session['authversion']}, 'auth_privileges' => 0];\n";
+            "    'auth_version' => {$session['authversion']}, 'auth_privileges' => $privileges];\n";
         file_put_contents($work . '/page.php', "<?php\n" .
             "\$_SERVER = ['SCRIPT_NAME' => '/$script', 'PHP_SELF' => '/$script', 'REQUEST_URI' => " . var_export($uri, true) . ", 'QUERY_STRING' => " . var_export($query, true) . ",\n" .
             "    'REQUEST_METHOD' => 'GET', 'SERVER_NAME' => 'localhost', 'SERVER_PORT' => '80', 'REMOTE_ADDR' => '127.0.0.1',\n" .
@@ -506,6 +586,7 @@ final class TemplateRenderTest extends TestCase
             $signin .
             "require '$script';\n");
         [$code, $out, $err] = $this->process([PHP_BINARY, '-d', 'output_buffering=0', '-d', 'display_errors=0', '-d', 'log_errors=1',
+            ...($errorLog === null ? [] : ['-d', 'error_log=' . $errorLog]),
             '-d', 'session.save_path=' . $tree . '/.sessions', $work . '/page.php'], $tree);
         self::assertSame(0, $code, $script . ': ' . $err . substr($out, 0, 2000));
         self::assertSame('', $err, $script);

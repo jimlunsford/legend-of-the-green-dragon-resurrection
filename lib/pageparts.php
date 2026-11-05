@@ -62,6 +62,8 @@ function page_header(){
 	$header = $template['header'];
 	$header=str_replace("{title}",htmlspecialchars($title,ENT_QUOTES|ENT_SUBSTITUTE,"UTF-8"),$header);
 	$header.=tlbutton_pop();
+	// A refused template's notice, at the top of the content, for a superuser only (Phase 5 close-out).
+	$header.=resurrection_template_notice();
 }
 
 /**
@@ -334,6 +336,7 @@ function popup_header($title="Legend of the Green Dragon"){
 
 	$header = $template['popuphead'];
 	$header = str_replace("{title}", $title, $header);
+	$header .= resurrection_template_notice();
 }
 
 /**
@@ -696,6 +699,12 @@ function charstats(){
  * @todo Template Help
  */
 function loadtemplate($templatename = "resurrection.htm"){
+	// A missing or unreadable file gives the safe frame (Phase 5 close-out), never a warning.
+	if (!is_file("templates/resurrection.htm") || !is_readable("templates/resurrection.htm")) {
+		require_once __DIR__ . '/../src/Ui/SafeFrame.php';
+		return \Resurrection\Ui\SafeFrame::parts();
+	}
+	$template = array();
 	$fulltemplate = file_get_contents("templates/resurrection.htm");
 	$fulltemplate = explode("<!--!",$fulltemplate);
 	while (list($key,$val)=resurrection_array_next($fulltemplate)){

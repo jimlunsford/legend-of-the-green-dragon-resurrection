@@ -21,7 +21,7 @@ On 2026-10-30 Jim changed the direction (`docs/PHASE5-TASK1-DIRECTION-20261030.m
 | Phase 2 | A real modern base application: strict fresh install, modern credentials, authentication, session rotation, CSRF infrastructure, account creation, village, commentary, logout, all 24 bundled modules installable. | DONE | `docs/MODERN-CORE-CHECKPOINT-20260913-PHASE2.md` |
 | Phase 3 | Close every game and application trust boundary until the modern core is mergeable. | DONE, merged into `main` at `0d078df` on 2026-10-23 | [`docs/PHASE3-MERGE-GATE-20261023.md`](docs/PHASE3-MERGE-GATE-20261023.md), `docs/MODERN-CORE-CHECKPOINT-20260913-PHASE3*.md`, `docs/CORE-ROUTE-SECURITY.md` |
 | Phase 4 | Release foundation: make the game ready for its first release. | DONE at `8b33edf` on 2026-10-30 | [Phase 4 below](#phase-4-release-foundation) |
-| Phase 5 | Resurrection UI: one new dark fantasy UI with original art replaces all 1.1.2 skins. | CURRENT | [Phase 5 below](#phase-5-resurrection-ui) |
+| Phase 5 | Resurrection UI: one new dark fantasy UI with original art replaces all 1.1.2 skins. | COMPLETE on acceptance of the close-out commit (2026-11-05); the next phase is Jim's to choose | [Phase 5 below](#phase-5-resurrection-ui), [`docs/PHASE5-SUMMARY-20261105.md`](docs/PHASE5-SUMMARY-20261105.md) |
 
 ## Phase 3 checklist
 
@@ -200,7 +200,7 @@ All of Phase 4's planned tasks are done. **Phase 4 DONE.**
 
 ## Phase 5: Resurrection UI
 
-**CURRENT** (started 2026-10-30). Goal: one new dark fantasy UI, with original art, replaces all 1.1.2 skins. The plan and audit: [`docs/PHASE5-UI-PLAN-20261030.md`](docs/PHASE5-UI-PLAN-20261030.md). The design contract: [`docs/UI-DESIGN-SPEC.md`](docs/UI-DESIGN-SPEC.md).
+**COMPLETE on acceptance of the close-out commit** (2026-10-30 to 2026-11-05; the task after the close-out records that acceptance). What the phase changed, task by task, with its decisions, licensing and open items: [`docs/PHASE5-SUMMARY-20261105.md`](docs/PHASE5-SUMMARY-20261105.md). Goal: one new dark fantasy UI, with original art, replaces all 1.1.2 skins. The plan and audit: [`docs/PHASE5-UI-PLAN-20261030.md`](docs/PHASE5-UI-PLAN-20261030.md). The design contract: [`docs/UI-DESIGN-SPEC.md`](docs/UI-DESIGN-SPEC.md).
 
 The release stays excluded until Jim says go: hosting, tags, GitHub releases, an image, and the archive-module rights. The skins are removed (task 15), so their rights are no longer a release item.
 
@@ -233,7 +233,10 @@ The plan's 15 tasks (section 7 of the plan has each task's tests and acceptance 
 - [x] 12: Art: the remaining location scenes. The 17 place scenes (batch 2, approved by Jim on 2026-11-01) committed byte for byte with their checksums; each place's page and the bundled modules whose pages happen in a place show its scene, the alt text the place's name (the inn's and the village's from their settings); the scene list and mapping rules in the spec (`docs/PHASE5-TASK12-SCENES-20261105.md`) Accepted at `34a0617`, Modern core 41953000057 (all 12 jobs), Baseline integrity 41952999724.
 - [x] 13: Art: the remaining icons. The 18 line icons (batch 3, approved by Jim on 2026-11-05) committed byte for byte with their checksums; an icon lookup; icons before the character panel's stat, bar, equipment and section labels (Resurrection template only); the tests' far-future dates pinned to the run's clock after a year-ahead run of the whole suite; shard durations refreshed (`docs/PHASE5-TASK13-ICONS-20261105.md`). Accepted at `6e2f55b`, Modern core 42029166571 (all 12 jobs), Baseline integrity 42029165803.
 - [x] 14: Art: creature and master portraits. The 313 portraits (batch 4, approved by Jim on 2026-11-05) drawn from the parts kit, committed byte for byte with `SHA256SUMS`, the kit (`kit.json`, every seeded creature and master) and its generator (`scripts/art/build_creature_portraits.py`); creature, master and Green Dragon lookups with type fallbacks and the `creatureportrait` hook; each foe's portrait on its fighter card, a PvP victim's race portrait (Resurrection template only) (`docs/PHASE5-TASK14-PORTRAITS-20261105.md`). Accepted at `e3d265c`, Modern core 42055783450 (all 12 jobs), Baseline integrity 42055783444.
-- [ ] 15: Remove the 1.1.2 skins and skin selection, each removal recorded (`docs/PHASE5-TASK15-REMOVE-SKINS-20261105.md`). **In progress.**
+- [x] 15: Remove the 1.1.2 skins and skin selection, each removal recorded (`docs/PHASE5-TASK15-REMOVE-SKINS-20261105.md`). Accepted at `5dfc363`, Modern core 42088078461 (all 12 jobs), Baseline integrity 42088078447.
+- [ ] Close-out: the safe credit frame (a built-in template in `src/Ui/SafeFrame.php` that `prepare_template()` renders when `templates/resurrection.htm` is missing, unreadable or fails its checks, with the attribution line now checked too, and the template notice for superusers only), the 7 unused 1.1.2 images deleted, and the Phase 5 summary (`docs/PHASE5-CLOSEOUT-20261105.md`, `docs/PHASE5-SUMMARY-20261105.md`). Ticked when CI accepts it, in the next task.
+
+On acceptance of the close-out commit, **Phase 5 is COMPLETE**. The next phase is not opened here: Jim chooses it.
 
 Every change from 1.1.2 that a player, administrator or operator can notice is recorded in [`docs/CHANGES-FROM-1.1.2.md`](docs/CHANGES-FROM-1.1.2.md).
 
