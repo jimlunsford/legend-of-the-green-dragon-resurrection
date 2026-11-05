@@ -236,4 +236,46 @@ final class ArtTest extends TestCase
             }
         }
     }
+
+    /** The character panel's icons (Phase 5 task 13): one file per name, the English label it stands beside, lowercased. */
+    private const array ICONS = [
+        'turns', 'torments', 'spirits', 'attack', 'defense', 'psyche', 'spirit', 'gold', 'favor', 'gems',
+        'hitpoints', 'soulpoints', 'experience', 'weapon', 'armor', 'mount', 'buffs', 'companions',
+    ];
+
+    public function testEachIconNameGivesItsFileAt16Pixels(): void
+    {
+        self::assertSame(self::ICONS, Art::ICONS);
+        foreach (self::ICONS as $name) {
+            self::assertSame(['src' => "assets/icons/$name.svg", 'width' => 16, 'height' => 16], Art::icon($name), $name);
+            self::assertFileExists(Art::ASSETS . "/icons/$name.svg");
+        }
+        // Every file in assets/icons/ is one of them.
+        $files = array_map(static fn (string $f): string => basename($f, '.svg'), glob(Art::ASSETS . '/icons/*') ?: []);
+        sort($files);
+        $names = self::ICONS;
+        sort($names);
+        self::assertSame($names, $files);
+    }
+
+    public function testAnUnknownIconNameGivesNothing(): void
+    {
+        foreach (['', 'charm', 'Gold', ' gold', 'gold.svg', '../scenes/forest', 'scenes/forest', 'forest', 'elf', 'hp',
+            'ICONS', 'gold/', 'unknown', 'fallback'] as $name) {
+            self::assertNull(Art::icon($name), $name);
+        }
+    }
+
+    public function testALabelGivesItsStandardStatsIconName(): void
+    {
+        foreach (self::ICONS as $name) {
+            self::assertSame($name, Art::iconName(ucfirst($name)), $name);
+            self::assertSame($name, Art::iconName(" $name "), $name);
+            self::assertSame($name, Art::iconName(strtoupper($name)), $name);
+        }
+        // A module's own label, or one only like a stat's, gives none.
+        foreach (['Charm', 'Clan', 'Clan Info', 'Vital Info', 'Ring', 'Hit points', 'Gold pieces', 'HP', 'XP', '', 'Gems!'] as $label) {
+            self::assertNull(Art::iconName($label), $label);
+        }
+    }
 }

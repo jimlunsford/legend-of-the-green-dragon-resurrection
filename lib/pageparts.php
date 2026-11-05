@@ -1089,7 +1089,7 @@ function resurrection_charpanel($standard, $buffs, $spirits, $modded){
 		$max = $u['level'] * 5 + 50;
 		$note = check_temp_stat("soulpoints",1);
 	}
-	$bar = array("kind"=>$alive ? "health" : "soul", "label"=>translate_inline($label),
+	$bar = array("kind"=>$alive ? "health" : "soul", "icon"=>resurrection_icon_html($label), "label"=>translate_inline($label),
 		"current"=>$num($current), "max"=>$num($max), "percent"=>resurrection_charpanel_percent($current, $max), "note"=>$note);
 	if (($v = $changed("Vital Info", $label)) !== null) { $bar['current'] = $v; unset($bar['max']); }
 	$str .= resurrection_charpanel_bar($bar);
@@ -1100,13 +1100,13 @@ function resurrection_charpanel($standard, $buffs, $spirits, $modded){
 		// The level cap: no level follows, so the bar is full and says what the game says there.
 		if ($alive && empty($u['seendragon'])) $caption = translate_inline("Seek Out the Green Dragon", "forest");
 		else $caption = translate_inline("None in the land are mightier than you!", "train");
-		$xp = array("kind"=>"experience", "label"=>translate_inline("Experience"), "current"=>$num($exp), "percent"=>"100",
+		$xp = array("kind"=>"experience", "icon"=>resurrection_icon_html("Experience"), "label"=>translate_inline("Experience"), "current"=>$num($exp), "percent"=>"100",
 			"note"=>$expnote, "caption"=>$caption);
 		if (($v = $changed("Personal Info", "Experience")) !== null) $xp['current'] = $v;
 		$str .= resurrection_charpanel_bar($xp);
 	} else {
 		$next = exp_for_next_level((int)$u['level'], (int)$u['dragonkills']);
-		$xp = array("kind"=>"experience", "label"=>translate_inline("Experience"), "current"=>$num($exp), "max"=>$num($next),
+		$xp = array("kind"=>"experience", "icon"=>resurrection_icon_html("Experience"), "label"=>translate_inline("Experience"), "current"=>$num($exp), "max"=>$num($next),
 			"percent"=>resurrection_charpanel_percent($exp, $next), "note"=>$expnote);
 		if (($v = $changed("Personal Info", "Experience")) !== null) { $xp['current'] = $v; unset($xp['max']); }
 		$str .= resurrection_charpanel_bar($xp);
@@ -1142,7 +1142,7 @@ function resurrection_charpanel($standard, $buffs, $spirits, $modded){
 	foreach ($tiles as $tile) {
 		list($section, $label, $value, $note) = $tile;
 		if (($v = $changed($section, $label)) !== null) { $value = $v; $note = ""; }
-		$tilestr .= templatereplace("stattile", array("label"=>translate_inline($label), "value"=>$value."`0", "note"=>$note."`0"));
+		$tilestr .= templatereplace("stattile", array("icon"=>resurrection_icon_html($label), "label"=>translate_inline($label), "value"=>$value."`0", "note"=>$note."`0"));
 	}
 	$str .= templatereplace("stattiles", array("tiles"=>$tilestr));
 
@@ -1153,16 +1153,18 @@ function resurrection_charpanel($standard, $buffs, $spirits, $modded){
 	foreach ($equipment as $item) {
 		list($row, $label, $value) = $item;
 		if (($v = $changed("Equipment Info", $row)) !== null) $value = $v;
-		$rows .= templatereplace("equiprow", array("label"=>translate_inline($label), "value"=>$value."`0"));
+		$rows .= templatereplace("equiprow", array("icon"=>resurrection_icon_html($label), "label"=>translate_inline($label), "value"=>$value."`0"));
 	}
 	foreach (resurrection_charpanel_extras($standard, "Equipment Info") as $label=>$value) {
 		// The label translated as getcharstats() translates it; the value in the row's own color, as the weapon's is.
-		$rows .= templatereplace("equiprow", array("label"=>translate_inline("`&$label`0"), "value"=>"$value`0"));
+		// A module's row: an icon only when its label is a standard stat's.
+		$rows .= templatereplace("equiprow", array("icon"=>resurrection_icon_html($label), "label"=>translate_inline("`&$label`0"), "value"=>"$value`0"));
 	}
 	$str .= templatereplace("equiprows", array("rows"=>$rows));
 
 	// Buffs, companions, then the rows modules added, each section as getcharstats() renders it.
-	$str .= templatereplace("statbuff", array("title"=>translate_inline("`0Buffs"), "value"=>$buffs));
+	// The headings' parts are getcharstats()'s too, so the icon goes into the title, not a part of its own.
+	$str .= templatereplace("statbuff", array("title"=>resurrection_icon_html("Buffs").translate_inline("`0Buffs"), "value"=>$buffs));
 	$sections = array();
 	if (isset($charstat_info["Companions"])) $sections["Companions"] = $charstat_info["Companions"];
 	foreach ($charstat_info as $section=>$rows) {
@@ -1172,12 +1174,12 @@ function resurrection_charpanel($standard, $buffs, $spirits, $modded){
 	}
 	foreach ($sections as $section=>$rows) {
 		if (!count($rows)) continue;
-		$head = templatereplace("stathead", array("title"=>translate_inline($section)));
+		$head = templatereplace("stathead", array("title"=>resurrection_icon_html($section).translate_inline($section)));
 		foreach ($rows as $label=>$value) {
 			if ($label == $section) {
-				$str .= templatereplace("statbuff", array("title"=>translate_inline("`0$label"), "value"=>"`^$value`0"));
+				$str .= templatereplace("statbuff", array("title"=>resurrection_icon_html($label).translate_inline("`0$label"), "value"=>"`^$value`0"));
 			} else {
-				$str .= $head.templatereplace("statrow", array("title"=>translate_inline("`&$label`0"), "value"=>"`^$value`0"));
+				$str .= $head.templatereplace("statrow", array("title"=>resurrection_icon_html($label).translate_inline("`&$label`0"), "value"=>"`^$value`0"));
 				$head = "";
 			}
 		}
@@ -1187,10 +1189,35 @@ function resurrection_charpanel($standard, $buffs, $spirits, $modded){
 }
 
 /**
+ * The icon beside a label of the character panel or the phone header (Phase 5 task 13), through the template's
+ * labelicon part: when the label, its color codes dropped, is one of the standard stats' (Art::ICONS, the English
+ * label lowercased) and its file exists. Otherwise nothing: a module's own row, a missing file, or a template without
+ * the part. The label stays beside it and carries the meaning, so the image has alt="" and aria-hidden.
+ *
+ * @param string $label the English label, before translation
+ * @return string
+ */
+function resurrection_icon_html($label){
+	global $template;
+	require_once __DIR__ . '/sanitize.php';
+	require_once __DIR__ . '/../src/Ui/Art.php';
+	if (!isset($template['labelicon'])) return "";
+	$name = \Resurrection\Ui\Art::iconName(full_sanitize((string)$label));
+	$icon = $name === null ? null : \Resurrection\Ui\Art::icon($name);
+	if ($icon === null) return "";
+	// Inline before the label: without the line break that ends the part.
+	return rtrim(templatereplace("labelicon", array(
+		"src"=>htmlspecialchars($icon['src'], ENT_QUOTES, "UTF-8"),
+		"width"=>(string)$icon['width'],
+		"height"=>(string)$icon['height'],
+	)), "\r\n");
+}
+
+/**
  * One bar of the panel: the statbar part ("current / max") when it has a maximum, otherwise the statbarcap part (the
  * value alone, with a caption under the bar: the level cap's wording, or nothing).
  *
- * @param array{kind: string, label: string, current: string, max?: string, percent: string, note: string, caption?: string} $bar
+ * @param array{kind: string, icon: string, label: string, current: string, max?: string, percent: string, note: string, caption?: string} $bar
  */
 function resurrection_charpanel_bar($bar){
 	if (isset($bar['max'])) {
@@ -1253,17 +1280,19 @@ function resurrection_phonehead_html(){
 
 	$num = function ($value) { return (string)round((float)$value, 1); };
 	if ($alive) {
-		$bars = array(array("health", translate_inline("HP"), $u['hitpoints'], $u['maxhitpoints']));
+		$bars = array(array("health", "Hitpoints", translate_inline("HP"), $u['hitpoints'], $u['maxhitpoints']));
 	} else {
-		$bars = array(array("soul", translate_inline("Soul"), $u['soulpoints'], $u['level'] * 5 + 50));
+		$bars = array(array("soul", "Soulpoints", translate_inline("Soul"), $u['soulpoints'], $u['level'] * 5 + 50));
 	}
-	if ((int)$u['level'] >= 15) $bars[] = array("experience", translate_inline("XP"), $u['experience'], null);
-	else $bars[] = array("experience", translate_inline("XP"), $u['experience'], exp_for_next_level((int)$u['level'], (int)$u['dragonkills']));
+	if ((int)$u['level'] >= 15) $bars[] = array("experience", "Experience", translate_inline("XP"), $u['experience'], null);
+	else $bars[] = array("experience", "Experience", translate_inline("XP"), $u['experience'], exp_for_next_level((int)$u['level'], (int)$u['dragonkills']));
 	$barstr = "";
 	foreach ($bars as $bar) {
-		list($kind, $label, $current, $max) = $bar;
+		list($kind, $icon, $label, $current, $max) = $bar;
 		$barstr .= templatereplace("phonebar", array(
 			"kind"=>$kind,
+			// The panel's icon for the bar: hitpoints (soulpoints when dead) and experience.
+			"icon"=>resurrection_icon_html($icon),
 			"label"=>$plain($label),
 			// The level cap has no maximum: the experience alone over a full bar, as the panel shows it.
 			"value"=>$max === null ? $num($current) : $num($current)." / ".$num($max),

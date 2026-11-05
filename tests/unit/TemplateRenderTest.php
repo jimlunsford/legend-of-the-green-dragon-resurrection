@@ -182,7 +182,7 @@ final class TemplateRenderTest extends TestCase
             self::assertStringNotContainsString("window.open('motd.php'", $village);
             $this->assertPortrait($village, 'dwarf', 'Dwarf', $name);
             $this->assertPhone($village, ['rz-nav' => 'Go', 'rz-character' => 'Character', 'rz-talk' => 'Talk', 'rz-more' => 'More'], 'dwarf',
-                [$name, 'Level 7 Dwarf &middot; 14 turns &middot; 1,247 gold', [['health', 'HP', '63 / 70', '90'], ['experience', 'XP', '5025 / 6641', '75.7']]]);
+                [$name, 'Level 7 Dwarf &middot; 14 turns &middot; 1,247 gold', [['health', 'hitpoints', 'HP', '63 / 70', '90'], ['experience', 'experience', 'XP', '5025 / 6641', '75.7']]]);
 
             // The same page in a 1.1.2 skin (its cookie, as the skin chooser sets it): none of the phone's pieces.
             $this->php($tree, 'db_query("UPDATE accounts SET allowednavs=?, laston=?, lasthit=? WHERE acctid=?", true, [serialize(["village.php" => true]), date("Y-m-d H:i:s"), date("Y-m-d H:i:s", time() + 60), ' . $player . ']);');
@@ -212,7 +212,7 @@ final class TemplateRenderTest extends TestCase
             $this->assertPortrait($fight, 'dwarf', 'Dwarf', $name);
             // The phone: no nav column and no commentary, so no Go and no Talk.
             $this->assertPhone($fight, ['rz-character' => 'Character', 'rz-more' => 'More'], 'dwarf',
-                [$name, 'Level 7 Dwarf &middot; 10 turns &middot; 1,247 gold', [['health', 'HP', '500 / 1000', '50'], ['experience', 'XP', '5025 / 6641', '75.7']]]);
+                [$name, 'Level 7 Dwarf &middot; 10 turns &middot; 1,247 gold', [['health', 'hitpoints', 'HP', '500 / 1000', '50'], ['experience', 'experience', 'XP', '5025 / 6641', '75.7']]]);
 
             // Dead, in the graveyard: torments and favor in place of turns and gold, soulpoints (of level * 5 + 50) in
             // place of hitpoints.
@@ -221,7 +221,7 @@ final class TemplateRenderTest extends TestCase
             $graveyard = $this->render($tree, $work, 'graveyard.php', $session);
             $this->assertCleanPage($graveyard, 'graveyard.php');
             $this->assertPhone($graveyard, ['rz-nav' => 'Go', 'rz-character' => 'Character', 'rz-more' => 'More'], 'dwarf',
-                [$name, 'Level 7 Dwarf &middot; 6 torments &middot; 40 favor', [['soul', 'Soul', '62 / 85', '72.9'], ['experience', 'XP', '5025 / 6641', '75.7']]]);
+                [$name, 'Level 7 Dwarf &middot; 6 torments &middot; 40 favor', [['soul', 'soulpoints', 'Soul', '62 / 85', '72.9'], ['experience', 'experience', 'XP', '5025 / 6641', '75.7']]]);
             $this->php($tree, 'db_query("UPDATE accounts SET alive=1, hitpoints=63 WHERE acctid=?", true, [' . $player . ']);');
 
             $mail = $this->render($tree, $work, 'mail.php', $session);
@@ -361,10 +361,11 @@ final class TemplateRenderTest extends TestCase
      * exactly these tabs, in this order, each an anchor whose target is on the page once. The source order the stylesheet
      * keeps: the content, the character panel, More, the footer, the tab bar. The phone header: none signed out
      * ($portrait null); signed in, in the page header, the race portrait, then the name, the subtitle, the mail link and
-     * the bars, each [kind, label, value, fill percent], checked when $head is given.
+     * the bars, each [kind, icon, label, value, fill percent], checked when $head is given. The icon (Phase 5 task 13) is
+     * the panel's for the bar, a decorative 16px image before the label.
      *
      * @param array<string, string> $tabs target id => label
-     * @param array{0: string, 1: string, 2: list<array{0: string, 1: string, 2: string, 3: string}>}|null $head
+     * @param array{0: string, 1: string, 2: list<array{0: string, 1: string, 2: string, 3: string, 4: string}>}|null $head
      */
     private function assertPhone(string $page, array $tabs, ?string $portrait, ?array $head = null): void
     {
@@ -394,7 +395,7 @@ final class TemplateRenderTest extends TestCase
         if ($head === null) { return; }
         self::assertSame($head[0], html_entity_decode($phone[1], ENT_QUOTES));
         self::assertSame($head[1], $phone[2]);
-        preg_match_all('#<div class="rz-phonebar rz-phonebar-([a-z]+)"><div class="rz-phonebar-text"><span class="rz-phonebar-label">([^<]*)</span><span class="rz-phonebar-value">([^<]*)</span></div>'
+        preg_match_all('#<div class="rz-phonebar rz-phonebar-([a-z]+)"><div class="rz-phonebar-text"><span class="rz-phonebar-label">(?:<img class="rz-labelicon" src="assets/icons/([a-z]+)\.svg" alt="" aria-hidden="true" width="16" height="16">)?([^<]*)</span><span class="rz-phonebar-value">([^<]*)</span></div>'
             . '<div class="rz-phonebar-track" aria-hidden="true"><div class="rz-phonebar-fill" style="width: ([0-9.]+)%"></div></div></div>#', $phone[3], $bars, PREG_SET_ORDER);
         self::assertSame($head[2], array_map(fn (array $bar): array => array_slice($bar, 1), $bars));
     }

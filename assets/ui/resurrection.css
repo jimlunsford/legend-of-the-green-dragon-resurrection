@@ -582,6 +582,28 @@ input[type="checkbox"], input[type="radio"] { width: 20px; height: 20px; accent-
 .rz-equiprow-label { color: var(--muted); }
 .rz-equiprow-value { color: var(--text); font-weight: var(--weight-ui-bold); text-align: right; overflow-wrap: anywhere; min-width: 0; }
 
+/*
+  The character panel's icons (task 13): 16px before a tile's, bar's or equipment row's label and the Buffs and
+  Companions headings, 6px from the text, centered on its line. Decorative: the label carries the meaning.
+*/
+.rz-labelicon {
+  display: inline-block;
+  width: var(--icon-size-label);
+  height: var(--icon-size-label);
+  margin-right: 6px;
+  vertical-align: -3px;
+}
+/*
+  A stat tile's label is one uppercase word: TORMENTS, the longest, is 86px of text, 108px with its icon. In a tile
+  narrower than that (the desktop's character column at its narrowest) the icon stands on its own line above the
+  label, in every tile alike, so no tile breaks between the icon and its word; in a wider tile it sits before the label.
+*/
+.rz-stattile { container-type: inline-size; }
+.rz-stattile .rz-labelicon { display: block; margin: 0 0 4px; }
+@container (min-width: 110px) {
+  .rz-stattile .rz-labelicon { display: inline-block; margin: 0 6px 0 0; }
+}
+
 /* Footer */
 
 .rz-footer {

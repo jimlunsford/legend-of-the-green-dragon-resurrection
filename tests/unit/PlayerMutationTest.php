@@ -112,7 +112,8 @@ final class PlayerMutationTest extends TestCase
             try { dag_place_bounty($target,250); self::fail('Quota bypass'); }
             catch (\DomainException $error) { self::assertSame('Daily bounty limit reached.',$error->getMessage()); }
             // Authorized admin placements are historically funded by the game.
-            db_query('UPDATE bounty SET setdate=? WHERE target=?',true,['2099-01-01 00:00:00',$target]);
+            // A setdate ten years ahead of the clock: still delayed whenever the test runs (until Phase 5 task 13 the fixed 2099-01-01).
+            db_query('UPDATE bounty SET setdate=? WHERE target=?',true,[date('Y-m-d H:i:s',strtotime('+10 years')),$target]);
             self::assertSame(0,dag_place_bounty($target,250,true));
             self::assertSame([250,0],dag_claim_bounties($target)); // own bounty still delayed
             self::assertSame([0,0],dag_claim_bounties($target));

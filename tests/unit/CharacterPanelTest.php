@@ -249,6 +249,111 @@ final class CharacterPanelTest extends TestCase
         self::assertStringContainsString("<span class='colLtMagenta'>12</span>", $html);
     }
 
+    public function testTheAlivePanelHasAnIconBeforeEachStandardLabel(): void
+    {
+        // Phase 5 task 13: the bars, the six tiles, the equipment rows and the Buffs and Companions headings; the
+        // companions' own rows have none.
+        self::assertSame([
+            ['statbar', 'Hitpoints', 'hitpoints'], ['statbar', 'Experience', 'experience'],
+            ['stattile', 'Turns', 'turns'], ['stattile', 'Spirits', 'spirits'], ['stattile', 'Attack', 'attack'],
+            ['stattile', 'Defense', 'defense'], ['stattile', 'Gold', 'gold'], ['stattile', 'Gems', 'gems'],
+            ['equiprow', 'Weapon', 'weapon'], ['equiprow', 'Armor', 'armor'], ['equiprow', 'Mount', 'mount'],
+            ['stathead', 'Buffs', 'buffs'], ['stathead', 'Companions', 'companions'],
+            ['statlabel', 'Fido', null], ['statlabel', 'Stone Golem', null], ['statlabel', 'Ghost', null],
+        ], $this->icons($this->render('resurrection.htm', self::players()['alive'])['html']));
+        // At the level cap the experience bar keeps its icon.
+        self::assertSame(['statbar', 'Experience', 'experience'], $this->icons($this->render('resurrection.htm', self::players()['capped'])['html'])[1]);
+        // Translated labels keep the icon of the stat they name.
+        $translated = self::players()['bare'];
+        $translated['translations'] = ['Gold' => 'Gold', 'Gems' => 'Edelsteine', 'Hitpoints' => 'Lebenspunkte', 'Weapon' => 'Waffe'];
+        $icons = $this->icons($this->render('resurrection.htm', $translated)['html']);
+        self::assertContains(['statbar', 'Lebenspunkte', 'hitpoints'], $icons);
+        self::assertContains(['stattile', 'Edelsteine', 'gems'], $icons);
+        self::assertContains(['equiprow', 'Waffe', 'weapon'], $icons);
+    }
+
+    public function testTheDeadPanelHasTheDeadStatsIcons(): void
+    {
+        $dead = self::players()['dead'];
+        $dead['user']['soulpoints'] = 40;
+        self::assertSame([
+            ['statbar', 'Soulpoints', 'soulpoints'], ['statbar', 'Experience', 'experience'],
+            ['stattile', 'Torments', 'torments'], ['stattile', 'Spirits', 'spirits'], ['stattile', 'Psyche', 'psyche'],
+            ['stattile', 'Spirit', 'spirit'], ['stattile', 'Favor', 'favor'], ['stattile', 'Gems', 'gems'],
+            ['equiprow', 'Weapon', 'weapon'], ['equiprow', 'Armor', 'armor'],
+            ['stathead', 'Buffs', 'buffs'],
+        ], $this->icons($this->render('resurrection.htm', $dead)['html']));
+    }
+
+    public function testRowsAModuleAddsHaveNoIconUnlessTheyNameAStandardStat(): void
+    {
+        $module = self::players()['module'];
+        // Two more module rows: one named as a standard stat is (with its color codes), one a section of its own.
+        $module['module'][] = ['addcharstat', 'Treasure'];
+        $module['module'][] = ['addcharstat', '`^Gold', '`^25 in the vault'];
+        $module['module'][] = ['setcharstat', 'Equipment Info', 'Weapon', '`^Ringblade'];
+        $icons = $this->icons($this->render('resurrection.htm', $module)['html']);
+        self::assertSame([
+            ['statbar', 'Hitpoints', 'hitpoints'], ['statbar', 'Experience', 'experience'],
+            ['stattile', 'Turns', 'turns'], ['stattile', 'Spirits', 'spirits'], ['stattile', 'Attack', 'attack'],
+            ['stattile', 'Defense', 'defense'], ['stattile', 'Gold', 'gold'], ['stattile', 'Gems', 'gems'],
+            ['equiprow', 'Weapon', 'weapon'], ['equiprow', 'Armor', 'armor'], ['equiprow', 'Mount', 'mount'],
+            // The module's equipment row and every row and section of its own: no icon, save the row named Gold.
+            ['equiprow', 'Ring', null],
+            ['stathead', 'Buffs', 'buffs'], ['stathead', 'Companions', 'companions'],
+            ['statlabel', 'Fido', null], ['statlabel', 'Stone Golem', null], ['statlabel', 'Ghost', null],
+            ['stathead', 'Vital Info', null], ['statlabel', 'Charm', null],
+            ['stathead', 'Clan Info', null], ['statlabel', 'Clan', null], ['stathead', 'Clan Info', null],
+            ['stathead', 'Treasure', null], ['statlabel', 'Gold', 'gold'],
+        ], $icons);
+    }
+
+    public function testNoOldSkinShowsAnIcon(): void
+    {
+        foreach (self::oldSkins() as $skin) {
+            foreach (['alive', 'dead', 'module'] as $player) {
+                $html = $this->render($skin, self::players()[$player])['html'];
+                self::assertStringNotContainsString('assets/icons/', $html, "$skin $player");
+                self::assertStringNotContainsString('rz-labelicon', $html, "$skin $player");
+                self::assertStringNotContainsString('{icon}', $html, "$skin $player");
+            }
+        }
+    }
+
+    /**
+     * Every label of the panel, in order, with the icon before it: [component, label text, icon name or null]. Each icon
+     * is the label element's first child, a decorative 16px image: alt="", aria-hidden="true", width and height 16, an
+     * assets/icons/ file that exists. No icon stands anywhere else.
+     *
+     * @return list<array{0: string, 1: string, 2: string|null}>
+     */
+    private function icons(string $html): array
+    {
+        $doc = \Dom\HTMLDocument::createFromString('<!DOCTYPE html><html><body>' . $html . '</body></html>', LIBXML_NOERROR, 'UTF-8');
+        $found = [];
+        $icons = 0;
+        foreach ($doc->querySelectorAll('.rz-statbar-label, .rz-stattile-label, .rz-equiprow-label, .rz-stathead, .rz-statlabel') as $label) {
+            $component = ['rz-statbar-label' => 'statbar', 'rz-stattile-label' => 'stattile', 'rz-equiprow-label' => 'equiprow',
+                'rz-stathead' => 'stathead', 'rz-statlabel' => 'statlabel'][$label->getAttribute('class')];
+            $name = null;
+            $first = $label->firstChild;
+            if ($first instanceof \Dom\Element && $first->localName === 'img') {
+                self::assertSame('rz-labelicon', $first->getAttribute('class'));
+                self::assertSame(1, preg_match('#\Aassets/icons/([a-z]+)\.svg\z#', (string)$first->getAttribute('src'), $m));
+                self::assertFileExists(self::ROOT . '/' . $first->getAttribute('src'));
+                self::assertSame(['', 'true', '16', '16'], [$first->getAttribute('alt'), $first->getAttribute('aria-hidden'),
+                    $first->getAttribute('width'), $first->getAttribute('height')]);
+                $name = $m[1];
+                $icons++;
+            }
+            $found[] = [$component, trim($label->textContent ?? ''), $name];
+        }
+        // An icon only ever before a label.
+        self::assertSame($icons, $doc->querySelectorAll('img.rz-labelicon')->length);
+        self::assertSame($icons, substr_count($html, 'assets/icons/'));
+        return $found;
+    }
+
     /**
      * The panel's portrait.
      *
@@ -274,7 +379,7 @@ final class CharacterPanelTest extends TestCase
      */
     private function bars(string $html): array
     {
-        preg_match_all('#<div class="rz-statbar rz-statbar-([a-z]+)"><div class="rz-statbar-text"><span class="rz-statbar-label">([^<]*)</span>'
+        preg_match_all('#<div class="rz-statbar rz-statbar-([a-z]+)"><div class="rz-statbar-text"><span class="rz-statbar-label">(?:<img class="rz-labelicon"[^>]*>)?([^<]*)</span>'
             . '<span class="rz-statbar-value">(.*?)</span></div><div class="rz-statbar-track" aria-hidden="true"><div class="rz-statbar-fill" style="width: ([0-9.]+)%"></div></div>'
             . '(?:<div class="rz-statbar-caption">(.*?)</div>)?</div>#s', $html, $m, PREG_SET_ORDER);
         self::assertSame(substr_count($html, 'class="rz-statbar '), count($m));
@@ -285,7 +390,7 @@ final class CharacterPanelTest extends TestCase
     /** @return array<string, string> tile label => value text */
     private function tiles(string $html): array
     {
-        preg_match_all('#<div class="rz-stattile"><span class="rz-stattile-label">([^<]*)</span><span class="rz-stattile-value">(.*?)</span></div>#s', $html, $m);
+        preg_match_all('#<div class="rz-stattile"><span class="rz-stattile-label">(?:<img class="rz-labelicon"[^>]*>)?([^<]*)</span><span class="rz-stattile-value">(.*?)</span></div>#s', $html, $m);
         self::assertSame(substr_count($html, 'class="rz-stattile"'), count($m[1]));
         return array_combine($m[1], array_map(fn (string $v) => trim(strip_tags($v)), $m[2]));
     }
@@ -308,14 +413,14 @@ final class CharacterPanelTest extends TestCase
     /** The text of the first section with this title. */
     private function section(string $html, string $title): string
     {
-        self::assertSame(1, preg_match('#<h2 class="rz-stathead">' . preg_quote($title, '#') . '</h2>(.*?)</section>#s', $html, $m), $title);
+        self::assertSame(1, preg_match('#<h2 class="rz-stathead">(?:<img class="rz-labelicon"[^>]*>)?' . preg_quote($title, '#') . '</h2>(.*?)</section>#s', $html, $m), $title);
         return trim((string)preg_replace('/\s+/', ' ', strip_tags($m[1])));
     }
 
     /** @return array<string, string> the label => value rows of the first section with this title */
     private function rows(string $html, string $title): array
     {
-        self::assertSame(1, preg_match('#<h2 class="rz-stathead">' . preg_quote($title, '#') . '</h2>(.*?)</section>#s', $html, $m), $title);
+        self::assertSame(1, preg_match('#<h2 class="rz-stathead">(?:<img class="rz-labelicon"[^>]*>)?' . preg_quote($title, '#') . '</h2>(.*?)</section>#s', $html, $m), $title);
         preg_match_all('#<div class="rz-statrow"><span class="rz-statlabel">(.*?)</span><span class="rz-statvalue">(.*?)</span></div>#s', $m[1], $rows);
         return array_combine(array_map(fn (string $v) => trim(strip_tags($v)), $rows[1]), array_map(fn (string $v) => trim(strip_tags($v)), $rows[2]));
     }

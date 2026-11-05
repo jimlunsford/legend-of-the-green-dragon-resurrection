@@ -32,7 +32,13 @@ PART_KEYS = {
     'scene': {'src', 'alt', 'width', 'height'}, 'portrait': {'src', 'alt', 'width', 'height', 'name', 'race'},
     # The phone (Phase 5 task 8): resurrection_phonehead_html() and resurrection_tabbar_html() in lib/pageparts.php.
     'phonehead': {'portrait', 'name', 'subtitle', 'mail', 'bars'}, 'phoneportrait': {'src', 'alt', 'width', 'height'},
-    'phonebar': {'kind', 'label', 'value', 'percent'}, 'tabbar': {'tabs'}, 'tab': {'target', 'label'},
+    'phonebar': {'kind', 'icon', 'label', 'value', 'percent'}, 'tabbar': {'tabs'}, 'tab': {'target', 'label'},
+    # The character panel's components (Phase 5 task 7) and their icons (Phase 5 task 13): resurrection_charpanel() and
+    # resurrection_icon_html() in lib/pageparts.php.
+    'statbar': {'kind', 'icon', 'label', 'current', 'max', 'note', 'percent'},
+    'statbarcap': {'kind', 'icon', 'label', 'current', 'note', 'percent', 'caption'},
+    'stattile': {'icon', 'label', 'value', 'note'}, 'equiprow': {'icon', 'label', 'value'},
+    'labelicon': {'src', 'width', 'height'},
     # The battle screen (Phase 5 task 10): lib/battle_view.php.
     'battle': {'screen'}, 'fighters': {'cards'}, 'fighter': {'kind', 'state', 'name', 'sub', 'hp'},
     'fighterbar': {'label', 'value', 'percent'}, 'fighterhp': {'label', 'value'}, 'battleactions': {'main', 'groups'},

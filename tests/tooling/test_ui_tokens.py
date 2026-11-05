@@ -293,6 +293,18 @@ class UiTokenTests(unittest.TestCase):
         # Since Phase 5 task 8 the phone's portrait is the compact character header's.
         self.assertRegex(phone, r'\.rz-phonehead-img \{[^}]*width: var\(--portrait-width-phone\);')
 
+    def test_the_label_icons(self):
+        # Phase 5 task 13: the character panel's icons are 16px (--icon-size-label) beside their labels, 6px from the
+        # text. In a stat tile too narrow for TORMENTS and its icon on one line, the icon stands above the label.
+        self.assertEqual('16px', self.properties.get('--icon-size-label'))
+        css = without_comments((ROOT / 'assets' / 'ui' / 'resurrection.css').read_text())
+        icon = re.search(r'\.rz-labelicon \{([^}]*)\}', css).group(1)
+        for declaration in ('width: var(--icon-size-label);', 'height: var(--icon-size-label);', 'margin-right: 6px;'):
+            self.assertIn(declaration, icon)
+        self.assertIn('.rz-stattile { container-type: inline-size; }', css)
+        self.assertIn('.rz-stattile .rz-labelicon { display: block; margin: 0 0 4px; }', css)
+        self.assertRegex(css, r'@container \(min-width: 110px\) \{\s*\.rz-stattile \.rz-labelicon \{ display: inline-block; margin: 0 6px 0 0; \}')
+
 
 def saturation(color):
     channels = [int(color[i:i + 2], 16) / 255 for i in (1, 3, 5)]

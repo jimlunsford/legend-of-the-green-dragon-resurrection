@@ -24,6 +24,12 @@ from xml.etree import ElementTree
 
 ROOT = Path(__file__).resolve().parents[2]
 
+def years_from_now(years=10):
+    """A time this many years after now, as the game stores times (UTC): a "not yet" that never runs out. Until Phase 5
+    task 13 these were the fixed time 2099-01-01 00:00:00, which the game compares with its clock."""
+    return time.strftime('%Y-%m-%d %H:%M:%S',time.gmtime(time.time()+years*365*86400))
+
+
 class WebApplicationTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -9469,7 +9475,7 @@ function MODULE_dohook($hook,$args) {
             self.assertEqual('9',after[0]['playerfights']); self.assertEqual(before[1],after[1]); self.assertEqual(before[2:],after[2:])
             self.assertEqual(200,f['request']('pvp.php')[0]); self.assertEqual(after,f['pvp_snapshot']())
             f['pvp_reject'](stale); f['pvp_reject'](data)
-            for key,value in [('location','Elsewhere'),('pk','1'),('hitpoints','249'),('alive','0'),('locked','1'),('pvpflag','2099-01-01 00:00:00'),('gold','90'),('experience','999'),('boughtroomtoday','1')]:
+            for key,value in [('location','Elsewhere'),('pk','1'),('hitpoints','249'),('alive','0'),('locked','1'),('pvpflag',years_from_now()),('gold','90'),('experience','999'),('boughtroomtoday','1')]:
                 data=f['pvp_form'](); prior=f['pvp_snapshot']()[1][key]; f['patch'](f['target'],**{key:value}); f['pvp_reject'](data)
                 # Even a newly issued form cannot reinterpret the original encounter.
                 fresh=f['pvp_form'](); f['pvp_reject'](fresh)
@@ -9482,7 +9488,7 @@ function MODULE_dohook($hook,$args) {
     def test_pvp_eligibility_and_entry_rollback(self):
         with self._pvp_fixture() as f:
             for who,changes in [('player',dict(alive=0,hitpoints=0)),('player',dict(playerfights=0)),('player',dict(specialinc='fixture.php')),('player',dict(badguy='a:0:{}')),
-                ('target',dict(alive=0)),('target',dict(locked=1)),('target',dict(slaydragon=1)),('target',dict(age=0)),('target',dict(location='Elsewhere')),('target',dict(level=2)),('target',dict(level=8)),('target',dict(loggedin=1,laston='2099-01-01 00:00:00')),('target',dict(pvpflag='2099-01-01 00:00:00'))]:
+                ('target',dict(alive=0)),('target',dict(locked=1)),('target',dict(slaydragon=1)),('target',dict(age=0)),('target',dict(location='Elsewhere')),('target',dict(level=2)),('target',dict(level=8)),('target',dict(loggedin=1,laston=years_from_now())),('target',dict(pvpflag=years_from_now()))]:
                 f['pvp_prepare'](); f['patch'](f[who],**changes); data=f['pvp_form'](f['entry']); f['pvp_reject'](data,f['entry'])
             # Listing range [-1,+2] and setup range +/-2 differ historically; do not rebalance.
             for changes in [dict(level=3),dict(level=7),dict(age=0,dragonkills=100),dict(age=0,pk=1),dict(age=0,experience=1501),dict(loggedin=1,laston='2000-01-01 00:00:00')]:
@@ -9656,7 +9662,7 @@ function MODULE_dohook($hook,$args) {
         try:
             prepare()
             # Funded eligible, own, future and already-closed rows are independent.
-            for amount,setter,date,status in [(250,0,'2020-01-01 00:00:00',0),(125,player,'2020-01-01 00:00:00',0),(75,0,'2099-01-01 00:00:00',0),(50,0,'2020-01-01 00:00:00',1)]:
+            for amount,setter,date,status in [(250,0,'2020-01-01 00:00:00',0),(125,player,'2020-01-01 00:00:00',0),(75,0,years_from_now(),0),(50,0,'2020-01-01 00:00:00',1)]:
                 self.query('INSERT INTO bounty(amount,target,setter,setdate,status) VALUES (?,?,?,?,?)',[amount,target,setter,date,status])
             before=snapshot(); status,body=call(entry); self.assertEqual(200,status); form=self._security_fields(body)
             self.assertEqual(before,snapshot())  # confirmation GET never starts a fight
@@ -9702,7 +9708,7 @@ function MODULE_dohook($hook,$args) {
             for changes in ["alive=0,hitpoints=0", "playerfights=0"]:
                 prepare(); self.query('UPDATE accounts SET '+changes+' WHERE acctid=?',[player])
                 _,body=call(entry); before=snapshot(); self.assertEqual(409,call(entry,self._security_fields(body))[0],changes); self.assertEqual(before,snapshot())
-            for changes in ["alive=0","locked=1","age=0","location='Elsewhere'","level=15","loggedin=1,laston=NOW()","pvpflag='2099-01-01 00:00:00'"]:
+            for changes in ["alive=0","locked=1","age=0","location='Elsewhere'","level=15","loggedin=1,laston=NOW()",f"pvpflag='{years_from_now()}'"]:
                 prepare(); self.query('UPDATE accounts SET '+changes+' WHERE acctid=?',[target])
                 _,body=call(entry); before=snapshot(); self.assertEqual(409,call(entry,self._security_fields(body))[0],changes); self.assertEqual(before,snapshot())
             prepare()

@@ -12,7 +12,7 @@ The license covers exactly three folders:
 
 - `scenes/`
 - `portraits/`
-- `icons/` (none yet)
+- `icons/`
 
 It does not cover `fonts/` (each font family keeps the SIL Open Font License 1.1 in its own `OFL.txt`, see
 `docs/THIRD-PARTY-LICENSES.md`) or `ui/` (the stylesheets are code, under the core license: CC BY-NC-SA 2.0 and
@@ -30,7 +30,7 @@ assets/
   README.md                   this file
   scenes/<place>.svg          scene banners, 1200x320: village, forest, fallback, and the 17 places of batch 2
   portraits/race/<race>.svg   race portraits, 200x240: human, elf, dwarf, troll, unknown
-  icons/<name>.svg            line icons on a 24px grid (later tasks)
+  icons/<name>.svg            line icons on a 24px grid: the 18 character panel icons of batch 3
   fonts/<family>/             woff2 faces and OFL.txt (SIL OFL 1.1)
   ui/                         tokens.css, fonts.css, resurrection.css
 ```
@@ -40,7 +40,8 @@ forest, and since Phase 5 task 12 each place's own page its place: `inn.php` the
 fields, and so on; a bundled module's page the scene of the place it happens in, Seth's song and Violet at the inn for
 example; every other player page the fallback; popups, superuser, editor and operator pages none; a module can name its
 own scene with the `scene` hook), and the portrait by race (the race lowercased; any other race, or none, gets
-`unknown`). `docs/UI-DESIGN-SPEC.md` has the image rules, the scene list with its mapping rules, and the art palette.
+`unknown`), and since Phase 5 task 13 the character panel's icons by name (`Art::icon()`: one of the 18 names below,
+otherwise nothing). `docs/UI-DESIGN-SPEC.md` has the image rules, the icon list and where each is used, the scene list with its mapping rules, and the art palette.
 
 ## Batch 1 (Phase 5 task 5)
 
@@ -79,7 +80,34 @@ The location scenes, approved by Jim on 2026-11-01. They use only colors already
 | `scenes/train.svg` | `78c2371f80af364d3e1ed01d6edfa0d9c51841fa6e8c28734e98885524b82133` |
 | `scenes/weapons.svg` | `97417d9d10db40dea471030074a08e6d60b719e44c96b32d00129d040fb1d1cf` |
 
-`tests/tooling/test_art.py` checks every file under `scenes/` and `portraits/` against these tables.
+## Batch 3 (Phase 5 task 13)
+
+The character panel's icons, approved by Jim on 2026-11-05: line icons on a 24px grid (`viewBox="0 0 24 24"`), 1.8
+stroke, round caps and joins, each one color by meaning and drawn at 16px beside its label. Each file is named for the
+English label it stands beside, lowercased. They use only colors already in the art palette.
+
+| File | SHA-256 |
+|---|---|
+| `icons/armor.svg` | `c185a72bb8fb4268a65e700dcc74affdf85c0fbfa562c6805bc1300a5bb4c808` |
+| `icons/attack.svg` | `143c5b73a3d993ef7741f152ac1a67eb410a85e85fee554bfff78f9ceb058c4d` |
+| `icons/buffs.svg` | `20bbc7c6ae06ae8ae6520ac1008880dbcc45ac43fed4059816beb6d8e0d1c1b1` |
+| `icons/companions.svg` | `415177aa071d92f674801a3f035b48981691f0fea74c24b2ae404048d7522c04` |
+| `icons/defense.svg` | `4b63a78b89728b2918dc97f00cc41d28c441472380229395558537b1e7a8f381` |
+| `icons/experience.svg` | `3630c79f29eba85261575ca4dad73f5174ab9638b106cae9d9e746cfe18a60a6` |
+| `icons/favor.svg` | `80f70941091987e73f3f03db092103ea0b6947a616c8dd3be2587038a0dd250a` |
+| `icons/gems.svg` | `7176f2f7a69577bb7c4e63e173950490c3e3301456d33c66f684b735b230944d` |
+| `icons/gold.svg` | `70969655290bf4b09913e31b54de49787531be7587ff2ed7ee482fc6e505298b` |
+| `icons/hitpoints.svg` | `da8e73153f8905e2be37c9529f2544a920eb72b8c51e0c7b0d84440ab67eec87` |
+| `icons/mount.svg` | `80c954cc51cc27baa3ccef0125852b4c9d677f4908fdac7d097ec7fa6922dd4a` |
+| `icons/psyche.svg` | `1bbe230727083ea5fba32fd9544d1959c950ec1f1282c8fe4ce55bbf4b53a01e` |
+| `icons/soulpoints.svg` | `05311d11d00dac8f7bbed7d2ae21e4018738f33c0f7208b67c2467158ca64d40` |
+| `icons/spirit.svg` | `49a33aa3757f9093e8471bbc2171c4ac2bdbc2c258987ebe384b2d7dd1b55cf3` |
+| `icons/spirits.svg` | `f149f22778c999abf8c8d21b5c17123599de42cb2cfd7a47d1929f651c49140e` |
+| `icons/torments.svg` | `5c987dd7745f9d34077adb2baaa01bc3f2d36daa72f859f8df27a7084b7e1653` |
+| `icons/turns.svg` | `261ba7b4b15f476a47bb7f28b1f89900ae42328b456b40daa9cf7e4e0c83fc13` |
+| `icons/weapon.svg` | `c5535706a49bf59fd0be6f29f4d634c9d91ee918fb791adca490676f034eeadc` |
+
+`tests/tooling/test_art.py` checks every file under `scenes/`, `portraits/` and `icons/` against these tables.
 
 ## Adding or changing art
 

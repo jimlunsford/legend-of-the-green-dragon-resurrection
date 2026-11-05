@@ -1,7 +1,7 @@
 """The game's original art in assets/ (Phase 5 task 5, docs/PHASE5-TASK5-IMAGES-20261030.md).
 
 The art comes from the command chat with its SHA-256 checksums and is committed byte for byte: every file under
-assets/scenes/ and assets/portraits/ must be one of the files below, unchanged. Every SVG under assets/ must stay a
+assets/scenes/, assets/portraits/ and assets/icons/ must be one of the files below, unchanged. Every SVG under assets/ must stay a
 plain drawing (no script, no event attribute, no foreignObject, no href or other external reference), use only the art
 palette in docs/UI-DESIGN-SPEC.md, and stay under 16 KB. assets/LICENSE licenses exactly three folders under
 CC BY-SA 4.0.
@@ -18,7 +18,7 @@ ASSETS = ROOT / 'assets'
 SPEC = ROOT / 'docs' / 'UI-DESIGN-SPEC.md'
 SIZE_LIMIT = 16 * 1024
 
-# Batch 1, as the command chat supplied it (Jim, 2026-10-30), then batch 2. A change to the art is a new file from the
+# Batch 1, as the command chat supplied it (Jim, 2026-10-30), then batches 2 and 3. A change to the art is a new file from the
 # command chat, added here with its checksum.
 CHECKSUMS = {
     'portraits/race/dwarf.svg': '93373dcde21447afd1780e1bb999e6c88d729bf24535f205f354e63a759568d3',
@@ -47,6 +47,25 @@ CHECKSUMS = {
     'scenes/stables.svg': 'e316875b62d063d0ea7b708a7a38e82aa8bc29a6bb3c43b9d684bf6be8bbe48e',
     'scenes/train.svg': '78c2371f80af364d3e1ed01d6edfa0d9c51841fa6e8c28734e98885524b82133',
     'scenes/weapons.svg': '97417d9d10db40dea471030074a08e6d60b719e44c96b32d00129d040fb1d1cf',
+    # Batch 3, the character panel's icons (Jim, approved 2026-11-05; Phase 5 task 13, docs/PHASE5-TASK13-ICONS-20261105.md).
+    'icons/armor.svg': 'c185a72bb8fb4268a65e700dcc74affdf85c0fbfa562c6805bc1300a5bb4c808',
+    'icons/attack.svg': '143c5b73a3d993ef7741f152ac1a67eb410a85e85fee554bfff78f9ceb058c4d',
+    'icons/buffs.svg': '20bbc7c6ae06ae8ae6520ac1008880dbcc45ac43fed4059816beb6d8e0d1c1b1',
+    'icons/companions.svg': '415177aa071d92f674801a3f035b48981691f0fea74c24b2ae404048d7522c04',
+    'icons/defense.svg': '4b63a78b89728b2918dc97f00cc41d28c441472380229395558537b1e7a8f381',
+    'icons/experience.svg': '3630c79f29eba85261575ca4dad73f5174ab9638b106cae9d9e746cfe18a60a6',
+    'icons/favor.svg': '80f70941091987e73f3f03db092103ea0b6947a616c8dd3be2587038a0dd250a',
+    'icons/gems.svg': '7176f2f7a69577bb7c4e63e173950490c3e3301456d33c66f684b735b230944d',
+    'icons/gold.svg': '70969655290bf4b09913e31b54de49787531be7587ff2ed7ee482fc6e505298b',
+    'icons/hitpoints.svg': 'da8e73153f8905e2be37c9529f2544a920eb72b8c51e0c7b0d84440ab67eec87',
+    'icons/mount.svg': '80c954cc51cc27baa3ccef0125852b4c9d677f4908fdac7d097ec7fa6922dd4a',
+    'icons/psyche.svg': '1bbe230727083ea5fba32fd9544d1959c950ec1f1282c8fe4ce55bbf4b53a01e',
+    'icons/soulpoints.svg': '05311d11d00dac8f7bbed7d2ae21e4018738f33c0f7208b67c2467158ca64d40',
+    'icons/spirit.svg': '49a33aa3757f9093e8471bbc2171c4ac2bdbc2c258987ebe384b2d7dd1b55cf3',
+    'icons/spirits.svg': 'f149f22778c999abf8c8d21b5c17123599de42cb2cfd7a47d1929f651c49140e',
+    'icons/torments.svg': '5c987dd7745f9d34077adb2baaa01bc3f2d36daa72f859f8df27a7084b7e1653',
+    'icons/turns.svg': '261ba7b4b15f476a47bb7f28b1f89900ae42328b456b40daa9cf7e4e0c83fc13',
+    'icons/weapon.svg': 'c5535706a49bf59fd0be6f29f4d634c9d91ee918fb791adca490676f034eeadc',
 }
 SVG_NAMESPACE = 'http://www.w3.org/2000/svg'
 # Attributes that carry a color; their values must be a palette color or none.
@@ -102,14 +121,43 @@ class ArtTests(unittest.TestCase):
         self.svgs = sorted(p for p in ASSETS.rglob('*') if p.is_file() and p.suffix.lower() == '.svg')
 
     def test_every_file_is_the_one_supplied(self):
-        on_disk = sorted(str(p.relative_to(ASSETS)) for folder in ('scenes', 'portraits')
+        on_disk = sorted(str(p.relative_to(ASSETS)) for folder in ('scenes', 'portraits', 'icons')
                          for p in (ASSETS / folder).rglob('*') if p.is_file())
-        self.assertEqual(sorted(CHECKSUMS), on_disk, 'Every file under assets/scenes and assets/portraits is listed')
+        self.assertEqual(sorted(CHECKSUMS), on_disk, 'Every file under assets/scenes, assets/portraits and assets/icons is listed')
+        self.assertEqual(18, sum(1 for name in CHECKSUMS if name.startswith('icons/')))
         for name, expected in CHECKSUMS.items():
             self.assertEqual(expected, hashlib.sha256((ASSETS / name).read_bytes()).hexdigest(), name)
         # The README's table is the same list.
         readme = (ASSETS / 'README.md').read_text()
         self.assertEqual(CHECKSUMS, dict(re.findall(r'^\| `([a-z/]+\.svg)` \| `([0-9a-f]{64})` \|', readme, re.M)))
+
+    def test_every_icon_the_code_names_exists(self):
+        # Phase 5 task 13: the names in Art::ICONS, and every label the panel and the phone header pass to
+        # resurrection_icon_html() as a literal, lowercased, are files in assets/icons/; every file there is named.
+        art = (ROOT / 'src' / 'Ui' / 'Art.php').read_text()
+        block = re.search(r'public const array ICONS = \[(.*?)\];', art, re.S)
+        self.assertIsNotNone(block)
+        names = re.findall(r"'([a-z]+)'", block.group(1))
+        self.assertEqual(18, len(names))
+        self.assertEqual(len(names), len(set(names)))
+        files = sorted(p.stem for p in (ASSETS / 'icons').glob('*.svg'))
+        self.assertEqual(sorted(names), files)
+        pageparts = (ROOT / 'lib' / 'pageparts.php').read_text()
+        literal = re.findall(r'resurrection_icon_html\("([^"$]+)"\)', pageparts)
+        self.assertEqual(['Experience', 'Buffs'], sorted(set(literal), key=literal.index))
+        # The labels the panel and the phone header build their rows from: each names an icon.
+        labels = re.findall(r'array\("(?:Vital|Personal) Info", "([A-Za-z]+)"', pageparts)
+        labels += re.findall(r'array\("(?:Weapon|Armor|Creature)", "([A-Za-z]+)"', pageparts)
+        labels += re.findall(r'\$label = "([A-Za-z]+)";', pageparts)
+        labels += re.findall(r'array\("(?:health|soul|experience)", "([A-Za-z]+)", translate_inline', pageparts)
+        self.assertEqual(sorted(set(names) - {'buffs', 'companions'}), sorted({label.lower() for label in labels}))
+        for label in literal + labels + ['Companions']:
+            self.assertIn(label.lower(), names, label)
+            self.assertTrue((ASSETS / 'icons' / f'{label.lower()}.svg').is_file(), label)
+        # The template draws an icon only through its part, decorative, at the label size.
+        template = (ROOT / 'templates' / 'resurrection.htm').read_text()
+        self.assertIn('<!--!labelicon--><img class="rz-labelicon" src="{src}" alt="" aria-hidden="true" width="{width}" height="{height}">\n', template)
+        self.assertNotIn('assets/icons/', template)
 
     def test_every_svg_is_a_plain_drawing(self):
         self.assertGreaterEqual(len(self.svgs), len(CHECKSUMS))

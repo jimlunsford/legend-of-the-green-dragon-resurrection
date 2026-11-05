@@ -261,6 +261,7 @@ query, so the template writes the two breakpoints as literals equal to these tok
 | `--nav-tile-height` | `48px` | A nav tile on a phone, at least (mockup, task 8) |
 | `--key-badge-size` | `24px` | Key badge, a square (mockup; was 22px) |
 | `--icon-size` | `24px` | Icon grid |
+| `--icon-size-label` | `16px` | An icon beside a label in the character panel and the phone header (task 13) |
 | `--scene-height` | `240px` | Scene banner height (Jim, task 5) |
 | `--scene-height-phone` | `150px` | Scene banner height on a phone (Jim, task 5) |
 | `--portrait-width` | `64px` | Race portrait in the character panel (Jim, task 5) |
@@ -327,7 +328,8 @@ query, so the template writes the two breakpoints as literals equal to these tok
   the label left (`--muted`) and the numbers right (`--text`, bold), `--size-small`. The numbers and fills are the
   panel's: hitpoints against the maximum, experience against `exp_for_next_level()`, at the level cap the experience
   alone over a full bar. Dead, the subtitle reads "Level 7 Elf · 6 torments · 40 favor" and the first bar is Soul,
-  soulpoints against level × 5 + 50. Signed out (and in popups) the header keeps the wordmark, on one line, its size
+  soulpoints against level × 5 + 50. Each bar's label has the panel's icon for it before it (task 13: hitpoints,
+  soulpoints when dead, experience; 16px, decorative). Signed out (and in popups) the header keeps the wordmark, on one line, its size
   shrunk to fit the screen (at most `--size-wordmark`), with the MoTD and Petition controls below it at the right.
   New translated texts: "%s turns", "%s gold", "%s torments", "%s favor", "HP", "Soul", "XP".
 - **Nav tiles** (task 8). Below `--breakpoint-phone` the nav groups lose their card and each nav is a tile in a
@@ -417,6 +419,37 @@ query, so the template writes the two breakpoints as literals equal to these tok
   its portrait is hidden (the phone header shows it) and its padding is `--space-panel-phone`.
   - **The dead.** Soulpoints replace hitpoints in the first bar (maximum level × 5 + 50, as 1.1.2), and the tiles are
     Torments, Spirits ("DEAD"), Psyche, Spirit, Favor and Gems: 1.1.2's meanings in the same components.
+  - **Icons** (Phase 5 task 13). A 16px icon (`--icon-size-label`) before each standard label, 6px from it and
+    centered on its line (`rz-labelicon`), through the template's `labelicon` part and `resurrection_icon_html()`. A
+    stat tile's label is one uppercase word, and TORMENTS with its icon needs 108px: in a tile whose content is
+    narrower than 110px (the desktop's character column at its narrowest) every tile's icon stands on its own line
+    above the label, 4px over it (a container query on the tile), and in a wider tile it sits before the label. Each
+    is decorative: `<img alt="" aria-hidden="true">` with `width` and `height` 16, since the label beside it carries
+    the meaning (and is translated as before). The icon is chosen by the label's English text, color codes dropped,
+    lowercased (`Art::iconName()`), so a row a module adds has none unless its label is a standard stat's (a module
+    row named "Gold" gets the gold icon; "Charm", "Clan" or "Ring" none). A missing file or a template without the part
+    gives no image, never a broken one. The 1.1.2 skins show none.
+
+    | Icon | Color | Where |
+    |---|---|---|
+    | `turns` | `#D9A84E` | Turns tile (alive) |
+    | `torments` | `#E8826A` | Torments tile (dead) |
+    | `spirits` | `#E3CF9A` | Spirits tile (alive and dead) |
+    | `attack` | `#E8826A` | Attack tile (alive) |
+    | `defense` | `#A99F8D` | Defense tile (alive) |
+    | `psyche` | `#8FB8D9` | Psyche tile (dead) |
+    | `spirit` | `#ECE4D4` | Spirit tile (dead) |
+    | `gold` | `#D9A84E` | Gold tile (alive) |
+    | `favor` | `#D9A84E` | Favor tile (dead) |
+    | `gems` | `#8FB8D9` | Gems tile (alive and dead) |
+    | `hitpoints` | `#7FB069` | Hitpoints bar (alive); the phone header's HP bar |
+    | `soulpoints` | `#ECE4D4` | Soulpoints bar (dead); the phone header's Soul bar |
+    | `experience` | `#D9A84E` | Experience bar; the phone header's XP bar |
+    | `weapon` | `#C4936A` | Weapon row |
+    | `armor` | `#A99F8D` | Armor row |
+    | `mount` | `#C08650` | Mount row (with a mount) |
+    | `buffs` | `#8FB8D9` | Buffs heading |
+    | `companions` | `#7FB069` | Companions heading (with companions) |
 - **HP and XP bars.** Fully rounded (`--radius-bar`), `--bar-height` in the character panel and `--bar-height-fight` in
   a fight. `--track` behind, the fill in `--health` for the player and `--foe` for enemies; the two fills
   also differ in lightness (relative luminance 0.366 and 0.193), so they read apart without color. XP uses `--accent`.
@@ -439,8 +472,8 @@ query, so the template writes the two breakpoints as literals equal to these tok
   difference beside it in the bonus (`` `@ ``) or penalty (`` `$ ``) color, and a temporary stat's note in its colors,
   as `charstats()` writes them. Spirits is a word ("Normal", "DEAD").
 - **Equipment rows.** An icon, the item name, and its value (attack or defense), one row each: weapon, armor, mount.
-  Task 7 (no icons until task 13): the label left (`--muted`), the item's name right (`--text`, bold, its color codes
-  kept), 8px padding, a 1px `--track` line between rows.
+  Task 7: the label left (`--muted`), the item's name right (`--text`, bold, its color codes kept), 8px padding, a 1px
+  `--track` line between rows. Task 13: the icon before the label (Character panel, Icons).
 - **Fighter cards** (Phase 5 task 10, `lib/battle_view.php`). At the top of every fight that runs `battle.php` (the
   forest, PvP, graveyard torments, training masters, the Green Dragon, module fights), a grid of cards, 16px apart,
   each at least 220px wide (one column on a phone): the player first, then each foe in the fight's order. A card is
@@ -575,6 +608,8 @@ not shown there, as before.
   windows, the moon, eyes and gems; art palette colors only (below).
 - **Portraits** in an arched frame tinted by race (players) or creature type (creatures).
 - **Icons**: line icons on a 24px grid, 1.8 stroke, colored by meaning (health green, damage, magic, gold accent).
+  The character panel's 18 (`assets/icons/`, Phase 5 task 13) are drawn at 16px beside their labels; the list and
+  where each is used are under Character panel, Icons.
 - **Every image slot has a fallback**: a page with no scene of its own shows the fallback scene, a race with no
   portrait of its own the unknown portrait, a missing icon nothing (the text label stays). A lookup never gives a
   broken URL: a missing file means no image.
@@ -657,7 +692,7 @@ The rules:
 ### Art palette (Phase 5 task 5)
 
 Every color the batch 1 files use. Future art stays within it, or extends it here in the task that adds the art.
-Batch 2 (the location scenes, task 12) uses only these colors.
+Batch 2 (the location scenes, task 12) and batch 3 (the character panel's icons, task 13) use only these colors.
 Colors that are also UI tokens are named; transparency comes from `opacity` and `stroke-opacity`, not from new colors.
 
 | Color | Token | Use in batch 1 |

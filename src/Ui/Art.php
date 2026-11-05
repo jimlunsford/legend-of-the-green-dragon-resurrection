@@ -76,6 +76,18 @@ final class Art
     public const array PORTRAIT_SIZE = [200, 240];
 
     /**
+     * The character panel's icons (Phase 5 task 13, docs/PHASE5-TASK13-ICONS-20261105.md): assets/icons/<name>.svg.
+     * Each name is the English label it stands beside, lowercased: the stat tiles, the bars, the equipment rows and the
+     * Buffs and Companions headings.
+     */
+    public const array ICONS = [
+        'turns', 'torments', 'spirits', 'attack', 'defense', 'psyche', 'spirit', 'gold', 'favor', 'gems',
+        'hitpoints', 'soulpoints', 'experience', 'weapon', 'armor', 'mount', 'buffs', 'companions',
+    ];
+    /** The size an icon is drawn at beside a label (the token --icon-size-label); the files are a 24px grid. */
+    public const int ICON_SIZE = 16;
+
+    /**
      * The scene a page shows, or null for none. $names gives each scene's alt text, the place's name, and the
      * fallback's (the page's own title): an array (scene => text, 'fallback' required), or a function of the scene,
      * as name() is. On runmodule.php the scene is the running module's (MODULES), and none on a module's editor page
@@ -161,6 +173,28 @@ final class Art
         $src = self::file('portraits/race', self::portraitName($race));
         if ($src === null || trim($alt) === '') { return null; }
         return ['src' => $src, 'alt' => $alt, 'width' => self::PORTRAIT_SIZE[0], 'height' => self::PORTRAIT_SIZE[1]];
+    }
+
+    /**
+     * An icon by its name (ICONS), drawn at ICON_SIZE, or null for any other name or a missing file: never a broken URL.
+     * Icons are decorative: the label beside one carries its meaning, so it has no alt text.
+     * @return array{src: string, width: int, height: int}|null
+     */
+    public static function icon(string $name): ?array
+    {
+        if (!in_array($name, self::ICONS, true)) { return null; }
+        $src = self::file('icons', $name);
+        return $src === null ? null : ['src' => $src, 'width' => self::ICON_SIZE, 'height' => self::ICON_SIZE];
+    }
+
+    /**
+     * The icon's name for a label, as the panel shows it (color codes dropped): the label trimmed and lowercased when
+     * it is one of the standard stats' (ICONS), otherwise null. A row a module adds gets an icon only this way.
+     */
+    public static function iconName(string $label): ?string
+    {
+        $name = strtolower(trim($label));
+        return in_array($name, self::ICONS, true) ? $name : null;
     }
 
     /** assets/<folder>/<name>.svg as a URL, or null when the name is not a plain file name or the file is missing. */

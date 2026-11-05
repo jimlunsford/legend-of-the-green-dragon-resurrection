@@ -198,3 +198,15 @@ the cave"). Every view's scene image loaded with its alt text, and every page's 
 - The 1.1.2 skins (no scene slot until task 15).
 - The art palette, `assets/LICENSE`, the copyright line and license block, the attribution line and its links.
 - The 60-minute job timeout and the shard split.
+
+## Acceptance (recorded in task 13, 2026-11-05)
+
+Task 12 is accepted at `34a06174efb1fe2485a285de3561e0cb97a11def`. Checked by the command chat and confirmed through the
+GitHub Actions API in task 13:
+
+- Modern core 41953000057: SUCCESS, all 12 jobs (both legs' checks, four shards and result). Shard jobs, shards 1 to 4:
+  PHP 8.4 / MariaDB 11.4 13:40, 13:46, 16:27, 19:43; PHP 8.5 / MySQL 8.4 17:32, 18:16, 20:30, 23:44.
+- Baseline integrity 41952999724: SUCCESS.
+
+The longest shard job, 23:44 (PHP 8.5 shard 4), is under 30 minutes; task 13 refreshes the shard durations to even
+the split (`docs/PHASE5-TASK13-ICONS-20261105.md`).
