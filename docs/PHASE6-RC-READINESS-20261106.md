@@ -585,3 +585,20 @@ Size: S (under a day of work, one commit), M (one to three days), L (more, or ne
 | N10 | A hosting image | A production container image (not local play) is excluded until Jim says go; listed so it is not forgotten | M |
 
 Counts: 4 BLOCKER, 13 SHOULD (one of them, S9, outside engineering), 10 NICE.
+
+## Acceptance (recorded 2026-11-06, Phase 6 task 2)
+
+Confirmed through the GitHub API at the start of task 2:
+
+| Workflow | Run | Result |
+|---|---|---|
+| Modern core | 42190029147 | **SUCCESS, all 12 jobs**: both legs' `checks`, the eight `http` shards and both `result` jobs |
+| Baseline integrity | 42190029178 | **SUCCESS** |
+
+Shard job durations (start to finish of each job), shards 1 to 4:
+
+- PHP 8.4 / MariaDB 11.4: 17:16, 13:30, 16:35, 20:05
+- PHP 8.5 / MySQL 8.4: 21:57, 22:02, 17:30, 21:46
+
+The longest, 22:02, is under the 30-minute mark. Task 1 (`ea8bb3d`) is accepted. Jim's decisions on the gap list and
+the task order are in `ROADMAP.md` and `PHASE6-TASK2-FIXES-20261106.md`.

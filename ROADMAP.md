@@ -249,34 +249,47 @@ Every change from 1.1.2 that a player, administrator or operator can notice is r
 
 ### Checklist
 
-- [ ] 1: Release readiness review for `1.0.0-rc.1` (docs only): Phase 5's acceptance recorded, Phase 6 opened, `main` audited against a 13-area checklist (fresh install, shared hosting, upgrades, versioning, licensing, security by review, a UI crawl of about 920 pages at 1440 and 390, gameplay tests, known defects, performance, modules, operations, CI health, docs), with a ranked gap list (`docs/PHASE6-RC-READINESS-20261106.md`). Verdict: not ready to cut; 4 BLOCKER, 13 SHOULD, 10 NICE. Ticked when CI accepts it, in the next task.
+- [x] 1: Release readiness review for `1.0.0-rc.1` (docs only): Phase 5's acceptance recorded, Phase 6 opened, `main` audited against a 13-area checklist (fresh install, shared hosting, upgrades, versioning, licensing, security by review, a UI crawl of about 920 pages at 1440 and 390, gameplay tests, known defects, performance, modules, operations, CI health, docs), with a ranked gap list (`docs/PHASE6-RC-READINESS-20261106.md`). Verdict: not ready to cut; 4 BLOCKER, 13 SHOULD, 10 NICE. Accepted at `ea8bb3d`, Modern core 42190029147 (all 12 jobs), Baseline integrity 42190029178.
+- [ ] 2: Crash fixes, CI pin, first administrator's flags (B1, S8, S7): `list.php`'s online and clan lists select `hitpoints`; `stats.php`'s two `GROUP BY ... DESC` fixed, with a sweep and a static test; every CI job on `ubuntu-24.04`, `actions/checkout` v7.0.1 and `shivammathur/setup-php` 2.40.0 (node24) pinned by SHA; the first administrator gets 1.1.2's flags less the removed surfaces' (`docs/PHASE6-TASK2-FIXES-20261106.md`). Ticked when CI accepts it.
+- [ ] 3: Hardening: S1, S2, S4, S6, S12.
+- [ ] 4: Web install, upgrade and maintenance: design and threat model (S3). Jim approves before task 5.
+- [ ] 5: Web install, upgrade and maintenance: build (S3).
+- [ ] 6: Host guide (B2), covering both the shell and the web path.
+- [ ] 7: Front-door docs, rc.1 cut materials, legal packet (B3, B4, S9).
 
-Proposed tasks from the gap list, not started (Jim picks which run; IDs, scope, tests and sizes in the review):
+Jim's decisions (2026-11-06):
+
+1. rc.1 is for public hosts too. B2 (host guide) stays a BLOCKER, and these become rc.1 blockers as well: S1 (security headers; CSP as far as task 3 gets it), S2 (internal-file guard), S3 (no-shell path), S4 (unreadable-config page), S6 (declared extensions), S7 (admin flags), S8 (CI pin), S9 (legal review, Jim and a lawyer), S12 (config outside the docroot).
+2. First administrator's flags: 1.1.2's set, minus the flags for surfaces that were removed.
+3. No-shell hosts: build a token-gated web install and upgrade page and a secret-protected web maintenance (cron) request. Design and security review first, Jim approves, then build. The 1.1.2 web installer stays 403; this is a new surface, not that one.
+4. Proposed by the command chat, open for Jim to overturn: S11 (password recovery, email verification) is a documented known limitation for rc.1 and a 1.0.0 blocker.
+
+The gap list (IDs, scope, tests and sizes in the review). Each item is ticked when the task that closes it is accepted:
 
 BLOCKER for `1.0.0-rc.1`:
 
-- [ ] B1: Fix the 500s the crawl found: the Warriors Online list (`list.php`) whenever a dead player is online, and `stats.php?op=referers` and `op=graph` on MySQL 8.4 (S).
-- [ ] B2: Write the host guide, with sample web server rules: docroot and denied paths, the config file's place, owner and mode, PHP version, extensions and production settings, HTTPS, cron, mail, logs, backups, upgrades, `sourceurl`, what to upload; rc.1 needs a shell or panel cron with CLI PHP (M).
-- [ ] B3: Refresh the front-door docs: `README.md`, `docs/VERSIONING.md`, `docs/SECURITY-STATUS.md`, `docs/MODULE-POLICY.md`, `project.json`'s `phase` (S).
-- [ ] B4: Prepare the rc.1 cut, stopping before the tag: release notes from `docs/CHANGES-FROM-1.1.2.md`, the tag message, the version rule for `main` after a tag, the cut checklist (S).
+- [ ] B1: Fix the 500s the crawl found: the Warriors Online list (`list.php`) whenever a dead player is online, and `stats.php?op=referers` and `op=graph` on MySQL 8.4 (S). Task 2.
+- [ ] B2: Write the host guide, with sample web server rules: docroot and denied paths, the config file's place, owner and mode, PHP version, extensions and production settings, HTTPS, cron, mail, logs, backups, upgrades, `sourceurl`, what to upload; both the shell path and the web path (M). Task 6.
+- [ ] B3: Refresh the front-door docs: `README.md`, `docs/VERSIONING.md`, `docs/SECURITY-STATUS.md`, `docs/MODULE-POLICY.md`, `project.json`'s `phase` (S). Task 7.
+- [ ] B4: Prepare the rc.1 cut, stopping before the tag: release notes from `docs/CHANGES-FROM-1.1.2.md`, the tag message, the version rule for `main` after a tag, the cut checklist (S). Task 7.
+- [ ] S1: Security headers (frame protection, `nosniff`, Referrer-Policy), then a Content Security Policy as far as task 3 gets it (S, then M). Task 3.
+- [ ] S2: Refuse direct requests to internal PHP files (`lib/`, `src/`, `modules/`) with a 404 (M). Task 3.
+- [ ] S3: The no-shell path: a token-gated web install and upgrade page and a secret-protected web maintenance request (L). Tasks 4 and 5.
+- [ ] S4: A clear page, not a blank 500, when `dbconnect.php` exists but cannot be read (S). Task 3.
+- [ ] S6: Declare `ext-ctype` and `ext-filter` in `composer.json` (S). Task 3.
+- [ ] S7: The first administrator's flags: 1.1.2's set less the removed surfaces', recorded in the change ledger (S). Task 2.
+- [ ] S8: Pin the CI runner to `ubuntu-24.04` and move `actions/checkout` and `shivammathur/setup-php` to Node 24 releases (S). Task 2.
+- [ ] S9: Legal review of the attribution wording and the AGPL question (Jim and a lawyer). Task 7 prepares the packet.
+- [ ] S12: Let the game read its config from outside the docroot (S). Task 3.
 
-SHOULD before 1.0.0:
+SHOULD before 1.0.0, not scheduled:
 
-- [ ] S1: Security headers (frame protection, `nosniff`, Referrer-Policy), then a Content Security Policy once the inline scripts and handlers are gone (S, then M).
-- [ ] S2: Refuse direct requests to internal PHP files (`lib/`, `src/`, `modules/`) with a 404 (M).
-- [ ] S3: Decide and build the no-shell path: a token-gated web install and upgrade page, and possibly a web-triggered maintenance request (L; Jim's decision first).
-- [ ] S4: A clear page, not a blank 500, when `dbconnect.php` exists but cannot be read (S).
 - [ ] S5: Labels and 44px tap targets on the pages the crawl found (S).
-- [ ] S6: Declare `ext-ctype` and `ext-filter` in `composer.json` (S).
-- [ ] S7: The first administrator's flags: record the change from 1.1.2's 20 flags to 5, then Jim decides (S).
-- [ ] S8: Pin the CI runner to `ubuntu-24.04` and move `actions/checkout` and `shivammathur/setup-php` to Node 24 releases (S).
-- [ ] S9: Legal review of the attribution wording and the AGPL question (Jim and a lawyer).
 - [ ] S10: A guide for module authors (S).
-- [ ] S11: Mail, account recovery and email verification for 1.0.0 (L; a public hosting gate).
-- [ ] S12: Let the game read its config from outside the docroot (S).
+- [ ] S11: Mail, account recovery and email verification (L; a public hosting gate). Proposed: a documented known limitation for rc.1 and a 1.0.0 blocker (decision 4).
 - [ ] S13: Bring `docs/SECURITY-STATUS.md` up to date as a living record (S).
 
-The 10 NICE items (N1 to N10) are listed in the review, not here.
+The 10 NICE items (N1 to N10) are listed in the review, not here, and are not scheduled.
 
 ### Public hosting
 

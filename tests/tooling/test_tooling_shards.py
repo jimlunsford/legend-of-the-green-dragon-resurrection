@@ -67,5 +67,31 @@ class ToolingShardTests(unittest.TestCase):
         self.assertEqual(shards.DEFAULT_SHARDS, count)
         self.assertEqual(list(range(1, count + 1)), listed)
 
+    def test_every_workflow_job_pins_its_runner_and_actions(self):
+        # Phase 6 task 2 (S8): ubuntu-latest was about to move to Ubuntu 26, and the node20 actions were deprecated.
+        # Every job names ubuntu-24.04 (or calls a local workflow whose jobs do), and every action is pinned by its full
+        # commit SHA with the version in a comment.
+        pinned = {'actions/checkout': '3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1',
+                  'shivammathur/setup-php': 'eb7c497e18156a6bbabfef1d3a82760b9eda3962 # 2.40.0'}
+        seen = set()
+        workflows = sorted((ROOT / '.github' / 'workflows').glob('*.yml'))
+        self.assertEqual(['baseline-integrity.yml', 'modern-core-leg.yml', 'modern-core.yml'], [w.name for w in workflows])
+        for path in workflows:
+            text = path.read_text()
+            jobs = re.split(r'(?m)^  (?=[a-z][a-z0-9_-]*:\s*$)', text[text.index('\njobs:\n'):])[1:]
+            self.assertTrue(jobs, path.name)
+            for job in jobs:
+                name = job.split(':', 1)[0]
+                runner = re.findall(r'(?m)^    runs-on: *(.+?) *$', job)
+                local = re.findall(r'(?m)^    uses: \./\.github/workflows/[a-z-]+\.yml *$', job)
+                self.assertTrue(runner == ['ubuntu-24.04'] or (not runner and len(local) == 1), f'{path.name} {name}: {runner}')
+            self.assertNotIn('ubuntu-latest', text, path.name)
+            for action, ref in re.findall(r'(?m)^ *(?:- )?uses: *([^.\s][^@\s]*)@(.+?) *$', text):
+                self.assertRegex(ref, r'\A[0-9a-f]{40} # \S', f'{path.name}: {action}')
+                self.assertIn(action, pinned, path.name)
+                self.assertTrue(ref.startswith(pinned[action]), f'{path.name}: {action}@{ref}')
+                seen.add(action)
+        self.assertEqual(set(pinned), seen)
+
 if __name__ == '__main__':
     unittest.main()

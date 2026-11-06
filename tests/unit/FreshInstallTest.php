@@ -218,6 +218,16 @@ final class FreshInstallTest extends TestCase
             $admin = resurrection_authenticate('FixtureAdmin', $password);
             self::assertIsArray($admin);
             self::assertGreaterThan(0, (int)$admin['superuser']);
+            // Phase 6 task 2 (S7): 1.1.2's twenty flags (installer_stage_10.php), less the three whose surfaces were
+            // removed: the payment log, the raw SQL console and the source viewer.
+            $removed = SU_EDIT_PAYLOG | SU_RAW_SQL | SU_VIEW_SOURCE;
+            $historical = SU_MEGAUSER | SU_EDIT_MOUNTS | SU_EDIT_CREATURES | SU_EDIT_PETITIONS | SU_EDIT_COMMENTS |
+                SU_EDIT_DONATIONS | SU_EDIT_USERS | SU_EDIT_CONFIG | SU_INFINITE_DAYS | SU_EDIT_EQUIPMENT | SU_EDIT_PAYLOG |
+                SU_DEVELOPER | SU_POST_MOTD | SU_MODERATE_CLANS | SU_EDIT_RIDDLES | SU_MANAGE_MODULES | SU_AUDIT_MODERATION |
+                SU_RAW_SQL | SU_VIEW_SOURCE | SU_NEVER_EXPIRE;
+            self::assertSame(3923967, $historical);
+            self::assertSame(2350079, $historical & ~$removed);
+            self::assertSame($historical & ~$removed, (int)$admin['superuser']);
             self::assertFalse(resurrection_authenticate('FixtureAdmin', $admin['password']));
             self::assertFalse(resurrection_authenticate('FixtureAdmin', 'wrong password'));
             self::assertFalse(resurrection_authenticate("FixtureAdmin' OR 1=1 --", $password));

@@ -144,7 +144,11 @@ function resurrection_fresh_install(string $login, #[\SensitiveParameter] string
         $db->beginTransaction();
         resurrection_activate_installed_modules($activate);
         $GLOBALS['fresh_install_phase'] = 'administrator';
-        $admin = resurrection_insert_account($login, $hash, $email, SU_MEGAUSER | SU_EDIT_USERS | SU_EDIT_CONFIG | SU_MANAGE_MODULES | SU_EDIT_COMMENTS);
+        // 1.1.2's set (installer_stage_10.php) without the flags of the removed payment log, SQL console and source viewer.
+        $admin = resurrection_insert_account($login, $hash, $email, SU_MEGAUSER | SU_EDIT_MOUNTS | SU_EDIT_CREATURES |
+            SU_EDIT_PETITIONS | SU_EDIT_COMMENTS | SU_EDIT_DONATIONS | SU_EDIT_USERS | SU_EDIT_CONFIG | SU_INFINITE_DAYS |
+            SU_EDIT_EQUIPMENT | SU_DEVELOPER | SU_POST_MOTD | SU_MODERATE_CLANS | SU_EDIT_RIDDLES | SU_MANAGE_MODULES |
+            SU_AUDIT_MODERATION | SU_NEVER_EXPIRE);
         // 1.1.2's installer_version setting is no longer written: it was the version shown, used as the install
         // marker. The completion marker and the applied steps are the database's state (lib/upgrade.php).
         foreach ($steps as $step) { resurrection_upgrade_record($step); }

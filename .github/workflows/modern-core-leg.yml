@@ -12,7 +12,7 @@ permissions:
   contents: read
 jobs:
   checks:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 60
     services:
       database:
@@ -32,13 +32,13 @@ jobs:
       RESURRECTION_TEST_DB_PASSWORD: disposable-test-only
       RESURRECTION_TEST_DB_NAME: resurrection_test
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1, node24, verified 2026-11-06
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
           fetch-tags: true
           persist-credentials: false
-      - uses: shivammathur/setup-php@bf6b4fbd49ca58e4608c9c89fba0b8d90bd2a39f # 2.35.5
+      - uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962 # 2.40.0, node24, verified 2026-11-06
         with:
           php-version: ${{ inputs.php }}
           extensions: pdo_mysql, mbstring, dom, xml, xmlwriter
@@ -66,7 +66,7 @@ jobs:
       - run: python3 scripts/validate-project.py
   http:
     name: http (${{ matrix.shard }})
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 60
     strategy:
       fail-fast: false
@@ -93,13 +93,13 @@ jobs:
       # PHP tooling tests skip on a PHP older than composer.json allows (Baseline's system PHP); here that fails.
       RESURRECTION_REQUIRE_PHP: '1'
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1, node24, verified 2026-11-06
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
           fetch-tags: true
           persist-credentials: false
-      - uses: shivammathur/setup-php@bf6b4fbd49ca58e4608c9c89fba0b8d90bd2a39f # 2.35.5
+      - uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962 # 2.40.0, node24, verified 2026-11-06
         with:
           php-version: ${{ inputs.php }}
           extensions: pdo_mysql, mbstring, dom, xml, xmlwriter
@@ -116,7 +116,7 @@ jobs:
   result:
     needs: [checks, http]
     if: always()
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
       - run: test "$CHECKS" = success && test "$HTTP" = success
