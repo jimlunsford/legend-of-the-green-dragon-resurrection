@@ -410,3 +410,11 @@ table name. They were reviewed onto the list (Item 6) and the sweep passes.
 - **Phone screenshots** are taken with the viewport grown to the page height, so the phone's fixed bottom navigation
   is drawn at the end of the page instead of over its middle. On sheet 2 they are cropped to the top of the page,
   through the web maintenance section.
+
+## Acceptance (recorded in Phase 6 task 5b, 2026-11-06)
+
+Task 5a is **accepted at `281fcf0`**:
+
+- Modern core 42281955893: **SUCCESS**, 12/12 jobs, every job on `ubuntu-24.04`. PHP 8.4 / MariaDB 11.4 `http` shards
+  13:50, 21:16, 18:34, 14:30; PHP 8.5 / MySQL 8.4 `http` shards 22:06, 21:42, 21:58, 21:47.
+- Baseline integrity 42281955860: **SUCCESS**.

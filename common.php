@@ -177,8 +177,9 @@ if (file_exists($resurrection_config)){
 		resurrection_operator_frame();
 	 	page_header("The game has not yet been installed");
 		output("`#Welcome to `@Legend of the Green Dragon`#, a game by Eric Stevens & JT Traub.`n`n");
-		// 1.1.2 linked its web installer here; installation is now a command-line action (docs/MODERN-INSTALLATION.md).
-		output("The game must be installed from the server's command line before it can be played: the operator runs `^php scripts/install.php`#, as docs/MODERN-INSTALLATION.md describes. There is no web installer.");
+		// 1.1.2 linked its web installer here. The install is the command, or setup.php for a host without a shell
+		// (Phase 6 task 5b); both run the same service (docs/MODERN-INSTALLATION.md).
+		output("The game must be installed before it can be played: the operator runs `^php scripts/install.php`# on the server's command line, or, on a host without a shell, opens `^setup.php`# in the browser and follows its steps, as docs/MODERN-INSTALLATION.md describes.");
 		output("`n`nIf you're not sure why you're seeing this message, it's because this game is not properly configured right now. ");
 		output("If you've previously been running the game here, chances are that you lost a file called '`%dbconnect.php`#' from your site.");
 		output("If that's the case, restore that file from your backup: the installer only sets up an empty database and never changes an existing one.");
@@ -323,7 +324,7 @@ if ($resurrection_database_state !== 'current'){
 			// The operator frame (Phase 6 task 5a): nothing of a running game can work on an incomplete install.
 			resurrection_operator_frame();
 			output("`#The game is unavailable: its database is not a completed installation.`n`n");
-			output("If you are the operator: diagnose the failed install, then recreate the disposable database and install again (docs/MODERN-INSTALLATION.md).");
+			output("If you are the operator: diagnose the failed install, then recreate the disposable database and install again with `^php scripts/install.php`# or `^setup.php`# (docs/MODERN-INSTALLATION.md).");
 		}
 	}
 	define("NO_SAVE_USER",true);

@@ -903,6 +903,52 @@ a.hotmotd { color: var(--accent); }
 @media (max-width: 480px) { .rz-webcron-status { grid-template-columns: minmax(0, 1fr); } .rz-webcron-status dd { margin-bottom: 8px; } }
 
 /*
+  The web setup page, setup.php (Phase 6 task 5b). Notices are outlined boxes: a refusal in --foe, a warning in
+  --accent, a note in --border. The checks are label and value rows with a one-word state; the token file sits in a
+  monospace box with the copy button beside it (under it on a phone); fields stack, each label above its input at the
+  full width of the column. The busy note shows while a long step runs (behaviors.js), and the pressed button dims.
+*/
+.rz-setup-notice { margin: 16px 0; padding: 12px 16px; border: 1px solid var(--border); border-left-width: 4px; border-radius: var(--radius-control); background: var(--panel); }
+.rz-setup-notice p { margin: 0; }
+.rz-setup-refusal { border-color: var(--foe); }
+.rz-setup-warning { border-color: var(--accent); }
+.rz-setup-lead { font-size: var(--size-heading); }
+.rz-setup-checks { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 6px 16px; margin: 16px 0; font-family: var(--font-ui); }
+.rz-setup-checks dt { color: var(--muted); font-weight: var(--weight-ui-medium); }
+.rz-setup-checks dd { margin: 0; overflow-wrap: anywhere; }
+.rz-setup-check-word { display: inline-block; min-width: 4.5em; margin-right: 8px; font-size: var(--size-label); font-weight: var(--weight-ui-bold); letter-spacing: var(--tracking-label); text-transform: uppercase; }
+.rz-setup-check-ok .rz-setup-check-word { color: var(--health); }
+.rz-setup-check-info .rz-setup-check-word { color: var(--magic); }
+.rz-setup-check-warning .rz-setup-check-word { color: var(--accent); }
+.rz-setup-check-fail .rz-setup-check-word { color: var(--damage); }
+.rz-setup-steps { padding-left: 1.4em; }
+.rz-setup-path { overflow-wrap: anywhere; }
+.rz-setup-copy { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 8px; margin: 8px 0 12px; }
+.rz-setup-copy [hidden] { display: none; }
+.rz-setup-copy .button { margin: 0; }
+.rz-content .rz-setup-file { flex: 1 1 320px; width: auto; min-width: 0; min-height: 0; font-family: monospace; font-size: var(--size-small); resize: none; white-space: pre; overflow-x: auto; }
+.rz-setup-help { margin: 4px 0 8px; color: var(--muted); font-family: var(--font-ui); font-size: var(--size-small); }
+.rz-setup-form { margin: 16px 0; }
+.rz-setup-field { display: flex; flex-direction: column; gap: 4px; margin: 0 0 12px; max-width: 560px; }
+.rz-setup-field label { font-weight: var(--weight-ui-medium); }
+.rz-content .rz-setup-field input:not([type="checkbox"]) { width: 100%; }
+.rz-setup-field .rz-setup-help { margin: 0; }
+.rz-setup-box { flex-direction: row; align-items: center; gap: 8px; min-height: var(--touch-target); }
+.rz-setup-choice { margin: 0 0 12px; padding: 8px 16px 12px; border: 1px solid var(--border); border-radius: var(--radius-control); }
+.rz-setup-choice legend { padding: 0 4px; color: var(--muted); font-family: var(--font-ui); }
+.rz-setup-choice div { display: flex; align-items: flex-start; gap: 8px; margin: 8px 0; }
+.rz-setup-choice input { flex: none; margin-top: 2px; }
+.rz-setup-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; margin: 16px 0; }
+.rz-setup-actions .button { margin: 0; }
+.rz-setup-actions button:disabled { opacity: 0.6; cursor: progress; }
+.rz-setup-busy { margin: 0; color: var(--accent); font-family: var(--font-ui); }
+.rz-setup-busy[hidden] { display: none; }
+.rz-setup-report { max-height: 320px; padding: 12px 16px; overflow: auto; background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius-control); font-size: var(--size-small); white-space: pre-wrap; overflow-wrap: anywhere; }
+.rz-setup-done { padding-left: 1.4em; }
+.rz-secret-note { color: var(--muted); font-style: italic; }
+@media (max-width: 480px) { .rz-setup-checks { grid-template-columns: minmax(0, 1fr); gap: 2px; } .rz-setup-checks dd { margin-bottom: 8px; } }
+
+/*
   The phone layout's pieces (Phase 5 task 8), hidden until the phone breakpoint: the compact character header, the More
   section (MoTD, Petition for Help, Credits where allowed) and the bottom tab bar.
 */

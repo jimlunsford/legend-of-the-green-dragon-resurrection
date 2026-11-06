@@ -54,6 +54,10 @@ parameters:
         - lib/database_config.php
         - lib/installer/install_run.php
         - lib/webcron.php
+        - lib/setup/token.php
+        - lib/setup/guard.php
+        - lib/setup/page.php
+        - lib/setup/run.php
         - scripts/install.php
         - scripts/upgrade.php
     bootstrapFiles:

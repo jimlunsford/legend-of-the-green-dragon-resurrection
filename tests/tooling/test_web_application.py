@@ -597,6 +597,55 @@ function resurrectionwebcronfixture_dohook($hook, $args) {
             logged = [r['message'] for r in q("SELECT message FROM gamelog WHERE category='settings' AND message LIKE '%web maintenance%' ORDER BY logid DESC LIMIT 3")]
             self.assertEqual(['Turned off web maintenance', 'Made a new web maintenance address', 'Turned on web maintenance'], logged)
 
+    def _stored_anywhere(self, needles):
+        """Where the needles are stored: every column of every table ('table.column'), the PHP session files and the
+        server's error output. Searched in PHP, row by row, so no table is copied out."""
+        code = ("require 'dbconnect.php'; require 'lib/dbwrapper_pdo.php'; db_connect($DB_HOST,$DB_USER,$DB_PASS); db_select_db($DB_NAME);"
+                " $needles=json_decode(stream_get_contents(STDIN),true); $found=[];"
+                " foreach (db_query('SHOW TABLES') as $t) { $t=(string)array_values($t)[0]; foreach (db_query('SELECT * FROM '.db_identifier($t)) as $row) {"
+                " foreach ($row as $column=>$value) { foreach ($needles as $n) { if (is_string($value) && str_contains($value,$n)) $found[]=$t.'.'.$column; } } } }"
+                " $dir=session_save_path() ?: sys_get_temp_dir(); foreach (glob($dir.'/sess_*') ?: [] as $file) { $data=@file_get_contents($file);"
+                " foreach ($needles as $n) { if (is_string($data) && str_contains($data,$n)) $found[]='session '.basename($file); } }"
+                " echo json_encode(array_values(array_unique($found)));")
+        result = subprocess.run([shutil.which('php'), '-r', code], input=json.dumps(needles), cwd=ROOT, capture_output=True, text=True, timeout=120)
+        self.assertEqual(0, result.returncode, result.stderr[-2000:])
+        found = json.loads(result.stdout)
+        self.server_log.seek(0)
+        if any(n in self.server_log.read() for n in needles):
+            found.append('server error output')
+        return found
+
+    def test_secret_page_is_kept_nowhere_http(self):
+        # Phase 6 task 5b, step 0: 1.1.2 keeps a copy of every page it draws for a signed-in player (accounts_output, read
+        # back by badnav.php and the last-hit view), so Game Settings' web maintenance page, which shows its secret
+        # address once, left the secret in the database. The kept copy now replaces a page's secret with a fixed note
+        # (resurrection_secret_output() in lib/pageparts.php, the one rule every page that shows a secret uses).
+        with self._admin_tool_session() as s, self._webcron_fixture():
+            q, login, request, csrf, player = (s[k] for k in ['q', 'login', 'request', 'csrf', 'player'])
+            q("UPDATE settings SET value='0' WHERE setting='webcron_enabled'")
+            q("UPDATE settings SET value='' WHERE setting IN ('webcron_secret_hash','webcron_secret_made')")
+            login(128)
+            secrets = []
+            status, body = request('configuration.php?op=webcron')
+            for op in ['webcron_on', 'webcron_new']:
+                status, body = request('configuration.php?op=' + op, {'csrf_token': csrf(body)})
+                self.assertEqual(200, status, body[:2000])
+                match = re.search(r'id="rz-webcron-key" class="rz-webcron-value" value="([A-Za-z0-9_-]{43})"', body)
+                self.assertIsNotNone(match, body[:3000])
+                secrets.append(match.group(1))
+                # The page itself shows the address once, and is never cached.
+                self.assertIn('webcron.php?key=' + match.group(1), body)
+                self.assertEqual([], self._stored_anywhere(secrets), op)
+                kept = q('SELECT output FROM accounts_output WHERE acctid=?', [player])[0]['output']
+                self.assertIn('A secret was shown here once. It is not kept, so it cannot be shown again.', kept)
+                self.assertIn('Web maintenance', kept)
+            # The kept copy, shown again by badnav.php, holds the note and not the address.
+            status, body = request('badnav.php')
+            self.assertEqual(200, status, body[:2000])
+            self.assertIn('A secret was shown here once.', body)
+            for secret in secrets:
+                self.assertNotIn(secret, body)
+
     def test_cron_without_a_config_exits_nonzero(self):
         # F1 (Phase 6 task 5a): with no configuration file, or a game that cannot start, cron.php printed common.php's
         # HTML page and exited 0, so a scheduler recorded success. Now: exit 1, nothing on stdout, one fixed line on
@@ -7604,7 +7653,7 @@ function MODULE_dohook($hook,$args) {
              lambda:(q("DELETE FROM settings WHERE setting='installer_version'"),q("INSERT IGNORE INTO settings (setting,value) VALUES ('resurrection_install','complete')")),
              'The game is unavailable: this database holds a Legend of the Green Dragon 1.1.2 game, which is unsupported. Resurrection does not upgrade or migrate a 1.1.2 database. If you are the operator: the only path is a fresh install into an empty database (docs/MODERN-INSTALLATION.md).'),
             ('incomplete install',lambda:q("DELETE FROM settings WHERE setting='resurrection_install'"),lambda:q("INSERT IGNORE INTO settings (setting,value) VALUES ('resurrection_install','complete')"),
-             'The game is unavailable: its database is not a completed installation. If you are the operator: diagnose the failed install, then recreate the disposable database and install again (docs/MODERN-INSTALLATION.md).'),
+             'The game is unavailable: its database is not a completed installation. If you are the operator: diagnose the failed install, then recreate the disposable database and install again with php scripts/install.php or setup.php (docs/MODERN-INSTALLATION.md).'),
         ]
         for name,change,restore,message in cases:
             with self.subTest(name):

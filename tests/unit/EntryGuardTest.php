@@ -36,7 +36,7 @@ final class EntryGuardTest extends TestCase
         $entries = [];
         foreach ($this->files($root) as $file) {
             if (!(preg_match('#\A[^/]+\.php\z#', $file) || preg_match('#\Ascripts/[^/]+\.php\z#', $file))
-                || in_array($file, ['common.php', 'battle.php', 'dbconnect.php'], true)) continue;
+                || in_array($file, ['common.php', 'battle.php', 'dbconnect.php', 'resurrection-setup.php', 'resurrection-setup-failures.php'], true)) continue;
             $entries[] = $file;
             if ($this->firstStatement($root . '/' . $file) !== self::DEFINE) $wrong[] = $file;
         }
@@ -46,9 +46,12 @@ final class EntryGuardTest extends TestCase
         self::assertContains('cron.php', $entries);
         // Phase 6 task 5a: web maintenance's entry point.
         self::assertContains('webcron.php', $entries);
+        // Phase 6 task 5b: the web setup page. Its token file and failure counter, like dbconnect.php, are the host's
+        // files, never entry points (they start with a line that answers an empty 404).
+        self::assertContains('setup.php', $entries);
         self::assertContains('scripts/install.php', $entries);
         self::assertContains('scripts/upgrade.php', $entries);
-        self::assertCount(63, $entries);
+        self::assertCount(64, $entries);
         // PHPUnit's own entry point.
         self::assertSame(self::DEFINE, $this->firstStatement($root . '/tests/bootstrap.php'));
         self::assertStringContainsString('bootstrap="tests/bootstrap.php"', (string)file_get_contents($root . '/phpunit.xml'));

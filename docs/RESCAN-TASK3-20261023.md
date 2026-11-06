@@ -448,6 +448,8 @@ are not listed.
 | `lib/service_authority.php` | `$lock ? ' FOR UPDATE' : ''` | 1 | server | Fixed lock clause chosen by a boolean argument. |
 | `lib/specialty_combat.php` | `$lock ? ' FOR UPDATE' : ''` | 1 | server | Fixed lock clause chosen by a boolean argument. |
 | `lib/specialty_onboarding.php` | `$lock ? ' FOR UPDATE' : ''` | 2 | server | Fixed lock clause chosen by a boolean argument. |
+| `lib/setup/guard.php` | `db_identifier(db_prefix('faillog'))` | 2 | server | `db_identifier()` of a fixed table name (the setup page's failed attempts in upgrade mode); the words, IP, key and times are bound. |
+| `lib/setup/token.php` | `db_identifier(db_prefix('settings'))` | 2 | server | `db_identifier()` of a fixed table name (the setup page's used tokens); the setting name and value are bound. |
 | `lib/stables_authority.php` | `$lock ? ' FOR UPDATE' : ''` | 1 | server | Fixed lock clause chosen by a boolean argument. |
 | `lib/stored_state_repair.php` | `$lock ? ' FOR UPDATE' : ''` | 1 | server | Fixed lock clause chosen by a boolean argument. |
 | `lib/stored_state_repair.php` | `db_identifier($field)` | 1 | server | `$field` is one of the six repair field names (`RESURRECTION_REPAIR_FIELDS` keys), checked before any query. |
@@ -589,3 +591,19 @@ The local run missed it because `SqlInterpolationScanner::shippedFiles()` listed
 untracked files that are not ignored (`--others --exclude-standard`), so a local `composer test` scans a new file before
 it is committed. That only adds files: in CI, where every file is tracked, the list is the same. The test and its
 matching are unchanged.
+
+## Reviewed list change, 2026-11-06 (Phase 6 task 5b)
+
+Task 5b's web setup page (`setup.php`, `lib/setup/`) put two fixed table names into SQL text, and `SqlSweepTest` failed
+locally ("Interpolated into SQL and not reviewed") until they were reviewed onto the list:
+
+- `db_identifier(db_prefix('faillog'))`, two sites in `lib/setup/guard.php` (`resurrection_setup_blocked()`,
+  `resurrection_setup_failure()`): the failed-attempt count and record in upgrade mode. The fixed words
+  (`setup_invalid_token`, `setup_invalid_credentials`), the IP, the token file's key and the times are bound.
+- `db_identifier(db_prefix('settings'))`, two sites in `lib/setup/token.php` (`resurrection_setup_used_tokens()`,
+  `resurrection_setup_record_used()`): the used tokens' keys. The setting name and its value are bound.
+
+Both are literal table names through the configured prefix and `db_identifier()`, the class of the other fixed-table
+rows; no request value reaches the SQL text. The scan also flagged a user-facing sentence in `lib/setup/page.php` that
+began with the word "Delete" followed by a path; it is not SQL, so the sentence was reworded ("PHP could not delete
+...") rather than listed. The test and its matching are unchanged.

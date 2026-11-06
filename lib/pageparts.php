@@ -84,6 +84,70 @@ function resurrection_operator_frame_active(){
 	return !empty($GLOBALS['resurrection_operator_frame']);
 }
 
+/** The markers around a page's secret part (resurrection_secret_output()). */
+const RESURRECTION_SECRET_OPEN = '<!--rz-secret-->';
+const RESURRECTION_SECRET_CLOSE = '<!--/rz-secret-->';
+
+/** What the kept copy of a page shows where its secret part was. */
+const RESURRECTION_SECRET_NOTE = '<p class="rz-secret-note">A secret was shown here once. It is not kept, so it cannot be shown again.</p>';
+
+/**
+ * The one rule for a page that shows a secret once (Phase 6 task 5b, step 0): Game Settings' web maintenance address,
+ * and the web setup page's token suggestion and maintenance address.
+ *
+ * 1.1.2 keeps each signed-in player's last rendered page in the database (accounts_output, written by saveuser() from
+ * page_footer()): badnav.php shows it again, and the user editor shows it as the last page hit. A secret part printed
+ * through this function is sent once and never kept:
+ *
+ * - the page is sent with Cache-Control: no-store;
+ * - the copy page_footer() keeps has the part replaced by a fixed note (resurrection_secret_kept_copy());
+ * - each secret named here is remembered for this request only, and if one is still in that copy (printed somewhere
+ *   else on the page), only the note is kept.
+ *
+ * @param string $html the secret part of the page, already escaped
+ * @param string ...$secrets every secret value in it
+ */
+function resurrection_secret_output(#[\SensitiveParameter] string $html, #[\SensitiveParameter] string ...$secrets): void {
+	if (!headers_sent()) header('Cache-Control: no-store');
+	resurrection_secret_register($secrets);
+	rawoutput(RESURRECTION_SECRET_OPEN . $html . RESURRECTION_SECRET_CLOSE);
+}
+
+/**
+ * The secrets this request's page shows, kept in memory for the request only (never in a global, the session or a
+ * file). With $add, adds to them.
+ *
+ * @param list<string>|null $add
+ * @return list<string>
+ */
+function resurrection_secret_register(#[\SensitiveParameter] ?array $add = null): array {
+	static $secrets = [];
+	foreach ($add ?? [] as $secret) {
+		if ($secret !== '') $secrets[] = $secret;
+	}
+	return $secrets;
+}
+
+/** Whether this request's page showed a secret. */
+function resurrection_secret_page(): bool {
+	return resurrection_secret_register() !== [];
+}
+
+/**
+ * The copy of the finished page that may be kept (accounts_output): the page itself unless it showed a secret; then
+ * every secret part replaced by the note, or the note alone when a secret is still anywhere in the copy.
+ */
+function resurrection_secret_kept_copy(#[\SensitiveParameter] string $page): string {
+	$secrets = resurrection_secret_register();
+	if ($secrets === []) return $page;
+	$copy = preg_replace('/' . preg_quote(RESURRECTION_SECRET_OPEN, '/') . '.*?' . preg_quote(RESURRECTION_SECRET_CLOSE, '/') . '/s', RESURRECTION_SECRET_NOTE, $page);
+	if (!is_string($copy)) return RESURRECTION_SECRET_NOTE;
+	foreach ($secrets as $secret) {
+		if (str_contains($copy, $secret)) return RESURRECTION_SECRET_NOTE;
+	}
+	return $copy;
+}
+
 /**
  * Returns an output formatted popup link based on JavaScript
  *
@@ -300,7 +364,8 @@ function page_footer($saveuser=true){
 	//finalize output
 	$output=$header.$output.$footer;
 	$session['user']['gensize']+=strlen($output);
-	$session['output']=$output;
+	// The kept copy of the page (accounts_output): never a secret the page showed once (Phase 6 task 5b, step 0).
+	$session['output']=resurrection_secret_kept_copy($output);
 	if ($saveuser === true) {
 		saveuser();
 	}

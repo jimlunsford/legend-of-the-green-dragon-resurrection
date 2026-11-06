@@ -201,11 +201,9 @@ function resurrection_webcron_render(#[\SensitiveParameter] ?string $secret): vo
     if ($secret !== null && $status['enabled']) {
         $base = resurrection_server_url() ?? resurrection_request_server_url();
         $address = ($base ?? '') . 'webcron.php?key=' . $secret;
-        rawoutput('<div class="rz-webcron-once" role="status"><p><strong>Copy this address now. It is shown only once.</strong> The game keeps only a fingerprint of it, so it cannot show it again. If you lose it, make a new address.</p>');
-        rawoutput('<label for="rz-webcron-address">Maintenance address</label><div class="rz-webcron-copy"><input type="text" id="rz-webcron-address" class="rz-webcron-value" value="' . $h($address) . '" readonly autocomplete="off" spellcheck="false"><button type="button" class="button" data-rz-copy="rz-webcron-address" data-rz-copied="Copied" hidden>Copy</button></div>');
-        rawoutput('<p>A scheduler that can send a request header (cron-job.org, EasyCron) should send the key in the <code>' . $h(RESURRECTION_WEBCRON_HEADER) . '</code> header instead, to <code>' . $h(($base ?? '') . 'webcron.php') . '</code>, so the key stays out of address logs.</p>');
-        rawoutput('<label for="rz-webcron-key">Key alone</label><div class="rz-webcron-copy"><input type="text" id="rz-webcron-key" class="rz-webcron-value" value="' . $h($secret) . '" readonly autocomplete="off" spellcheck="false"><button type="button" class="button" data-rz-copy="rz-webcron-key" data-rz-copied="Copied" hidden>Copy</button></div>');
-        rawoutput('<p>Ask for it every 5 to 15 minutes. It answers <code>OK</code> whatever happened; the result shows on this page.</p></div>');
+        // Shown once, under the one rule for a page that shows a secret (resurrection_secret_output(), Phase 6 task 5b):
+        // sent no-store, and never in the copy of the page the game keeps.
+        resurrection_secret_output(resurrection_webcron_once_html($address, $secret, $base ?? ''), $secret, $address);
     }
     rawoutput('<dl class="rz-webcron-status">');
     rawoutput('<dt>Web maintenance</dt><dd>' . ($status['enabled'] ? 'On' : 'Off') . '</dd>');
@@ -230,4 +228,18 @@ function resurrection_webcron_render(#[\SensitiveParameter] ?string $secret): vo
         $form('webcron_on', 'Turn on web maintenance');
     }
     rawoutput('</div></section>');
+}
+
+/**
+ * The web maintenance address and key, shown once with copy buttons: Game Settings' page that made them, and the web
+ * setup page's last screen (Phase 6 task 5b). The caller prints it through resurrection_secret_output().
+ */
+function resurrection_webcron_once_html(#[\SensitiveParameter] string $address, #[\SensitiveParameter] string $secret, string $base): string {
+    $h = static fn (string $text): string => htmlspecialchars($text, ENT_QUOTES, 'UTF-8');
+    $html = '<div class="rz-webcron-once" role="status"><p><strong>Copy this address now. It is shown only once.</strong> The game keeps only a fingerprint of it, so it cannot show it again. If you lose it, make a new address.</p>';
+    $html .= '<label for="rz-webcron-address">Maintenance address</label><div class="rz-webcron-copy"><input type="text" id="rz-webcron-address" class="rz-webcron-value" value="' . $h($address) . '" readonly autocomplete="off" spellcheck="false"><button type="button" class="button" data-rz-copy="rz-webcron-address" data-rz-copied="Copied" hidden>Copy</button></div>';
+    $html .= '<p>A scheduler that can send a request header (cron-job.org, EasyCron) should send the key in the <code>' . $h(RESURRECTION_WEBCRON_HEADER) . '</code> header instead, to <code>' . $h($base . 'webcron.php') . '</code>, so the key stays out of address logs.</p>';
+    $html .= '<label for="rz-webcron-key">Key alone</label><div class="rz-webcron-copy"><input type="text" id="rz-webcron-key" class="rz-webcron-value" value="' . $h($secret) . '" readonly autocomplete="off" spellcheck="false"><button type="button" class="button" data-rz-copy="rz-webcron-key" data-rz-copied="Copied" hidden>Copy</button></div>';
+    $html .= '<p>Ask for it every 5 to 15 minutes. It answers <code>OK</code> whatever happened; the result shows in Game Settings, under Web maintenance.</p></div>';
+    return $html;
 }

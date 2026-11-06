@@ -19,13 +19,31 @@ final class SensitiveParameterTest extends TestCase
         'resurrection_webcron_render' => ['secret'],
         'resurrection_install_run' => ['password', 'values'],
         'resurrection_database_open' => ['database'],
+        // Phase 6 task 5b: the setup page's token, the administrator's password, and a page that shows a secret.
+        'resurrection_webcron_once_html' => ['address', 'secret'],
+        'resurrection_secret_output' => ['html', 'secrets'],
+        'resurrection_secret_register' => ['add'],
+        'resurrection_secret_kept_copy' => ['page'],
+        'resurrection_setup_base32' => ['bytes'],
+        'resurrection_setup_token_well_formed' => ['value'],
+        'resurrection_setup_token_hash' => ['token'],
+        'resurrection_setup_token_matches' => ['fileToken', 'typed'],
+        'resurrection_setup_grant' => ['token'],
+        'resurrection_setup_grant_new' => ['token'],
+        'resurrection_setup_install' => ['token'],
+        'resurrection_setup_upgrade' => ['token'],
+        'resurrection_setup_administrator' => ['password'],
+        'resurrection_setup_page' => ['secrets'],
+        'resurrection_setup_screen_form' => ['typed'],
+        'resurrection_setup_screen_maintenance' => ['secret', 'address'],
     ];
 
     public static function setUpBeforeClass(): void
     {
         require_once 'lib/names.php';
         ob_start();
-        foreach (['constants', 'datacache', 'settings', 'modules', 'output', 'sanitize', 'translator', 'installer/install_run', 'webcron'] as $library) {
+        foreach (['constants', 'datacache', 'settings', 'modules', 'output', 'sanitize', 'translator', 'installer/install_run', 'webcron',
+                'pageparts', 'upgrade', 'setup/run'] as $library) {
             require_once 'lib/' . $library . '.php';
         }
         ob_end_clean();
@@ -61,6 +79,25 @@ final class SensitiveParameterTest extends TestCase
                 }
             }
         }
+    }
+
+    public function testNoSetupFunctionTakesASecretUnmarked(): void
+    {
+        // Phase 6 task 5b, the same guard for the setup page: in lib/setup/, a parameter named for the token, a
+        // password, a secret or the address that carries it is always marked.
+        $count = 0;
+        foreach (glob('lib/setup/*.php') ?: [] as $file) {
+            preg_match_all('/^function (resurrection_setup_\w+)\(/m', (string)file_get_contents($file), $functions);
+            foreach ($functions[1] as $function) {
+                $count++;
+                foreach ((new \ReflectionFunction($function))->getParameters() as $parameter) {
+                    if (preg_match('/\A(token|fileToken|typed|password|secret|secrets|address|bytes)\z/', $parameter->getName())) {
+                        self::assertNotSame([], $parameter->getAttributes(\SensitiveParameter::class), $function . '($' . $parameter->getName() . ')');
+                    }
+                }
+            }
+        }
+        self::assertGreaterThan(40, $count);
     }
 
     public function testTheSecretIsReplacedInATrace(): void

@@ -88,7 +88,11 @@ This follows 1.1.2, whose installer pre-selected its recommended modules for act
 
 The installer uses an advisory database lock. Any existing table causes refusal, including an unrelated populated database, a partial failed install, and a previous historical game. A completed Resurrection database is reported as installed. A recognizable 1.1.2 database (its settings `installer_version` 1.x and an accounts table) is reported as unsupported: the command says that Resurrection does not upgrade or migrate a 1.1.2 database and that a fresh install into an empty database is the only path. Unrelated tables are reported as populated. Each is refused with its reason, without modification, and `--write-config` writes nothing for them. No automatic truncate, drop, retry cleanup or in-place upgrade is performed. Diagnose a failed disposable installation before explicitly recreating its disposable database. Never apply that procedure to valuable data.
 
-The historical web installer returns 403 before bootstrap. Direct requests cannot install or upgrade, even if an installation marker is removed. scripts/install.php rejects HTTP with 404. No 1.1.2 database will be migrated; installs are fresh only.
+The historical web installer returns 403 before bootstrap, even if an installation marker is removed. scripts/install.php rejects HTTP with 404. No 1.1.2 database will be migrated; installs are fresh only.
+
+### Without a shell: setup.php
+
+A host with only a hosting panel can install, or upgrade, from the browser: open `https://your-site/setup.php`. It runs the same install and upgrade services as the commands. It answers only while the game is not installed (no configuration file, or one whose database is empty) or its database is behind, and is an empty 404 otherwise. To prove control of the site's files, it asks for a file named `resurrection-setup.php` in the game's folder (or beside the `LOGD_DBCONNECT` file), created in the panel's file manager with the two lines the page shows, and for the value on its second line. The file works once, for 60 minutes. An upgrade also asks for a top administrator's login and password and a fresh backup. The page needs HTTPS. Its last install screen offers daily maintenance through the panel's scheduler (`php cron.php`) or, if the scheduler can only fetch an address, web maintenance. The full host guide is a later task; `PHASE6-TASK5B-SETUP-PAGE-20261106.md` has the details.
 
 ## Authentication and sessions
 
@@ -120,7 +124,7 @@ A new version of Resurrection can change the database. Each change is a numbered
 - **Ahead** (the database has a step this version does not have, or a newer bundled module): "Game Unavailable". This is a downgrade, and it is refused: run the newer version again, or restore the backup taken before it upgraded the database.
 - A 1.1.2 database stays unsupported, and an incomplete install stays refused. Neither is upgraded.
 
-Upgrades go one release at a time (`VERSIONING.md`). Run every command below as the same user, with the same private configuration file, as the install and `cron.php`. `scripts/upgrade.php` takes the same optional configuration path as `scripts/install.php` (default `dbconnect.php` in the repository root) and rejects HTTP with 404.
+Upgrades go one release at a time (`VERSIONING.md`). Without a shell, `setup.php` applies the same upgrade (see "Without a shell: setup.php" above). Run every command below as the same user, with the same private configuration file, as the install and `cron.php`. `scripts/upgrade.php` takes the same optional configuration path as `scripts/install.php` (default `dbconnect.php` in the repository root) and rejects HTTP with 404.
 
 ### 1. Back up
 

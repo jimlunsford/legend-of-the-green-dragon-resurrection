@@ -31,6 +31,9 @@
   - data-rz-copy="id" on a button (hidden in the markup): shown when the page loads; a click copies the value of the
     field with that id to the clipboard, and the button says data-rz-copied for a moment (Game Settings' web
     maintenance address, Phase 6 task 5a). Without this file the field stays readonly and selectable.
+  - data-rz-busy="id" on a form (setup.php's long steps, Phase 6 task 5b): when it is sent, its submit buttons are
+    disabled, the hidden note with that id is shown, and a second press sends nothing. Without this file the form is
+    sent as any other; the server refuses a second install or upgrade on its own.
 
   Every one of these was an enhancement in 1.1.2 too: the game works without this file.
 */
@@ -173,7 +176,30 @@
     if (form && form.nodeName === 'FORM' && form.hasAttribute('data-rz-confirm')
         && !window.confirm(form.getAttribute('data-rz-confirm'))) {
       e.preventDefault();
+      return;
     }
+    if (form && form.nodeName === 'FORM' && form.hasAttribute('data-rz-busy')) {
+      if (form.hasAttribute('data-rz-busy-sent')) { e.preventDefault(); return; }
+      form.setAttribute('data-rz-busy-sent', '1');
+      var note = byId(form.getAttribute('data-rz-busy'));
+      if (note) { note.hidden = false; }
+      // After this event, so the pressed button's own name and value still go with the form.
+      setTimeout(function () {
+        Array.prototype.forEach.call(form.querySelectorAll('button[type="submit"], input[type="submit"], button:not([type])'),
+          function (button) { button.disabled = true; });
+      }, 0);
+    }
+  });
+
+  // A page restored from the back/forward cache gets its busy forms back.
+  window.addEventListener('pageshow', function (e) {
+    if (!e.persisted) { return; }
+    each('form[data-rz-busy-sent]', function (form) {
+      form.removeAttribute('data-rz-busy-sent');
+      var note = byId(form.getAttribute('data-rz-busy'));
+      if (note) { note.hidden = true; }
+      Array.prototype.forEach.call(form.querySelectorAll('button, input[type="submit"]'), function (button) { button.disabled = false; });
+    });
   });
 
   document.addEventListener('change', function (e) {

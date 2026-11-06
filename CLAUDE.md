@@ -98,7 +98,25 @@ Since Phase 6 task 5a each operation is one service, and the services are the on
 - `resurrection_upgrade_run()` and `resurrection_upgrade()` (`lib/upgrade.php`)
 - `resurrection_maintenance_run()` (`lib/maintenance.php`)
 
-The commands (`scripts/install.php`, `scripts/upgrade.php`, `cron.php`) and the web pages (`webcron.php`, and `setup.php` from task 5b) are thin front ends: they parse arguments or the request, read the environment, print and set exit codes or the response, and call the service. Change the behavior in the service, never in one front end. The commands' locks, lock names, refusal texts, JSON and exit codes stay as they are; their existing tests are the proof.
+The commands (`scripts/install.php`, `scripts/upgrade.php`, `cron.php`) and the web pages (`webcron.php`, `setup.php`) are thin front ends: they parse arguments or the request, read the environment, print and set exit codes or the response, and call the service. Change the behavior in the service, never in one front end. The commands' locks, lock names, refusal texts, JSON and exit codes stay as they are; their existing tests are the proof.
+
+## Web setup page
+
+`setup.php` (Phase 6 task 5b; `docs/PHASE6-TASK5B-SETUP-PAGE-20261106.md`) is the browser front end over the install and upgrade services, for hosts without a shell. Keep these rules:
+
+- It answers only while the game is not installed (no configuration file, or one whose database is empty) or its database is behind. Every other state is the empty 404 with no cookie. The mode is decided again on every request. The one exception is the maintenance choice on the install's last screen, which needs that install's grant.
+- It never loads `common.php`. It always sends the enforced CSP, `Cache-Control: no-store` and `X-Robots-Tag: noindex`.
+- Every change needs the token file `resurrection-setup.php` and the value it holds typed on the page:
+  - The file sits beside the `LOGD_DBCONNECT` file when that is set, else in the game folder, never both.
+  - Line 1 is the guard line, line 2 is `rzsetup-` plus 32 base32 characters, and an optional line 3 is exactly `https-terminated-upstream`.
+  - It holds at most 128 bytes, is read with a bounded read and is never included.
+  - It is refused when it has fewer than 12 distinct characters, is more than 60 minutes old or is more than 5 minutes ahead.
+  - The value is compared with `hash_equals()`. The file is used once: it is deleted on success, and its key is recorded in `setup_tokens_used`.
+  - Upgrade also needs an `SU_MEGAUSER` login and password and the backup box.
+- Plain HTTP is refused unless `REMOTE_ADDR` is the machine itself. `X-Forwarded-Proto` counts only with the file's third line.
+- Failures are capped at 10 in 15 minutes per token file: in `faillog` for an upgrade, in the guarded counter file for an install.
+- The token, the passwords and the maintenance secret never go in a URL, log, error page, session or saved page. Mark parameters that carry them `#[\SensitiveParameter]`. A page that shows a secret once uses `resurrection_secret_output()` (`lib/pageparts.php`).
+- Screens use the operator frame with the full credits. The credits are copied into `lib/setup/credits.php`, and `SetupCreditsTest` keeps them byte-identical to `common.php`'s. Every change is POST plus CSRF, with no inline script or style.
 
 ## Tests
 

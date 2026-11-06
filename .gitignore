@@ -1,6 +1,9 @@
 # Generated configuration and secrets
 /dbconnect.php
 /prefixes.php
+# The web setup page's token file and failure counter (setup.php, Phase 6 task 5b)
+/resurrection-setup.php
+/resurrection-setup-failures.php
 .env
 .env.*
 !.env.example

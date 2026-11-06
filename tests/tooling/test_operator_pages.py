@@ -129,8 +129,11 @@ class OperatorPageTests(unittest.TestCase):
         self.assertRendered(status, body, 'The game has not yet been installed')
         shown = text(body)
         self.assertIn('Welcome to Legend of the Green Dragon , a game by Eric Stevens & JT Traub.', shown)
-        self.assertIn("The game must be installed from the server's command line before it can be played: the operator "
-                      'runs php scripts/install.php , as docs/MODERN-INSTALLATION.md describes. There is no web installer.', shown)
+        # Phase 6 task 5b: the page names both paths, the command and setup.php.
+        self.assertIn("The game must be installed before it can be played: the operator runs php scripts/install.php on the "
+                      "server's command line, or, on a host without a shell, opens setup.php in the browser and follows its "
+                      'steps, as docs/MODERN-INSTALLATION.md describes.', shown)
+        self.assertNotIn('There is no web installer.', shown)
         self.assertIn('restore that file from your backup', shown)
         self.assertNotIn('installer.php', body)
 
@@ -264,7 +267,11 @@ class OperatorPageTests(unittest.TestCase):
                     self.assertEqual(1, body.count(credit), body[-3000:])
                 self.assertNotIn('rz-safe-frame', body)
                 self.assertIn('scripts/install.php' if label == 'not installed' else 'LOGD_DBCONNECT', text(body))
-                self.assertNotIn('setup.php', body)
+                # Phase 6 task 5b: the not-installed page names setup.php beside the command; the others do not.
+                if label == 'not installed':
+                    self.assertIn('setup.php', text(body))
+                else:
+                    self.assertNotIn('setup.php', body)
                 self.assertNotIn('webcron', body)
 
     def test_operator_pages_send_the_security_headers(self):
@@ -303,8 +310,9 @@ class OperatorPageTests(unittest.TestCase):
         internal = sorted(f for f in listed if f and (f.split('/')[0] in ('lib', 'modules', 'src') or f in ('common.php', 'battle.php')))
         entries = sorted(f for f in listed if f and '/' not in f and f not in ('common.php', 'battle.php', 'dbconnect.php'))
         self.assertGreater(len(internal), 270)
-        # Phase 6 task 5a: webcron.php is the 61st; without a configuration it answers its empty 404.
-        self.assertEqual(61, len(entries))
+        # Phase 6 task 5a: webcron.php is the 61st; without a configuration it answers its empty 404. Phase 6 task 5b:
+        # setup.php is the 62nd; without a configuration it answers with its install checks.
+        self.assertEqual(62, len(entries))
         with self.tree() as (port, tree, error_log):
             wrong = []
             for path in internal:
@@ -320,7 +328,8 @@ class OperatorPageTests(unittest.TestCase):
                 status, _, body = self.get(port, path)
                 page = body.decode('utf-8', errors='replace')
                 expected = answers.get(path, 200)
-                if status != expected or ERROR.search(page) or (expected == 200 and 'The game has not yet been installed' not in page):
+                shows = 'Install the game' if path == 'setup.php' else 'The game has not yet been installed'
+                if status != expected or ERROR.search(page) or (expected == 200 and shows not in page):
                     wrong.append(f'{path}: {status} {page[:200]!r}')
             self.assertEqual([], wrong)
 

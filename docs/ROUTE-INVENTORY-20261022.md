@@ -37,11 +37,11 @@ with `check_su_access()`. Short names in the evidence column: `CRS` is `CORE-ROU
 
 | Status | Entries |
 |---|---|
-| CLOSED | 90 |
+| CLOSED | 91 |
 | DISABLED | 3 |
 | READ-ONLY | 70 |
 | OPEN | 0 |
-| Total | 163 |
+| Total | 164 |
 
 ## Top-level pages
 
@@ -146,6 +146,7 @@ with `check_su_access()`. Short names in the evidence column: `CRS` is `CORE-ROU
 | `referral.php` | anyone | no | READ-ONLY | The referral link and list; the query takes no request input; `serverurl` never saved (`COMPLETION-REPORTING-20261017.md`). |
 | `rock.php` | player (veteran) | commentary | CLOSED | Commentary through the shared helper. |
 | `runmodule.php` | player | dispatch | CLOSED | Active install and dependency checks (`CRS`, runmodule row); `test_dispatcher_enforces_module_state`. Module routes are below. |
+| `setup.php` | anyone with file access to the site (the token file) and, for an upgrade, an `SU_MEGAUSER` login and password | a fresh install (the configuration file, the database), an upgrade, and web maintenance on the install's last screen | CLOSED | Answers only while the game is not installed (no configuration file, or one whose database is empty) or its database is behind; every other state is the empty 404 with no cookie. Every change is a POST with CSRF in its own session (`rzsetup`), after the token file `resurrection-setup.php` (guard line, 60 minutes, single use, `hash_equals()`, 10 failures in 15 minutes) and HTTPS (plain HTTP only from this machine; `X-Forwarded-Proto` only with the file's third line). The install and upgrade are the services the commands run (`PHASE6-TASK5B-SETUP-PAGE-20261106.md`); `tests/tooling/test_web_ops_http.py`. |
 | `shades.php` | player (dead) | commentary | CLOSED | Commentary through the shared helper. |
 | `stables.php` | player | no | READ-ONLY | Listing bound (`STABLES-AUTHORITY-20261016.md`). |
 | `stables.php?op=examine\|buymount\|confirmbuy\|feed\|sellmount\|confirmsell` | player | gold, gems, mount | CLOSED | `STABLES-AUTHORITY-20261016.md`; `test_stables_buy_feed_and_sell_authority_http`. |
@@ -481,3 +482,14 @@ gains its web maintenance section: `configuration.php?op=webcron` (READ-ONLY, th
 request still gets 404. `installer.php` still answers 403.
 
 Counts: CLOSED 90, DISABLED 3, READ-ONLY 70, OPEN 0, total 163.
+
+## Web setup page, 2026-11-06
+
+Phase 6 task 5b (`PHASE6-TASK5B-SETUP-PAGE-20261106.md`). One top-level page is added, `setup.php` (64 here, with
+`common.php` and `battle.php`; `EntryGuardTest` now counts 64 entry points, the two commands included). It has no `op`:
+its steps are a POST field `step` (token, verify, install, maintenance, upgrade, continue), each checked against the
+mode, the session's grant and the CSRF token, and its row covers them. The host's token file `resurrection-setup.php`
+and failure counter `resurrection-setup-failures.php` are not pages: each starts with a line that answers an empty 404,
+and both are in `.gitignore`. `installer.php` still answers 403 and `cron.php` 404.
+
+Counts: CLOSED 91, DISABLED 3, READ-ONLY 70, OPEN 0, total 164.
