@@ -343,3 +343,16 @@ Supporting evidence only; CI is the acceptance.
   `composer lint`: 419 files, 0 failures.
 - Historical verifier: PASS (417 files, 11 commits). Project validator: PASS (970 tracked files). `git diff --check`
   with `core.whitespace=cr-at-eol` (the two CRLF files' added lines end in CR, as their existing lines do): clean.
+
+## Acceptance (recorded in Phase 6 task 4)
+
+Task 3 is **accepted at `b1de59d`** (Jim, 2026-11-06).
+
+- Modern core 42239340118: **SUCCESS**, 12/12 jobs, every job on `ubuntu-24.04`. PHP 8.4 / MariaDB 11.4 `http`
+  shards 19:10, 20:19, 20:03, 20:26; PHP 8.5 / MySQL 8.4 `http` shards 21:38, 21:44, 16:45, 21:22.
+- Baseline integrity 42239340082: **SUCCESS**.
+
+Task 3, S1, S2, S4, S6 and S12 are ticked in `ROADMAP.md`. Two items found in this task are added to `ROADMAP.md`
+under Phase 6: the stale form tokens after signing in again during the new-day questions (above), and the header and
+panel links on this task's configuration page (MoTD, Petition for Help, Online Characters), which cannot work without
+a configuration; task 5 removes them.
