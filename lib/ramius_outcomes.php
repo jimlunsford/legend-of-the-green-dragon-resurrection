@@ -1,4 +1,5 @@
 <?php
+if (!\defined('RESURRECTION_ENTRY') && \PHP_SAPI !== 'cli') { \http_response_code(404); exit; }
 // Historical early-resurrection effects. Only included inside the Ramius mutation.
 	rawoutput(resurrection_presentation("larger"));
 	output("`c`b`#It is a New Day!`0`b`c");

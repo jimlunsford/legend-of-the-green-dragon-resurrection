@@ -1,4 +1,5 @@
 <?php
+if (!\defined('RESURRECTION_ENTRY') && \PHP_SAPI !== 'cli') { \http_response_code(404); exit; }
 /**
  * The user editor's repair path (`user.php?op=repair`, SU_EDIT_USERS) for an account locked out by stored state that
  * fails its schema.

@@ -1,4 +1,5 @@
 <?php
+if (!\defined('RESURRECTION_ENTRY') && \PHP_SAPI !== 'cli') { \http_response_code(404); exit; }
 function dag_sortbounties($x, $y) {
 	if ($x['Amount'] == $y['Amount']) {
 		return 0;

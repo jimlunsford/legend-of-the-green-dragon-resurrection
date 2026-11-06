@@ -1,4 +1,9 @@
 <?php
+if (!\defined('RESURRECTION_ENTRY') && \PHP_SAPI !== 'cli') { \http_response_code(404); exit; }
+// The security headers (Phase 6 task 3, S1), before anything can be sent: enforced until the game's settings can be
+// read, then as its csp_mode setting says (below, beside the Content-Type).
+require_once __DIR__ . '/src/Http/SecurityHeaders.php';
+\Resurrection\Http\SecurityHeaders::send();
 require_once __DIR__ . '/src/Security/ScalarState.php';
 // translator ready
 // addnews ready
@@ -131,8 +136,39 @@ $lc = $l;
 // problem connecting to the database server.  Useful for migration moves
 // like LotGD.net experienced on 7/20/04.
 ob_start();
-if (file_exists("dbconnect.php")){
-	require_once("dbconnect.php");
+// The configuration file (Phase 6 task 3, S12 and S4): LOGD_DBCONNECT's absolute path when it is set, else
+// dbconnect.php here (src/Configuration/ConfigLocation.php). A file that is there but cannot be read or loaded gets the
+// operator page in lib/config_failure.php (status 503) instead of a blank error; a missing file still goes to the
+// not-installed page below.
+require_once __DIR__ . '/src/Configuration/ConfigLocation.php';
+$resurrection_config_env = \Resurrection\Configuration\ConfigLocation::fromEnvironment();
+$resurrection_config = $resurrection_config_env ?? \Resurrection\Configuration\ConfigLocation::DEFAULT_FILE;
+if ($resurrection_config_env !== null && !\Resurrection\Configuration\ConfigLocation::usable($resurrection_config_env)){
+	require_once("lib/config_failure.php");
+	resurrection_config_failure($resurrection_config, 'relative');
+}
+// A file PHP cannot even see because a directory on its path cannot be entered is unreadable, not missing.
+if ($resurrection_config_env !== null && !file_exists($resurrection_config)
+		&& \Resurrection\Configuration\ConfigLocation::closedDirectory($resurrection_config) !== null){
+	require_once("lib/config_failure.php");
+	resurrection_config_failure($resurrection_config, 'unreadable');
+}
+if (file_exists($resurrection_config)){
+	if (!is_file($resurrection_config) || !is_readable($resurrection_config)){
+		require_once("lib/config_failure.php");
+		resurrection_config_failure($resurrection_config, 'unreadable');
+	}
+	try {
+		require_once($resurrection_config);
+	} catch (\Throwable $resurrection_config_error) {
+		require_once("lib/config_failure.php");
+		// Only the line, never PHP's message: a parse error can quote the file.
+		resurrection_config_failure($resurrection_config, 'broken', $resurrection_config_error->getFile() === realpath($resurrection_config) ? $resurrection_config_error->getLine() : null);
+	}
+	if (!isset($DB_HOST, $DB_USER, $DB_PASS, $DB_NAME)){
+		require_once("lib/config_failure.php");
+		resurrection_config_failure($resurrection_config, 'broken');
+	}
 }else{
 	if (!defined("IS_INSTALLER")){
 	 	if (!defined("DB_NODB")) define("DB_NODB",true);
@@ -209,6 +245,7 @@ require_once 'lib/upgrade.php';
 $resurrection_database_state = defined("IS_INSTALLER") ? 'current' : resurrection_database_state();
 
 header("Content-Type: text/html; charset=".getsetting('charset','ISO-8859-1'));
+\Resurrection\Http\SecurityHeaders::send(\Resurrection\Http\SecurityHeaders::mode(getsetting('csp_mode', \Resurrection\Http\SecurityHeaders::DEFAULT_MODE)));
 
 if (strtotime("-".getsetting("LOGINTIMEOUT",900)." seconds") > $session['lasthit'] && $session['lasthit']>0 && $session['loggedin']){
     db_query('UPDATE ' . db_prefix('accounts') . ' SET loggedin=0 WHERE acctid=?', true, [(int)$session['user']['acctid']]);

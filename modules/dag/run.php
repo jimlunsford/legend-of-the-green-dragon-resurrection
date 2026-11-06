@@ -1,4 +1,5 @@
 <?php
+if (!\defined('RESURRECTION_ENTRY') && \PHP_SAPI !== 'cli') { \http_response_code(404); exit; }
 function dag_run_private(){
 	require_once("modules/dag/misc_functions.php");
 	global $session;

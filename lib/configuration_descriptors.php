@@ -1,4 +1,5 @@
 <?php
+if (!\defined('RESURRECTION_ENTRY') && \PHP_SAPI !== 'cli') { \http_response_code(404); exit; }
 /** Existing core declarations shared by rendering and mutation validation. */
 function resurrection_core_layout(): array {
  global $session;
@@ -29,6 +30,11 @@ function resurrection_core_layout(): array {
 		"Source Code,title",
 		// The label is the setting's description in the settings editor. It must not contain a comma.
 		"sourceurl"=>"Public source code URL for the View PHP Source link. If you change the game you must point this at your own complete modified source: the license (LICENSE.txt) requires you to give it on request to anyone you let play. Only http and https addresses are accepted.|https://github.com/jimlunsford/legend-of-the-green-dragon-resurrection",
+
+		// Phase 6 task 3 (S1): the Content Security Policy (src/Http/SecurityHeaders.php). Notes and choices hold no comma.
+		"Security Headers,title",
+		"Every page sends a Content Security Policy that lets the browser run only the game's own script and style files. Every page the game ships passes it. Choose Report only or Off on purpose: only for a third-party module that still prints inline script or inline style (its pages break under Enforce). Report only sends the policy as Content-Security-Policy-Report-Only: the browser blocks nothing and reports what it would block in its console. Off sends no policy. The frame and content-type protection and the Referrer-Policy are sent whatever this says.,note",
+		"csp_mode"=>"Content Security Policy,enum,enforce,Enforce (the default),report-only,Report only,off,Off",
 
 		"Beta Setup,title",
 		"beta"=>"Enable beta features for all players?,bool",

@@ -1,4 +1,5 @@
 <?php
+if (!\defined('RESURRECTION_ENTRY') && \PHP_SAPI !== 'cli') { \http_response_code(404); exit; }
 require_once("lib/ban_admin.php");
 $subop = httpget("subop");
 $none = translate_inline('NONE');
@@ -61,23 +62,6 @@ addnav("4 years","user.php?op=removeban&duration=4+years");
 addnav("Forever","user.php?op=removeban&duration=forever");
 $sql = "SELECT * FROM " . db_prefix("bans") . " $since ORDER BY banexpire";
 $result = db_query($sql, true, $parameters);
-rawoutput("<script language='JavaScript'>
-function getUserInfo(filename,divid){
-	// Browsers no longer load an XML document directly; the request is the link's own registered URL.
-	var request = new XMLHttpRequest();
-	request.onload = function(){
-		var xmldom = request.responseXML;
-		var output='';
-		for (var x=0; x<xmldom.documentElement.childNodes.length; x++){
-			output = output + unescape(xmldom.documentElement.childNodes[x].getAttribute('name').replace(/\\+/g,' ')) +'<br>';
-		}
-		document.getElementById('user'+divid).innerHTML=output;
-	};
-	request.open('GET', filename);
-	request.send();
-}
-</script>
-");
 rawoutput("<table border=0 cellpadding=2 cellspacing=1".resurrection_presentation("grid").">");
 $ops = translate_inline("Ops");
 $bauth = translate_inline("Ban Author");
@@ -122,7 +106,7 @@ while ($row = db_fetch_assoc($result)) {
 	output_notl("%s", $row['banreason']);
 	rawoutput("</td><td>");
 	$file = "user.php?op=removeban&subop=xml&ip=" . rawurlencode($row['ipfilter']) . "&id=" . rawurlencode($row['uniqueid']);
-	rawoutput("<div id='user$i'><a href='" . htmlspecialchars($file, ENT_QUOTES, 'UTF-8') . "' target='_blank' onClick=\"getUserInfo(this.href,$i); return false;\">");
+	rawoutput("<div id='user$i'><a href='" . htmlspecialchars($file, ENT_QUOTES, 'UTF-8') . "' target='_blank' data-rz-userinfo='user$i'>");
 	output_notl("%s", $showuser, true);
 	rawoutput("</a></div>");
 	addnav("",$file);

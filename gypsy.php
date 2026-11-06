@@ -1,4 +1,5 @@
 <?php
+define('RESURRECTION_ENTRY', true);
 // addnews ready
 // translator ready
 // mail ready

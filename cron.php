@@ -1,4 +1,5 @@
 <?php
+define('RESURRECTION_ENTRY', true);
 // Global maintenance is a CLI operation. Player New Day routes are unchanged.
 if (PHP_SAPI !== 'cli') {
     http_response_code(404);

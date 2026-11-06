@@ -1,0 +1,6 @@
+/*
+  Resurrection UI: the safe frame's own rule (src/Ui/SafeFrame.php). The frame links this file before the stylesheet,
+  so the stylesheet wins; when the stylesheet is missing it keeps the art from growing past the page. Until Phase 6
+  task 3 the rule was a <style> element in the frame, which the Content Security Policy refuses.
+*/
+img { max-width: 100%; height: auto; }

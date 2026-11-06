@@ -1,4 +1,5 @@
 <?php
+if (!\defined('RESURRECTION_ENTRY') && \PHP_SAPI !== 'cli') { \http_response_code(404); exit; }
 /** The supported fresh-install path. Never modifies an existing database. */
 require_once __DIR__ . '/../../src/Security/Passwords.php';
 require_once __DIR__ . '/../../src/Installation/InstallRefused.php';

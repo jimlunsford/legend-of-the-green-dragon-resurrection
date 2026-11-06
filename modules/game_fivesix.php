@@ -1,4 +1,5 @@
 <?php
+if (!\defined('RESURRECTION_ENTRY') && \PHP_SAPI !== 'cli') { \http_response_code(404); exit; }
 /*Five Sixes tavern game
   version 1.7
   - Added periods at the end of News announcements

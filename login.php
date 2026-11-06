@@ -1,4 +1,5 @@
 <?php
+define('RESURRECTION_ENTRY', true);
 require_once __DIR__ . '/src/Security/ScalarState.php';
 require_once __DIR__ . '/src/Security/NavigationState.php';
 require_once __DIR__ . '/src/Security/PreferenceState.php';

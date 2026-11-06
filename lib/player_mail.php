@@ -1,4 +1,5 @@
 <?php
+if (!\defined('RESURRECTION_ENTRY') && \PHP_SAPI !== 'cli') { \http_response_code(404); exit; }
 /** Player mail authority. No gameplay mutation is delegated to request fields. */
 require_once __DIR__.'/player_mutation.php';
 require_once __DIR__.'/systemmail.php';

@@ -1,6 +1,7 @@
 <?php
 declare(strict_types=1);
 namespace Resurrection\Security;
+if (!\defined('RESURRECTION_ENTRY') && \PHP_SAPI !== 'cli') { \http_response_code(404); exit; }
 
 /** Session-bound one-use form intent. Business authorization is checked separately. */
 final class ActionToken

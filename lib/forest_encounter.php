@@ -1,4 +1,5 @@
 <?php
+if (!\defined('RESURRECTION_ENTRY') && \PHP_SAPI !== 'cli') { \http_response_code(404); exit; }
 /** Historical Forest encounter producer, called only inside the ordinary POST transaction. */
 function resurrection_forest_encounter(): bool {
     global $session, $playermount;

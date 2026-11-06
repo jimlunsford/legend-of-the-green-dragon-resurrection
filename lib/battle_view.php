@@ -1,4 +1,5 @@
 <?php
+if (!\defined('RESURRECTION_ENTRY') && \PHP_SAPI !== 'cli') { \http_response_code(404); exit; }
 /**
  * The battle screen (Phase 5 task 10, docs/PHASE5-TASK10-BATTLE-COMMENTARY-20261031.md).
  *
@@ -244,8 +245,9 @@ function resurrection_battle_hp(string $label, int|float|string $current, ?float
 	if ($text !== null || $max === null) {
 		return templatereplace('fighterhp', array('label'=>$label, 'value'=>$text ?? $num($current)));
 	}
-	$fill = round(max(0, min(100, (float)$current / $max * 100)), 1);
-	return templatereplace('fighterbar', array('label'=>$label, 'percent'=>(string)$fill,
+	// The fill's class (rz-fill-0 to rz-fill-100), as the character panel's bars (Phase 6 task 3).
+	$fill = $max > 0 ? resurrection_fill_percent((float)$current / $max * 100) : "0";
+	return templatereplace('fighterbar', array('label'=>$label, 'percent'=>$fill,
 		'value'=>$num(max(0, (float)$current)).' / '.$num($max)));
 }
 

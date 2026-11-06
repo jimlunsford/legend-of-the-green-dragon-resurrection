@@ -1,4 +1,5 @@
 <?php
+if (!\defined('RESURRECTION_ENTRY') && \PHP_SAPI !== 'cli') { \http_response_code(404); exit; }
 /** Return links taken from a request: only known on-site pages, never a value the request controls. */
 
 /**

@@ -1,4 +1,5 @@
 <?php
+define('RESURRECTION_ENTRY', true);
 require_once __DIR__ . '/src/Security/ScalarState.php';
 require_once __DIR__ . '/src/Game/BuffState.php';
 require_once __DIR__ . '/src/Compatibility/array_cursor.php';
@@ -113,26 +114,9 @@ if ($op==""){
 	while ($row = db_fetch_assoc($result)){
 		$mounts[$row['hashorse']] = $row['c'];
 	}
-	rawoutput("<script language='JavaScript'>
-	function getUserInfo(id,divid){
-		var filename='mounts.php?op=xml&id='+id;
-		var xmldom;
-		if (document.implementation && document.implementation.createDocument){
-			// Mozilla
-			xmldom = document.implementation.createDocument('','',null);
-		} else if (window.ActiveXObject) {
-			// IE
-			xmldom = new ActiveXObject('Microsoft.XMLDOM');
-		}
-		xmldom.async=false;
-		xmldom.load(filename);
-		var output='';
-		for (var x=0; x<xmldom.documentElement.childNodes.length; x++) {
-			output = output + unescape(xmldom.documentElement.childNodes[x].getAttribute('name').replace(/\\+/g, ' ')) + '<br />';
-		}
-		document.getElementById('mountusers'+divid).innerHTML=output;
-	}
-	</script>");
+	// The owner count's link loads the owners' names into its cell (assets/ui/behaviors.js, Phase 6 task 3). 1.1.2's
+	// inline getUserInfo() used XMLDocument.load(), which no current browser has, so the click opened the raw XML in
+	// a new window instead; it now does what the ban list's lookup does.
 
 	$sql = "SELECT * FROM " . db_prefix("mounts") . " ORDER BY mountcategory, mountcostgems, mountcostgold";
 	$ops = translate_inline("Ops");
@@ -205,7 +189,7 @@ if ($op==""){
 		}
 		rawoutput("</td><td nowrap>");
 		$file = "mounts.php?op=xml&id=".$mid;
-		rawoutput("<div id='mountusers$i'><a href='$file' target='_blank' onClick=\"getUserInfo('".$mid."', $i); return false\">");
+		rawoutput("<div id='mountusers$i'><a href='$file' target='_blank' data-rz-userinfo='mountusers$i'>");
  		output_notl("`#%s`0", $mounts[$row['mountid']]);
 		addnav("", $file);
 		rawoutput("</a></div>");

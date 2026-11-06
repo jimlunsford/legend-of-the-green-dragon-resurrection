@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 namespace Resurrection\Compatibility;
+if (!\defined('RESURRECTION_ENTRY') && \PHP_SAPI !== 'cli') { \http_response_code(404); exit; }
 
 /**
  * PHP 5's sprintf() result for formats PHP 8 refuses.

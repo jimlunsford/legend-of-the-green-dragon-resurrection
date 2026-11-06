@@ -130,8 +130,10 @@ final class NavigationTest extends TestCase
         self::assertSame("<span class='colLtYellow'>Ye Olde </span><span class='colDkGreen'>Bank</span>", $labels['bank.php?c=7']);
         self::assertSame('<b>Hall of Fame</b>', $labels['hof.php?c=7']);
         self::assertSame('Stables', $labels['stables.php?c=7']);
-        // The popups keep their target and click handler.
-        self::assertStringContainsString("class=\"rz-navitem nav\" target='_blank' onClick=\"window.open('mail.php','mailphp','scrollbars=yes,resizable=yes,width=550,height=300').focus(); return false;\">", $page['html']);
+        // The popups keep their target; the popup's size is data for assets/ui/behaviors.js, which opens it as 1.1.2's
+        // onClick did (Phase 6 task 3).
+        self::assertStringContainsString("class=\"rz-navitem nav\" target='_blank' data-rz-popup=\"550x300\"><span class=\"rz-key\" aria-hidden=\"true\">a</span>", $page['html']);
+        self::assertStringNotContainsString('onClick', $page['html']);
         self::assertStringContainsString("class=\"rz-navitem nav\" target='_blank'><span class=\"rz-key\" aria-hidden=\"true\">O</span>", $page['html']);
         // Headings and help text, the hidden nav allowed but not shown.
         self::assertStringContainsString('<h2 class="rz-navhead">Gates</h2>', $page['html']);
@@ -158,9 +160,10 @@ final class NavigationTest extends TestCase
                 self::assertSame('go', $entry[1], $item['link']);
             }
         }
-        // The map rides in {script} as data, with the static script; no inline key handler.
+        // The map rides in {script} as data, on the static script (its data-rz-keys attribute since Phase 6 task 3); no
+        // inline key handler and no script element without a src.
         $script = (string)$page['script'];
-        self::assertSame(1, preg_match('#\A<script type="application/json" id="rz-keys">(.*)</script>\n<script src="assets/ui/keys.js" defer></script>\z#s', $script, $json), $script);
+        self::assertSame(1, preg_match("#\\A<script src=\"assets/ui/keys.js\" defer data-rz-keys='([^']*)'></script>\\z#s", $script, $json), $script);
         self::assertSame($page['keys'], json_decode($json[1], true));
         foreach (['onkeypress', 'keyevent', 'window.location', 'window.open', '<!--', '&', '<b>'] as $absent) {
             self::assertStringNotContainsString($absent, $json[1], $absent);

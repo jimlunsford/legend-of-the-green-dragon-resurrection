@@ -1,4 +1,5 @@
 <?php
+define('RESURRECTION_ENTRY', true);
 // Supported local installation command. Never expose this entrypoint over HTTP.
 //
 //   php scripts/install.php [--modules=recommended|none] [CONFIG]
@@ -8,6 +9,11 @@
 // from DB_HOST, DB_USER, DB_PASS, DB_NAME and DB_PREFIX in the environment (owner-only, never over an existing file,
 // outside the served directory unless --allow-served-path) and installs with the file it wrote. --modules chooses
 // what the install activates: 1.1.2's recommended modules (the default) or none.
+//
+// LOGD_DBCONNECT (Phase 6 task 3, S12): when the environment sets it to the configuration file's absolute path, that
+// file is the one the game reads (src/Configuration/ConfigLocation.php), so the command uses it too: CONFIG may be left
+// out (a different CONFIG is refused), and when the file does not exist yet the command writes it there, as
+// --write-config does.
 if (PHP_SAPI !== 'cli') { http_response_code(404); exit("Not found.\n"); }
 chdir(dirname(__DIR__));
 error_reporting(E_ALL);
@@ -18,6 +24,7 @@ set_error_handler(static function (int $severity, string $message, string $file,
 });
 try {
     require 'src/Configuration/ConfigFile.php';
+    require 'src/Configuration/ConfigLocation.php';
     $modules = 'recommended';
     $writeConfig = false;
     $allowServed = false;
@@ -30,6 +37,13 @@ try {
         else { $paths[] = $argument; }
     }
     if (count($paths) > 1) { throw new \Resurrection\Installation\InstallRefused('Give one configuration file.'); }
+    $located = \Resurrection\Configuration\ConfigLocation::fromEnvironment();
+    if ($located !== null) {
+        if (!\Resurrection\Configuration\ConfigLocation::usable($located)) { throw new \Resurrection\Installation\InstallRefused('LOGD_DBCONNECT must be the configuration file\'s absolute path.'); }
+        if ($paths && $paths[0] !== $located) { throw new \Resurrection\Installation\InstallRefused('LOGD_DBCONNECT names the configuration file the game reads. Give that path, or none.'); }
+        $paths = [$located];
+        if (!file_exists($located) && !is_link($located)) { $writeConfig = true; }
+    }
     if ($allowServed && !$writeConfig) { throw new \Resurrection\Installation\InstallRefused('--allow-served-path applies only to --write-config.'); }
     if ($writeConfig && !$paths) { throw new \Resurrection\Installation\InstallRefused('--write-config needs the configuration file\'s absolute path.'); }
     $config = $paths[0] ?? 'dbconnect.php';

@@ -1,4 +1,5 @@
 <?php
+if (!\defined('RESURRECTION_ENTRY') && \PHP_SAPI !== 'cli') { \http_response_code(404); exit; }
 require_once("lib/charcleanup.php");
 require_once("lib/admin_authority.php");
 require_once("lib/user_editor.php");

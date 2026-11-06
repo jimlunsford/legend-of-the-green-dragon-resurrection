@@ -1,4 +1,5 @@
 <?php
+if (!\defined('RESURRECTION_ENTRY') && \PHP_SAPI !== 'cli') { \http_response_code(404); exit; }
 /** The scheduler's lock for this database: one maintenance run at a time (cron.php). */
 function resurrection_maintenance_lock_name(): string {
     $rows = db_query('SELECT DATABASE() AS db', true, []);

@@ -1,4 +1,5 @@
 <?php
+if (!\defined('RESURRECTION_ENTRY') && \PHP_SAPI !== 'cli') { \http_response_code(404); exit; }
 require_once __DIR__ . '/../../src/Security/MailContent.php';
 // Phase 5 task 11: the inbox is a list (resurrection_mail_inbox(), lib/mail_view.php) and prints no italics. (1.1.2's
 // table, with its scroll images and Check All script, was kept for the 1.1.2 skins until Phase 5 task 15.)

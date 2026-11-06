@@ -1,4 +1,5 @@
 <?php
+if (!\defined('RESURRECTION_ENTRY') && \PHP_SAPI !== 'cli') { \http_response_code(404); exit; }
 tlschema("faq");
 popup_header("Specific and Technical Questions");
 $c = translate_inline("Return to Contents");

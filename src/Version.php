@@ -1,6 +1,7 @@
 <?php
 declare(strict_types=1);
 namespace Resurrection;
+if (!\defined('RESURRECTION_ENTRY') && \PHP_SAPI !== 'cli') { \http_response_code(404); exit; }
 
 /**
  * Resurrection's version: the one place it is set (docs/VERSIONING.md). project.json and docs/VERSIONING.md must say

@@ -1,6 +1,7 @@
 <?php
 declare(strict_types=1);
 namespace Resurrection\Http;
+if (!\defined('RESURRECTION_ENTRY') && \PHP_SAPI !== 'cli') { \http_response_code(404); exit; }
 
 /** Raw input access. Encoding belongs at the SQL/HTML destination, never here. */
 final class Input

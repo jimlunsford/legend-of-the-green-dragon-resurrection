@@ -1,4 +1,5 @@
 <?php
+if (!\defined('RESURRECTION_ENTRY') && \PHP_SAPI !== 'cli') { \http_response_code(404); exit; }
 		require_once("lib/clan_authority.php");
 		// GET only asks; the protected POST withdraws, with succession or deletion, in one transaction.
 		if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {

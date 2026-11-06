@@ -203,7 +203,7 @@ final class TemplateRenderTest extends TestCase
             self::assertStringNotContainsString("window.open('motd.php'", $village);
             $this->assertPortrait($village, 'dwarf', 'Dwarf', $name);
             $this->assertPhone($village, ['rz-nav' => 'Go', 'rz-character' => 'Character', 'rz-talk' => 'Talk', 'rz-more' => 'More'], 'dwarf',
-                [$name, 'Level 7 Dwarf &middot; 14 turns &middot; 1,247 gold', [['health', 'hitpoints', 'HP', '63 / 70', '90'], ['experience', 'experience', 'XP', '5025 / 6641', '75.7']]]);
+                [$name, 'Level 7 Dwarf &middot; 14 turns &middot; 1,247 gold', [['health', 'hitpoints', 'HP', '63 / 70', '90'], ['experience', 'experience', 'XP', '5025 / 6641', '76']]]);
 
             // An old skin's cookie (jade.htm, as 1.1.2's skin chooser set it), and the skin settings an older install
             // stored (defaultskin jade.htm, homeskinselect 1): nothing reads them, so the page is the Resurrection UI, the
@@ -217,7 +217,7 @@ final class TemplateRenderTest extends TestCase
             self::assertStringContainsString('<body class="rz-page">', $old);
             self::assertStringNotContainsString('jade', $old);
             $this->assertPhone($old, ['rz-nav' => 'Go', 'rz-character' => 'Character', 'rz-talk' => 'Talk', 'rz-more' => 'More'], 'dwarf',
-                [$name, 'Level 7 Dwarf &middot; 14 turns &middot; 1,247 gold', [['health', 'hitpoints', 'HP', '63 / 70', '90'], ['experience', 'experience', 'XP', '5025 / 6641', '75.7']]]);
+                [$name, 'Level 7 Dwarf &middot; 14 turns &middot; 1,247 gold', [['health', 'hitpoints', 'HP', '63 / 70', '90'], ['experience', 'experience', 'XP', '5025 / 6641', '76']]]);
             $oldhome = $this->render($tree, $work, 'home.php', null, '', 'jade.htm');
             $this->assertCleanPage($oldhome, 'home.php with a jade.htm cookie');
             self::assertStringNotContainsString('jade', $oldhome);
@@ -325,7 +325,7 @@ final class TemplateRenderTest extends TestCase
             $this->assertPortrait($fight, 'dwarf', 'Dwarf', $name);
             // The phone: no nav column and no commentary, so no Go and no Talk.
             $this->assertPhone($fight, ['rz-character' => 'Character', 'rz-more' => 'More'], 'dwarf',
-                [$name, 'Level 7 Dwarf &middot; 10 turns &middot; 1,247 gold', [['health', 'hitpoints', 'HP', '500 / 1000', '50'], ['experience', 'experience', 'XP', '5025 / 6641', '75.7']]]);
+                [$name, 'Level 7 Dwarf &middot; 10 turns &middot; 1,247 gold', [['health', 'hitpoints', 'HP', '500 / 1000', '50'], ['experience', 'experience', 'XP', '5025 / 6641', '76']]]);
 
             // Dead, in the graveyard: torments and favor in place of turns and gold, soulpoints (of level * 5 + 50) in
             // place of hitpoints.
@@ -334,7 +334,7 @@ final class TemplateRenderTest extends TestCase
             $graveyard = $this->render($tree, $work, 'graveyard.php', $session);
             $this->assertCleanPage($graveyard, 'graveyard.php');
             $this->assertPhone($graveyard, ['rz-nav' => 'Go', 'rz-character' => 'Character', 'rz-more' => 'More'], 'dwarf',
-                [$name, 'Level 7 Dwarf &middot; 6 torments &middot; 40 favor', [['soul', 'soulpoints', 'Soul', '62 / 85', '72.9'], ['experience', 'experience', 'XP', '5025 / 6641', '75.7']]]);
+                [$name, 'Level 7 Dwarf &middot; 6 torments &middot; 40 favor', [['soul', 'soulpoints', 'Soul', '62 / 85', '73'], ['experience', 'experience', 'XP', '5025 / 6641', '76']]]);
             $this->php($tree, 'db_query("UPDATE accounts SET alive=1, hitpoints=63 WHERE acctid=?", true, [' . $player . ']);');
 
             $mail = $this->render($tree, $work, 'mail.php', $session);
@@ -414,14 +414,16 @@ final class TemplateRenderTest extends TestCase
     /**
      * A page in the safe frame (Phase 5 close-out): the frame's body class; the 1.1.2 credit line, the license block and
      * the attribution line once each, the attribution after the credit line; no missing-part warning; the stylesheet
-     * linked, and the frame's own small style block.
+     * linked, and the frame's own small stylesheet before it.
      */
     private function assertSafeFrame(string $page, string $label, bool $popup): void
     {
         self::assertStringStartsWith("<!DOCTYPE html>\n<html lang=\"en\">", $page, $label);
         self::assertStringContainsString($popup ? '<body class="rz-page rz-popup rz-safe-frame">' : '<body class="rz-page rz-safe-frame">', $page, $label);
         self::assertStringContainsString('<link rel="stylesheet" href="assets/ui/resurrection.css">', $page, $label);
-        self::assertStringContainsString("<style>img { max-width: 100%; height: auto }</style>\n<link rel=\"stylesheet\" href=\"assets/ui/resurrection.css\">", $page, $label);
+        // The frame's own rule is a stylesheet of its own, before the main one (Phase 6 task 3; until then a <style>).
+        self::assertStringContainsString("<link rel=\"stylesheet\" href=\"assets/ui/safeframe.css\">\n<link rel=\"stylesheet\" href=\"assets/ui/resurrection.css\">", $page, $label);
+        self::assertStringNotContainsString('<style', $page, $label);
         self::assertStringNotContainsString('template part was not found', $page, $label);
         self::assertStringNotContainsString('piece was not found', $page, $label);
         self::assertStringNotContainsString('Runtime error', $page, $label);
@@ -452,7 +454,8 @@ final class TemplateRenderTest extends TestCase
             if ($badge !== '') { $keyed[strtoupper(html_entity_decode($badge, ENT_QUOTES))] = html_entity_decode($href, ENT_QUOTES); }
         }
         self::assertNotSame([], $keyed, $script);
-        self::assertSame(1, preg_match('#<script type="application/json" id="rz-keys">([^<]*)</script>\n<script src="assets/ui/keys.js" defer></script>#', $page, $json), $script);
+        // The key map is the key script's data-rz-keys attribute (Phase 6 task 3; until then a JSON script element).
+        self::assertSame(1, preg_match("#<script src=\"assets/ui/keys.js\" defer data-rz-keys='([^']*)'></script>#", $page, $json), $script);
         $map = json_decode($json[1], true);
         self::assertIsArray($map);
         self::assertSame(count($keyed), count($map), $script);
@@ -533,7 +536,7 @@ final class TemplateRenderTest extends TestCase
         self::assertSame($head[0], html_entity_decode($phone[1], ENT_QUOTES));
         self::assertSame($head[1], $phone[2]);
         preg_match_all('#<div class="rz-phonebar rz-phonebar-([a-z]+)"><div class="rz-phonebar-text"><span class="rz-phonebar-label">(?:<img class="rz-labelicon" src="assets/icons/([a-z]+)\.svg" alt="" aria-hidden="true" width="16" height="16">)?([^<]*)</span><span class="rz-phonebar-value">([^<]*)</span></div>'
-            . '<div class="rz-phonebar-track" aria-hidden="true"><div class="rz-phonebar-fill" style="width: ([0-9.]+)%"></div></div></div>#', $phone[3], $bars, PREG_SET_ORDER);
+            . '<div class="rz-phonebar-track" aria-hidden="true"><div class="rz-phonebar-fill rz-fill-([0-9]+)"></div></div></div>#', $phone[3], $bars, PREG_SET_ORDER);
         self::assertSame($head[2], array_map(fn (array $bar): array => array_slice($bar, 1), $bars));
     }
 
@@ -548,7 +551,7 @@ final class TemplateRenderTest extends TestCase
     private function assertMailLink(string $page, int $unread, int $read): void
     {
         $label = "Ye Olde Mail: $unread new, $read old";
-        self::assertSame(1, preg_match("#<a href='mail\\.php' target='_blank' rel='noopener' class='rz-control rz-control-mail (hotmotd|motd)' aria-label='([^']*)' title='([^']*)' onclick=\"[^\"]*\"><svg class='rz-icon'[^>]*>.*?</svg><span class='rz-control-label'>Mail</span>(.*?)</a>#s", $page, $link), 'mail link');
+        self::assertSame(1, preg_match("#<a href='mail\\.php' target='_blank' rel='noopener' class='rz-control rz-control-mail (hotmotd|motd)' aria-label='([^']*)' title='([^']*)' data-rz-popup=\"550x300\" data-rz-popup-media=\"desktop\"><svg class='rz-icon'[^>]*>.*?</svg><span class='rz-control-label'>Mail</span>(.*?)</a>#s", $page, $link), 'mail link');
         self::assertSame($unread > 0 ? 'hotmotd' : 'motd', $link[1]);
         self::assertSame($label, $link[2]);
         self::assertSame($label, $link[3]);

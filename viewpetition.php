@@ -1,4 +1,5 @@
 <?php
+define('RESURRECTION_ENTRY', true);
 require_once __DIR__ . '/src/Compatibility/array_cursor.php';
 // translator ready
 // addnews ready
@@ -297,7 +298,7 @@ if ($op==""){
 	$reppet = substr($row['body'], 0, 2000);
 	output("`@From: ");
 	if ($row['login']>"") {
-		rawoutput("<a href=\"mail.php?op=write&to=".rawurlencode($row['login'])."&body=".rawurlencode("\n\n----- $yourpeti -----\n$reppet")."&subject=RE:+$peti\" target=\"_blank\" onClick=\"".popup("mail.php?op=write&to=".rawurlencode($row['login'])."&body=".rawurlencode("\n\n----- $yourpeti -----\n$reppet")."&subject=RE:+$peti").";return false;\"><img src='images/newscroll.GIF' width='16' height='16' alt='$write' border='0'></a>");
+		rawoutput("<a href=\"mail.php?op=write&to=".rawurlencode($row['login'])."&body=".rawurlencode("\n\n----- $yourpeti -----\n$reppet")."&subject=RE:+$peti\" target=\"_blank\"".resurrection_popup_attributes()."><img src='images/newscroll.GIF' width='16' height='16' alt='$write' border='0'></a>");
 	}
 	output_notl("`^`b%s`b`n", $row['name']);
 	output("`@Date: `^`b%s`b (%s)`n", $row['date'], reltime(strtotime($row['date'])));

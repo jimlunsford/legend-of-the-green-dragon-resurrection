@@ -1,4 +1,5 @@
 <?php
+if (!\defined('RESURRECTION_ENTRY') && \PHP_SAPI !== 'cli') { \http_response_code(404); exit; }
 require_once __DIR__ . '/../src/Security/ScalarState.php';
 require_once __DIR__ . '/../src/Compatibility/array_cursor.php';
 require_once __DIR__ . '/../src/Compatibility/LegacySprintf.php';
@@ -135,6 +136,45 @@ function resurrection_form_script(){
 	if ($done) return "";
 	$done = true;
 	return "<script src=\"assets/ui/showform.js\" defer></script>";
+}
+
+/**
+ * The page behaviors (Phase 6 task 3, S1): assets/ui/behaviors.js does what 1.1.2's inline scripts and inline event
+ * handlers did, from the data attributes the helpers below write. page_header() and popup_header() load it on every
+ * page, so the pages pass the Content Security Policy (src/Http/SecurityHeaders.php).
+ *
+ * @return string
+ */
+function resurrection_behaviors_script(){
+	return "<script src=\"assets/ui/behaviors.js\" defer></script>";
+}
+
+/** An attribute value, escaped for either quote. */
+function resurrection_attribute_value(string $value): string {
+	return htmlspecialchars($value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+}
+
+/**
+ * A confirmation, as 1.1.2's onclick="return confirm('...')" and onsubmit asked it: the link, button or form asks
+ * first, with this text, and a "no" stops it (assets/ui/behaviors.js).
+ */
+function resurrection_confirm_attribute(string $text): string {
+	return ' data-rz-confirm="' . resurrection_attribute_value($text) . '"';
+}
+
+/**
+ * A link that opens as popup() opens it: in a window named after the page, of this size (assets/ui/behaviors.js).
+ * $desktop opens it so only on a desktop with a mouse, as the header controls do (resurrection_header_control()).
+ * Double quotes, as the other data attributes: the header control's link then never ends in '> before its icon.
+ */
+function resurrection_popup_attributes(string $size = "550x300", bool $desktop = false): string {
+	if (!preg_match('/\A[0-9]+x[0-9]+\z/', $size)) $size = "550x300";
+	return ' data-rz-popup="' . $size . '"' . ($desktop ? ' data-rz-popup-media="desktop"' : '');
+}
+
+/** A hidden marker: the field with this id gets the focus when the page loads (1.1.2's inline .focus() scripts). */
+function resurrection_focus_marker(string $id): string {
+	return "<span hidden data-rz-focus='" . resurrection_attribute_value($id) . "'></span>";
 }
 
 /**
@@ -1021,7 +1061,8 @@ function private_addnav($text,$link=false,$priv=false,$pop=false,$popsize="500x3
 				"text"=>resurrection_nav_label($label,$priv),
 				"link"=>HTMLEntities($link.($pop!=true?$extra:""), ENT_COMPAT, getsetting("charset", "ISO-8859-1")),
 				"accesskey"=>$keyrep,
-				"popup"=>($pop==true ? "target='_blank'".($popsize>""?" onClick=\"".popup($link,$popsize)."; return false;\"":"") : "")
+				// A popup nav opens as popup() did, from data for assets/ui/behaviors.js (Phase 6 task 3); 1.1.2 wrote an onClick.
+				"popup"=>($pop==true ? "target='_blank'".($popsize>""?resurrection_popup_attributes($popsize):"") : "")
 				);
 			// The badge (aria-hidden in the part) shows the key; the link's name is the label alone, and
 			// aria-keyshortcuts names the key beside accesskey.

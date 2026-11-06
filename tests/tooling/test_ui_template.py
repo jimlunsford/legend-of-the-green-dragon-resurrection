@@ -256,11 +256,13 @@ class TemplateTests(unittest.TestCase):
         for inline in ('onkeypress', 'keyevent', '$quickkeys[$key]="'):
             self.assertNotIn(inline, pageparts, inline)
             self.assertNotIn(inline, output, inline)
-        self.assertIn('<script type=\\"application/json\\" id=\\"rz-keys\\">', pageparts)
-        self.assertIn('<script src=\\"assets/ui/keys.js\\" defer></script>', pageparts)
+        # The map is the key script's data-rz-keys attribute (Phase 6 task 3; until then a JSON script element).
+        self.assertNotIn('<script type=\\"application/json\\"', pageparts)
+        self.assertIn('<script src=\\"assets/ui/keys.js\\" defer data-rz-keys=\'".$json."\'></script>', pageparts)
         keys = (ROOT / 'assets' / 'ui' / 'keys.js').read_text()
         self.assertTrue(keys.isascii())
-        self.assertIn("document.getElementById('rz-keys')", keys)
+        self.assertIn("document.querySelector('script[data-rz-keys]')", keys)
+        self.assertIn("JSON.parse(data.getAttribute('data-rz-keys'))", keys)
         self.assertIn("document.addEventListener('keypress'", keys)
         # 1.1.2's rule: no key while typing in an input or a textarea, or with Alt or Ctrl held.
         self.assertIn("if (name === 'INPUT' || name === 'TEXTAREA' || e.altKey || e.ctrlKey) { return; }", keys)
@@ -371,7 +373,9 @@ class TemplateTests(unittest.TestCase):
                       '<div class="rz-phonehead-mail">{mail}</div>', '<div class="rz-phonehead-bars">{bars}</div>'):
             self.assertIn(piece, head)
         self.assertLess(head.index('{portrait}'), head.index('{name}'))
-        self.assertIn('<div class="rz-phonebar-fill" style="width: {percent}%"></div>', self.parts['phonebar'])
+        # The fill's width is a class, rz-fill-0 to rz-fill-100 (Phase 6 task 3; until then an inline width).
+        self.assertIn('<div class="rz-phonebar-fill rz-fill-{percent}"></div>', self.parts['phonebar'])
+        self.assertNotIn('style=', self.text)
         pageparts = (ROOT / 'lib' / 'pageparts.php').read_text(errors='replace')
         self.assertIn('if (empty($session[\'user\'][\'loggedin\']) || empty($session[\'loggedin\'])) return "";', pageparts)
 

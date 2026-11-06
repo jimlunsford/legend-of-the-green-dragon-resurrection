@@ -1,4 +1,5 @@
 <?php
+if (!\defined('RESURRECTION_ENTRY') && \PHP_SAPI !== 'cli') { \http_response_code(404); exit; }
 
 /**
  * The "View PHP Source" link. 1.1.2 pointed it at source.php, its own source viewer; Resurrection removed that

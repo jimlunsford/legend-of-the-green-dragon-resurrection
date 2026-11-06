@@ -5,6 +5,8 @@
     "license": "CC-BY-NC-SA-2.0",
     "require": {
         "php": "~8.4.0 || ~8.5.0",
+        "ext-ctype": "*",
+        "ext-filter": "*",
         "ext-pdo": "*",
         "ext-pdo_mysql": "*",
         "ext-mbstring": "*",

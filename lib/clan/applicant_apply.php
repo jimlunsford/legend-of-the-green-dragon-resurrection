@@ -1,4 +1,5 @@
 <?php
+if (!\defined('RESURRECTION_ENTRY') && \PHP_SAPI !== 'cli') { \http_response_code(404); exit; }
 		require_once("lib/clan_authority.php");
 		try { $to = \Resurrection\Http\Input::integer($_GET, 'to', 0, 0); }
 		catch (InvalidArgumentException $error) { http_response_code(400); exit('Invalid clan request.'); }

@@ -1,4 +1,5 @@
 <?php
+if (!\defined('RESURRECTION_ENTRY') && \PHP_SAPI !== 'cli') { \http_response_code(404); exit; }
 	page_header("Clan Hall for %s",  full_sanitize($claninfo['clanname']));
 	addnav("Clan Options");
 	if ($op==""){

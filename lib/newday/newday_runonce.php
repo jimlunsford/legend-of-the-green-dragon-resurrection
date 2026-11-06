@@ -1,4 +1,5 @@
 <?php
+if (!\defined('RESURRECTION_ENTRY') && \PHP_SAPI !== 'cli') { \http_response_code(404); exit; }
 //newday runonce
 	//Let's do a new day operation that will only fire off for
 	//one user on the whole server.

@@ -1,4 +1,5 @@
 <?php
+if (!\defined('RESURRECTION_ENTRY') && \PHP_SAPI !== 'cli') { \http_response_code(404); exit; }
 // PDO is the sole active transport. Historical drivers remain in the immutable tag.
 require_once __DIR__ . '/errorhandling.php';
 require_once __DIR__ . '/datacache.php';

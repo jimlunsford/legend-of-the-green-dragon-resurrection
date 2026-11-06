@@ -1,4 +1,5 @@
 <?php
+if (!\defined('RESURRECTION_ENTRY') && \PHP_SAPI !== 'cli') { \http_response_code(404); exit; }
 		require_once("lib/clan_authority.php");
 		addnav("Clan Hall","clan.php");
 		addnav("Clan Options");
@@ -93,7 +94,7 @@
 				else $buttons .= htmlspecialchars(full_sanitize($demote), ENT_QUOTES, 'UTF-8');
 				$buttons .= " | ";
 				$buttons .= isset($allowed['remove'])
-					? '<button class="button" name="clanaction" value="remove" onclick="return confirm('.htmlspecialchars(json_encode(full_sanitize($confirm)), ENT_QUOTES, 'UTF-8').');">'.htmlspecialchars(full_sanitize($remove), ENT_QUOTES, 'UTF-8').'</button>'
+					? '<button class="button" name="clanaction" value="remove"'.resurrection_confirm_attribute(full_sanitize($confirm)).'>'.htmlspecialchars(full_sanitize($remove), ENT_QUOTES, 'UTF-8').'</button>'
 					: htmlspecialchars(full_sanitize($remove), ENT_QUOTES, 'UTF-8');
 				$buttons .= " ]";
 				if ($allowed !== [] && $actor !== null) {

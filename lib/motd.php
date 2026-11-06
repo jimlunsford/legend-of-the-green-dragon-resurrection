@@ -1,4 +1,5 @@
 <?php
+if (!\defined('RESURRECTION_ENTRY') && \PHP_SAPI !== 'cli') { \http_response_code(404); exit; }
 require_once __DIR__ . '/../src/Security/MotdPoll.php';
 require_once __DIR__ . '/../src/Compatibility/array_cursor.php';
 require_once __DIR__ . '/../src/Http/Input.php';
@@ -384,10 +385,11 @@ function motd_poll_form() {
 		rawoutput($pollitem);
 		rawoutput("<div id='hidepolls'>");
 		rawoutput("</div>");
-		rawoutput("<script language='JavaScript'>document.getElementById('hidepolls').innerHTML = '';</script>",true);
 		$addi = translate_inline("Add Poll Item");
 		$add = translate_inline("Add");
-		rawoutput("<a href=\"#\" onClick=\"javascript:document.getElementById('hidepolls').innerHTML += '".addslashes($pollitem)."'; return false;\">$addi</a><br>");
+		// Add Poll Item adds another choice (assets/ui/behaviors.js). 1.1.2's inline script also emptied #hidepolls, which
+		// is empty, and its onClick rewrote the whole list, which lost what was typed into the choices it had added.
+		rawoutput("<a href=\"#\" data-rz-append='hidepolls' data-rz-append-html=\"".htmlspecialchars($pollitem, ENT_QUOTES, 'UTF-8')."\">$addi</a><br>");
 		rawoutput("<input type='submit' class='button' value='$add'></form>");
 	}else{
 		try {

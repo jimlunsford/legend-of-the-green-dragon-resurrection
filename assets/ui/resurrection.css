@@ -547,6 +547,31 @@ input[type="checkbox"], input[type="radio"] { width: 20px; height: 20px; accent-
 .rz-statbar-caption { color: var(--muted); font-size: var(--size-small); }
 .rz-statbar-caption:empty { display: none; }
 
+/* A bar's fill width (Phase 6 task 3, S1): the template's statbar, statbarcap, phonebar and fighterbar parts draw the
+   fill as rz-fill-{percent}, the whole percent from resurrection_charpanel_percent(), because the Content Security
+   Policy refuses inline style attributes. Until then the fill was style="width: N%". */
+.rz-fill-0 { width: 0%; } .rz-fill-1 { width: 1%; } .rz-fill-2 { width: 2%; } .rz-fill-3 { width: 3%; } .rz-fill-4 { width: 4%; }
+.rz-fill-5 { width: 5%; } .rz-fill-6 { width: 6%; } .rz-fill-7 { width: 7%; } .rz-fill-8 { width: 8%; } .rz-fill-9 { width: 9%; }
+.rz-fill-10 { width: 10%; } .rz-fill-11 { width: 11%; } .rz-fill-12 { width: 12%; } .rz-fill-13 { width: 13%; } .rz-fill-14 { width: 14%; }
+.rz-fill-15 { width: 15%; } .rz-fill-16 { width: 16%; } .rz-fill-17 { width: 17%; } .rz-fill-18 { width: 18%; } .rz-fill-19 { width: 19%; }
+.rz-fill-20 { width: 20%; } .rz-fill-21 { width: 21%; } .rz-fill-22 { width: 22%; } .rz-fill-23 { width: 23%; } .rz-fill-24 { width: 24%; }
+.rz-fill-25 { width: 25%; } .rz-fill-26 { width: 26%; } .rz-fill-27 { width: 27%; } .rz-fill-28 { width: 28%; } .rz-fill-29 { width: 29%; }
+.rz-fill-30 { width: 30%; } .rz-fill-31 { width: 31%; } .rz-fill-32 { width: 32%; } .rz-fill-33 { width: 33%; } .rz-fill-34 { width: 34%; }
+.rz-fill-35 { width: 35%; } .rz-fill-36 { width: 36%; } .rz-fill-37 { width: 37%; } .rz-fill-38 { width: 38%; } .rz-fill-39 { width: 39%; }
+.rz-fill-40 { width: 40%; } .rz-fill-41 { width: 41%; } .rz-fill-42 { width: 42%; } .rz-fill-43 { width: 43%; } .rz-fill-44 { width: 44%; }
+.rz-fill-45 { width: 45%; } .rz-fill-46 { width: 46%; } .rz-fill-47 { width: 47%; } .rz-fill-48 { width: 48%; } .rz-fill-49 { width: 49%; }
+.rz-fill-50 { width: 50%; } .rz-fill-51 { width: 51%; } .rz-fill-52 { width: 52%; } .rz-fill-53 { width: 53%; } .rz-fill-54 { width: 54%; }
+.rz-fill-55 { width: 55%; } .rz-fill-56 { width: 56%; } .rz-fill-57 { width: 57%; } .rz-fill-58 { width: 58%; } .rz-fill-59 { width: 59%; }
+.rz-fill-60 { width: 60%; } .rz-fill-61 { width: 61%; } .rz-fill-62 { width: 62%; } .rz-fill-63 { width: 63%; } .rz-fill-64 { width: 64%; }
+.rz-fill-65 { width: 65%; } .rz-fill-66 { width: 66%; } .rz-fill-67 { width: 67%; } .rz-fill-68 { width: 68%; } .rz-fill-69 { width: 69%; }
+.rz-fill-70 { width: 70%; } .rz-fill-71 { width: 71%; } .rz-fill-72 { width: 72%; } .rz-fill-73 { width: 73%; } .rz-fill-74 { width: 74%; }
+.rz-fill-75 { width: 75%; } .rz-fill-76 { width: 76%; } .rz-fill-77 { width: 77%; } .rz-fill-78 { width: 78%; } .rz-fill-79 { width: 79%; }
+.rz-fill-80 { width: 80%; } .rz-fill-81 { width: 81%; } .rz-fill-82 { width: 82%; } .rz-fill-83 { width: 83%; } .rz-fill-84 { width: 84%; }
+.rz-fill-85 { width: 85%; } .rz-fill-86 { width: 86%; } .rz-fill-87 { width: 87%; } .rz-fill-88 { width: 88%; } .rz-fill-89 { width: 89%; }
+.rz-fill-90 { width: 90%; } .rz-fill-91 { width: 91%; } .rz-fill-92 { width: 92%; } .rz-fill-93 { width: 93%; } .rz-fill-94 { width: 94%; }
+.rz-fill-95 { width: 95%; } .rz-fill-96 { width: 96%; } .rz-fill-97 { width: 97%; } .rz-fill-98 { width: 98%; } .rz-fill-99 { width: 99%; }
+.rz-fill-100 { width: 100%; }
+
 .rz-stattiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
 .rz-stattile {
   display: flex;

@@ -1,6 +1,7 @@
 <?php
 declare(strict_types=1);
 namespace Resurrection\Upgrade;
+if (!\defined('RESURRECTION_ENTRY') && \PHP_SAPI !== 'cli') { \http_response_code(404); exit; }
 
 /**
  * The numbered upgrade steps in one directory (upgrades/ for the game; tests pass their own). A step is a file named

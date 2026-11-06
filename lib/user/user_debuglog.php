@@ -1,4 +1,5 @@
 <?php
+if (!\defined('RESURRECTION_ENTRY') && \PHP_SAPI !== 'cli') { \http_response_code(404); exit; }
 if ($petition !=""){
 	addnav("Navigation");
 	addnav("Return to the petition","viewpetition.php?op=view&id=$petition");

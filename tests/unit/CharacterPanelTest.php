@@ -86,7 +86,7 @@ final class CharacterPanelTest extends TestCase
         // The bars: the stored numbers, the fill their ratio.
         self::assertSame([
             ['kind' => 'health', 'label' => 'Hitpoints', 'value' => '63 / 70', 'percent' => '90', 'caption' => null],
-            ['kind' => 'experience', 'label' => 'Experience', 'value' => '5025 / 6641', 'percent' => '75.7', 'caption' => null],
+            ['kind' => 'experience', 'label' => 'Experience', 'value' => '5025 / 6641', 'percent' => '76', 'caption' => null],
         ], $this->bars($html));
         // The six tiles, in order; attack and defense with the buffs' difference in the bonus and penalty colors, and a
         // temporary stat's note as charstats() writes it.
@@ -106,6 +106,30 @@ final class CharacterPanelTest extends TestCase
         self::assertSame(1, substr_count($html, 'class="rz-card rz-statcard"'));
         // The card comes first, the buffs and companions after it.
         self::assertLessThan(strpos($html, 'rz-statsection'), strpos($html, 'rz-equiprows'));
+    }
+
+    /**
+     * A bar's fill is one of the classes rz-fill-0 to rz-fill-100 (Phase 6 task 3, S1: the Content Security Policy
+     * refuses style attributes): the nearest whole percent, but a bar that is not empty never shows as empty and one
+     * that is not full never shows as full; the stylesheet has a rule for each of the 101.
+     */
+    public function testTheFillIsAWholePercentClassThatTheStylesheetDraws(): void
+    {
+        $code = 'require "lib/pageparts.php"; echo json_encode([resurrection_charpanel_percent(0, 70), resurrection_charpanel_percent(1, 1000),'
+            . ' resurrection_charpanel_percent(5025, 6641), resurrection_charpanel_percent(40, 85), resurrection_charpanel_percent(999, 1000),'
+            . ' resurrection_charpanel_percent(70, 70), resurrection_charpanel_percent(92, 70), resurrection_charpanel_percent(-4, 70),'
+            . ' resurrection_charpanel_percent(5, 0), resurrection_fill_percent(0.5), resurrection_fill_percent(99.5)]);';
+        $process = proc_open([PHP_BINARY, '-r', $code], [1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes, (string)realpath(self::ROOT));
+        self::assertIsResource($process);
+        $out = (string)stream_get_contents($pipes[1]);
+        $err = (string)stream_get_contents($pipes[2]);
+        self::assertSame(0, proc_close($process), $err);
+        self::assertSame(['0', '1', '76', '47', '99', '100', '100', '0', '0', '1', '99'], json_decode($out, true));
+        $css = (string)file_get_contents(self::ROOT . '/assets/ui/resurrection.css');
+        for ($n = 0; $n <= 100; $n++) {
+            self::assertStringContainsString(".rz-fill-$n { width: $n%; }", $css);
+        }
+        self::assertSame(101, preg_match_all('/\.rz-fill-[0-9]+ \{/', $css));
     }
 
     public function testCompanionsRenderAsRowsInTheirSection(): void
@@ -169,8 +193,8 @@ final class CharacterPanelTest extends TestCase
         $html = $this->render($dead)['html'];
         // Soulpoints against level x 5 + 50, as charstats() works it out; experience as when alive.
         self::assertSame([
-            ['kind' => 'soul', 'label' => 'Soulpoints', 'value' => '40 / 85', 'percent' => '47.1', 'caption' => null],
-            ['kind' => 'experience', 'label' => 'Experience', 'value' => '5025 / 6641', 'percent' => '75.7', 'caption' => null],
+            ['kind' => 'soul', 'label' => 'Soulpoints', 'value' => '40 / 85', 'percent' => '47', 'caption' => null],
+            ['kind' => 'experience', 'label' => 'Experience', 'value' => '5025 / 6641', 'percent' => '76', 'caption' => null],
         ], $this->bars($html));
         self::assertSame(['Torments' => '5', 'Spirits' => 'DEAD', 'Psyche' => '19', 'Spirit' => '19', 'Favor' => '40 (30+10)',
             'Gems' => '3'], $this->tiles($html));
@@ -337,7 +361,7 @@ final class CharacterPanelTest extends TestCase
     private function bars(string $html): array
     {
         preg_match_all('#<div class="rz-statbar rz-statbar-([a-z]+)"><div class="rz-statbar-text"><span class="rz-statbar-label">(?:<img class="rz-labelicon"[^>]*>)?([^<]*)</span>'
-            . '<span class="rz-statbar-value">(.*?)</span></div><div class="rz-statbar-track" aria-hidden="true"><div class="rz-statbar-fill" style="width: ([0-9.]+)%"></div></div>'
+            . '<span class="rz-statbar-value">(.*?)</span></div><div class="rz-statbar-track" aria-hidden="true"><div class="rz-statbar-fill rz-fill-([0-9]+)"></div></div>'
             . '(?:<div class="rz-statbar-caption">(.*?)</div>)?</div>#s', $html, $m, PREG_SET_ORDER);
         self::assertSame(substr_count($html, 'class="rz-statbar '), count($m));
         return array_map(fn (array $bar) => ['kind' => $bar[1], 'label' => $bar[2], 'value' => trim(strip_tags($bar[3])),

@@ -1,6 +1,7 @@
 <?php
 declare(strict_types=1);
 namespace Resurrection\Game;
+if (!\defined('RESURRECTION_ENTRY') && \PHP_SAPI !== 'cli') { \http_response_code(404); exit; }
 
 /** Finite vocabulary of the expressions actually shipped with the bundled game.
  * No PHP parser, function dispatch, variable interpolation, or mutable callbacks.

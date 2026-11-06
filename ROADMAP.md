@@ -250,8 +250,8 @@ Every change from 1.1.2 that a player, administrator or operator can notice is r
 ### Checklist
 
 - [x] 1: Release readiness review for `1.0.0-rc.1` (docs only): Phase 5's acceptance recorded, Phase 6 opened, `main` audited against a 13-area checklist (fresh install, shared hosting, upgrades, versioning, licensing, security by review, a UI crawl of about 920 pages at 1440 and 390, gameplay tests, known defects, performance, modules, operations, CI health, docs), with a ranked gap list (`docs/PHASE6-RC-READINESS-20261106.md`). Verdict: not ready to cut; 4 BLOCKER, 13 SHOULD, 10 NICE. Accepted at `ea8bb3d`, Modern core 42190029147 (all 12 jobs), Baseline integrity 42190029178.
-- [ ] 2: Crash fixes, CI pin, first administrator's flags (B1, S8, S7): `list.php`'s online and clan lists select `hitpoints`; `stats.php`'s two `GROUP BY ... DESC` fixed, with a sweep and a static test; every CI job on `ubuntu-24.04`, `actions/checkout` v7.0.1 and `shivammathur/setup-php` 2.40.0 (node24) pinned by SHA; the first administrator gets 1.1.2's flags less the removed surfaces' (`docs/PHASE6-TASK2-FIXES-20261106.md`). Ticked when CI accepts it.
-- [ ] 3: Hardening: S1, S2, S4, S6, S12.
+- [x] 2: Crash fixes, CI pin, first administrator's flags (B1, S8, S7): `list.php`'s online and clan lists select `hitpoints`; `stats.php`'s two `GROUP BY ... DESC` fixed, with a sweep and a static test; every CI job on `ubuntu-24.04`, `actions/checkout` v7.0.1 and `shivammathur/setup-php` 2.40.0 (node24) pinned by SHA; the first administrator gets 1.1.2's flags less the removed surfaces' (`docs/PHASE6-TASK2-FIXES-20261106.md`). Accepted at `fcce356`, Modern core 42206564929 (all 12 jobs), Baseline integrity 42206564872.
+- [ ] 3: Hardening: S1, S2, S4, S6, S12. Every response sends `X-Frame-Options`, `nosniff`, `Referrer-Policy` and an enforced Content Security Policy (`csp_mode`: enforce, report-only, off) from `src/Http/SecurityHeaders.php`; every inline script, handler and style moved to `assets/ui/`; internal PHP answers a direct request with an empty 404; an unreadable or damaged config gets a 503 operator page; `ext-ctype` and `ext-filter` declared; `LOGD_DBCONNECT` names a config file outside the docroot (`docs/PHASE6-TASK3-HARDENING-20261106.md`). Ticked when CI accepts it.
 - [ ] 4: Web install, upgrade and maintenance: design and threat model (S3). Jim approves before task 5.
 - [ ] 5: Web install, upgrade and maintenance: build (S3).
 - [ ] 6: Host guide (B2), covering both the shell and the web path.
@@ -268,7 +268,7 @@ The gap list (IDs, scope, tests and sizes in the review). Each item is ticked wh
 
 BLOCKER for `1.0.0-rc.1`:
 
-- [ ] B1: Fix the 500s the crawl found: the Warriors Online list (`list.php`) whenever a dead player is online, and `stats.php?op=referers` and `op=graph` on MySQL 8.4 (S). Task 2.
+- [x] B1: Fix the 500s the crawl found: the Warriors Online list (`list.php`) whenever a dead player is online, and `stats.php?op=referers` and `op=graph` on MySQL 8.4 (S). Task 2.
 - [ ] B2: Write the host guide, with sample web server rules: docroot and denied paths, the config file's place, owner and mode, PHP version, extensions and production settings, HTTPS, cron, mail, logs, backups, upgrades, `sourceurl`, what to upload; both the shell path and the web path (M). Task 6.
 - [ ] B3: Refresh the front-door docs: `README.md`, `docs/VERSIONING.md`, `docs/SECURITY-STATUS.md`, `docs/MODULE-POLICY.md`, `project.json`'s `phase` (S). Task 7.
 - [ ] B4: Prepare the rc.1 cut, stopping before the tag: release notes from `docs/CHANGES-FROM-1.1.2.md`, the tag message, the version rule for `main` after a tag, the cut checklist (S). Task 7.
@@ -277,8 +277,8 @@ BLOCKER for `1.0.0-rc.1`:
 - [ ] S3: The no-shell path: a token-gated web install and upgrade page and a secret-protected web maintenance request (L). Tasks 4 and 5.
 - [ ] S4: A clear page, not a blank 500, when `dbconnect.php` exists but cannot be read (S). Task 3.
 - [ ] S6: Declare `ext-ctype` and `ext-filter` in `composer.json` (S). Task 3.
-- [ ] S7: The first administrator's flags: 1.1.2's set less the removed surfaces', recorded in the change ledger (S). Task 2.
-- [ ] S8: Pin the CI runner to `ubuntu-24.04` and move `actions/checkout` and `shivammathur/setup-php` to Node 24 releases (S). Task 2.
+- [x] S7: The first administrator's flags: 1.1.2's set less the removed surfaces', recorded in the change ledger (S). Task 2.
+- [x] S8: Pin the CI runner to `ubuntu-24.04` and move `actions/checkout` and `shivammathur/setup-php` to Node 24 releases (S). Task 2.
 - [ ] S9: Legal review of the attribution wording and the AGPL question (Jim and a lawyer). Task 7 prepares the packet.
 - [ ] S12: Let the game read its config from outside the docroot (S). Task 3.
 

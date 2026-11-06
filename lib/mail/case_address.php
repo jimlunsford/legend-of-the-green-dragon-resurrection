@@ -1,4 +1,5 @@
 <?php
+if (!\defined('RESURRECTION_ENTRY') && \PHP_SAPI !== 'cli') { \http_response_code(404); exit; }
 $escape = static fn($value) => htmlspecialchars($value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 rawoutput("<form action='mail.php?op=write' method='post'>");
 // Each input's label is a <label for> (Phase 5 task 9); no color span stays open across it.

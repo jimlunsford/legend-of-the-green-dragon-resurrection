@@ -209,3 +209,14 @@ Supporting evidence only; CI is the acceptance.
 - `composer validate --strict`: valid. `composer install`: done. `composer audit`: no advisories. `composer lint`:
   410 files, 0 failures.
 - Historical verifier: PASS (417 files, 11 commits). Project validator: PASS. `git diff --check`: clean.
+
+## Acceptance (recorded in Phase 6 task 3)
+
+Task 2 is **accepted at `fcce356`** (Jim, 2026-11-06).
+
+- Modern core 42206564929: **SUCCESS**, 12/12 jobs. PHP 8.4 / MariaDB 11.4 `http` shards 19:25, 19:24, 13:44, 17:50;
+  PHP 8.5 / MySQL 8.4 `http` shards 22:09, 15:08, 16:02, 18:30.
+- Baseline integrity 42206564872: **SUCCESS**.
+- Every job ran on `ubuntu-24.04`. Annotations: 0. The Node 20 deprecation warning and the Ubuntu 26 notice are gone.
+
+B1, S7 and S8 are ticked in `ROADMAP.md`.

@@ -1,4 +1,5 @@
 <?php
+if (!\defined('RESURRECTION_ENTRY') && \PHP_SAPI !== 'cli') { \http_response_code(404); exit; }
 $thispage_superuser_level = 0;
 function check_su_access($level){
     global $session,$thispage_superuser_level;

@@ -1,4 +1,5 @@
 <?php
+define('RESURRECTION_ENTRY', true);
 require_once __DIR__ . '/src/Security/CommentSnapshot.php';
 // translator ready
 // addnews ready

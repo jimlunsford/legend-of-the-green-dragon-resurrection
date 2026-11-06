@@ -1,6 +1,7 @@
 <?php
 declare(strict_types=1);
 namespace Resurrection\Upgrade;
+if (!\defined('RESURRECTION_ENTRY') && \PHP_SAPI !== 'cli') { \http_response_code(404); exit; }
 
 /**
  * The upgrade stopped at its first failure, partway. Everything before the failed change is applied and recorded;

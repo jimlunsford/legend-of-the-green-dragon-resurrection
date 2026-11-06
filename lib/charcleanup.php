@@ -1,4 +1,5 @@
 <?php
+if (!\defined('RESURRECTION_ENTRY') && \PHP_SAPI !== 'cli') { \http_response_code(404); exit; }
 require_once __DIR__ . '/constants.php';
 
 /** A delete_character hook set dodel=false: the deletion's transaction is rolled back, so nothing changes. */

@@ -1,4 +1,5 @@
 <?php
+if (!\defined('RESURRECTION_ENTRY') && \PHP_SAPI !== 'cli') { \http_response_code(404); exit; }
 tlschema("faq");
 popup_header("Frequently Asked Questions (FAQ)");
 output("`^Welcome to Legend of the Green Dragon.`n`n");

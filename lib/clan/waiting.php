@@ -1,4 +1,5 @@
 <?php
+if (!\defined('RESURRECTION_ENTRY') && \PHP_SAPI !== 'cli') { \http_response_code(404); exit; }
 	page_header("Clan Halls");
 	addnav("Clan Options");
 	output("You stroll off to the side where there are some plush leather chairs, and take a seat.");

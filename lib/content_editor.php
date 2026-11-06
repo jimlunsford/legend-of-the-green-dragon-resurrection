@@ -1,4 +1,5 @@
 <?php
+if (!\defined('RESURRECTION_ENTRY') && \PHP_SAPI !== 'cli') { \http_response_code(404); exit; }
 require_once __DIR__ . '/player_mutation.php';
 require_once __DIR__ . '/equipment_authority.php';
 require_once __DIR__ . '/substitute.php';
@@ -108,8 +109,7 @@ function resurrection_content_form(string $url, string $scope, string $context, 
 
 /** The 1.1.2 "Del" link, with its confirmation, as a protected POST form bound to the row shown. */
 function resurrection_content_delete_form(string $url, string $scope, string $context, string $label, string $confirm): string {
-    $confirm = htmlspecialchars(json_encode($confirm, JSON_THROW_ON_ERROR | JSON_INVALID_UTF8_SUBSTITUTE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT), ENT_QUOTES, 'UTF-8');
-    return resurrection_content_form($url, $scope, $context, resurrection_presentation('inline-form-flush') . " onsubmit='return confirm($confirm);'") .
+    return resurrection_content_form($url, $scope, $context, resurrection_presentation('inline-form-flush') . resurrection_confirm_attribute($confirm)) .
         "<button type='submit'" . resurrection_presentation('link-button') . ">" .
         htmlspecialchars($label, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '</button></form>';
 }

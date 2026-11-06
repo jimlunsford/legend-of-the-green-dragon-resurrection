@@ -1,6 +1,9 @@
 <?php
+define('RESURRECTION_ENTRY', true);
 // Installation is an operator-only CLI action. The historical web installer
 // cannot safely distinguish upgrade authorization from anonymous first use.
+require_once __DIR__ . '/src/Http/SecurityHeaders.php';
+\Resurrection\Http\SecurityHeaders::send();
 http_response_code(403);
 header('Content-Type: text/plain; charset=UTF-8');
 header('Cache-Control: no-store');

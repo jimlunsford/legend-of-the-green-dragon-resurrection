@@ -1,4 +1,5 @@
 <?php
+if (!\defined('RESURRECTION_ENTRY') && \PHP_SAPI !== 'cli') { \http_response_code(404); exit; }
 require_once __DIR__ . '/../src/Compatibility/array_cursor.php';
 /**
  * Library (supporting) functions for page output
@@ -147,7 +148,6 @@ function page_footer($saveuser=true){
 	$result = db_query($sql);
 	$row = db_fetch_assoc($result);
 	db_free_result($result);
-	$headscript = "";
 	// 1.1.2 opened an unread MoTD in a popup window on every page load (from page_footer()). Popup blockers stop that,
 	// and a phone has no popups: an unread MoTD now marks the header's MoTD link instead, on every page (Phase 5 task 4).
 	if ($row && isset($session['user']['lastmotd']) &&
@@ -157,12 +157,10 @@ function page_footer($saveuser=true){
 	}else{
 		$session['needtoviewmotd']=false;
 	}
+	// {headscript}: the icon and the page behaviors (Phase 6 task 3). 1.1.2 could also write an inline script here (its
+	// $headscript, which nothing in the game set after the MoTD popup went in Phase 5 task 4); no page prints one now.
 	$pre_headscript = "<LINK REL=\"shortcut icon\" HREF=\"favicon.ico\" TYPE=\"image/x-icon\"/>";
-	if ($headscript>""){
-		$header=str_replace("{headscript}",$pre_headscript."<script language='JavaScript'>".$headscript."</script>",$header);
-	}else{
-		$header = str_replace("{headscript}",$pre_headscript,$header);
-	}
+	$header = str_replace("{headscript}",$pre_headscript.resurrection_behaviors_script(),$header);
 
 	$script = "";
 
@@ -336,6 +334,8 @@ function popup_header($title="Legend of the Green Dragon"){
 
 	$header = $template['popuphead'];
 	$header = str_replace("{title}", $title, $header);
+	// The page behaviors (Phase 6 task 3): a popup's confirmations, previews and warnings too.
+	$header = str_replace("{headscript}", resurrection_behaviors_script(), $header);
 	$header .= resurrection_template_notice();
 }
 
@@ -777,7 +777,8 @@ function petitionlink(){
  * One header control: a real link to a popup page (mail.php, motd.php or petition.php) that works without JavaScript and
  * on a phone. It opens in a new tab or window (target="_blank"), so the game page and the navigation it allows stay as
  * they were: those pages are outside forced navigation (OVERRIDE_FORCED_NAV) and keep no restore page. On a desktop
- * with a mouse, the click opens 1.1.2's small popup window instead; if a blocker stops it, the link opens as usual.
+ * with a mouse (at least 900px wide, hover and a fine pointer), the click opens 1.1.2's small popup window instead
+ * (assets/ui/behaviors.js; an inline onclick until Phase 6 task 3); if a blocker stops it, the link opens as usual.
  *
  * @param string $page The popup page
  * @param string $kind mail, motd or petition: the icon and the CSS class
@@ -797,7 +798,7 @@ function resurrection_header_control($page, $kind, $text, $label, $badge, $hot){
 	$label = htmlentities(full_sanitize($label), ENT_QUOTES | ENT_SUBSTITUTE, $charset);
 	$text = htmlentities(full_sanitize($text), ENT_QUOTES | ENT_SUBSTITUTE, $charset);
 	$out = "<a href='$page' target='_blank' rel='noopener' class='rz-control rz-control-$kind ".($hot ? "hotmotd" : "motd")."'"
-		." aria-label='$label' title='$label' onclick=\"".resurrection_popup_enhancement($page)."\">"
+		." aria-label='$label' title='$label'".resurrection_popup_attributes("550x300", true).">"
 		."<svg class='rz-icon' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8'"
 		." stroke-linecap='round' stroke-linejoin='round' aria-hidden='true' focusable='false'>{$icons[$kind]}</svg>"
 		."<span class='rz-control-label'>$text</span>";
@@ -806,23 +807,6 @@ function resurrection_header_control($page, $kind, $text, $label, $badge, $hot){
 			: "<span class='rz-badge' aria-hidden='true'>".(int)$badge."</span>";
 	}
 	return $out."</a>";
-}
-
-/**
- * The click handler of a header control: on a desktop with a mouse (at least 900px wide, hover and a fine pointer) it
- * opens 1.1.2's popup window (popup()'s name and size) and cancels the link; anywhere else, or if the window was
- * blocked, the link is followed as a plain link.
- *
- * @param string $page The popup page
- * @param string $size The popup window size (Default: 550x300, as popup())
- * @return string
- */
-function resurrection_popup_enhancement($page, $size="550x300"){
-	$s = explode("x",$size);
-	$name = preg_replace("([^[:alnum:]])","",$page);
-	return "if(window.matchMedia&&window.matchMedia('(min-width: 900px) and (hover: hover) and (pointer: fine)').matches){"
-		."var w=window.open(this.href,'$name','scrollbars=yes,resizable=yes,width={$s[0]},height={$s[1]}');"
-		."if(w){w.focus();return false;}}return true;";
 }
 
 /**
@@ -950,16 +934,18 @@ function resurrection_nav_keys(){
 }
 
 /**
- * The {script} the page carries for its hotkeys: the key map as JSON data and the static key script. The map is a
- * list of lists and any brace in a URL is written as \u007b or \u007d, so page_footer()'s clean-up of unused {tags} finds
- * nothing to remove; the JSON escapes <, >, & and quotes, so nothing in it can end the element (Phase 5 task 6).
+ * The {script} the page carries for its hotkeys: the static key script, with the key map as JSON in its data-rz-keys
+ * attribute (Phase 6 task 3; until then a <script type="application/json"> element of its own, Phase 5 task 6). The map
+ * is a list of lists and any brace in a URL is written as \u007b or \u007d, so page_footer()'s clean-up of unused {tags}
+ * finds nothing to remove; the JSON escapes <, >, & and apostrophes, so nothing in it can end the attribute (its quotes
+ * are the JSON's own, inside apostrophes).
  */
 function resurrection_nav_script(){
 	$keys = resurrection_nav_keys();
 	if (count($keys) == 0) return "";
 	$json = json_encode($keys, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_INVALID_UTF8_SUBSTITUTE);
 	$json = str_replace(array("{", "}"), array("\\u007b", "\\u007d"), $json);
-	return "<script type=\"application/json\" id=\"rz-keys\">".$json."</script>\n<script src=\"assets/ui/keys.js\" defer></script>";
+	return "<script src=\"assets/ui/keys.js\" defer data-rz-keys='".$json."'></script>";
 }
 
 /**
@@ -988,12 +974,25 @@ function resurrection_charpanel_race($race){
 /**
  * A bar's fill, as a percentage of its width: $current against $max, never below 0 and never above 100 (hitpoints
  * above the maximum, or experience past what the next level needs, fill the bar and no more). A bar with no maximum
- * is empty. One decimal at most.
+ * is empty.
+ *
+ * A whole number (Phase 6 task 3, S1): the template draws the fill with one of 101 classes, rz-fill-0 to rz-fill-100
+ * (assets/ui/resurrection.css), because the Content Security Policy refuses inline style attributes. Until then the
+ * fill was an inline width with one decimal. The nearest whole percent, except that a bar that is not empty never
+ * shows as empty and one that is not full never shows as full.
  */
 function resurrection_charpanel_percent($current, $max){
 	if ($max <= 0) return "0";
-	$percent = round(max(0, min(100, $current / $max * 100)), 1);
-	return (string)$percent;
+	return resurrection_fill_percent($current / $max * 100);
+}
+
+/** A percentage as the whole number of its fill class (resurrection_charpanel_percent()), 0 to 100. */
+function resurrection_fill_percent($percent){
+	$percent = max(0.0, min(100.0, (float)$percent));
+	$step = (int)round($percent);
+	if ($step === 0 && $percent > 0) $step = 1;
+	if ($step === 100 && $percent < 100) $step = 99;
+	return (string)$step;
 }
 
 /**

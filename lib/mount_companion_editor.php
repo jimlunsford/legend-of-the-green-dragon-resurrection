@@ -1,4 +1,5 @@
 <?php
+if (!\defined('RESURRECTION_ENTRY') && \PHP_SAPI !== 'cli') { \http_response_code(404); exit; }
 require_once __DIR__ . '/content_editor.php';
 require_once __DIR__ . '/stables_authority.php';
 require_once __DIR__ . '/buffs.php';

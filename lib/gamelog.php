@@ -1,4 +1,5 @@
 <?php
+if (!\defined('RESURRECTION_ENTRY') && \PHP_SAPI !== 'cli') { \http_response_code(404); exit; }
 function gamelog($message,$category="general",$filed=false){
 	global $session;
 	// Bound: 1.1.2 pasted the message and category in with addslashes(); a message can carry player text (logins).

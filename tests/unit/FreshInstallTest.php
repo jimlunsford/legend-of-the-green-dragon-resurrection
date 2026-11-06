@@ -167,6 +167,52 @@ final class FreshInstallTest extends TestCase
             foreach (array_column(db_query('SHOW TABLES'), 'Tables_in_resurrection_test') as $table) db_query('DROP TABLE ' . db_identifier($table));
             $GLOBALS['settings'] = null;
 
+            // Phase 6 task 3 (S12): LOGD_DBCONNECT names the configuration file the game reads, outside the served
+            // directory. The command then uses it: a different CONFIG or a relative path is refused before anything
+            // happens, and with the file missing the command writes it there (as --write-config does) and installs.
+            $located = $private . '/from-environment.php';
+            $environment['LOGD_DBCONNECT'] = $located;
+            try {
+                [$code, $out, $err] = $run('--write-config', $written . '.other');
+                self::assertSame(1, $code);
+                self::assertSame("Installation refused. LOGD_DBCONNECT names the configuration file the game reads. Give that path, or none.\n", $err);
+                $environment['LOGD_DBCONNECT'] = 'relative/from-environment.php';
+                [$code, $out, $err] = $run('--write-config');
+                self::assertSame(1, $code);
+                self::assertSame("Installation refused. LOGD_DBCONNECT must be the configuration file's absolute path.\n", $err);
+                self::assertSame('empty', resurrection_install_state());
+                self::assertFileDoesNotExist($located);
+                $environment['LOGD_DBCONNECT'] = $located;
+                $process = proc_open([PHP_BINARY, 'scripts/install.php', '--modules=none'], [1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes, dirname(__DIR__, 2), $environment);
+                $out = stream_get_contents($pipes[1]); fclose($pipes[1]);
+                $err = stream_get_contents($pipes[2]); fclose($pipes[2]);
+                self::assertSame(0, proc_close($process), $err . $out);
+                foreach ($secrets as $secret) self::assertStringNotContainsString($secret, $out . $err);
+                self::assertSame(['tables' => count(resurrection_fresh_schema()) + 2, 'modules_installed' => 24, 'modules_active' => 0,
+                    'administrator' => 1, 'state' => 'installed', 'modules' => 'none', 'config' => 'written'], json_decode($out, true, 512, JSON_THROW_ON_ERROR));
+                clearstatcache();
+                self::assertSame(0600, fileperms($located) & 0777);
+                self::assertFalse(\Resurrection\Configuration\ConfigFile::inside((string)realpath($located), dirname(__DIR__, 2)));
+                self::assertFileDoesNotExist(dirname(__DIR__, 2) . '/from-environment.php');
+                self::assertSame($loaded, (static function (string $path): array {
+                    require $path;
+                    return compact('DB_HOST', 'DB_USER', 'DB_PASS', 'DB_NAME', 'DB_PREFIX', 'DB_USEDATACACHE', 'DB_DATACACHEPATH');
+                })($located));
+                // The upgrade command reads the same file, and refuses another.
+                foreach ([[['--dry-run'], 0, ''], [['--dry-run', $written], 1, "Upgrade refused. LOGD_DBCONNECT names the configuration file the game reads. Give that path, or none. Nothing was changed.\n"]] as [$arguments, $expected, $message]) {
+                    $process = proc_open([PHP_BINARY, 'scripts/upgrade.php', ...$arguments], [1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes, dirname(__DIR__, 2), $environment);
+                    $out = stream_get_contents($pipes[1]); fclose($pipes[1]);
+                    $err = stream_get_contents($pipes[2]); fclose($pipes[2]);
+                    self::assertSame($expected, proc_close($process), $err . $out);
+                    self::assertSame($message, $err);
+                }
+            } finally {
+                unset($environment['LOGD_DBCONNECT']);
+                if (file_exists($located)) unlink($located);
+            }
+            foreach (array_column(db_query('SHOW TABLES'), 'Tables_in_resurrection_test') as $table) db_query('DROP TABLE ' . db_identifier($table));
+            $GLOBALS['settings'] = null;
+
             // The existing-config mode with --modules=none: all 24 installed and inactive. Later tests start here.
             [$code, $out, $err] = $run('--modules=none', $config);
             self::assertSame(0, $code, $err . $out);

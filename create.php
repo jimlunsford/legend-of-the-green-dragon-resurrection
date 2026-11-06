@@ -1,4 +1,5 @@
 <?php
+define('RESURRECTION_ENTRY', true);
 // Keep the historical renderer and account/module boundaries.
 define('ALLOW_ANONYMOUS', true);
 require_once 'common.php';

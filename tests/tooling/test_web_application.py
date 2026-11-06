@@ -23,6 +23,9 @@ import urllib.request
 from xml.etree import ElementTree
 
 ROOT = Path(__file__).resolve().parents[2]
+# The game's Content Security Policy as Phase 6 task 3 set it (src/Http/SecurityHeaders.php sends it).
+CSP_POLICY = ("default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self'; font-src 'self'; object-src 'none'; "
+              "base-uri 'self'; form-action 'self'; frame-ancestors 'self'")
 
 def years_from_now(years=10):
     """A time this many years after now, as the game stores times (UTC): a "not yet" that never runs out. Until Phase 5
@@ -58,6 +61,10 @@ class WebApplicationTests(unittest.TestCase):
         # Outside the application tree; only the loopback fixture server loads this.
         cls.seed_file = tempfile.NamedTemporaryFile(mode='w', suffix='.php')
         cls.seed_file.write("<?php if (in_array($_SERVER['HTTP_X_RESURRECTION_FIXTURE'] ?? '', ['skeleton-death','specialty-accounting'], true)) mt_srand(12345); if (($_SERVER['HTTP_X_RESURRECTION_FIXTURE'] ?? '') === 'ordinary-flee-failure') mt_srand(3); if (($_SERVER['HTTP_X_RESURRECTION_FIXTURE'] ?? '') === 'graveyard-round') mt_srand(1); if (($_SERVER['HTTP_X_RESURRECTION_FIXTURE'] ?? '') === 'inn-bribe') mt_srand(4); if (($_SERVER['HTTP_X_RESURRECTION_FIXTURE'] ?? '') === 'graveyard-haunt') mt_srand(7);\n")
+        # Phase 6 task 3 (S1): every HTML page this server sends is checked for what the Content Security Policy refuses
+        # (tests/fixtures/inline-content-scan.php); tearDownClass fails the run if any page had one.
+        cls.inline_log = tempfile.NamedTemporaryFile(mode='w+', suffix='.jsonl', prefix='resurrection-inline-')
+        cls.seed_file.write("require " + json.dumps(str(ROOT / 'tests' / 'fixtures' / 'inline-content-scan.php')) + ";\n")
         cls.seed_file.flush()
         # PHP's actual external-mail transport is replaced ONLY on this fixture server.
         # The subprocess independently observes committed rows before reporting delivery failure.
@@ -77,7 +84,8 @@ sys.exit(1)
         cls.server_log = tempfile.TemporaryFile(mode='w+t')
         cls.server = subprocess.Popen([shutil.which('php'), '-d', 'display_errors=1', '-d', 'error_reporting=-1',
                                        '-d', 'zend.exception_ignore_args=1', '-d', 'sendmail_path='+str(cls.mail_program), '-d', 'auto_prepend_file='+cls.seed_file.name, '-S', f'127.0.0.1:{cls.port}', '-t', str(ROOT)],
-                                      stdout=subprocess.DEVNULL, stderr=cls.server_log, cwd=ROOT)
+                                      stdout=subprocess.DEVNULL, stderr=cls.server_log, cwd=ROOT,
+                                      env=dict(os.environ, RESURRECTION_INLINE_LOG=cls.inline_log.name))
         for _ in range(100):
             try:
                 with socket.create_connection(('127.0.0.1', cls.port), timeout=.1):
@@ -99,6 +107,22 @@ sys.exit(1)
         cls.seed_file.close()
         cls.mail_transport.cleanup()
         cls.config.unlink()
+        cls.inline_log.seek(0)
+        pages = [json.loads(line) for line in cls.inline_log.read().splitlines() if line.strip()]
+        cls.inline_log.close()
+        cls._inline_content_verdict(pages)
+
+    @staticmethod
+    def _inline_content_verdict(pages):
+        """Phase 6 task 3 (S1): no page the suite rendered printed an inline script, an inline event handler, a style
+        attribute or element, or a javascript: URL. Each shard checks the pages its own tests rendered."""
+        bad = {}
+        for page in pages:
+            if page['found']:
+                bad.setdefault(page['page'].split('?')[0], sorted(set(page['found'])))
+        if bad:
+            raise AssertionError('Pages printed what the Content Security Policy refuses (%d of %d pages): %s'
+                                 % (sum(1 for page in pages if page['found']), len(pages), json.dumps(bad, indent=1)[:6000]))
 
     @staticmethod
     def query(sql, parameters=()):
@@ -6913,7 +6937,8 @@ function MODULE_dohook($hook,$args) {
             url=f'user.php?op=lasthit&userid={target}';q('UPDATE accounts SET lastnewday=? WHERE acctid=?',[self._current_game_day(),f['player']]);self._security_allow(f['player'],url)
             opener=urllib.request.build_opener(urllib.request.HTTPCookieProcessor(f['jar']()))
             response=opener.open(f'http://127.0.0.1:{self.port}/'+url,timeout=20)
-            self.assertEqual('sandbox',response.headers['Content-Security-Policy']);self.assertIn('<script>alert(1)</script>',response.read().decode())
+            # Phase 6 task 3 (S1): the sandbox is added to the game's whole policy, which every page now carries.
+            self.assertEqual(CSP_POLICY+'; sandbox',response.headers['Content-Security-Policy']);self.assertIn('<script>alert(1)</script>',response.read().decode())
 
     def test_referer_tracking_fits_its_columns_http(self):
         # common.php counts off-site http:// referers on every page. 1.1.2 pasted the Referer and the request path into
@@ -7287,12 +7312,13 @@ function MODULE_dohook($hook,$args) {
                 q("UPDATE accounts SET name='BanDecoyName',lastip=?,uniqueid='decoy-id' WHERE acctid=?",["10.99'.5.6",decoy])
                 q("UPDATE accounts SET name='BanSiblingName',lastip=?,uniqueid=? WHERE acctid=?",["10.%_'.5.7",uid,sibling])
                 login(64)
-                # setupban: the reason round-trips as text; the stored IP's % and _ match only themselves; its quote stays inside the script string.
+                # setupban: the reason round-trips as text; the stored IP's % and _ match only themselves; its quote stays inside the
+                # filter link's data attribute, escaped (Phase 6 task 3; it was a string in an inline script until then).
                 reason='"><script>reason</script>'
                 status,body=request(f'user.php?op=setupban&userid={target}&reason='+urllib.parse.quote(reason,safe=''));self.assertEqual(200,status,body[:2000])
                 self.assertIn(('reason',reason),self._user_editor_form(body,save));self.assertNotIn('<script>reason</script>',body)
                 self.assertIn('BanSiblingName',body);self.assertNotIn('BanDecoyName',body);self.assertNotIn('<svg/onload=alert(1)>',body)
-                self.assertNotIn("value='10.%_'",html.unescape(body));self.assertIn('value="10.%_\\u0027.5.',html.unescape(body))
+                self.assertNotIn("value='10.%_'",html.unescape(body));self.assertIn('data-rz-fill-value="10.%_&#039;.5.',body);self.assertNotIn('onClick=',body)
                 # saveban: POST, CSRF, a one-use intent; validation before any write; 1.1.2's texts and debug log.
                 def ban_form():
                     status,body=request('user.php?op=setupban');self.assertEqual(200,status,body[:2000])
@@ -8644,7 +8670,7 @@ function MODULE_dohook($hook,$args) {
                 self.assertEqual(405,request(save)[0]);self.assertEqual(403,request(save,{**post(fields),'csrf_token':'0'*64})[0])
                 self.assertEqual(400,request(save,{**post(fields),'extra':'1'})[0]);self.assertEqual(400,request(save,{**post(fields),'trans[]':'x'})[0])
                 self.assertEqual(409,request(save,post(fields,text='Fixture other'))[0]);self.assertEqual(before,(rows(),waiting()))
-                status,body=request(save,post(fields));self.assertEqual(200,status,body[:2000]);self.assertIn('window.close()',body)
+                status,body=request(save,post(fields));self.assertEqual(200,status,body[:2000]);self.assertIn('<span hidden data-rz-close-window></span>',body);self.assertNotIn('window.close()',body)
                 # 1.1.2's insert stored its version with a trailing space; the namespace's untranslated copy is removed.
                 self.assertEqual([(ns,text,"Übersetzt O'Reilly \\ <i>",'WebPlayer',version+' ')],rows());self.assertEqual([(ns,'Fixture other')],waiting())
                 self.assertEqual(409,request(save,post(fields))[0])
@@ -9380,6 +9406,141 @@ function MODULE_dohook($hook,$args) {
                 status,body=request('village.php'); self.assertEqual(200,status,body[:2000])
         finally:
             for column in ['prefs','allowednavs','restorepage']: stored(column,saved[column])
+
+    @contextmanager
+    def _tree_server(self, env=None, files=None):
+        """A second loopback server on a copy of the tree made of symlinks, without dbconnect.php (Phase 6 task 3): env
+        is added to the server's environment, files ({name: text}) are written into the copy. Yields its port."""
+        with tempfile.TemporaryDirectory(prefix='resurrection-tree-') as tree:
+            for entry in ROOT.iterdir():
+                if entry.name not in ('dbconnect.php', '.git', *(files or {})):
+                    os.symlink(entry, Path(tree) / entry.name)
+            for name, text in (files or {}).items():
+                (Path(tree) / name).write_text(text)
+            with socket.socket() as sock:
+                sock.bind(('127.0.0.1', 0))
+                port = sock.getsockname()[1]
+            log = tempfile.TemporaryFile(mode='w+t')
+            server = subprocess.Popen([shutil.which('php'), '-d', 'display_errors=1', '-d', 'error_reporting=-1',
+                                       '-S', f'127.0.0.1:{port}', '-t', tree], cwd=tree, stdout=subprocess.DEVNULL, stderr=log,
+                                      env=dict({k: v for k, v in os.environ.items() if k != 'LOGD_DBCONNECT'}, **(env or {})))
+            try:
+                for _ in range(100):
+                    try:
+                        with socket.create_connection(('127.0.0.1', port), timeout=.1):
+                            break
+                    except OSError:
+                        self.assertIsNone(server.poll(), 'Second test server exited')
+                        time.sleep(.05)
+                yield port
+            finally:
+                server.terminate()
+                server.wait(timeout=5)
+                log.close()
+
+    @staticmethod
+    def _headers(port, path, client=None):
+        """The status and headers of one GET, redirects not followed."""
+        class NoRedirect(urllib.request.HTTPRedirectHandler):
+            def redirect_request(self, *args): return None
+        opener = urllib.request.build_opener(*(client or []), NoRedirect)
+        try:
+            response = opener.open(f'http://127.0.0.1:{port}/' + path, timeout=20)
+        except urllib.error.HTTPError as error:
+            response = error
+        body = response.read().decode('utf-8', errors='replace')
+        return response.status, response.headers, body
+
+    def assertSecurityHeaders(self, headers, mode, label):
+        """Phase 6 task 3 (S1): the three headers always, and the policy as the mode says."""
+        self.assertEqual('SAMEORIGIN', headers['X-Frame-Options'], label)
+        self.assertEqual('nosniff', headers['X-Content-Type-Options'], label)
+        self.assertEqual('same-origin', headers['Referrer-Policy'], label)
+        enforced, reported = headers.get_all('Content-Security-Policy') or [], headers.get_all('Content-Security-Policy-Report-Only') or []
+        self.assertEqual([CSP_POLICY] if mode == 'enforce' else [], enforced, label)
+        self.assertEqual([CSP_POLICY] if mode == 'report-only' else [], reported, label)
+
+    def test_security_headers_on_every_page_type_in_each_mode_http(self):
+        # Phase 6 task 3 (S1): src/Http/SecurityHeaders.php sends X-Frame-Options, X-Content-Type-Options and
+        # Referrer-Policy on every response, and the Content Security Policy as csp_mode says: enforced (the default),
+        # report-only, or off. A signed-out game page, a signed-in one, a popup, an operator's page, the installer's 403
+        # and index.php's redirect. (The not-installed, configuration and safe-frame pages are in test_operator_pages.py,
+        # which runs them without a database; the last hit's sandbox is in the user editor test.)
+        player = self.query("SELECT acctid FROM accounts WHERE login='WebPlayer'")[0]['acctid']
+        admin = self.query("SELECT acctid FROM accounts WHERE login='FixtureAdmin'")[0]['acctid']
+        stored = self.query("SELECT value FROM settings WHERE setting='csp_mode'")
+        players = self._security_client()
+        admins = self._security_client('FixtureAdmin', 'Synthetic administrator password')
+        cookies = lambda call: [urllib.request.HTTPCookieProcessor(call.cookiejar)]
+        try:
+            for mode in ['enforce', 'report-only', 'off']:
+                self.query("INSERT INTO settings (setting,value) VALUES ('csp_mode',?) ON DUPLICATE KEY UPDATE value=?", [mode, mode])
+                day = self._current_game_day()
+                self.query('UPDATE accounts SET lastnewday=? WHERE acctid IN (?,?)', [day, player, admin])
+                self._security_allow(player, 'village.php')
+                self._security_allow(admin, 'configuration.php')
+                pages = [('home.php', None, 200, '<form'), ('village.php', cookies(players), 200, 'rz-navitem'),
+                         ('mail.php', cookies(players), 200, 'rz-popup'), ('configuration.php', cookies(admins), 200, 'csp_mode')]
+                for path, client, status, needle in pages:
+                    code, headers, body = self._headers(self.port, path, client)
+                    self.assertEqual(status, code, f'{mode} {path}: {body[:1500]}')
+                    self.assertIn(needle, body, f'{mode} {path}')
+                    self.assertSecurityHeaders(headers, mode, f'{mode} {path}')
+                    # Every page loads the behaviors script, and nothing inline.
+                    self.assertIn('<script src="assets/ui/behaviors.js" defer></script>', body, f'{mode} {path}')
+                # No settings before these answer: the policy is always enforced.
+                for path, status in [('installer.php', 403), ('index.php', 302)]:
+                    code, headers, _ = self._headers(self.port, path)
+                    self.assertEqual(status, code, path)
+                    self.assertSecurityHeaders(headers, 'enforce', f'{mode} {path}')
+        finally:
+            value = stored[0]['value'] if stored else 'enforce'
+            self.query("INSERT INTO settings (setting,value) VALUES ('csp_mode',?) ON DUPLICATE KEY UPDATE value=?", [value, value])
+
+    def test_logd_dbconnect_reads_the_config_from_outside_the_docroot_http(self):
+        # Phase 6 task 3 (S12): LOGD_DBCONNECT holds the configuration file's absolute path. Set, that file wins and a
+        # dbconnect.php in the game's directory is ignored; unset, dbconnect.php is read as before. Here the game is
+        # served from a copy of the tree with no dbconnect.php, and the file sits in a private directory outside it.
+        # (The install through LOGD_DBCONNECT is in tests/unit/FreshInstallTest.php; its configuration page when the
+        # file cannot be read is in test_operator_pages.py.)
+        with tempfile.TemporaryDirectory(prefix='resurrection-private-') as private:
+            config = Path(private) / 'game.php'
+            config.write_text(self.config.read_text())
+            config.chmod(0o600)
+            closed = ("<?php $DB_HOST='127.0.0.1:1'; $DB_USER='nobody'; $DB_PASS='docroot-file-must-not-be-read'; $DB_NAME='none';"
+                      " $DB_PREFIX=''; $DB_USEDATACACHE=0; $DB_DATACACHEPATH='';\n")
+            player = self.query("SELECT acctid FROM accounts WHERE login='WebPlayer'")[0]['acctid']
+            # The game plays from the file outside the docroot: sign in, the village, a popup, the warriors list.
+            with self._tree_server(env={'LOGD_DBCONNECT': str(config)}) as port:
+                status, body = self._security_client(login=None, port=port)('home.php')
+                self.assertEqual(200, status, body[:1500])
+                self.assertNotIn('has not yet been installed', body)
+                call = self._security_client(port=port)
+                self.query('UPDATE accounts SET lastnewday=? WHERE acctid=?', [self._current_game_day(), player])
+                self._security_allow(player, 'village.php')
+                status, body = call('village.php')
+                self.assertEqual(200, status, body[:1500])
+                self.assertIn('rz-navitem', body)
+                status, body = call('mail.php')
+                self.assertEqual(200, status, body[:1500])
+                self._security_allow(player, 'list.php')
+                status, body = call('list.php')
+                self.assertEqual(200, status, body[:1500])
+                self.assertIn('WebPlayer', html.unescape(body))
+            # Both files there: LOGD_DBCONNECT's wins; without it, the docroot's file is read (and its closed port fails).
+            with self._tree_server(env={'LOGD_DBCONNECT': str(config)}, files={'dbconnect.php': closed}) as port:
+                status, _, body = self._headers(port, 'home.php')
+                self.assertEqual(200, status, body[:1500])
+                self.assertNotIn('Database Connection Error', body)
+                self.assertNotIn('docroot-file-must-not-be-read', body)
+            with self._tree_server(files={'dbconnect.php': closed}) as port:
+                status, _, body = self._headers(port, 'home.php')
+                self.assertIn('Database Connection Error', body)
+            # Set, and the file is not there: the not-installed page, as for a missing dbconnect.php.
+            with self._tree_server(env={'LOGD_DBCONNECT': str(Path(private) / 'missing.php')}) as port:
+                status, _, body = self._headers(port, 'home.php')
+                self.assertEqual(200, status, body[:1500])
+                self.assertIn('The game has not yet been installed', body)
 
     def _security_client(self, login='WebPlayer', password="Synthetic web O'Reilly \\ password", port=None):
         class NoRedirect(urllib.request.HTTPRedirectHandler):

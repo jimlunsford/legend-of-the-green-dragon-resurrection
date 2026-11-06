@@ -1,4 +1,5 @@
 <?php
+if (!\defined('RESURRECTION_ENTRY') && \PHP_SAPI !== 'cli') { \http_response_code(404); exit; }
 
 /**
  * A base URL fit to save as `serverurl` and to put in mail and links: http or https, a host name or IP address, an

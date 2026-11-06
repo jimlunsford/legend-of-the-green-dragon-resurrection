@@ -551,13 +551,18 @@ final class BattleCommentaryRenderTest extends TestCase
     {
         $fill = $card->querySelector('.rz-fighterbar-track > .rz-fighterbar-fill');
         self::assertNotNull($fill);
-        self::assertSame(1, preg_match('/^width: ([0-9.]+)%$/', (string)$fill->getAttribute('style'), $m));
+        // The fill's width is its class, rz-fill-0 to rz-fill-100 (Phase 6 task 3; until then style="width: N%").
+        self::assertNull($fill->getAttribute('style'));
+        self::assertSame(1, preg_match('/^rz-fighterbar-fill rz-fill-([0-9]+)$/', (string)$fill->getAttribute('class'), $m));
         return $m[1];
     }
 
+    /** The whole percent of the fill class: the nearest, but never empty unless empty, never full unless full. */
     private function width(int|float $current, int|float $max): string
     {
-        return (string)round(max(0, min(100, $current / $max * 100)), 1);
+        $percent = max(0, min(100, $current / $max * 100));
+        $step = (int)round($percent);
+        return (string)($step === 0 && $percent > 0 ? 1 : ($step === 100 && $percent < 100 ? 99 : $step));
     }
 
     // Players, comments and pages.

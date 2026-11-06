@@ -1,4 +1,5 @@
 <?php
+if (!\defined('RESURRECTION_ENTRY') && \PHP_SAPI !== 'cli') { \http_response_code(404); exit; }
 // translator ready
 // addnews ready
 // mail ready
@@ -112,7 +113,7 @@ function darkhorse_bartender($from){
 		$try = translate_inline("Try");
 		rawoutput("<input name='testtext' id='testtext'><input type='submit' class='button' value='$try'></form>");
 		addnav("",$from."op=bartender&what=colors");
-		rawoutput("<script language='JavaScript'>document.getElementById('testtext').focus();</script>");
+		rawoutput(resurrection_focus_marker('testtext'));
 		if ($testtext) {
 			output("`0You entered %s`n", prevent_colors(HTMLEntities($testtext, ENT_COMPAT, getsetting("charset", "ISO-8859-1"))),true);
 			output("It looks like %s`n", $testtext);
@@ -129,7 +130,7 @@ function darkhorse_bartender($from){
 				$search = translate_inline("Search");
 				rawoutput("<form action='".$from."op=bartender&what=enemies&subop=search' method='POST'><input name='name' id='name'><input type='submit' class='button' value='$search'></form>");
 				addnav("",$from."op=bartender&what=enemies&subop=search");
-				rawoutput("<script language='JavaScript'>document.getElementById('name').focus();</script>");
+				rawoutput(resurrection_focus_marker('name'));
 			}else{
 				addnav("Search Again",$from."op=bartender&what=enemies");
 				$search = "%";

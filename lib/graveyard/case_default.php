@@ -1,4 +1,5 @@
 <?php
+if (!\defined('RESURRECTION_ENTRY') && \PHP_SAPI !== 'cli') { \http_response_code(404); exit; }
 if (!$skipgraveyardtext) {
 	output("Your spirit wanders into a lonely graveyard, overgrown with sickly weeds which seem to grab at your spirit as you float past them.");
 	output("Around you are the remains of many broken tombstones, some lying on their faces, some shattered to pieces.");

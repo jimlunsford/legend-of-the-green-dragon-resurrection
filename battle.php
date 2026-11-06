@@ -1,4 +1,5 @@
 <?php
+if (!\defined('RESURRECTION_ENTRY') && \PHP_SAPI !== 'cli') { \http_response_code(404); exit; }
 // This is a caller-owned combat include, never an independent HTTP action.
 if (basename($_SERVER['SCRIPT_NAME'] ?? '') === 'battle.php' ||
     realpath($_SERVER['SCRIPT_FILENAME'] ?? '') === __FILE__) {

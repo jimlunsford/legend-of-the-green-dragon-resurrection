@@ -1,4 +1,5 @@
 <?php
+if (!\defined('RESURRECTION_ENTRY') && \PHP_SAPI !== 'cli') { \http_response_code(404); exit; }
 		$apply = httpget('apply');
 		if ($apply==1 && ($_SERVER['REQUEST_METHOD'] ?? '') === 'POST'){
 			require_once("lib/clan_authority.php");

@@ -1,4 +1,5 @@
 <?php
+define('RESURRECTION_ENTRY', true);
 // addnews ready
 // translator ready
 // mail ready
@@ -147,7 +148,7 @@ for($i=0;$i<$max;$i++){
 	output_notl("`^%s`0", $row['level']);
 	rawoutput("</td><td>");
 	if ($session['user']['loggedin']) {
-		rawoutput("<a href=\"mail.php?op=write&to=".rawurlencode($row['login'])."\" target=\"_blank\" onClick=\"".popup("mail.php?op=write&to=".rawurlencode($row['login'])."").";return false;\">");
+		rawoutput("<a href=\"mail.php?op=write&to=".rawurlencode($row['login'])."\" target=\"_blank\"".resurrection_popup_attributes().">");
 		rawoutput("<img src='images/newscroll.GIF' width='16' height='16' alt='$writemail' border='0'></a>");
 		rawoutput("<a href='bio.php?char=".$row['acctid']."'>");
 		addnav("","bio.php?char=".$row['acctid']."");

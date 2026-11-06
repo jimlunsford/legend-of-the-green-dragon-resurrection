@@ -1,4 +1,5 @@
 <?php
+define('RESURRECTION_ENTRY', true);
 //addnews ready
 // mail ready
 require_once("common.php");
@@ -66,7 +67,7 @@ rawoutput("<input name='q' id='q'>");
 $se = translate_inline("Search");
 rawoutput("<input type='submit' class='button' value='$se'>");
 rawoutput("</form>");
-rawoutput("<script language='JavaScript'>document.getElementById('q').focus();</script>");
+rawoutput(resurrection_focus_marker('q'));
 addnav("","user.php?op=search$m");
 require_once("lib/superusernav.php");
 superusernav();

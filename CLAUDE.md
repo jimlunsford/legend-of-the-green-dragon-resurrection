@@ -81,6 +81,15 @@ Do not start a subsystem the task prompt does not name.
 - No 1.1.2 server will be upgraded. All installs are fresh.
 - Do not change a version string unless a task prompt says to.
 
+## Configuration file
+
+Which database configuration file the game, `scripts/install.php` and `scripts/upgrade.php` use (Phase 6 task 3, S12; `src/Configuration/ConfigLocation.php`):
+
+1. `LOGD_DBCONNECT` set (not empty): that absolute path, and only it. A `dbconnect.php` in the game's directory is ignored. Missing: the game shows the not-installed page and the installer writes the file there. Unreadable, damaged, or not an absolute path: the S4 operator page (503). A command given another path is refused.
+2. `LOGD_DBCONNECT` unset or empty: `dbconnect.php` in the game's directory, as before. A command's path argument works as before.
+
+Keep this order. Never let a docroot file win over `LOGD_DBCONNECT`.
+
 ## Tests
 
 - Never remove, skip, or weaken an existing test to get a pass.

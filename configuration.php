@@ -1,4 +1,5 @@
 <?php
+define('RESURRECTION_ENTRY', true);
 require_once 'common.php';
 require_once 'lib/typed_editor.php';
 require_once 'lib/configuration_descriptors.php';

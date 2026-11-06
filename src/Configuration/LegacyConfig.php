@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 namespace Resurrection\Configuration;
+if (!\defined('RESURRECTION_ENTRY') && \PHP_SAPI !== 'cli') { \http_response_code(404); exit; }
 
 /** Transitional serialization of trusted local PHP configuration, not a secret store. */
 final class LegacyConfig

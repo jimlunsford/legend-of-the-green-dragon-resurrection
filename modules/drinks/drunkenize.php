@@ -1,4 +1,5 @@
 <?php
+if (!\defined('RESURRECTION_ENTRY') && \PHP_SAPI !== 'cli') { \http_response_code(404); exit; }
 function drinks_drunkenize($commentary,$level){
 	if (get_module_pref("noslur")) return $commentary;
 	$straight = $commentary;

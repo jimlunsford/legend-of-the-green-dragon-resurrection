@@ -1,4 +1,5 @@
 <?php
+if (!\defined('RESURRECTION_ENTRY') && \PHP_SAPI !== 'cli') { \http_response_code(404); exit; }
 // Historical Dragon scaling and reset calculations, called only inside the
 // Dragon controller's locked player transaction. No independent HTTP endpoint.
 if (basename($_SERVER['SCRIPT_NAME'] ?? '') === 'dragon_outcomes.php') {

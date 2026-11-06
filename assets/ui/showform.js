@@ -14,7 +14,8 @@
   Resize: a resizeable textarea's + and - buttons (data-rz-resize, data-rz-step) change its rows, between 4 and 49
   as 1.1.2's increase() did.
 
-  Confirm: a submit button with data-rz-confirm asks first, and the form is not sent unless the player agrees.
+  Confirm: a submit button with data-rz-confirm asks first, and the form is not sent unless the player agrees. Since
+  Phase 6 task 3 assets/ui/behaviors.js, on every page, does that for every link, button and form that carries it.
 
   Check all (Phase 5 task 11, the mail inbox): a button with data-rz-checkall ticks every checkbox of that name in its
   form, as 1.1.2's inline Check All did.
@@ -82,12 +83,6 @@
       Array.prototype.forEach.call(scope.querySelectorAll('input[type="checkbox"]'), function (box) {
         if (box.name === name) { box.checked = true; }
       });
-    });
-  });
-
-  Array.prototype.forEach.call(document.querySelectorAll('[data-rz-confirm]'), function (button) {
-    button.addEventListener('click', function (e) {
-      if (!window.confirm(button.getAttribute('data-rz-confirm'))) { e.preventDefault(); }
     });
   });
 }());

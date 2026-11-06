@@ -1,4 +1,5 @@
 <?php
+if (!\defined('RESURRECTION_ENTRY') && \PHP_SAPI !== 'cli') { \http_response_code(404); exit; }
 output("`\$%s`0 waves his skeletal arms as he begins to command the very fabric of life.`n`n",$deathoverlord);
 // Note to translators.  The text spoken by Ramius here is backwards
 // English.  You might choose to maintain it in tact, or you might choose

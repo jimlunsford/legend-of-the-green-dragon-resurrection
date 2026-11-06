@@ -1,4 +1,5 @@
 <?php
+define('RESURRECTION_ENTRY', true);
 //Author: Lonny Luberts - 3/18/2005
 //Heavily modified by JT Traub
 require_once("common.php");

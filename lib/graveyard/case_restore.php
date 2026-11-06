@@ -1,4 +1,5 @@
 <?php
+if (!\defined('RESURRECTION_ENTRY') && \PHP_SAPI !== 'cli') { \http_response_code(404); exit; }
 require_once("lib/restore_authority.php");
 output("`)`b`cThe Mausoleum`c`b");
 // Only the protected POST restores. GET (the Mausoleum link, a restored page) asks.

@@ -1,4 +1,5 @@
 <?php
+if (!\defined('RESURRECTION_ENTRY') && \PHP_SAPI !== 'cli') { \http_response_code(404); exit; }
 resurrection_require_post();
 try {
     $ip = \Resurrection\Http\Input::string($_POST, 'ipfilter');

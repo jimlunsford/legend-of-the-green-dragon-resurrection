@@ -93,7 +93,8 @@ final class OutputBufferingTest extends TestCase
                 if (is_array($token) && $token[0] === T_INLINE_HTML) { $printing[] = $file . ':' . $token[2] . ' ' . json_encode($token[1]); }
             }
         }
-        self::assertSame(['lib/all_tables.php:1492 "\n"'], $printing);
+        // The line is 1493 since Phase 6 task 3 put the internal-file guard (S2) on line 2 of every file under lib/.
+        self::assertSame(['lib/all_tables.php:1493 "\n"'], $printing);
     }
 
     /**

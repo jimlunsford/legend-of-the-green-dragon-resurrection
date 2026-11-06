@@ -1,4 +1,5 @@
 <?php
+if (!\defined('RESURRECTION_ENTRY') && \PHP_SAPI !== 'cli') { \http_response_code(404); exit; }
 require_once __DIR__ . '/../inn_economy.php';
 $post = ($_SERVER['REQUEST_METHOD'] ?? '') === 'POST';
 if ($act==""){
@@ -110,7 +111,7 @@ if ($act==""){
 	rawoutput("<input name='testtext' id='input'>");
 	rawoutput("<input type='submit' class='button' value='$try'>");
 	rawoutput("</form>");
-	rawoutput("<script language='javascript'>document.getElementById('input').focus();</script>");
+	rawoutput(resurrection_focus_marker('input'));
 		output("`0`n`nThese colors can be used in your name, and in any conversations you have.");
 	addnav("",$REQUEST_URI);
 }else if($act=="specialty"){

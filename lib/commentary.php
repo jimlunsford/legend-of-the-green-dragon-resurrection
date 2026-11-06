@@ -1,4 +1,5 @@
 <?php
+if (!\defined('RESURRECTION_ENTRY') && \PHP_SAPI !== 'cli') { \http_response_code(404); exit; }
 require_once __DIR__ . '/../src/Compatibility/array_cursor.php';
 // translator ready
 // addnews ready
@@ -409,15 +410,16 @@ function viewcommentary($section,$message="Interject your own commentary?",$limi
 		addnav("","$scriptname?op=commentdelete&return=".URLEncode($_SERVER['REQUEST_URI']));
 		$mod_Del1 = htmlentities(translate_inline("Delete Checked Comments"), ENT_COMPAT, getsetting("charset", "ISO-8859-1"));
 		$mod_Del2 = htmlentities(translate_inline("Delete Checked & Ban (3 days)"), ENT_COMPAT, getsetting("charset", "ISO-8859-1"));
-		$mod_Del_confirm = addslashes(htmlentities(translate_inline("Are you sure you wish to ban this user and have you specified the exact reason for the ban, i.e. cut/pasted their offensive comments?"), ENT_COMPAT, getsetting("charset", "ISO-8859-1")));
+		// The confirmation as data for assets/ui/behaviors.js (Phase 6 task 3); 1.1.2 escaped it for an inline confirm().
+		$mod_Del_confirm_text = translate_inline("Are you sure you wish to ban this user and have you specified the exact reason for the ban, i.e. cut/pasted their offensive comments?");
 		$mod_reason = translate_inline("Reason:");
 		$mod_reason_desc = htmlentities(translate_inline("Banned for comments you posted."), ENT_COMPAT, getsetting("charset", "ISO-8859-1"));
 
 		output_notl("<form action='$scriptname?op=commentdelete&return=".URLEncode($_SERVER['REQUEST_URI'])."' method='POST'>",true);
 		rawoutput(resurrection_csrf_field());
 		output_notl("<input type='submit' class='button' value=\"$mod_Del1\">",true);
-		output_notl("<input type='submit' class='button' name='delnban' value=\"$mod_Del2\" onClick=\"return confirm('$mod_Del_confirm');\">",true);
-		output_notl("`n".resurrection_label_for('reason0', "Reason:", true)." <input name='reason0'".resurrection_control_id('reason0')." size='40' value=\"$mod_reason_desc\" onChange=\"document.getElementById('reason').value=this.value;\">",true);
+		output_notl("<input type='submit' class='button' name='delnban' value=\"$mod_Del2\" ".resurrection_confirm_attribute($mod_Del_confirm_text).">",true);
+		output_notl("`n".resurrection_label_for('reason0', "Reason:", true)." <input name='reason0'".resurrection_control_id('reason0')." size='40' value=\"$mod_reason_desc\" data-rz-copy-to='reason'>",true);
 	}
 
 
@@ -469,7 +471,7 @@ function viewcommentary($section,$message="Interject your own commentary?",$limi
 	if ($moderating){
 		output_notl("`n");
 		rawoutput("<input type='submit' class='button' value=\"$mod_Del1\">");
-		rawoutput("<input type='submit' class='button' name='delnban' value=\"$mod_Del2\" onClick=\"return confirm('$mod_Del_confirm');\">");
+		rawoutput("<input type='submit' class='button' name='delnban' value=\"$mod_Del2\" ".resurrection_confirm_attribute($mod_Del_confirm_text).">");
 		output_notl("`n");
 		resurrection_label_open('reason');
 		output_notl("%s", $mod_reason);

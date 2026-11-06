@@ -1,6 +1,7 @@
 <?php
 declare(strict_types=1);
 namespace Resurrection\Game;
+if (!\defined('RESURRECTION_ENTRY') && \PHP_SAPI !== 'cli') { \http_response_code(404); exit; }
 
 /** Business state of the one companion created by bundled Dark Arts (src/Game/CompanionState.php uses it for that key). */
 final class SkeletonCompanionState

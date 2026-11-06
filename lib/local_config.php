@@ -1,4 +1,5 @@
 <?php
+if (!\defined('RESURRECTION_ENTRY') && \PHP_SAPI !== 'cli') { \http_response_code(404); exit; }
 
 // Make PHP know about the memory limit.
 // Please note, this will not work if you are running in safe mode.

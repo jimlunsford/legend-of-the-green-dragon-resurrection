@@ -1,4 +1,5 @@
 <?php
+define('RESURRECTION_ENTRY', true);
 require_once __DIR__ . '/src/Security/ScalarState.php';
 require_once __DIR__ . '/src/Compatibility/array_cursor.php';
 // addnews ready
@@ -262,12 +263,12 @@ function companionform($companion, $context){
 	resurrection_label_open('fighter');
 	output("Fighter?:");
 	resurrection_label_close();
-	rawoutput("</td><td><input id='fighter' type='checkbox' name='companion[abilities][fight]' value='1'".($companion['abilities']['fight']==true?" checked":"")." onClick='document.getElementById(\"defender\").disabled=document.getElementById(\"fighter\").checked; if(document.getElementById(\"defender\").disabled==true) document.getElementById(\"defender\").checked=false;'></td></tr>");
+	rawoutput("</td><td><input id='fighter' type='checkbox' name='companion[abilities][fight]' value='1'".($companion['abilities']['fight']==true?" checked":"")." data-rz-uncheck-other='defender'></td></tr>");
 	rawoutput("<tr><td nowrap>");
 	resurrection_label_open('defender');
 	output("Defender?:");
 	resurrection_label_close();
-	rawoutput("</td><td><input id='defender' type='checkbox' name='companion[abilities][defend]' value='1'".($companion['abilities']['defend']==true?" checked":"")." onClick='document.getElementById(\"fighter\").disabled=document.getElementById(\"defender\").checked; if(document.getElementById(\"fighter\").disabled==true) document.getElementById(\"fighter\").checked=false;'></td></tr>");
+	rawoutput("</td><td><input id='defender' type='checkbox' name='companion[abilities][defend]' value='1'".($companion['abilities']['defend']==true?" checked":"")." data-rz-uncheck-other='fighter'></td></tr>");
 	rawoutput("<tr><td nowrap>");
 	resurrection_label_open('companion-abilities-heal');
 	output("Healer level:");

@@ -31,11 +31,7 @@ ALLOWED = [
     ('lib/installer/installer_sqlstatements.php', "'Gypsy Bandit'",
      "data: the Gypsy Bandit's stored creature script, which CreatureAi::supported() recognizes by its SHA-256; the "
      "pickpocket's output is printed by lib/extended-battle.php, which uses classes"),
-    ('src/Ui/SafeFrame.php', 'class="rz-statbar-fill" style="width: {percent}%"',
-     "the safe frame's copies of the template's bar parts (the Phase 5 close-out): a bar's fill width is its "
-     "value, as in templates/resurrection.htm, which this scan does not read"),
-    ('src/Ui/SafeFrame.php', 'class="rz-phonebar-fill" style="width: {percent}%"', 'the same, for the phone header\'s bars'),
-    ('src/Ui/SafeFrame.php', 'class="rz-fighterbar-fill" style="width: {percent}%"', 'the same, for the fight\'s bars'),
+    # The safe frame's bar parts drew their fill width inline until Phase 6 task 3; they use rz-fill-N classes now.
 ]
 
 # The pages task 9 fixes by hand: every input they print has a bound label (<label for> or a wrapping <label>). The
@@ -189,10 +185,16 @@ class TabsTest(unittest.TestCase):
         for needle in ("querySelectorAll('[data-rz-tabs]')", "setAttribute('aria-selected'", "tab.tabIndex = on ? 0 : -1;",
                        "'ArrowRight'", "'ArrowLeft'", "'Home'", "'End'", "list.hidden = false;", "data-rz-resize",
                        "index.name = 'showFormTabIndex';",
-                       "box.rows + step > 3 && box.rows + step < 50", "window.confirm(button.getAttribute('data-rz-confirm'))"):
+                       "box.rows + step > 3 && box.rows + step < 50"):
             self.assertIn(needle, script, needle)
         for unsafe in ('eval(', 'innerHTML', 'document.write', 'new Function', 'http:', 'https:', 'import '):
             self.assertNotIn(unsafe, script, unsafe)
+        # A button's confirmation moved to assets/ui/behaviors.js, on every page, with every other confirmation (Phase 6
+        # task 3), so a button is asked once.
+        self.assertNotIn('data-rz-confirm', script.split('*/', 1)[1])
+        behaviors = (ROOT / 'assets' / 'ui' / 'behaviors.js').read_text()
+        self.assertIn("closest(target, 'a[data-rz-confirm], button[data-rz-confirm], input[data-rz-confirm]')", behaviors)
+        self.assertIn("!window.confirm(asking.getAttribute('data-rz-confirm'))", behaviors)
 
 
 class StylesheetTest(unittest.TestCase):

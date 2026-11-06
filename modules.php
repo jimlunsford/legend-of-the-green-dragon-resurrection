@@ -1,4 +1,5 @@
 <?php
+define('RESURRECTION_ENTRY', true);
 require_once __DIR__ . '/src/Compatibility/array_cursor.php';
 // addnews ready
 // translator ready
@@ -109,7 +110,6 @@ if ($op==""){
 		$strsettings = translate_inline("Settings");
 		$strnosettings = translate_inline("`\$No Settings`0");
 		$uninstallconfirm = translate_inline("Are you sure you wish to uninstall this module?  All user preferences and module settings will be lost.  If you wish to temporarily remove access to the module, you may simply deactivate it.");
-		$uninstallconfirm = $h(json_encode($uninstallconfirm, JSON_THROW_ON_ERROR | JSON_INVALID_UTF8_SUBSTITUTE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT));
 		$status = translate_inline("Status");
 		$mname = translate_inline("Module Name");
 		$ops = translate_inline("Ops");
@@ -158,7 +158,7 @@ if ($op==""){
 			// A module that is not bundled can only be deactivated: running its code to uninstall or reinstall it is refused.
 			if ($bundled) {
 				rawoutput(" |");
-				$link(resurrection_module_confirm_url('uninstall', $name, $cat), $uninstall, " onClick='return confirm($uninstallconfirm);'");
+				$link(resurrection_module_confirm_url('uninstall', $name, $cat), $uninstall, resurrection_confirm_attribute($uninstallconfirm));
 				rawoutput(" | ");
 				$link(resurrection_module_confirm_url('reinstall', $name, $cat), $reinstall);
 			}

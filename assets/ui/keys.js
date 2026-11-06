@@ -1,8 +1,9 @@
 /*
   Resurrection UI: the nav hotkeys (Phase 5 task 6).
 
-  The page carries its key map as data, <script type="application/json" id="rz-keys">, written by
-  resurrection_nav_script() in lib/pageparts.php: a list of [key, action, url, ...], the key uppercase. This file does
+  The page carries its key map as data, in this script element's data-rz-keys attribute (Phase 6 task 3; until then
+  a <script type="application/json" id="rz-keys"> element), written by resurrection_nav_script() in
+  lib/pageparts.php: a list of [key, action, url, ...], the key uppercase. This file does
   what 1.1.2's inline document.onkeypress script did with the same keys:
 
   - "go": follow the link (window.location);
@@ -15,11 +16,11 @@
 (function () {
   'use strict';
 
-  var data = document.getElementById('rz-keys');
+  var data = document.querySelector('script[data-rz-keys]');
   if (!data) { return; }
   var keys = {};
   try {
-    var list = JSON.parse(data.textContent);
+    var list = JSON.parse(data.getAttribute('data-rz-keys'));
     for (var i = 0; i < list.length; i++) {
       // A key the page used twice goes where the later one does, as in 1.1.2's map.
       keys[list[i][0]] = list[i].slice(1);

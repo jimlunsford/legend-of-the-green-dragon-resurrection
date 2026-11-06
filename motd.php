@@ -1,4 +1,5 @@
 <?php
+define('RESURRECTION_ENTRY', true);
 // addnews ready
 // translator ready
 // mail ready
@@ -89,7 +90,7 @@ if ($op=="") {
 	resurrection_label_open('motd-month');
 	output("MoTD Archives:");
 	resurrection_label_close();
-	rawoutput("<select name='month'".resurrection_control_id('motd-month')." onChange='this.form.submit();' >");
+	rawoutput("<select name='month'".resurrection_control_id('motd-month')." data-rz-autosubmit>");
 	rawoutput("<option value=''>--Current--</option>");
 	while ($row = db_fetch_assoc($result)){
 		$time = strtotime("{$row['d']}-01");

@@ -1,4 +1,5 @@
 <?php
+define('RESURRECTION_ENTRY', true);
 // translator ready
 // addnews ready
 // mail ready
@@ -71,7 +72,7 @@ if ($op==""){
 		rawoutput("<input name='to' id='to'>");
 		output(" (partial names are ok, you will be asked to confirm the transaction before it occurs).`n");
 		rawoutput("<input type='submit' class='button' value='$preview'></form>");
-		rawoutput("<script language='javascript'>document.getElementById('amount').focus();</script>");
+		rawoutput(resurrection_focus_marker('amount'));
 		addnav("","bank.php?op=transfer2");
 	}else{
 		output_notl($indebt);
@@ -119,7 +120,7 @@ if ($op==""){
 		rawoutput("<input name='to' id='to' value='".resurrection_bank_attribute($to)."'>");
 		output(" (partial names are ok, you will be asked to confirm the transaction before it occurs).`n");
 		rawoutput("<input type='submit' class='button' value='$msg'></form>");
-		rawoutput("<script language='javascript'>document.getElementById('amount').focus();</script>",true);
+		rawoutput(resurrection_focus_marker('amount'),true);
 		addnav("","bank.php?op=transfer2");
 	}elseif(db_num_rows($result)>1){
 		rawoutput("<form action='bank.php?op=transfer3' method='POST'>".resurrection_bank_fields('bank-transfer', $amt));
@@ -215,7 +216,7 @@ if ($op==""){
 	output_notl("`^");
 	output("`n`iEnter 0 or nothing to deposit it all`i");
 	rawoutput("</form>");
-	rawoutput("<script language='javascript'>document.getElementById('input').focus();</script>",true);
+	rawoutput(resurrection_focus_marker('input'),true);
   addnav("","bank.php?op=depositfinish");
 }elseif($op=="depositfinish"){
 	try {
@@ -261,7 +262,7 @@ if ($op==""){
 	output_notl("`6");
 	output("`n(Money will be withdrawn until you have none left, the remainder will be borrowed)");
 	rawoutput("</form>");
-	rawoutput("<script language='javascript'>document.getElementById('input').focus();</script>");
+	rawoutput(resurrection_focus_marker('input'));
 	addnav("","bank.php?op=withdrawfinish");
 }elseif($op=="withdraw"){
 	$withdraw = translate_inline("Withdraw");
@@ -279,7 +280,7 @@ if ($op==""){
 	output_notl("`6");
 	output("`n`iEnter 0 or nothing to withdraw it all`i");
 	rawoutput("</form>");
-	rawoutput("<script language='javascript'>document.getElementById('input').focus();</script>");
+	rawoutput(resurrection_focus_marker('input'));
 	addnav("","bank.php?op=withdrawfinish");
 }elseif($op=="withdrawfinish"){
 	try {

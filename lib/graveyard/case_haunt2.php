@@ -1,4 +1,5 @@
 <?php
+if (!\defined('RESURRECTION_ENTRY') && \PHP_SAPI !== 'cli') { \http_response_code(404); exit; }
 require_once("lib/bank_authority.php");
 try {
 	// The bank's recipient search: each typed UTF-8 character in order, LIKE wildcards matching only themselves.
@@ -17,7 +18,7 @@ if (db_num_rows($result)<=0){
 	rawoutput("<input name='name' id='name'>");
 	rawoutput("<input type='submit' class='button' value='$search'>");
 	rawoutput("</form>");
-	rawoutput("<script language='JavaScript'>document.getElementById('name').focus()</script>",true);
+	rawoutput(resurrection_focus_marker('name'),true);
 }else{
 	output("`\$%s`) will allow you to try to haunt these people:`n",$deathoverlord);
 	$name = translate_inline("Name");

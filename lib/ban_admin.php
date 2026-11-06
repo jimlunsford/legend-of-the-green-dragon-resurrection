@@ -1,4 +1,5 @@
 <?php
+if (!\defined('RESURRECTION_ENTRY') && \PHP_SAPI !== 'cli') { \http_response_code(404); exit; }
 require_once __DIR__ . '/admin_authority.php';
 
 /** 1.1.2's "Will Expire Within" navigation. Any other duration shows the default (two weeks) list. */
@@ -10,12 +11,6 @@ const RESURRECTION_BAN_MAX_DAYS = 36500;
 /** The similar-IP list's prefix for LIKE ... ESCAPE '|': a stored % or _ matches only itself. */
 function resurrection_ban_like_prefix(string $prefix): string {
     return strtr($prefix, ['|' => '||', '%' => '|%', '_' => '|_']) . '%';
-}
-
-/** A value as a JavaScript string literal inside an HTML attribute. */
-function resurrection_ban_js(string $value): string {
-    return htmlspecialchars(json_encode($value, JSON_THROW_ON_ERROR | JSON_INVALID_UTF8_SUBSTITUTE | JSON_HEX_TAG | JSON_HEX_AMP |
-        JSON_HEX_APOS | JSON_HEX_QUOT), ENT_QUOTES, 'UTF-8');
 }
 
 /** The list's "Will Expire Within" choice: a listed duration, "forever", or "" (the default list). */

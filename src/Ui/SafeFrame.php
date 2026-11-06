@@ -2,6 +2,7 @@
 declare(strict_types=1);
 
 namespace Resurrection\Ui;
+if (!\defined('RESURRECTION_ENTRY') && \PHP_SAPI !== 'cli') { \http_response_code(404); exit; }
 
 /**
  * The safe frame (Phase 5 close-out, docs/PHASE5-CLOSEOUT-20261105.md): a built-in template that prepare_template()
@@ -12,9 +13,9 @@ namespace Resurrection\Ui;
  * It has every part the code fills, with the same keys, so no page prints a missing-part warning; its four frame parts
  * are the template's, less the phone's pieces (the compact header, the tab bar and the More section, which only the
  * stylesheet keeps hidden on a desktop). It links the stylesheet; when that file is missing the page is plain markup
- * that still reads, the credit line, the license block and the attribution line included, and its one <style> rule,
- * before the stylesheet so the stylesheet wins, keeps the art from growing past the page. The rule has spaces inside
- * its braces: page_header() and page_footer() strip any {...} without one as an unused tag.
+ * that still reads, the credit line, the license block and the attribution line included, and its own small
+ * stylesheet, assets/ui/safeframe.css, linked before the stylesheet so the stylesheet wins, keeps the art from growing
+ * past the page. (Until Phase 6 task 3 that rule was a <style> element here, which the Content Security Policy refuses.)
  */
 final class SafeFrame
 {
@@ -27,7 +28,7 @@ final class SafeFrame
 <head>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{title}</title>
-<style>img { max-width: 100%; height: auto }</style>
+<link rel="stylesheet" href="assets/ui/safeframe.css">
 <link rel="stylesheet" href="assets/ui/resurrection.css">
 {headscript}{script}
 </head>
@@ -73,7 +74,7 @@ final class SafeFrame
 <head>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{title}</title>
-<style>img { max-width: 100%; height: auto }</style>
+<link rel="stylesheet" href="assets/ui/safeframe.css">
 <link rel="stylesheet" href="assets/ui/resurrection.css">
 {headscript}{script}
 </head>
@@ -109,8 +110,8 @@ final class SafeFrame
 <!--!statend--></section></div>
 <!--!statheader--></section><section class="rz-card rz-statcard"><div class="rz-statid">{portrait}<div class="rz-statid-text"><h2 class="rz-statname">{name}</h2><p class="rz-statsub">{subtitle}</p></div></div>
 <!--!statportrait--><img class="rz-statportrait" src="{src}" alt="{alt}" width="{width}" height="{height}">
-<!--!statbar--><div class="rz-statbar rz-statbar-{kind}"><div class="rz-statbar-text"><span class="rz-statbar-label">{icon}{label}</span><span class="rz-statbar-value">{current} / {max}{note}</span></div><div class="rz-statbar-track" aria-hidden="true"><div class="rz-statbar-fill" style="width: {percent}%"></div></div></div>
-<!--!statbarcap--><div class="rz-statbar rz-statbar-{kind}"><div class="rz-statbar-text"><span class="rz-statbar-label">{icon}{label}</span><span class="rz-statbar-value">{current}{note}</span></div><div class="rz-statbar-track" aria-hidden="true"><div class="rz-statbar-fill" style="width: {percent}%"></div></div><div class="rz-statbar-caption">{caption}</div></div>
+<!--!statbar--><div class="rz-statbar rz-statbar-{kind}"><div class="rz-statbar-text"><span class="rz-statbar-label">{icon}{label}</span><span class="rz-statbar-value">{current} / {max}{note}</span></div><div class="rz-statbar-track" aria-hidden="true"><div class="rz-statbar-fill rz-fill-{percent}"></div></div></div>
+<!--!statbarcap--><div class="rz-statbar rz-statbar-{kind}"><div class="rz-statbar-text"><span class="rz-statbar-label">{icon}{label}</span><span class="rz-statbar-value">{current}{note}</span></div><div class="rz-statbar-track" aria-hidden="true"><div class="rz-statbar-fill rz-fill-{percent}"></div></div><div class="rz-statbar-caption">{caption}</div></div>
 <!--!stattiles--><div class="rz-stattiles">{tiles}</div>
 <!--!stattile--><div class="rz-stattile"><span class="rz-stattile-label">{icon}{label}</span><span class="rz-stattile-value">{value}{note}</span></div>
 <!--!equiprows--><div class="rz-equiprows">{rows}</div>
@@ -133,14 +134,14 @@ final class SafeFrame
 <!--!loginfull--><div class="rz-loginfull">Server Full!</div>
 <!--!phonehead--><div class="rz-phonehead"><div class="rz-phonehead-top">{portrait}<div class="rz-phonehead-id"><p class="rz-phonehead-name">{name}</p><p class="rz-phonehead-sub">{subtitle}</p></div><div class="rz-phonehead-mail">{mail}</div></div><div class="rz-phonehead-bars">{bars}</div></div>
 <!--!phoneportrait--><img class="rz-phonehead-img" src="{src}" alt="{alt}" width="{width}" height="{height}">
-<!--!phonebar--><div class="rz-phonebar rz-phonebar-{kind}"><div class="rz-phonebar-text"><span class="rz-phonebar-label">{icon}{label}</span><span class="rz-phonebar-value">{value}</span></div><div class="rz-phonebar-track" aria-hidden="true"><div class="rz-phonebar-fill" style="width: {percent}%"></div></div></div>
+<!--!phonebar--><div class="rz-phonebar rz-phonebar-{kind}"><div class="rz-phonebar-text"><span class="rz-phonebar-label">{icon}{label}</span><span class="rz-phonebar-value">{value}</span></div><div class="rz-phonebar-track" aria-hidden="true"><div class="rz-phonebar-fill rz-fill-{percent}"></div></div></div>
 <!--!tabbar--><nav class="rz-tabbar" aria-label="Sections">{tabs}</nav>
 <!--!tab--><a class="rz-tab" href="#{target}">{label}</a>
 <!--!battle--><div class="rz-battle">{screen}</div>
 <!--!fighters--><div class="rz-fighters">{cards}</div>
 <!--!fighter--><section class="rz-fighter rz-fighter-{kind}{state}"><div class="rz-fighter-id">{portrait}<div class="rz-fighter-text"><h2 class="rz-fighter-name">{name}</h2><p class="rz-fighter-sub">{sub}</p></div></div>{hp}</section>
 <!--!fighterportrait--><img class="rz-fighter-portrait" src="{src}" alt="{alt}" width="{width}" height="{height}">
-<!--!fighterbar--><div class="rz-fighterbar"><div class="rz-fighterbar-text"><span class="rz-fighterbar-label">{label}</span><span class="rz-fighterbar-value">{value}</span></div><div class="rz-fighterbar-track" aria-hidden="true"><div class="rz-fighterbar-fill" style="width: {percent}%"></div></div></div>
+<!--!fighterbar--><div class="rz-fighterbar"><div class="rz-fighterbar-text"><span class="rz-fighterbar-label">{label}</span><span class="rz-fighterbar-value">{value}</span></div><div class="rz-fighterbar-track" aria-hidden="true"><div class="rz-fighterbar-fill rz-fill-{percent}"></div></div></div>
 <!--!fighterhp--><div class="rz-fighterbar rz-fighterbar-nobar"><div class="rz-fighterbar-text"><span class="rz-fighterbar-label">{label}</span><span class="rz-fighterbar-value">{value}</span></div></div>
 <!--!battleactions--><div class="rz-battle-actions">{main}{groups}</div>
 <!--!battlemain--><div class="rz-battle-buttons rz-battle-main">{buttons}</div>

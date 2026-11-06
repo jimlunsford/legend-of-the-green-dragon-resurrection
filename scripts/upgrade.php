@@ -1,4 +1,5 @@
 <?php
+define('RESURRECTION_ENTRY', true);
 // Supported upgrade command. Never expose this entrypoint over HTTP.
 //
 //   php scripts/upgrade.php --dry-run [CONFIG]
@@ -10,6 +11,9 @@
 // (docs/MODERN-INSTALLATION.md, "Upgrading"). The command holds the install's and maintenance's database locks while
 // it runs, applies the pending steps in upgrades/ in order, records each once it succeeded, runs any pending bundled
 // module upgrade, and stops at the first failure (lib/upgrade.php).
+//
+// LOGD_DBCONNECT (Phase 6 task 3, S12): when the environment sets it to the configuration file's absolute path, that
+// file is the one the game reads, and the command uses it too; CONFIG may be left out, and a different CONFIG is refused.
 if (PHP_SAPI !== 'cli') { http_response_code(404); exit("Not found.\n"); }
 chdir(dirname(__DIR__));
 error_reporting(E_ALL);
@@ -20,6 +24,7 @@ set_error_handler(static function (int $severity, string $message, string $file,
 });
 require 'src/Upgrade/UpgradeRefused.php';
 require 'src/Upgrade/UpgradeStopped.php';
+require 'src/Configuration/ConfigLocation.php';
 use Resurrection\Upgrade\UpgradeRefused;
 use Resurrection\Upgrade\UpgradeStopped;
 
@@ -40,6 +45,12 @@ try {
     if ($dryRun && $backup) { throw new UpgradeRefused('Give --dry-run or --backup-confirmed, not both. Nothing was changed.'); }
     if (!$dryRun && !$backup) {
         throw new UpgradeRefused('Take a fresh backup of the database first, then run again with --backup-confirmed. Some upgrade changes cannot be rolled back: MySQL and MariaDB commit a table change the moment it runs, so if an upgrade stops partway, the backup is the way back. To see what would change without changing anything, use --dry-run. docs/MODERN-INSTALLATION.md, "Upgrading", says how to take and restore a backup. Nothing was changed.');
+    }
+    $located = \Resurrection\Configuration\ConfigLocation::fromEnvironment();
+    if ($located !== null) {
+        if (!\Resurrection\Configuration\ConfigLocation::usable($located)) { throw new UpgradeRefused('LOGD_DBCONNECT must be the configuration file\'s absolute path. Nothing was changed.'); }
+        if ($paths && $paths[0] !== $located) { throw new UpgradeRefused('LOGD_DBCONNECT names the configuration file the game reads. Give that path, or none. Nothing was changed.'); }
+        $paths = [$located];
     }
     $config = $paths[0] ?? 'dbconnect.php';
     // lib/all_tables.php (1.1.2) prints a newline after its closing tag; the report starts clean.

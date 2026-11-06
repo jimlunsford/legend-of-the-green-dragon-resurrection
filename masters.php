@@ -1,4 +1,5 @@
 <?php
+define('RESURRECTION_ENTRY', true);
 // Initially written as a module by Chris Vorndran.
 // Moved into core by JT Traub
 

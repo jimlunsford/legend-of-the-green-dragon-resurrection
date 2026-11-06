@@ -1,4 +1,5 @@
 <?php
+define('RESURRECTION_ENTRY', true);
 // Reject request authority before bootstrap, including legacy victory and master overrides.
 if (array_diff(array_keys($_GET), ['op','c']) !== [] ||
     array_diff(array_keys($_POST), ['csrf_token','action_token','rounds']) !== []) {

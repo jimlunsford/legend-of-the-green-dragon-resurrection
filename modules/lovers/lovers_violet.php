@@ -1,4 +1,5 @@
 <?php
+if (!\defined('RESURRECTION_ENTRY') && \PHP_SAPI !== 'cli') { \http_response_code(404); exit; }
 function lovers_violet(?int $choice = null){
 	global $session;
 	$seenlover = 0; // Entry and locked daily authority are checked by lovers_run().

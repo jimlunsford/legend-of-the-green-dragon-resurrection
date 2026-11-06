@@ -1,4 +1,5 @@
 <?php
+define('RESURRECTION_ENTRY', true);
 // translator ready
 // addnews ready
 // mail ready
@@ -79,7 +80,7 @@ if ($op=="" || $op=="search"){
 	rawoutput("<input name='q' id='q'>");
 	rawoutput("<input type='submit' class='button' value='$search'>");
 	rawoutput("</form>");
-	rawoutput("<script language='JavaScript'>document.getElementById('q').focus();</script>",true);
+	rawoutput(resurrection_focus_marker('q'),true);
 	addnav("","creatures.php?op=search");
 
 	addnav("Levels");

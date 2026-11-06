@@ -1,4 +1,5 @@
 <?php
+if (!\defined('RESURRECTION_ENTRY') && \PHP_SAPI !== 'cli') { \http_response_code(404); exit; }
 /** User-editor search: all search text is raw and bound, ordering is allow-listed. */
 function lookup_user($query=false, $order=false, $fields=false, $where=false){
     $columns = ['acctid','login','name','level','laston','loggedin','gentimecount','gentime','lastip','uniqueid','emailaddress'];

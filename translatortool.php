@@ -1,4 +1,5 @@
 <?php
+define('RESURRECTION_ENTRY', true);
 // addnews ready
 // translator ready
 // mail ready
@@ -117,7 +118,8 @@ if ($op==""){
 		exit();
 	}else{
 		popup_header("Updated");
-		rawoutput("<script language='javascript'>window.close();</script>");
+		// The window closes itself (assets/ui/behaviors.js; 1.1.2 printed an inline window.close()).
+		rawoutput("<span hidden data-rz-close-window></span>");
 		popup_footer();
 	}
 }elseif($op=="list"){

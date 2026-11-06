@@ -1,4 +1,5 @@
 <?php
+if (!\defined('RESURRECTION_ENTRY') && \PHP_SAPI !== 'cli') { \http_response_code(404); exit; }
 $default_settings = array(
 	"transferperlevel"=>25,
 	"maxtransferout"=>25,
@@ -96,6 +97,8 @@ $default_settings = array(
 	"serverurl"=>"http://".($_SERVER['SERVER_NAME'] ?? 'localhost').(($_SERVER['SERVER_PORT'] ?? 80) == 80?"":":".$_SERVER['SERVER_PORT']).dirname($_SERVER['REQUEST_URI'] ?? '/'),
 	"defaultlanguage"=>"en",
 	"sourceurl"=>"https://github.com/jimlunsford/legend-of-the-green-dragon-resurrection",
+	// Phase 6 task 3 (S1): the Content Security Policy is enforced (src/Http/SecurityHeaders.php).
+	"csp_mode"=>"enforce",
 	"emailpetitions"=>0,
 	"multimaster"=>1,
 	"pvpimmunity"=>5,

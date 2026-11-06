@@ -1,4 +1,5 @@
 <?php
+if (!\defined('RESURRECTION_ENTRY') && \PHP_SAPI !== 'cli') { \http_response_code(404); exit; }
 require_once("lib/ban_admin.php");
 // "Add a ban" opens the form with no account; 1.1.2 read the missing row as empty.
 $row = resurrection_admin_account($userid, 'name,lastip,uniqueid') ?? ['name' => '', 'lastip' => '', 'uniqueid' => ''];
@@ -32,7 +33,7 @@ rawoutput("<input name='reason'".resurrection_control_id('ban-reason')." size=50
 output_notl("`n");
 $pban = translate_inline("Post ban");
 $conf = translate_inline("Are you sure you wish to issue a permanent ban?");
-rawoutput("<input type='submit' class='button' value='$pban' onClick='if (document.getElementById(\"duration\").value==0) {return confirm(\"$conf\");} else {return true;}'>");
+rawoutput("<input type='submit' class='button' value='$pban'".resurrection_confirm_attribute($conf)." data-rz-confirm-when-zero='duration'>");
 rawoutput("</form>");
 output("For an IP ban, enter the beginning part of the IP you wish to ban if you wish to ban a range, or simply a full IP to ban a single IP`n`n");
 addnav("","user.php?op=saveban");
@@ -61,7 +62,7 @@ if ($row['name']!=""){
 		$result = db_query($sql, true, [resurrection_ban_like_prefix($thisip), $oip]);
 		if (db_num_rows($result)>0){
 			output(" IP Filter: %s ", $thisip);
-			rawoutput("<a href='#' onClick=\"document.getElementById('ip').value=" . resurrection_ban_js($thisip) . "; document.getElementById('ipradio').checked = true; return false\">");
+			rawoutput("<a href='#' data-rz-fill='ip' data-rz-fill-value=\"" . resurrection_attribute_value($thisip) . "\" data-rz-fill-check='ipradio'>");
 			output("Use this filter");
 			rawoutput("</a>");
 			output_notl("`n");

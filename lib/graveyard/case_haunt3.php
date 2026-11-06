@@ -1,4 +1,5 @@
 <?php
+if (!\defined('RESURRECTION_ENTRY') && \PHP_SAPI !== 'cli') { \http_response_code(404); exit; }
 require_once("lib/haunt_authority.php");
 output("`)`c`bThe Mausoleum`b`c");
 // Only the protected POST haunts. GET (a target link, a restored page, New Day's "Continue") asks.

@@ -1,4 +1,5 @@
 <?php
+if (!\defined('RESURRECTION_ENTRY') && \PHP_SAPI !== 'cli') { \http_response_code(404); exit; }
 require_once __DIR__ . '/admin_authority.php';
 require_once __DIR__ . '/names.php';
 require_once __DIR__ . '/../src/Security/Passwords.php';

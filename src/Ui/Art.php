@@ -1,6 +1,7 @@
 <?php
 declare(strict_types=1);
 namespace Resurrection\Ui;
+if (!\defined('RESURRECTION_ENTRY') && \PHP_SAPI !== 'cli') { \http_response_code(404); exit; }
 
 /**
  * The game's art in assets/ (CC BY-SA 4.0, assets/LICENSE): which scene banner a page shows and which portrait a race

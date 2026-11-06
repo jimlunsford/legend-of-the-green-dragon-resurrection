@@ -1,4 +1,5 @@
 <?php
+if (!\defined('RESURRECTION_ENTRY') && \PHP_SAPI !== 'cli') { \http_response_code(404); exit; }
 // Presentation only. All allocation authority is in dragon_points.php.
 page_header('Dragon Points');
 output('`@You earn one dragon point each time you slay the dragon.');
@@ -15,7 +16,8 @@ if ($unspent === 1) {
             '<button class="button">'.$escape(translate_inline($schema['desc'][$type])).'</button></form>');
     }
 } else {
-    rawoutput('<form id="dkForm" method="POST" action="'.$escape($url).'">'.resurrection_action_fields('dragon-points', $context).
+    // The points-left counter (assets/ui/behaviors.js; an inline script until Phase 6 task 3).
+    rawoutput('<form id="dkForm" method="POST" action="'.$escape($url).'" data-rz-points-left="'.(int)$unspent.'" data-rz-points-target="amtLeft" data-rz-points-text=" points left to spend.">'.resurrection_action_fields('dragon-points', $context).
         '<input type="hidden" name="allocation" value="bulk">');
     foreach ($schema['buy'] as $type => $buyable) {
         if (!$buyable) continue;
@@ -24,10 +26,6 @@ if ($unspent === 1) {
     }
     rawoutput('<p id="amtLeft"></p><button class="button">'.$escape(translate_inline('Spend')).'</button>'.
         '<button type="reset">'.$escape(translate_inline('Reset')).'</button></form>');
-    rawoutput('<script>const dpForm=document.getElementById("dkForm");function pointsLeft(){let left='.$unspent.';'.
-        'dpForm.querySelectorAll("input[type=number]").forEach(input=>{left-=Number(input.value)||0;});'.
-        'document.getElementById("amtLeft").textContent=left+" points left to spend.";}'.
-        'dpForm.addEventListener("input",pointsLeft);dpForm.addEventListener("reset",()=>setTimeout(pointsLeft,0));pointsLeft();</script>');
 }
 $distribution = array_fill_keys(array_keys($schema['desc']), 0);
 foreach ($session['user']['dragonpoints'] as $type) $distribution[isset($distribution[$type]) ? $type : 'unknown']++;

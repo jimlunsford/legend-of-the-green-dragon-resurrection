@@ -1,4 +1,5 @@
 <?php
+if (!\defined('RESURRECTION_ENTRY') && \PHP_SAPI !== 'cli') { \http_response_code(404); exit; }
 require_once __DIR__ . '/../src/Security/ScalarState.php';
 require_once __DIR__ . '/../src/Security/PreferenceState.php';
 require_once __DIR__ . '/../src/Compatibility/array_cursor.php';
@@ -207,8 +208,7 @@ function tlbutton_push($indata,$hot=false,$namespace=FALSE){
 				$uri = comscroll_sanitize($uri);
 				$link = "translatortool.php?u=".
 					rawurlencode($uri)."&t=".rawurlencode($indata);
-				$link = "<a href='$link' target='_blank' onClick=\"".
-					popup($link).";return false;\" class='t".
+				$link = "<a href='$link' target='_blank'".resurrection_popup_attributes()." class='t".
 					($hot?"hot":"")."'>T</a>";
 			}
 			array_push($translatorbuttons,$link);

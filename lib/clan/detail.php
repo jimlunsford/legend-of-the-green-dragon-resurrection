@@ -1,4 +1,5 @@
 <?php
+if (!\defined('RESURRECTION_ENTRY') && \PHP_SAPI !== 'cli') { \http_response_code(404); exit; }
 	require_once("lib/clan_authority.php");
 	// The clan id comes from the URL: it must be a clan id, and every query binds it.
 	try {
@@ -73,7 +74,7 @@
 	}
 	if ($moderator){
 		$url = "clan.php?detail=$detail";
-		rawoutput("<div id='hidearea'>");
+		rawoutput("<div id='hidearea' data-rz-reveal-area>");
 		rawoutput("<form action='$url' method='POST'>".resurrection_action_fields('clan-detail', resurrection_clan_text_context($row1, $session['user'])));
 		addnav("",$url);
 		output("Superuser / Moderator renaming:`n");
@@ -96,9 +97,10 @@
 			rawoutput("<input type='submit' name='block' value=\"$snb\" class='button'>");
 		rawoutput("</form>");
 		rawoutput("</div>");
-		rawoutput("<script language='JavaScript'>var hidearea = document.getElementById('hidearea');hidearea.style.visibility='hidden';hidearea.style.display='none';</script>",true);
+		// The form starts hidden and the link shows it (assets/ui/behaviors.js: data-rz-reveal-area on the form's div;
+		// 1.1.2 used an inline script and onClick).
 		$e = translate_inline("Edit Clan Info");
-		rawoutput("<a href='#' onClick='hidearea.style.visibility=\"visible\"; hidearea.style.display=\"inline\"; return false;'>$e</a>",true);
+		rawoutput("<a href='#' data-rz-reveal='hidearea'>$e</a>",true);
 		output_notl("`n");
 	}
 
