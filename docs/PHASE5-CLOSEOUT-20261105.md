@@ -193,3 +193,20 @@ license and the attribution line, and the scene no wider than the page.
 
 Recorded by the next task: the close-out's Modern core and Baseline integrity runs. Phase 5 is complete on their
 acceptance.
+
+## Acceptance (recorded 2026-11-06, Phase 6 task 1)
+
+The close-out commit `4f66f61a919a550337b49e383db8dbd6af6d530c` is accepted. Both runs were read through the GitHub
+API on 2026-11-06; both ran on `main` at that commit, attempt 1.
+
+| Workflow | Run | Result |
+|---|---|---|
+| Modern core | 42098285495 | **SUCCESS, all 12 jobs**: both legs' `checks`, the eight `http` shards and both `result` jobs |
+| Baseline integrity | 42098285516 | **SUCCESS** (`provenance`: historical verifier PASS, 417 files, 11 commits; validator PASS, 966 files; 140 tooling tests, 4 skipped as designed) |
+
+Shard job durations (start to finish of each job), shards 1 to 4:
+
+- PHP 8.4 / MariaDB 11.4: 18:00, 15:50, 20:41, 15:47
+- PHP 8.5 / MySQL 8.4: 23:03, 22:34, 22:06, 21:53
+
+The longest, 23:03, is under the 30-minute mark. **Phase 5 is COMPLETE.**

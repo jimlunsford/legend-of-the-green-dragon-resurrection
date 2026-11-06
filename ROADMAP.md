@@ -12,6 +12,8 @@ The finish line for the modernization was the merge of PR #1 into `main`, reache
 
 On 2026-10-30 Jim changed the direction (`docs/PHASE5-TASK1-DIRECTION-20261030.md`): the behaviorally faithful rule is dropped. Gameplay, balance, text and UI may change when a task prompt says so, and every change from 1.1.2 is recorded with the old behavior, the new behavior and why. Phase 5 gives the game one new UI and original art. It stays PHP on this codebase, so other people can host it.
 
+Phase 5 is complete. On 2026-11-05 Jim chose Phase 6, Release readiness: find and fix what stands between `main` and the first release candidate, `1.0.0-rc.1`. The release itself stays excluded until he says go.
+
 ## Phases
 
 | Phase | Purpose | Status | Record |
@@ -21,7 +23,8 @@ On 2026-10-30 Jim changed the direction (`docs/PHASE5-TASK1-DIRECTION-20261030.m
 | Phase 2 | A real modern base application: strict fresh install, modern credentials, authentication, session rotation, CSRF infrastructure, account creation, village, commentary, logout, all 24 bundled modules installable. | DONE | `docs/MODERN-CORE-CHECKPOINT-20260913-PHASE2.md` |
 | Phase 3 | Close every game and application trust boundary until the modern core is mergeable. | DONE, merged into `main` at `0d078df` on 2026-10-23 | [`docs/PHASE3-MERGE-GATE-20261023.md`](docs/PHASE3-MERGE-GATE-20261023.md), `docs/MODERN-CORE-CHECKPOINT-20260913-PHASE3*.md`, `docs/CORE-ROUTE-SECURITY.md` |
 | Phase 4 | Release foundation: make the game ready for its first release. | DONE at `8b33edf` on 2026-10-30 | [Phase 4 below](#phase-4-release-foundation) |
-| Phase 5 | Resurrection UI: one new dark fantasy UI with original art replaces all 1.1.2 skins. | COMPLETE on acceptance of the close-out commit (2026-11-05); the next phase is Jim's to choose | [Phase 5 below](#phase-5-resurrection-ui), [`docs/PHASE5-SUMMARY-20261105.md`](docs/PHASE5-SUMMARY-20261105.md) |
+| Phase 5 | Resurrection UI: one new dark fantasy UI with original art replaces all 1.1.2 skins. | COMPLETE, accepted at `4f66f61` (2026-11-05; recorded 2026-11-06) | [Phase 5 below](#phase-5-resurrection-ui), [`docs/PHASE5-SUMMARY-20261105.md`](docs/PHASE5-SUMMARY-20261105.md) |
+| Phase 6 | Release readiness: find and fix what stands between `main` and the first release candidate, `1.0.0-rc.1`. | CURRENT (opened 2026-11-06; Jim chose it on 2026-11-05) | [Phase 6 below](#phase-6-release-readiness), [`docs/PHASE6-RC-READINESS-20261106.md`](docs/PHASE6-RC-READINESS-20261106.md) |
 
 ## Phase 3 checklist
 
@@ -104,7 +107,7 @@ Each family is DONE only when its acceptance evidence passes on both supported C
 
 ### Current
 
-- None. Phase 3 is complete and merged. The current phase is Phase 5, below.
+- None. Phase 3 is complete and merged. The current phase is Phase 6, below.
 
 ### Remaining
 
@@ -200,7 +203,7 @@ All of Phase 4's planned tasks are done. **Phase 4 DONE.**
 
 ## Phase 5: Resurrection UI
 
-**COMPLETE on acceptance of the close-out commit** (2026-10-30 to 2026-11-05; the task after the close-out records that acceptance). What the phase changed, task by task, with its decisions, licensing and open items: [`docs/PHASE5-SUMMARY-20261105.md`](docs/PHASE5-SUMMARY-20261105.md). Goal: one new dark fantasy UI, with original art, replaces all 1.1.2 skins. The plan and audit: [`docs/PHASE5-UI-PLAN-20261030.md`](docs/PHASE5-UI-PLAN-20261030.md). The design contract: [`docs/UI-DESIGN-SPEC.md`](docs/UI-DESIGN-SPEC.md).
+**COMPLETE** (2026-10-30 to 2026-11-05), accepted at the close-out commit `4f66f61`; Phase 6 task 1 recorded the acceptance on 2026-11-06. What the phase changed, task by task, with its decisions, licensing and open items: [`docs/PHASE5-SUMMARY-20261105.md`](docs/PHASE5-SUMMARY-20261105.md). Goal: one new dark fantasy UI, with original art, replaces all 1.1.2 skins. The plan and audit: [`docs/PHASE5-UI-PLAN-20261030.md`](docs/PHASE5-UI-PLAN-20261030.md). The design contract: [`docs/UI-DESIGN-SPEC.md`](docs/UI-DESIGN-SPEC.md).
 
 The release stays excluded until Jim says go: hosting, tags, GitHub releases, an image, and the archive-module rights. The skins are removed (task 15), so their rights are no longer a release item.
 
@@ -234,11 +237,46 @@ The plan's 15 tasks (section 7 of the plan has each task's tests and acceptance 
 - [x] 13: Art: the remaining icons. The 18 line icons (batch 3, approved by Jim on 2026-11-05) committed byte for byte with their checksums; an icon lookup; icons before the character panel's stat, bar, equipment and section labels (Resurrection template only); the tests' far-future dates pinned to the run's clock after a year-ahead run of the whole suite; shard durations refreshed (`docs/PHASE5-TASK13-ICONS-20261105.md`). Accepted at `6e2f55b`, Modern core 42029166571 (all 12 jobs), Baseline integrity 42029165803.
 - [x] 14: Art: creature and master portraits. The 313 portraits (batch 4, approved by Jim on 2026-11-05) drawn from the parts kit, committed byte for byte with `SHA256SUMS`, the kit (`kit.json`, every seeded creature and master) and its generator (`scripts/art/build_creature_portraits.py`); creature, master and Green Dragon lookups with type fallbacks and the `creatureportrait` hook; each foe's portrait on its fighter card, a PvP victim's race portrait (Resurrection template only) (`docs/PHASE5-TASK14-PORTRAITS-20261105.md`). Accepted at `e3d265c`, Modern core 42055783450 (all 12 jobs), Baseline integrity 42055783444.
 - [x] 15: Remove the 1.1.2 skins and skin selection, each removal recorded (`docs/PHASE5-TASK15-REMOVE-SKINS-20261105.md`). Accepted at `5dfc363`, Modern core 42088078461 (all 12 jobs), Baseline integrity 42088078447.
-- [ ] Close-out: the safe credit frame (a built-in template in `src/Ui/SafeFrame.php` that `prepare_template()` renders when `templates/resurrection.htm` is missing, unreadable or fails its checks, with the attribution line now checked too, and the template notice for superusers only), the 7 unused 1.1.2 images deleted, and the Phase 5 summary (`docs/PHASE5-CLOSEOUT-20261105.md`, `docs/PHASE5-SUMMARY-20261105.md`). Ticked when CI accepts it, in the next task.
+- [x] Close-out: the safe credit frame (a built-in template in `src/Ui/SafeFrame.php` that `prepare_template()` renders when `templates/resurrection.htm` is missing, unreadable or fails its checks, with the attribution line now checked too, and the template notice for superusers only), the 7 unused 1.1.2 images deleted, and the Phase 5 summary (`docs/PHASE5-CLOSEOUT-20261105.md`, `docs/PHASE5-SUMMARY-20261105.md`). Accepted at `4f66f61`, Modern core 42098285495 (all 12 jobs), Baseline integrity 42098285516.
 
-On acceptance of the close-out commit, **Phase 5 is COMPLETE**. The next phase is not opened here: Jim chooses it.
+**Phase 5 COMPLETE**, accepted at `4f66f61`. Jim chose the next phase, Phase 6, on 2026-11-05.
 
 Every change from 1.1.2 that a player, administrator or operator can notice is recorded in [`docs/CHANGES-FROM-1.1.2.md`](docs/CHANGES-FROM-1.1.2.md).
+
+## Phase 6: Release readiness
+
+**CURRENT** (opened 2026-11-06; Jim chose it on 2026-11-05). Goal: find and fix what stands between `main` and the first release candidate, `1.0.0-rc.1`. The release itself (tag, GitHub release, hosting, deploy) stays excluded until Jim says go. Task 1 is the readiness review; the later tasks come from its gap list, and Jim picks which run.
+
+### Checklist
+
+- [ ] 1: Release readiness review for `1.0.0-rc.1` (docs only): Phase 5's acceptance recorded, Phase 6 opened, `main` audited against a 13-area checklist (fresh install, shared hosting, upgrades, versioning, licensing, security by review, a UI crawl of about 920 pages at 1440 and 390, gameplay tests, known defects, performance, modules, operations, CI health, docs), with a ranked gap list (`docs/PHASE6-RC-READINESS-20261106.md`). Verdict: not ready to cut; 4 BLOCKER, 13 SHOULD, 10 NICE. Ticked when CI accepts it, in the next task.
+
+Proposed tasks from the gap list, not started (Jim picks which run; IDs, scope, tests and sizes in the review):
+
+BLOCKER for `1.0.0-rc.1`:
+
+- [ ] B1: Fix the 500s the crawl found: the Warriors Online list (`list.php`) whenever a dead player is online, and `stats.php?op=referers` and `op=graph` on MySQL 8.4 (S).
+- [ ] B2: Write the host guide, with sample web server rules: docroot and denied paths, the config file's place, owner and mode, PHP version, extensions and production settings, HTTPS, cron, mail, logs, backups, upgrades, `sourceurl`, what to upload; rc.1 needs a shell or panel cron with CLI PHP (M).
+- [ ] B3: Refresh the front-door docs: `README.md`, `docs/VERSIONING.md`, `docs/SECURITY-STATUS.md`, `docs/MODULE-POLICY.md`, `project.json`'s `phase` (S).
+- [ ] B4: Prepare the rc.1 cut, stopping before the tag: release notes from `docs/CHANGES-FROM-1.1.2.md`, the tag message, the version rule for `main` after a tag, the cut checklist (S).
+
+SHOULD before 1.0.0:
+
+- [ ] S1: Security headers (frame protection, `nosniff`, Referrer-Policy), then a Content Security Policy once the inline scripts and handlers are gone (S, then M).
+- [ ] S2: Refuse direct requests to internal PHP files (`lib/`, `src/`, `modules/`) with a 404 (M).
+- [ ] S3: Decide and build the no-shell path: a token-gated web install and upgrade page, and possibly a web-triggered maintenance request (L; Jim's decision first).
+- [ ] S4: A clear page, not a blank 500, when `dbconnect.php` exists but cannot be read (S).
+- [ ] S5: Labels and 44px tap targets on the pages the crawl found (S).
+- [ ] S6: Declare `ext-ctype` and `ext-filter` in `composer.json` (S).
+- [ ] S7: The first administrator's flags: record the change from 1.1.2's 20 flags to 5, then Jim decides (S).
+- [ ] S8: Pin the CI runner to `ubuntu-24.04` and move `actions/checkout` and `shivammathur/setup-php` to Node 24 releases (S).
+- [ ] S9: Legal review of the attribution wording and the AGPL question (Jim and a lawyer).
+- [ ] S10: A guide for module authors (S).
+- [ ] S11: Mail, account recovery and email verification for 1.0.0 (L; a public hosting gate).
+- [ ] S12: Let the game read its config from outside the docroot (S).
+- [ ] S13: Bring `docs/SECURITY-STATUS.md` up to date as a living record (S).
+
+The 10 NICE items (N1 to N10) are listed in the review, not here.
 
 ### Public hosting
 

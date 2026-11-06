@@ -8,9 +8,9 @@ Legend of the Green Dragon - Resurrection. A modern continuation of LoGD 1.1.2 D
 
 Phase 3 is complete, merged into `main` at `0d078dff49e790339e0ab0aefdf5b35478bf6419` (PR #1, normal merge commit, 2026-10-23). Phase 4, Release foundation, is complete: its last item, the output buffering fix, was accepted at `8b33edfc8b9cf2f04661d5023011e704a21b485f` (Modern core 40958421349, all 12 jobs; Baseline integrity 40958422672).
 
-Current phase: Phase 5 complete on acceptance of the close-out commit; the next phase is Jim's to choose. Work only on what a task prompt names.
+Current phase: Phase 6, Release readiness (opened 2026-11-06; Jim chose it on 2026-11-05). Its goal: find and fix what stands between `main` and the first release candidate, `1.0.0-rc.1`. Task 1, the readiness review, is in `docs/PHASE6-RC-READINESS-20261106.md`; the later tasks come from its gap list, and Jim picks which run. The release itself (tag, GitHub release, hosting, deploy) stays excluded until Jim says go. Work only on what a task prompt names.
 
-Phase 5, Resurrection UI (2026-10-30 to 2026-11-05), replaced all 1.1.2 skins with one dark fantasy UI and original art: what it changed, task by task, in `docs/PHASE5-SUMMARY-20261105.md`; tasks and status in `ROADMAP.md`; the design contract any UI change builds to in `docs/UI-DESIGN-SPEC.md`.
+Phase 5, Resurrection UI (2026-10-30 to 2026-11-05; complete, accepted at `4f66f61`), replaced all 1.1.2 skins with one dark fantasy UI and original art: what it changed, task by task, in `docs/PHASE5-SUMMARY-20261105.md`; tasks and status in `ROADMAP.md`; the design contract any UI change builds to in `docs/UI-DESIGN-SPEC.md`.
 
 Direction (Jim, 2026-10-30; `docs/PHASE5-TASK1-DIRECTION-20261030.md`):
 

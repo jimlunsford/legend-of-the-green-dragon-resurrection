@@ -96,3 +96,20 @@ Both were found while drawing the portraits (task 14). Neither is changed; each 
 - **Master 5's broken byte.** Master 5's seeded name has the replacement character U+FFFD where 1.1.2's file lost a byte
   (`55 6e ef bf bd 6c 69 74 68`, "Un?lith"; the historical tag has the same bytes). The game shows the seeded name;
   the portrait kit names it "Unélith" in the SVG's title only.
+
+## Acceptance (recorded 2026-11-06, Phase 6 task 1)
+
+The close-out commit `4f66f61a919a550337b49e383db8dbd6af6d530c` is accepted. Both runs were read through the GitHub
+API on 2026-11-06; both ran on `main` at that commit, attempt 1.
+
+| Workflow | Run | Result |
+|---|---|---|
+| Modern core | 42098285495 | **SUCCESS, all 12 jobs**: both legs' `checks`, the eight `http` shards and both `result` jobs |
+| Baseline integrity | 42098285516 | **SUCCESS** (`provenance`: historical verifier PASS, 417 files, 11 commits; validator PASS, 966 files; 140 tooling tests, 4 skipped as designed) |
+
+Shard job durations (start to finish of each job), shards 1 to 4:
+
+- PHP 8.4 / MariaDB 11.4: 18:00, 15:50, 20:41, 15:47
+- PHP 8.5 / MySQL 8.4: 23:03, 22:34, 22:06, 21:53
+
+The longest, 23:03, is under the 30-minute mark. **Phase 5 is COMPLETE.**
