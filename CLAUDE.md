@@ -90,6 +90,16 @@ Which database configuration file the game, `scripts/install.php` and `scripts/u
 
 Keep this order. Never let a docroot file win over `LOGD_DBCONNECT`.
 
+## Install, upgrade and maintenance services
+
+Since Phase 6 task 5a each operation is one service, and the services are the one code path:
+
+- `resurrection_install_run()` (`lib/installer/install_run.php`)
+- `resurrection_upgrade_run()` and `resurrection_upgrade()` (`lib/upgrade.php`)
+- `resurrection_maintenance_run()` (`lib/maintenance.php`)
+
+The commands (`scripts/install.php`, `scripts/upgrade.php`, `cron.php`) and the web pages (`webcron.php`, and `setup.php` from task 5b) are thin front ends: they parse arguments or the request, read the environment, print and set exit codes or the response, and call the service. Change the behavior in the service, never in one front end. The commands' locks, lock names, refusal texts, JSON and exit codes stay as they are; their existing tests are the proof.
+
 ## Tests
 
 - Never remove, skip, or weaken an existing test to get a pass.

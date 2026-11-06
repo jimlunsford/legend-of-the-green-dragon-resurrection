@@ -57,42 +57,16 @@ try {
     require 'lib/translator.php';
     // lib/all_tables.php (1.1.2), which the installer loads, prints a newline after its closing tag; the output starts clean.
     ob_start();
-    require 'lib/installer/fresh_install.php';
+    require 'lib/installer/install_run.php';
     ob_end_clean();
     // The module API's translation namespace falls back to the page address (common.php sets it); a command has none.
     $REQUEST_URI = '';
-    $activate = resurrection_install_module_plan($modules);
     $login = getenv('RESURRECTION_ADMIN_LOGIN');
     $password = getenv('RESURRECTION_ADMIN_PASSWORD');
     $email = getenv('RESURRECTION_ADMIN_EMAIL') ?: '';
-    if ($login === false || $password === false) { throw new RuntimeException('Administrator credentials must be provided through the environment.'); }
-    if ($writeConfig) {
-        // Everything that can refuse runs before the file is written: the target, the values, the administrator, and
-        // the database itself (reachable and empty; the install checks it again under its lock).
-        $target = \Resurrection\Configuration\ConfigFile::target($config, dirname(__DIR__), $allowServed);
-        $values = \Resurrection\Configuration\ConfigFile::fromEnvironment(getenv());
-        resurrection_validate_account($login, $email);
-        \Resurrection\Security\Passwords::hash($password);
-        $DB_PREFIX = $values['DB_PREFIX'];
-        if (!db_connect($values['DB_HOST'], $values['DB_USER'], $values['DB_PASS']) || !db_select_db($values['DB_NAME'])) {
-            throw new RuntimeException('Database connection failed.');
-        }
-        resurrection_refuse_install_state(resurrection_install_state());
-        \Resurrection\Configuration\ConfigFile::write($target, $values);
-        unset($values);
-        $config = $target;
-    }
-    // The install reads its database settings from the file, whether it existed or was just written.
-    require $config;
-    if (!isset($DB_HOST, $DB_USER, $DB_PASS, $DB_NAME) ||
-        !is_string($DB_HOST) || !is_string($DB_USER) || !is_string($DB_PASS) || !is_string($DB_NAME)) {
-        throw new RuntimeException('Database configuration is incomplete.');
-    }
-    if (!db_connect($DB_HOST, $DB_USER, $DB_PASS) || !db_select_db($DB_NAME)) {
-        throw new RuntimeException('Database connection failed.');
-    }
-    unset($DB_HOST, $DB_USER, $DB_PASS);
-    $result = resurrection_fresh_install($login, $password, $email, $activate);
+    // The install itself is one service (lib/installer/install_run.php), shared with the web setup page.
+    $result = resurrection_install_run($modules, $config, $writeConfig, $allowServed, $login === false ? null : $login,
+        $password === false ? null : $password, $email, getenv(), dirname(__DIR__));
     unset($password);
     echo json_encode($result + ['modules' => $modules, 'config' => $writeConfig ? 'written' : 'existing'], JSON_THROW_ON_ERROR) . "\n";
 } catch (\Resurrection\Installation\InstallRefused $refusal) {

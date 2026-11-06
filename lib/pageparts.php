@@ -68,6 +68,23 @@ function page_header(){
 }
 
 /**
+ * Marks this request's page as an operator page (Phase 6 task 5a): the page the operator sees when the game cannot run
+ * yet (not installed, its configuration file cannot be used, its database is not a completed install). The page keeps
+ * the template's frame, checked by prepare_template() with the safe frame as the fallback, so the copyright line, the
+ * license block and the Resurrection attribution line stay; it drops what cannot work without a running game: the
+ * MoTD and Petition for Help links, the mail link, the staff's petition counts and the character panel (for a visitor
+ * signed out, the Online Characters list).
+ */
+function resurrection_operator_frame(){
+	$GLOBALS['resurrection_operator_frame'] = true;
+}
+
+/** Whether this request's page is an operator page (resurrection_operator_frame()). */
+function resurrection_operator_frame_active(){
+	return !empty($GLOBALS['resurrection_operator_frame']);
+}
+
+/**
  * Returns an output formatted popup link based on JavaScript
  *
  * @param string $page The URL to open
@@ -140,14 +157,20 @@ function page_footer($saveuser=true){
 
 	tlschema("common");
 
-	$charstats = charstats();
+	// An operator page (Phase 6 task 5a) shows no character panel and no online list: it reads no game data.
+	$operator = resurrection_operator_frame_active();
+	$charstats = $operator ? "" : charstats();
 
 	restore_buff_fields();
 
-	$sql = "SELECT motddate FROM " . db_prefix("motd") . " ORDER BY motditem DESC LIMIT 1";
-	$result = db_query($sql);
-	$row = db_fetch_assoc($result);
-	db_free_result($result);
+	if ($operator) {
+		$row = false;
+	} else {
+		$sql = "SELECT motddate FROM " . db_prefix("motd") . " ORDER BY motditem DESC LIMIT 1";
+		$result = db_query($sql);
+		$row = db_fetch_assoc($result);
+		db_free_result($result);
+	}
 	// 1.1.2 opened an unread MoTD in a popup window on every page load (from page_footer()). Popup blockers stop that,
 	// and a phone has no popups: an unread MoTD now marks the header's MoTD link instead, on every page (Phase 5 task 4).
 	if ($row && isset($session['user']['lastmotd']) &&
@@ -195,10 +218,11 @@ function page_footer($saveuser=true){
 	$footer=str_replace("{nav}",$builtnavs,$footer);
 	//output the motd
 
-	$header = str_replace("{motd}", motdlink(), $header);
-	$footer = str_replace("{motd}", motdlink(), $footer);
+	// An operator page has no MoTD, petition or mail link: none of them can work there (Phase 6 task 5a).
+	$header = str_replace("{motd}", $operator ? "" : motdlink(), $header);
+	$footer = str_replace("{motd}", $operator ? "" : motdlink(), $footer);
 	//output the mail link
-	if (isset($session['user']['acctid']) && $session['user']['acctid']>0 && $session['user']['loggedin']) {
+	if (!$operator && isset($session['user']['acctid']) && $session['user']['acctid']>0 && $session['user']['loggedin']) {
 		$header=str_replace("{mail}",maillink(),$header);
 		$footer=str_replace("{mail}",maillink(),$footer);
 	}else{
@@ -207,10 +231,10 @@ function page_footer($saveuser=true){
 	}
 	//output petition count
 
-	$petitionlink = petitionlink();
+	$petitionlink = $operator ? "" : petitionlink();
 	$header=str_replace("{petition}",$petitionlink,$header);
 	$footer=str_replace("{petition}",$petitionlink,$footer);
-	if ($session['user']['superuser'] & SU_EDIT_PETITIONS){
+	if (!$operator && ($session['user']['superuser'] & SU_EDIT_PETITIONS)){
 		$sql = "SELECT count(petitionid) AS c,status FROM " . db_prefix("petitions") . " GROUP BY status";
 		$result = db_query_cached($sql,"petition_counts");
 		$petitions=array(0=>0,1=>0,2=>0,3=>0,4=>0,5=>0,6=>0,7=>0);

@@ -5,7 +5,29 @@ require_once 'lib/typed_editor.php';
 require_once 'lib/configuration_descriptors.php';
 check_su_access(SU_EDIT_CONFIG);
 try {
-    $op = \Resurrection\Http\Input::choice($_GET, 'op', ['', 'save', 'modulesettings'], '');
+    $op = \Resurrection\Http\Input::choice($_GET, 'op', ['', 'save', 'modulesettings', 'webcron', 'webcron_on', 'webcron_off', 'webcron_new'], '');
+    if (str_starts_with($op, 'webcron')) {
+        // Web maintenance (Phase 6 task 5a): every change is a POST with the CSRF token. Turning it on and making a new
+        // address both make a new secret, which this page shows once.
+        require_once 'lib/webcron.php';
+        require_once 'lib/gamelog.php';
+        $secret = null;
+        if ($op !== 'webcron') {
+            resurrection_require_post();
+            if ($op === 'webcron_off') { resurrection_webcron_disable(); gamelog('Turned off web maintenance', 'settings'); }
+            else { $secret = resurrection_webcron_enable(); gamelog($op === 'webcron_on' ? 'Turned on web maintenance' : 'Made a new web maintenance address', 'settings'); }
+        }
+        header('Cache-Control: no-store');
+        page_header('Game Settings');
+        require_once 'lib/superusernav.php';
+        superusernav();
+        addnav('Standard settings', 'configuration.php');
+        addnav('Web maintenance', 'configuration.php?op=webcron');
+        module_editor_navs('settings', 'configuration.php?op=modulesettings&module=');
+        resurrection_webcron_render($secret);
+        unset($secret);
+        page_footer();
+    }
     $namespace = $op === 'modulesettings' ? \Resurrection\Http\Input::string($_GET, 'module') : 'core';
     if ($op==='modulesettings' && $namespace==='core') throw new InvalidArgumentException();
     $layout = $namespace === 'core' ? resurrection_core_layout() : resurrection_editor_module($namespace)['settings'] ?? [];
@@ -18,6 +40,7 @@ try {
     require_once 'lib/superusernav.php';
     superusernav();
     addnav('Standard settings', 'configuration.php');
+    addnav('Web maintenance', 'configuration.php?op=webcron');
     module_editor_navs('settings', 'configuration.php?op=modulesettings&module=');
     $url = $namespace === 'core' ? 'configuration.php?op=save' : 'configuration.php?op=modulesettings&module='.rawurlencode($namespace).'&save=1';
     addnav('', $url);

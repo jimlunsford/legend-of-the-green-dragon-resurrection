@@ -37,11 +37,11 @@ with `check_su_access()`. Short names in the evidence column: `CRS` is `CORE-ROU
 
 | Status | Entries |
 |---|---|
-| CLOSED | 88 |
+| CLOSED | 90 |
 | DISABLED | 3 |
-| READ-ONLY | 69 |
+| READ-ONLY | 70 |
 | OPEN | 0 |
-| Total | 160 |
+| Total | 163 |
 
 ## Top-level pages
 
@@ -71,6 +71,8 @@ with `check_su_access()`. Short names in the evidence column: `CRS` is `CORE-ROU
 | `companions.php?op=add\|edit\|save\|del\|take\|activate\|deactivate&subop=module` | admin SU_EDIT_MOUNTS | companion rows, players' companions, module preferences | CLOSED | `CONTENT-EDITORS-PART3-AUTHORITY-20261017.md`; `test_mount_and_companion_editor_authority_http`. |
 | `configuration.php` | admin SU_EDIT_CONFIG | no | READ-ONLY | Typed editor (`CRS`, configuration row). |
 | `configuration.php?op=save\|modulesettings` | admin SU_EDIT_CONFIG | settings | CLOSED | `CRS`; `test_shared_typed_settings_http`. |
+| `configuration.php?op=webcron` | admin SU_EDIT_CONFIG | no | READ-ONLY | Web maintenance's status: whether it is on, when the address was made and last used, and the last maintenance result; never the address (`PHASE6-TASK5A-SERVICES-WEBCRON-20261106.md`); `test_webcron_rotation_stops_the_old_address`. |
+| `configuration.php?op=webcron_on\|webcron_off\|webcron_new` | admin SU_EDIT_CONFIG | web maintenance settings (a new secret's hash, or none) | CLOSED | POST with CSRF; the new address is shown once, on the page that made it; a new address or off stops the old one at once; each change in the game log (`PHASE6-TASK5A-SERVICES-WEBCRON-20261106.md`); `test_webcron_rotation_stops_the_old_address`. |
 | `create.php` | anonymous | no | READ-ONLY | The account form. |
 | `create.php?op=create` | anonymous | account | CLOSED | POST + CSRF, bound (`MODERN-CORE-CHECKPOINT-20260913-PHASE2.md`); `test_create_login_rotate_render_logout`. |
 | `create.php?op=val` | anonymous | no | DISABLED | 410: email validation stays disabled. `op=forgot` (legacy recovery) is removed since 2026-10-24 and is refused as an unknown op (400); `test_create_login_rotate_render_logout`. |
@@ -175,6 +177,7 @@ with `check_su_access()`. Short names in the evidence column: `CRS` is `CORE-ROU
 | `weaponeditor.php?op=add\|edit\|save\|del` | admin SU_EDIT_EQUIPMENT | weapon rows | CLOSED | `CONTENT-EDITORS-PART1-AUTHORITY-20261016.md`; `test_weapon_and_armor_editor_authority_http`. |
 | `weapons.php` | player | no | READ-ONLY | Listing bound (`EQUIPMENT-PURCHASE-AUTHORITY-20261015.md`). |
 | `weapons.php?op=buy` | player | gold, weapon | CLOSED | `EQUIPMENT-PURCHASE-AUTHORITY-20261015.md`; `test_weapon_and_armor_purchase_authority_http`. |
+| `webcron.php` | anyone presenting the secret (off by default) | the daily maintenance, once per game day | CLOSED | Off, a wrong or missing secret, or a configuration or database problem: the empty 404. The secret (header, POST field `key` or query `key`) is compared with `hash_equals()` on its SHA-256 hash; a 60-second gap, the maintenance lock without waiting and the day marker; the constant answer 200 `OK`; no session, cookie or job output (`PHASE6-TASK5A-SERVICES-WEBCRON-20261106.md`); `test_webcron_off_wrong_or_missing_secret_is_the_same_404`, `test_webcron_flood_runs_once` and the other `test_webcron_*` tests. |
 
 ## Bundled module routes
 
@@ -468,3 +471,13 @@ Phase 5 task 15 (`PHASE5-TASK15-REMOVE-SKINS-20261105.md`). No entry point is ad
 changes anything (its skin chooser and the `template` cookie it set are removed; its row above says so), and
 `prefs.php?op=save` no longer sets the cookie. `test_route_inventory.py`'s dead-link scan reads the one template,
 `templates/resurrection.htm`, in place of the 18 skins (`test_the_link_scan_reads_the_one_template`).
+
+## Web maintenance, 2026-11-06
+
+Phase 6 task 5a (`PHASE6-TASK5A-SERVICES-WEBCRON-20261106.md`). One top-level page is added, `webcron.php` (63 here, with
+`common.php` and `battle.php`; `EntryGuardTest` now counts 63 entry points, the two commands included), and Game Settings
+gains its web maintenance section: `configuration.php?op=webcron` (READ-ONLY, the status) and
+`configuration.php?op=webcron_on|webcron_off|webcron_new` (CLOSED, POST with CSRF). `cron.php` keeps its row: a web
+request still gets 404. `installer.php` still answers 403.
+
+Counts: CLOSED 90, DISABLED 3, READ-ONLY 70, OPEN 0, total 163.

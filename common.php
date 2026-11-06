@@ -99,7 +99,8 @@ require_once("lib/php_generic_environment.php");
 php_generic_environment();
 //session_register("session");
 require_once 'lib/web_security.php';
-resurrection_start_session();
+// Web maintenance (webcron.php, Phase 6 task 5a) runs without a session: it sends no cookie.
+if (!defined('RESURRECTION_WEBCRON')) resurrection_start_session();
 $_SESSION['session'] ??= [];
 $session =& $_SESSION['session'];
 $session += ['loggedin' => false, 'lasthit' => 0, 'message' => '', 'debug' => '', 'allowednavs' => [], 'bufflist' => [], 'templatename' => '', 'templatemtime' => 0];
@@ -172,6 +173,8 @@ if (file_exists($resurrection_config)){
 }else{
 	if (!defined("IS_INSTALLER")){
 	 	if (!defined("DB_NODB")) define("DB_NODB",true);
+		// The operator frame: no MoTD, petition or online list, which cannot work before an install (Phase 6 task 5a).
+		resurrection_operator_frame();
 	 	page_header("The game has not yet been installed");
 		output("`#Welcome to `@Legend of the Green Dragon`#, a game by Eric Stevens & JT Traub.`n`n");
 		// 1.1.2 linked its web installer here; installation is now a command-line action (docs/MODERN-INSTALLATION.md).
@@ -293,8 +296,9 @@ if (!isset($nokeeprestore[$SCRIPT_NAME]) || !$nokeeprestore[$SCRIPT_NAME]) {
 
 }
 if ($resurrection_database_state !== 'current'){
-	// A command (cron.php) stops instead of printing a page, so maintenance never runs on a database it cannot use.
-	if (PHP_SAPI === 'cli') { throw new RuntimeException('The game cannot run on this database: ' . $resurrection_database_state . '.'); }
+	// A command (cron.php) and web maintenance (webcron.php) stop instead of printing a page, so maintenance never runs
+	// on a database it cannot use.
+	if (PHP_SAPI === 'cli' || defined('RESURRECTION_WEBCRON')) { throw new RuntimeException('The game cannot run on this database: ' . $resurrection_database_state . '.'); }
 	if ($resurrection_database_state === 'behind') {
 		page_header("Upgrade Needed");
 		output("`#The game is temporarily unavailable while a game upgrade is applied, please be patient, the upgrade will be completed soon.");
@@ -316,6 +320,8 @@ if ($resurrection_database_state !== 'current'){
 			output("`#The game is unavailable: this database holds a Legend of the Green Dragon 1.1.2 game, which is unsupported. Resurrection does not upgrade or migrate a 1.1.2 database.`n`n");
 			output("If you are the operator: the only path is a fresh install into an empty database (docs/MODERN-INSTALLATION.md).");
 		} else {
+			// The operator frame (Phase 6 task 5a): nothing of a running game can work on an incomplete install.
+			resurrection_operator_frame();
 			output("`#The game is unavailable: its database is not a completed installation.`n`n");
 			output("If you are the operator: diagnose the failed install, then recreate the disposable database and install again (docs/MODERN-INSTALLATION.md).");
 		}
@@ -351,13 +357,13 @@ catch (DomainException $error) { http_response_code(409); exit('Invalid stored b
 
 $session['user']['lastip']=$REMOTE_ADDR;
 [$session['user']['uniqueid'], $sendid] = resurrection_player_id($_COOKIE['lgi'] ?? null, $session['user']['uniqueid']);
-if ($sendid) {
+if ($sendid && !defined('RESURRECTION_WEBCRON')) {
 	setcookie('lgi', $session['user']['uniqueid'], ['expires' => strtotime('+365 days'), 'secure' => session_get_cookie_params()['secure'], 'httponly' => true, 'samesite' => 'Lax']);
 }
 $_COOKIE['lgi'] = $session['user']['uniqueid'];
 // 1.1.2's referer tracking, bound and fitted to its columns; a failure there never stops the page.
 require_once 'lib/referer_tracking.php';
-resurrection_track_referer();
+if (!defined('RESURRECTION_WEBCRON')) resurrection_track_referer();
 
 if (!isset($session['user']['superuser'])) $session['user']['superuser']=0;
 

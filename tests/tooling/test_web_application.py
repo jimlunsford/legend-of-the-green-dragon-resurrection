@@ -231,6 +231,453 @@ function resurrectionmaintenancefixture_dohook($hook, $args) {
         self.assertEqual(0, second.returncode, second.stderr)
         self.assertEqual('already-complete', json.loads(second.stdout)['maintenance'])
 
+    # Phase 6 task 5a: web maintenance (webcron.php; docs/PHASE6-TASK4-WEB-OPS-DESIGN-20261106.md, section 4).
+    WEBCRON_SETTINGS = ('webcron_enabled', 'webcron_secret_hash', 'webcron_secret_made', 'webcron_last_attempt',
+                        'maintenance_day', 'maintenance_last_run')
+
+    @contextmanager
+    def _webcron_fixture(self):
+        """Web maintenance turned on with a fresh secret, today's maintenance not yet done and no attempt yet; every
+        setting it touches is put back after. Yields the secret."""
+        q = self.query
+        names = ','.join('?' for _ in self.WEBCRON_SETTINGS)
+        saved = q('SELECT setting,value FROM settings WHERE setting IN (' + names + ')', list(self.WEBCRON_SETTINGS))
+        secret = base64.urlsafe_b64encode(os.urandom(32)).decode().rstrip('=')
+        try:
+            q('DELETE FROM settings WHERE setting IN (' + names + ')', list(self.WEBCRON_SETTINGS))
+            q('INSERT INTO settings (setting,value) VALUES (?,?),(?,?),(?,?)',
+              ['webcron_enabled', '1', 'webcron_secret_hash', hashlib.sha256(secret.encode()).hexdigest(), 'webcron_secret_made', '2026-11-06 00:00:00'])
+            yield secret
+        finally:
+            q('DELETE FROM settings WHERE setting IN (' + names + ')', list(self.WEBCRON_SETTINGS))
+            for row in saved:
+                q('INSERT INTO settings (setting,value) VALUES (?,?)', [row['setting'], row['value']])
+
+    def _webcron(self, key=None, how='header', method='GET', port=None, extra=None):
+        """One request to webcron.php: (status, headers as a sorted list without Date, body bytes)."""
+        path, body, headers = '/webcron.php', None, dict(extra or {})
+        if key is not None and how == 'header':
+            headers['X-Resurrection-Maintenance-Key'] = key
+        elif key is not None and how == 'post':
+            body = urllib.parse.urlencode({'key': key}); headers['Content-Type'] = 'application/x-www-form-urlencoded'; method = 'POST'
+        elif key is not None and how == 'query':
+            path += '?' + urllib.parse.urlencode({'key': key})
+        connection = http.client.HTTPConnection('127.0.0.1', port or self.port, timeout=60)
+        try:
+            connection.request(method, path, body=body, headers=headers)
+            response = connection.getresponse()
+            return response.status, sorted((k, v) for k, v in response.getheaders() if k.lower() not in ('date', 'host')), response.read()
+        finally:
+            connection.close()
+
+    def _webcron_setting(self, name):
+        rows = self.query('SELECT value FROM settings WHERE setting=?', [name])
+        return rows[0]['value'] if rows else None
+
+    def _webcron_last_run(self):
+        stored = self._webcron_setting('maintenance_last_run')
+        if stored is None:
+            return None
+        record = json.loads(stored)
+        self.assertEqual(['time', 'path', 'result'], list(record))
+        return record['path'], record['result']
+
+    def _webcron_runs(self):
+        # Each maintenance run logs its debug log cleanup once (lib/newday/newday_runonce.php).
+        return int(self.query("SELECT COUNT(*) AS n FROM gamelog WHERE category='maintenance' AND message LIKE 'Cleaned up % from debuglog %'")[0]['n'])
+
+    def _webcron_retry(self):
+        # Past the one-minute gap without waiting a minute: the last attempt moved back.
+        self.query("UPDATE settings SET value='0000000001' WHERE setting='webcron_last_attempt'")
+
+    WEBCRON_OK = [('Cache-Control', 'no-store'), ('Content-Security-Policy', CSP_POLICY), ('Content-Type', 'text/plain; charset=UTF-8'),
+                  ('Referrer-Policy', 'same-origin'), ('X-Content-Type-Options', 'nosniff'), ('X-Frame-Options', 'SAMEORIGIN')]
+
+    def assertWebcronOk(self, answer, label=''):
+        status, headers, body = answer
+        self.assertEqual(200, status, label)
+        self.assertEqual(b'OK\n', body, label)
+        self.assertEqual(self.WEBCRON_OK, [h for h in headers if h[0] not in ('Connection', 'X-Powered-By', 'Content-Length')], label)
+        self.assertNotIn('set-cookie', [k.lower() for k, _ in headers], label)
+
+    def test_webcron_off_wrong_or_missing_secret_is_the_same_404(self):
+        # Off, a wrong secret, a missing one, one that cannot be a secret, another method, or a configuration or database
+        # that cannot be used: the same empty 404, byte for byte and header for header, with nothing recorded.
+        with self._webcron_fixture() as secret:
+            before = (self._webcron_setting('webcron_last_attempt'), self._webcron_setting('maintenance_last_run'), self._webcron_runs())
+            answers = {}
+            for how in ['header', 'post', 'query']:
+                answers['wrong ' + how] = self._webcron('wrong-' + secret, how)
+                answers['other wrong ' + how] = self._webcron(secret[:-1], how)
+            answers['missing'] = self._webcron()
+            answers['missing, POST'] = self._webcron(method='POST')
+            answers['empty'] = self._webcron('', 'query')
+            answers['too long'] = self._webcron('a' * 129, 'query')
+            connection = http.client.HTTPConnection('127.0.0.1', self.port, timeout=20)
+            try:
+                connection.request('GET', '/webcron.php?key[]=' + urllib.parse.quote(secret))
+                response = connection.getresponse()
+                answers['array'] = (response.status, sorted((k, v) for k, v in response.getheaders() if k.lower() not in ('date', 'host')), response.read())
+            finally:
+                connection.close()
+            answers['PUT'] = self._webcron(secret, 'header', method='PUT')
+            self.query("UPDATE settings SET value='0' WHERE setting='webcron_enabled'")
+            for how in ['header', 'post', 'query']:
+                answers['off ' + how] = self._webcron(secret, how)
+            self.query("UPDATE settings SET value='1' WHERE setting='webcron_enabled'")
+            # A configuration file that cannot be used, a database that cannot be reached, and none at all.
+            closed = ("<?php $DB_HOST='127.0.0.1:1'; $DB_USER='nobody'; $DB_PASS='closed-port-only'; $DB_NAME='none';"
+                      " $DB_PREFIX=''; $DB_USEDATACACHE=0; $DB_DATACACHEPATH='';\n")
+            for label, files in [('database unreachable', {'dbconnect.php': closed}), ('config damaged', {'dbconnect.php': "<?php $DB_PASS = 'x' 'y';\n"}),
+                                 ('config incomplete', {'dbconnect.php': "<?php $DB_HOST='127.0.0.1:1';\n"}), ('no config', None)]:
+                with self._tree_server(files=files) as port:
+                    answers[label] = self._webcron(secret, 'header', port=port)
+            reference = answers['missing']
+            self.assertEqual(404, reference[0])
+            self.assertEqual(b'', reference[2])
+            self.assertIn(('Cache-Control', 'no-store'), reference[1])
+            self.assertIn(('Content-Security-Policy', CSP_POLICY), reference[1])
+            for label, answer in answers.items():
+                with self.subTest(label):
+                    self.assertEqual(reference, answer)
+                    self.assertNotIn('set-cookie', [k.lower() for k, _ in answer[1]])
+            # Nothing reached the gap, the game or the record.
+            self.assertEqual(before, (self._webcron_setting('webcron_last_attempt'), self._webcron_setting('maintenance_last_run'), self._webcron_runs()))
+            # The right secret, by each of the three ways, is the constant OK.
+            for how in ['header', 'post', 'query']:
+                self.assertWebcronOk(self._webcron(secret, how), how)
+
+    def test_webcron_runs_once_per_game_day_with_a_constant_answer(self):
+        q = self.query
+        epoch = q("SELECT value FROM settings WHERE setting='game_epoch'")[0]['value']
+        with self._webcron_fixture() as secret:
+            today = self._current_game_day()
+            runs = self._webcron_runs()
+            first = self._webcron(secret)
+            self.assertWebcronOk(first, 'first')
+            self.assertEqual(today, self._webcron_setting('maintenance_day'))
+            self.assertEqual(('web', 'complete'), self._webcron_last_run())
+            self.assertEqual(runs + 1, self._webcron_runs())
+            recorded = self._webcron_setting('maintenance_last_run')
+            # The same game day: inside the gap, and past it, the same answer and nothing runs or is recorded.
+            for label in ['inside the gap', 'past the gap']:
+                if label == 'past the gap':
+                    self._webcron_retry()
+                answer = self._webcron(secret, 'query')
+                self.assertEqual(first, answer, label)
+                self.assertEqual(runs + 1, self._webcron_runs(), label)
+                self.assertEqual(recorded, self._webcron_setting('maintenance_last_run'), label)
+            # The next game day (the epoch one game day earlier): it runs once more.
+            length = 86400 // int(q("SELECT value FROM settings WHERE setting='daysperday'")[0]['value'])
+            try:
+                import calendar
+                self.assertTrue(epoch.endswith(' +0000'), epoch)
+                earlier = time.strftime('%Y-%m-%d %H:%M:%S +0000', time.gmtime(calendar.timegm(time.strptime(epoch[:19], '%Y-%m-%d %H:%M:%S')) - length))
+                q("UPDATE settings SET value=? WHERE setting='game_epoch'", [earlier])
+                tomorrow = self._current_game_day()
+                self.assertNotEqual(today, tomorrow)
+                self._webcron_retry()
+                self.assertEqual(first, self._webcron(secret, 'post'))
+                self.assertEqual(tomorrow, self._webcron_setting('maintenance_day'))
+                self.assertEqual(runs + 2, self._webcron_runs())
+                self._webcron_retry()
+                self.assertEqual(first, self._webcron(secret))
+                self.assertEqual(runs + 2, self._webcron_runs())
+            finally:
+                q("UPDATE settings SET value=? WHERE setting='game_epoch'", [epoch])
+        self.assertEqual(self.game_clock['day'], self._current_game_day())
+
+    def test_webcron_flood_runs_once(self):
+        # Many requests at once on a server with several workers: one claims the attempt and runs; the rest are inside the
+        # gap. Every answer is the same OK.
+        import concurrent.futures
+        with self._webcron_fixture() as secret, self._tree_server(env={'PHP_CLI_SERVER_WORKERS': '6'}, files={'dbconnect.php': (ROOT / 'dbconnect.php').read_text()}) as port:
+            runs = self._webcron_runs()
+            with concurrent.futures.ThreadPoolExecutor(max_workers=12) as pool:
+                answers = list(pool.map(lambda i: self._webcron(secret, ['header', 'post', 'query'][i % 3], port=port), range(24)))
+            for answer in answers:
+                self.assertWebcronOk(answer)
+            self.assertEqual(runs + 1, self._webcron_runs())
+            self.assertEqual(('web', 'complete'), self._webcron_last_run())
+            claimed = int(self._webcron_setting('webcron_last_attempt'))
+            self.assertLess(abs(claimed - time.time()), 120)
+            # Past the gap, a second flood on the same game day loads nothing.
+            self._webcron_retry()
+            with concurrent.futures.ThreadPoolExecutor(max_workers=12) as pool:
+                for answer in pool.map(lambda i: self._webcron(secret, port=port), range(12)):
+                    self.assertWebcronOk(answer)
+            self.assertEqual(runs + 1, self._webcron_runs())
+
+    def test_webcron_and_cron_share_the_lock_and_the_day(self):
+        def cron():
+            return subprocess.run([shutil.which('php'), 'cron.php'], cwd=ROOT, capture_output=True, text=True, timeout=60)
+        with self._webcron_fixture() as secret:
+            runs = self._webcron_runs()
+            # The command first: the address finds the day done.
+            done = cron()
+            self.assertEqual(0, done.returncode, done.stderr)
+            self.assertEqual('complete', json.loads(done.stdout)['maintenance'])
+            self.assertEqual(('cli', 'complete'), self._webcron_last_run())
+            self.assertWebcronOk(self._webcron(secret))
+            self.assertEqual(runs + 1, self._webcron_runs())
+            # The address first: the command finds it done, and says so.
+            self.query("UPDATE settings SET value='' WHERE setting='maintenance_day'")
+            self._webcron_retry()
+            self.assertWebcronOk(self._webcron(secret))
+            self.assertEqual(('web', 'complete'), self._webcron_last_run())
+            again = cron()
+            self.assertEqual(0, again.returncode, again.stderr)
+            self.assertEqual('already-complete', json.loads(again.stdout)['maintenance'])
+            self.assertEqual(('cli', 'already-complete'), self._webcron_last_run())
+            self.assertEqual(runs + 2, self._webcron_runs())
+            # One maintenance lock: while another holds it (here a process standing in for a run or an upgrade), the
+            # address answers OK and records locked, and the command refuses; neither runs.
+            self.query("UPDATE settings SET value='' WHERE setting='maintenance_day'")
+            lock = 'resurrection-maintenance-' + hashlib.sha256(b'resurrection_test').hexdigest()[:32]
+            holder = subprocess.Popen([shutil.which('php'), '-r', "require 'dbconnect.php'; require 'lib/dbwrapper_pdo.php'; db_connect($DB_HOST,$DB_USER,$DB_PASS); db_select_db($DB_NAME);"
+                                       " echo db_query('SELECT GET_LOCK(?,0) AS l', true, [$argv[1]])[0]['l'], \"\\n\"; fgets(STDIN);", lock],
+                                      cwd=ROOT, stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True)
+            try:
+                self.assertEqual('1', holder.stdout.readline().strip())
+                self._webcron_retry()
+                self.assertWebcronOk(self._webcron(secret))
+                self.assertEqual(('web', 'locked'), self._webcron_last_run())
+                refused = cron()
+                self.assertEqual((1, ''), (refused.returncode, refused.stdout))
+                self.assertIn('Maintenance', refused.stderr)
+                self.assertEqual(('cli', 'locked'), self._webcron_last_run())
+                self.assertEqual('', self._webcron_setting('maintenance_day'))
+                self.assertEqual(runs + 2, self._webcron_runs())
+            finally:
+                holder.stdin.close()
+                holder.wait(timeout=10)
+                holder.stdout.close()
+            self._webcron_retry()
+            self.assertWebcronOk(self._webcron(secret))
+            self.assertEqual(('web', 'complete'), self._webcron_last_run())
+            self.assertEqual(runs + 3, self._webcron_runs())
+
+    def test_webcron_sets_no_cookie_and_prints_nothing(self):
+        # What the jobs print, the headers and cookies they set, and a job that ends the request: none of it is the
+        # answer, which stays OK. A job that ends the request is recorded as failed.
+        path = ROOT / 'modules' / 'resurrectionwebcronfixture.php'
+        module = 'resurrectionwebcronfixture'
+        with path.open('x') as file:
+            file.write('''<?php
+function resurrectionwebcronfixture_getmoduleinfo() {
+    return ['name'=>'Web maintenance fixture','version'=>'1.0','author'=>'Synthetic','category'=>'Tests'];
+}
+function resurrectionwebcronfixture_dohook($hook, $args) {
+    db_query("INSERT INTO settings (setting,value) VALUES ('fixture_wc_calls','1') ON DUPLICATE KEY UPDATE value=value+1");
+    echo '<html>FIXTURE-PRINTED</html>';
+    header('X-Fixture: printed');
+    setcookie('fixture', 'set');
+    if (getsetting('fixture_wc_mode', 'print') === 'exit') exit('FIXTURE-EXIT');
+    return $args;
+}
+''')
+        try:
+            with self._webcron_fixture() as secret:
+                self.query('INSERT INTO modules (modulename,active,version) VALUES (?,1,?)', [module, '1.0'])
+                self.query('INSERT INTO module_hooks (modulename,location,`function`,whenactive,priority) VALUES (?,?,?,?,?)',
+                           [module, 'newday-runonce', module + '_dohook', '', 100])
+                runs = self._webcron_runs()
+                answer = self._webcron(secret)
+                self.assertWebcronOk(answer, 'print')
+                self.assertEqual('1', self._webcron_setting('fixture_wc_calls'), 'The job ran and printed.')
+                self.assertNotIn('X-Fixture', dict(answer[1]))
+                self.assertEqual(('web', 'complete'), self._webcron_last_run())
+                self.assertEqual(runs + 1, self._webcron_runs())
+                # The hook's receipt for the day goes too (resurrection_invoke_module_hook() runs a hook once a day).
+                self.query("INSERT INTO settings (setting,value) VALUES ('fixture_wc_mode','exit') ON DUPLICATE KEY UPDATE value=VALUES(value)")
+                self.query("UPDATE settings SET value='' WHERE setting='maintenance_day'")
+                self.query("DELETE FROM settings WHERE setting LIKE 'mh:%'")
+                self._webcron_retry()
+                answer = self._webcron(secret, 'query')
+                self.assertWebcronOk(answer, 'exit')
+                self.assertNotIn('X-Fixture', dict(answer[1]))
+                # It ran and ended the request inside its transaction, which was rolled back; the failure is recorded.
+                self.assertEqual('1', self._webcron_setting('fixture_wc_calls'))
+                self.assertEqual(('web', 'failed'), self._webcron_last_run())
+                self.assertEqual('', self._webcron_setting('maintenance_day'))
+                # The lock was released with the request: the next run is not refused.
+                self.query("UPDATE settings SET value='print' WHERE setting='fixture_wc_mode'")
+                self.query("DELETE FROM settings WHERE setting LIKE 'mh:%'")
+                self._webcron_retry()
+                self.assertWebcronOk(self._webcron(secret))
+                self.assertEqual(('web', 'complete'), self._webcron_last_run())
+        finally:
+            path.unlink()
+            self.query('DELETE FROM module_hooks WHERE modulename=?', [module])
+            self.query('DELETE FROM modules WHERE modulename=?', [module])
+            self.query("DELETE FROM settings WHERE setting IN ('fixture_wc_mode','fixture_wc_calls') OR setting LIKE 'mh:%'")
+
+    def test_webcron_refuses_while_an_upgrade_is_pending(self):
+        # A database behind the code: the address answers the same OK, runs nothing, records the failure, and logs one
+        # fixed line with no SQL, value or secret.
+        q = self.query
+        saved = q("SELECT version FROM modules WHERE modulename='findgold'")[0]['version']
+        with self._webcron_fixture() as secret:
+            runs = self._webcron_runs()
+            self.server_log.seek(0, 2)
+            try:
+                q("UPDATE modules SET version='0.1' WHERE modulename='findgold'")
+                self.assertWebcronOk(self._webcron(secret))
+                self.assertEqual(('web', 'failed'), self._webcron_last_run())
+                self.assertIsNone(self._webcron_setting('maintenance_day'))
+                self.assertEqual(runs, self._webcron_runs())
+                self.server_log.seek(0)
+                logged = [line for line in self.server_log.read().splitlines() if 'web maintenance failed' in line]
+                self.assertTrue(logged)
+                self.assertRegex(logged[-1], r'Resurrection: web maintenance failed at common\.php:\d+ ?$')
+                self.assertNotIn(secret, logged[-1])
+            finally:
+                q("UPDATE modules SET version=? WHERE modulename='findgold'", [saved])
+            self._webcron_retry()
+            self.assertWebcronOk(self._webcron(secret))
+            self.assertEqual(('web', 'complete'), self._webcron_last_run())
+
+    def test_webcron_rotation_stops_the_old_address(self):
+        # Game Settings (SU_EDIT_CONFIG): every change is a POST with the CSRF token; the address is shown once, on the
+        # page that made it; a new address stops the old one at once, and turning it off stops every address.
+        with self._admin_tool_session() as s, self._webcron_fixture():
+            q, login, request, csrf = (s[k] for k in ['q', 'login', 'request', 'csrf'])
+            q("UPDATE settings SET value='0' WHERE setting='webcron_enabled'")
+            q("UPDATE settings SET value='' WHERE setting IN ('webcron_secret_hash','webcron_secret_made')")
+            def shown(body):
+                match = re.search(r'id="rz-webcron-key" class="rz-webcron-value" value="([A-Za-z0-9_-]{43})"', body)
+                return match.group(1) if match else None
+            def stored():
+                return q("SELECT value FROM settings WHERE setting='webcron_secret_hash'")[0]['value']
+            # Without the flag: refused, and nothing changes.
+            login(0)
+            status, body = request('configuration.php?op=webcron')
+            self.assertNotIn('rz-webcron', body)
+            login(128)
+            status, body = request('configuration.php?op=webcron')
+            self.assertEqual(200, status, body[:2000])
+            self.assertIn('<dt>Web maintenance</dt><dd>Off</dd>', body)
+            self.assertIn('action="configuration.php?op=webcron_on"', body)
+            token = csrf(body)
+            # A GET, or a POST without the token, changes nothing.
+            self.assertEqual(403, request('configuration.php?op=webcron_on')[0])
+            self.assertEqual(403, request('configuration.php?op=webcron_on', {'x': '1'})[0])
+            self.assertEqual('', stored())
+            status, body = request('configuration.php?op=webcron_on', {'csrf_token': token})
+            self.assertEqual(200, status, body[:2000])
+            first = shown(body)
+            self.assertIsNotNone(first, body[:3000])
+            self.assertIn('webcron.php?key=' + first + '"', body)
+            self.assertIn('data-rz-copy="rz-webcron-address"', body)
+            self.assertEqual(hashlib.sha256(first.encode()).hexdigest(), stored())
+            self.assertEqual([], q('SELECT setting FROM settings WHERE value LIKE ?', ['%' + first + '%']))
+            self.assertWebcronOk(self._webcron(first))
+            # Afterwards: when it was made, last used and the last result, never the address.
+            status, body = request('configuration.php?op=webcron')
+            self.assertNotIn(first, body)
+            self.assertIn('<dt>Web maintenance</dt><dd>On</dd>', body)
+            self.assertRegex(body, r'<dt>Address last used</dt><dd>\d{4}-\d\d-\d\d \d\d:\d\d:\d\d UTC</dd>')
+            self.assertRegex(body, r'<dt>Last maintenance</dt><dd>\d{4}-\d\d-\d\d \d\d:\d\d:\d\d UTC, by the web address: complete</dd>')
+            # A new address: the old one is the empty 404 at once, the new one works.
+            status, body = request('configuration.php?op=webcron_new', {'csrf_token': csrf(body)})
+            second = shown(body)
+            self.assertIsNotNone(second, body[:3000])
+            self.assertNotEqual(first, second)
+            self.assertEqual((404, b''), self._webcron(first)[::2])
+            self.assertWebcronOk(self._webcron(second, 'query'))
+            # Off: every address stops.
+            status, body = request('configuration.php?op=webcron')
+            status, body = request('configuration.php?op=webcron_off', {'csrf_token': csrf(body)})
+            self.assertEqual(200, status, body[:2000])
+            self.assertIn('<dt>Web maintenance</dt><dd>Off</dd>', body)
+            self.assertIsNone(shown(body))
+            self.assertEqual('', stored())
+            for key in [first, second]:
+                self.assertEqual((404, b''), self._webcron(key)[::2])
+            logged = [r['message'] for r in q("SELECT message FROM gamelog WHERE category='settings' AND message LIKE '%web maintenance%' ORDER BY logid DESC LIMIT 3")]
+            self.assertEqual(['Turned off web maintenance', 'Made a new web maintenance address', 'Turned on web maintenance'], logged)
+
+    def test_cron_without_a_config_exits_nonzero(self):
+        # F1 (Phase 6 task 5a): with no configuration file, or a game that cannot start, cron.php printed common.php's
+        # HTML page and exited 0, so a scheduler recorded success. Now: exit 1, nothing on stdout, one fixed line on
+        # stderr.
+        closed = ("<?php $DB_HOST='127.0.0.1:1'; $DB_USER='nobody'; $DB_PASS='closed-port-only'; $DB_NAME='none';"
+                  " $DB_PREFIX=''; $DB_USEDATACACHE=0; $DB_DATACACHEPATH='';\n")
+        missing = 'Maintenance refused: there is no configuration file, so the game is not installed. Nothing was run.\n'
+        unusable = 'Maintenance refused: the game could not start (it is not installed, or its configuration file or database cannot be used). Nothing was run.\n'
+        with tempfile.TemporaryDirectory(prefix='resurrection-cron-') as tree, tempfile.TemporaryDirectory(prefix='resurrection-cron-private-') as private:
+            # cron.php itself is copied: it changes to its own directory, which for a link would be the real tree.
+            for entry in ROOT.iterdir():
+                if entry.name not in ('dbconnect.php', '.git', 'cron.php'):
+                    os.symlink(entry, Path(tree) / entry.name)
+            shutil.copy(ROOT / 'cron.php', Path(tree) / 'cron.php')
+            environment = {k: v for k, v in os.environ.items() if k != 'LOGD_DBCONNECT'}
+            def cron(config=None, env=None):
+                target = Path(tree) / 'dbconnect.php'
+                if config is None:
+                    target.unlink(missing_ok=True)
+                else:
+                    target.write_text(config)
+                return subprocess.run([shutil.which('php'), '-d', 'display_errors=1', '-d', 'log_errors=0', 'cron.php'], cwd=tree,
+                                      env=dict(environment, **(env or {})), capture_output=True, text=True, timeout=60)
+            for label, config, env, expected in [
+                    ('no config', None, None, missing),
+                    ('LOGD_DBCONNECT names a missing file', None, {'LOGD_DBCONNECT': private + '/missing.php'}, missing),
+                    ('database unreachable', closed, None, unusable),
+                    ('incomplete config', "<?php $DB_HOST='127.0.0.1:1';\n", None, unusable)]:
+                with self.subTest(label):
+                    result = cron(config, env)
+                    self.assertEqual((1, ''), (result.returncode, result.stdout), result.stderr)
+                    if expected == missing:
+                        self.assertEqual(expected, result.stderr)
+                    else:
+                        # The fixed line ends the output. A configuration file that cannot be used also gets the S4 page's
+                        # reason in the PHP error log, which a command's PHP writes to stderr: one line, no HTML.
+                        self.assertTrue(result.stderr.endswith(expected), result.stderr)
+                        self.assertLessEqual(len(result.stderr.splitlines()), 2, result.stderr)
+                    self.assertNotIn('<', result.stderr)
+                    self.assertNotIn('closed-port-only', result.stdout + result.stderr)
+            # The game installed but its install incomplete: the same, and nothing ran.
+            marker = self.query("SELECT value FROM settings WHERE setting='resurrection_install'")
+            self.query("DELETE FROM settings WHERE setting='resurrection_install'")
+            try:
+                result = cron((ROOT / 'dbconnect.php').read_text())
+                self.assertEqual(1, result.returncode, result.stdout)
+                self.assertEqual('', result.stdout)
+                self.assertNotIn('<', result.stderr)
+                self.assertEqual(1, len(result.stderr.splitlines()), result.stderr)
+            finally:
+                self.query("INSERT INTO settings (setting,value) VALUES ('resurrection_install',?)", [marker[0]['value']])
+
+    def test_operator_frame_on_an_incomplete_install_http(self):
+        # Phase 6 task 5a: the "not a completed installation" page is an operator page: no MoTD, Petition for Help,
+        # mail or Online Characters (none can work on an incomplete install), and the full credits.
+        q = self.query
+        copyright = 'Game Design and Code: Copyright &copy; 2002-2005, Eric Stevens & JT Traub, &copy; 2006-2007, Dragonprime Development Team'
+        license_block = "This work is licensed under a <a rel='license' href='http://creativecommons.org/licenses/by-nc-sa/2.0/' target='_blank'>Creative Commons License</a>."
+        attribution = ('<p class="rz-attribution">A <a href="https://phoenix233.com" target="_blank" rel="noopener">Phoenix 2:33 LLC</a>'
+                       ' Project by <a href="https://jimlunsford.com" target="_blank" rel="noopener">Jim Lunsford</a></p>')
+        anonymous = self._security_client(login=None)
+        # A running game shows the panels the operator frame leaves out.
+        status, body = anonymous('home.php')
+        for panel in ['motd.php', 'petition.php', 'Online Characters']:
+            self.assertIn(panel, body)
+        marker = q("SELECT value FROM settings WHERE setting='resurrection_install'")
+        q("DELETE FROM settings WHERE setting='resurrection_install'")
+        try:
+            status, body = anonymous('home.php')
+            self.assertEqual(200, status, body[:2000])
+            self.assertIn('<title>Game Unavailable', body)
+            self.assertIn('not a completed installation', body)
+            for panel in ['motd.php', 'petition.php', 'mail.php', 'Online Characters', 'rz-petitioncount']:
+                self.assertNotIn(panel, body, panel)
+            for credit in [copyright, license_block, attribution]:
+                self.assertEqual(1, body.count(credit), body[-3000:])
+        finally:
+            q("INSERT INTO settings (setting,value) VALUES ('resurrection_install',?)", [marker[0]['value']])
+        status, body = anonymous('home.php')
+        self.assertIn('Online Characters', body)
+
     def test_dispatcher_enforces_module_state(self):
         class NoRedirect(urllib.request.HTTPRedirectHandler):
             def redirect_request(self, *args):

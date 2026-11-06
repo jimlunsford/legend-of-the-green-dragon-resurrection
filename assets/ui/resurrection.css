@@ -470,6 +470,8 @@ input[type="checkbox"], input[type="radio"] { width: 20px; height: 20px; accent-
   overflow-wrap: anywhere;
 }
 .rz-character-inner:empty { display: none; }
+/* An operator page (Phase 6 task 5a) has no character panel: the content takes the column's space. */
+.rz-character:has(> .rz-character-inner:empty) { display: none; }
 
 /*
   The race portrait (Phase 5 task 5): at the top of the character panel, --portrait-width wide, beside the player's
@@ -882,6 +884,23 @@ a.hotmotd { color: var(--accent); }
 .rz-mail-actions .button, .rz-mail-actions form.rz-inline { margin: 0; }
 .rz-mail-note, .rz-mail-empty { color: var(--muted); font-family: var(--font-ui); font-size: var(--size-small); }
 .rz-mail-empty { font-size: var(--size-ui); }
+
+/*
+  Game Settings' web maintenance (Phase 6 task 5a): the address shown once in an --accent outlined box, its field the
+  full width with the copy button beside it (wrapping under it on a phone), and the status as label and value rows.
+*/
+.rz-webcron [hidden] { display: none; }
+.rz-webcron-once { margin: 16px 0; padding: 12px 16px; border: 1px solid var(--accent); border-radius: var(--radius-control); }
+.rz-webcron-once label { display: block; margin-top: 8px; color: var(--muted); font-family: var(--font-ui); font-weight: var(--weight-ui-medium); }
+.rz-webcron-copy { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 4px 0 8px; }
+.rz-webcron-copy .button { margin: 0; }
+.rz-content .rz-webcron-value { flex: 1 1 240px; width: auto; min-width: 0; font-family: monospace; }
+.rz-webcron-status { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 4px 16px; margin: 16px 0; }
+.rz-webcron-status dt { color: var(--muted); font-family: var(--font-ui); font-weight: var(--weight-ui-medium); }
+.rz-webcron-status dd { margin: 0; overflow-wrap: anywhere; }
+.rz-webcron-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.rz-webcron-actions form.rz-inline, .rz-webcron-actions .button { margin: 0; }
+@media (max-width: 480px) { .rz-webcron-status { grid-template-columns: minmax(0, 1fr); } .rz-webcron-status dd { margin-bottom: 8px; } }
 
 /*
   The phone layout's pieces (Phase 5 task 8), hidden until the phone breakpoint: the compact character header, the More

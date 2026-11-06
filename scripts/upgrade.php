@@ -28,8 +28,6 @@ require 'src/Configuration/ConfigLocation.php';
 use Resurrection\Upgrade\UpgradeRefused;
 use Resurrection\Upgrade\UpgradeStopped;
 
-$phase = 'preflight';
-$locked = false;
 $code = 1;
 try {
     $dryRun = false;
@@ -61,24 +59,9 @@ try {
     ob_end_clean();
     // The module API's translation namespace falls back to the page address (common.php sets it); a command has none.
     $REQUEST_URI = '';
-    // The same database settings the install used, from the same file.
-    require $config;
-    if (!isset($DB_HOST, $DB_USER, $DB_PASS, $DB_NAME) ||
-        !is_string($DB_HOST) || !is_string($DB_USER) || !is_string($DB_PASS) || !is_string($DB_NAME)) {
-        throw new RuntimeException('Database configuration is incomplete.');
-    }
-    $phase = 'connect';
-    if (!db_connect($DB_HOST, $DB_USER, $DB_PASS) || !db_select_db($DB_NAME)) {
-        throw new RuntimeException('Database connection failed.');
-    }
-    unset($DB_HOST, $DB_USER, $DB_PASS);
-    $phase = 'lock';
-    if (!resurrection_upgrade_lock()) {
-        throw new UpgradeRefused('Another upgrade, an install or maintenance (cron.php) is running on this database. Run the upgrade again once it has finished. Nothing was changed.');
-    }
-    $locked = true;
-    $phase = $dryRun ? 'dry-run' : 'upgrade';
-    resurrection_upgrade(resurrection_upgrade_steps_directory(), !$dryRun, static function (string $line): void { echo $line, "\n"; });
+    // The upgrade itself is one service (resurrection_upgrade_run() in lib/upgrade.php), shared with the web setup page:
+    // it reads the configuration, connects, holds the install's and maintenance's locks, and releases them.
+    resurrection_upgrade_run($config, !$dryRun, static function (string $line): void { echo $line, "\n"; });
     $code = 0;
 } catch (UpgradeRefused $refusal) {
     // Fixed text, never a submitted or configured value.
@@ -87,8 +70,6 @@ try {
     fwrite(STDERR, $stopped->getMessage() . "\n");
 } catch (Throwable $error) {
     // No exception message, trace, SQL, submitted values or configuration in the output.
-    fwrite(STDERR, 'Upgrade refused or failed (' . $phase . ', at ' . basename($error->getFile()) . ':' . $error->getLine() . '). If the upgrade had started, the report above says what was applied. Check the configuration and docs/MODERN-INSTALLATION.md, "Upgrading".' . "\n");
-} finally {
-    if ($locked) { resurrection_upgrade_unlock(); }
+    fwrite(STDERR, 'Upgrade refused or failed (' . ($GLOBALS['resurrection_upgrade_phase'] ?? 'preflight') . ', at ' . basename($error->getFile()) . ':' . $error->getLine() . '). If the upgrade had started, the report above says what was applied. Check the configuration and docs/MODERN-INSTALLATION.md, "Upgrading".' . "\n");
 }
 exit($code);

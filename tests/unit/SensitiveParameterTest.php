@@ -1,0 +1,89 @@
+<?php
+declare(strict_types=1);
+namespace Resurrection\Tests;
+use PHPUnit\Framework\TestCase;
+
+/**
+ * The web maintenance secret never shows in a stack trace (Phase 6 task 5a): every function that takes it, or a request
+ * array that carries it, marks the parameter #[\SensitiveParameter], so PHP replaces the value in a trace with a
+ * SensitiveParameterValue. The install service's password and values and the database credentials are marked too.
+ */
+final class SensitiveParameterTest extends TestCase
+{
+    /** @var array<string, list<string>> function => its parameters that carry a secret */
+    private const array SENSITIVE = [
+        'resurrection_webcron_presented' => ['server', 'post', 'get'],
+        'resurrection_webcron_hash' => ['secret'],
+        'resurrection_webcron_matches' => ['presented'],
+        'resurrection_webcron_gate' => ['presented'],
+        'resurrection_webcron_render' => ['secret'],
+        'resurrection_install_run' => ['password', 'values'],
+        'resurrection_database_open' => ['database'],
+    ];
+
+    public static function setUpBeforeClass(): void
+    {
+        require_once 'lib/names.php';
+        ob_start();
+        foreach (['constants', 'datacache', 'settings', 'modules', 'output', 'sanitize', 'translator', 'installer/install_run', 'webcron'] as $library) {
+            require_once 'lib/' . $library . '.php';
+        }
+        ob_end_clean();
+    }
+
+    /** @return list<string> */
+    private static function marked(string $function): array
+    {
+        $marked = [];
+        foreach ((new \ReflectionFunction($function))->getParameters() as $parameter) {
+            if ($parameter->getAttributes(\SensitiveParameter::class)) { $marked[] = $parameter->getName(); }
+        }
+        return $marked;
+    }
+
+    public function testEveryParameterThatCarriesTheSecretIsMarked(): void
+    {
+        foreach (self::SENSITIVE as $function => $parameters) {
+            self::assertSame($parameters, self::marked($function), $function);
+        }
+    }
+
+    public function testNoWebMaintenanceFunctionTakesTheSecretUnmarked(): void
+    {
+        // A guard for later additions: in lib/webcron.php, a parameter named for the secret is always marked.
+        $source = (string)file_get_contents('lib/webcron.php');
+        preg_match_all('/^function (resurrection_webcron_\w+)\(/m', $source, $functions);
+        self::assertGreaterThanOrEqual(10, count($functions[1]));
+        foreach ($functions[1] as $function) {
+            foreach ((new \ReflectionFunction($function))->getParameters() as $parameter) {
+                if (preg_match('/secret|presented|key|server|post|get/i', $parameter->getName())) {
+                    self::assertNotSame([], $parameter->getAttributes(\SensitiveParameter::class), $function . '($' . $parameter->getName() . ')');
+                }
+            }
+        }
+    }
+
+    public function testTheSecretIsReplacedInATrace(): void
+    {
+        // An invalid table prefix makes the gate throw before any query; the trace keeps arguments for this check.
+        $secret = 'Synthetic-webcron-secret-must-not-show-in-a-trace';
+        $ignore = ini_get('zend.exception_ignore_args');
+        $prefix = $GLOBALS['DB_PREFIX'] ?? null;
+        ini_set('zend.exception_ignore_args', '0');
+        $GLOBALS['DB_PREFIX'] = 'not a prefix ';
+        try {
+            resurrection_webcron_gate($secret, 1);
+            self::fail('The gate did not throw.');
+        } catch (\InvalidArgumentException $error) {
+            $frames = array_values(array_filter($error->getTrace(), static fn (array $frame): bool => ($frame['function'] ?? '') === 'resurrection_webcron_gate'));
+            self::assertCount(1, $frames);
+            self::assertInstanceOf(\SensitiveParameterValue::class, $frames[0]['args'][0]);
+            self::assertSame(1, $frames[0]['args'][1]);
+            self::assertStringNotContainsString($secret, $error->getTraceAsString());
+            self::assertStringNotContainsString($secret, print_r($error->getTrace(), true));
+        } finally {
+            ini_set('zend.exception_ignore_args', (string)$ignore);
+            $GLOBALS['DB_PREFIX'] = $prefix;
+        }
+    }
+}

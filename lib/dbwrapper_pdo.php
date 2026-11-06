@@ -121,6 +121,11 @@ function db_fetch_assoc(&$result) {
 }
 
 function db_num_rows($result) { return is_array($result) ? count($result) : 0; }
+/**
+ * The rows the last query changed; each query sets it anew.
+ *
+ * @phpstan-impure
+ */
 function db_affected_rows($link = false) { return $GLOBALS['dbinfo']['affected_rows'] ?? 0; }
 function db_insert_id() {
     return isset($GLOBALS['dbinfo']['connection']) ? (int) $GLOBALS['dbinfo']['connection']->lastInsertId() : -1;

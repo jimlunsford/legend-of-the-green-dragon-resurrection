@@ -138,10 +138,18 @@ function resurrection_upgrade_unlock(): void {
  * (resurrection_upgrade_module()). The first failure stops it with UpgradeStopped: the database stays at the last good
  * step, and a new run continues from there. A refusal (UpgradeRefused) changes nothing.
  *
+ * With a budget (Phase 6 task 5a, for the web setup page on hosts that cut a request short), it stops cleanly once the
+ * budget is spent: only between steps or module upgrades, never inside one, and only after at least one of them ran in
+ * this call, so every call makes progress. It reports what was applied and what remains, and returns the state
+ * 'behind'; the next call continues from there. Without a budget (the command) nothing changes.
+ *
  * @param callable(string): void $report receives each line of the report
+ * @param float|null $budget seconds this call may spend before it stops between two steps; null for no limit
  * @return array{steps: list<string>, modules: list<string>, state: string}
  */
-function resurrection_upgrade(string $directory, bool $apply, callable $report): array {
+function resurrection_upgrade(string $directory, bool $apply, callable $report, ?float $budget = null): array {
+    $started = microtime(true);
+    if ($budget !== null && !($budget >= 0)) { throw new InvalidArgumentException('The upgrade budget must be zero or more seconds.'); }
     $install = resurrection_install_state();
     if ($install === 'unsupported-1.1.2') {
         throw new UpgradeRefused('This database holds a Legend of the Green Dragon 1.1.2 game, which is unsupported: Resurrection does not upgrade or migrate a 1.1.2 database. The only path is a fresh install into an empty database. Nothing was changed.');
@@ -193,7 +201,22 @@ function resurrection_upgrade(string $directory, bool $apply, callable $report):
         catch (Throwable $error) { $stop('creating the upgrade ledger', $error); }
         $report('- created the upgrade ledger (the upgrade_steps table)');
     }
+    // Past the budget, after at least one step or module upgrade in this call: stop between two of them.
+    $spent = static fn (int $applied): bool => $budget !== null && $applied > 0 && microtime(true) - $started >= $budget;
+    /**
+     * @param list<string> $done
+     * @param list<string> $upgraded
+     * @return array{steps: list<string>, modules: list<string>, state: string}
+     */
+    $pause = static function (array $done, array $upgraded) use ($steps, $state, $report): array {
+        $remaining = array_values(array_diff(array_keys($steps), $done));
+        $modules = array_values(array_diff(array_keys($state['modules']), $upgraded));
+        $report('Time budget reached: applied ' . count($done) . ' upgrade step(s) and ' . count($upgraded) . ' module upgrade(s) in this run; '
+            . count($remaining) . ' upgrade step(s) and ' . count($modules) . ' module upgrade(s) remain. Run the upgrade again to continue: recorded steps are skipped.');
+        return ['steps' => $done, 'modules' => $upgraded, 'state' => 'behind'];
+    };
     foreach ($steps as $id => $step) {
+        if ($spent(count($done))) { return $pause($done, $upgraded); }
         $GLOBALS['dbinfo']['error_context'] = '';
         try {
             ($step['apply'])();
@@ -209,6 +232,7 @@ function resurrection_upgrade(string $directory, bool $apply, callable $report):
     $session = ['loggedin' => false, 'user' => ['acctid' => 0, 'name' => 'Upgrade', 'superuser' => 0, 'loggedin' => false, 'prefs' => []]];
     try {
         foreach ($state['modules'] as $module => $stored) {
+            if ($spent(count($done) + count($upgraded))) { return $pause($done, $upgraded); }
             $GLOBALS['dbinfo']['error_context'] = '';
             try { $ok = resurrection_upgrade_module($module); }
             catch (Throwable $error) { $stop('the upgrade of module ' . $module, $error); }
@@ -222,4 +246,35 @@ function resurrection_upgrade(string $directory, bool $apply, callable $report):
     if ($after !== 'current') { throw new UpgradeStopped('Upgrade finished its steps, but the database is still ' . $after . '. Run php scripts/upgrade.php --dry-run to see what remains.'); }
     $report('Upgrade complete: applied ' . count($done) . ' upgrade step(s) and ' . count($upgraded) . ' module upgrade(s). The database is current.');
     return ['steps' => $done, 'modules' => $upgraded, 'state' => $after];
+}
+
+/**
+ * The upgrade, as one service (Phase 6 task 5a; docs/PHASE6-TASK4-WEB-OPS-DESIGN-20261106.md, section 3.5). It was the
+ * body of scripts/upgrade.php: read the configuration, connect, take the install's and maintenance's locks together,
+ * run resurrection_upgrade(), release the locks. The command keeps its arguments and its output; the web setup page
+ * (task 5b) calls the same function. $GLOBALS['resurrection_upgrade_phase'] names the phase it reached (preflight,
+ * connect, lock, dry-run or upgrade), for the command's failure line.
+ *
+ * @param callable(string): void $report receives each line of the report
+ * @param float|null $budget seconds before it stops between two steps (resurrection_upgrade()); null for no limit
+ * @return array{steps: list<string>, modules: list<string>, state: string}
+ */
+function resurrection_upgrade_run(string $config, bool $apply, callable $report, ?float $budget = null): array {
+    require_once __DIR__ . '/database_config.php';
+    $GLOBALS['resurrection_upgrade_phase'] = 'preflight';
+    // The same database settings the install used, from the same file.
+    $database = resurrection_database_config($config);
+    $GLOBALS['resurrection_upgrade_phase'] = 'connect';
+    resurrection_database_open($database);
+    unset($database);
+    $GLOBALS['resurrection_upgrade_phase'] = 'lock';
+    if (!resurrection_upgrade_lock()) {
+        throw new UpgradeRefused('Another upgrade, an install or maintenance (cron.php) is running on this database. Run the upgrade again once it has finished. Nothing was changed.');
+    }
+    try {
+        $GLOBALS['resurrection_upgrade_phase'] = $apply ? 'upgrade' : 'dry-run';
+        return resurrection_upgrade(resurrection_upgrade_steps_directory(), $apply, $report, $budget);
+    } finally {
+        resurrection_upgrade_unlock();
+    }
 }

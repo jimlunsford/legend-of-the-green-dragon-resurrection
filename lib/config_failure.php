@@ -34,6 +34,7 @@ function resurrection_config_failure(string $path, string $reason, ?int $line = 
 	header('Retry-After: 300');
 	header('Cache-Control: no-store');
 	if (!defined('DB_NODB')) define('DB_NODB', true);
+	resurrection_operator_frame();
 	page_header("The game cannot read its configuration");
 	output("`#This game is installed, but it cannot use its database configuration file, so no page can be shown until the operator fixes it.`n`n");
 	output("`^What failed: `#%s`n", $explained . ($line !== null ? " (line $line)" : ""));

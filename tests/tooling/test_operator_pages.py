@@ -244,6 +244,29 @@ class OperatorPageTests(unittest.TestCase):
             finally:
                 closed.chmod(0o755)
 
+    def test_operator_frame_has_no_game_panels_and_keeps_the_credits(self):
+        # Phase 6 task 5a: the not-installed page and the S4 configuration page are drawn in the operator frame. No MoTD,
+        # Petition for Help, mail or Online Characters (none of them can work before the game can read its database);
+        # the 1.1.2 credit line, the license block and the Resurrection attribution line once each, in the template that
+        # prepare_template() checked. The pages name the command path only.
+        with self.tree(self.config_text()) as (port, tree, _):
+            (tree / 'dbconnect.php').chmod(0)
+            pages = {'S4 configuration page': self.get(port)}
+        with self.tree() as (port, _, _):
+            pages['not installed'] = self.get(port)
+        for label, (status, _, raw) in pages.items():
+            with self.subTest(label):
+                body = raw.decode('utf-8', errors='replace')
+                self.assertIn(status, (200, 503), body[:2000])
+                for panel in ['motd.php', 'petition.php', 'mail.php', 'Online Characters', 'rz-petitioncount', 'rz-control']:
+                    self.assertNotIn(panel, body, panel)
+                for credit in [COPYRIGHT, LICENSE, ATTRIBUTION]:
+                    self.assertEqual(1, body.count(credit), body[-3000:])
+                self.assertNotIn('rz-safe-frame', body)
+                self.assertIn('scripts/install.php' if label == 'not installed' else 'LOGD_DBCONNECT', text(body))
+                self.assertNotIn('setup.php', body)
+                self.assertNotIn('webcron', body)
+
     def test_operator_pages_send_the_security_headers(self):
         # Phase 6 task 3 (S1): the pages that run before the game's settings can be read (not installed, the database
         # error, the safe frame) and the installer's 403 carry all four headers, the policy enforced.
@@ -280,7 +303,8 @@ class OperatorPageTests(unittest.TestCase):
         internal = sorted(f for f in listed if f and (f.split('/')[0] in ('lib', 'modules', 'src') or f in ('common.php', 'battle.php')))
         entries = sorted(f for f in listed if f and '/' not in f and f not in ('common.php', 'battle.php', 'dbconnect.php'))
         self.assertGreater(len(internal), 270)
-        self.assertEqual(60, len(entries))
+        # Phase 6 task 5a: webcron.php is the 61st; without a configuration it answers its empty 404.
+        self.assertEqual(61, len(entries))
         with self.tree() as (port, tree, error_log):
             wrong = []
             for path in internal:
@@ -290,7 +314,7 @@ class OperatorPageTests(unittest.TestCase):
             self.assertEqual([], wrong)
             self.assertEqual('', error_log.read_text())
             self.assertEqual([], [p.name for p in (tree / '.sessions').iterdir()])
-            answers = {'installer.php': 403, 'index.php': 302, 'cron.php': 404, 'runmodule.php': 400}
+            answers = {'installer.php': 403, 'index.php': 302, 'cron.php': 404, 'runmodule.php': 400, 'webcron.php': 404}
             wrong = []
             for path in entries:
                 status, _, body = self.get(port, path)

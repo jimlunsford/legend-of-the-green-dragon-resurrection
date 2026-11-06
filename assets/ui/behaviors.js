@@ -28,6 +28,9 @@
   - data-rz-points-left="N" on the dragon point form: the "points left to spend" counter (data-rz-points-target,
     data-rz-points-text).
   - data-rz-preview="name" on a text field: previewfield()'s live preview of the color codes and the characters left.
+  - data-rz-copy="id" on a button (hidden in the markup): shown when the page loads; a click copies the value of the
+    field with that id to the clipboard, and the button says data-rz-copied for a moment (Game Settings' web
+    maintenance address, Phase 6 task 5a). Without this file the field stays readonly and selectable.
 
   Every one of these was an enhancement in 1.1.2 too: the game works without this file.
 */
@@ -128,6 +131,30 @@
       };
       request.open('GET', info.href);
       request.send();
+      return;
+    }
+
+    var copier = closest(target, 'button[data-rz-copy]');
+    if (copier) {
+      var source = byId(copier.getAttribute('data-rz-copy'));
+      if (!source) { return; }
+      e.preventDefault();
+      var label = copier.getAttribute('data-rz-label') || copier.textContent;
+      copier.setAttribute('data-rz-label', label);
+      var done = function () {
+        copier.textContent = copier.getAttribute('data-rz-copied') || label;
+        setTimeout(function () { copier.textContent = label; }, 2000);
+      };
+      var fallback = function () {
+        source.focus();
+        source.select();
+        try { if (document.execCommand('copy')) { done(); } } catch (err) { /* the field stays selected */ }
+      };
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(source.value).then(done, fallback);
+      } else {
+        fallback();
+      }
       return;
     }
 
@@ -270,6 +297,8 @@
       form.addEventListener('reset', function () { setTimeout(update, 0); });
       update();
     });
+
+    each('button[data-rz-copy]', function (button) { button.hidden = false; });
 
     each('[data-rz-focus]', function (marker) {
       var field = byId(marker.getAttribute('data-rz-focus'));

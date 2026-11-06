@@ -487,6 +487,8 @@ E1 `setup.php` GET; E2 `setup.php` POST; E3 the token file `resurrection-setup.p
 | T19 | Old code over a newer database, or a 1.1.2 database | R5 | `ahead`, `out-of-order`, `unsupported-1.1.2` are 404 here and refused by the services | None |
 | T20 | Half-uploaded release | R5 | Host guide: upload to a new folder, swap; the upgrade reads and checks every pending step file before changing anything | A host who uploads in place may see errors until the upload ends |
 | T21 | Maintenance runs during an upgrade | R1, E4 | The upgrade holds the maintenance lock; the run refuses unless the database is `current` | None |
+| T22 | The upgrade's login check misreads an older database layout (added with decision 1's amendment) | R5, E2 | The check runs once, before any step, against the database as the upgrade finds it; task 5b proves it works against the oldest layout an upgrade starts from | A future step that changes how accounts are stored must keep the check working on the layout before it; the 5b test fails if it does not |
+| T23 | A client sends `X-Forwarded-Proto: https` over plain HTTP to get past the HTTPS refusal (added with decision 5's amendment) | R1, E2 | The header is ignored unless the token file carries the exact third line `https-terminated-upstream`, which only someone with file access can write; it applies to that token's run only; the 128-byte cap holds | While such a token is live, a plain-HTTP request that forges the header is accepted; the line is the host's statement that TLS ends upstream, and it expires and is used up with the token |
 
 ## 6. Test plan for task 5
 
@@ -505,6 +507,8 @@ where a request is the point; HTTP tests are grouped to keep shard time down.
 | `SetupTokenTest::testGeneratedValueCarries160Bits` | Entropy |
 | `SetupTokenTest::testLocationFollowsLogdDbconnectAndIgnoresTheGameDirectory` | S12 precedence |
 | `SetupTokenTest::testComparisonUsesHashEquals` (static) | Constant time |
+| `SetupTokenTest::testAcceptsTheOptionalThirdLineExactly`, `testRefusesAnyOtherThirdLine`, `testCapHoldsWithTheThirdLine` (decision 5's amendment) | T23 |
+| `UpgradeLoginLayoutTest::testAuthenticatesAgainstTheOldestUpgradableLayoutBeforeAnyStep` (decision 1's amendment) | T22 |
 | `SetupStateTest::testModeForEveryState` (data provider over the table in 3.2) | When the page answers |
 | `SetupFailureLimitTest::testCounterFileIsGuardedAndKeyedByTokenFile`, `testFaillogCountInUpgradeMode`, `testNewTokenFileStartsANewCount` | 3.9 |
 | `InstallRunParityTest::testCommandAndServiceProduceTheSameDatabase` | One code path |
@@ -530,6 +534,8 @@ where a request is the point; HTTP tests are grouped to keep shard time down.
 | `test_setup_never_echoes_or_logs_secrets` (responses, PHP error log and session file searched for the token, the database password and the administrator password) | 3.3, T17 |
 | `test_setup_headers_policy_and_credits_on_every_screen` | 3.8, T15 |
 | `test_setup_refuses_plain_http` (if question 5 is answered so) | 3.8 |
+| `test_setup_forwarded_proto_trusted_only_with_the_third_line` (decision 5's amendment) | T23 |
+| `test_setup_upgrade_login_check_runs_before_any_step` (decision 1's amendment) | T22 |
 | `test_setup_failure_limit` | 3.9 |
 | `test_webcron_off_wrong_or_missing_secret_is_the_same_404` | 4.1, 4.4 |
 | `test_webcron_runs_once_per_game_day_with_a_constant_answer` (moves the clock and restores it) | 4.4 |
@@ -633,3 +639,29 @@ name, every refusal text, the config writer's rules, the S12 precedence.
 
 Proposed names (`setup.php`, `webcron.php`, `resurrection-setup.php`, the setting names) are not questions; say if
 any should change.
+
+## Decisions (approved 2026-11-06)
+
+Jim approved the design on 2026-11-06 with every recommendation in section 9, plus two amendments. Where this section
+and the sections above differ, this section wins.
+
+1. **Upgrade:** the token plus an `SU_MEGAUSER` login and password typed on the setup page. **Amendment:** task 5b must
+   prove that the login check works against the oldest database layout an upgrade starts from, before any step runs
+   (threat T22; tests `UpgradeLoginLayoutTest`, `test_setup_upgrade_login_check_runs_before_any_step`).
+2. **Maintenance secret:** its SHA-256 hash in the settings table, rotatable in Game Settings.
+3. **Web maintenance:** off by default. The install's last screen offers it (task 5b).
+4. **Secret travel:** the header (documented first), the POST field or the query string.
+5. **Plain HTTP:** refused on the setup page except from `localhost`. **Amendment:** the token file may carry an
+   optional third line, exactly `https-terminated-upstream`. When it is present, the page accepts
+   `X-Forwarded-Proto: https` as HTTPS for that run only. The forwarded header is never trusted otherwise. The 128-byte
+   cap still holds (threat T23; tests in `SetupTokenTest` and `test_setup_forwarded_proto_trusted_only_with_the_third_line`).
+6. **Failed partial install:** the page never empties a database. The host empties it in the panel.
+
+Task 5 is split in two: **5a** builds the shared services, the operator frame, the `cron.php` fix (F1) and web
+maintenance; **5b** builds `setup.php`.
+
+Task 4 is **accepted at `668cf4e`** (recorded in Phase 6 task 5a):
+
+- Modern core 42247060344: **SUCCESS**, 12/12 jobs, every job on `ubuntu-24.04`. PHP 8.4 / MariaDB 11.4 `http`
+  shards 15:25, 16:30, 19:44, 17:43; PHP 8.5 / MySQL 8.4 `http` shards 16:03, 17:42, 20:14, 21:11.
+- Baseline integrity 42247060378: **SUCCESS**.

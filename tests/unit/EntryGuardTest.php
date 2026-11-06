@@ -44,9 +44,11 @@ final class EntryGuardTest extends TestCase
         self::assertContains('village.php', $entries);
         self::assertContains('installer.php', $entries);
         self::assertContains('cron.php', $entries);
+        // Phase 6 task 5a: web maintenance's entry point.
+        self::assertContains('webcron.php', $entries);
         self::assertContains('scripts/install.php', $entries);
         self::assertContains('scripts/upgrade.php', $entries);
-        self::assertCount(62, $entries);
+        self::assertCount(63, $entries);
         // PHPUnit's own entry point.
         self::assertSame(self::DEFINE, $this->firstStatement($root . '/tests/bootstrap.php'));
         self::assertStringContainsString('bootstrap="tests/bootstrap.php"', (string)file_get_contents($root . '/phpunit.xml'));

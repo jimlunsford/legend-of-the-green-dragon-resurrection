@@ -51,6 +51,9 @@ parameters:
         - lib/installer/fresh_install.php
         - lib/installer/bundled_modules.php
         - lib/upgrade.php
+        - lib/database_config.php
+        - lib/installer/install_run.php
+        - lib/webcron.php
         - scripts/install.php
         - scripts/upgrade.php
     bootstrapFiles:

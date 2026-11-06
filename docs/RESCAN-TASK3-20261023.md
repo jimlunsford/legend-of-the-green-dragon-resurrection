@@ -474,6 +474,8 @@ are not listed.
 | `lib/user/user_removeban.php` | `$since` | 1 | server | Fixed predicates with placeholders; the dates are bound. |
 | `lib/user_editor.php` | `$lock ? ' FOR UPDATE' : ''` | 1 | server | Fixed lock clause chosen by a boolean argument. |
 | `lib/user_editor.php` | `substr($sql, 0, -1)` | 1 | server | `db_identifier()` of account columns present in the stored row, with placeholders; the values are bound. |
+| `lib/webcron.php` | `$table` | 3 | server | `db_identifier(db_prefix('settings'))`: the web maintenance gate's one read and its claim of the attempt time; the times and names are bound. |
+| `lib/webcron.php` | `db_identifier(db_prefix('settings'))` | 3 | server | `db_identifier()` of a fixed table name (web maintenance's settings and its failure record). |
 | `list.php` | `$limit` | 1 | server | Empty or the fixed ` LIMIT ?,? `; the page is bound. |
 | `list.php` | `$search` | 1 | server | Empty or the fixed ` AND name LIKE ? `; the pattern is bound. |
 | `list.php` | `date("Y-m-d H:i:s",strtotime("-".getsetting("LOGINTIMEOUT",900)." seconds"))` | 2 | server | `date()` output. |

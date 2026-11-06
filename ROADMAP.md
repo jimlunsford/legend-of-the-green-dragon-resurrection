@@ -252,16 +252,17 @@ Every change from 1.1.2 that a player, administrator or operator can notice is r
 - [x] 1: Release readiness review for `1.0.0-rc.1` (docs only): Phase 5's acceptance recorded, Phase 6 opened, `main` audited against a 13-area checklist (fresh install, shared hosting, upgrades, versioning, licensing, security by review, a UI crawl of about 920 pages at 1440 and 390, gameplay tests, known defects, performance, modules, operations, CI health, docs), with a ranked gap list (`docs/PHASE6-RC-READINESS-20261106.md`). Verdict: not ready to cut; 4 BLOCKER, 13 SHOULD, 10 NICE. Accepted at `ea8bb3d`, Modern core 42190029147 (all 12 jobs), Baseline integrity 42190029178.
 - [x] 2: Crash fixes, CI pin, first administrator's flags (B1, S8, S7): `list.php`'s online and clan lists select `hitpoints`; `stats.php`'s two `GROUP BY ... DESC` fixed, with a sweep and a static test; every CI job on `ubuntu-24.04`, `actions/checkout` v7.0.1 and `shivammathur/setup-php` 2.40.0 (node24) pinned by SHA; the first administrator gets 1.1.2's flags less the removed surfaces' (`docs/PHASE6-TASK2-FIXES-20261106.md`). Accepted at `fcce356`, Modern core 42206564929 (all 12 jobs), Baseline integrity 42206564872.
 - [x] 3: Hardening: S1, S2, S4, S6, S12. Every response sends `X-Frame-Options`, `nosniff`, `Referrer-Policy` and an enforced Content Security Policy (`csp_mode`: enforce, report-only, off) from `src/Http/SecurityHeaders.php`; every inline script, handler and style moved to `assets/ui/`; internal PHP answers a direct request with an empty 404; an unreadable or damaged config gets a 503 operator page; `ext-ctype` and `ext-filter` declared; `LOGD_DBCONNECT` names a config file outside the docroot (`docs/PHASE6-TASK3-HARDENING-20261106.md`). Accepted at `b1de59d`, Modern core 42239340118 (all 12 jobs), Baseline integrity 42239340082.
-- [ ] 4: Web install, upgrade and maintenance: design and threat model (S3). Jim approves before task 5. Design published for review (`docs/PHASE6-TASK4-WEB-OPS-DESIGN-20261106.md`); ticked when Jim approves it and CI accepts it.
-- [ ] 5: Web install, upgrade and maintenance: build (S3).
+- [x] 4: Web install, upgrade and maintenance: design and threat model (S3) (`docs/PHASE6-TASK4-WEB-OPS-DESIGN-20261106.md`). Jim approved it on 2026-11-06 with every recommendation and two amendments (the section "Decisions (approved 2026-11-06)"). Accepted at `668cf4e`, Modern core 42247060344 (all 12 jobs), Baseline integrity 42247060378.
+- [ ] 5a: Shared services, operator frame, `cron.php` fix, web maintenance (S3 part 1): the install, upgrade and maintenance services the commands and web pages share, the upgrade's time budget, `cron.php`'s exit 1 without a config (F1), the operator frame, `webcron.php` and Game Settings' web maintenance (`docs/PHASE6-TASK5A-SERVICES-WEBCRON-20261106.md`). Published for review; ticked when CI accepts it.
+- [ ] 5b: The web setup page, `setup.php` (S3 part 2).
 - [ ] 6: Host guide (B2), covering both the shell and the web path.
 - [ ] 7: Front-door docs, rc.1 cut materials, legal packet (B3, B4, S9).
 
 Found during Phase 6 (not yet scheduled to a task unless it says so):
 
 - [ ] Signing in again in the middle of the new-day questions replays a page (`badnav.php`) that carries the earlier session's form tokens, so its buttons answer "Invalid form submission." (403). Already present at `fcce356`. Found in task 3 (`docs/PHASE6-TASK3-HARDENING-20261106.md`).
-- [ ] `cron.php` run with no configuration file prints the HTML not-installed page and exits 0, so a scheduler records success. Found in task 4 (`docs/PHASE6-TASK4-WEB-OPS-DESIGN-20261106.md`, F1); the design has task 5 fix it.
-- [ ] The configuration page from task 3 (S4) still shows the MoTD and Petition for Help links and the Online Characters panel. None of them can work without a configuration. Task 5 removes them.
+- [ ] `cron.php` run with no configuration file prints the HTML not-installed page and exits 0, so a scheduler records success. Found in task 4 (`docs/PHASE6-TASK4-WEB-OPS-DESIGN-20261106.md`, F1); fixed in task 5a (exit 1, one fixed line on stderr); ticked when CI accepts it.
+- [ ] The configuration page from task 3 (S4) still shows the MoTD and Petition for Help links and the Online Characters panel. None of them can work without a configuration. Task 5a draws it, the not-installed page and the "not a completed installation" page in the operator frame without them; ticked when CI accepts it.
 
 Jim's decisions (2026-11-06):
 
@@ -280,7 +281,7 @@ BLOCKER for `1.0.0-rc.1`:
 - [ ] B4: Prepare the rc.1 cut, stopping before the tag: release notes from `docs/CHANGES-FROM-1.1.2.md`, the tag message, the version rule for `main` after a tag, the cut checklist (S). Task 7.
 - [x] S1: Security headers (frame protection, `nosniff`, Referrer-Policy), then a Content Security Policy as far as task 3 gets it (S, then M). Task 3.
 - [x] S2: Refuse direct requests to internal PHP files (`lib/`, `src/`, `modules/`) with a 404 (M). Task 3.
-- [ ] S3: The no-shell path: a token-gated web install and upgrade page and a secret-protected web maintenance request (L). Tasks 4 and 5.
+- [ ] S3: The no-shell path: a token-gated web install and upgrade page and a secret-protected web maintenance request (L). Tasks 4, 5a (web maintenance) and 5b (the setup page).
 - [x] S4: A clear page, not a blank 500, when `dbconnect.php` exists but cannot be read (S). Task 3.
 - [x] S6: Declare `ext-ctype` and `ext-filter` in `composer.json` (S). Task 3.
 - [x] S7: The first administrator's flags: 1.1.2's set less the removed surfaces', recorded in the change ledger (S). Task 2.
