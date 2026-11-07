@@ -1,6 +1,6 @@
 # Supported platforms and current verification scope
 
-Policy checked 2026-09-13. Resurrection remains a development branch, not an installable supported game or a hosting-approved release.
+Policy checked 2026-09-13; the runtime requirements and the configuration section updated 2026-11-07 (Phase 6 task 6) to match the code. No release has been cut yet. How to host the game: [`HOST-GUIDE.md`](HOST-GUIDE.md).
 
 ## PHP target
 
@@ -11,7 +11,7 @@ Policy checked 2026-09-13. Resurrection remains a development branch, not an ins
 
 Source: [PHP supported versions](https://www.php.net/supported-versions.php). PHP 8.6 is still a prerelease. Composer deliberately accepts only 8.4.x and 8.5.x; matrix results describe engineering checks, not every gameplay route.
 
-Runtime requirements: PDO, pdo_mysql, mbstring, JSON, sessions and normal standard PHP facilities. Development additionally needs Composer 2, DOM/XML/XMLWriter, tokenizer, Python 3, and Git. Session support is required for the future application smoke gate even though the isolated driver/config tests do not exercise sessions. PHPUnit is locked to 12.5.35, PHPStan to 2.2.14. New infrastructure uses PSR-4; historical procedural code remains procedural.
+Runtime requirements: the extensions `composer.json` declares (ctype, filter, JSON, mbstring, PDO, pdo_mysql, session) and normal standard PHP facilities; no Composer package is needed at run time. Development additionally needs Composer 2, DOM/XML/XMLWriter, tokenizer, Python 3, and Git. PHPUnit is locked to 12.5.35, PHPStan to 2.2.14. New infrastructure uses PSR-4; historical procedural code remains procedural.
 
 ## Database targets
 
@@ -25,8 +25,8 @@ Driver requirements: explicit utf8mb4 connection, native prepared statements, mu
 
 Use disposable local or CI databases and synthetic data. Do not run the historical PHP 5 lab for this phase. CI uses standard GitHub runners with no public game runtime. Runtime credentials, Composer vendor contents, local sessions, caches and logs are not committed.
 
-Future production will require HTTPS, a supported PHP SAPI with sessions, private configuration outside the document root where practical, and web-server rules denying configuration, vendor, tests, internal libraries and development tooling. Those deployment rules are not implemented or certified here. No production web-server or VPS changes are part of this work.
+A hosted game needs HTTPS, a supported PHP SAPI with sessions, the configuration file outside the document root where practical (`LOGD_DBCONNECT`), and web-server rules denying configuration, vendor, tests, internal libraries and development tooling. The host guide lists them; sample rules for nginx and Apache are in `docs/hosting/` (samples, not active), checked by `tests/tooling/test_host_guide.py` and locally behind real servers (`PHASE6-TASK6-HOST-GUIDE-20261107.md`). No production web-server or VPS changes are part of this work.
 
-## Configuration transition
+## Configuration
 
-The current installer still uses ignored local dbconnect.php. There is not yet environment-variable precedence or a completed safe fresh-install flow. Stage 6 now serializes an explicit field allow-list with var_export for both fresh and upgrade generation; it no longer prints generated credentials on failure. Existing trusted configuration is reloaded in the upgrade branch because common.php unsets connection credentials. Atomic writes, location outside the public tree, populated-database guards and post-install lockout remain required.
+The game, `scripts/install.php` and `scripts/upgrade.php` read the configuration file `LOGD_DBCONNECT` names when that environment variable is set (an absolute path), else `dbconnect.php` in the game's directory (`src/Configuration/ConfigLocation.php`; Phase 6 task 3, S12). The install writes it through the LegacyConfig generator, owner-only (0600), never over an existing file, outside the served directory unless allowed; a host without a shell installs and upgrades with `setup.php` (Phase 6 task 5b). A file that exists but cannot be used gets the 503 configuration page (S4). Populated databases are refused, and a completed install records its completion.

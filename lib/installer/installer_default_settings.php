@@ -94,7 +94,15 @@ $default_settings = array(
 	"mailsizelimit"=>1024,
 	"expirecontent"=>180,
 	"lastdboptimize"=>date("y-m-d h:i:s"),
-	"serverurl"=>"http://".($_SERVER['SERVER_NAME'] ?? 'localhost').(($_SERVER['SERVER_PORT'] ?? 80) == 80?"":":".$_SERVER['SERVER_PORT']).dirname($_SERVER['REQUEST_URI'] ?? '/'),
+	// Phase 6 task 6: the install request's own scheme, and no port when it is the scheme's default. 1.1.2 always wrote
+	// http:// and kept any port but 80, so a web install over HTTPS (setup.php) stored http://host:443/, and the web
+	// maintenance address the install's last screen shows from it did not work.
+	"serverurl"=>(static function (array $server): string {
+		$https = is_string($server['HTTPS'] ?? null) && $server['HTTPS'] !== '' && strtolower($server['HTTPS']) !== 'off';
+		$port = (string)($server['SERVER_PORT'] ?? ($https ? '443' : '80'));
+		return ($https ? 'https://' : 'http://') . ($server['SERVER_NAME'] ?? 'localhost') . ($port === ($https ? '443' : '80') ? '' : ':' . $port)
+			. dirname(strtok((string)($server['REQUEST_URI'] ?? '/'), '?') ?: '/');
+	})($_SERVER),
 	"defaultlanguage"=>"en",
 	"sourceurl"=>"https://github.com/jimlunsford/legend-of-the-green-dragon-resurrection",
 	// Phase 6 task 3 (S1): the Content Security Policy is enforced (src/Http/SecurityHeaders.php).

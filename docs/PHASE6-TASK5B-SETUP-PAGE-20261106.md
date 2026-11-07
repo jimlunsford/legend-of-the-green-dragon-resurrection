@@ -355,3 +355,9 @@ note is shown, and a second submit sends nothing (one POST each). The PHP error 
 - The fix adds under 1 s of tests (the four loopback tests) and makes the race test's second server start the same way as the first. The slowest CI shard at `af0337c` was 22:12, so `shard-durations.json` and the 60-minute timeout are unchanged.
 - PHPStan, both configurations: no errors. PHP lint: 442 files, 0 failures. `composer validate`, `install` and `audit`: OK. Project validator: exit 0. Historical verifier: PASS (417 files, 11 commits). `git diff --check`: clean.
 - Correction to "Local results" above: that shard run used MySQL 8.4 containers (`mysql:8.4`), not MariaDB 10.11. This run used MariaDB 11.4, the failing leg's database.
+
+**Acceptance (recorded in Phase 6 task 6, 2026-11-07).** Task 5b is **accepted at `73cc1da`**, through the fix:
+- Modern core 42321788194: **SUCCESS**, 12/12 jobs, every job on `ubuntu-24.04`. PHP 8.4 / MariaDB 11.4 `http` shards
+  19:35, 20:48, 14:13, 18:34; PHP 8.5 / MySQL 8.4 `http` shards 19:14, 17:01, 19:52, 17:50.
+- Baseline integrity 42321788112: **SUCCESS**.
+- The failed run, Modern core 42296406057 at `af0337c`, stays on record.

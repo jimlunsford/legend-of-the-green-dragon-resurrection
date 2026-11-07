@@ -1,0 +1,42 @@
+# Legend of the Green Dragon - Resurrection: sample .htaccess for the game folder (docs/HOST-GUIDE.md).
+#
+# A SAMPLE, NOT ACTIVE. Nothing in the game reads this file. For Apache hosts where you cannot edit the server's
+# configuration (most shared hosting). If you can edit it, use docs/hosting/apache.conf instead.
+#
+# To use it: upload it into the game folder (the folder holding index.php) and rename it .htaccess. Then open the
+# game: if every page now answers "500 Internal Server Error", your host does not allow one of the directives below.
+# Delete the .htaccess again (the game works without it) and ask the host which of these it allows:
+#   mod_rewrite's RewriteRule (needs AllowOverride FileInfo), and Require (needs AllowOverride AuthConfig).
+#
+# Each block is wrapped, so a module the server lacks skips its block instead of failing. The first block refuses
+# every path on the guide's deny list with a 404; it works in a sub-folder too, because a .htaccess rule sees the
+# path from its own folder. The second block refuses the files again (403) where mod_rewrite is missing. Without
+# mod_rewrite the folders are not refused: the game's own internal PHP files still answer a direct request with an
+# empty 404, but anything else in them is served, so never upload the folders on the guide's "Do not upload" list.
+#
+# Lines starting with # are comments. Apache allows no comment after a directive on the same line.
+
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    # Dotfiles and dot folders anywhere (.git, .github, .gitignore, .env, .local-play), except .well-known/, which
+    # certificate renewals use.
+    RewriteRule "(^|/)\.(?!well-known(/|$))" - [R=404,L]
+    # The game's internal and development folders.
+    RewriteRule "^(lib|src|modules|upgrades|scripts|tests|docs|lab|local|vendor|var)(/|$)" - [NC,R=404,L]
+    # The configuration file, the table prefix map, the setup token file and its failure counter, the two PHP files
+    # only other pages include.
+    RewriteRule "^(dbconnect|prefixes|resurrection-setup|resurrection-setup-failures|common|battle)\.php$" - [NC,R=404,L]
+    # Development and project files.
+    RewriteRule "^(composer\.(json|lock)|project\.json|phpunit\.xml|phpstan[^/]*\.neon)$" - [NC,R=404,L]
+    # Markdown anywhere.
+    RewriteRule "\.md$" - [NC,R=404,L]
+</IfModule>
+
+<IfModule mod_authz_core.c>
+    <FilesMatch "^\.">
+        Require all denied
+    </FilesMatch>
+    <FilesMatch "^(?i:(dbconnect|prefixes|resurrection-setup|resurrection-setup-failures|common|battle)\.php|composer\.(json|lock)|project\.json|phpunit\.xml|phpstan[^/]*\.neon|[^/]*\.md)$">
+        Require all denied
+    </FilesMatch>
+</IfModule>

@@ -71,6 +71,7 @@ The integrity commands do not execute the application. The modern CI matrix also
 - [Foundation checkpoint, historical record](docs/FOUNDATION-CHECKPOINT-20260913.md)
 - [Modern core phase-1 checkpoint](docs/MODERN-CORE-CHECKPOINT-20260913.md)
 - [Modern core phase-2 checkpoint](docs/MODERN-CORE-CHECKPOINT-20260913-PHASE2.md)
+- [Host guide: running the game on a web server](docs/HOST-GUIDE.md)
 - [Modern local installation](docs/MODERN-INSTALLATION.md)
 - [Raw request contract](docs/REQUEST-SEMANTICS.md)
 

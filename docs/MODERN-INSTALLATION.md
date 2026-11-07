@@ -1,6 +1,6 @@
 # Modern local installation and operation
 
-Public hosting is not approved yet. These instructions are for a local, disposable development installation. Resurrection installs fresh only: a 1.1.2 database is not migrated or upgraded.
+This document is for local play and development: a local, disposable installation, and how the install and upgrade commands behave. To run the game on a web server, with or without a shell, follow the host guide, [`HOST-GUIDE.md`](HOST-GUIDE.md); this document does not repeat its steps. Public hosting has its own gates (`ROADMAP.md`, "Public hosting"). Resurrection installs fresh only: a 1.1.2 database is not migrated or upgraded.
 
 ## Play locally
 
@@ -39,7 +39,7 @@ python3 scripts/local-play.py restore .local-play/backups/resurrection-DATE.sql
 
 ## Runtime and database
 
-Use a standard PHP 8.4 or 8.5 build with PDO MySQL, mbstring, JSON, filter, and native sessions. The game does not depend on PHP's output buffering: it also runs with `output_buffering` off, PHP's default without a `php.ini` (`PHASE4-OUTPUT-BUFFERING-FIX-20261029.md`). Install the locked Composer dependencies. The CI pairs are PHP 8.4 with MariaDB 11.4 and PHP 8.5 with MySQL 8.4. A sessionless PHP build cannot run the application.
+Use a standard PHP 8.4 or 8.5 build with ctype, filter, JSON, mbstring, PDO, PDO MySQL and native sessions (the `ext-*` list in `composer.json`). The game does not depend on PHP's output buffering: it also runs with `output_buffering` off, PHP's default without a `php.ini` (`PHASE4-OUTPUT-BUFFERING-FIX-20261029.md`). For development, install the locked Composer dependencies (PHPUnit and PHPStan); the game itself loads none of them, and a hosted copy has no `vendor/` (`HOST-GUIDE.md`, "What to upload"). The CI pairs are PHP 8.4 with MariaDB 11.4 and PHP 8.5 with MySQL 8.4. A sessionless PHP build cannot run the application.
 
 Create a dedicated **empty** database and a dedicated account authorized only for that database. Use utf8mb4 at database creation. Application connections explicitly use utf8mb4 and retain server SQL modes while adding STRICT_TRANS_TABLES, NO_ZERO_DATE, NO_ZERO_IN_DATE, ERROR_FOR_DIVISION_BY_ZERO, and NO_ENGINE_SUBSTITUTION. Fresh tables use InnoDB and utf8mb4_unicode_ci. Do not weaken global SQL modes.
 
@@ -73,7 +73,7 @@ php scripts/install.php /absolute/private/path/dbconnect.php
 
 Use the LegacyConfig generator when writing configuration from code; never interpolate credentials into PHP source. With no path the command reads `dbconnect.php` in the repository root.
 
-The game itself reads `dbconnect.php` in the repository root. For local play, either point to it with `--allow-served-path` (for example `php scripts/install.php --write-config --allow-served-path "$PWD/dbconnect.php"`) or copy the private file there with restrictive permissions; it is ignored by Git. The CI creates this file exclusively and removes it after loopback tests.
+The game reads the file `LOGD_DBCONNECT` names when that environment variable is set (an absolute path; the commands then use that file too and refuse another), else `dbconnect.php` in the repository root (`HOST-GUIDE.md`, "The configuration file"). For local play, either point to it with `--allow-served-path` (for example `php scripts/install.php --write-config --allow-served-path "$PWD/dbconnect.php"`) or copy the private file there with restrictive permissions; it is ignored by Git. The CI creates this file exclusively and removes it after loopback tests.
 
 ### Step 2: the install and its modules
 
@@ -92,7 +92,7 @@ The historical web installer returns 403 before bootstrap, even if an installati
 
 ### Without a shell: setup.php
 
-A host with only a hosting panel can install, or upgrade, from the browser: open `https://your-site/setup.php`. It runs the same install and upgrade services as the commands. It answers only while the game is not installed (no configuration file, or one whose database is empty) or its database is behind, and is an empty 404 otherwise. To prove control of the site's files, it asks for a file named `resurrection-setup.php` in the game's folder (or beside the `LOGD_DBCONNECT` file), created in the panel's file manager with the two lines the page shows, and for the value on its second line. The file works once, for 60 minutes. An upgrade also asks for a top administrator's login and password and a fresh backup. The page needs HTTPS. Its last install screen offers daily maintenance through the panel's scheduler (`php cron.php`) or, if the scheduler can only fetch an address, web maintenance. The full host guide is a later task; `PHASE6-TASK5B-SETUP-PAGE-20261106.md` has the details.
+A host with only a hosting panel installs, or upgrades, from the browser with `setup.php`, which runs the same install and upgrade services as the commands above. The steps (the token file, HTTPS, the form, the maintenance choice, a failed install) are in the host guide, [`HOST-GUIDE.md`](HOST-GUIDE.md), sections 5.2, 5.3 and 9; the page's rules and tests are in `PHASE6-TASK5B-SETUP-PAGE-20261106.md`.
 
 ## Authentication and sessions
 
@@ -114,7 +114,7 @@ php cron.php
 
 The command must run with the same private configuration and filesystem ownership as the application. Schedule it often enough to cover the configured game-day interval. The project does not install a scheduler or deploy a server.
 
-A database advisory lock serializes maintenance. A completed game-day marker makes repeated invocations skip that day's maintenance. The marker is written after successful maintenance. Player New Day behavior and its turn/economy rules remain separate. Each bundled daily hook commits its writes with a per-day receipt, so a failed run rolls that hook back and a retry skips hooks already done; the core cleanup is not one transaction, and a non-bundled module's filesystem, network or DDL effects would not roll back (`SECURITY-STATUS.md`, S13). Running a scheduler in production is a public hosting gate. HTTP GET and POST to cron.php return 404 before bootstrap.
+A database advisory lock serializes maintenance. A completed game-day marker makes repeated invocations skip that day's maintenance. The marker is written after successful maintenance. Player New Day behavior and its turn/economy rules remain separate. Each bundled daily hook commits its writes with a per-day receipt, so a failed run rolls that hook back and a retry skips hooks already done; the core cleanup is not one transaction, and a non-bundled module's filesystem, network or DDL effects would not roll back (`SECURITY-STATUS.md`, S13). On a hosted game, schedule it (or web maintenance, for a scheduler that can only fetch an address) as the host guide describes (`HOST-GUIDE.md`, "Daily maintenance"). HTTP GET and POST to cron.php return 404 before bootstrap.
 
 ## Upgrading
 
@@ -128,22 +128,7 @@ Upgrades go one release at a time (`VERSIONING.md`). Without a shell, `setup.php
 
 ### 1. Back up
 
-Put the new version's files in place first: the game then shows "Upgrade Needed" and no one can play while you work. Take a fresh backup of the whole database, for example:
-
-```sh
-mysqldump --single-transaction --default-character-set=utf8mb4 -h HOST -u USER -p DATABASE > resurrection-before-upgrade.sql
-```
-
-Keep the backup private: it holds every account. Check that the file is complete (it ends with a `-- Dump completed` line). A backup is required because MySQL and MariaDB commit a table change the moment it runs: if an upgrade stops partway, the changes it made cannot be rolled back.
-
-To restore it, recreate the database empty and load the file into it, then put the previous version's files back:
-
-```sh
-mysql -h HOST -u USER -p -e 'DROP DATABASE DATABASE; CREATE DATABASE DATABASE CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci'
-mysql --default-character-set=utf8mb4 -h HOST -u USER -p DATABASE < resurrection-before-upgrade.sql
-```
-
-Restoring replaces everything in that database. Check the name twice before dropping it.
+Put the new version's files in place first: the game then shows "Upgrade Needed" and no one can play while you work. Take a fresh backup of the whole database and keep it private: it holds every account. A backup is required because MySQL and MariaDB commit a table change the moment it runs: if an upgrade stops partway, the changes it made cannot be rolled back. For local play, `python3 scripts/local-play.py backup` takes it (above); on a hosted game, the host guide gives the `mysqldump` command, the panel and phpMyAdmin ways, and the restore (`HOST-GUIDE.md`, "Upgrade" and "Backups and restore").
 
 ### 2. Dry run
 
