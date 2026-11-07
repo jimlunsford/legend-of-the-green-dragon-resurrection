@@ -22,6 +22,7 @@ import urllib.request
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from php_runtime import supported_php  # noqa: E402
+from loopback_server import wait_until_ready  # noqa: E402
 
 COPYRIGHT = 'Game Design and Code: Copyright &copy; 2002-2005, Eric Stevens & JT Traub, &copy; 2006-2007, Dragonprime Development Team'
 LICENSE = "This work is licensed under a <a rel='license' href='http://creativecommons.org/licenses/by-nc-sa/2.0/' target='_blank'>Creative Commons License</a>."
@@ -83,13 +84,7 @@ class OperatorPageTests(unittest.TestCase):
                                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, env=dict(environment, **(env or {})),
                                       preexec_fn=demote)
             try:
-                for _ in range(100):
-                    try:
-                        with socket.create_connection(('127.0.0.1', port), timeout=.1):
-                            break
-                    except OSError:
-                        self.assertIsNone(server.poll(), 'Loopback PHP test server exited')
-                        time.sleep(.05)
+                wait_until_ready(server, port)
                 yield port, Path(tree), error_log
             finally:
                 server.terminate()

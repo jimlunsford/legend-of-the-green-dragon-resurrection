@@ -22,6 +22,9 @@ import urllib.parse
 import urllib.request
 from xml.etree import ElementTree
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from loopback_server import wait_until_ready  # noqa: E402
+
 ROOT = Path(__file__).resolve().parents[2]
 # The game's Content Security Policy as Phase 6 task 3 set it (src/Http/SecurityHeaders.php sends it).
 CSP_POLICY = ("default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self'; font-src 'self'; object-src 'none'; "
@@ -5294,10 +5297,7 @@ db_query('UPDATE accounts SET deathpower=114 WHERE acctid=?',true,[(int)$argv[1]
         log=tempfile.TemporaryFile(mode='w+t')
         server=subprocess.Popen([shutil.which('php'),'-d','display_errors=1','-d','error_reporting=-1','-S',f'127.0.0.1:{port}','-t',str(ROOT)],cwd=ROOT,stdout=subprocess.DEVNULL,stderr=log)
         try:
-            for _ in range(100):
-                try:
-                    with socket.create_connection(('127.0.0.1',port),timeout=.1):break
-                except OSError:time.sleep(.02)
+            wait_until_ready(server,port,'Second loopback PHP server')
             with self._ramius_fixture() as f:
                 f['prepare']();first_form=f['form']()
                 # A second login deliberately invalidates the first auth version.
@@ -5506,10 +5506,7 @@ $db=$GLOBALS['dbinfo']['connection'];$db->beginTransaction();db_query('SELECT ac
         log=tempfile.TemporaryFile(mode='w+t')
         server=subprocess.Popen([shutil.which('php'),'-d','display_errors=1','-d','error_reporting=-1','-S',f'127.0.0.1:{port}','-t',str(ROOT)],cwd=ROOT,stdout=subprocess.DEVNULL,stderr=log)
         try:
-            for _ in range(100):
-                try:
-                    with socket.create_connection(('127.0.0.1',port),timeout=.1):break
-                except OSError:time.sleep(.02)
+            wait_until_ready(server,port,'Second loopback PHP server')
             with self._mail_fixture() as f:
                 target=f['targets'][0];second_id=f['targets'][2];f['setting']('inboxlimit',1)
                 password=self.query('SELECT password FROM accounts WHERE acctid=?',[f['actor']])[0]['password']
@@ -7315,10 +7312,7 @@ function MODULE_dohook($hook,$args) {
             server=subprocess.Popen([shutil.which('php'),'-d','display_errors=1','-d','error_reporting=-1','-S',f'127.0.0.1:{port}','-t',str(ROOT)],cwd=ROOT,stdout=subprocess.DEVNULL,stderr=log)
             started=f['signals']/f'{f["module"]}-started';release=f['signals']/f'{f["module"]}-release';results=[]
             try:
-                for _ in range(100):
-                    try:
-                        with socket.create_connection(('127.0.0.1',port),timeout=.1):break
-                    except OSError:time.sleep(.02)
+                wait_until_ready(server,port,'Second loopback PHP server')
                 second=self._security_client(login=None,port=port)
                 for cookie in online.cookiejar: second.cookiejar.set_cookie(cookie)
                 fields=form();q('UPDATE accounts SET lastnewday=? WHERE acctid=?',[self._current_game_day(),target]);self._security_allow(target,'list.php')
@@ -7542,6 +7536,9 @@ function MODULE_dohook($hook,$args) {
                     self.assertIn('If you are the operator: take a fresh backup, see what is pending with php scripts/upgrade.php --dry-run, then apply it with '
                                   'php scripts/upgrade.php --backup-confirmed (docs/MODERN-INSTALLATION.md, "Upgrading").',plain)
                     self.assertNotIn('installer.php',body)
+                    # Phase 6 task 5b: one operator line names both paths, the command and setup.php for a host without a shell.
+                    self.assertIn("The operator applies the upgrade with php scripts/upgrade.php --backup-confirmed on the server's command line, or, "
+                                  'on a host without a shell, opens setup.php in the browser and follows its steps, as docs/MODERN-INSTALLATION.md describes.',plain)
                     # The refresh returns to the page asked for, escaped; nothing else is linked.
                     refresh=re.findall(r"<meta http-equiv='refresh' content='30; url=([^']*)'>",body)
                     self.assertEqual(['home.php?a=1&amp;b=2' if who=='anonymous' else 'village.php'],refresh)
@@ -8321,10 +8318,7 @@ function MODULE_dohook($hook,$args) {
         server=subprocess.Popen([shutil.which('php'),'-d','display_errors=1','-d','error_reporting=-1','-d','zend.exception_ignore_args=1',
                                  '-d','auto_prepend_file='+prepend.name,'-S',f'127.0.0.1:{port}','-t',str(ROOT)],cwd=ROOT,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
         try:
-            for _ in range(100):
-                try:
-                    with socket.create_connection(('127.0.0.1',port),timeout=.1):break
-                except OSError:time.sleep(.02)
+            wait_until_ready(server,port,'Second loopback PHP server')
             seconds=[]
             for client in clients:
                 second=self._security_client(login=None,port=port)
@@ -9325,10 +9319,7 @@ echo json_encode(systemmail((int)$argv[1],['Trusted %s','notice'],['Hello %s','J
             log=tempfile.TemporaryFile(mode='w+t')
             server=subprocess.Popen([shutil.which('php'),'-d','display_errors=1','-d','error_reporting=-1','-S',f'127.0.0.1:{port}','-t',str(ROOT)],cwd=ROOT,stdout=subprocess.DEVNULL,stderr=log)
             try:
-                for _ in range(100):
-                    try:
-                        with socket.create_connection(('127.0.0.1',port),timeout=.1):break
-                    except OSError:time.sleep(.02)
+                wait_until_ready(server,port,'Second loopback PHP server')
                 login(64)
                 def twin(client):
                     other=self._security_client(login=None,port=port)
@@ -9768,10 +9759,7 @@ function MODULE_dohook($hook,$args) {
         server=subprocess.Popen([shutil.which('php'),'-d','display_errors=1','-d','error_reporting=-1','-d','zend.exception_ignore_args=1','-d','sendmail_path='+str(program),
                                  '-d','auto_prepend_file='+prepend.name,'-S',f'127.0.0.1:{port}','-t',str(ROOT)],cwd=ROOT,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
         try:
-            for _ in range(100):
-                try:
-                    with socket.create_connection(('127.0.0.1',port),timeout=.1):break
-                except OSError:time.sleep(.02)
+            wait_until_ready(server,port,'Second loopback PHP server')
             yield port,lambda:capture.read_text().split('\n=====\n')[:-1] if capture.exists() else []
         finally:
             server.terminate();server.wait(timeout=20);prepend.close();transport.cleanup()
@@ -9921,13 +9909,7 @@ function MODULE_dohook($hook,$args) {
                                        '-S', f'127.0.0.1:{port}', '-t', tree], cwd=tree, stdout=subprocess.DEVNULL, stderr=log,
                                       env=dict({k: v for k, v in os.environ.items() if k != 'LOGD_DBCONNECT'}, **(env or {})))
             try:
-                for _ in range(100):
-                    try:
-                        with socket.create_connection(('127.0.0.1', port), timeout=.1):
-                            break
-                    except OSError:
-                        self.assertIsNone(server.poll(), 'Second test server exited')
-                        time.sleep(.05)
+                wait_until_ready(server, port, 'Second test server')
                 yield port
             finally:
                 server.terminate()

@@ -19,7 +19,6 @@ import os
 from pathlib import Path
 import re
 import shutil
-import socket
 import subprocess
 import sys
 import tempfile
@@ -33,6 +32,7 @@ import urllib.request
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from php_runtime import supported_php  # noqa: E402
+from loopback_server import start_php_server  # noqa: E402
 
 COPYRIGHT = 'Game Design and Code: Copyright &copy; 2002-2005, Eric Stevens & JT Traub, &copy; 2006-2007, Dragonprime Development Team'
 LICENSE = "This work is licensed under a <a rel='license' href='http://creativecommons.org/licenses/by-nc-sa/2.0/' target='_blank'>Creative Commons License</a>."
@@ -200,35 +200,33 @@ class SetupPageTests(unittest.TestCase):
             sessions.mkdir()
             log = tree / '.php-errors.log'
             log.touch()
-            with socket.socket() as sock:
-                sock.bind(('127.0.0.1', 0))
-                port = sock.getsockname()[1]
-            arguments = [self.php, '-d', 'display_errors=0', '-d', 'log_errors=1', '-d', 'error_log=' + str(log),
-                         '-d', 'session.save_path=' + str(sessions), '-d', 'auto_prepend_file=' + str(self.prepend)]
-            for key, value in (ini or {}).items():
-                arguments += ['-d', f'{key}={value}']
-            environment = {k: v for k, v in os.environ.items() if k != 'LOGD_DBCONNECT'}
-            environment.update(env or {})
-            if workers:
-                environment['PHP_CLI_SERVER_WORKERS'] = str(workers)
-            server = subprocess.Popen(arguments + ['-S', f'127.0.0.1:{port}', '-t', str(tree)], cwd=tree,
-                                      stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, env=environment)
-            try:
-                for _ in range(200):
-                    try:
-                        with socket.create_connection(('127.0.0.1', port), timeout=.1):
-                            break
-                    except OSError:
-                        self.assertIsNone(server.poll(), 'Loopback PHP server exited')
-                        time.sleep(.05)
-                class Served:
-                    pass
-                served = Served()
-                served.port, served.path, served.log, served.sessions = port, tree, log, sessions
+            served = type('Served', (), {})()
+            served.path, served.log, served.sessions = tree, log, sessions
+            with self.server(served, env=env, workers=workers, ini=ini) as port:
+                served.port = port
                 yield served
-            finally:
-                server.terminate()
-                server.wait(timeout=10)
+
+    @contextmanager
+    def server(self, served, env=None, workers=None, ini=None):
+        """A PHP server for a tree() copy, on a port the OS chose: the error log, sessions and test prepend file of
+        `served`, the given ini settings and environment. Yields its port once it answers; fails with a clear message
+        (and the server's output) if it exits or never answers. tree() and a test's second server both use it."""
+        arguments = [self.php, '-d', 'display_errors=0', '-d', 'log_errors=1', '-d', 'error_log=' + str(served.log),
+                     '-d', 'session.save_path=' + str(served.sessions), '-d', 'auto_prepend_file=' + str(self.prepend)]
+        for key, value in (ini or {}).items():
+            arguments += ['-d', f'{key}={value}']
+        environment = {k: v for k, v in os.environ.items() if k != 'LOGD_DBCONNECT'}
+        environment.update(env or {})
+        if workers:
+            environment['PHP_CLI_SERVER_WORKERS'] = str(workers)
+        handle, output = tempfile.mkstemp(prefix='.server-', suffix='.out', dir=served.path)
+        os.close(handle)
+        process, port = start_php_server(arguments, served.path, served.path, environment, output)
+        try:
+            yield port
+        finally:
+            process.terminate()
+            process.wait(timeout=10)
 
     def token_file(self, directory, value, upstream=False, lines=None, age=0):
         path = Path(directory) / 'resurrection-setup.php'
@@ -504,18 +502,8 @@ class SetupPageTests(unittest.TestCase):
         value = token_value('race')
         with self.tree() as served:
             self.token_file(served.path, value)
-            second = subprocess.Popen([self.php, '-d', 'display_errors=0', '-d', 'log_errors=1', '-d', 'error_log=' + str(served.log),
-                                       '-d', 'session.save_path=' + str(served.sessions), '-S', f'127.0.0.1:{served.port + 1}', '-t', str(served.path)],
-                                      cwd=served.path, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                                      env={k: v for k, v in os.environ.items() if k != 'LOGD_DBCONNECT'})
-            try:
-                for _ in range(200):
-                    try:
-                        with socket.create_connection(('127.0.0.1', served.port + 1), timeout=.1):
-                            break
-                    except OSError:
-                        time.sleep(.05)
-                clients = [Client(served.port), Client(served.port + 1)]
+            with self.server(served) as second:
+                clients = [Client(served.port), Client(second)]
                 forms = [self.verify(c, self.start(c), value) for c in clients]
                 results = [None, None]
                 barrier = threading.Barrier(2)
@@ -527,9 +515,6 @@ class SetupPageTests(unittest.TestCase):
                     thread.start()
                 for thread in threads:
                     thread.join(timeout=180)
-            finally:
-                second.terminate()
-                second.wait(timeout=10)
             winners = [r for r in results if r[0] == 200]
             self.assertEqual(1, len(winners), [(r[0], text(r[2])[:300]) for r in results])
             loser = [r for r in results if r[0] != 200][0]

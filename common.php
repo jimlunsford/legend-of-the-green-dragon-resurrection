@@ -305,6 +305,8 @@ if ($resurrection_database_state !== 'current'){
 		output("`#The game is temporarily unavailable while a game upgrade is applied, please be patient, the upgrade will be completed soon.");
 		// 1.1.2 sent admins to its web installer here; the upgrade is now a command (docs/MODERN-INSTALLATION.md).
 		output("An administrator applies the upgrade from the server's command line; the web installer is no longer available.");
+		// Phase 6 task 5b: setup.php is the upgrade's path on a host without a shell.
+		output("The operator applies the upgrade with `^php scripts/upgrade.php --backup-confirmed`# on the server's command line, or, on a host without a shell, opens `^setup.php`# in the browser and follows its steps, as docs/MODERN-INSTALLATION.md describes.");
 		output("If you are the operator: take a fresh backup, see what is pending with `^php scripts/upgrade.php --dry-run`#, then apply it with `^php scripts/upgrade.php --backup-confirmed`# (docs/MODERN-INSTALLATION.md, \"Upgrading\").`n`n");
 		output("`@If you don't know what this all means, just sit tight, we're doing an upgrade and will be done soon, you will be automatically returned to the game when the upgrade is complete.");
 		rawoutput("<meta http-equiv='refresh' content='30; url=" . htmlspecialchars((string)$session['user']['restorepage'], ENT_QUOTES) . "'>");

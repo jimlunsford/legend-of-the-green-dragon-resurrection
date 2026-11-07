@@ -273,3 +273,85 @@ note is shown, and a second submit sends nothing (one POST each). The PHP error 
   and restores it at the end (`tests/support/database_dump.php`). Out of order is covered over HTTP only: PHPUnit has no
   recorded steps to put out of order without writing to `upgrades/`, which the PHPUnit tests never do.
 - **The scan.** `SqlSweepTest` flagged a user-facing sentence that began "Delete" followed by a path; it was reworded.
+
+## CI failure and fix (2026-11-07)
+
+**CI at `af0337c`.**
+- Modern core 42296406057: FAILURE, 11 of 12 jobs SUCCESS. The failed job was `engineering (8.4, mariadb:11.4) / http (2)`, at 1:42.
+  - The failing test was `test_web_ops_http.SetupPageTests.test_setup_concurrent_installs_one_wins`.
+  - It raised `urllib.error.URLError: [Errno 111] Connection refused` from `self.start(c)` at line 519, after 10.3 s.
+  - The shard runner stops at the first failure (`failfast`), so shard 2 ran 12 of its 64 assigned tests.
+  - The other shards took 17:12, 16:10 and 19:42 on PHP 8.4, and 19:16, 17:27, 22:12 and 22:05 on PHP 8.5.
+- Baseline integrity 42296405848: SUCCESS.
+- The failed run stays on record and was not rerun. 5b is accepted through this fix's run.
+
+**Cause (confirmed).** The race test started its second PHP server on `served.port + 1`, a port nobody checked.
+- On the runner that port was in use, so the second server exited at once.
+  - A runner's loopback ports are shared with outgoing connections and with the database service's published port, which comes from the same ephemeral range.
+  - `php -S` exits with "Failed to listen on ... (reason: Address already in use)" when a socket is bound there, even one that is not listening.
+- The wait loop that followed never called `poll()`. After 200 × 0.05 s it fell through silently, which matches the 10.3 s.
+  - The first request then met nothing listening: connection refused at line 519.
+- The second server also lacked the `auto_prepend_file` (the fixture's REMOTE_ADDR/HTTPS headers) and the ini that `tree()` gives the first one.
+- Reproduced locally with the old test file at `af0337c` (below).
+
+**The change.**
+- New `tests/tooling/loopback_server.py` holds two functions:
+  - `free_port()`: binds to port 0, so the OS picks the port.
+  - `wait_until_ready()`: checks `poll()` on every pass. It returns only when the process is running and answers. If the process exits, or nothing answers in time, it raises `ServerStartError` with the port and the server's own output.
+- `start_php_server()` launches `php -S` on a free port with its output in a file, and also waits for PHP's own "Development Server (http://127.0.0.1:PORT) started" line.
+  - Another program that listens on the port is therefore never taken for the server.
+  - If PHP reports the port taken in the moment between choosing and binding it, it tries a new port, up to 3 times. Otherwise it fails with its message.
+- In `test_web_ops_http.py`, the server launch moved out of `tree()` into `server(served, env, workers, ini)`. It gives every server the same error log, sessions, prepend file, ini and environment. `tree()` and the race test's second server both use it.
+  - The race test's assertions are unchanged.
+  - The server's output file is a dot file in the tree, so the test that lists the tree's non-dot files is unaffected.
+- New `tests/tooling/test_loopback_server.py` (4 fast tests): a server that starts answers on an OS port; one that exits fails with its output; another program listening on the port is not taken for the server; one that never answers fails after the time allowed.
+
+**Other derived ports and readiness loops in `tests/`.**
+- Derived or fixed ports: only the race test's `served.port + 1`.
+  - Every other server takes its port from the OS: `test_disabled_endpoints.py`, `test_web_application.py` (the class server and 8 second servers), `test_operator_pages.py`, and `tree()`.
+  - `127.0.0.1:1` in fixtures is a deliberately closed database address, not a server.
+- Readiness loops that could fall through silently, all now `wait_until_ready(server, port, ...)`:
+
+| File | Line (at `af0337c`) | Before |
+|---|---|---|
+| `test_web_ops_http.py` | 217 (`tree()`) | Checked `poll()` but fell through after 200 tries |
+| `test_web_ops_http.py` | 512 (race test) | No `poll()`; fell through |
+| `test_web_application.py` | 5297, 5509, 7318, 8324, 9328, 9771 | No `poll()`; fell through after 100 × 0.02 s |
+| `test_web_application.py` | 9924 | Checked `poll()` but fell through |
+| `test_operator_pages.py` | 86 | Checked `poll()` but fell through |
+
+- Already safe, left as they were:
+  - `test_disabled_endpoints.py:34` and `test_web_application.py:89` return on success, raise if the server exits and raise after the loop.
+  - `test_web_application.py:10594` has `else: self.fail(...)` after the loop.
+
+**Upgrade Needed.** One operator line added after "An administrator applies the upgrade from the server's command line; the web installer is no longer available.":
+- "The operator applies the upgrade with `php scripts/upgrade.php --backup-confirmed` on the server's command line, or, on a host without a shell, opens `setup.php` in the browser and follows its steps, as docs/MODERN-INSTALLATION.md describes."
+- The page's other text is unchanged. `test_upgrade_needed_page_and_copyright_footer_http` asserts the line for the anonymous visitor and the signed-in player. The change is recorded in `CHANGES-FROM-1.1.2.md`.
+
+**Fail-first (PHP 8.4.27, MariaDB 11.4).**
+- Old harness: the test file from `af0337c`, run with `served.port + 1` held by a runner script.
+  - With the port bound (not listening), the result is exactly the CI error: `ERROR: test_setup_concurrent_installs_one_wins`, `File ".../test_web_ops_http.py", line 519, in test_setup_concurrent_installs_one_wins`, `urllib.error.URLError: <urlopen error [Errno 111] Connection refused>`, after 11.1 s.
+  - With the port held by a listening socket, the old loop takes that socket for the server: the request hangs and fails with `TimeoutError: timed out` after 121 s.
+- New harness, the same runner, both ways: OK (2.5 s and 2.7 s). The second server's port comes from the OS.
+- New guard, a throwaway call with a `-t` path that does not exist:
+  - The old pattern ends after 10.1 s with `URLError: <urlopen error [Errno 111] Connection refused>`.
+  - `start_php_server()` fails after 0.1 s with `ServerStartError: Loopback PHP test server on 127.0.0.1:40017 exited with code 1 before it answered.` followed by `Server output: Directory /tmp/exit-at-once-.../no-such-tree does not exist.`
+- Upgrade Needed with `af0337c`'s `common.php`: `FAIL` (anonymous and player), `AssertionError: "The operator applies the upgrade with php scripts/upgrade.php --backup-confirmed ..." not found`. With the change: OK.
+
+**20 runs.** `test_setup_concurrent_installs_one_wins` ran 20 times in a row, each in its own process, on PHP 8.4.27 with MariaDB 11.4: 20 of 20 OK, 2.4 to 3.2 s each.
+
+**Local results (supporting evidence; CI is the acceptance).**
+- PHPUnit on MariaDB 11.4: PHP 8.4.27 OK (414 tests, 71 s); PHP 8.5.12 OK (414 tests, 87 s).
+- The four shards ran in parallel on PHP 8.4.27, each with its own MariaDB 11.4 container. Each shard's PHPUnit was OK (414 tests, 91 to 96 s).
+
+| Shard | Tests run | Time |
+|---|---|---|
+| 1 | 68 | 14.1 min |
+| 2 | 66 | 14.4 min |
+| 3 | 174 | 14.3 min |
+| 4 | 67 | 13.8 min |
+
+  No failures, errors or skips.
+- The fix adds under 1 s of tests (the four loopback tests) and makes the race test's second server start the same way as the first. The slowest CI shard at `af0337c` was 22:12, so `shard-durations.json` and the 60-minute timeout are unchanged.
+- PHPStan, both configurations: no errors. PHP lint: 442 files, 0 failures. `composer validate`, `install` and `audit`: OK. Project validator: exit 0. Historical verifier: PASS (417 files, 11 commits). `git diff --check`: clean.
+- Correction to "Local results" above: that shard run used MySQL 8.4 containers (`mysql:8.4`), not MariaDB 10.11. This run used MariaDB 11.4, the failing leg's database.
