@@ -255,8 +255,18 @@ Every change from 1.1.2 that a player, administrator or operator can notice is r
 - [x] 4: Web install, upgrade and maintenance: design and threat model (S3) (`docs/PHASE6-TASK4-WEB-OPS-DESIGN-20261106.md`). Jim approved it on 2026-11-06 with every recommendation and two amendments (the section "Decisions (approved 2026-11-06)"). Accepted at `668cf4e`, Modern core 42247060344 (all 12 jobs), Baseline integrity 42247060378.
 - [x] 5a: Shared services, operator frame, `cron.php` fix, web maintenance (S3 part 1): the install, upgrade and maintenance services the commands and web pages share, the upgrade's time budget, `cron.php`'s exit 1 without a config (F1), the operator frame, `webcron.php` and Game Settings' web maintenance (`docs/PHASE6-TASK5A-SERVICES-WEBCRON-20261106.md`). Accepted at `281fcf0`, Modern core 42281955893 (all 12 jobs), Baseline integrity 42281955860.
 - [x] 5b: The web setup page, `setup.php` (S3 part 2): token-gated install and upgrade for hosts without a shell, the upgrade in parts, the post-install maintenance choice, and one rule for pages that show a secret once (step 0) (`docs/PHASE6-TASK5B-SETUP-PAGE-20261106.md`). CI at `af0337c` failed on the race test's second server (Modern core 42296406057, kept on record); the fix (a port the OS chose, a readiness wait that fails clearly) and `setup.php` on the Upgrade Needed page followed. Accepted through the fix at `73cc1da`, Modern core 42321788194 (all 12 jobs), Baseline integrity 42321788112.
-- [ ] 6: Host guide (B2), covering both the shell and the web path: `docs/HOST-GUIDE.md`, sample server rules in `docs/hosting/` (nginx, Apache, `.htaccess`, not active) checked by `tests/tooling/test_host_guide.py` and, locally, behind real nginx with PHP-FPM and Apache with mod_php; the server URL a fresh install over HTTPS stores is fixed (`docs/PHASE6-TASK6-HOST-GUIDE-20261107.md`). Published for review; ticked when CI accepts it.
-- [ ] 7: Front-door docs, rc.1 cut materials, legal packet (B3, B4, S9).
+- [x] 6: Host guide (B2), covering both the shell and the web path: `docs/HOST-GUIDE.md`, sample server rules in `docs/hosting/` (nginx, Apache, `.htaccess`, not active) checked by `tests/tooling/test_host_guide.py` and, locally, behind real nginx with PHP-FPM and Apache with mod_php; the server URL a fresh install over HTTPS stores is fixed (`docs/PHASE6-TASK6-HOST-GUIDE-20261107.md`). Accepted at `5f2d951`, Modern core 42329102594 (all 12 jobs), Baseline integrity 42329102592.
+- [ ] 7: Front-door docs, rc.1 cut materials, legal packet (B3, B4, S9), and the `requirevalidemail` lock: Game Settings shows it locked off and refuses a change, and the game treats it as off; `README.md`, `VERSIONING.md`, `SECURITY.md`, `SECURITY-STATUS.md` and `MODULE-POLICY.md` match the code; the draft release notes (`docs/RELEASE-NOTES-1.0.0-rc.1.md`), the cut checklist with the tag message (`docs/RC-CUT-CHECKLIST.md`) and the version rule for `main` after a tag; the release package script (`scripts/build-release-package.py`); the legal review packet (`docs/LEGAL-REVIEW-PACKET-20261107.md`) (`docs/PHASE6-TASK7-RC-MATERIALS-20261107.md`). Published; ticked when CI accepts it.
+
+What stands between `main` and the `v1.0.0-rc.1` tag, in order (`docs/RC-CUT-CHECKLIST.md`):
+
+1. CI acceptance of task 7's commit: both Modern core legs and Baseline integrity at SUCCESS.
+2. Counsel's answers to the legal review packet (S9), and any wording change they bring, landed and accepted by CI.
+3. Jim's go for the cut.
+4. The version commit (`src/Version.php`, `project.json`, `docs/VERSIONING.md`, the pinned value in `tests/tooling/test_version.py`, the release notes made final) and its CI acceptance on both legs and Baseline.
+5. The annotated tag `v1.0.0-rc.1` on that accepted commit, on Jim's go; then the release package built from the tag, twice with the same SHA-256, and attached nowhere until Jim says where.
+
+Nothing else is a blocker for the tag. The open items a host or player can hit (S5, S11, the stale form tokens after signing in again, the recorded 1.1.2 behaviors) ship as known issues in the release notes.
 
 Found during Phase 6 (not yet scheduled to a task unless it says so):
 
@@ -271,14 +281,19 @@ Jim's decisions (2026-11-06):
 3. No-shell hosts: build a token-gated web install and upgrade page and a secret-protected web maintenance (cron) request. Design and security review first, Jim approves, then build. The 1.1.2 web installer stays 403; this is a new surface, not that one.
 4. Proposed by the command chat, open for Jim to overturn: S11 (password recovery, email verification) is a documented known limitation for rc.1 and a 1.0.0 blocker.
 
+Jim's decisions (2026-11-07):
+
+1. rc.1 ships only the sample server rules in `docs/hosting/`. No active `.htaccess`.
+2. S11 (account recovery and email verification) is a known limitation for rc.1 and a blocker for 1.0.0 (decision 4 above, confirmed). Until it ships, `requirevalidemail` stays off and locked (task 7).
+
 The gap list (IDs, scope, tests and sizes in the review). Each item is ticked when the task that closes it is accepted:
 
 BLOCKER for `1.0.0-rc.1`:
 
 - [x] B1: Fix the 500s the crawl found: the Warriors Online list (`list.php`) whenever a dead player is online, and `stats.php?op=referers` and `op=graph` on MySQL 8.4 (S). Task 2.
 - [x] B2: Write the host guide, with sample web server rules: docroot and denied paths, the config file's place, owner and mode, PHP version, extensions and production settings, HTTPS, cron, mail, logs, backups, upgrades, `sourceurl`, what to upload; both the shell path and the web path (M). Task 6 (`docs/HOST-GUIDE.md`).
-- [ ] B3: Refresh the front-door docs: `README.md`, `docs/VERSIONING.md`, `docs/SECURITY-STATUS.md`, `docs/MODULE-POLICY.md`, `project.json`'s `phase` (S). Task 7.
-- [ ] B4: Prepare the rc.1 cut, stopping before the tag: release notes from `docs/CHANGES-FROM-1.1.2.md`, the tag message, the version rule for `main` after a tag, the cut checklist (S). Task 7.
+- [ ] B3: Refresh the front-door docs: `README.md`, `docs/VERSIONING.md`, `docs/SECURITY-STATUS.md`, `docs/MODULE-POLICY.md`, `project.json`'s `phase` (S). Task 7: done, with `SECURITY.md`'s hosting banner; `project.json`'s `phase` is left for the version commit (no test reads it). Ticked when task 7 is accepted.
+- [ ] B4: Prepare the rc.1 cut, stopping before the tag: release notes from `docs/CHANGES-FROM-1.1.2.md`, the tag message, the version rule for `main` after a tag, the cut checklist (S). Task 7: done (`docs/RELEASE-NOTES-1.0.0-rc.1.md`, draft; `docs/RC-CUT-CHECKLIST.md`; `docs/VERSIONING.md`), with the release package script. Ticked when task 7 is accepted.
 - [x] S1: Security headers (frame protection, `nosniff`, Referrer-Policy), then a Content Security Policy as far as task 3 gets it (S, then M). Task 3.
 - [x] S2: Refuse direct requests to internal PHP files (`lib/`, `src/`, `modules/`) with a 404 (M). Task 3.
 - [x] S3: The no-shell path: a token-gated web install and upgrade page and a secret-protected web maintenance request (L). Tasks 4, 5a (web maintenance) and 5b (the setup page).
@@ -286,14 +301,14 @@ BLOCKER for `1.0.0-rc.1`:
 - [x] S6: Declare `ext-ctype` and `ext-filter` in `composer.json` (S). Task 3.
 - [x] S7: The first administrator's flags: 1.1.2's set less the removed surfaces', recorded in the change ledger (S). Task 2.
 - [x] S8: Pin the CI runner to `ubuntu-24.04` and move `actions/checkout` and `shivammathur/setup-php` to Node 24 releases (S). Task 2.
-- [ ] S9: Legal review of the attribution wording and the AGPL question (Jim and a lawyer). Task 7 prepares the packet.
+- [ ] S9: Legal review of the attribution wording and the AGPL question (Jim and a lawyer). Packet ready, awaiting counsel (`docs/LEGAL-REVIEW-PACKET-20261107.md`, task 7).
 - [x] S12: Let the game read its config from outside the docroot (S). Task 3.
 
 SHOULD before 1.0.0, not scheduled:
 
 - [ ] S5: Labels and 44px tap targets on the pages the crawl found (S).
 - [ ] S10: A guide for module authors (S).
-- [ ] S11: Mail, account recovery and email verification (L; a public hosting gate). Proposed: a documented known limitation for rc.1 and a 1.0.0 blocker (decision 4).
+- [ ] S11: Mail, account recovery and email verification (L; a public hosting gate). A known limitation for rc.1 and a blocker for 1.0.0 (Jim, 2026-11-07).
 - [ ] S13: Bring `docs/SECURITY-STATUS.md` up to date as a living record (S).
 
 The 10 NICE items (N1 to N10) are listed in the review, not here, and are not scheduled.

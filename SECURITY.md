@@ -1,8 +1,10 @@
 # Security
 
-**NOT APPROVED FOR PUBLIC GAME HOSTING**
+**NOT RELEASED. NOT CERTIFIED FOR PUBLIC GAME HOSTING.**
 
-This repository contains vulnerable historical application source. A public repository is not a public game deployment. Do not run the historical baseline on an Internet-facing server, including a temporary demo hostname.
+No Resurrection release has been cut. `main` is `1.0.0-dev`. The first test build, `1.0.0-rc.1`, is meant for hosts to try, with the limitations its [release notes](docs/RELEASE-NOTES-1.0.0-rc.1.md) list (no account recovery or email verification among them), and with the [host guide](docs/HOST-GUIDE.md)'s rules. It has had no independent security review, and the project's own public hosting gates ([ROADMAP.md](ROADMAP.md), "Public hosting") are not all met: `project.json` keeps `public_game_hosting_approved` at `false`.
+
+This repository also keeps the vulnerable historical 1.1.2 source, unchanged, under the tag `historical-source-1.1.2`. Never run it on an Internet-facing server, including a temporary demo hostname.
 
 Read [security status](docs/SECURITY-STATUS.md) and [lab safety](lab/historical-1.1.2/README.md). No historical audit finding is considered fixed by repository setup, containers or a successful HTTP response.
 

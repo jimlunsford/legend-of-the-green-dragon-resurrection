@@ -1,6 +1,6 @@
 # Legend of the Green Dragon - Resurrection
 
-**Modern core engineering in progress. No Resurrection version or release has been assigned.**
+**Release readiness (Phase 6). No Resurrection release has been cut yet: `main` is version `1.0.0-dev`, and the first test build, `1.0.0-rc.1`, waits on the maintainer's go and on legal review.**
 
 **The historical source contains known high-severity security defects and unsupported runtime assumptions. Do not deploy the historical baseline to the public Internet.**
 
@@ -8,13 +8,13 @@
 
 A modern continuation of Legend of the Green Dragon 1.1.2 Dragonprime Edition with bundled maintenance fixes, in PHP, so that other people can host it.
 
-Phases 1 to 4 modernized the implementation and kept the game as it was: runtime compatibility, security, maintainability, testing, database behavior and selected module support. Since 2026-10-30 gameplay, text and the interface may change too, one deliberate and recorded change at a time; the current phase gives the game a new interface and original art. See [ROADMAP.md](ROADMAP.md).
+Phases 1 to 4 modernized the implementation and kept the game as it was: runtime compatibility, security, maintainability, testing, database behavior and selected module support. Since 2026-10-30 gameplay, text and the interface may change too, one deliberate and recorded change at a time ([changes from 1.1.2](docs/CHANGES-FROM-1.1.2.md)). Phase 5 gave the game one new interface and original art. The current phase, Phase 6, closes what stands between `main` and the first test build. See [ROADMAP.md](ROADMAP.md).
 
 ## What this is not
 
 - Not the original LoGD project or an official DragonPrime continuation.
 - Not endorsed by the original authors.
-- Not currently production-ready or approved for public game hosting.
+- Not released yet, and not certified for public game hosting: the first test build is meant for hosts to try, with the known limitations in its [release notes](docs/RELEASE-NOTES-1.0.0-rc.1.md); the project's own public hosting gates are in [ROADMAP.md](ROADMAP.md), "Public hosting".
 - Not a reconstruction of an exact old server, player community or historical database.
 
 ## Historical source
@@ -27,7 +27,7 @@ The original 11 preservation commits and exact 417-file core tree remain reachab
 
 ## Play it on your own computer
 
-Local use only, not for hosting. With Docker (Compose v2.24 or newer) and Python 3:
+Local use only, not for hosting (to host it, follow the [host guide](docs/HOST-GUIDE.md)). With Docker (Compose v2.24 or newer) and Python 3:
 
 ```sh
 python3 scripts/local-play.py up      # start the game; the first time, install it
@@ -54,10 +54,13 @@ composer check
 vendor/bin/phpstan analyse -c phpstan-new.neon
 ```
 
-The integrity commands do not execute the application. The modern CI matrix also performs a real strict fresh installation, installs all 24 bundled modules inactive, and verifies account creation, authentication, session rotation, village rendering, commentary moderation and logout. See the phase-2 checkpoint for exact evidence and remaining security/module gates. PHP 5 lab work is deferred; public hosting remains unapproved.
+The integrity commands do not execute the application. CI (Modern core, on PHP 8.4 with MariaDB 11.4 and PHP 8.5 with MySQL 8.4) also runs the release upgrade check, PHPUnit, both PHPStan gates and the HTTP suite in four shards: a strict fresh install, account creation, sign-in, play, the 24 bundled modules, the admin editors, the web setup page and web maintenance. Each task's evidence doc records its runs. PHP 5 lab work is deferred.
 
 ## Project documents
 
+- [Roadmap](ROADMAP.md) and [changes from 1.1.2](docs/CHANGES-FROM-1.1.2.md)
+- [Host guide: running the game on a web server](docs/HOST-GUIDE.md)
+- [Release notes for 1.0.0-rc.1 (draft; not cut)](docs/RELEASE-NOTES-1.0.0-rc.1.md) and the [cut checklist](docs/RC-CUT-CHECKLIST.md)
 - [Versioning](docs/VERSIONING.md)
 - [Licensing and provenance](docs/LICENSING-AND-PROVENANCE.md)
 - [Notice](NOTICE) and [third-party licenses](docs/THIRD-PARTY-LICENSES.md)
@@ -71,8 +74,10 @@ The integrity commands do not execute the application. The modern CI matrix also
 - [Foundation checkpoint, historical record](docs/FOUNDATION-CHECKPOINT-20260913.md)
 - [Modern core phase-1 checkpoint](docs/MODERN-CORE-CHECKPOINT-20260913.md)
 - [Modern core phase-2 checkpoint](docs/MODERN-CORE-CHECKPOINT-20260913-PHASE2.md)
-- [Host guide: running the game on a web server](docs/HOST-GUIDE.md)
-- [Modern local installation](docs/MODERN-INSTALLATION.md)
+- [Resurrection UI: what Phase 5 changed](docs/PHASE5-SUMMARY-20261105.md) and the [UI design spec](docs/UI-DESIGN-SPEC.md)
+- [Release readiness review (Phase 6)](docs/PHASE6-RC-READINESS-20261106.md)
+- [Legal review packet (for counsel)](docs/LEGAL-REVIEW-PACKET-20261107.md)
+- [Modern local installation and development](docs/MODERN-INSTALLATION.md)
 - [Raw request contract](docs/REQUEST-SEMANTICS.md)
 
 ## Licensing
@@ -93,4 +98,4 @@ Original game design and code: **Eric Stevens and JT Traub**. Continued developm
 
 ## Modern core work
 
-Modernization is in progress on `modernization/core-modernization`. The engineering/driver tests do not establish an installable or publicly hostable game. See [platform targets](docs/SUPPORTED-PLATFORMS.md) and [validation scope](docs/ENGINEERING-VALIDATION.md). PHP 5 characterization is deferred during this phase.
+Work happens on `main`. `modernization/core-modernization` is a historical branch (PR #1, merged on 2026-10-23). The game installs fresh, with a shell (`php scripts/install.php`) or without one (`setup.php`), and upgrades with the upgrade steps; there is no 1.1.2 migration. See [platform targets](docs/SUPPORTED-PLATFORMS.md), the [host guide](docs/HOST-GUIDE.md) and [validation scope](docs/ENGINEERING-VALIDATION.md). PHP 5 characterization is deferred.

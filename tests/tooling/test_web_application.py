@@ -1679,6 +1679,54 @@ echo "locked\\n";fflush(STDOUT);$change=json_decode(fgets(STDIN),true,512,JSON_T
             for row in module_saved: self.query('INSERT INTO module_settings(modulename,setting,value) VALUES (?,?,?)',['cedrikspotions',row['setting'],row['value']])
             self.query('UPDATE accounts SET superuser=? WHERE acctid=?',[original,player]); self.query('UPDATE modules SET active=0')
 
+    def test_requirevalidemail_is_locked_off_http(self):
+        # Phase 6 task 7 (S11 interim): Game Settings shows requirevalidemail off and locked and refuses a form that sends
+        # it, changing nothing; the game treats it as off whatever the settings row holds, so create.php still makes an
+        # account with the row forced to 1.
+        player=self.query('SELECT acctid FROM accounts WHERE login=?',['WebPlayer'])[0]['acctid']
+        original=self.query('SELECT superuser FROM accounts WHERE acctid=?',[player])[0]['superuser']
+        core_saved=self.query('SELECT setting,value FROM settings ORDER BY setting')
+        login,password='LockedEmailPlayer','Synthetic locked email player password'
+        self.query('UPDATE accounts SET superuser=128 WHERE acctid=?',[player])
+        call=self._security_client()
+        def request(url,fields=None): self._security_allow(player,url); return call(url,fields)
+        settings=lambda: self.query('SELECT setting,value FROM settings ORDER BY setting')
+        try:
+            base,save='configuration.php','configuration.php?op=save'
+            status,body=request(base); self.assertEqual(200,status,body[:2000])
+            locked=re.search(r'<p class="rz-setting-locked"><label>Require users to validate their email address <select disabled[^>]*>'
+                             r'<option selected>No</option></select></label><span class="rz-setting-locked-note" id="([^"]+)">([^<]+)</span></p>',body)
+            self.assertIsNotNone(locked,'requirevalidemail is not shown locked')
+            self.assertIn('aria-describedby="'+locked.group(1)+'"',body)
+            self.assertIn('Locked off.',locked.group(2)); self.assertIn('Known limitations',locked.group(2))
+            fields=dict(self._user_editor_form(body,save)); self.assertNotIn('requirevalidemail',fields)
+            # A form that turns it on (or sends it at all) is refused, and no setting changes.
+            for value in ['1','0']:
+                with self.subTest(sent=value):
+                    _,body=request(base); before=settings()
+                    status,_=request(save,{**dict(self._user_editor_form(body,save)),'requirevalidemail':value})
+                    self.assertEqual(400,status); self.assertEqual(before,settings())
+            # The form as shown still saves.
+            _,body=request(base); status,result=request(save,dict(self._user_editor_form(body,save))); self.assertEqual(200,status,result[:1500])
+            # A row left at 1 does not block account creation.
+            self.query("INSERT INTO settings(setting,value) VALUES ('requirevalidemail','1') ON DUPLICATE KEY UPDATE value='1'")
+            self.query("INSERT INTO settings(setting,value) VALUES ('allowcreation','1') ON DUPLICATE KEY UPDATE value='1'")
+            visitor=self._security_client(login=None)
+            status,body=visitor('create.php'); self.assertEqual(200,status,body[:2000]); self.assertNotIn('Account creation is unavailable',body)
+            csrf=re.search(r'name=[\'"]csrf_token[\'"] value=[\'"]([a-f0-9]{64})',body).group(1)
+            status,body=visitor('create.php?op=create',{'csrf_token':csrf,'name':login,'pass1':password,'pass2':password,'email':'locked@example.invalid','sex':'0'})
+            self.assertEqual(200,status,body[:2000]); self.assertIn('Your account was created',body)
+            self.assertEqual(1,len(self.query('SELECT acctid FROM accounts WHERE login=?',[login])))
+            # Game Settings still shows it locked off with the row at 1.
+            status,body=request(base); self.assertEqual(200,status,body[:2000])
+            self.assertRegex(body,r'Require users to validate their email address <select disabled[^>]*><option selected>No</option>')
+        finally:
+            for row in self.query('SELECT acctid FROM accounts WHERE login=?',[login]):
+                self.query('DELETE FROM accounts_output WHERE acctid=?',[row['acctid']]); self.query('DELETE FROM accounts WHERE acctid=?',[row['acctid']])
+            self.query('DELETE FROM settings')
+            for row in core_saved: self.query('INSERT INTO settings(setting,value) VALUES (?,?)',[row['setting'],row['value']])
+            self.query('UPDATE accounts SET superuser=? WHERE acctid=?',[original,player])
+
     def test_shared_mount_preferences_http(self):
         player=self.query('SELECT acctid FROM accounts WHERE login=?',['WebPlayer'])[0]['acctid']
         original=self.query('SELECT superuser FROM accounts WHERE acctid=?',[player])[0]['superuser']

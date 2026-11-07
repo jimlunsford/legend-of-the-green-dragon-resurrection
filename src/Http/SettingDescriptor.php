@@ -19,7 +19,9 @@ final class SettingDescriptor
             [$form, $default] = array_pad(explode('|', $declaration, 2), 2, null);
             $parts = array_map('trim', explode(',', $form));
             $type = $parts[1] ?? '';
-            if (in_array($type, ['title','note','viewonly','invisible','hidden','bitfield'], true)) continue;
+            // A locked setting (Phase 6 task 7) is held at one value and never saved: undeclared here, so a form that
+            // sends it is refused (patch()). The settings editor shows it locked.
+            if (in_array($type, ['title','note','viewonly','invisible','hidden','bitfield','locked'], true)) continue;
             $descriptor = ['label'=>$parts[0], 'type'=>$type, 'default'=>$default, 'min'=>-2147483647, 'max'=>2147483647, 'length'=>255];
             if (in_array($type, ['', 'text','string','textarea'], true)) {
                 $descriptor['type'] = 'string';

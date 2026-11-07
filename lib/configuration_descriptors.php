@@ -51,7 +51,8 @@ function resurrection_core_layout(): array {
 		"maxrestartgold"=>"Maximum amount of gold a player will get after a dragonkill,int",
 		"maxrestartgems"=>"Maximum number of gems a player will get after a dragonkill,int",
 		"requireemail"=>"Require users to enter their email address,bool",
-		"requirevalidemail"=>"Require users to validate their email address,bool",
+		// Phase 6 task 7: held off (lib/settings.php, resurrection_locked_settings()); shown locked, never saved.
+		"requirevalidemail"=>"Require users to validate their email address,locked",
 		"blockdupeemail"=>"One account per email address,bool",
 		"spaceinname"=>"Allow spaces in user names,bool",
 		"allowoddadminrenames"=>"Allow admins to enter 'illegal' names in the user editor,bool",

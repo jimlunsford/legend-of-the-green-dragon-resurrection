@@ -91,6 +91,21 @@ def matches(item, path):
     return path == item
 
 
+def upload_files():
+    """The files the guide's "Upload these" list takes, sorted: a folder entry its files, a file entry that file, and a
+    pattern entry (`*.php`, "every PHP file in the top folder") the top folder's files it matches. The release package
+    (scripts/build-release-package.py) must hold exactly these (tests/tooling/test_release_package.py)."""
+    upload = entries(guide(), '### Upload these')
+    taken = set()
+    for path in repository_files():
+        if not (ROOT / path).is_file():
+            continue
+        for item in upload:
+            if ('*' in item and '/' not in path and fnmatch.fnmatchcase(path, item)) or ('*' not in item and matches(item, path)):
+                taken.add(path)
+    return sorted(taken)
+
+
 def shipped_code():
     """The text of everything the game ships and runs (no tests, docs or development tools)."""
     parts = []

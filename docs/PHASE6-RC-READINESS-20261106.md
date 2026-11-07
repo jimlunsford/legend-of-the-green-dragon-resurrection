@@ -602,3 +602,26 @@ Shard job durations (start to finish of each job), shards 1 to 4:
 
 The longest, 22:02, is under the 30-minute mark. Task 1 (`ea8bb3d`) is accepted. Jim's decisions on the gap list and
 the task order are in `ROADMAP.md` and `PHASE6-TASK2-FIXES-20261106.md`.
+
+## Decisions (recorded 2026-11-07, Phase 6 task 7)
+
+Jim, 2026-11-07:
+
+1. rc.1 ships only the sample server rules in `docs/hosting/`. No active `.htaccess` (`PHASE6-TASK6-HOST-GUIDE-20261107.md`,
+   the question at its end, option A).
+2. S11 (account recovery and email verification) is a known limitation for rc.1 and a blocker for 1.0.0. This confirms
+   decision 4 of 2026-11-06 in `ROADMAP.md`, which the command chat had proposed. Until S11 ships, Game Settings keeps
+   `requirevalidemail` off and locked (task 7).
+
+## Status of B3, B4 and S9 (recorded 2026-11-07, Phase 6 task 7)
+
+The gap list above stays as written. Task 7 (`PHASE6-TASK7-RC-MATERIALS-20261107.md`) closes or advances three rows:
+
+| ID | Status after task 7 | Where |
+|---|---|---|
+| B3 | Done, pending task 7's CI acceptance. `README.md` (status, branch, phase, document list), `VERSIONING.md` (the gameplay sentence), `SECURITY-STATUS.md` (PR #1, what is open today; the full living record stays S13), `MODULE-POLICY.md` (the certification paragraph) and a hosting banner in `SECURITY.md` match the code. `project.json`'s `phase` is not changed: no test reads it, and the cut's version commit sets it | `README.md`, `docs/VERSIONING.md`, `docs/SECURITY-STATUS.md`, `docs/MODULE-POLICY.md`, `SECURITY.md` |
+| B4 | Done up to the tag, pending task 7's CI acceptance. Draft release notes with operator notes and known issues; the cut checklist with the version commit, the checks before and after, the CI acceptance rule, the package step and the tag message; the rule for `main`'s version after a tag. The version string is unchanged (`1.0.0-dev`) | `docs/RELEASE-NOTES-1.0.0-rc.1.md`, `docs/RC-CUT-CHECKLIST.md`, `docs/VERSIONING.md`, `scripts/build-release-package.py` |
+| S9 | Packet ready, awaiting counsel. Facts and numbered questions only, no conclusions and no wording changes | `docs/LEGAL-REVIEW-PACKET-20261107.md` |
+
+What stands between `main` and the `v1.0.0-rc.1` tag is listed in `ROADMAP.md` (Phase 6, after task 7) and in
+`docs/RC-CUT-CHECKLIST.md`.

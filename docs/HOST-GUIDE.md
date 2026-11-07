@@ -8,8 +8,10 @@ The steps are short. Where a step depends on your kind of host, it says so. Word
 commands, settings or values to type exactly.
 
 **Known limitations of a hosted game (rc.1).** There is no password recovery by email: an administrator resets a
-password in the user editor. There is no email verification: the setting `requirevalidemail` must stay off (when it
-is on, nobody can create an account). Mail from the game is best effort ("Mail", below). The project's own public
+password in the user editor. There is no email verification: Game Settings shows `requirevalidemail` ("Require users
+to validate their email address") locked off, and the game treats it as off whatever the database holds, because with
+it on nobody could create an account. Both come with S11, a blocker for 1.0.0. Mail from the game is best effort
+("Mail", below). The project's own public
 hosting gates are listed in `ROADMAP.md`, "Public hosting".
 
 ## 1. What you need
@@ -43,7 +45,9 @@ A shell is not required. Every step below has a way through the panel.
 
 ## 2. What to upload
 
-Take the files from the release (or from a clone of the repository). Upload only what the game needs.
+Take the files from the release package (or from a clone of the repository). Upload only what the game needs. A
+release's package, `legend-of-the-green-dragon-resurrection-<version>.zip`, holds exactly the list below and nothing
+else: unzip it into the empty game folder. From a clone, copy the list yourself.
 
 ### Upload these
 
@@ -69,12 +73,15 @@ The game does not use these. If one is uploaded by mistake, the server rules in 
   `composer install` in the site's folder.
 - `.git/`, `.github/`, `.gitignore`: the project's history and its own automation.
 - `tests/`, `lab/`, `local/`, `docs/`: tests, the historical lab, local play and the project's documents.
-- `scripts/art/`, `scripts/lint-php.py`, `scripts/local-play.py`, `scripts/release-upgrade-check.py`,
-  `scripts/tooling-shards.py`, `scripts/validate-project.py`, `scripts/verify-historical-baseline.py`: the
-  project's own tools (everything in the scripts folder but the two commands above).
+- `scripts/art/`, `scripts/build-release-package.py`, `scripts/lint-php.py`, `scripts/local-play.py`,
+  `scripts/release-upgrade-check.py`, `scripts/tooling-shards.py`, `scripts/validate-project.py`,
+  `scripts/verify-historical-baseline.py`: the project's own tools (everything in the scripts folder but the two
+  commands above).
 - `composer.json`, `composer.lock`, `project.json`, `phpunit.xml`, `phpstan.neon`, `phpstan-new.neon`,
   `phpstan-baseline.neon`: development files.
-- `*.md`: the project's Markdown documents (`README.md`, `ROADMAP.md`, `CLAUDE.md` and the others).
+- `*.md`: the project's Markdown documents in the top folder (`README.md`, `ROADMAP.md`, `CLAUDE.md` and the others).
+  The short notes inside `assets/` and `upgrades/` come with their folders: the game needs `upgrades/` to exist, even
+  with no upgrade step in it yet, and the server rules refuse Markdown anywhere.
 
 Upload into a new, empty folder. Leaving the files of an older copy beside the new ones mixes two versions.
 
@@ -278,8 +285,8 @@ Open Game Settings (`configuration.php`, in the Grotto) as the administrator:
   its pages break under `enforce`. `report-only` blocks nothing and makes the browser report what it would block in
   its console; `off` sends no policy. The other protections (frame, content type, referrer) are sent whatever it
   says.
-- **Require users to validate their email address** (`requirevalidemail`): leave it off (see the known limitations
-  at the top).
+- **Require users to validate their email address** (`requirevalidemail`): locked off; Game Settings shows it
+  locked and refuses a change (see the known limitations at the top).
 
 ## 7. Daily maintenance
 

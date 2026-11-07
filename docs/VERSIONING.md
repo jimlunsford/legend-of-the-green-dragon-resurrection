@@ -16,13 +16,19 @@ The footer shows "Version: Resurrection 1.0.0-dev, based on LoGD 1.1.2 Dragonpri
 - **MINOR**: a feature or improvement that upgrades cleanly from the previous version, with the upgrade command and no other operator action.
 - **PATCH**: fixes only. No new feature and no changed behavior beyond the fix.
 
-Gameplay keeps 1.1.2's behavior in every version (`docs/MODERNIZATION-PRINCIPLES.md`); a version number never licenses a rebalance.
+Gameplay, balance, text and the interface change only when a task decides it, one recorded change at a time: each change from 1.1.2 is in `docs/CHANGES-FROM-1.1.2.md` with the old behavior, the new behavior and why (the direction since 2026-10-30, `docs/PHASE5-TASK1-DIRECTION-20261030.md`). A gameplay change takes its number by the rules above, like any other change; the number never decides one.
 
 ## Development, test builds and releases
 
 - **`1.0.0-dev`** is the version while development leads toward the first release. `-dev` sorts before every `-rc` of the same number, so a development build never looks newer than a test build of its own release. It stays `1.0.0-dev` until the first test build.
 - **`1.0.0-rc.N`** is a test build of 1.0.0 (`rc.1`, `rc.2`, ...). Each one is a candidate for the release.
 - **`1.0.0`** is the first release. After it, development moves to the next number with `-dev` (for example `1.1.0-dev`).
+
+### `main`'s version after a tag
+
+- **After a test build's tag** (`v1.0.0-rc.N`), `main` keeps `1.0.0-rc.N`. It never goes back to `1.0.0-dev`, which sorts before every rc and would make a newer build look older than the tagged one. Only the tagged commit is the test build: a build from a later commit says `1.0.0-rc.N` too, and the footer is not proof of which commit runs. The next cut's version commit sets `1.0.0-rc.(N+1)`, or `1.0.0` for the release.
+- **After the release's tag** (`v1.0.0`), the first commit on `main` sets the next number with `-dev` (`1.1.0-dev`, or `1.0.1-dev` when only fixes are planned), as above.
+- The version changes only in a version commit: a cut's, on an explicit release decision, or the one right after a release's tag (`docs/RC-CUT-CHECKLIST.md`).
 
 A test build or release gets a tag `vMAJOR.MINOR.PATCH` or `vMAJOR.MINOR.PATCH-rc.N` (for example `v1.0.0-rc.1`), only on an explicit release decision. No such tag exists yet. `-dev` versions are never tagged.
 

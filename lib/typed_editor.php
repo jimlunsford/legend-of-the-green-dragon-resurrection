@@ -130,7 +130,7 @@ function resurrection_settings_save(string $namespace,array $schema): void {
  * @return list<array{title:string,keys:list<string>}>
  */
 function resurrection_editor_sections(array $layout, array $schema): array {
-    $sections=[]; $current=null;
+    $sections=[]; $current=null; $locked=resurrection_editor_locked($layout);
     foreach ($layout as $key=>$declaration) {
         if (is_array($declaration)) $declaration=$declaration[0] ?? '';
         if (!is_string($key)) {
@@ -138,7 +138,7 @@ function resurrection_editor_sections(array $layout, array $schema): array {
             if (($parts[1] ?? '')==='title') { $sections[]=['title'=>$parts[0],'keys'=>[]]; $current=count($sections)-1; }
             continue;
         }
-        if (!isset($schema[$key])) continue;
+        if (!isset($schema[$key]) && !isset($locked[$key])) continue;
         if ($current===null) { $sections[]=['title'=>'Settings','keys'=>[]]; $current=count($sections)-1; }
         $sections[$current]['keys'][]=$key;
     }
@@ -164,24 +164,63 @@ function resurrection_editor_form(string $url,string $scope,string $context,arra
             $x=$n+1;
             rawoutput("<div id='showFormTable$x' class='rz-form-section' role='tabpanel' aria-labelledby='showFormButton$x'>"
                 ."<h2 class='rz-form-section-title'>".resurrection_plain_text($titles[$x])."</h2>");
-            resurrection_editor_fields(array_intersect_key($schema, array_flip($section['keys'])), $values);
+            resurrection_editor_fields($schema, $values, $section['keys'], resurrection_editor_locked($layout));
             rawoutput('</div>');
         }
         rawoutput('<button class="button">Save</button></form>'.resurrection_form_script());
         return;
     }
-    resurrection_editor_fields($schema, $values);
+    resurrection_editor_fields($schema, $values, $sections[0]['keys'] ?? array_keys($schema), resurrection_editor_locked($layout));
     rawoutput('<button class="button">Save</button></form>');
 }
 
 /**
- * Each setting's row: its label around its control.
+ * The layout's locked settings (Phase 6 task 7; lib/settings.php, resurrection_locked_settings()): key => label. Only a
+ * setting the game holds at one value may be declared locked.
+ *
+ * @param array<int|string,mixed> $layout
+ * @return array<string,string> */
+function resurrection_editor_locked(array $layout): array {
+    $locked=[]; $held=resurrection_locked_settings();
+    foreach ($layout as $key=>$declaration) {
+        if (is_array($declaration)) $declaration=$declaration[0] ?? '';
+        $parts=array_map('trim', explode(',', (string)$declaration));
+        if (!is_string($key) || ($parts[1] ?? '')!=='locked') continue;
+        if (!array_key_exists($key, $held)) throw new DomainException('A locked setting the game does not hold.');
+        $locked[$key]=$parts[0];
+    }
+    return $locked;
+}
+
+/** Why a locked setting is locked, in one line for Game Settings. */
+function resurrection_editor_locked_reason(string $key): string {
+    return match ($key) {
+        'requirevalidemail' => 'Locked off. The game cannot verify email addresses yet, so with this on nobody could create an account. This is a known limitation of this version: see "Known limitations" in the host guide (docs/HOST-GUIDE.md).',
+        default => 'Locked.',
+    };
+}
+
+/**
+ * Each setting's row, in the order given: its label around its control. A locked setting shows the value the game holds
+ * it at in a disabled control with no name, so a browser never sends it, and the line saying why.
  *
  * @param array<string,array<string,mixed>> $schema
- * @param array<string,mixed> $values */
-function resurrection_editor_fields(array $schema,array $values): void {
+ * @param array<string,mixed> $values
+ * @param list<string>|null $keys the settings to show, in order (null: every one in the schema)
+ * @param array<string,string> $locked resurrection_editor_locked() */
+function resurrection_editor_fields(array $schema,array $values,?array $keys=null,array $locked=[]): void {
     $escape=static fn($v)=>htmlspecialchars((string)$v,ENT_QUOTES|ENT_SUBSTITUTE,'UTF-8');
-    foreach ($schema as $key=>$descriptor) {
+    foreach ($keys ?? array_keys($schema) as $key) {
+        if (isset($locked[$key])) {
+            $held=resurrection_locked_settings()[$key];
+            $id='rz-locked-'.$key;
+            rawoutput('<p class="rz-setting-locked"><label>'.$escape($locked[$key]).' <select disabled aria-describedby="'.$escape($id).'">'
+                .'<option selected>'.($held==='1' ? 'Yes' : 'No').'</option></select></label>'
+                .'<span class="rz-setting-locked-note" id="'.$escape($id).'">'.$escape(resurrection_editor_locked_reason($key)).'</span></p>');
+            continue;
+        }
+        if (!isset($schema[$key])) continue;
+        $descriptor=$schema[$key];
         $value=$values[$key] ?? $descriptor['default'];
         rawoutput('<p><label>'.$escape($descriptor['label']).' ');
         if (in_array($descriptor['type'],['bool','enum'],true)) {

@@ -32,4 +32,4 @@ Archived `icecaravan` requires `icetown >= 1.3`, but archived `icetown` reports 
 
 ## Modern engineering phase
 
-The same 24 bundled entrypoints remain. They receive PHP syntax checks during core modernization. Hook registration, dependencies, activation enforcement, preferences and module DDL are not yet certified. The archived module set remains outside this phase.
+The same 24 bundled entrypoints remain. Phase 3 certified all 24: install, activate, deactivate, reactivate, reinstall, settings and preferences round trips, their hooks, events and gameplay changes, and all 24 active together (`BUNDLED-MODULE-CERTIFICATION.md`, 24 PASS). Every module manager operation is a POST with CSRF and a one-use intent, only bundled modules install, and dependencies and activation are enforced (`MODULE-MANAGER-AUTHORITY-20261017.md`). A fresh install activates the 23 recommended modules by default (`PHASE4-TASK1B-FRESH-INSTALL-20261029.md`). Module code is still trusted PHP: the certification covers these 24 only, and any other module needs its own admission review under this policy. The archived module set remains outside the project; none is imported.

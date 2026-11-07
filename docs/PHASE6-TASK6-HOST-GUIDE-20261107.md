@@ -265,3 +265,14 @@ only the samples in `docs/hosting/`?
 
 Recommendation: A for rc.1, with the guide's check after install ("open `dbconnect.php` and `lib/`") so each host sees
 in a minute whether their server refuses them. Revisit after rc.1 feedback from real hosts.
+
+## Acceptance and decision (recorded in Phase 6 task 7, 2026-11-07)
+
+Task 6 is **accepted at `5f2d951`**:
+
+- Modern core 42329102594: **SUCCESS**, 12/12 jobs, every job on `ubuntu-24.04`. PHP 8.4 / MariaDB 11.4 `http` shards
+  19:53, 20:52, 18:53, 19:27; PHP 8.5 / MySQL 8.4 `http` shards 15:12, 21:03, 18:25, 17:47.
+- Baseline integrity 42329102592: **SUCCESS**.
+
+Jim's answer to the question above (2026-11-07): **A, only the samples.** rc.1 ships the sample server rules in
+`docs/hosting/` and no active `.htaccess`.

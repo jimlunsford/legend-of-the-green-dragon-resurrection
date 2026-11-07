@@ -1,8 +1,8 @@
 # Security status
 
-**NOT APPROVED FOR PUBLIC GAME HOSTING**
+**NOT CERTIFIED FOR PUBLIC GAME HOSTING** (no release cut yet; what is open today: the section "2026-11-07: open today" at the end)
 
-Updated 2026-09-13 for draft PR #1. This ledger describes the modernization branch, not unchanged foundation main. The inherited audit remains the reference. A disabled endpoint is not a security certification for the rest of the application.
+Updated 2026-09-13 for draft PR #1 (merged on 2026-10-23; the rows below are kept as recorded then). This ledger describes the modernization branch, not unchanged foundation main. The inherited audit remains the reference. A disabled endpoint is not a security certification for the rest of the application.
 
 | ID | Status | Remediation/evidence | Residual risk or next work |
 |---|---|---|---|
@@ -27,7 +27,7 @@ Known security defects are not desired gameplay. Historical originals remain in 
 
 Before public hosting: finish remaining SQL/output/authorization/CSRF routes, replace or constrain module/buff/combat eval paths, certify active bundled hooks and scheduler recovery, implement modern recovery/email delivery, and verify private configuration/internal-file denial, TLS/headers, abuse controls, deployment isolation and restore procedures. These are remaining gates even though the base installation/authentication milestone now passes. Independent security review remains required for public readiness.
 
-PR #1 remains open and draft. Public-hosting verdict: **NO**. See [phase-2 checkpoint](MODERN-CORE-CHECKPOINT-20260913-PHASE2.md) and [validation](ENGINEERING-VALIDATION.md); the [previous checkpoint](MODERN-CORE-CHECKPOINT-20260913.md) is retained unchanged.
+PR #1 remained open and draft at that time (it merged on 2026-10-23). Public-hosting verdict: **NO**. See [phase-2 checkpoint](MODERN-CORE-CHECKPOINT-20260913-PHASE2.md) and [validation](ENGINEERING-VALIDATION.md); the [previous checkpoint](MODERN-CORE-CHECKPOINT-20260913.md) is retained unchanged.
 
 ## 2026-10-24: disabled endpoints removed
 
@@ -48,3 +48,36 @@ installed as a module is trusted PHP, only the 24 bundled modules are certified,
 and a production scheduler is a hosting gate. The "Before public hosting" list above is as recorded; its "certify active
 bundled hooks and scheduler recovery" item is now covered for the bundled modules by these rows, and scheduler
 deployment remains with the hosting gates. Public-hosting verdict: still **NO**.
+
+## 2026-11-07: open today (Phase 6 task 7, B3)
+
+A short list of what is open at this commit, from the code and the Phase 6 evidence. The full living record, one current
+row per area with its evidence and the hosting gates as a checklist, is S13 (`ROADMAP.md`); the rows above stay as
+recorded.
+
+Closed since the rows above were written (each with its evidence doc):
+
+- S08: every state change is a POST with CSRF, most with a one-use intent (`CORE-ROUTE-SECURITY.md`, Phase 3).
+- S09: the eval sites are removed (`EXPRESSION-EVALUATION-AUDIT.md`); the raw console is gone (2026-10-24 above).
+- Internal files: `lib/`, `src/` and `modules/` answer a direct request with an empty 404; security headers and an
+  enforced Content Security Policy on every response; a clear page for an unreadable configuration; the configuration
+  file outside the docroot through `LOGD_DBCONNECT` (`PHASE6-TASK3-HARDENING-20261106.md`).
+- A host without a shell: the token-gated `setup.php` and the secret web maintenance request
+  (`PHASE6-TASK4-WEB-OPS-DESIGN-20261106.md`, `PHASE6-TASK5A-SERVICES-WEBCRON-20261106.md`,
+  `PHASE6-TASK5B-SETUP-PAGE-20261106.md`); the host guide and sample server rules (`HOST-GUIDE.md`).
+
+Open:
+
+- **Account recovery and email verification (S05; Phase 6 S11).** None exists. Resets are an administrator's action
+  in the user editor. `requirevalidemail` is held off and locked in Game Settings (`PHASE6-TASK7-RC-MATERIALS-20261107.md`).
+  A known limitation for rc.1 and a blocker for 1.0.0 (Jim, 2026-11-07).
+- **Mail is best effort (S11).** PHP `mail()`; a failure is logged and the game goes on (`HOST-GUIDE.md`, "Mail").
+- **Installed module code is trusted PHP (S04).** Only the 24 bundled modules are certified.
+- **Maintenance is not one transaction (S13).** A failed run repeats its date-based cleanups.
+- **Stale form tokens after signing in again during the new day.** The replayed page's buttons answer "Invalid form
+  submission." (403); reloading the page works (`ROADMAP.md`, "Found during Phase 6").
+- **The recorded 1.1.2 behaviors** (`PHASE6-RC-READINESS-20261106.md`, section 8), among them a ban reason shown as raw
+  HTML (staff write it) and an ID ban that clearing the `lgi` cookie evades.
+- **The public hosting gates** (`ROADMAP.md`, "Public hosting"): abuse controls, production TLS, proxy and session
+  configuration on a real host, isolation and least privilege, a restore drill, monitoring, and an independent security
+  review. Public-hosting verdict: still **NO** (`project.json`: `public_game_hosting_approved` is `false`).

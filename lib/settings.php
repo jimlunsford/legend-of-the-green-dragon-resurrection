@@ -49,9 +49,23 @@ function clearsettings(){
 	unset($settings);
 }
 
+/**
+ * Settings the game holds at one value whatever the settings table stores (Phase 6 task 7): getsetting() returns this
+ * value, and Game Settings shows the setting locked and refuses a change (lib/configuration_descriptors.php declares it
+ * "locked"). requirevalidemail: with it on, create.php makes no account, and the email verification it stands for does
+ * not exist (S11, a known limitation of rc.1). The lock goes when S11 ships.
+ *
+ * @return array<string,string> setting => the value it is held at
+ */
+function resurrection_locked_settings(): array {
+	return ['requirevalidemail' => '0'];
+}
+
 function getsetting($settingname,$default){
 	global $settings;
 	global $DB_USEDATACACHE,$DB_DATACACHEPATH;
+	$locked = resurrection_locked_settings();
+	if (array_key_exists((string)$settingname, $locked)) return $locked[(string)$settingname];
 	if ($settingname=="usedatacache") return $DB_USEDATACACHE;
 		elseif ($settingname=="datacachepath") return $DB_DATACACHEPATH;
 	if (!isset($settings[$settingname])) {

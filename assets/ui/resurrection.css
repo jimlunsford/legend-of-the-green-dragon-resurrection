@@ -819,6 +819,9 @@ a.hotmotd { color: var(--accent); }
 .rz-form-section > p > label { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; color: var(--muted); font-weight: var(--weight-ui-medium); }
 .rz-form-section > p > label > input:not([type]) { width: min(100%, 480px); }
 .rz-content .rz-form-section-title { margin-top: 16px; }
+/* A locked setting (Phase 6 task 7): its disabled control dimmed, and the line saying why under it. */
+.rz-setting-locked select:disabled { opacity: 0.6; cursor: not-allowed; }
+.rz-setting-locked-note { display: block; max-width: 60ch; margin-top: 4px; color: var(--muted); font-family: var(--font-ui); font-size: var(--size-small); }
 
 /*
   The MoTD (Phase 5 task 11, lib/motd.php): each item's title in Cinzel, its author and date in --muted, its body in
