@@ -149,6 +149,11 @@ function resurrection_account_mail_on(): bool {
     return resurrection_account_mail_switch() && resurrection_account_mail_blockers() === [];
 }
 
+/** Whether staff accounts may recover their password by mail (account_mail_staff, decision 3 and task 13b; on by default). */
+function resurrection_account_mail_staff_allowed(): bool {
+    return (int)getsetting('account_mail_staff', 1) === 1;
+}
+
 /** Turn the switch on, only when every condition holds; false (nothing changed) otherwise. */
 function resurrection_account_mail_turn_on(): bool {
     if (resurrection_account_mail_blockers() !== []) return false;

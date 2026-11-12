@@ -32,6 +32,10 @@ class MailCapture:
         directory.chmod(0o1777)
         self.path = directory / 'capture.jsonl'
         self.program = directory / 'sendmail'
+        self.answer(exit_code)
+
+    def answer(self, exit_code):
+        """Make the program answer exit_code from now on (0 accepted, else refused); it records every message either way."""
         self.program.write_text('#!' + sys.executable + ' -I\n' + (
             'import json, sys\n'
             'message = sys.stdin.buffer.read().decode("utf-8", "replace")\n'

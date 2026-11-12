@@ -5,7 +5,7 @@ require_once 'lib/typed_editor.php';
 require_once 'lib/configuration_descriptors.php';
 check_su_access(SU_EDIT_CONFIG);
 try {
-    $op = \Resurrection\Http\Input::choice($_GET, 'op', ['', 'save', 'modulesettings', 'webcron', 'webcron_on', 'webcron_off', 'webcron_new', 'accountmail', 'accountmail_test', 'accountmail_on', 'accountmail_off'], '');
+    $op = \Resurrection\Http\Input::choice($_GET, 'op', ['', 'save', 'modulesettings', 'webcron', 'webcron_on', 'webcron_off', 'webcron_new', 'accountmail', 'accountmail_test', 'accountmail_on', 'accountmail_off', 'accountmail_staff_on', 'accountmail_staff_off'], '');
     if (str_starts_with($op, 'webcron')) {
         // Web maintenance (Phase 6 task 5a): every change is a POST with the CSRF token. Turning it on and making a new
         // address both make a new secret, which this page shows once.
@@ -31,7 +31,7 @@ try {
     }
     if (str_starts_with($op, 'accountmail')) {
         // Account mail (Phase 6 task 13a, S11): the status, the test mail to the signed-in administrator's own address,
-        // and the switch. Every change is a POST with the CSRF token and a one-use action token.
+        // the switch, and the staff switch (task 13b). Every change is a POST with the CSRF token and a one-use action token.
         require_once 'lib/account_mail_admin.php';
         require_once 'lib/gamelog.php';
         $acctid = (int)$session['user']['acctid'];

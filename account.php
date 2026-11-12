@@ -1,19 +1,26 @@
 <?php
 define('RESURRECTION_ENTRY', true);
 /**
- * Account mail's page (Phase 6 task 13a, S11 part 1; docs/PHASE6-TASK12-ACCOUNT-MAIL-DESIGN-20261112.md, section 3.3,
- * and its decisions). A link in an account mail opens it with a token:
+ * Account mail's page (Phase 6 tasks 13a and 13b, S11 parts 1 and 2; docs/PHASE6-TASK12-ACCOUNT-MAIL-DESIGN-20261112.md,
+ * sections 3.1 to 3.4, and its decisions). A link in an account mail opens it with a token:
  *
  * - op=open: the token (query string t) is checked (shape, hash, unused, unexpired, at most 5 openings, the account's
  *   authversion unchanged) and exchanged for a 15-minute grant in a new session id, then a 303 to the clean address
- *   op=confirm, with no body. The token is read and removed from the request before the game starts, so no page, form,
- *   session, log, saved page, referer record or restore page ever holds it.
- * - op=confirm: the grant's page, and its POST (CSRF), which acts on the token in one transaction and uses it up.
+ *   (op=reset for a recovery link, op=confirm for the test mail), with no body. The token is read and removed from the
+ *   request before the game starts, so no page, form, session, log, saved page, referer record or restore page ever
+ *   holds it. A recovery link opens only while account mail is on.
+ * - op=confirm: the test mail grant's page, and its POST (CSRF), which acts on the token in one transaction.
+ * - op=forgot (task 13b): the request form while account mail is on, one line while it is off; its POST (CSRF) gets
+ *   the same page whatever it matched, and the lookup, the token and the mail run after that page is complete
+ *   (lib/account_recovery.php).
+ * - op=reset (task 13b): the recovery grant's form, and its POST (CSRF), which sets the password in one transaction
+ *   and uses up every recovery link of the account; the notice mail follows after the page. A visitor signed in as
+ *   another account is told to sign out first, and nothing changes.
  *
- * In this task the one purpose is the test mail from Game Settings (mailtest). Every other op, every refused token and
- * every missing grant get one fixed page, status 400, whatever the reason. Every response is sent with
- * Referrer-Policy: no-referrer, Cache-Control: no-store and X-Robots-Tag: noindex, and no page is kept in
- * accounts_output.
+ * Every other op, every refused token and every missing grant get one fixed page, status 400, whatever the reason.
+ * Every response is sent with Referrer-Policy: no-referrer, Cache-Control: no-store and X-Robots-Tag: noindex, no page
+ * is kept in accounts_output, and no footer shows the page-gen time or the time to the next new day, so that every
+ * forgot-password response is the same page.
  */
 // The token, taken out of the request before anything can record it.
 $resurrection_account_token = $_GET['t'] ?? null;
@@ -26,15 +33,18 @@ if (is_string($resurrection_account_token) && preg_match('/\A[A-Za-z0-9_-]{43}\z
     });
 }
 $resurrection_account_op = is_string($_GET['op'] ?? null) ? $_GET['op'] : '';
-$_SERVER['REQUEST_URI'] = 'account.php' . ($resurrection_account_op === 'open' ? '?op=open' : ($resurrection_account_op === 'confirm' ? '?op=confirm' : ''));
-$_SERVER['QUERY_STRING'] = $resurrection_account_op === 'open' ? 'op=open' : ($resurrection_account_op === 'confirm' ? 'op=confirm' : '');
+$resurrection_account_clean = in_array($resurrection_account_op, ['open', 'confirm', 'forgot', 'reset'], true) ? 'op=' . $resurrection_account_op : '';
+$_SERVER['REQUEST_URI'] = 'account.php' . ($resurrection_account_clean === '' ? '' : '?' . $resurrection_account_clean);
+$_SERVER['QUERY_STRING'] = $resurrection_account_clean;
 define('ALLOW_ANONYMOUS', true);
 define('OVERRIDE_FORCED_NAV', true);
 define('RESURRECTION_SECRET_URL', true);
 define('RESURRECTION_NO_KEPT_PAGE', true);
+define('RESURRECTION_QUIET_FOOTER', true);
 require_once 'common.php';
 require_once 'lib/web_security.php';
 require_once 'lib/account_mail.php';
+require_once 'lib/account_recovery.php';
 
 header('Referrer-Policy: no-referrer');
 header('Cache-Control: no-store');
@@ -46,12 +56,60 @@ function resurrection_account_expired(): never {
     http_response_code(400);
     page_header('Account');
     output('`#This link has expired or was already used. Ask for a new one.`0');
-    addnav(!empty($session['loggedin']) ? 'Return to the game' : 'Login page', !empty($session['loggedin']) ? 'village.php' : 'index.php');
+    resurrection_account_nav();
     page_footer();
     exit;
 }
 
-$op = in_array($resurrection_account_op, ['open', 'confirm'], true) ? $resurrection_account_op : '';
+/** The navigation every account page ends with. */
+function resurrection_account_nav(): void {
+    global $session;
+    addnav(!empty($session['loggedin']) ? 'Return to the game' : 'Login page', !empty($session['loggedin']) ? 'village.php' : 'index.php');
+}
+
+/**
+ * Hold everything the page prints from here on, and when the request ends (page_footer() exits), send it with
+ * resurrection_account_after_response(): $work after the page, or, with a floor and no way to complete the response
+ * early, before a page held to the floor. The session is written and closed first, so the work never holds it.
+ */
+function resurrection_account_send_then(callable $work, float $floor): void {
+    $level = ob_get_level();
+    ob_start();
+    register_shutdown_function(static function () use ($work, $floor, $level): void {
+        $page = '';
+        while (ob_get_level() > $level) $page = (string)ob_get_clean() . $page;
+        if (session_status() === PHP_SESSION_ACTIVE) session_write_close();
+        resurrection_account_after_response($page, $work, (float)($_SERVER['REQUEST_TIME_FLOAT'] ?? microtime(true)), $floor, resurrection_account_response_finisher());
+    });
+}
+
+$op = in_array($resurrection_account_op, ['open', 'confirm', 'forgot', 'reset'], true) ? $resurrection_account_op : '';
+if ($op === 'forgot') {
+    unset($resurrection_account_token);
+    page_header('Forgot your password');
+    if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
+        // The same page for every request that passes CSRF, whatever it names and whatever happens to it (3.1).
+        resurrection_require_post();
+        $who = $_POST['who'] ?? null;
+        unset($_POST['who'], $_REQUEST['who']);
+        rawoutput('<section class="rz-account" aria-labelledby="rz-account-title"><h2 id="rz-account-title">Check your mail</h2>');
+        rawoutput('<p>' . htmlspecialchars(RESURRECTION_ACCOUNT_RECOVERY_ANSWER, ENT_QUOTES, 'UTF-8') . '</p></section>');
+        resurrection_account_send_then(static function () use ($who): void { resurrection_account_recovery_request($who); }, RESURRECTION_ACCOUNT_RESPONSE_FLOOR);
+    } elseif (!resurrection_account_mail_on()) {
+        rawoutput('<section class="rz-account" aria-labelledby="rz-account-title"><h2 id="rz-account-title">Forgot your password?</h2>');
+        rawoutput('<p>' . htmlspecialchars(RESURRECTION_ACCOUNT_RECOVERY_OFF, ENT_QUOTES, 'UTF-8') . '</p></section>');
+    } else {
+        rawoutput('<section class="rz-account" aria-labelledby="rz-account-title"><h2 id="rz-account-title">Forgot your password?</h2>');
+        rawoutput('<p>Type your login, or the email address of your account. If the account has an address verified here, a link to choose a new password is mailed to that address.</p>');
+        rawoutput('<form class="rz-account-form" action="account.php?op=forgot" method="POST">' . resurrection_csrf_field()
+            . '<p><label for="rz-forgot-who">Login or email address</label> <input type="text" name="who" id="rz-forgot-who" maxlength="128" autocomplete="username" required></p>'
+            . '<p><input type="submit" class="' . resurrection_button_class(true) . '" value="Send me a link"></p></form>');
+        rawoutput('<p>No address, or no access to it? Use Petition for Help to ask an administrator to reset your password.</p></section>');
+        addnav('', 'account.php?op=forgot');
+    }
+    resurrection_account_nav();
+    page_footer();
+}
 if ($op === 'open') {
     $token = $resurrection_account_token;
     unset($resurrection_account_token);
@@ -67,14 +125,65 @@ if ($op === 'open') {
         unset($token);
         resurrection_account_expired();
     }
-    $opened = resurrection_account_token_open($token, ['mailtest']);
+    // A recovery link opens only while account mail is on (section 6: links mailed earlier get the expired page).
+    $opened = resurrection_account_token_open($token, resurrection_account_mail_on() ? ['mailtest', 'recover'] : ['mailtest']);
     unset($token);
     if ($opened === null) resurrection_account_expired();
     resurrection_account_grant_store($opened);
-    header('Location: account.php?op=confirm', true, 303);
+    header('Location: account.php?op=' . ($opened['purpose'] === 'recover' ? 'reset' : 'confirm'), true, 303);
     exit;
 }
 unset($resurrection_account_token);
+if ($op === 'reset') {
+    $grant = resurrection_account_grant('recover');
+    if ($grant === null || !resurrection_account_mail_on()) { resurrection_account_grant_clear(); resurrection_account_expired(); }
+    // The grant's token must still be live: unused, unexpired, and its account's authversion still the token's.
+    $rows = db_query('SELECT a.acctid,a.login FROM ' . db_prefix('account_tokens') . ' t JOIN ' . db_prefix('accounts')
+        . " a ON a.acctid=t.acctid AND a.authversion=t.authversion WHERE t.tokenid=? AND t.tokenhash=? AND t.purpose='recover' AND t.used IS NULL AND t.expires>?", true,
+        [$grant['tokenid'], $grant['hash'], date('Y-m-d H:i:s')]);
+    if (count($rows) !== 1) { resurrection_account_grant_clear(); resurrection_account_expired(); }
+    // Someone signed in as another account (3.3, point 7): nothing happens until they sign out.
+    if (!empty($session['loggedin']) && (int)($session['user']['acctid'] ?? 0) !== (int)$rows[0]['acctid']) {
+        page_header('Sign out first');
+        rawoutput('<section class="rz-account" aria-labelledby="rz-account-title"><h2 id="rz-account-title">Sign out first</h2>');
+        rawoutput('<p>This link is for another account than the one you are signed in as. Sign out, then open the link from the mail again. Nothing has changed.</p></section>');
+        resurrection_account_nav();
+        page_footer();
+    }
+    $problem = '';
+    if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
+        resurrection_require_post();
+        $pass1 = is_string($_POST['pass1'] ?? null) ? $_POST['pass1'] : '';
+        $pass2 = is_string($_POST['pass2'] ?? null) ? $_POST['pass2'] : '';
+        unset($_POST['pass1'], $_POST['pass2'], $_REQUEST['pass1'], $_REQUEST['pass2']);
+        try { $reset = resurrection_account_recovery_reset($grant, $pass1, $pass2); }
+        catch (InvalidArgumentException $error) { $reset = null; $problem = $error->getMessage() === 'The two passwords are not the same.' ? 'The two passwords are not the same.' : 'A password has 12 to 72 bytes.'; }
+        catch (DomainException $error) { unset($pass1, $pass2); resurrection_account_grant_clear(); resurrection_account_expired(); }
+        unset($pass1, $pass2);
+        if ($reset !== null) {
+            resurrection_account_grant_clear();
+            resurrection_rotate_session();
+            page_header('Password changed');
+            rawoutput('<section class="rz-account" aria-labelledby="rz-account-title"><h2 id="rz-account-title">Password changed</h2>');
+            rawoutput('<p>Your password was changed. Sign in with it now.</p>');
+            rawoutput('<p>Every other session of this account has ended, and a notice is on its way to the account\'s address.</p></section>');
+            resurrection_account_send_then(static function () use ($reset): void { resurrection_account_recovery_notices($reset); }, 0.0);
+            addnav('Login page', 'index.php');
+            page_footer();
+        }
+    }
+    page_header('Choose a new password');
+    rawoutput('<section class="rz-account" aria-labelledby="rz-account-title"><h2 id="rz-account-title">Choose a new password</h2>');
+    if ($problem !== '') rawoutput('<p class="rz-setting-refused" role="alert">' . htmlspecialchars($problem, ENT_QUOTES, 'UTF-8') . '</p>');
+    rawoutput('<p>Choose a new password for the account <strong>' . htmlspecialchars((string)$rows[0]['login'], ENT_QUOTES, 'UTF-8') . '</strong>. It needs 12 to 72 bytes. Every session of the account ends when you save it, and you sign in with the new password.</p>');
+    rawoutput('<form class="rz-account-form" action="account.php?op=reset" method="POST">' . resurrection_csrf_field()
+        . '<p><label for="rz-reset-pass1">New password (12 to 72 bytes)</label> <input type="password" name="pass1" id="rz-reset-pass1" autocomplete="new-password" required></p>'
+        . '<p><label for="rz-reset-pass2">The same password again</label> <input type="password" name="pass2" id="rz-reset-pass2" autocomplete="new-password" required></p>'
+        . '<p><input type="submit" class="' . resurrection_button_class(true) . '" value="Save the new password"></p></form></section>');
+    addnav('', 'account.php?op=reset');
+    resurrection_account_nav();
+    page_footer();
+}
 if ($op !== 'confirm') resurrection_account_expired();
 
 $grant = resurrection_account_grant('mailtest');

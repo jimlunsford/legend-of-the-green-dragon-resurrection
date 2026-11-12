@@ -43,6 +43,9 @@ final class SensitiveParameterTest extends TestCase
         'resurrection_account_mail_link' => ['token'],
         'resurrection_account_mail_deliver' => ['body'],
         'resurrection_send_email' => ['body'],
+        // Phase 6 task 13b: a recovery mail's body (its links), and the new password on the reset.
+        'resurrection_account_recovery_deliver' => ['body'],
+        'resurrection_account_recovery_reset' => ['password', 'repeat'],
     ];
 
     public static function setUpBeforeClass(): void
@@ -50,7 +53,7 @@ final class SensitiveParameterTest extends TestCase
         require_once 'lib/names.php';
         ob_start();
         foreach (['constants', 'datacache', 'settings', 'modules', 'output', 'sanitize', 'translator', 'installer/install_run', 'webcron',
-                'pageparts', 'upgrade', 'setup/run', 'account_mail', 'account_mail_admin'] as $library) {
+                'pageparts', 'upgrade', 'setup/run', 'account_mail', 'account_mail_admin', 'account_recovery'] as $library) {
             require_once 'lib/' . $library . '.php';
         }
         ob_end_clean();
@@ -111,14 +114,14 @@ final class SensitiveParameterTest extends TestCase
     {
         // Phase 6 task 13a, the same guard for account mail: in its libraries, a parameter named for a token, a mail body
         // or a link is always marked (the transport, resurrection_send_email(), is in the list above). A grant and a
-        // token row carry only the hash.
+        // token row carry only the hash. Task 13b adds the recovery library, and a password there.
         $count = 0;
-        foreach (['lib/account_mail.php', 'lib/account_mail_admin.php'] as $file) {
+        foreach (['lib/account_mail.php', 'lib/account_mail_admin.php', 'lib/account_recovery.php'] as $file) {
             preg_match_all('/^function (resurrection_\w+)\(/m', (string)file_get_contents($file), $functions);
             foreach ($functions[1] as $function) {
                 $count++;
                 foreach ((new \ReflectionFunction($function))->getParameters() as $parameter) {
-                    if (preg_match('/\A(token|body|link|secret)\z/', $parameter->getName())) {
+                    if (preg_match('/\A(token|body|link|secret|password|repeat)\z/', $parameter->getName())) {
                         self::assertNotSame([], $parameter->getAttributes(\SensitiveParameter::class), $function . '($' . $parameter->getName() . ')');
                     }
                 }

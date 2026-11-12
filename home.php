@@ -7,6 +7,7 @@ define('RESURRECTION_ENTRY', true);
 define("ALLOW_ANONYMOUS",true);
 require_once("common.php");
 require_once("lib/http.php");
+require_once("lib/account_mail.php");
 // 1.1.2's skin chooser posted here and set the template cookie; the skins and the chooser are gone (Phase 5 task 15).
 
 if (!isset($session['loggedin'])) $session['loggedin']=false;
@@ -82,10 +83,22 @@ if ($onlinecount<getsetting("maxonline",0) || getsetting("maxonline",0)==0){
 	}
 	if (isset($session['message']) && $session['message']>"")
 		output_notl("`b`\$%s`b`n", $session['message'],true);
+	// Password recovery by mail (Phase 6 task 13b): a link to it, only while account mail is on; after a failed
+	// sign-in, beside the "login incorrect" message, else under the form.
+	$forgot = resurrection_account_mail_on();
+	$failed = !empty($session['login_incorrect']);
+	unset($session['login_incorrect']);
+	if ($forgot && $failed) {
+		rawoutput("<p class='rz-login-forgot'>".translate_inline("Forgot your password?")." <a href='account.php?op=forgot'>".translate_inline("Ask for a link by email")."</a></p>");
+	}
 	$uname = translate_inline("<u>U</u>sername");
 	$pass = translate_inline("<u>P</u>assword");
 	$butt = translate_inline("Log in");
 	rawoutput("<form action='login.php' method='POST'>".resurrection_csrf_field().templatereplace("login",array("username"=>$uname,"password"=>$pass,"button"=>$butt))."</form>");
+	if ($forgot && !$failed) {
+		rawoutput("<p class='rz-login-forgot'><a href='account.php?op=forgot'>".translate_inline("Forgot your password?")."</a></p>");
+	}
+	if ($forgot) addnav("","account.php?op=forgot");
 	output_notl("`c");
 	addnav("","login.php");
 } else {

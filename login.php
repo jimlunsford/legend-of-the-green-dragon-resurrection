@@ -46,6 +46,8 @@ try {
         db_query('INSERT INTO ' . db_prefix('faillog') . ' (date,post,ip,acctid,id) VALUES (?,?,?,?,?)', true,
             [date('Y-m-d H:i:s'), 'invalid_credentials', $_SERVER['REMOTE_ADDR'] ?? '', 0, '']);
         $session['message'] = '`4Error, your login was incorrect`0';
+        // home.php links to password recovery beside this message while account mail is on (Phase 6 task 13b).
+        $session['login_incorrect'] = true;
         header('Location: index.php', true, 303);
         exit();
     }

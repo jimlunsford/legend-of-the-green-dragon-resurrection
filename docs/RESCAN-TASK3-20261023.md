@@ -359,6 +359,11 @@ are not listed.
 | `lib/account_mail.php` | `implode(' AND ', $where)` | 1 | server | Fixed predicates chosen from the constant `RESURRECTION_ACCOUNT_MAIL_LIMITS` row; the times, purposes, keys and account ID are bound. |
 | `lib/account_mail.php` | `implode(',', array_fill(0, count($mail), '?'))` | 1 | server | Placeholders, one per fixed mail purpose; the purposes are bound. |
 | `lib/account_mail.php` | `implode(',', array_fill(0, count($purposes), '?'))` | 1 | server | Placeholders, one per purpose of the constant limit row; the purposes are bound. |
+| `lib/account_recovery.php` | `$accounts` | 3 | server | `db_identifier(db_prefix('accounts'))`: the recovery lookup by login or verified address, and the reset's update; the login, the address, the hash and the account ID are bound. |
+| `lib/account_recovery.php` | `$columns` | 2 | server | The fixed column list of the recovery lookup, literal in the function. |
+| `lib/account_recovery.php` | `db_identifier(db_prefix('account_tokens'))` | 2 | server | `db_identifier()` of a fixed table name (the 5-minute rule's count of live recovery tokens, and the reset using up every recovery token of the account). |
+| `lib/account_recovery.php` | `db_identifier(db_prefix('accounts'))` | 2 | server | `db_identifier()` of a fixed table name (the 5-minute rule's account join, and the megausers a staff reset notifies). |
+| `lib/account_recovery.php` | `db_identifier(db_prefix('bans'))` | 1 | server | `db_identifier()` of a fixed table name (`checkban()`'s ban query, without its session side effects); the IP, ID and date are bound. |
 | `lib/accounts.php` | `implode(',', array_fill(0, count($values), '?'))` | 1 | server | Placeholders; the values are bound. |
 | `lib/accounts.php` | `implode(',', array_map('db_identifier', array_keys($values)))` | 1 | server | `db_identifier()` of the fixed column names of the new account array. |
 | `lib/admin_authority.php` | `$columns` | 1 | server | Fixed column lists from every caller (`donators.php`, `lib/admin_authority.php`, `lib/user/user_del.php`, `lib/user/user_setupban.php`, `lib/user_editor.php`). |
@@ -639,3 +644,17 @@ were reviewed onto the list:
 
 No request value reaches the SQL text. The token itself never reaches SQL: only its SHA-256 hash, bound, after the
 format check. The test and its matching are unchanged.
+
+## Reviewed list change, 2026-11-12 (Phase 6 task 13b)
+
+Task 13b's password recovery (`lib/account_recovery.php`) puts fixed table names and one fixed column list into SQL
+text, and `SqlSweepTest` failed locally ("Interpolated into SQL and not reviewed") until they were reviewed onto the
+list:
+
+- Fixed table names through the configured prefix and `db_identifier()`: `accounts`, `account_tokens` and `bans`.
+  `$accounts` holds the first.
+- `$columns`: the recovery lookup's column list, a literal in the function.
+- The lookup's `LIMIT` is the constant `RESURRECTION_ACCOUNT_RECOVERY_ACCOUNTS` (5), which the scan does not flag.
+
+No request value reaches the SQL text: the login or address typed on the forgot-password page, the token's hash, the
+times and the account IDs are bound. The test and its matching are unchanged.

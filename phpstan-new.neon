@@ -60,6 +60,7 @@ parameters:
         - lib/setup/run.php
         - lib/account_mail.php
         - lib/account_mail_admin.php
+        - lib/account_recovery.php
         - scripts/install.php
         - scripts/upgrade.php
     bootstrapFiles:

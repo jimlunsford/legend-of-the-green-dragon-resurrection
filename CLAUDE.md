@@ -137,6 +137,11 @@ Account mail (S11; Phase 6 task 13a, `docs/PHASE6-TASK12-ACCOUNT-MAIL-DESIGN-202
   matched.
 - The switch turns on only when every condition holds; turning it off is always allowed. `requirevalidemail` stays
   locked until task 13c lifts it as the design says.
+- Password recovery (task 13b, `lib/account_recovery.php`): every forgot-password request that passes CSRF gets the
+  same page, status, headers and cookies, whatever it matched. Its work (limits, lookup, token, mail) runs after the
+  page is complete (`resurrection_account_after_response()`), with the 1.5-second floor where the server cannot finish
+  a response early. A recovery mail goes only to an address verified for the account. `account.php` pages show no
+  time-dependent footer (`RESURRECTION_QUIET_FOOTER`); keep them free of anything that differs per request.
 - Tests and CI never send mail. Every test web server runs with a mail capture (`tests/tooling/mail_capture.py`;
   `start_php_server()` refuses one without); PHPUnit runs with `sendmail_path=/bin/false` (CI's `ini-values`;
   `MailCaptureGuardTest` and `test_mail_capture.py` fail otherwise). A test that needs a message uses a capture.

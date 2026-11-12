@@ -2,23 +2,30 @@
 if (!\defined('RESURRECTION_ENTRY') && \PHP_SAPI !== 'cli') { \http_response_code(404); exit; }
 /**
  * Game Settings' Account mail section (Phase 6 task 13a; docs/PHASE6-TASK12-ACCOUNT-MAIL-DESIGN-20261112.md, section
- * 2.5), for SU_EDIT_CONFIG: the status, the test mail (to the signed-in administrator's own address only), and the
- * switch. Every change is a POST with the CSRF token and a one-use action token. The page holds no secret: the test
+ * 2.5), for SU_EDIT_CONFIG: the status, the test mail (to the signed-in administrator's own address only), the
+ * switch, and (task 13b, decision 3) whether staff accounts may recover their password by mail. Every change is a POST with the CSRF token and a one-use action token. The page holds no secret: the test
  * mail's link goes only into the mail.
  */
 require_once __DIR__ . '/account_mail.php';
 require_once __DIR__ . '/player_mutation.php';
 
-/** The action tokens' context: the account acting and the state the page showed. */
-function resurrection_account_mail_admin_context(int $acctid, bool $switch): string {
-    return $acctid . ':' . ($switch ? 'on' : 'off');
+/** The action tokens' context: the account acting and the state the page showed (the switch and the staff switch). */
+function resurrection_account_mail_admin_context(int $acctid, bool $switch, bool $staff): string {
+    return $acctid . ':' . ($switch ? 'on' : 'off') . ':staff-' . ($staff ? 'on' : 'off');
 }
 
 /**
- * Handle a POST op (accountmail_test, accountmail_on, accountmail_off) and return the line to show above the section.
+ * Handle a POST op (accountmail_test, accountmail_on, accountmail_off, accountmail_staff_on, accountmail_staff_off)
+ * and return the line to show above the section.
  */
 function resurrection_account_mail_admin_handle(string $op, int $acctid): string {
-    resurrection_consume_action('account-mail', resurrection_account_mail_admin_context($acctid, resurrection_account_mail_switch()));
+    resurrection_consume_action('account-mail', resurrection_account_mail_admin_context($acctid, resurrection_account_mail_switch(), resurrection_account_mail_staff_allowed()));
+    if ($op === 'accountmail_staff_on' || $op === 'accountmail_staff_off') {
+        $allowed = $op === 'accountmail_staff_on';
+        savesetting('account_mail_staff', $allowed ? '1' : '0');
+        gamelog($allowed ? 'Allowed password recovery by mail for staff accounts' : 'Excluded staff accounts from password recovery by mail', 'settings');
+        return $allowed ? 'Staff accounts may recover their password by mail.' : 'Staff accounts are excluded from password recovery by mail.';
+    }
     if ($op === 'accountmail_test') {
         return match (resurrection_account_mail_test_send($acctid)) {
             'sent' => 'The test mail was handed to the mail transport. Open it and press Confirm on the page its link shows.',
@@ -72,13 +79,15 @@ function resurrection_account_mail_admin_render(int $acctid, string $notice = ''
         . (in_array('stale-proof', $status['blockers'], true) ? ' (for an earlier Server URL or Admin Email)' : '')) . '</dd>');
     rawoutput('<dt>Last 24 hours</dt><dd>' . $h($status['sent'] . ' account mail(s) handed to the mail transport, ' . $status['refused'] . ' refused') . '</dd>');
     rawoutput('<dt>Hourly limit</dt><dd>' . $h($status['hourly'] . ' account mails an hour (Standard settings, Account Mail)') . '</dd>');
+    $staff = resurrection_account_mail_staff_allowed();
+    rawoutput('<dt>Staff accounts</dt><dd>' . $h($staff ? 'May recover their password by mail; every other megauser gets a game mail after each staff reset' : 'Excluded from password recovery by mail; an administrator resets their passwords in the user editor') . '</dd>');
     rawoutput('</dl>');
     if ($status['blockers'] !== []) {
         rawoutput('<ul class="rz-accountmail-conditions">');
         foreach ($status['blockers'] as $blocker) rawoutput('<li>' . $h(resurrection_account_mail_admin_reason($blocker)) . '</li>');
         rawoutput('</ul>');
     }
-    $context = resurrection_account_mail_admin_context($acctid, $status['switch']);
+    $context = resurrection_account_mail_admin_context($acctid, $status['switch'], $staff);
     $form = static function (string $op, string $label) use ($h, $context): void {
         $url = 'configuration.php?op=' . $op;
         addnav('', $url);
@@ -88,6 +97,7 @@ function resurrection_account_mail_admin_render(int $acctid, string $notice = ''
     $form('accountmail_test', 'Send a test mail to my address');
     if ($status['switch']) $form('accountmail_off', 'Turn account mail off');
     elseif ($status['blockers'] === []) $form('accountmail_on', 'Turn account mail on');
+    $form($staff ? 'accountmail_staff_off' : 'accountmail_staff_on', $staff ? 'Exclude staff accounts from recovery' : 'Allow staff accounts to recover');
     rawoutput('</div>');
     rawoutput('<p>A confirmed test mail proves that the server\'s mail program accepted a message from this sender, that it reached one real inbox, and that its link reached this game over HTTPS. It does not prove that mail reaches every provider or keeps working: the counts above show refusals, and the game log has a line for each.</p>');
     rawoutput('</section>');

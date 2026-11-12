@@ -349,11 +349,16 @@ function page_footer($saveuser=true){
 	// The footer's Credits link, only where about.php is a nav the page allows, and the time to the next new day
 	// (Phase 5 task 4).
 	$footer=str_replace("{credits}", creditslink(), $footer);
-	$footer=str_replace("{newday}", resurrection_newday_text(), $footer);
+	// A page whose bytes must not depend on when or how fast it was made (account.php, Phase 6 task 13b: every
+	// forgot-password response is the same page) shows no time to the next new day, and of the page-gen line only the
+	// query count, which is the same for the same work.
+	$quiet = defined('RESURRECTION_QUIET_FOOTER');
+	$footer=str_replace("{newday}", $quiet ? '' : resurrection_newday_text(), $footer);
 	//output page generation time
 	$gentime = getmicrotime()-$pagestarttime;
 	$session['user']['gentime']+=$gentime;
 	$session['user']['gentimecount']++;
+	if ($quiet) $footer=str_replace("{pagegen}", "Page gen: ".$dbinfo['queriesthishit']." queries", $footer);
 	$footer=str_replace("{pagegen}","Page gen: ".round($gentime,3)."s / ".$dbinfo['queriesthishit']." queries (".round($dbinfo['querytime'],3)."s), Ave: ".round($session['user']['gentime']/$session['user']['gentimecount'],3)."s - ".round($session['user']['gentime'],3)."/".round($session['user']['gentimecount'],3)."",$footer);
 
 	tlschema();
