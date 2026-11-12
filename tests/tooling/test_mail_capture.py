@@ -16,7 +16,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import mail_capture  # noqa: E402
 from loopback_server import start_php_server  # noqa: E402
-from php_runtime import supported_php  # noqa: E402
+from php_runtime import supported_php, version  # noqa: E402
 
 
 def _launches(source):
@@ -85,10 +85,17 @@ class MailCaptureGuardTest(unittest.TestCase):
             self.assertEqual('player@example.org', message['To'])
             self.assertEqual('game@example.org', message['From'])
             self.assertIn('https://game.example.org/account.php?op=open&t=x', message.get_content())
+            # A refusal: what both supported versions guarantee is that mail() returns false and the capture holds the
+            # one message. PHP 8.5's mail() also warns "Sendmail exited with non-zero exit code 1"; PHP 8.4's warns
+            # nothing (Phase 6 task 13a: Modern core 43294075991 failed here on 8.4). Each version's text is pinned, so
+            # a change in either shows up.
             result = self._mail(refusing)
             self.assertTrue(result.stdout.endswith('false\n'), result.stdout)
-            self.assertIn('Sendmail exited with non-zero exit code 1', result.stdout)
             self.assertEqual(1, len(refusing.raw()))
+            if version(supported_php()) >= (8, 5):
+                self.assertIn('Sendmail exited with non-zero exit code 1', result.stdout)
+            else:
+                self.assertEqual(('false\n', ''), (result.stdout, result.stderr))
             accepting.clear()
             self.assertEqual([], accepting.raw())
         finally:

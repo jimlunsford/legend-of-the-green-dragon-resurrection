@@ -213,11 +213,19 @@ Recompute only if serialized-state source changes. Never change counts by assump
 - Local MariaDB 10.11 works as a disposable test database. Supporting evidence only.
 - PHPUnit expects an empty database, as in CI. Recreate the disposable DB before a full PHPUnit run.
 - Whenever a task adds or changes tests, PHPUnit must pass locally on both supported PHP versions, 8.4 and 8.5, before publishing (install the 8.4 build beside 8.5 and run `php8.4 vendor/bin/phpunit`). Task 10's tests passed on 8.5 and failed on 8.4 in CI: they used `Dom\ParentNode::$children`, which exists only from PHP 8.5.
+- Every new or changed tooling (shard) test also runs locally on both CI legs before a push, not only PHPUnit: PHP 8.4
+  with MariaDB 11.4, and PHP 8.5 with MySQL 8.4 (Phase 6 task 13a's fix: a test that passed on 8.5 failed on 8.4 in
+  CI, where PHP 8.4's `mail()` prints no warning). For each leg, put a folder first on `PATH` whose `php` is that
+  version (the tests start `php` from `PATH`), start a fresh database of that leg's server, install it with
+  `vendor/bin/phpunit tests/unit/FreshInstallTest.php`, then run the shard that holds the test:
+  `PATH=<folder whose php is 8.4>:$PATH RESURRECTION_TEST_DB_HOST=<MariaDB 11.4 host:port> RESURRECTION_REQUIRE_PHP=1 python3 scripts/tooling-shards.py --shards 5 --shard N`,
+  and the same with PHP 8.5 and MySQL 8.4. Run all five shards on both legs when the change touches a shared helper.
 - PHPUnit needs `sendmail_path=/bin/false` locally too, and it can only be set at startup: put it in an ini file in a
   folder named by `PHP_INI_SCAN_DIR` (for example `PHP_INI_SCAN_DIR=":/path/to/ini"`). `-d` does not reach the child
   processes the tests start.
 - Run the Python tooling tests from `tests/tooling` or through `scripts/tooling-shards.py`. As root, the test servers
-  run as `nobody`, so a copy of the tree must sit where `nobody` can read it (not under a mode-700 folder).
+  run as `nobody`, so a copy of the tree, and the folder put first on `PATH` for a PHP version, must sit where
+  `nobody` can read them (not under a mode-700 folder).
 - Move temporary fixture/config leftovers out of the repo before lint and commit.
 - Remove each local MySQL container's data volume with the container (`docker rm -f -v`). Leftover volumes filled the session disk and stopped MySQL from starting.
 

@@ -94,6 +94,11 @@ final class MailMessageTest extends TestCase
         self::assertSame(['sent', 'refused'], array_column(db_query("SELECT result FROM account_mail_log WHERE purpose='mailtest' ORDER BY eventid"), 'result'));
         self::assertSame(['Account mail (mailtest) could not be handed to the mail transport.', 'Test mail refused by the mail transport'],
             array_column(db_query("SELECT message FROM gamelog WHERE category='account mail' AND (message LIKE '%refused%' OR message LIKE 'Account mail (mailtest)%') ORDER BY logid"), 'message'));
+        // The same refusal under the game's error handler, as a page sends it: PHP 8.5's mail() warns (the handler throws
+        // and the transport catches it), PHP 8.4's only returns false. Either way the answer is false and nothing is printed.
+        [$out, $messages] = $this->child('require_once "lib/errorhandling.php"; var_export(resurrection_send_email("player@example.org", "Subject", "Body\n", "game@example.org"));', [], 1);
+        self::assertSame('false', $out);
+        self::assertCount(4, $messages);
     }
 
     public function testNoPlayerValueInHeaders(): void
