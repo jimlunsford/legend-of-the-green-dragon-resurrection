@@ -654,3 +654,21 @@ The rows above change as follows:
 What stands between `main` and the `v1.0.0-rc.1` tag: counsel's answers (S9) and any wording change they bring, Jim's
 go, the version commit and its CI acceptance, then the tag and the package (`ROADMAP.md`, Phase 6;
 `docs/RC-CUT-CHECKLIST.md`).
+
+## Task 10 accepted; S9 and S11 decided (recorded 2026-11-12, Phase 6 task 11)
+
+Task 10 is accepted at `f1c92b2`: Modern core 43228986117 SUCCESS (14/14 jobs, all on `ubuntu-24.04`; the slowest
+17:36), Baseline integrity 43228986075 SUCCESS. Jim decided two things on 2026-11-12 (`ROADMAP.md`, Phase 6;
+`docs/PHASE6-TASK11-20261112.md`). The rows above change as follows:
+
+| ID | Status after task 11 | Where |
+|---|---|---|
+| S9 | Closed by decision (Jim, 2026-11-12): no legal counsel. The project meets the licenses as written, and every statement of the credit stays within what the licenses allow. The packet was not sent and is kept as a record. The shipped documents now state the credit as section 4(d) of CC BY-NC-SA 2.0 describes it (4(d) is the credit clause; 4(c) is the noncommercial clause), quote the host's duties from `LICENSE.txt` and the legal code, and add no term; a static test keeps them so. The AGPL question in section 4.5 stays as `CLAUDE.md` has it: no file is labelled AGPL | `NOTICE`, `docs/LEGAL-REVIEW-PACKET-20261107.md`, `tests/tooling/test_credit_wording.py` |
+| S10 | Done. Accepted at `f1c92b2` | `docs/MODULE-AUTHOR-GUIDE.md` |
+| S11 | An rc.1 blocker (Jim, 2026-11-12), replacing the 2026-11-07 decision that made it a known rc.1 limitation. The order: a design and threat model, approved by Jim; then the build; then the `requirevalidemail` lock lifted as the design says. Not started | `ROADMAP.md`, `docs/RC-CUT-CHECKLIST.md`, `docs/SECURITY-STATUS.md` |
+| S13 | Done. Accepted at `f1c92b2` | `docs/SECURITY-STATUS.md` |
+
+What stands between `main` and the `v1.0.0-rc.1` tag, in order: task 11's CI acceptance; the S11 design and threat
+model, approved by Jim; the S11 build, accepted by CI, with the `requirevalidemail` lock lifted as the design says and
+the release notes and host guide updated; Jim's go; the version commit and its CI acceptance; then the tag and the
+package (`ROADMAP.md`, Phase 6; `docs/RC-CUT-CHECKLIST.md`).

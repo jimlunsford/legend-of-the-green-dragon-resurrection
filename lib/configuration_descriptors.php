@@ -29,7 +29,7 @@ function resurrection_core_layout(): array {
 
 		"Source Code,title",
 		// The label is the setting's description in the settings editor. It must not contain a comma.
-		"sourceurl"=>"Public source code URL for the View PHP Source link. If you change the game you must point this at your own complete modified source: the license (LICENSE.txt) requires you to give it on request to anyone you let play. Only http and https addresses are accepted.|https://github.com/jimlunsford/legend-of-the-green-dragon-resurrection",
+		"sourceurl"=>"Public source code URL for the View PHP Source link. Point this at your own complete modified source if you change the game; LICENSE.txt has the terms for a changed game's source. Only http and https addresses are accepted.|https://github.com/jimlunsford/legend-of-the-green-dragon-resurrection",
 
 		// Phase 6 task 3 (S1): the Content Security Policy (src/Http/SecurityHeaders.php). Notes and choices hold no comma.
 		"Security Headers,title",

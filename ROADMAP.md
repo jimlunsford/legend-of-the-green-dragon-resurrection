@@ -259,16 +259,19 @@ Every change from 1.1.2 that a player, administrator or operator can notice is r
 - [x] 7: Front-door docs, rc.1 cut materials, legal packet (B3, B4, S9), and the `requirevalidemail` lock: Game Settings shows it locked off and refuses a change, and the game treats it as off; `README.md`, `VERSIONING.md`, `SECURITY.md`, `SECURITY-STATUS.md` and `MODULE-POLICY.md` match the code; the draft release notes (`docs/RELEASE-NOTES-1.0.0-rc.1.md`), the cut checklist with the tag message (`docs/RC-CUT-CHECKLIST.md`) and the version rule for `main` after a tag; the release package script (`scripts/build-release-package.py`); the legal review packet (`docs/LEGAL-REVIEW-PACKET-20261107.md`) (`docs/PHASE6-TASK7-RC-MATERIALS-20261107.md`). Accepted at `01cd708`, Modern core 42365272202 (all 12 jobs), Baseline integrity 42365272387.
 - [x] 8: Records, shard rebalance, `LOGINTIMEOUT` bounds, labels and tap targets (S5): task 7's acceptance recorded; `tests/tooling/shard-durations.json` refreshed from run 42365272202's per-test times on both legs (the slowest PHP 8.5 shard projected at 19.0 minutes, from 20.5); Game Settings takes `LOGINTIMEOUT` only from 300 to 86400 seconds and says why it refuses anything else, and a stored value outside that range is read as its nearest end; the S5 inputs labelled and the S5 targets at least 44px; the release notes updated (`docs/PHASE6-TASK8-20261112.md`). Accepted at `3dba4d1`, Modern core 43147065548 (all 12 jobs; two PHP 8.5 shards over 21 minutes, 22:38 and 23:26), Baseline integrity 43147065448.
 - [x] 9: CI shard time, stale form tokens after signing in again, phone layout: the `http` jobs install the game with `FreshInstallTest` only (the full PHPUnit suite stays in `checks`), five shards per leg (14 jobs), and `tests/tooling/shard-durations.json` holds each test's largest time over two runs, both legs (`scripts/tooling-shards.py --refresh-durations`); the kept copy of a page holds no form token, and `badnav.php` fills its forms from the session that shows it, so a player who signs in again mid-page carries on while the old tokens stay refused; on a phone `create.php` and the companion and mount editors put each label above its field, the player-facing lists fit the screen, and admin tables scroll in their own box (`docs/PHASE6-TASK9-20261112.md`). Accepted at `2a6e2a7`, Modern core 43181214497 (all 14 jobs; slowest 17:55), Baseline integrity 43181214600.
-- [ ] 10: Security status record (S13) and module author guide (S10): task 9's acceptance recorded; `docs/SECURITY-STATUS.md` as a living record, one current row per area (status, control, evidence by file and test, what is left over) and the public hosting gates as a checklist, with the rule that a task changing a control updates its row in the same commit (also in `CLAUDE.md`); `docs/MODULE-AUTHOR-GUIDE.md` for writing or porting a module (hooks, presentation, the CSP, the entry guard, POST and CSRF, secrets, SQL, versions, admission), pointed to by `docs/MODULE-POLICY.md`, with `tests/tooling/test_module_author_guide.py` checking every name and example against the code (`docs/PHASE6-TASK10-20261112.md`). Pending CI acceptance.
+- [x] 10: Security status record (S13) and module author guide (S10): task 9's acceptance recorded; `docs/SECURITY-STATUS.md` as a living record, one current row per area (status, control, evidence by file and test, what is left over) and the public hosting gates as a checklist, with the rule that a task changing a control updates its row in the same commit (also in `CLAUDE.md`); `docs/MODULE-AUTHOR-GUIDE.md` for writing or porting a module (hooks, presentation, the CSP, the entry guard, POST and CSRF, secrets, SQL, versions, admission), pointed to by `docs/MODULE-POLICY.md`, with `tests/tooling/test_module_author_guide.py` checking every name and example against the code (`docs/PHASE6-TASK10-20261112.md`). Accepted at `f1c92b2`, Modern core 43228986117 (all 14 jobs; slowest 17:36), Baseline integrity 43228986075.
+- [ ] 11: S9 closed by Jim's decision and S11 moved into rc.1 (both recorded), task 10's acceptance recorded; every statement of the credit and of what hosts must do under the licenses says only what the licenses say (the credit as section 4(d) of CC BY-NC-SA 2.0 describes it, `LICENSE.txt` quoted, no added term), kept so by `tests/tooling/test_credit_wording.py`; `installer.php`'s 403 names the two real ways to install, `php scripts/install.php` and `setup.php` (`docs/PHASE6-TASK11-20261112.md`). Pending CI acceptance.
 
-What stands between `main` and the `v1.0.0-rc.1` tag, in order (`docs/RC-CUT-CHECKLIST.md`):
+What stands between `main` and the `v1.0.0-rc.1` tag, in order (`docs/RC-CUT-CHECKLIST.md`; Jim's decisions of 2026-11-12):
 
-1. Counsel's answers to the legal review packet (S9), and any wording change they bring, landed and accepted by CI.
-2. Jim's go for the cut.
-3. The version commit (`src/Version.php`, `project.json`, `docs/VERSIONING.md`, the pinned value in `tests/tooling/test_version.py`, the release notes made final) and its CI acceptance on both legs and Baseline.
-4. The annotated tag `v1.0.0-rc.1` on that accepted commit, on Jim's go; then the release package built from the tag, twice with the same SHA-256, and attached nowhere until Jim says where.
+1. Task 11's CI acceptance.
+2. The S11 design and threat model (mail, account recovery, email verification), approved by Jim.
+3. The S11 build, accepted by CI on both legs and Baseline, with the `requirevalidemail` lock lifted as the design says, and the release notes and host guide updated.
+4. Jim's go for the cut.
+5. The version commit (`src/Version.php`, `project.json`, `docs/VERSIONING.md`, the pinned value in `tests/tooling/test_version.py`, the release notes made final) and its CI acceptance on both legs and Baseline.
+6. The annotated tag `v1.0.0-rc.1` on that accepted commit, on Jim's go; then the release package built from the tag, twice with the same SHA-256, and attached nowhere until Jim says where.
 
-Nothing else is a blocker for the tag. The open items a host or player can hit (S11 and the recorded 1.1.2 behaviors) ship as known issues in the release notes. The stale form tokens after signing in again are fixed in task 9.
+S9 is closed by Jim's decision (no legal counsel). Nothing else is a blocker for the tag. The recorded 1.1.2 behaviors ship as known issues in the release notes; S11's known-issue entry stays, marked planned for rc.1, until S11 lands. The stale form tokens after signing in again are fixed in task 9.
 
 Found during Phase 6 (not yet scheduled to a task unless it says so):
 
@@ -288,6 +291,11 @@ Jim's decisions (2026-11-07):
 1. rc.1 ships only the sample server rules in `docs/hosting/`. No active `.htaccess`.
 2. S11 (account recovery and email verification) is a known limitation for rc.1 and a blocker for 1.0.0 (decision 4 above, confirmed). Until it ships, `requirevalidemail` stays off and locked (task 7).
 
+Jim's decisions (2026-11-12):
+
+1. S9: no legal counsel. The project meets the licenses as written, and every statement of the credit rule stays within what the licenses allow. The legal review packet (`docs/LEGAL-REVIEW-PACKET-20261107.md`) was not sent and is kept as a record. Task 11 brings every statement of the credit and of hosts' duties within the licenses' own words.
+2. S11 (mail, account recovery and email verification) is an rc.1 blocker. This replaces decision 2 of 2026-11-07, which made it a known limitation for rc.1. The order: a design and threat model first, approved by Jim; then the build; then the `requirevalidemail` lock lifted as the design says.
+
 The gap list (IDs, scope, tests and sizes in the review). Each item is ticked when the task that closes it is accepted:
 
 BLOCKER for `1.0.0-rc.1`:
@@ -303,15 +311,15 @@ BLOCKER for `1.0.0-rc.1`:
 - [x] S6: Declare `ext-ctype` and `ext-filter` in `composer.json` (S). Task 3.
 - [x] S7: The first administrator's flags: 1.1.2's set less the removed surfaces', recorded in the change ledger (S). Task 2.
 - [x] S8: Pin the CI runner to `ubuntu-24.04` and move `actions/checkout` and `shivammathur/setup-php` to Node 24 releases (S). Task 2.
-- [ ] S9: Legal review of the attribution wording and the AGPL question (Jim and a lawyer). Packet ready, awaiting counsel (`docs/LEGAL-REVIEW-PACKET-20261107.md`, task 7).
+- [x] S9: Legal review of the attribution wording and the AGPL question (Jim and a lawyer). Closed by Jim's decision on 2026-11-12: no legal counsel; the project meets the licenses as written, and every statement of the credit rule stays within what the licenses allow (task 11). The packet was not sent and is kept as a record (`docs/LEGAL-REVIEW-PACKET-20261107.md`). No file is labeled AGPL.
 - [x] S12: Let the game read its config from outside the docroot (S). Task 3.
+- [ ] S11: Mail, account recovery and email verification (L; a public hosting gate). An rc.1 blocker since Jim's decision of 2026-11-12 (it was a known limitation for rc.1 and a 1.0.0 blocker, 2026-11-07). Design and threat model first, approved by Jim; then the build; then the `requirevalidemail` lock lifted as the design says. Not started.
 
 SHOULD before 1.0.0, not scheduled:
 
 - [x] S5: Labels and 44px tap targets on the pages the crawl found (S). Task 8 (`docs/PHASE6-TASK8-20261112.md`). Accepted at `3dba4d1`.
-- [x] S10: A guide for module authors (S). Task 10 (`docs/MODULE-AUTHOR-GUIDE.md`, kept true by `tests/tooling/test_module_author_guide.py`), CI acceptance pending at publish.
-- [ ] S11: Mail, account recovery and email verification (L; a public hosting gate). A known limitation for rc.1 and a blocker for 1.0.0 (Jim, 2026-11-07).
-- [x] S13: Bring `docs/SECURITY-STATUS.md` up to date as a living record (S). Task 10 (one current row per area, the public hosting gates as a checklist, the update rule in `CLAUDE.md`), CI acceptance pending at publish.
+- [x] S10: A guide for module authors (S). Task 10 (`docs/MODULE-AUTHOR-GUIDE.md`, kept true by `tests/tooling/test_module_author_guide.py`). Accepted at `f1c92b2`.
+- [x] S13: Bring `docs/SECURITY-STATUS.md` up to date as a living record (S). Task 10 (one current row per area, the public hosting gates as a checklist, the update rule in `CLAUDE.md`). Accepted at `f1c92b2`.
 
 The 10 NICE items (N1 to N10) are listed in the review, not here, and are not scheduled. One NICE item found since, not scheduled:
 

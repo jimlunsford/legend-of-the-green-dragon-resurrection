@@ -1,5 +1,7 @@
 # Legal review packet: licensing and attribution (S9)
 
+**Not sent, by Jim's decision on 2026-11-12. Kept as a record.**
+
 For counsel. Prepared 2026-11-07 in Phase 6 task 7, from the repository at the commit that adds this file (its parent
 is `5f2d951`). It holds facts and questions only. It draws no legal conclusion and changes no wording: every quoted
 text below is as it stands in the repository. The answers go to Jim Lunsford (Phoenix 2:33 LLC), who decides any

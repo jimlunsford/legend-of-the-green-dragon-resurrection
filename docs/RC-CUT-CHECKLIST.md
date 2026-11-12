@@ -9,8 +9,11 @@ that go, and a session never does them on its own. The steps are in order; a ste
 ## 0. Before the cut starts
 
 - [ ] Jim has said go for this cut, naming the version (`1.0.0-rc.1`).
-- [ ] Counsel's answers to the legal review packet (`docs/LEGAL-REVIEW-PACKET-20261107.md`, S9) are in, and any
-      wording change they bring has landed and been accepted by CI.
+- [ ] S11 (mail, account recovery and email verification) has landed and been accepted by CI on both legs and
+      Baseline, before the version commit: its design and threat model approved by Jim first, then the build, with the
+      `requirevalidemail` lock lifted as the design says and the release notes and host guide updated (Jim,
+      2026-11-12: an rc.1 blocker).
+- [ ] The release notes no longer list S11 as a known issue.
 - [ ] Every task before the cut is accepted: both Modern core legs and Baseline integrity at SUCCESS on its commit.
 - [ ] The release notes (`docs/RELEASE-NOTES-<version>.md`) list every open item a host or player can hit, checked
       against `ROADMAP.md` at the cut's starting commit.

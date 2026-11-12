@@ -3,9 +3,10 @@ if (!\defined('RESURRECTION_ENTRY') && \PHP_SAPI !== 'cli') { \http_response_cod
 
 /**
  * The "View PHP Source" link. 1.1.2 pointed it at source.php, its own source viewer; Resurrection removed that
- * viewer, so the link points at the public source instead. The LoGD license (LICENSE.txt) asks anyone who lets
- * people outside their family and friends play a modified copy to give the complete modified source on request,
- * so an operator who changes the game sets `sourceurl` to their own modified source.
+ * viewer, so the link points at the public source instead. LICENSE.txt's terms for public hosting include "make
+ * any and ALL changes which you make to the game available on request (note this doesn't have to be available via
+ * the online source display link ...)"; an operator who changes the game can set `sourceurl` to their own modified
+ * source. This describes the link, not the license: read LICENSE.txt for its terms.
  */
 const RESURRECTION_SOURCE_URL = 'https://github.com/jimlunsford/legend-of-the-green-dragon-resurrection';
 

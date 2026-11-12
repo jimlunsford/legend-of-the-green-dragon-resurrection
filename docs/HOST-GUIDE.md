@@ -10,7 +10,7 @@ commands, settings or values to type exactly.
 **Known limitations of a hosted game (rc.1).** There is no password recovery by email: an administrator resets a
 password in the user editor. There is no email verification: Game Settings shows `requirevalidemail` ("Require users
 to validate their email address") locked off, and the game treats it as off whatever the database holds, because with
-it on nobody could create an account. Both come with S11, a blocker for 1.0.0. Mail from the game is best effort
+it on nobody could create an account. Both come with S11, planned for rc.1 (Jim, 2026-11-12). Mail from the game is best effort
 ("Mail", below). The project's own public
 hosting gates are listed in `ROADMAP.md`, "Public hosting".
 
@@ -63,7 +63,7 @@ Into the site's folder (the docroot, the folder the site's address opens, for ex
 - `scripts/install.php` and `scripts/upgrade.php`, inside a scripts folder: the shell path uses them
 - `*.php`: every PHP file in the top folder, including `common.php` and `battle.php`, which the pages include
 - `favicon.ico` and `favicon.png`
-- `LICENSE.txt`, `README.txt` and `NOTICE`: the license and the credits, which must travel with the game
+- `LICENSE.txt`, `README.txt` and `NOTICE`: the license and the credits (section 6, "The credits")
 
 ### Do not upload
 
@@ -272,14 +272,21 @@ Open Game Settings (`configuration.php`, in the Grotto) as the administrator:
   mail and in the web maintenance address, so it must be `https://`.
 - **Admin Email** (`gameadminemail`): a real address you read. It is the sender of the game's mail and receives
   petition notices when `emailpetitions` is on.
-- **Public source code URL** (`sourceurl`): the "View PHP Source" link in every footer. The license
-  (`LICENSE.txt`) requires you to give the complete source to anyone you let play. The default points at the
-  project's public repository, which is right only for an unchanged copy. If you change the code, publish your
-  changed source and point this setting at it.
-- **The credits stay.** Every page's footer carries the 1.1.2 copyright and license block and the line "A Phoenix 2:33
-  LLC Project by Jim Lunsford" with its two links. The license terms require them: do not remove, hide or shrink
-  them. If the page template is changed so that it lacks them, the game refuses it and draws its built-in frame with
-  the credits instead. (The attribution line's wording is under legal review; this is the rule as it stands today.)
+- **Public source code URL** (`sourceurl`): the "View PHP Source" link in every footer. The default points at the
+  project's public repository, which holds this project's unchanged source. `LICENSE.txt` says, in its own words,
+  that "if you put this game on a web server and allow people 'outside of a normal circle of family and its social
+  acquaintances' to play there, then you are publically performing this work and MUST either a) make any and ALL
+  changes which you make to the game available on request (...), b) make arrangements privately with the authors
+  wherein they grant you a special license, or c) remove the code entirely from the machine." Read it in full. If you
+  change the code and publish your changed source, point this setting at it.
+- **The credits.** Every page's footer shows the 1.1.2 copyright line and license block and, on its own line under
+  them, "A Phoenix 2:33 LLC Project by Jim Lunsford" with its two links. Section 4(d) of CC BY-NC-SA 2.0 (quoted in
+  full in `NOTICE`) covers keeping the work's copyright notices intact and giving credit, with the URI the licensor
+  names "to the extent reasonably practicable", and in a derivative work "at a minimum such credit will appear where
+  any other comparable authorship credit appears and in a manner at least as prominent as such other comparable
+  authorship credit". How the game behaves, not a license term: if the page template is changed so that it lacks
+  these lines, the game draws its built-in frame with them instead. You may change your copy of the code under the
+  license.
 - **Content Security Policy** (`csp_mode`, under Security Headers): leave it at `enforce`. Every page the game ships
   works under it. Choose `report-only` only for a third-party module that still prints inline script or inline style:
   its pages break under `enforce`. `report-only` blocks nothing and makes the browser report what it would block in

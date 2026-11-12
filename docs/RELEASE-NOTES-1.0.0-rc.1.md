@@ -64,8 +64,8 @@ The level a host or player notices. Each line is a group of rows in `docs/CHANGE
   (the footer's "View PHP Source" link now opens the public source, `sourceurl`), and password recovery.
 - **Modules.** The 24 bundled modules are certified; a fresh install turns on the 23 recommended ones. Only bundled
   modules install. None of 1.1.2's archive modules is included.
-- **A credit line** under 1.1.2's on every page: "A Phoenix 2:33 LLC Project by Jim Lunsford", with its two links. The
-  host guide says what a host must keep.
+- **A credit line** under 1.1.2's on every page: "A Phoenix 2:33 LLC Project by Jim Lunsford", with its two links: the
+  credit section 4(d) of CC BY-NC-SA 2.0 describes, which `NOTICE` quotes in full, with no added term.
 
 ## Operator notes
 
@@ -89,7 +89,7 @@ bundled modules.
 - **No account recovery or email verification (S11).** A player who forgets a password asks an administrator, who
   resets it in the user editor. Game Settings shows "Require users to validate their email address"
   (`requirevalidemail`) locked off, and the game treats it as off whatever the database holds, because with it on
-  nobody could create an account. Planned for 1.0.0, which it blocks.
+  nobody could create an account. Planned for rc.1; removed when S11 lands (Jim, 2026-11-12: an rc.1 blocker).
 - **Mail is best effort.** The game sends mail with PHP's `mail()`. A message that cannot be handed over is logged and
   the game goes on (host guide, "Mail").
 - **1.1.2 behaviors kept as they were** (`ROADMAP.md`, Phase 3, "Recorded, not changed"), among them: a ban reason is
@@ -103,8 +103,10 @@ bundled modules.
 - **No 1.1.2 migration**, by design: install fresh.
 - **Not certified for public hosting.** The project's own gates (`ROADMAP.md`, "Public hosting") are not all met, and no
   independent security review has been done. `project.json` keeps `public_game_hosting_approved` at `false`.
-- **Licensing questions are with counsel (S9):** the attribution line's wording, and how code under AGPL-3.0-or-later
-  could ship beside the CC BY-NC-SA material (`docs/LEGAL-REVIEW-PACKET-20261107.md`). No file is labeled AGPL.
+- **Licensing (S9): closed by decision.** Jim decided on 2026-11-12 not to seek legal counsel: the project meets the
+  licenses as written, and every statement of the credit stays within what they allow (section 4(d) of CC BY-NC-SA
+  2.0, quoted in `NOTICE`). The legal review packet was not sent and is kept as a record
+  (`docs/LEGAL-REVIEW-PACKET-20261107.md`). No file is labeled AGPL.
 
 ## Credits
 

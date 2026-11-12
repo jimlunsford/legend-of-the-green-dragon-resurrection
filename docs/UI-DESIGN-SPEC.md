@@ -295,7 +295,8 @@ query, so the template writes the two breakpoints as literals equal to these tok
   rel="noopener"`, nothing requested until clicked). Its own line (`<p class="rz-attribution">`) in the template's
   `footer` and `popupfoot`, after the 1.1.2 credit line and outside its element, so it never reads as authorship of the
   1.1.2 code; the same `--muted` color and `--size-small` size as that line. `CLAUDE.md`: no task removes, hides,
-  shrinks or weakens it.
+  shrinks or weakens it (the project's own rule for its tasks; for anyone else, `NOTICE` quotes section 4(d) of the
+  license, which covers credit).
 - **Character panel values** (Jim, 2026-10-30, task 4). Values are `--text`, bold, by default, not gold:
   `getcharstats()` wraps each value in `` `^ `` (`colLtYellow`), and the template's CSS, scoped to the character panel
   (`.rz-statvalue`, `.rz-statbuff`), reads that wrapper as `--text`. The bonus (`` `@ ``) and penalty (`` `$ ``) codes

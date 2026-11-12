@@ -9,10 +9,22 @@ Development Team, as stated in the source files. The original copyright
 notices, LICENSE.txt, README.txt and the about-page text are kept unchanged.
 
 License: Creative Commons Attribution-NonCommercial-ShareAlike 2.0
-(https://creativecommons.org/licenses/by-nc-sa/2.0/legalcode), plus the
-authors' own terms in LICENSE.txt. Anyone who lets people outside their
-family and friends play a modified copy must give the complete modified
-source on request.
+(https://creativecommons.org/licenses/by-nc-sa/2.0/legalcode), and the
+authors' text in LICENSE.txt. Read both in full; this notice does not
+replace or interpret them. LICENSE.txt says, in its own words: "if you put
+this game on a web server and allow people 'outside of a normal circle of
+family and its social acquaintances' to play there, then you are publically
+performing this work and MUST either a) make any and ALL changes which you
+make to the game available on request (note this doesn't have to be
+available via the online source display link, but they must be able to ask
+you for the code AND receive it in toto), b) make arrangements privately
+with the authors wherein they grant you a special license, or c) remove the
+code entirely from the machine."
+
+Noncommercial. Section 4(c) of the license says: "You may not exercise any
+of the rights granted to You in Section 3 above in any manner that is
+primarily intended for or directed toward commercial advantage or private
+monetary compensation."
 
 Resurrection's modifications are licensed the same way: CC BY-NC-SA 2.0 plus
 the terms in LICENSE.txt.
@@ -29,21 +41,46 @@ ShareAlike 2.0 license, as an adaptation of LoGD 1.1.2. The original authors'
 copyright notices and credits above, LICENSE.txt and README.txt stay exactly
 as they are.
 
-Credit. Section 4 of the CC BY-NC-SA 2.0 license requires anyone who
-distributes or publicly performs this work, or an adaptation of it, to keep
-its copyright notices intact and to credit its authors, in an adaptation
-where any other comparable authorship credit appears and at least as
-prominently. For Resurrection that credit is:
+Credit. Section 4(d) of the CC BY-NC-SA 2.0 license says: "If you
+distribute, publicly display, publicly perform, or publicly digitally
+perform the Work or any Derivative Works or Collective Works, You must keep
+intact all copyright notices for the Work and give the Original Author
+credit reasonable to the medium or means You are utilizing by conveying the
+name (or pseudonym if applicable) of the Original Author if supplied; the
+title of the Work if supplied; to the extent reasonably practicable, the
+Uniform Resource Identifier, if any, that Licensor specifies to be
+associated with the Work, unless such URI does not refer to the copyright
+notice or licensing information for the Work; and in the case of a
+Derivative Work, a credit identifying the use of the Work in the Derivative
+Work (e.g., "French translation of the Work by Original Author," or
+"Screenplay based on original Work by Original Author"). Such credit may be
+implemented in any reasonable manner; provided, however, that in the case of
+a Derivative Work or Collective Work, at a minimum such credit will appear
+where any other comparable authorship credit appears and in a manner at
+least as prominent as such other comparable authorship credit."
+
+For Resurrection, the credit Phoenix 2:33 LLC supplies under section 4(d) is:
 
     A Phoenix 2:33 LLC Project by Jim Lunsford
 
-with "Phoenix 2:33 LLC" linking to https://phoenix233.com and "Jim Lunsford"
-linking to https://jimlunsford.com. The game shows it in the footer of every
-page and popup, on its own line under the original authors' credit line. Anyone
-who hosts, distributes or adapts Resurrection keeps this notice intact and
-keeps that credit, with both links, where the original authors' credit appears
-(the footer of every page) and at least as prominently. This is the credit the
-license already requires, not an added term.
+and the URIs it names are https://phoenix233.com (for "Phoenix 2:33 LLC")
+and https://jimlunsford.com (for "Jim Lunsford"). Under section 4(d), keep
+this credit, with those links to the extent reasonably practicable, intact
+wherever the original authors' credit appears, and at least as prominently.
+The game shows it in the footer of every page and popup, on its own line
+under the original authors' credit line.
+
+This notice states the credit section 4(d) describes and adds no term of its
+own. Sections 4(a) and 4(b) of the license say that you "may not offer or
+impose any terms on the Work that alter or restrict the terms of this License
+or the recipients' exercise of the rights granted hereunder", and the same of
+Derivative Works; nothing in this project is meant as such a term.
+
+How the software behaves (not a license term): the game checks its page
+template for the original authors' credit line, the license block and the
+line above, and if one is missing it draws its built-in frame
+(src/Ui/SafeFrame.php), which carries them. A host may change their copy of
+the code under the license.
 
 Art. The original art in assets/scenes/, assets/portraits/ and assets/icons/
 is Copyright (c) 2026 Phoenix 2:33 LLC and licensed under the Creative

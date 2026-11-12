@@ -1,6 +1,6 @@
 # Legend of the Green Dragon - Resurrection
 
-**Release readiness (Phase 6). No Resurrection release has been cut yet: `main` is version `1.0.0-dev`, and the first test build, `1.0.0-rc.1`, waits on the maintainer's go and on legal review.**
+**Release readiness (Phase 6). No Resurrection release has been cut yet: `main` is version `1.0.0-dev`, and the first test build, `1.0.0-rc.1`, waits on S11 (account recovery and email verification) and the maintainer's go.**
 
 **The historical source contains known high-severity security defects and unsupported runtime assumptions. Do not deploy the historical baseline to the public Internet.**
 
@@ -77,7 +77,7 @@ The integrity commands do not execute the application. CI (Modern core, on PHP 8
 - [Modern core phase-2 checkpoint](docs/MODERN-CORE-CHECKPOINT-20260913-PHASE2.md)
 - [Resurrection UI: what Phase 5 changed](docs/PHASE5-SUMMARY-20261105.md) and the [UI design spec](docs/UI-DESIGN-SPEC.md)
 - [Release readiness review (Phase 6)](docs/PHASE6-RC-READINESS-20261106.md)
-- [Legal review packet (for counsel)](docs/LEGAL-REVIEW-PACKET-20261107.md)
+- [Legal review packet (not sent, by Jim's decision on 2026-11-12; kept as a record)](docs/LEGAL-REVIEW-PACKET-20261107.md)
 - [Modern local installation and development](docs/MODERN-INSTALLATION.md)
 - [Raw request contract](docs/REQUEST-SEMANTICS.md)
 
@@ -85,11 +85,11 @@ The integrity commands do not execute the application. CI (Modern core, on PHP 8
 
 Resurrection is a **noncommercial project**. The inherited [LICENSE.txt](LICENSE.txt) remains unchanged. It identifies CC BY-NC-SA 2.0 and contains additional LoGD-specific source/public-performance language. This project does not apply an incompatible replacement license to inherited code. Individual module and asset rights require review.
 
-See [NOTICE](NOTICE) for the attribution, the license and what it asks of anyone who runs a modified copy, and [third-party licenses](docs/THIRD-PARTY-LICENSES.md) for the development libraries in `composer.lock` (the game itself needs none). The game's "View PHP Source" link points at the public source; an operator who changes the game sets it (`sourceurl`) to their own modified source.
+See [NOTICE](NOTICE) for the attribution and the license, with the parts it quotes from `LICENSE.txt` and the legal code, and [third-party licenses](docs/THIRD-PARTY-LICENSES.md) for the development libraries in `composer.lock` (the game itself needs none). The game's "View PHP Source" link points at the public source; the `sourceurl` setting changes it, for example to an operator's own modified source (`LICENSE.txt` has the terms for a changed game's source).
 
 ## Credit and attribution
 
-Resurrection's modifications and additions are Copyright (c) 2026 Phoenix 2:33 LLC, licensed under CC BY-NC-SA 2.0 as an adaptation of LoGD 1.1.2; the original authors' copyright and credits stay as they are. The game credits Resurrection on every page and popup, on its own line under the original authors' credit: "A Phoenix 2:33 LLC Project by Jim Lunsford", with "Phoenix 2:33 LLC" linking to https://phoenix233.com and "Jim Lunsford" to https://jimlunsford.com. Anyone who hosts, distributes or adapts Resurrection keeps that credit and its links where the original authors' credit appears, at least as prominently, as the license's attribution section requires. See [NOTICE](NOTICE).
+Resurrection's modifications and additions are Copyright (c) 2026 Phoenix 2:33 LLC, licensed under CC BY-NC-SA 2.0 as an adaptation of LoGD 1.1.2; the original authors' copyright and credits stay as they are. The game credits Resurrection on every page and popup, on its own line under the original authors' credit: "A Phoenix 2:33 LLC Project by Jim Lunsford", with "Phoenix 2:33 LLC" linking to https://phoenix233.com and "Jim Lunsford" to https://jimlunsford.com. This is the credit section 4(d) of CC BY-NC-SA 2.0 describes: anyone who distributes or publicly performs the work keeps its copyright notices intact and gives credit, with the URI the licensor names "to the extent reasonably practicable", and in a derivative work "at a minimum such credit will appear where any other comparable authorship credit appears and in a manner at least as prominent as such other comparable authorship credit". [NOTICE](NOTICE) quotes section 4(d) in full and adds no term of its own.
 
 ## Credits
 

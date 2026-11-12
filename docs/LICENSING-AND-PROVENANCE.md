@@ -6,9 +6,17 @@ This is an engineering rights ledger and working interpretation, not a legal rul
 
 The historical `LICENSE.txt` is preserved byte-for-byte. It identifies **Creative Commons Attribution-NonCommercial-ShareAlike 2.0**, links to that legal text, and supplies additional LoGD-specific source/public-performance expectations and exceptions.
 
-The project is **noncommercial**. Do not claim commercial use is permitted. Retain attribution, copyright notices and ShareAlike obligations. Modifications are contemplated by the inherited terms, but that does not permit blanket relicensing to MIT, GPL or AGPL. Later LoGD code cannot be imported into the old GPL line as a relicensing shortcut.
+The project is **noncommercial**. Section 4(c) of the license says: "You may not exercise any of the rights granted to
+You in Section 3 above in any manner that is primarily intended for or directed toward commercial advantage or private
+monetary compensation." `NOTICE` quotes the whole clause. Do not claim commercial use is permitted. Retain attribution, copyright notices and ShareAlike obligations. Modifications are contemplated by the inherited terms, but that does not permit blanket relicensing to MIT, GPL or AGPL. Later LoGD code cannot be imported into the old GPL line as a relicensing shortcut.
 
-The CC legal code and LoGD's explanatory/additional text are distinct evidence. Do not describe generic CC BY-NC-SA as an AGPL-style source license. Conservatively retain LoGD's stated expectation that applicable modified source be available on request for public game hosting beyond the stated family/social circle. A live executable source viewer is not mandatory under the LoGD text; safe source delivery can satisfy that stated approach.
+The CC legal code and LoGD's explanatory/additional text are distinct evidence. Do not describe generic CC BY-NC-SA as an AGPL-style source license. `LICENSE.txt` says, in its own words, that "if you put this game on a web server and allow people 'outside of a
+normal circle of family and its social acquaintances' to play there, then you are publically performing this work and
+MUST either a) make any and ALL changes which you make to the game available on request (note this doesn't have to be
+available via the online source display link, but they must be able to ask you for the code AND receive it in toto),
+b) make arrangements privately with the authors wherein they grant you a special license, or c) remove the code
+entirely from the machine." This page does not interpret it; read `LICENSE.txt` and the legal code in full. The game
+offers its source through the `sourceurl` link (2026-10-24, below); the source viewer stays disabled.
 
 Sources: [preserved LICENSE](../LICENSE.txt), [CC deed](https://creativecommons.org/licenses/by-nc-sa/2.0/), [official legal-code source](https://github.com/creativecommons/cc-legal-tools-data/blob/main/legacy/legalcode/by-nc-sa_2.0.html).
 
@@ -97,3 +105,24 @@ Phase 5 task 15 (`PHASE5-TASK15-REMOVE-SKINS-20261105.md`). An engineering recor
   `NOTICE` names each skin's credited designer and says where they remain.
 - Still open: the inherited core images in `images/` (the task lists the ones nothing references any more; none is
   deleted), and the other items above.
+
+## 2026-11-12: the credit within the license (Phase 6 task 11)
+
+`PHASE6-TASK11-20261112.md`. An engineering record, not a legal ruling.
+
+- **S9 closed by decision.** Jim decided on 2026-11-12 not to seek legal counsel: the project meets the licenses as
+  written, and every statement of the credit stays within what the licenses allow. `LEGAL-REVIEW-PACKET-20261107.md`
+  was not sent and is kept as a record.
+- **The credit is section 4(d)'s.** Section 4(d) of CC BY-NC-SA 2.0 is the credit clause (4(c) is the noncommercial
+  clause). For a Derivative Work it asks for "a credit identifying the use of the Work in the Derivative Work", the URI
+  the Licensor specifies "to the extent reasonably practicable", and that "at a minimum such credit will appear where
+  any other comparable authorship credit appears and in a manner at least as prominent as such other comparable
+  authorship credit." Sections 4(a) and 4(b) say that you "may not offer or impose any terms" that "alter or restrict the
+  terms of this License". `NOTICE`, `README.md`, `HOST-GUIDE.md` and the release notes now state the Resurrection credit
+  in 4(d)'s terms and add no term, condition or penalty of their own. The template check and the built-in frame are
+  described as how the software behaves, not as a license term.
+- **Host duties are quoted.** Where a shipped document states what a host must do, it quotes `LICENSE.txt` or the legal
+  code; this page's "Inherited core" section quotes `LICENSE.txt` in place of the earlier reading of it.
+- **Kept unchanged:** `LICENSE.txt`, `README.txt`, the rendered credit and attribution lines, their links and where they
+  appear, the template check, the XOR checks and the safe frame. `tests/tooling/test_credit_wording.py` keeps the
+  shipped documents free of wording that adds a term.

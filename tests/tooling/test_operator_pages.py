@@ -287,6 +287,12 @@ class OperatorPageTests(unittest.TestCase):
                     code, headers, body = self.get(port, path)
                     self.assertEqual(status, code, body[:1500])
                     self.assertIn(needle, body.decode())
+                    if label == 'installer':
+                        # Phase 6 task 11: the 403 names the two real ways to install, and no migration (none exists;
+                        # installs are fresh only).
+                        self.assertIn('php scripts/install.php', body.decode())
+                        self.assertIn('setup.php', body.decode().replace('installer.php', ''))
+                        self.assertNotIn('migration', body.decode().lower())
                     for name, value in expected.items():
                         self.assertEqual([value], headers.get_all(name), f'{label}: {name}')
                     self.assertIsNone(headers['Content-Security-Policy-Report-Only'])
