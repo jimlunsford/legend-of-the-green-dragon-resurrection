@@ -25,6 +25,8 @@ $mname = translate_inline("Module Name");
 $mver = translate_inline("Version");
 $mauth = translate_inline("Module Author");
 $mdown = translate_inline("Download Location");
+// Phase 6 task 9: the list sits in an rz-fit box, which fits it to a phone's width; the table's markup stays 1.1.2's.
+rawoutput("<div class='rz-fit'>");
 rawoutput("<table border='0' cellpadding='2' cellspacing='1' bgcolor='#999999'>",true);
 rawoutput("<tr class='trhead'><td>$mname</td><td>$mver</td><td>$mauth</td><td>$mdown</td></tr>",true);
 if (db_num_rows($result) == 0) {
@@ -81,4 +83,5 @@ while ($row = db_fetch_assoc($result)) {
 	rawoutput("</tr>");
 }
 rawoutput("</table>");
+rawoutput("</div>");
 ?>

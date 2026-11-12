@@ -8,7 +8,8 @@ function resurrection_dragon_context(?array $specialty = null): string {
     global $session;
     $combat = resurrection_combat_context($specialty ?? ['module'=>'','skill'=>0,'uses'=>0]);
     $state = [];
-    foreach (['dragonkills','dragonpoints','slaydragon','gold','gems','experience','charm','age','race','specialmisc','superuser','authversion'] as $key) {
+    // No authversion: it changes on every sign-in, and badnav.php replays a page kept before one after it (Phase 6 task 9).
+    foreach (['dragonkills','dragonpoints','slaydragon','gold','gems','experience','charm','age','race','specialmisc','superuser'] as $key) {
         $state[$key] = $session['user'][$key];
     }
     return hash('sha256', json_encode([$combat,$state], JSON_THROW_ON_ERROR));

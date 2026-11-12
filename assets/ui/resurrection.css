@@ -1044,6 +1044,33 @@ a.hotmotd { color: var(--accent); }
   .rz-form-section select, .rz-form-section textarea { width: 100%; }
 
   /*
+    Phase 6 task 9: a label-and-field table (create.php, the companion and mount editors) stacks the same way, each label
+    above its field and the field the full width.
+  */
+  .rz-content table.rz-stack, .rz-stack > tbody, .rz-stack > tbody > tr, .rz-stack > tbody > tr > td { display: block; width: 100%; }
+  .rz-stack > tbody > tr > td { padding: 4px 0; white-space: normal; }
+  .rz-stack > tbody > tr > td + td { padding-bottom: 12px; }
+  .rz-stack input:not([type="checkbox"]):not([type="radio"]):not([type="button"]):not([type="submit"]):not([type="hidden"]),
+  .rz-stack select, .rz-stack textarea { width: 100%; }
+
+  /*
+    Phase 6 task 9: a player-facing list (the warrior list, the Hall of Fame, Dag's bounty list, the about page's module
+    list) fits the screen instead of scrolling in its box. The table takes the card's width and most of its padding, in
+    smaller type with tighter cells; words wrap between them, never inside one. Admin tables keep their own scroll box.
+  */
+  .rz-content table.rz-fit, .rz-content .rz-fit > table {
+    display: table;
+    width: calc(100% + 2 * (var(--space-card-phone) - 8px));
+    max-width: none;
+    margin-left: calc(8px - var(--space-card-phone));
+    margin-right: calc(8px - var(--space-card-phone));
+    overflow: visible;
+    font-size: var(--size-small);
+  }
+  .rz-fit td, .rz-fit th { padding: 6px 4px; white-space: normal; }
+  .rz-fit .trhead td, .rz-fit .trhead th { letter-spacing: normal; }
+
+  /*
     Phone header, signed out (and popups): the wordmark on one line, shrunk to the screen's width (its width is about
     18 times its font size), "Resurrection" and the controls on the row below.
   */

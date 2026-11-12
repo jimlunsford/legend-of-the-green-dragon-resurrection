@@ -20,7 +20,8 @@ function resurrection_inn_room_prices(int $level): array {
 function resurrection_inn_room_context(string $pay): string {
     global $session;
     $state = ['pay'=>$pay, 'fee'=>(string)getsetting('innfee', '5%')];
-    foreach (['acctid','level','gold','goldinbank','boughtroomtoday','location','loggedin','alive','authversion'] as $key) {
+    // No authversion: it changes on every sign-in, and badnav.php replays a page kept before one after it (Phase 6 task 9).
+    foreach (['acctid','level','gold','goldinbank','boughtroomtoday','location','loggedin','alive'] as $key) {
         $state[$key] = (string)$session['user'][$key];
     }
     return hash('sha256', json_encode($state, JSON_THROW_ON_ERROR));

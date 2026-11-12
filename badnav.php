@@ -41,7 +41,10 @@ if ($session['user']['loggedin'] && $session['loggedin']){
 		}
 		page_footer();
 	}
-	echo $row['output'];
+	// The kept page with this session's form tokens (Phase 6 task 9). Its actions are issued afresh only on the first
+	// replay after signing in (login.php), when the session is new; the earlier session's tokens are never accepted.
+	echo \Resurrection\Security\KeptPage::replay($row['output'], $_SESSION, !empty($_SESSION['kept_page_reissue']));
+	unset($_SESSION['kept_page_reissue']);
 	$session['debug']="";
 	$session['user']['allowednavs']=$session['allowednavs'];
 	saveuser();

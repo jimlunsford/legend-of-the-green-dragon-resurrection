@@ -3,6 +3,7 @@
 import argparse
 import json
 from pathlib import Path
+import re
 import statistics
 import sys
 import time
@@ -10,13 +11,17 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 TOOLING = ROOT / 'tests' / 'tooling'
-# Per-test seconds, the larger of the two legs' (PHP 8.5 / MySQL 8.4 and PHP 8.4 / MariaDB 11.4) in one Modern core
-# run, rounded to 0.1s; a test under 0.05s is 0.0. Refresh from the shards' printed durations.
+# Per-test seconds: the largest each test took in the http job logs given to --refresh-durations, rounded to 0.1s (a
+# test under 0.05s is 0.0). Phase 6 task 9: give it every http job of at least two Modern core runs, both legs. One run
+# is not enough: a job's speed depends on its runner, and the same tests took from 0.78 to 1.22 times as long from one
+# run to the next. With the largest of four samples, no job of either run took longer than its table sum.
 DURATIONS = TOOLING / 'shard-durations.json'
+# A line of unittest's "Slowest test durations" (--durations 0), with or without the Actions log's timestamp.
+DURATION_LINE = re.compile(r'(?m)^(?:\S+Z )?(\d+\.\d+)s +\S+ \(([\w.]+)\)\s*$')
 WEB_MODULE = 'test_web_application'
 # Creates the WebPlayer account that every later web test logs in as.
 ACCOUNT_SETUP = WEB_MODULE + '.WebApplicationTests.test_create_login_rotate_render_logout'
-DEFAULT_SHARDS = 4
+DEFAULT_SHARDS = 5
 
 def discover():
     """Test ids in exactly the order `python3 -m unittest discover -s tests/tooling` runs them."""
@@ -32,6 +37,16 @@ def discover():
     if broken:
         raise SystemExit('Tooling discovery failed: ' + ', '.join(broken))
     return tests
+
+def durations_from_logs(texts):
+    """The table for shard-durations.json from shard logs: each test's largest time in any of them, rounded to 0.1s."""
+    table = {}
+    for text in texts:
+        for seconds, test in DURATION_LINE.findall(text):
+            table[test] = max(table.get(test, 0.0), round(float(seconds), 1))
+    if not table:
+        raise ValueError('No test durations found in the logs')
+    return dict(sorted(table.items()))
 
 def weights(ids):
     """Measured seconds per test (shard-durations.json); a test missing from it costs the median.
@@ -101,7 +116,14 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--shards', type=int, default=DEFAULT_SHARDS)
     parser.add_argument('--shard', type=int, help='1-based shard to run; omit to list every shard')
+    parser.add_argument('--refresh-durations', nargs='+', metavar='LOG',
+                        help='rewrite shard-durations.json from these http job logs (every job of two or more runs)')
     args = parser.parse_args()
+    if args.refresh_durations:
+        table = durations_from_logs(Path(log).read_text(encoding='utf-8-sig', errors='replace') for log in args.refresh_durations)
+        DURATIONS.write_text(json.dumps(table, indent=1) + '\n')
+        print(f'{len(table)} tests, {sum(table.values()):.1f}s in all, from {len(args.refresh_durations)} logs')
+        return 0
     tests = discover()
     ids = [test.id() for test in tests]
     cost = weights(ids)

@@ -40,8 +40,9 @@ function resurrection_graveyard_context(): string {
     restore_buff_fields();
     try {
         $state=resurrection_graveyard_state(); $player=[];
+        // No authversion: it changes on every sign-in, and badnav.php replays a page kept before one after it (Phase 6 task 9).
         foreach (['acctid','alive','hitpoints','soulpoints','deathpower','gravefights','level','attack','defense','maxhitpoints',
-            'specialinc','specialmisc','authversion','lasthit','name','sex','dragonkills','dragonpoints'] as $key) $player[$key]=is_array($session['user'][$key])?$session['user'][$key]:(string)$session['user'][$key];
+            'specialinc','specialmisc','lasthit','name','sex','dragonkills','dragonpoints'] as $key) $player[$key]=is_array($session['user'][$key])?$session['user'][$key]:(string)$session['user'][$key];
         $buffs=[]; foreach ($session['bufflist'] as $id=>$buff) { unset($buff['fields_calculated'],$buff['tempstats_calculated']); $buffs[]=[$id,$buff]; }
         $ordered=[]; foreach ($companions as $id=>$companion) $ordered[]=[$id,$companion];
         $settings=[]; foreach (['gravechance'=>0,'enablecompanions'=>true,'maxattacks'=>4,'autofight'=>0,'autofightfull'=>0] as $key=>$default) $settings[$key]=(string)getsetting($key,$default);

@@ -22,7 +22,7 @@ final class PresentationTest extends TestCase
     private const string RESURRECTION = "<div class='rz-center'>A centered line</div><div class='rz-float-right'>Right</div>"
         . "<div class='rz-float-left'>Left</div> <span class='colDkGreen'>Green</span> <b>Bold</b>";
     /** Every entry of resurrection_presentation(). */
-    private const array KEYS = ['grid', 'inline-form', 'inline-form-dq', 'inline-form-flush', 'link-button', 'shop-button', 'larger',
+    private const array KEYS = ['grid', 'grid-fit', 'inline-form', 'inline-form-dq', 'inline-form-flush', 'link-button', 'shop-button', 'larger',
         'larger-end', 'violet', 'grey', 'white', 'gold', 'warning', 'typed', 'pre-wrap', 'indent', 'clan-motd', 'clan-textarea',
         'plain-link', 'danger-cell'];
 
@@ -45,6 +45,7 @@ final class PresentationTest extends TestCase
         }
         self::assertSame("<span class='rz-larger'>", $new['larger']);
         self::assertSame(" class='rz-grid'", $new['grid']);
+        self::assertSame(" class='rz-grid rz-fit'", $new['grid-fit']);
         self::assertSame('', $new['danger-cell']);
         // The same before a template is loaded; an unknown key is nothing.
         self::assertSame($new, $this->table($this->run_(false, $code)));

@@ -52,6 +52,8 @@ final class SecretPageTest extends TestCase
         $source = (string)file_get_contents('lib/pageparts.php');
         self::assertSame(1, substr_count($source, "\$session['output']=resurrection_secret_kept_copy(\$output);"));
         self::assertSame(0, preg_match("/\\\$session\\['output'\\]\\s*=\\s*\\\$output\\s*;/", $source));
+        // The copy then keeps markers for the session's form tokens, never the tokens (Phase 6 task 9).
+        self::assertSame(1, substr_count($source, "\$session['output']=resurrection_secret_kept_copy(\$output);\n\t// The setup page's frame has no session before a grant (Phase 6 task 5b): nothing to replace then.\n\t\$session['output']=\\Resurrection\\Security\\KeptPage::keep(\$session['output'], \$_SESSION ?? []);"));
         // Both pages that show a secret use it: Game Settings' web maintenance and the setup page.
         self::assertStringContainsString('resurrection_secret_output(resurrection_webcron_once_html(', (string)file_get_contents('lib/webcron.php'));
         self::assertStringContainsString('resurrection_secret_output(', (string)file_get_contents('lib/setup/page.php'));

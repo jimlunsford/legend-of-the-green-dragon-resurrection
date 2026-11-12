@@ -34,6 +34,12 @@ The level a host or player notices. Each line is a group of rows in `docs/CHANGE
 - **Labels and tap targets.** Every control on the Warriors list's search, Cedrik's gem wish and Dag's bounty forms has
   a label, and the shop item buttons, the write-mail icons, the module list's links and the radio buttons and
   checkboxes are at least 44px to tap on a phone.
+- **Signing in again picks up where you left off.** After a sign-out or a timeout in the middle of the new day's
+  questions, a fight or a forest event, the page you left comes back with working buttons; a form from the earlier
+  session is still refused.
+- **Phone layout.** On a phone, account creation and the companion and mount editors put each label above its field,
+  the Warriors list, the Hall of Fame, Dag's bounty list and the module list fit the screen, and an admin table that is
+  wider than the screen scrolls inside its own box.
 - **No password recovery by email** in this build (see "Known issues").
 
 ### For hosts
@@ -81,8 +87,6 @@ the public source address (`sourceurl`), and run the checks in the guide's secti
   nobody could create an account. Planned for 1.0.0, which it blocks.
 - **Mail is best effort.** The game sends mail with PHP's `mail()`. A message that cannot be handed over is logged and
   the game goes on (host guide, "Mail").
-- **Signing in again during the new day's questions** can replay a page whose buttons answer "Invalid form
-  submission." (403). Reloading the page, or following its link again, gives working buttons.
 - **1.1.2 behaviors kept as they were** (`ROADMAP.md`, Phase 3, "Recorded, not changed"), among them: a ban reason is
   shown to the banned visitor as raw HTML (staff write it); clearing the `lgi` cookie evades an ID ban; weapon, armor and
   title text allows color codes; the clan-delete hook is not called on disband; the healer resets hitpoints above the

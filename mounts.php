@@ -289,7 +289,8 @@ function mountform($mount, $context){
 
 	rawoutput(resurrection_content_form("mounts.php?op=save&id={$mount['mountid']}", "mount-edit-".(int)$mount['mountid'], $context));
 	rawoutput("<input type='hidden' name='mount[mountactive]' value=\"".(int)$mount['mountactive']."\">");
-	rawoutput("<table>");
+	// A label-and-field table: on a phone each label sits above its field (Phase 6 task 9).
+	rawoutput("<table class='rz-stack'>");
 	rawoutput("<tr><td nowrap>");
 	resurrection_label_open('mount-mountname');
 	output("Mount Name:");

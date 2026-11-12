@@ -1,6 +1,7 @@
 <?php
 if (!\defined('RESURRECTION_ENTRY') && \PHP_SAPI !== 'cli') { \http_response_code(404); exit; }
 require_once __DIR__ . '/../src/Compatibility/array_cursor.php';
+require_once __DIR__ . '/../src/Security/KeptPage.php';
 /**
  * Library (supporting) functions for page output
  *		addnews ready
@@ -364,8 +365,13 @@ function page_footer($saveuser=true){
 	//finalize output
 	$output=$header.$output.$footer;
 	$session['user']['gensize']+=strlen($output);
-	// The kept copy of the page (accounts_output): never a secret the page showed once (Phase 6 task 5b, step 0).
+	// The kept copy of the page (accounts_output): never a secret the page showed once (Phase 6 task 5b, step 0), and
+	// never this session's form tokens, only markers badnav.php fills from the session that shows it (Phase 6 task 9).
 	$session['output']=resurrection_secret_kept_copy($output);
+	// The setup page's frame has no session before a grant (Phase 6 task 5b): nothing to replace then.
+	$session['output']=\Resurrection\Security\KeptPage::keep($session['output'], $_SESSION ?? []);
+	// This session issued the page now kept, so a later replay never issues its actions afresh.
+	unset($_SESSION['kept_page_reissue']);
 	if ($saveuser === true) {
 		saveuser();
 	}

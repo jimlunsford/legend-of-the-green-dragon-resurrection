@@ -94,7 +94,8 @@ function resurrection_newday_validate(): void {
 function resurrection_newday_context(array $sources): string {
     global $baseaccount;
     $state = $baseaccount;
-    foreach (['password','laston','gentime','gentimecount','gensize','allowednavs','restorepage','lastip','uniqueid'] as $key) unset($state[$key]);
+    // No authversion: it changes on every sign-in, and badnav.php replays a page kept before one after it (Phase 6 task 9).
+    foreach (['password','laston','gentime','gentimecount','gensize','allowednavs','restorepage','lastip','uniqueid','authversion'] as $key) unset($state[$key]);
     foreach (['bufflist','companions','dragonpoints','prefs'] as $key) $state[$key] = \Resurrection\Security\ScalarState::read($state[$key]);
     return hash('sha256', json_encode(NewDayState::canonical([$state,$sources,gmdate('Y-m-d',gametime())]), JSON_THROW_ON_ERROR));
 }

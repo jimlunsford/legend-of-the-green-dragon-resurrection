@@ -29,7 +29,7 @@ function dag_run_private(){
 		// Added for new Bounty Code
 		output("`c`bThe Bounty List`b`c`n");
 		$result = db_query('SELECT bountyid,amount,target,setter,setdate FROM ' . db_prefix('bounty') . ' WHERE status=0 AND setdate<=? ORDER BY bountyid ASC',true,[date('Y-m-d H:i:s')]);
-		rawoutput("<table border=0 cellpadding=2 cellspacing=1".resurrection_presentation("grid").">");
+		rawoutput("<table border=0 cellpadding=2 cellspacing=1".resurrection_presentation("grid-fit").">");
 		$amount = translate_inline("Amount");
 		$level = translate_inline("Level");
 		$name = translate_inline("Name");

@@ -67,6 +67,33 @@ class ToolingShardTests(unittest.TestCase):
         self.assertEqual(shards.DEFAULT_SHARDS, count)
         self.assertEqual(list(range(1, count + 1)), listed)
 
+    def test_http_jobs_install_and_run_their_shard_only(self):
+        # Phase 6 task 9: the shards need only the installed game FreshInstallTest leaves (proved in
+        # docs/PHASE6-TASK9-20261112.md), so an http job no longer runs the whole PHPUnit suite; checks still does.
+        workflow = (ROOT / '.github' / 'workflows' / 'modern-core-leg.yml').read_text()
+        jobs = dict(re.findall(r'(?ms)^  ([a-z]+):\n(.*?)(?=^  [a-z]+:\n|\Z)', workflow[workflow.index('\njobs:\n'):]))
+        self.assertEqual(['checks', 'http', 'result'], list(jobs))
+        runs = {name: re.findall(r'(?m)^      - run: (.+?) *$', job) for name, job in jobs.items()}
+        self.assertIn('composer test', runs['checks'])
+        self.assertNotIn('composer test', runs['http'])
+        self.assertEqual(['composer install --no-interaction --prefer-dist --no-progress', 'vendor/bin/phpunit tests/unit/FreshInstallTest.php',
+                          'python3 scripts/tooling-shards.py --shards 5 --shard ${{ matrix.shard }}'], runs['http'])
+        self.assertIn('needs: [checks, http]', jobs['result'])
+
+    def test_the_durations_table_is_each_tests_largest_time(self):
+        # Phase 6 task 9: one run's times did not predict the next (each job's runner sets its speed), so the table is
+        # the largest time each test took over every log it is refreshed from, a prerequisite's included.
+        logs = ['2026-11-12T03:39:43.5568313Z 322.362s   test_slow (test_web_application.WebApplicationTests.test_slow)\n'
+                '2026-11-12T03:39:43.5568313Z 0.04s      test_quick (test_a.A.test_quick)\n'
+                '2026-11-12T03:39:43.5568313Z test_slow (test_web_application.WebApplicationTests.test_slow) ... ok\n',
+                '9.412s     test_create_login_rotate_render_logout (test_web_application.WebApplicationTests.test_create_login_rotate_render_logout)\n'
+                '292.7s   test_slow (test_web_application.WebApplicationTests.test_slow)\n',
+                '2026-11-12T03:19:02Z 10.31s   test_create_login_rotate_render_logout (test_web_application.WebApplicationTests.test_create_login_rotate_render_logout)\n']
+        self.assertEqual({'test_a.A.test_quick': 0.0, 'test_web_application.WebApplicationTests.test_create_login_rotate_render_logout': 10.3,
+                          'test_web_application.WebApplicationTests.test_slow': 322.4}, shards.durations_from_logs(logs))
+        with self.assertRaisesRegex(ValueError, 'No test durations'):
+            shards.durations_from_logs(['Shard 1/5: ran 0'])
+
     def test_every_workflow_job_pins_its_runner_and_actions(self):
         # Phase 6 task 2 (S8): ubuntu-latest was about to move to Ubuntu 26, and the node20 actions were deprecated.
         # Every job names ubuntu-24.04 (or calls a local workflow whose jobs do), and every action is pinned by its full

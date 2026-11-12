@@ -54,7 +54,7 @@ composer check
 vendor/bin/phpstan analyse -c phpstan-new.neon
 ```
 
-The integrity commands do not execute the application. CI (Modern core, on PHP 8.4 with MariaDB 11.4 and PHP 8.5 with MySQL 8.4) also runs the release upgrade check, PHPUnit, both PHPStan gates and the HTTP suite in four shards: a strict fresh install, account creation, sign-in, play, the 24 bundled modules, the admin editors, the web setup page and web maintenance. Each task's evidence doc records its runs. PHP 5 lab work is deferred.
+The integrity commands do not execute the application. CI (Modern core, on PHP 8.4 with MariaDB 11.4 and PHP 8.5 with MySQL 8.4) also runs the release upgrade check, PHPUnit, both PHPStan gates and the HTTP suite in five shards: a strict fresh install, account creation, sign-in, play, the 24 bundled modules, the admin editors, the web setup page and web maintenance. Each task's evidence doc records its runs. PHP 5 lab work is deferred.
 
 ## Project documents
 

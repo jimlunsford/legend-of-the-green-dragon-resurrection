@@ -138,7 +138,7 @@ Local verification, proportionate to the change:
 - Historical verifier and project validator
 - Repository hygiene and whitespace
 
-Local shard runs: run locally only the shards that contain new or changed tests, through `scripts/tooling-shards.py`. Run all four only when a shared helper changes (intent, CSRF, player mutation, systemmail, combat, the shard runner itself). CI runs the full suite on both legs, and CI is the acceptance.
+Local shard runs: run locally only the shards that contain new or changed tests, through `scripts/tooling-shards.py`. Run all five only when a shared helper changes (intent, CSRF, player mutation, systemmail, combat, the shard runner itself). CI runs the full suite on both legs, and CI is the acceptance.
 
 ## CI
 
@@ -149,9 +149,9 @@ Supported matrix:
 
 Workflows: Modern core, Baseline integrity.
 
-Modern core runs per leg: one `checks` job, four `http` shard jobs, and one `result` job. `scripts/tooling-shards.py` assigns every Python test to exactly one shard, and `tests/tooling/test_tooling_shards.py` fails if a test is dropped or doubled.
+Modern core runs per leg: one `checks` job, five `http` shard jobs, and one `result` job, 14 jobs in all (Phase 6 task 9; 12 before). Acceptance is all 14 jobs. `checks` runs the full PHPUnit suite; an `http` job runs only `FreshInstallTest`, the install its shard needs, then its shard. `scripts/tooling-shards.py` assigns every Python test to exactly one shard, and `tests/tooling/test_tooling_shards.py` fails if a test is dropped or doubled.
 
-- Do not change the 60-minute timeout unless the task prompt says to. Never raise it to fit more tests. If a shard nears 30 minutes, refresh `tests/tooling/shard-durations.json` or add a shard.
+- Do not change the 60-minute timeout unless the task prompt says to. Never raise it to fit more tests. Keep every job under 21 minutes. When the slowest nears it, refresh `tests/tooling/shard-durations.json` with `scripts/tooling-shards.py --refresh-durations` from every `http` job log of at least two runs, both legs, or add a shard.
 - New tests are assigned automatically. Do not hand-edit shard lists.
 - Plain `unittest discover` runs tests in name order, so a web test that needs WebPlayer must not rely on running after `test_create_login_rotate_render_logout` unless the shard runner orders it. Run local serial checks through `scripts/tooling-shards.py`.
 - Do not rerun old workflows. Do not dispatch duplicates.

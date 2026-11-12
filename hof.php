@@ -100,7 +100,8 @@ function display_table($title, $sql, $none=false, $foot=false,
 	} else {
 		output("`c`b`^%s`0`b`c`n", $title);
 	}
-	rawoutput("<table cellspacing='0' cellpadding='2' align='center'>");
+	// The list fits a phone's width (Phase 6 task 9).
+	rawoutput("<table cellspacing='0' cellpadding='2' align='center' class='rz-fit'>");
 	rawoutput("<tr class='trhead'>");
 	output_notl("<td>`b$rank`b</td><td>`b$name`b</td>", true);
 	if ($data_header !== false) {

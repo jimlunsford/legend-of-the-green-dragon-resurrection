@@ -51,7 +51,8 @@ function resurrection_dragon_point_context(array $schema): string {
     foreach (['acctid','dragonkills','maxhitpoints','attack','defense'] as $field) {
         $state[$field] = DragonPointState::integer($session['user'][$field]);
     }
-    foreach (['race','specialty','alive','specialinc','lasthit','age','location','authversion'] as $field) {
+    // No authversion: it changes on every sign-in, and badnav.php replays a page kept before one after it (Phase 6 task 9).
+    foreach (['race','specialty','alive','specialinc','lasthit','age','location'] as $field) {
         $state[$field] = (string)$session['user'][$field];
     }
     $state['dragonpoints'] = $session['user']['dragonpoints'];

@@ -71,8 +71,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2, 3, 4]
-    # A fresh disposable database per shard; composer test performs the same clean install as before.
+        shard: [1, 2, 3, 4, 5]
+    # A fresh disposable database per shard. The shards need only the installed game FreshInstallTest leaves (its
+    # administrator and player fixtures); the full PHPUnit suite runs once per leg, in checks (Phase 6 task 9).
     services:
       database:
         image: ${{ inputs.database }}
@@ -107,10 +108,10 @@ jobs:
           tools: composer:v2
           ini-values: error_reporting=-1, display_errors=1
       - run: composer install --no-interaction --prefer-dist --no-progress
-      - run: composer test
+      - run: vendor/bin/phpunit tests/unit/FreshInstallTest.php
         env:
           RESURRECTION_TEST_DB_HOST: 127.0.0.1:${{ job.services.database.ports[3306] }}
-      - run: python3 scripts/tooling-shards.py --shards 4 --shard ${{ matrix.shard }}
+      - run: python3 scripts/tooling-shards.py --shards 5 --shard ${{ matrix.shard }}
         env:
           RESURRECTION_TEST_DB_HOST: 127.0.0.1:${{ job.services.database.ports[3306] }}
   result:

@@ -127,7 +127,7 @@ $race = translate_inline("Race");
 $sex = translate_inline("Sex");
 $last = translate_inline("Last On");
 
-rawoutput("<table border=0 cellpadding=2 cellspacing=1".resurrection_presentation("grid").">",true);
+rawoutput("<table border=0 cellpadding=2 cellspacing=1".resurrection_presentation("grid-fit").">",true);
 rawoutput("<tr class='trhead'><td>$alive</td><td>$level</td><td>$name</td><td>$loc</td><td>$race</td><td>$sex</td><td>$last</tr>");
 $writemail = translate_inline("Write Mail");
 $alive = translate_inline("`1Yes`0");

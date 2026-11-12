@@ -278,6 +278,8 @@ function resurrection_presentation($key){
 		"float-left" => "<div class='rz-float-left'>",
 		// Admin and module tables drawn as a grid of 1px lines (cellspacing over a grey table background).
 		"grid" => " class='rz-grid'",
+		// A player-facing grid (the warrior list, Dag's bounty list) that fits a phone's width (Phase 6 task 9).
+		"grid-fit" => " class='rz-grid rz-fit'",
 		// A form inside a line of text or a table cell.
 		"inline-form" => " class='rz-inline'",
 		"inline-form-dq" => ' class="rz-inline"',

@@ -202,7 +202,8 @@ function companionform($companion, $context){
 
 	rawoutput(resurrection_content_form("companions.php?op=save&id={$companion['companionid']}", "companion-edit-".(int)$companion['companionid'], $context));
 	rawoutput("<input type='hidden' name='companion[companionactive]' value=\"".(int)$companion['companionactive']."\">");
-	rawoutput("<table width='100%'>");
+	// A label-and-field table: on a phone each label sits above its field (Phase 6 task 9).
+	rawoutput("<table width='100%' class='rz-stack'>");
 	rawoutput("<tr><td nowrap>");
 	resurrection_label_open('companion-name');
 	output("Companion Name:");

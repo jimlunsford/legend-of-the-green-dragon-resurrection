@@ -318,5 +318,61 @@ class StylesheetTest(unittest.TestCase):
             self.assertTrue(re.search(r'\.' + re.escape(name) + r'\b', self.css + tokens), name)
 
 
+class PhoneTablesTest(unittest.TestCase):
+    """Phase 6 task 9: on a phone a label-and-field table stacks (rz-stack) and a player-facing list fits the screen
+    (rz-fit); admin tables keep their own scroll box. The classes are styled under the phone breakpoint only, so the
+    desktop layout does not change. The browser check (390 wide, every crawled page) is in docs/PHASE6-TASK9-20261112.md."""
+
+    STACK = {'create.php': 'rawoutput(\'<table class="rz-stack"><tr><td><label for="create-name">',
+             'companions.php': "rawoutput(\"<table width='100%' class='rz-stack'>\");",
+             'mounts.php': "rawoutput(\"<table class='rz-stack'>\");"}
+    FIT = {'list.php': 'resurrection_presentation("grid-fit")', 'modules/dag/run.php': 'resurrection_presentation("grid-fit")',
+           'hof.php': "rawoutput(\"<table cellspacing='0' cellpadding='2' align='center' class='rz-fit'>\");"}
+
+    @classmethod
+    def setUpClass(cls):
+        css = CSS.read_text()
+        start = css.index('@media (max-width: 600px) {')
+        depth, end = 0, start
+        for end in range(css.index('{', start), len(css)):
+            depth += {'{': 1, '}': -1}.get(css[end], 0)
+            if depth == 0:
+                break
+        cls.phone, cls.outside = css[start:end], css[:start] + css[end:]
+
+    def phone_rule(self, selector):
+        found = re.search(r'(?m)^  ' + re.escape(selector) + r'\s*\{([^}]*)\}', self.phone)
+        self.assertIsNotNone(found, selector)
+        return found.group(1)
+
+    def test_label_and_field_tables_stack(self):
+        for path, line in self.STACK.items():
+            self.assertIn(line, (ROOT / path).read_text(), path)
+        rule = self.phone_rule('.rz-content table.rz-stack, .rz-stack > tbody, .rz-stack > tbody > tr, .rz-stack > tbody > tr > td')
+        self.assertIn('display: block;', rule)
+        self.assertIn('width: 100%;', rule)
+        self.assertIn('width: 100%;', self.phone_rule('.rz-stack select, .rz-stack textarea'))
+
+    def test_player_lists_fit_the_screen(self):
+        for path, text in self.FIT.items():
+            self.assertIn(text, (ROOT / path).read_text(), path)
+        # The about page's module list: an rz-fit box around the table, whose own markup stays 1.1.2's.
+        about = (ROOT / 'lib' / 'about' / 'about_listmodules.php').read_text()
+        table = 'rawoutput("<table border=\'0\' cellpadding=\'2\' cellspacing=\'1\' bgcolor=\'#999999\'>",true);'
+        self.assertIn('rawoutput("<div class=\'rz-fit\'>");\n' + table, about)
+        self.assertIn('rawoutput("</table>");\nrawoutput("</div>");\n?>', about)
+        rule = self.phone_rule('.rz-content table.rz-fit, .rz-content .rz-fit > table')
+        for value in ('display: table;', 'max-width: none;', 'overflow: visible;'):
+            self.assertIn(value, rule, value)
+        self.assertNotIn('anywhere', self.phone_rule('.rz-fit td, .rz-fit th'))
+
+    def test_desktop_is_unchanged(self):
+        for name in ('rz-stack', 'rz-fit'):
+            self.assertIn('.' + name, self.phone, name)
+            self.assertNotRegex(self.outside, r'\.' + name + r'\b', name)
+        # Admin tables keep their scroll box on a phone.
+        self.assertIn('display: block; max-width: 100%; overflow-x: auto;', self.phone_rule('.rz-content table'))
+
+
 if __name__ == '__main__':
     unittest.main()

@@ -81,9 +81,10 @@ function resurrection_training_context(): string {
     restore_buff_fields();
     try {
         $state=resurrection_training_state(); $player=[];
+        // No authversion: it changes on every sign-in, and badnav.php replays a page kept before one after it (Phase 6 task 9).
         foreach (['acctid','level','experience','hitpoints','maxhitpoints','attack','defense','soulpoints','alive','seenmaster',
             'race','specialty','dragonkills','dragonpoints','gold','gems','turns','location','specialinc','age','sex',
-            'name','referer','refererawarded','lasthit','authversion'] as $key) $player[$key]=is_array($session['user'][$key])?$session['user'][$key]:(string)$session['user'][$key];
+            'name','referer','refererawarded','lasthit'] as $key) $player[$key]=is_array($session['user'][$key])?$session['user'][$key]:(string)$session['user'][$key];
         $buffs=[]; foreach ($session['bufflist'] as $id=>$buff) { unset($buff['fields_calculated'],$buff['tempstats_calculated']); $buffs[]=[$id,$buff]; }
         $ordered=[]; foreach ($companions as $id=>$companion) $ordered[]=[$id,$companion];
         $settings=[]; foreach (['multimaster'=>1,'automaster'=>1,'companionslevelup'=>1,'enablecompanions'=>true,

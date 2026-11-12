@@ -21,7 +21,9 @@ try {
         if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
             page_header('Log out');
             rawoutput('<form action="login.php?op=logout" method="POST">' . resurrection_csrf_field() . '<input class="button" type="submit" value="Log out"></form>');
-            page_footer();
+            // Not kept (Phase 6 task 9): after signing in again, badnav.php shows the page the player left, as 1.1.2
+            // did (its logout had no page of its own), not this one.
+            page_footer(false);
         }
         resurrection_require_post();
         if ($session['loggedin']) {
@@ -62,6 +64,10 @@ try {
     catch (DomainException $error) { http_response_code(409); exit('Invalid stored Dragon Point state. You were not logged in.'); }
     $version = resurrection_begin_login((int)$account['acctid'], $account['password']);
     resurrection_rotate_session();
+    // A new sign-in holds no earlier action token. The kept page's actions are issued afresh once, on its first
+    // replay (badnav.php; Phase 6 task 9).
+    unset($_SESSION['actions']);
+    $_SESSION['kept_page_reissue'] = true;
     $_SESSION['auth_version'] = $version;
     unset($account['password']);
     $session['user'] = $account;

@@ -5064,7 +5064,7 @@ function resurrectionspecialtyobserver_dohook($hook,$args) {
                 buffs={'ordinary':{'name':'ordinary','schema':'test','rounds':3},'carry':{'name':'carry','schema':'test','rounds':2,'survivenewday':1}}
                 self.query('UPDATE accounts SET bufflist=?,companions=?,alive=0,hitpoints=0,charm=1,marriedto=4294967295 WHERE acctid=?',[f['encode'](buffs),f['encode']({'returning':comp}),f['player']])
                 form=f['form']();before=f['state']()
-                logs=self.query('SELECT * FROM debuglog WHERE actor=?',[f['player']])
+                logs=self.query('SELECT * FROM debuglog WHERE actor=? ORDER BY id',[f['player']])
                 if hook_failure:
                     # Actual bundled specialty hook attempts to restore uses after core effects.
                     self.query("ALTER TABLE module_userprefs ADD CONSTRAINT fixture_daily_failure CHECK (userid <> "+str(f['player'])+" OR modulename <> 'specialtydarkarts' OR setting <> 'uses' OR value='0')")
@@ -5074,7 +5074,7 @@ function resurrectionspecialtyobserver_dohook($hook,$args) {
                     table='accounts'
                 try: self.assertEqual(500,f['request'](data=form)[0])
                 finally: self.query('ALTER TABLE '+table+' DROP CONSTRAINT fixture_daily_failure')
-                self.assertEqual(before,f['state']());self.assertEqual(logs,self.query('SELECT * FROM debuglog WHERE actor=?',[f['player']]))
+                self.assertEqual(before,f['state']());self.assertEqual(logs,self.query('SELECT * FROM debuglog WHERE actor=? ORDER BY id',[f['player']]))
                 self.assertEqual(409,f['request'](data=form)[0]);self.assertEqual(before,f['state']())
                 self.assertEqual(200,f['request'](data=f['form']())[0]);self.assertEqual('2',f['state']()[0]['age'])
 
@@ -5390,14 +5390,14 @@ echo json_encode(['day'=>gmdate('Y-m-d',$now),'headroom'=>intdiv(86400-$now%8640
                 comp={'name':'Returning companion','hitpoints':10,'maxhitpoints':10,'attack':1,'defense':1,'abilities':{'fight':1},'suspended':True,'allowinshades':0}
                 buffs={'ordinary':{'name':'ordinary','schema':'test','rounds':3},'carry':{'name':'carry','schema':'test','rounds':2,'survivenewday':1}}
                 f['prepare'](bufflist=f['encode'](buffs),companions=f['encode']({'friend':comp}),charm=1,marriedto=4294967295)
-                form=f['form']();before=f['state']();logs=self.query('SELECT * FROM debuglog WHERE actor=?',[f['player']])
+                form=f['form']();before=f['state']();logs=self.query('SELECT * FROM debuglog WHERE actor=? ORDER BY id',[f['player']])
                 if hook_failure:
                     self.query("ALTER TABLE module_userprefs ADD CONSTRAINT fixture_ramius_failure CHECK (userid <> "+str(f['player'])+" OR modulename <> 'specialtydarkarts' OR setting <> 'uses' OR value='0')");table='module_userprefs'
                 else:
                     self.query("ALTER TABLE accounts ADD CONSTRAINT fixture_ramius_failure CHECK (login <> 'WebPlayer' OR age=1)");table='accounts'
                 try:self.assertEqual(500,f['request'](data=form)[0])
                 finally:self.query('ALTER TABLE '+table+' DROP CONSTRAINT fixture_ramius_failure')
-                self.assertEqual(before,f['state']());self.assertEqual(logs,self.query('SELECT * FROM debuglog WHERE actor=?',[f['player']]))
+                self.assertEqual(before,f['state']());self.assertEqual(logs,self.query('SELECT * FROM debuglog WHERE actor=? ORDER BY id',[f['player']]))
                 self.assertEqual('113',f['state']()[0]['deathpower']);self.assertEqual(f['day'],f['state']()[0]['lastnewday'])
                 self.assertEqual(409,f['request'](data=form)[0]);self.assertEqual(before,f['state']())
                 self.assertEqual(200,f['request'](data=f['form']())[0]);self.assertEqual('13',f['state']()[0]['deathpower'])
@@ -11326,6 +11326,193 @@ function MODULE_dohook($hook,$args) {
             self.assertIn('forest.php?op=search', body)
         finally:
             for row in saved: self.query('UPDATE modules SET active=? WHERE modulename=?', [row['active'], row['modulename']])
+
+    def _relogin_client(self):
+        """A browser-like client for the re-login tests (Phase 6 task 9): (status, Location, body), redirects not followed."""
+        class NoRedirect(urllib.request.HTTPRedirectHandler):
+            def redirect_request(self, *args): return None
+        jar = http.cookiejar.CookieJar()
+        client = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(jar), NoRedirect)
+        def request(path, fields=None):
+            data = None if fields is None else urllib.parse.urlencode(fields).encode()
+            try: response = client.open(urllib.request.Request(f'http://127.0.0.1:{self.port}/' + path, data=data), timeout=20)
+            except urllib.error.HTTPError as error: response = error
+            body = response.read().decode('utf-8', errors='replace')
+            self.assertNotRegex(body, r'(?i)(fatal error|warning:|deprecated:|notice:)', body[:2000])
+            return response.status, response.headers.get('Location', ''), body
+        def login(name, password):
+            _, _, body = request('home.php')
+            csrf = re.search(r'name=[\'"]csrf_token[\'"] value=[\'"]([a-f0-9]{64})', body).group(1)
+            self.assertEqual((303, 'village.php'), request('login.php', {'csrf_token': csrf, 'name': name, 'password': password})[:2])
+        def logout():
+            status, _, body = request('login.php?op=logout')
+            self.assertEqual(200, status, body[:1500])
+            csrf = re.search(r'name=[\'"]csrf_token[\'"] value=[\'"]([a-f0-9]{64})', body).group(1)
+            self.assertEqual((303, 'index.php'), request('login.php?op=logout', {'csrf_token': csrf})[:2])
+        def replayed():
+            """Sign-in lands on village.php, which the kept page does not allow: badnav.php shows that page again."""
+            status, location, body = request('village.php')
+            self.assertEqual((302, 'badnav.php'), (status, location), body[:1500])
+            status, _, body = request('badnav.php')
+            self.assertEqual(200, status, body[:1500])
+            return body
+        def expire(player):
+            """The session runs out (LOGINTIMEOUT): the next page signs the player out."""
+            self.query('UPDATE accounts SET laston=DATE_SUB(laston, INTERVAL 2 HOUR) WHERE acctid=?', [player])
+            self.assertEqual((303, 'index.php?op=timeout'), request('village.php')[:2])
+        request.login, request.logout, request.expire, request.replayed, request.cookiejar = login, logout, expire, replayed, jar
+        return request
+
+    def test_relogin_during_newday_questions_continues_the_day_http(self):
+        # Phase 6 task 9: signing in again in the middle of the new-day questions used to replay the kept page
+        # (badnav.php) with the earlier session's form tokens, and every button on it answered "Invalid form
+        # submission." (403). The replayed page now carries this session's tokens; the earlier page's stay refused.
+        login, password = 'ReloginPlayer', 'Synthetic relogin password'
+        modules = self.query("SELECT modulename,active FROM modules WHERE modulename IN ('racehuman','specialtymysticpower')")
+        self.query("UPDATE modules SET active=1 WHERE modulename IN ('racehuman','specialtymysticpower')")
+        try:
+            request = self._relogin_client()
+            _, _, body = request('create.php')
+            csrf = re.search(r'name=[\'"]csrf_token[\'"] value=[\'"]([a-f0-9]{64})', body).group(1)
+            status, _, body = request('create.php?op=create', {'csrf_token': csrf, 'name': login, 'pass1': password,
+                                      'pass2': password, 'email': 'relogin@example.invalid', 'sex': '0'})
+            self.assertIn('Your account was created', body)
+            player = self.query('SELECT acctid FROM accounts WHERE login=?', [login])[0]['acctid']
+            request.login(login, password)
+            self.assertEqual((302, 'newday.php'), request('village.php')[:2])
+            status, _, body = request('newday.php')
+            self.assertEqual(200, status, body[:1500])
+            self.assertIn('setrace', body)
+            first = self._security_fields(body)
+            # The session runs out at the race question, and the player signs in again: the race question is shown again.
+            request.expire(player)
+            request.login(login, password)
+            body = request.replayed()
+            self.assertIn('setrace', body)
+            again = self._security_fields(body)
+            # The replayed form works (1.1.2's tokens-free page did; before this task it answered 403).
+            status, _, chosen = request('newday.php?continue=1', again | {'onboarding': 'race', 'setrace': 'Human'})
+            self.assertEqual(200, status, chosen[:1500])
+            self.assertEqual('Human', self.query('SELECT race FROM accounts WHERE acctid=?', [player])[0]['race'])
+            self.assertNotEqual(first['csrf_token'], again['csrf_token'])
+            self.assertNotEqual(first['action_token'], again['action_token'])
+            # Used once: the same form again is refused (the race page's link is no longer allowed).
+            self.assertEqual((302, 'badnav.php'), request('newday.php?continue=1', again | {'onboarding': 'race', 'setrace': 'Elf'})[:2])
+            self.assertEqual('Human', self.query('SELECT race FROM accounts WHERE acctid=?', [player])[0]['race'])
+            status, _, body = request(next(html.unescape(link) for link in re.findall(r'href=[\'"]([^\'"]+)', chosen)
+                                           if html.unescape(link).startswith('newday.php?continue=1')))
+            self.assertEqual(200, status, body[:1500])
+            self.assertIn('setspecialty', body)
+            # Signed out at the specialty question (Quit, then Log out), and signed in again. The sign-out page is not
+            # kept, so the specialty question is shown again, not the sign-out page.
+            first = self._security_fields(body)
+            request.logout()
+            request.login(login, password)
+            body = request.replayed()
+            self.assertIn('setspecialty', body)
+            again = self._security_fields(body)
+            self.assertNotEqual(first['csrf_token'], again['csrf_token'])
+            self.assertNotEqual(first['action_token'], again['action_token'])
+            # The earlier session's form stays refused, and changes nothing.
+            status, _, body = request('newday.php?continue=1', first | {'onboarding': 'specialty', 'setspecialty': 'MP'})
+            self.assertEqual(403, status, body[:500])
+            self.assertEqual('Invalid form submission.', body)
+            # Its intent with this session's CSRF token is refused too: an intent belongs to the session that issued it.
+            status, _, body = request('newday.php?continue=1', {'csrf_token': again['csrf_token'], 'action_token': first['action_token'],
+                                                                'onboarding': 'specialty', 'setspecialty': 'MP'})
+            self.assertEqual(409, status, body[:500])
+            self.assertEqual('', self.query('SELECT specialty FROM accounts WHERE acctid=?', [player])[0]['specialty'])
+            status, _, body = request('newday.php?continue=1', again | {'onboarding': 'specialty', 'setspecialty': 'MP'})
+            self.assertEqual(200, status, body[:1500])
+            self.assertEqual('MP', self.query('SELECT specialty FROM accounts WHERE acctid=?', [player])[0]['specialty'])
+            # The day's last question, the New Day form: the session runs out again, and it still begins the day.
+            link = next(html.unescape(link) for link in re.findall(r'href=[\'"]([^\'"]+)', body) if html.unescape(link).startswith('newday.php?continue=1'))
+            status, _, body = request(link)
+            self.assertEqual(200, status, body[:1500])
+            self.assertIn('Begin New Day', body)
+            first = self._security_fields(body)
+            request.expire(player)
+            request.login(login, password)
+            body = request.replayed()
+            again = self._security_fields(body)
+            status, _, body = request('newday.php?continue=1', first | {'newday': 'normal'})
+            self.assertEqual(403, status, body[:500])
+            status, _, body = request('newday.php?continue=1', {'csrf_token': again['csrf_token'], 'action_token': first['action_token'], 'newday': 'normal'})
+            self.assertEqual(409, status, body[:500])
+            self.assertEqual('', self.query('SELECT lastnewday FROM accounts WHERE acctid=?', [player])[0]['lastnewday'])
+            status, _, body = request('newday.php?continue=1', again | {'newday': 'normal'})
+            self.assertEqual(200, status, body[:1500])
+            self.assertNotEqual('', self.query('SELECT lastnewday FROM accounts WHERE acctid=?', [player])[0]['lastnewday'])
+            link = next(html.unescape(link) for link in re.findall(r'href=[\'"]([^\'"]+)', body) if html.unescape(link).startswith('village.php'))
+            status, _, body = request(link)
+            self.assertEqual(200, status, body[:1500])
+            self.assertIn(login, body)
+            # The kept copy holds no live token: only the markers this session's replay fills in.
+            kept = self.query('SELECT output FROM accounts_output WHERE acctid=?', [player])[0]['output']
+            self.assertNotRegex(kept, r'name=[\'"](?:csrf_token|action_token)[\'"] value=[\'"][a-f0-9]{64}')
+        finally:
+            for row in modules:
+                self.query('UPDATE modules SET active=? WHERE modulename=?', [row['active'], row['modulename']])
+            for table, column in [('accounts_output', 'acctid'), ('module_userprefs', 'userid'), ('accounts', 'acctid')]:
+                self.query(f'DELETE FROM {table} WHERE {column} IN (SELECT acctid FROM (SELECT acctid FROM accounts WHERE login=?) AS a)', [login])
+
+    def test_relogin_mid_fight_keeps_forms_working_and_old_tokens_refused_http(self):
+        # Phase 6 task 9: any kept page with forms, here a forest fight, is shown again after signing in with this
+        # session's tokens. In the same session the replay is unchanged: the page's own tokens, and a used one stays used.
+        login = 'ReloginFighter'
+        player = self._security_target(login)
+        saved = self.query("SELECT setting,value FROM settings WHERE setting='forestchance'")
+        self.query("INSERT INTO settings(setting,value) VALUES ('forestchance','0') ON DUPLICATE KEY UPDATE value='0'")
+        self.query("UPDATE accounts SET race='Human',specialty='MP',lastnewday=?,lasthit=NOW(),turns=10,hitpoints=500,maxhitpoints=500,"
+                   "attack=1,defense=20,level=5,alive=1,badguy='',specialinc='',location='Degolburg',allowednavs='a:1:{s:11:\"village.php\";b:1;}',restorepage='' WHERE acctid=?",
+                   [self._current_game_day(), player])
+        def form(body, action):
+            found = re.findall(r'<form method="POST" action="' + re.escape(action) + r'">(.*?)</form>', body, re.S)
+            self.assertTrue(found, action + ' ' + body[:1500])
+            return self._security_fields(found[0])
+        try:
+            request = self._relogin_client()
+            request.login(login, 'Synthetic administrator password')
+            def follow(body, prefix):
+                link = next(html.unescape(link) for link in re.findall(r'href=[\'"]([^\'"]+)', body) if html.unescape(link).startswith(prefix))
+                status, _, body = request(link)
+                self.assertEqual(200, status, body[:1500])
+                return body
+            status, _, body = request('village.php')
+            self.assertEqual(200, status, body[:1500])
+            body = follow(follow(body, 'forest.php'), 'forest.php?op=search')
+            status, _, body = request('forest.php?op=search', form(body, 'forest.php?op=search') | {'type': ''})
+            self.assertEqual(200, status, body[:1500])
+            first = form(body, 'forest.php?op=fight')
+            # The same session: the kept fight page comes back with its own tokens.
+            body = request.replayed()
+            self.assertEqual(first, form(body, 'forest.php?op=fight'))
+            # The session runs out, and the player signs in again: the fight page comes back with this session's tokens,
+            # and fights.
+            request.expire(player)
+            request.login(login, 'Synthetic administrator password')
+            body = request.replayed()
+            again = form(body, 'forest.php?op=fight')
+            before = self.query('SELECT badguy,hitpoints FROM accounts WHERE acctid=?', [player])
+            status, _, body = request('forest.php?op=fight', again)
+            self.assertEqual(200, status, body[:1500])
+            self.assertNotEqual(before, self.query('SELECT badguy,hitpoints FROM accounts WHERE acctid=?', [player]))
+            self.assertNotEqual(first['csrf_token'], again['csrf_token'])
+            self.assertNotEqual(first['action_token'], again['action_token'])
+            # The fight goes on (attack 1). The earlier session's form, its intent with this session's CSRF token, and
+            # the token just used are all refused, and change nothing.
+            after = self.query('SELECT badguy,hitpoints,experience,gold FROM accounts WHERE acctid=?', [player])
+            self.assertNotEqual('', after[0]['badguy'])
+            for fields, expected in [(first, 403), ({'csrf_token': again['csrf_token'], 'action_token': first['action_token']}, 409), (again, 409)]:
+                status, _, body = request('forest.php?op=fight', fields)
+                self.assertEqual(expected, status, body[:500])
+            self.assertEqual(after, self.query('SELECT badguy,hitpoints,experience,gold FROM accounts WHERE acctid=?', [player]))
+        finally:
+            for row in saved:
+                self.query('UPDATE settings SET value=? WHERE setting=?', [row['value'], row['setting']])
+            if not saved: self.query("DELETE FROM settings WHERE setting='forestchance'")
+            for table, column in [('accounts_output', 'acctid'), ('module_userprefs', 'userid'), ('accounts', 'acctid')]:
+                self.query(f'DELETE FROM {table} WHERE {column}=?', [player])
 
     def test_create_login_rotate_render_logout(self):
         class NoRedirect(urllib.request.HTTPRedirectHandler):
