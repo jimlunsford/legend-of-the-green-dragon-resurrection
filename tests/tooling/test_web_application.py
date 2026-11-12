@@ -1727,6 +1727,135 @@ echo "locked\\n";fflush(STDOUT);$change=json_decode(fgets(STDIN),true,512,JSON_T
             for row in core_saved: self.query('INSERT INTO settings(setting,value) VALUES (?,?)',[row['setting'],row['value']])
             self.query('UPDATE accounts SET superuser=? WHERE acctid=?',[original,player])
 
+    def test_logintimeout_is_bounded_http(self):
+        # Phase 6 task 8: Game Settings shows LOGINTIMEOUT's bounds (300 to 86400 seconds) and refuses a value outside
+        # them with one line saying why, changing nothing; a row forced outside the range is read as the nearest bound,
+        # so a stored 0 no longer signs a player out on their next page load.
+        player=self.query('SELECT acctid FROM accounts WHERE login=?',['WebPlayer'])[0]['acctid']
+        original=self.query('SELECT superuser FROM accounts WHERE acctid=?',[player])[0]['superuser']
+        core_saved=self.query('SELECT setting,value FROM settings ORDER BY setting')
+        self.query('UPDATE accounts SET superuser=128 WHERE acctid=?',[player])
+        call=self._security_client()
+        def request(url,fields=None): self._security_allow(player,url); return call(url,fields)
+        settings=lambda: self.query('SELECT setting,value FROM settings ORDER BY setting')
+        try:
+            base,save='configuration.php','configuration.php?op=save'
+            status,body=request(base); self.assertEqual(200,status,body[:2000])
+            with self.subTest(check='the page shows the bounds'):
+                field=re.search(r'<p class="rz-setting-bounded"><label>Seconds of inactivity before auto-logoff <input name="LOGINTIMEOUT" value="900"'
+                                r' type="number" inputmode="numeric" step="1" min="300" max="86400" aria-describedby="([^"]+)"></label>'
+                                r'<span class="rz-setting-bounds" id="([^"]+)">([^<]+)</span></p>',body)
+                self.assertIsNotNone(field,'LOGINTIMEOUT does not show its bounds')
+                self.assertEqual(field.group(1),field.group(2))
+                self.assertTrue(field.group(3).startswith('From 300 to 86400 seconds (5 minutes to 1 day).'),field.group(3))
+            # A value outside the range is refused on the page, with one line saying why, and no setting changes.
+            for value in ['0','299','86401','-5']:
+                with self.subTest(sent=value):
+                    _,body=request(base); before=settings()
+                    status,result=request(save,{**dict(self._user_editor_form(body,save)),'LOGINTIMEOUT':value})
+                    self.assertEqual(400,status,result[:1500]); self.assertEqual(before,settings())
+                    self.assertEqual(['Not saved: &quot;Seconds of inactivity before auto-logoff&quot; must be a whole number from 300 to 86400.'],
+                                     re.findall(r'<p class="rz-setting-refused" role="alert">([^<]*)</p>',result))
+                    self.assertIn('name="LOGINTIMEOUT" value="900"',result)
+            # The ends of the range save.
+            for value in ['300','86400','900']:
+                with self.subTest(saved=value):
+                    _,body=request(base); status,result=request(save,{**dict(self._user_editor_form(body,save)),'LOGINTIMEOUT':value})
+                    self.assertEqual(200,status,result[:1500]); self.assertNotIn('rz-setting-refused',result)
+                    self.assertEqual([{'value':value}],self.query("SELECT value FROM settings WHERE setting='LOGINTIMEOUT'"))
+            # A row forced to 0 leaves a signed-in player signed in after a page load (1.1.2 signed everyone out).
+            with self.subTest(check='a stored 0 is clamped'):
+                self.query('UPDATE accounts SET superuser=0 WHERE acctid=?',[player])
+                status,body=request('village.php'); self.assertEqual(200,status,body[:2000])
+                self.query("UPDATE settings SET value='0' WHERE setting='LOGINTIMEOUT'")
+                time.sleep(2.2)
+                for _ in range(2):
+                    status,body=request('village.php'); self.assertEqual(200,status,body[:2000])
+                    self.assertNotIn('op=timeout',body)
+                self.assertEqual([{'loggedin':'1'}],self.query('SELECT loggedin FROM accounts WHERE acctid=?',[player]))
+        finally:
+            self.query('DELETE FROM settings')
+            for row in core_saved: self.query('INSERT INTO settings(setting,value) VALUES (?,?)',[row['setting'],row['value']])
+            self.query('UPDATE accounts SET superuser=? WHERE acctid=?',[original,player])
+
+    def test_s5_labels_and_tap_targets_render_http(self):
+        # Phase 6 task 8 (S5; PHASE6-RC-READINESS-20261106.md, 6.5 and 6.6), as each page renders: every control a player
+        # fills in has a label; every radio button and checkbox sits inside its label (the stylesheet's 44px tap target);
+        # the write-mail icon links carry rz-tap and the module list's links sit in an rz-tap-wrap span; each affordable
+        # shop item is a button.rz-shop-link. The sizes themselves are measured in a browser
+        # (docs/PHASE6-TASK8-20261112.md); test_ui_forms.StylesheetTest.test_tap_targets holds the rules.
+        class Content(HTMLParser):
+            def __init__(self):
+                super().__init__(); self.labels=0; self.controls=[]; self.label_for=set(); self.links=[]; self.buttons=[]; self.spans=[]
+            def handle_starttag(self,tag,attrs):
+                a=dict(attrs)
+                if tag=='label':
+                    self.labels+=1
+                    if a.get('for'): self.label_for.add(a['for'])
+                elif tag in ('input','select','textarea'):
+                    kind=(a.get('type') or ('text' if tag=='input' else tag)).lower()
+                    if kind not in ('hidden','submit','button','reset','image'):
+                        self.controls.append({'tag':tag,'type':kind,'name':a.get('name'),'id':a.get('id'),'inside':self.labels>0})
+                elif tag=='span': self.spans.append('rz-tap-wrap' in (a.get('class') or '').split())
+                # A link inside an rz-tap-wrap span (the module list, whose markup stays 1.1.2's) counts as rz-tap.
+                elif tag=='a': self.links.append((a.get('href') or '',(a.get('class') or '')+(' rz-tap' if any(self.spans) else '')))
+                elif tag=='button': self.buttons.append(a.get('class') or '')
+            def handle_endtag(self,tag):
+                if tag=='label': self.labels=max(0,self.labels-1)
+                elif tag=='span' and self.spans: self.spans.pop()
+        def content(body):
+            start=body.index('class="rz-card rz-content"'); parser=Content(); parser.feed(body[start:body.index('</main>',start)]); return parser
+        def labelled(page,url,choices_only=False):
+            for control in page.controls:
+                if choices_only and control['type'] not in ('radio','checkbox'): continue
+                with self.subTest(url=url,control=control['name']):
+                    self.assertTrue(control['inside'] or (control['id'] and control['id'] in page.label_for),control)
+                    if control['type'] in ('radio','checkbox'): self.assertTrue(control['inside'],control)
+        player=self.query('SELECT acctid FROM accounts WHERE login=?',['WebPlayer'])[0]['acctid']
+        original=self.query('SELECT superuser,gold,gems,level,alive,hitpoints,specialinc,allowednavs FROM accounts WHERE acctid=?',[player])[0]
+        active=self.query('SELECT modulename,active FROM modules')
+        self.query('UPDATE modules SET active=1')
+        self.query("UPDATE accounts SET superuser=0,gold=5000,gems=20,level=7,alive=1,hitpoints=GREATEST(hitpoints,1),specialinc='' WHERE acctid=?",[player])
+        call=self._security_client()
+        def request(url,fields=None): self._security_allow(player,url); return call(url,fields)
+        try:
+            pages={}
+            for url in ['list.php','bio.php?char=FixtureAdmin','weapons.php','armor.php','about.php?op=listmodules',
+                        'runmodule.php?module=cedrikspotions&op=gems','runmodule.php?module=dag&op=addbounty']:
+                status,body=request(url); self.assertEqual(200,status,url+' '+body[:1500]); pages[url]=content(body)
+            status,body=self._security_client(login=None)('create.php'); self.assertEqual(200,status,body[:1500]); pages['create.php']=content(body)
+            self.query('UPDATE accounts SET superuser=? WHERE acctid=?',[64|2|65536,player])
+            category=self.query("SELECT category FROM modules WHERE modulename='dag'")[0]['category']
+            for url in ['runmodule.php?module=dag&manage=true&admin=true','companions.php?op=add','modules.php?cat='+urllib.parse.quote(category)]:
+                status,body=request(url); self.assertEqual(200,status,url+' '+body[:1500]); pages[url]=content(body)
+            # Labels (6.5): the Warriors list's search, Cedrik's gem wish, Dag's player and admin bounty forms.
+            for url,names in [('list.php',{'name'}),('runmodule.php?module=cedrikspotions&op=gems',{'gemcount','wish'}),
+                              ('runmodule.php?module=dag&op=addbounty',{'contractname','amount'}),
+                              ('runmodule.php?module=dag&manage=true&admin=true',{'setter','getter','target','s','d','contractname','amount'})]:
+                with self.subTest(url=url): self.assertTrue(names<={c['name'] for c in pages[url].controls},(url,pages[url].controls))
+                labelled(pages[url],url)
+            # Radio buttons and checkboxes inside their labels (6.6).
+            for url,kind in [('create.php','radio'),('runmodule.php?module=cedrikspotions&op=gems','radio'),
+                             ('runmodule.php?module=dag&manage=true&admin=true','radio'),('companions.php?op=add','checkbox'),
+                             ('modules.php?cat='+urllib.parse.quote(category),'checkbox')]:
+                with self.subTest(url=url): self.assertTrue(any(c['type']==kind for c in pages[url].controls),url)
+                labelled(pages[url],url,choices_only=True)
+            # The small links (6.6): the write-mail icon, the module list's links.
+            for url,prefix in [('list.php','mail.php?op=write'),('bio.php?char=FixtureAdmin','mail.php?op=write'),('about.php?op=listmodules','http')]:
+                links=[(href,cls) for href,cls in pages[url].links if href.startswith(prefix)]
+                with self.subTest(url=url):
+                    self.assertTrue(links,url)
+                    self.assertEqual([],[link for link in links if 'rz-tap' not in link[1].split()],url)
+            # The shops' item buttons (6.6).
+            for url in ['weapons.php','armor.php']:
+                with self.subTest(url=url):
+                    self.assertTrue(pages[url].buttons,url)
+                    self.assertEqual({'rz-shop-link'},set(pages[url].buttons),url)
+        finally:
+            self.query('UPDATE accounts SET superuser=?,gold=?,gems=?,level=?,alive=?,hitpoints=?,specialinc=?,allowednavs=? WHERE acctid=?',
+                       [original['superuser'],original['gold'],original['gems'],original['level'],original['alive'],original['hitpoints'],original['specialinc'],original['allowednavs'],player])
+            for row in active: self.query('UPDATE modules SET active=? WHERE modulename=?',[row['active'],row['modulename']])
+
     def test_shared_mount_preferences_http(self):
         player=self.query('SELECT acctid FROM accounts WHERE login=?',['WebPlayer'])[0]['acctid']
         original=self.query('SELECT superuser FROM accounts WHERE acctid=?',[player])[0]['superuser']

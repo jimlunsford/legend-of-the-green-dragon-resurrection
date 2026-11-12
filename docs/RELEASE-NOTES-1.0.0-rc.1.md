@@ -2,7 +2,8 @@
 
 **Draft. This test build has not been cut.** There is no `v1.0.0-rc.1` tag and no package yet: the cut happens only on
 the maintainer's go, by `docs/RC-CUT-CHECKLIST.md`. Until then `main` is `1.0.0-dev`. Written in Phase 6 task 7
-(2026-11-07) from `docs/CHANGES-FROM-1.1.2.md`, which holds every change in full with its evidence.
+(2026-11-07) from `docs/CHANGES-FROM-1.1.2.md`, which holds every change in full with its evidence; brought up to date
+in Phase 6 task 8 (2026-11-12).
 
 ## What Resurrection is
 
@@ -30,6 +31,9 @@ The level a host or player notices. Each line is a group of rows in `docs/CHANGE
 - **Safer accounts.** Passwords are hashed with PHP's password API and must be 12 to 72 bytes. Signing in, changing the
   password and signing out end older sessions. Every action that changes something is a form with a security token, so
   a link elsewhere cannot act for you.
+- **Labels and tap targets.** Every control on the Warriors list's search, Cedrik's gem wish and Dag's bounty forms has
+  a label, and the shop item buttons, the write-mail icons, the module list's links and the radio buttons and
+  checkboxes are at least 44px to tap on a phone.
 - **No password recovery by email** in this build (see "Known issues").
 
 ### For hosts
@@ -41,6 +45,9 @@ The level a host or player notices. Each line is a group of rows in `docs/CHANGE
   1.1.2 web installer is gone (`installer.php` answers 403).
 - **Upgrades** are numbered steps applied by `php scripts/upgrade.php` (or `setup.php`), one release at a time. While the
   database is behind, the game shows "Upgrade Needed".
+- **The sign-out timeout has bounds.** "Seconds of inactivity before auto-logoff" (`LOGINTIMEOUT`) takes 300 to 86400
+  seconds in Game Settings, which refuses anything else and says why. A database row outside that range is read as
+  the nearest end of it, so a stored 0 no longer signs every player out.
 - **Daily maintenance** runs from `cron.php` in a scheduler, or, for a scheduler that can only fetch an address, from
   `webcron.php` with a secret key. Game Settings shows when it last ran.
 - **The configuration file can live outside the docroot**: set `LOGD_DBCONNECT` to its absolute path. A file the game
@@ -76,9 +83,6 @@ the public source address (`sourceurl`), and run the checks in the guide's secti
   the game goes on (host guide, "Mail").
 - **Signing in again during the new day's questions** can replay a page whose buttons answer "Invalid form
   submission." (403). Reloading the page, or following its link again, gives working buttons.
-- **Some controls are small or unlabelled on a phone (S5):** the shop item buttons, the mail icon links, the module
-  list links and radio buttons are under 44px; the Warriors list name search, Cedrik's gem wish and Dag's bounty forms
-  have inputs without labels.
 - **1.1.2 behaviors kept as they were** (`ROADMAP.md`, Phase 3, "Recorded, not changed"), among them: a ban reason is
   shown to the banned visitor as raw HTML (staff write it); clearing the `lgi` cookie evades an ID ban; weapon, armor and
   title text allows color codes; the clan-delete hook is not called on disband; the healer resets hitpoints above the

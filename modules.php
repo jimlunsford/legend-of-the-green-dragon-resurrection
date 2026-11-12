@@ -148,7 +148,7 @@ if ($op==""){
 			$bundled = resurrection_module_bundled($name);
 			rawoutput("<tr class='".($i%2?"trlight":"trdark")."'>",true);
 			rawoutput("<td nowrap valign='top'>");
-			rawoutput("<input type='checkbox' name='module[]'".resurrection_control_id("module-$name")." value='" . $h($name) . "'>".resurrection_label_for("module-$name", "Select module", false, $name));
+			rawoutput("<label><input type='checkbox' name='module[]'".resurrection_control_id("module-$name")." value='" . $h($name) . "'></label>".resurrection_label_for("module-$name", "Select module", false, $name));
 			rawoutput("</td><td valign='top' nowrap>[ ");
 			if ($row['active']){
 				$link(resurrection_module_confirm_url('deactivate', $name, $cat), $deactivate);
@@ -270,7 +270,7 @@ if ($op==""){
 						output("Not installable");
 						rawoutput("</td>");
 				} else {
-					rawoutput("<td><input type='checkbox' name='module[]'".resurrection_control_id("module-{$moduleinfo[$i]['shortname']}")." value='" . $h($moduleinfo[$i]['shortname']) . "'>".resurrection_label_for("module-{$moduleinfo[$i]['shortname']}", "Select module", false, $moduleinfo[$i]['shortname'])."</td>");
+					rawoutput("<td><label><input type='checkbox' name='module[]'".resurrection_control_id("module-{$moduleinfo[$i]['shortname']}")." value='" . $h($moduleinfo[$i]['shortname']) . "'></label>".resurrection_label_for("module-{$moduleinfo[$i]['shortname']}", "Select module", false, $moduleinfo[$i]['shortname'])."</td>");
 					rawoutput("<td nowrap valign='top'>");
 					rawoutput("[ ");
 					$installurl = resurrection_module_confirm_url('install', $moduleinfo[$i]['shortname'], (string)$moduleinfo[$i]['category']);

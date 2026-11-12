@@ -177,7 +177,8 @@ function resurrection_core_layout(): array {
 		"expiretrashacct"=>"Days to keep never logged-in accounts? (0 = infinite),int",
 		"expirenewacct"=>"Days to keep 1 level (0 dragon) accounts? (0 =infinite),int",
 		"expireoldacct"=>"Days to keep all other accounts? (0 = infinite),int",
-		"LOGINTIMEOUT"=>"Seconds of inactivity before auto-logoff,int",
+		// Phase 6 task 8: bounded (lib/settings.php, resurrection_bounded_settings()); a stored value outside is clamped.
+		"LOGINTIMEOUT"=>"Seconds of inactivity before auto-logoff,int,".implode(',', resurrection_bounded_settings()['LOGINTIMEOUT']),
 
 		"High Load Optimization,title",
 		"This has been moved to the dbconnect.php,note",

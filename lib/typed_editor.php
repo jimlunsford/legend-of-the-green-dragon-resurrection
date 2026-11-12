@@ -48,7 +48,7 @@ function resurrection_settings_rules(string $namespace,array $schema,array $valu
             if ($namespace==='core' && $descriptor['type']==='bool' && $value==='') $value='0';
             \Resurrection\Http\SettingDescriptor::value($descriptor,$value);
         }
-        catch (InvalidArgumentException $error) { throw new InvalidArgumentException('Invalid declared field: '.$key); }
+        catch (InvalidArgumentException $error) { throw new InvalidArgumentException('Invalid declared field: '.$key, $error->getCode(), $error); }
     }
     $pairs = match($namespace) {
         'cedrikspotions'=>[['minrand','maxrand']], 'findgold'=>[['mingold','maxgold']],
@@ -201,6 +201,17 @@ function resurrection_editor_locked_reason(string $key): string {
 }
 
 /**
+ * A bounded setting's range and why, in one line for Game Settings (Phase 6 task 8; lib/settings.php).
+ * @param array<string,mixed> $descriptor */
+function resurrection_editor_bounds_note(string $key, array $descriptor): string {
+    $range='From '.(int)$descriptor['min'].' to '.(int)$descriptor['max'].' seconds';
+    return match ($key) {
+        'LOGINTIMEOUT' => $range.' (5 minutes to 1 day). Below that, players are signed out almost at once; above it, a closed browser stays signed in for days. A stored value outside the range is used as the nearest end of it.',
+        default => $range.'.',
+    };
+}
+
+/**
  * Each setting's row, in the order given: its label around its control. A locked setting shows the value the game holds
  * it at in a disabled control with no name, so a browser never sends it, and the line saying why.
  *
@@ -222,6 +233,14 @@ function resurrection_editor_fields(array $schema,array $values,?array $keys=nul
         if (!isset($schema[$key])) continue;
         $descriptor=$schema[$key];
         $value=$values[$key] ?? $descriptor['default'];
+        if (!empty($descriptor['bounded'])) {
+            // Phase 6 task 8: a bounded whole number shows its range and why, and the browser keeps to it too.
+            $id='rz-bounds-'.$key;
+            rawoutput('<p class="rz-setting-bounded"><label>'.$escape($descriptor['label']).' <input name="'.$escape($key).'" value="'.$escape($value).'"'
+                .' type="number" inputmode="numeric" step="1" min="'.(int)$descriptor['min'].'" max="'.(int)$descriptor['max'].'" aria-describedby="'.$escape($id).'"></label>'
+                .'<span class="rz-setting-bounds" id="'.$escape($id).'">'.$escape(resurrection_editor_bounds_note($key,$descriptor)).'</span></p>');
+            continue;
+        }
         rawoutput('<p><label>'.$escape($descriptor['label']).' ');
         if (in_array($descriptor['type'],['bool','enum'],true)) {
             $options=$descriptor['type']==='bool' ? ['0'=>'No','1'=>'Yes'] : $descriptor['options'];

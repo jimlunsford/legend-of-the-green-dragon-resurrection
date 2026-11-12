@@ -108,11 +108,15 @@ function dag_run_private(){
 			output("`7\"So, who ye be wantin' to place a hit on? Just so ye be knowing, they got to be legal to be killin', they got to be at least level %s, and they can't be having too much outstandin' bounty nor be getting hit too frequent like, so if they ain't be listed, they can't be contracted on!  We don't run no slaughterhouse here, we run a.....business.  Also, there be a %s%% listin' fee fer any hit ye be placin'.\"`n`n", get_module_setting("bountylevel"), get_module_setting("bountyfee"));
 			rawoutput("<form action='runmodule.php?module=dag&op=finalize' method='POST'>");
             rawoutput(resurrection_action_fields('dag-place', (string)$session['user']['acctid']));
+			resurrection_label_open('dag-contractname');
 			output("`2Target: ");
-			rawoutput("<input name='contractname'>");
+			resurrection_label_close();
+			rawoutput("<input name='contractname'".resurrection_control_id('dag-contractname').">");
 			output_notl("`n");
+			resurrection_label_open('dag-amount');
 			output("`2Amount to Place: ");
-			rawoutput("<input name='amount' id='amount' width='5'>");
+			resurrection_label_close();
+			rawoutput("<input name='amount'".resurrection_control_id('dag-amount')." width='5'>");
 			output_notl("`n`n");
 			$final = translate_inline("Finalize Contract");
 			rawoutput("<input type='submit' class='button' value='$final'>");
@@ -139,8 +143,10 @@ function dag_run_private(){
 			output("Dag Durnick searches through his list for a moment, `7\"There be a couple of 'em that ye could be talkin' about.  Which one ye be meaning?\"`n");
 			rawoutput("<form action='runmodule.php?module=dag&op=finalize&subfinal=1' method='POST'>");
             rawoutput(resurrection_action_fields('dag-place', (string)$session['user']['acctid']));
+			resurrection_label_open('dag-contractname');
 			output("`2Target: ");
-			rawoutput("<select name='contractname'>");
+			resurrection_label_close();
+			rawoutput("<select name='contractname'".resurrection_control_id('dag-contractname').">");
 			for ($i=0;$i<db_num_rows($result);$i++){
 				$row = db_fetch_assoc($result);
 				rawoutput("<option value=\"".htmlspecialchars($row['name'],ENT_QUOTES,'UTF-8')."\">".full_sanitize($row['name'])."</option>");
@@ -148,8 +154,10 @@ function dag_run_private(){
 			rawoutput("</select>");
 			output_notl("`n`n");
 			// Amount was strictly typed before the name search.
+			resurrection_label_open('dag-amount');
 			output("`2Amount to Place: ");
-			rawoutput("<input name='amount' id='amount' width='5' value='$amount'>");
+			resurrection_label_close();
+			rawoutput("<input name='amount'".resurrection_control_id('dag-amount')." width='5' value='$amount'>");
 			output_notl("`n`n");
 			$final = translate_inline("Finalize Contract");
 			rawoutput("<input type='submit' class='button' value='$final'>");

@@ -61,6 +61,26 @@ function resurrection_locked_settings(): array {
 	return ['requirevalidemail' => '0'];
 }
 
+/**
+ * Settings the game reads only inside a range (Phase 6 task 8): getsetting() returns a stored value outside it as the
+ * nearest bound, and Game Settings refuses a value outside it (lib/configuration_descriptors.php declares the bounds
+ * from here). LOGINTIMEOUT: with 0, or a few seconds, every player is signed out on their next page load; above a day,
+ * a closed browser stays signed in for days.
+ *
+ * @return array<string,array{0:int,1:int}> setting => [lowest, highest]
+ */
+function resurrection_bounded_settings(): array {
+	return ['LOGINTIMEOUT' => [300, 86400]];
+}
+
+/** A bounded setting's value held inside its range (an integer); any other setting's value unchanged. */
+function resurrection_bounded_setting(string $settingname, mixed $value): mixed {
+	$bounds = resurrection_bounded_settings()[$settingname] ?? null;
+	if ($bounds === null) return $value;
+	$number = is_numeric($value) ? (int)$value : $bounds[0];
+	return max($bounds[0], min($bounds[1], $number));
+}
+
 function getsetting($settingname,$default){
 	global $settings;
 	global $DB_USEDATACACHE,$DB_DATACACHEPATH;
@@ -71,13 +91,13 @@ function getsetting($settingname,$default){
 	if (!isset($settings[$settingname])) {
 		loadsettings();
 	}else {
-		return $settings[$settingname];
+		return resurrection_bounded_setting((string)$settingname, $settings[$settingname]);
 	}
 	if (!isset($settings[$settingname])){
 		savesetting($settingname,$default);
-		return $default;
+		return resurrection_bounded_setting((string)$settingname, $default);
 	}else{
-		return $settings[$settingname];
+		return resurrection_bounded_setting((string)$settingname, $settings[$settingname]);
 	}
 }
 ?>

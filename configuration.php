@@ -33,9 +33,21 @@ try {
     $layout = $namespace === 'core' ? resurrection_core_layout() : resurrection_editor_module($namespace)['settings'] ?? [];
     $schema = \Resurrection\Http\SettingDescriptor::declare($layout);
     $save = $op === 'save' || ($op === 'modulesettings' && isset($_GET['save']));
-    if ($save) resurrection_settings_save($namespace, $schema);
+    // A bounded setting outside its range (Phase 6 task 8) is refused on the page itself: nothing is saved, the status
+    // is 400, and one line above the form says why. Every other refusal stays the plain 400 below.
+    $refused = null;
+    if ($save) {
+        try { resurrection_settings_save($namespace, $schema); }
+        catch (InvalidArgumentException $error) {
+            for ($cause = $error; $cause !== null && $refused === null; $cause = $cause->getPrevious()) {
+                if ($cause->getCode() === \Resurrection\Http\SettingDescriptor::OUT_OF_BOUNDS) $refused = $cause->getMessage();
+            }
+            if ($refused === null) throw $error;
+        }
+    }
     if ($save && $namespace==='core') $schema=\Resurrection\Http\SettingDescriptor::declare(resurrection_core_layout());
     $values = resurrection_settings_values($namespace);
+    if ($refused !== null) http_response_code(400);
     page_header('Game Settings');
     require_once 'lib/superusernav.php';
     superusernav();
@@ -44,6 +56,7 @@ try {
     module_editor_navs('settings', 'configuration.php?op=modulesettings&module=');
     $url = $namespace === 'core' ? 'configuration.php?op=save' : 'configuration.php?op=modulesettings&module='.rawurlencode($namespace).'&save=1';
     addnav('', $url);
+    if ($refused !== null) rawoutput('<p class="rz-setting-refused" role="alert">'.htmlspecialchars($refused, ENT_QUOTES|ENT_SUBSTITUTE, 'UTF-8').'</p>');
     resurrection_editor_form($url, 'settings-'.$namespace, resurrection_editor_context($schema, $values), $schema, $values, $layout);
     page_footer();
 } catch (InvalidArgumentException|DomainException $error) {

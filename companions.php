@@ -259,16 +259,17 @@ function companionform($companion, $context){
 	resurrection_label_close();
 	rawoutput("</td><td><input name='companion[defense]'".resurrection_control_id('companion-defense')." value=\"".htmlentities($companion['defense'], ENT_COMPAT, getsetting("charset", "ISO-8859-1"))."\"> / ".resurrection_label_for('companion-defenseperlevel', "Bonus per level")."<input name='companion[defenseperlevel]'".resurrection_control_id('companion-defenseperlevel')." value=\"".htmlentities($companion['defenseperlevel'], ENT_COMPAT, getsetting("charset", "ISO-8859-1"))."\"></td></tr>");
 
+	// Phase 6 task 8 (S5): each checkbox also sits inside a label of its own, at least 44px square, which is its tap target.
 	rawoutput("<tr><td nowrap>");
 	resurrection_label_open('fighter');
 	output("Fighter?:");
 	resurrection_label_close();
-	rawoutput("</td><td><input id='fighter' type='checkbox' name='companion[abilities][fight]' value='1'".($companion['abilities']['fight']==true?" checked":"")." data-rz-uncheck-other='defender'></td></tr>");
+	rawoutput("</td><td><label><input id='fighter' type='checkbox' name='companion[abilities][fight]' value='1'".($companion['abilities']['fight']==true?" checked":"")." data-rz-uncheck-other='defender'></label></td></tr>");
 	rawoutput("<tr><td nowrap>");
 	resurrection_label_open('defender');
 	output("Defender?:");
 	resurrection_label_close();
-	rawoutput("</td><td><input id='defender' type='checkbox' name='companion[abilities][defend]' value='1'".($companion['abilities']['defend']==true?" checked":"")." data-rz-uncheck-other='fighter'></td></tr>");
+	rawoutput("</td><td><label><input id='defender' type='checkbox' name='companion[abilities][defend]' value='1'".($companion['abilities']['defend']==true?" checked":"")." data-rz-uncheck-other='fighter'></label></td></tr>");
 	rawoutput("<tr><td nowrap>");
 	resurrection_label_open('companion-abilities-heal');
 	output("Healer level:");
@@ -298,12 +299,12 @@ function companionform($companion, $context){
 	resurrection_label_open('companion-cannotdie');
 	output("Companion cannot die:");
 	resurrection_label_close();
-	rawoutput("</td><td><input type='checkbox' name='companion[cannotdie]'".resurrection_control_id('companion-cannotdie')." value='1'".($companion['cannotdie']==true?" checked":"")."></td></tr>");
+	rawoutput("</td><td><label><input type='checkbox' name='companion[cannotdie]'".resurrection_control_id('companion-cannotdie')." value='1'".($companion['cannotdie']==true?" checked":"")."></label></td></tr>");
 	rawoutput("<tr><td nowrap>");
 	resurrection_label_open('companion-cannotbehealed');
 	output("Companion cannot be healed:");
 	resurrection_label_close();
-	rawoutput("</td><td><input type='checkbox' name='companion[cannotbehealed]'".resurrection_control_id('companion-cannotbehealed')." value='1'".($companion['cannotbehealed']==true?" checked":"")."></td></tr>");
+	rawoutput("</td><td><label><input type='checkbox' name='companion[cannotbehealed]'".resurrection_control_id('companion-cannotbehealed')." value='1'".($companion['cannotbehealed']==true?" checked":"")."></label></td></tr>");
 	rawoutput("<tr><td nowrap>");
 
 	resurrection_label_open('companion-companioncostdks');
@@ -324,17 +325,17 @@ function companionform($companion, $context){
 	resurrection_label_open('companion-allowinshades');
 	output("Allow in shades:");
 	resurrection_label_close();
-	rawoutput("</td><td><input type='checkbox' name='companion[allowinshades]'".resurrection_control_id('companion-allowinshades')." value='1'".($companion['allowinshades']==true?" checked":"")."></td></tr>");
+	rawoutput("</td><td><label><input type='checkbox' name='companion[allowinshades]'".resurrection_control_id('companion-allowinshades')." value='1'".($companion['allowinshades']==true?" checked":"")."></label></td></tr>");
 	rawoutput("<tr><td nowrap>");
 	resurrection_label_open('companion-allowinpvp');
 	output("Allow in PvP:");
 	resurrection_label_close();
-	rawoutput("</td><td><input type='checkbox' name='companion[allowinpvp]'".resurrection_control_id('companion-allowinpvp')." value='1'".($companion['allowinpvp']==true?" checked":"")."></td></tr>");
+	rawoutput("</td><td><label><input type='checkbox' name='companion[allowinpvp]'".resurrection_control_id('companion-allowinpvp')." value='1'".($companion['allowinpvp']==true?" checked":"")."></label></td></tr>");
 	rawoutput("<tr><td nowrap>");
 	resurrection_label_open('companion-allowintrain');
 	output("Allow in train:");
 	resurrection_label_close();
-	rawoutput("</td><td><input type='checkbox' name='companion[allowintrain]'".resurrection_control_id('companion-allowintrain')." value='1'".($companion['allowintrain']==true?" checked":"")."></td></tr>");
+	rawoutput("</td><td><label><input type='checkbox' name='companion[allowintrain]'".resurrection_control_id('companion-allowintrain')." value='1'".($companion['allowintrain']==true?" checked":"")."></label></td></tr>");
 	rawoutput("</table>");
 	$save = translate_inline("Save");
 	rawoutput("<input type='submit' class='button' value='$save'></form>");

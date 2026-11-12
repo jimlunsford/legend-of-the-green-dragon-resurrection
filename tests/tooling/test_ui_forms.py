@@ -47,6 +47,14 @@ OPERATOR = {}
 # Controls that need no label of their own: buttons say what they do, hidden inputs show nothing.
 UNLABELLED_TYPES = {'hidden', 'submit', 'button', 'reset', 'image'}
 
+# Phase 6 task 8 (S5): the pages whose inputs the readiness review found unlabelled, and the pages whose radio buttons and
+# checkboxes were 20px targets.
+S5_LABELLED = ['list.php', 'modules/cedrikspotions.php', 'modules/dag/run.php', 'modules/dag/misc_functions.php']
+S5_CHOICES = ['create.php', 'modules/cedrikspotions.php', 'modules/dag/misc_functions.php', 'companions.php', 'modules.php']
+# The small links that are 44px tap targets: the write-mail icon (class rz-tap), and the module list's links, each inside
+# an rz-tap-wrap span because the about pages keep 1.1.2's markup (test_license_text.py). File => (links, how).
+S5_TAP_LINKS = {'list.php': (1, 'class'), 'bio.php': (1, 'class'), 'lib/about/about_listmodules.php': (2, 'wrap')}
+
 
 def sources():
     for path in sorted(ROOT.rglob('*.php')):
@@ -145,6 +153,41 @@ class LabelTest(unittest.TestCase):
             else:
                 self.assertLabelled(rel, text)
 
+    def test_the_s5_pages_label_every_input(self):
+        # Phase 6 task 8 (S5; PHASE6-RC-READINESS-20261106.md, 6.5): the Warriors list's name search, Cedrik's gem wish,
+        # and Dag's player and admin bounty forms.
+        for rel in S5_LABELLED:
+            with self.subTest(rel):
+                self.assertLabelled(rel, (ROOT / rel).read_text())
+
+    def test_the_s5_choices_sit_inside_their_labels(self):
+        # Phase 6 task 8 (S5, 6.6): each radio button and checkbox on these pages is inside a <label>, which the
+        # stylesheet makes its 44px tap target (StylesheetTest.test_tap_targets).
+        for rel in S5_CHOICES:
+            with self.subTest(rel):
+                text = (ROOT / rel).read_text()
+                choices = [m for m in re.finditer(r"""<input\b[^>]*?type=['"](radio|checkbox)['"]""", text)]
+                self.assertTrue(choices, rel)
+                outside = [text[m.start():m.end()] for m in choices if not text[:m.start()].endswith('<label>')]
+                self.assertEqual([], outside, rel)
+
+    def test_the_s5_small_links_are_tap_targets(self):
+        # Phase 6 task 8 (S5, 6.6): the write-mail icon links carry rz-tap, and the module list's links sit inside an
+        # rz-tap-wrap span; the stylesheet makes both 44px each way (StylesheetTest.test_tap_targets).
+        for rel, (count, how) in S5_TAP_LINKS.items():
+            with self.subTest(rel):
+                lines = (ROOT / rel).read_text().splitlines()
+                at = [n for n, line in enumerate(lines)
+                      if re.search(r"""<a href=(?:\\?["'])(?:mail\.php\?op=write|http|\{\$row\['download'\]\})""", line)]
+                self.assertEqual(count, len(at), rel)
+                for n in at:
+                    if how == 'class':
+                        self.assertRegex(lines[n], r"""<a href=[^>]*class=\\?["']rz-tap\\?["']""", rel)
+                    else:
+                        self.assertEqual('rawoutput("<span class=\'rz-tap-wrap\'>");', lines[n - 1].strip(), rel)
+                        self.assertEqual('rawoutput("</a>");', lines[n + 2].strip(), rel)
+                        self.assertEqual('rawoutput("</span>");', lines[n + 3].strip(), rel)
+
     def test_previewfield_inputs_are_labelled_where_they_are_used(self):
         # lib/forms.php's previewfield() prints input$name; each caller labels it.
         forms = (ROOT / 'lib' / 'forms.php').read_text()
@@ -225,6 +268,21 @@ class StylesheetTest(unittest.TestCase):
         self.assertNotIn('--raised', inputs)
         self.assertIn('color: var(--muted);', self.rule('::placeholder'))
         self.assertIn('min-height: 88px;', self.rule('textarea'))
+
+    def test_tap_targets(self):
+        # Phase 6 task 8 (S5): 44px (--touch-target) for the shop item button's own box, the rz-tap links, and each
+        # radio button's and checkbox's label.
+        tokens = (ROOT / 'assets' / 'ui' / 'tokens.css').read_text()
+        self.assertRegex(tokens, r'--touch-target:\s*44px;')
+        shop = self.rule('.rz-content button.rz-shop-link')
+        for value in ('display: inline-flex;', 'min-width: var(--touch-target);', 'min-height: var(--touch-target);'):
+            self.assertIn(value, shop, value)
+        tap = self.rule('.rz-content a.rz-tap, .rz-content .rz-tap-wrap > a')
+        for value in ('display: inline-flex;', 'min-width: var(--touch-target);', 'min-height: var(--touch-target);'):
+            self.assertIn(value, tap, value)
+        choice = self.rule('.rz-content label:has(> input[type="checkbox"]), .rz-content label:has(> input[type="radio"])')
+        for value in ('display: inline-flex;', 'min-width: var(--touch-target);', 'min-height: var(--touch-target);'):
+            self.assertIn(value, choice, value)
 
     def test_tabs(self):
         self.assertIn('flex-wrap: wrap;', self.rule('.rz-tabs'))

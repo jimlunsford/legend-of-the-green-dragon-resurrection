@@ -10,7 +10,8 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 TOOLING = ROOT / 'tests' / 'tooling'
-# Per-test seconds from PHP 8.5 / MySQL 8.4 shard runs; refresh from the shards' printed durations.
+# Per-test seconds, the larger of the two legs' (PHP 8.5 / MySQL 8.4 and PHP 8.4 / MariaDB 11.4) in one Modern core
+# run, rounded to 0.1s; a test under 0.05s is 0.0. Refresh from the shards' printed durations.
 DURATIONS = TOOLING / 'shard-durations.json'
 WEB_MODULE = 'test_web_application'
 # Creates the WebPlayer account that every later web test logs in as.

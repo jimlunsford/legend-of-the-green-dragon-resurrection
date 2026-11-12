@@ -811,6 +811,14 @@ a.hotmotd { color: var(--accent); }
 .rz-shop-link span { color: inherit; }
 .rz-shop-link::after { content: ""; position: absolute; inset: 0; }
 .rz-content tr:has(.rz-shop-link:hover) { background: var(--ground); }
+/*
+  Tap targets (Phase 6 task 8, S5): the shop item button's own box is at least 44px each way, not only its row (the rule
+  above keeps the button's fill and padding off); a small link marked rz-tap (the write-mail icon in list.php and bio.php),
+  or inside an rz-tap-wrap span (each module's link on about.php's module list, whose markup stays 1.1.2's), is at least
+  44px each way.
+*/
+.rz-content button.rz-shop-link { display: inline-flex; align-items: center; min-width: var(--touch-target); min-height: var(--touch-target); }
+.rz-content a.rz-tap, .rz-content .rz-tap-wrap > a { display: inline-flex; align-items: center; justify-content: center; min-width: var(--touch-target); min-height: var(--touch-target); vertical-align: middle; }
 
 /*
   The settings editors' sections (Phase 5 task 11, lib/typed_editor.php): showform()'s tabs; in each section a heading,
@@ -822,6 +830,13 @@ a.hotmotd { color: var(--accent); }
 /* A locked setting (Phase 6 task 7): its disabled control dimmed, and the line saying why under it. */
 .rz-setting-locked select:disabled { opacity: 0.6; cursor: not-allowed; }
 .rz-setting-locked-note { display: block; max-width: 60ch; margin-top: 4px; color: var(--muted); font-family: var(--font-ui); font-size: var(--size-small); }
+/*
+  A bounded setting (Phase 6 task 8): its number field as wide as a text field, the line with its range under it, and
+  the line saying why a value outside the range was refused above the form.
+*/
+.rz-form-section > p.rz-setting-bounded > label > input { width: min(100%, 480px); }
+.rz-setting-bounds { display: block; max-width: 60ch; margin-top: 4px; color: var(--muted); font-family: var(--font-ui); font-size: var(--size-small); }
+.rz-content .rz-setting-refused { padding: 8px 12px; border: 1px solid var(--accent); border-radius: var(--radius-control); font-family: var(--font-ui); font-weight: var(--weight-ui-medium); }
 
 /*
   The MoTD (Phase 5 task 11, lib/motd.php): each item's title in Cinzel, its author and date in --muted, its body in

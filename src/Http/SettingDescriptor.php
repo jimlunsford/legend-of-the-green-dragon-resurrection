@@ -6,6 +6,9 @@ if (!\defined('RESURRECTION_ENTRY') && \PHP_SAPI !== 'cli') { \http_response_cod
 /** Small typed adapter for the shipped form declarations, not a second settings store. */
 final class SettingDescriptor
 {
+    /** The exception code for a whole number outside the bounds its declaration names ("int,LOW,HIGH"). */
+    public const OUT_OF_BOUNDS = 4001;
+
     /**
  * @param array<array-key,mixed> $layout
  * @return array<string,array<string,mixed>> */
@@ -33,6 +36,14 @@ final class SettingDescriptor
                 if ($type !== 'int' && $type !== 'amount') {
                     $descriptor['min'] = (float)($parts[2] ?? 0);
                     $descriptor['max'] = (float)($parts[3] ?? 0);
+                } elseif ($type === 'int' && isset($parts[2], $parts[3])) {
+                    // Phase 6 task 8: a bounded whole number, "int,LOW,HIGH" (LOGINTIMEOUT; lib/settings.php).
+                    $low = filter_var($parts[2], FILTER_VALIDATE_INT);
+                    $high = filter_var($parts[3], FILTER_VALIDATE_INT);
+                    if ($low === false || $high === false || $low > $high) throw new \DomainException('Invalid bounds.');
+                    $descriptor['min'] = $low;
+                    $descriptor['max'] = $high;
+                    $descriptor['bounded'] = true;
                 }
                 $descriptor['default'] ??= (string)max(0, $descriptor['min']);
             } elseif ($type === 'enum' || $type === 'enumpretrans') {
@@ -65,9 +76,21 @@ final class SettingDescriptor
             $number=$type==='amount' ? rtrim($value,'%') : $value;
             if ($type==='amount' && !preg_match('/\A-?(?:0|[1-9][0-9]*)%?\z/',$value)) throw new \InvalidArgumentException('Invalid amount.');
             $pattern = $type === 'floatrange' ? '/\A-?(?:[0-9]+(?:\.[0-9]+)?|\.[0-9]+)\z/' : '/\A-?(?:0|[1-9][0-9]*)\z/';
-            if (!preg_match($pattern, $number) || !is_finite((float)$number) || (float)$number<$descriptor['min'] || (float)$number>$descriptor['max']) throw new \InvalidArgumentException('Invalid number.');
+            if (!preg_match($pattern, $number) || !is_finite((float)$number)) throw new \InvalidArgumentException('Invalid number.');
+            if ((float)$number<$descriptor['min'] || (float)$number>$descriptor['max']) {
+                if (!empty($descriptor['bounded'])) throw new \InvalidArgumentException(self::boundsLine($descriptor), self::OUT_OF_BOUNDS);
+                throw new \InvalidArgumentException('Invalid number.');
+            }
         }
         return $value;
+    }
+
+    /**
+     * The one line Game Settings shows for a bounded whole number: its range, and why a value outside it is refused.
+     * @param array<string,mixed> $descriptor */
+    public static function boundsLine(array $descriptor): string
+    {
+        return 'Not saved: "'.$descriptor['label'].'" must be a whole number from '.$descriptor['min'].' to '.$descriptor['max'].'.';
     }
 
     /**

@@ -103,7 +103,8 @@ if ($session['user']['loggedin']){
 	$search = translate_inline("Search by name: ");
 	$search2 = translate_inline("Search");
 
-	rawoutput("<form action='list.php?op=search' method='POST'>$search<input name='name'><input type='submit' class='button' value='$search2'></form>");
+	// Phase 6 task 8 (S5): the search text is the input's label.
+	rawoutput("<form action='list.php?op=search' method='POST'><label for='rz-list-name'>$search</label><input name='name' id='rz-list-name'><input type='submit' class='button' value='$search2'></form>");
 	addnav("","list.php?op=search");
 }
 
@@ -148,7 +149,7 @@ for($i=0;$i<$max;$i++){
 	output_notl("`^%s`0", $row['level']);
 	rawoutput("</td><td>");
 	if ($session['user']['loggedin']) {
-		rawoutput("<a href=\"mail.php?op=write&to=".rawurlencode($row['login'])."\" target=\"_blank\"".resurrection_popup_attributes().">");
+		rawoutput("<a href=\"mail.php?op=write&to=".rawurlencode($row['login'])."\" class=\"rz-tap\" target=\"_blank\"".resurrection_popup_attributes().">");
 		rawoutput("<img src='images/newscroll.GIF' width='16' height='16' alt='$writemail' border='0'></a>");
 		rawoutput("<a href='bio.php?char=".$row['acctid']."'>");
 		addnav("","bio.php?char=".$row['acctid']."");

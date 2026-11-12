@@ -229,3 +229,13 @@ PHPUnit run.
 | `scripts/verify-historical-baseline.py` | PASS: tag object `51cab4f`, commit `bdc29df`, tree `4013a0c`, 417 files, 11 commits |
 | `scripts/validate-project.py` | PASS, 1,018 tracked files checked |
 | `git diff --check` | clean |
+
+## Acceptance (recorded in Phase 6 task 8, 2026-11-12)
+
+Task 7 is **accepted at `01cd708`**:
+
+- Modern core 42365272202: **SUCCESS**, 12/12 jobs, every job on `ubuntu-24.04`. PHP 8.4 / MariaDB 11.4 `http` shards
+  16:00, 16:55, 16:51, 17:46; PHP 8.5 / MySQL 8.4 `http` shards 19:08, 22:32, 20:24, 22:48.
+- Baseline integrity 42365272387: **SUCCESS**.
+
+B3 and B4 are closed. S9 stays "packet ready, awaiting counsel".

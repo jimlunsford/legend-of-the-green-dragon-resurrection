@@ -52,9 +52,13 @@ while ($row = db_fetch_assoc($result)) {
 	output_notl("`^%s`0", $row['moduleauthor'], true);
 	rawoutput("</td><td nowrap valign='top'>");
 	if ($row['download'] == "core_module") {
+		// Phase 6 task 8 (S5): each link sits in an rz-tap-wrap span, which makes it a 44px tap target. The link's own
+		// markup is 1.1.2's, kept as it was (tests/tooling/test_license_text.py).
+		rawoutput("<span class='rz-tap-wrap'>");
 		rawoutput("<a href='http://dragonprime.net/index.php?module=Downloads;catd=4' target='_blank'>");
 		output("Core Distribution");
 		rawoutput("</a>");
+		rawoutput("</span>");
 	} elseif ($row['download']) {
 		// We should check all legeal protocols
 		$protocols = array("http","https","ftp","ftps");
@@ -64,9 +68,11 @@ while ($row = db_fetch_assoc($result)) {
 		if (!in_array($protocol,$protocols)){
 			output("`\$Contact Admin for Release");
 		}else{
+			rawoutput("<span class='rz-tap-wrap'>");
 			rawoutput("<a href='{$row['download']}' target='_blank'>");
 			output("Download");
 			rawoutput("</a>");
+			rawoutput("</span>");
 		}
 	} else {
 		output("`\$Not publically released.`0");

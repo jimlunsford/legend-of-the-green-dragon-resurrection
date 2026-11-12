@@ -59,14 +59,22 @@ function dag_manage(){
 
 	rawoutput("<form action='runmodule.php?module=dag&manage=true&op=viewbounties&type=search&admin=true' method='POST'>");
 	addnav("","runmodule.php?module=dag&manage=true&op=viewbounties&type=search&admin=true");
+	resurrection_label_open('dag-setter');
 	output("Setter: ");
-	rawoutput("<input name='setter' value=\"".htmlspecialchars((string)httppost('setter'),ENT_QUOTES,'UTF-8')."\">");
+	resurrection_label_close();
+	rawoutput("<input name='setter'".resurrection_control_id('dag-setter')." value=\"".htmlspecialchars((string)httppost('setter'),ENT_QUOTES,'UTF-8')."\">");
+	resurrection_label_open('dag-getter');
 	output(" Winner: ");
-	rawoutput("<input name='getter' value=\"".htmlspecialchars((string)httppost('getter'),ENT_QUOTES,'UTF-8')."\">");
+	resurrection_label_close();
+	rawoutput("<input name='getter'".resurrection_control_id('dag-getter')." value=\"".htmlspecialchars((string)httppost('getter'),ENT_QUOTES,'UTF-8')."\">");
+	resurrection_label_open('dag-target');
 	output(" Target: ");
-	rawoutput("<input name='target' value=\"".htmlspecialchars((string)httppost('target'),ENT_QUOTES,'UTF-8')."\">");
+	resurrection_label_close();
+	rawoutput("<input name='target'".resurrection_control_id('dag-target')." value=\"".htmlspecialchars((string)httppost('target'),ENT_QUOTES,'UTF-8')."\">");
 	output_notl("`n");
+	resurrection_label_open('dag-sort');
 	output("Order by: ");
+	resurrection_label_close();
 	$id = translate_inline("ID");
 	$amt = translate_inline("Amount");
 	$targ = translate_inline("Target");
@@ -78,7 +86,7 @@ function dag_manage(){
 	$desc = translate_inline("Descending");
 	$asc = translate_inline("Ascending");
 	$search = translate_inline("Search");
-	rawoutput("<select name='s'>
+	rawoutput("<select name='s'".resurrection_control_id('dag-sort').">
 		<option value='1'".(httppost('s')=='1'?" selected":"").">$id</option>
 		<option value='2'".(httppost('s')=='2'?" selected":"").">$amt</option>
 		<option value='3'".(httppost('s')=='3'?" selected":"").">$targ</option>
@@ -88,8 +96,9 @@ function dag_manage(){
 		<option value='7'".(httppost('s')=='7'?" selected":"").">$win</option>
 		<option value='8'".(httppost('s')=='8'?" selected":"").">$wdate</option>
 		</select>");
-	rawoutput("<input type='radio' name='d' value='1'".(httppost('d')==1?" checked":"")."> $desc");
-	rawoutput("<input type='radio' name='d' value='2'".(httppost('d')==1?"":" checked")."> $asc");
+	// Phase 6 task 8 (S5): each order's label holds its radio button, so the whole label is the tap target.
+	rawoutput("<label><input type='radio' name='d' value='1'".(httppost('d')==1?" checked":"")."> $desc</label>");
+	rawoutput("<label><input type='radio' name='d' value='2'".(httppost('d')==1?"":" checked")."> $asc</label>");
 	output_notl("`n");
 	rawoutput("<input type='submit' class='button' value='$search'>");
 	rawoutput("</form>");
@@ -161,11 +170,15 @@ function dag_manage(){
 		output("`n`n`c`bAdd Bounty`b`c`n");
 		rawoutput("<form action='runmodule.php?module=dag&manage=true&op=addbounty&admin=true' method='POST'>");
         rawoutput(resurrection_action_fields('dag-admin-place',(string)$session['user']['acctid']));
+		resurrection_label_open('dag-contractname');
 		output("`2Target: ");
-		rawoutput("<input name='contractname'>");
+		resurrection_label_close();
+		rawoutput("<input name='contractname'".resurrection_control_id('dag-contractname').">");
 		output_notl("`n");
+		resurrection_label_open('dag-amount');
 		output("`2Amount to Place: ");
-		rawoutput("<input name='amount' id='amount' width='5'>");
+		resurrection_label_close();
+		rawoutput("<input name='amount'".resurrection_control_id('dag-amount')." width='5'>");
 		output_notl("`n`n");
 		$final = translate_inline("Finalize Contract");
 		rawoutput("<input type='submit' class='button' value='$final'>");
@@ -188,8 +201,10 @@ function dag_manage(){
 			output("Select the correct name:`n");
 			rawoutput("<form action='runmodule.php?module=dag&manage=true&op=addbounty&subfinal=1&admin=true' method='POST'>");
         rawoutput(resurrection_action_fields('dag-admin-place',(string)$session['user']['acctid']));
+			resurrection_label_open('dag-contractname');
 			output("`2Target: ");
-			rawoutput("<select name='contractname'>");
+			resurrection_label_close();
+			rawoutput("<select name='contractname'".resurrection_control_id('dag-contractname').">");
 			for ($i=0;$i<db_num_rows($result);$i++){
 				$row = db_fetch_assoc($result);
 				rawoutput("<option value=\"".htmlspecialchars($row['name'],ENT_QUOTES,'UTF-8')."\">".full_sanitize($row['name'])."</option>");
@@ -197,8 +212,10 @@ function dag_manage(){
 			rawoutput("</select>");
 			output_notl("`n`n");
 			// Amount is already typed.
+			resurrection_label_open('dag-amount');
 			output("`2Amount to Place: ");
-			rawoutput("<input name='amount' id='amount' width='5' value='$amount'>");
+			resurrection_label_close();
+			rawoutput("<input name='amount'".resurrection_control_id('dag-amount')." width='5' value='$amount'>");
 			output_notl("`n`n");
 			$final = translate_inline("Finalize Contract");
 			rawoutput("<input type='submit' class='button' value='$final'>");

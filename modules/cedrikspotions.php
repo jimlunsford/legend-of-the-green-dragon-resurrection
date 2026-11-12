@@ -180,26 +180,34 @@ function cedrikspotions_run(){
 			} else {
 				output("\"`%You have gems, do ya?`0\" %s`0 asks.  \"`%Well, I'll make you a magic elixir for between `^%s and %s gems`%, depending on which one you want!`0\"",$barkeep,$mincost, $maxcost);
 			}
-			output("`n`nGive him how many gems?");
+			output_notl("`n`n");
+			// Phase 6 task 8 (S5): the question labels the gem count, and each wish's label holds its radio button.
+			resurrection_label_open('cedrik-gemcount');
+			output("Give him how many gems?");
+			resurrection_label_close();
 			$give = translate_inline("Give");
 			$link = appendcount("runmodule.php?module=cedrikspotions&op=gems");
 			addnav("", $link);
 			rawoutput("<form action='$link' method='POST'>");
             rawoutput(resurrection_action_fields('cedrik-purchase',(string)$session['user']['acctid']));
-			rawoutput("<input name='gemcount' value='0'>");
+			rawoutput("<input name='gemcount'".resurrection_control_id('cedrik-gemcount')." value='0'>");
 			rawoutput("<input type='submit' class='button' value='$give'>");
 			output("`nAnd what do you wish for?`n");
 			if (get_module_setting("ischarm") == 1) {
-				rawoutput("<input type='radio' name='wish' value='1' checked>");
+				output_notl("`0");
+				rawoutput("<label><input type='radio' name='wish' value='1' checked>");
 				output("Charm");
 				if ($mincost != $maxcost) {
 					$cm = get_module_setting("charmcost");
 					output("(%s %s for %s charm)", $cm, translate_inline($cm==1?"gem":"gems"), get_module_setting("charmgain"));
 				}
+				output_notl("`0");
+				rawoutput("</label>");
 				output_notl("`n");
 			}
 			if (get_module_setting("ismax") == 1) {
-				rawoutput("<input type='radio' name='wish' value='2'>");
+				output_notl("`0");
+				rawoutput("<label><input type='radio' name='wish' value='2'>");
 				output("Vitality");
 				if ($mincost != $maxcost) {
 					$cm = get_module_setting("maxcost");
@@ -216,34 +224,45 @@ function cedrikspotions_run(){
 							$hptype,
 							translate_inline($hm==1?"hitpoint":"hitpoints"));
 				}
+				output_notl("`0");
+				rawoutput("</label>");
 				output_notl("`n");
 			}
 			if (get_module_setting("istemp") == 1) {
-				rawoutput("<input type='radio' name='wish' value='3'>");
+				output_notl("`0");
+				rawoutput("<label><input type='radio' name='wish' value='3'>");
 				output("Health");
 				if ($mincost != $maxcost) {
 					$cm = get_module_setting("tempcost");
 					$hm = get_module_setting("tempgain");
 					output("(%s %s for %s %s)", $cm, translate_inline($cm==1?"gem":"gems"), $hm, translate_inline($hm == 1? "hitpoint":"hitpoints"));
 				}
+				output_notl("`0");
+				rawoutput("</label>");
 				output_notl("`n");
 			}
 			if (get_module_setting("isforget") == 1) {
-				rawoutput("<input type='radio' name='wish' value='4'>");
+				output_notl("`0");
+				rawoutput("<label><input type='radio' name='wish' value='4'>");
 				output("Forgetfulness");
 				if ($mincost != $maxcost) {
 					$cm = get_module_setting("forgcost");
 					output_notl("(%s %s)", $cm, translate_inline($cm==1?"gem":"gems"));
 				}
+				output_notl("`0");
+				rawoutput("</label>");
 				output_notl("`n");
 			}
 			if (get_module_setting("istrans") == 1) {
-				rawoutput("<input type='radio' name='wish' value='5'>");
+				output_notl("`0");
+				rawoutput("<label><input type='radio' name='wish' value='5'>");
 				output("Transmutation");
 				if ($mincost != $maxcost) {
 					$cm = get_module_setting("transcost");
 					output_notl("(%s %s)", $cm, translate_inline($cm==1?"gem":"gems"));
 				}
+				output_notl("`0");
+				rawoutput("</label>");
 				output_notl("`n");
 			}
 			rawoutput("</form>");

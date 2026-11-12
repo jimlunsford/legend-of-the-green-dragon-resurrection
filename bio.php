@@ -49,7 +49,7 @@ if ($target = db_fetch_assoc($result)) {
   output("`^Biography for %s`^.",$target['name']);
   $write = translate_inline("Write Mail");
   if ($session['user']['loggedin'])
-	  rawoutput("<a href=\"mail.php?op=write&to={$target['login']}\" target=\"_blank\"".resurrection_popup_attributes()."><img src='images/newscroll.GIF' width='16' height='16' alt='$write' border='0'></a>");
+	  rawoutput("<a href=\"mail.php?op=write&to={$target['login']}\" class=\"rz-tap\" target=\"_blank\"".resurrection_popup_attributes()."><img src='images/newscroll.GIF' width='16' height='16' alt='$write' border='0'></a>");
   output_notl("`n`n");
 
   if ($target['clanname']>"" && getsetting("allowclans",false)){

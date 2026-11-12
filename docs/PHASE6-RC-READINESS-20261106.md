@@ -625,3 +625,15 @@ The gap list above stays as written. Task 7 (`PHASE6-TASK7-RC-MATERIALS-20261107
 
 What stands between `main` and the `v1.0.0-rc.1` tag is listed in `ROADMAP.md` (Phase 6, after task 7) and in
 `docs/RC-CUT-CHECKLIST.md`.
+
+## Task 7 accepted; S5 (recorded 2026-11-12, Phase 6 task 8)
+
+Task 7 is accepted at `01cd708`: Modern core 42365272202 SUCCESS (12/12 jobs, all on `ubuntu-24.04`), Baseline
+integrity 42365272387 SUCCESS. The rows above change as follows:
+
+| ID | Status after task 8 | Where |
+|---|---|---|
+| B3 | Done. Accepted at `01cd708` | as above |
+| B4 | Done up to the tag. Accepted at `01cd708` | as above |
+| S9 | Packet ready, awaiting counsel | `docs/LEGAL-REVIEW-PACKET-20261107.md` |
+| S5 | Done, pending task 8's CI acceptance. The inputs in 6.5 have labels; the player-page targets in 6.6 (shop item buttons, mail icon links, module list links, radio and checkbox hit areas through their labels) are at least 44px at 390 wide. The staff sort headers and the translator "T" links in 6.6 were not part of S5's row and are unchanged | `docs/PHASE6-TASK8-20261112.md` |
