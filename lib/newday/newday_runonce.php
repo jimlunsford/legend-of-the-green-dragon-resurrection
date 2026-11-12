@@ -28,6 +28,10 @@ if (!\defined('RESURRECTION_ENTRY') && \PHP_SAPI !== 'cli') { \http_response_cod
 	//Expire Chars
 	require_once("lib/expire_chars.php");
 
+	// Account mail (Phase 6 task 13a): tokens used or expired more than 7 days ago, log rows older than 30 days.
+	require_once("lib/account_mail.php");
+	resurrection_account_mail_cleanup();
+
 	//Clean up old mails
 	$sql = "DELETE FROM " . db_prefix("mail") . " WHERE sent<'".date("Y-m-d H:i:s",strtotime("-".getsetting("oldmail",14)."days"))."'";
 	db_query($sql);

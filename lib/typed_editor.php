@@ -204,9 +204,10 @@ function resurrection_editor_locked_reason(string $key): string {
  * A bounded setting's range and why, in one line for Game Settings (Phase 6 task 8; lib/settings.php).
  * @param array<string,mixed> $descriptor */
 function resurrection_editor_bounds_note(string $key, array $descriptor): string {
-    $range='From '.(int)$descriptor['min'].' to '.(int)$descriptor['max'].' seconds';
+    $range='From '.(int)$descriptor['min'].' to '.(int)$descriptor['max'];
     return match ($key) {
-        'LOGINTIMEOUT' => $range.' (5 minutes to 1 day). Below that, players are signed out almost at once; above it, a closed browser stays signed in for days. A stored value outside the range is used as the nearest end of it.',
+        'LOGINTIMEOUT' => $range.' seconds (5 minutes to 1 day). Below that, players are signed out almost at once; above it, a closed browser stays signed in for days. A stored value outside the range is used as the nearest end of it.',
+        'account_mail_hourly' => $range.' mails an hour. Many hosts cap mail at 100 to 500 an hour; past this limit account mail waits for the next hour. A stored value outside the range is used as the nearest end of it.',
         default => $range.'.',
     };
 }

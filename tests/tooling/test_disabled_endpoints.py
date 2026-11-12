@@ -12,6 +12,7 @@ import unittest
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from php_runtime import supported_php  # noqa: E402
+import mail_capture  # noqa: E402
 
 class DisabledEndpointTests(unittest.TestCase):
     @classmethod
@@ -29,7 +30,7 @@ class DisabledEndpointTests(unittest.TestCase):
                          "if ($file !== false && is_file($file)) return false;\n"
                          "http_response_code(404); echo \"No such file.\\n\";\n")
         cls.router.flush()
-        cls.server = subprocess.Popen([php, '-n', '-S', f'127.0.0.1:{cls.port}', '-t', str(ROOT), cls.router.name],
+        cls.server = subprocess.Popen([php, '-n', *mail_capture.default_args(), '-S', f'127.0.0.1:{cls.port}', '-t', str(ROOT), cls.router.name],
                                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         for _ in range(100):
             try:

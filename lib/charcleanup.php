@@ -72,6 +72,8 @@ function char_cleanup(int $id, int $type): bool
         }
     }
 
+    // Account mail tokens (Phase 6 task 13a): a deleted account's links stop working with it.
+    db_query('DELETE FROM ' . db_prefix('account_tokens') . ' WHERE acctid=?', true, [$id]);
     // Delete any module user prefs
     db_query('DELETE FROM ' . db_prefix('module_userprefs') . ' WHERE userid=?', true, [$id]);
     // Delete any mail to or from the user

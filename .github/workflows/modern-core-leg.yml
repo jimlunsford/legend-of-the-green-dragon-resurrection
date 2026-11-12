@@ -44,7 +44,7 @@ jobs:
           extensions: pdo_mysql, mbstring, dom, xml, xmlwriter
           coverage: none
           tools: composer:v2
-          ini-values: error_reporting=-1, display_errors=1
+          ini-values: error_reporting=-1, display_errors=1, sendmail_path=/bin/false
       - run: composer validate --strict
       - run: composer install --no-interaction --prefer-dist --no-progress
       - run: composer audit
@@ -106,7 +106,7 @@ jobs:
           extensions: pdo_mysql, mbstring, dom, xml, xmlwriter
           coverage: none
           tools: composer:v2
-          ini-values: error_reporting=-1, display_errors=1
+          ini-values: error_reporting=-1, display_errors=1, sendmail_path=/bin/false
       - run: composer install --no-interaction --prefer-dist --no-progress
       - run: vendor/bin/phpunit tests/unit/FreshInstallTest.php
         env:

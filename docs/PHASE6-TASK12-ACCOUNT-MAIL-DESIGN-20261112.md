@@ -732,3 +732,43 @@ accounts that already have a verified address (the administrator's, from the tes
 Defaults that are not questions unless Jim wants them to be: recovery links live 30 minutes and other links 24 hours;
 5 opens per link; the limits in section 5; the 1.5-second floor; no automatic sign-in after a reset; no IP in any
 mail.
+
+## Acceptance (recorded in Phase 6 task 13a, 2026-11-12)
+
+Task 12 is **accepted at `ae4bd3b`**:
+
+- Modern core 43245774215: **SUCCESS**, 14/14 jobs, every job on `ubuntu-24.04`. PHP 8.4 / MariaDB 11.4 `http` shards
+  11:52, 14:59, 16:02, 13:00, 13:31; PHP 8.5 / MySQL 8.4 `http` shards 16:49, 13:00, 12:00, 17:11, 15:38.
+- Baseline integrity 43245774307: **SUCCESS**.
+
+## Decisions (approved 2026-11-12)
+
+Jim approved the design on 2026-11-12 with every recommendation, plus one addition.
+
+1. `mail()` only for rc.1. No SMTP client.
+2. Recovery mail goes only to an address verified for the account.
+3. Staff accounts can recover, with a game mail to every other `SU_MEGAUSER` after a staff reset, a game log line, and
+   a switch to exclude staff (default: included).
+4. An unverified sign-up cannot sign in until confirmed.
+5. `requirevalidemail` reads as on only while account mail is effectively on (a confirmed test mail for the current
+   `serverurl` and sender).
+6. The token travels in the query string. It is exchanged on first open for a session grant and a 303 to a clean URL.
+7. While account mail is on, notification mail goes only to verified addresses. While it is off, as today.
+8. The schema ships as upgrade step `0001` plus the fresh install.
+9. The build splits into 13a, 13b and 13c, as in section 12.
+
+**Addition (13c): the verify prompt.** While account mail is on, a signed-in player whose address is unverified sees a
+one-line prompt to verify it, with a link to Preferences. The player can dismiss it. It is not shown while account mail
+is off. It belongs to section 4.2, the test plan and the 13c scope, as follows:
+
+- **Section 4.2, addition.** While account mail is effectively on, a signed-in player whose `emailaddress` is not
+  empty and not verified (or empty, when `requireemail` is on) sees one line at the top of the page, "Your email
+  address is not verified. Verify it in Preferences.", with a link to `prefs.php` and a Dismiss button (POST, CSRF).
+  Dismissing hides it for that address: the dismissal is stored with the address it was made for, so a later change of
+  address shows it again. It is never shown while account mail is off, and never on `account.php` or the operator
+  pages.
+- **Section 10, addition (13c).** PHPUnit `VerifyPromptTest::testShownOnlyWhileAccountMailIsOnAndTheAddressIsUnverified`,
+  `::testDismissHidesItForThatAddressOnly`; HTTP: `test_signup_verification_and_resend` also checks the prompt after a
+  Preferences address change, its link and its Dismiss POST, and `test_account_mail_off_leaves_today_behavior` checks it
+  is absent.
+- **Section 12, addition.** 13c's scope includes the prompt.

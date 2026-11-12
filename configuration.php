@@ -5,7 +5,7 @@ require_once 'lib/typed_editor.php';
 require_once 'lib/configuration_descriptors.php';
 check_su_access(SU_EDIT_CONFIG);
 try {
-    $op = \Resurrection\Http\Input::choice($_GET, 'op', ['', 'save', 'modulesettings', 'webcron', 'webcron_on', 'webcron_off', 'webcron_new'], '');
+    $op = \Resurrection\Http\Input::choice($_GET, 'op', ['', 'save', 'modulesettings', 'webcron', 'webcron_on', 'webcron_off', 'webcron_new', 'accountmail', 'accountmail_test', 'accountmail_on', 'accountmail_off'], '');
     if (str_starts_with($op, 'webcron')) {
         // Web maintenance (Phase 6 task 5a): every change is a POST with the CSRF token. Turning it on and making a new
         // address both make a new secret, which this page shows once.
@@ -23,9 +23,28 @@ try {
         superusernav();
         addnav('Standard settings', 'configuration.php');
         addnav('Web maintenance', 'configuration.php?op=webcron');
+        addnav('Account mail', 'configuration.php?op=accountmail');
         module_editor_navs('settings', 'configuration.php?op=modulesettings&module=');
         resurrection_webcron_render($secret);
         unset($secret);
+        page_footer();
+    }
+    if (str_starts_with($op, 'accountmail')) {
+        // Account mail (Phase 6 task 13a, S11): the status, the test mail to the signed-in administrator's own address,
+        // and the switch. Every change is a POST with the CSRF token and a one-use action token.
+        require_once 'lib/account_mail_admin.php';
+        require_once 'lib/gamelog.php';
+        $acctid = (int)$session['user']['acctid'];
+        $notice = $op === 'accountmail' ? '' : resurrection_account_mail_admin_handle($op, $acctid);
+        header('Cache-Control: no-store');
+        page_header('Game Settings');
+        require_once 'lib/superusernav.php';
+        superusernav();
+        addnav('Standard settings', 'configuration.php');
+        addnav('Web maintenance', 'configuration.php?op=webcron');
+        addnav('Account mail', 'configuration.php?op=accountmail');
+        module_editor_navs('settings', 'configuration.php?op=modulesettings&module=');
+        resurrection_account_mail_admin_render($acctid, $notice);
         page_footer();
     }
     $namespace = $op === 'modulesettings' ? \Resurrection\Http\Input::string($_GET, 'module') : 'core';
@@ -53,6 +72,7 @@ try {
     superusernav();
     addnav('Standard settings', 'configuration.php');
     addnav('Web maintenance', 'configuration.php?op=webcron');
+    addnav('Account mail', 'configuration.php?op=accountmail');
     module_editor_navs('settings', 'configuration.php?op=modulesettings&module=');
     $url = $namespace === 'core' ? 'configuration.php?op=save' : 'configuration.php?op=modulesettings&module='.rawurlencode($namespace).'&save=1';
     addnav('', $url);

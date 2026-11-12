@@ -32,7 +32,8 @@ final class BoundedSettingsTest extends TestCase
         } finally {
             $settings = $saved;
         }
-        self::assertSame(['LOGINTIMEOUT' => [300, 86400]], resurrection_bounded_settings());
+        // Phase 6 task 13a adds account_mail_hourly (10 to 1000 mails an hour); LOGINTIMEOUT's range is unchanged.
+        self::assertSame(['LOGINTIMEOUT' => [300, 86400], 'account_mail_hourly' => [10, 1000]], resurrection_bounded_settings());
         self::assertSame('abc', resurrection_bounded_setting('maxonline', 'abc'));
     }
 

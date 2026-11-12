@@ -65,12 +65,13 @@ function resurrection_locked_settings(): array {
  * Settings the game reads only inside a range (Phase 6 task 8): getsetting() returns a stored value outside it as the
  * nearest bound, and Game Settings refuses a value outside it (lib/configuration_descriptors.php declares the bounds
  * from here). LOGINTIMEOUT: with 0, or a few seconds, every player is signed out on their next page load; above a day,
- * a closed browser stays signed in for days.
+ * a closed browser stays signed in for days. account_mail_hourly (Phase 6 task 13a): the most account mail the game
+ * sends in an hour; 0 would stop it, and above 1000 a host's mail quota is no protection.
  *
  * @return array<string,array{0:int,1:int}> setting => [lowest, highest]
  */
 function resurrection_bounded_settings(): array {
-	return ['LOGINTIMEOUT' => [300, 86400]];
+	return ['LOGINTIMEOUT' => [300, 86400], 'account_mail_hourly' => [10, 1000]];
 }
 
 /** A bounded setting's value held inside its range (an integer); any other setting's value unchanged. */

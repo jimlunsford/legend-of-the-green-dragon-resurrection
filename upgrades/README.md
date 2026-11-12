@@ -2,7 +2,9 @@
 
 Each file here is one numbered database upgrade step. `php scripts/upgrade.php` applies the steps a database does not have yet, in number order, and records each in the database's `upgrade_steps` table once it has fully succeeded. A fresh install records every step in this directory as applied, because its schema already has them. The design and its reasons are in `docs/PHASE4-TASK2-UPGRADE-SYSTEM-20261029.md`; operators follow `docs/MODERN-INSTALLATION.md`, "Upgrading".
 
-There are no steps yet: no release exists, so no database needs one.
+The steps:
+
+- `0001-account-mail.php` (Phase 6 task 13a, before the first release): account mail's two tables, `account_tokens` and `account_mail_log`, and the `accounts.emailverified` column (`docs/PHASE6-TASK12-ACCOUNT-MAIL-DESIGN-20261112.md`, section 7). Each change is checked before it is made, no row is changed, and its definitions are written out in the step, never read from shared code.
 
 ## Writing a step
 

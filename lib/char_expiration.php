@@ -45,6 +45,19 @@ function resurrection_expire_warning_cutoff(int $old, int $now): ?string {
 }
 
 /**
+ * The warning email's text. Its address is the configured `serverurl` (resurrection_server_url()), never the request
+ * (Phase 6 task 13a, F1): 1.1.2 passed getsetting() a default built from SERVER_NAME, SERVER_PORT and REQUEST_URI, so a
+ * stored value went into the mail unchecked, and with no `serverurl` row the request-built default was saved as the
+ * setting (from webcron.php, the scheduler's request). Without a valid serverurl the email says so, as the mail and
+ * petition notices do.
+ */
+function resurrection_expire_warning_body(): string {
+    require_once __DIR__ . '/server_url.php';
+    return sprintf_translate("One or more of your characters in Legend of the Green Dragon at %s is about to expire.  If you wish to keep this character, you should log on to him or her soon!",
+        resurrection_server_url() ?? translate_inline("(Server URL not set or not valid)"));
+}
+
+/**
  * Delete one selected account in its own transaction, rechecking the rules under the account lock (a player who
  * logged on since the selection is kept). Hook mail is queued and delivered only after commit.
  * @param list<int|string> $parameters
@@ -139,7 +152,7 @@ function resurrection_expire_characters(int $now): void {
         " WHERE laston < ? AND emailaddress!='' AND sentnotice=0 AND (superuser&?)=0 ORDER BY acctid", true, [$cutoff, NO_ACCOUNT_EXPIRATION]);
     if (!$rows) return;
     $subject = translate_inline("LoGD Character Expiration");
-    $body = sprintf_translate("One or more of your characters in Legend of the Green Dragon at %s is about to expire.  If you wish to keep this character, you should log on to him or her soon!",getsetting("serverurl","http://".$_SERVER['SERVER_NAME'].($_SERVER['SERVER_PORT'] == 80?"":":".$_SERVER['SERVER_PORT']).dirname($_SERVER['REQUEST_URI'])));
+    $body = resurrection_expire_warning_body();
     $from = getsetting("gameadminemail","postmaster@localhost.com");
     $sent = 0;
     foreach ($rows as $row) {

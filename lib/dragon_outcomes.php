@@ -130,6 +130,7 @@ function resurrection_dragon_complete(bool $flawless): void {
 				   ,"lastmotd"=>1
 				   ,"emailaddress"=>1
 				   ,"emailvalidation"=>1
+                   ,"emailverified"=>1 // The address the player verified (S11) survives progression resets.
 				   ,"gensize"=>1
 				   ,"bestdragonage"=>1
 				   ,"dragonage"=>1

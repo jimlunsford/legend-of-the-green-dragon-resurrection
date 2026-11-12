@@ -16,6 +16,8 @@ use Resurrection\Upgrade\StepCatalog;
  */
 final class UpgradeBudgetTest extends TestCase
 {
+    use RealStepsAside;
+
     private const string ORDER = __DIR__ . '/../fixtures/upgrade-steps/order';
     private const array PENDING = ['Pending:', '- step 0001-first: Log step 0001', '- step 0002-second: Log step 0002', '- step 0010-tenth: Log step 0010'];
 
@@ -75,6 +77,7 @@ final class UpgradeBudgetTest extends TestCase
     public function testNoBudgetChangesNothing(): void
     {
         $this->connect();
+        $this->setAsideRealSteps();
         $before = resurrection_database_snapshot();
         try {
             [$lines, $result] = self::upgrade(null);
@@ -92,6 +95,7 @@ final class UpgradeBudgetTest extends TestCase
     public function testStopsBetweenStepsAndTheNextRunResumes(): void
     {
         $this->connect();
+        $this->setAsideRealSteps();
         $before = resurrection_database_snapshot();
         try {
             // A budget of 0 is spent at once, yet one step always runs: each run applies exactly one, then stops.
@@ -121,6 +125,7 @@ final class UpgradeBudgetTest extends TestCase
     public function testANegativeBudgetIsRefusedBeforeAnything(): void
     {
         $this->connect();
+        $this->setAsideRealSteps();
         $before = resurrection_database_snapshot();
         try {
             self::upgrade(-1.0);

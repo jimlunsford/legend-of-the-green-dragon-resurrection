@@ -51,4 +51,30 @@ final class SecurityHeadersTest extends TestCase
         self::assertSame(['enforce' => 'Enforce (the default)', 'report-only' => 'Report only', 'off' => 'Off'], $schema['csp_mode']['options']);
         self::assertSame('enforce', $schema['csp_mode']['default']);
     }
+
+    public function testAccountPageSendsNoReferrerAndNoStoreAndTakesTheTokenOutFirst(): void
+    {
+        // Phase 6 task 13a: account.php, which a link in an account mail opens with a token in its query string. Its
+        // own headers replace the default Referrer-Policy (same-origin) after common.php sent it, and the token leaves
+        // $_GET and $_REQUEST, and the recorded request address, before common.php can record anything. The pages are
+        // checked over HTTP in tests/tooling/test_account_mail_http.py.
+        $page = (string)file_get_contents(dirname(__DIR__, 2) . '/account.php');
+        $common = strpos($page, "require_once 'common.php';");
+        self::assertNotFalse($common);
+        foreach (["unset(\$_GET['t'], \$_REQUEST['t']);", "\$_SERVER['REQUEST_URI'] = ", "\$_SERVER['QUERY_STRING'] = ", "define('RESURRECTION_SECRET_URL', true);",
+                "define('RESURRECTION_NO_KEPT_PAGE', true);"] as $before) {
+            $at = strpos($page, $before);
+            self::assertNotFalse($at, $before);
+            self::assertLessThan($common, $at, $before);
+        }
+        foreach (["header('Referrer-Policy: no-referrer');", "header('Cache-Control: no-store');", "header('X-Robots-Tag: noindex');"] as $header) {
+            $at = strpos($page, $header);
+            self::assertNotFalse($at, $header);
+            self::assertGreaterThan($common, $at, $header);
+            self::assertLessThan(strpos($page, 'function resurrection_account_expired'), $at, $header);
+        }
+        // The page's own markers are honoured: no referer record, no kept page.
+        self::assertStringContainsString("!defined('RESURRECTION_SECRET_URL')) resurrection_track_referer();", (string)file_get_contents(dirname(__DIR__, 2) . '/common.php'));
+        self::assertStringContainsString("if (defined('RESURRECTION_NO_KEPT_PAGE')) \$session['output']='';", (string)file_get_contents(dirname(__DIR__, 2) . '/lib/pageparts.php'));
+    }
 }

@@ -54,6 +54,12 @@ function resurrection_core_layout(): array {
 		// Phase 6 task 7: held off (lib/settings.php, resurrection_locked_settings()); shown locked, never saved.
 		"requirevalidemail"=>"Require users to validate their email address,locked",
 		"blockdupeemail"=>"One account per email address,bool",
+
+		// Phase 6 task 13a (S11): account mail's limits. The switch, the test mail and the status are under Account mail.
+		"Account Mail,title",
+		"Password recovery and email verification by mail are turned on under Account mail once a test mail has been confirmed. These settings apply while it is on.,note",
+		"account_mail_hourly"=>"Most account mail sent in one hour,int,".implode(',', resurrection_bounded_settings()['account_mail_hourly']),
+		"account_mail_staff"=>"Staff accounts may recover their password by mail,bool",
 		"spaceinname"=>"Allow spaces in user names,bool",
 		"allowoddadminrenames"=>"Allow admins to enter 'illegal' names in the user editor,bool",
 		"selfdelete"=>"Allow player to delete their character,bool",

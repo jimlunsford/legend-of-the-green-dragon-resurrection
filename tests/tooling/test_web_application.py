@@ -24,6 +24,7 @@ from xml.etree import ElementTree
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from loopback_server import wait_until_ready  # noqa: E402
+import mail_capture  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[2]
 # The game's Content Security Policy as Phase 6 task 3 set it (src/Http/SecurityHeaders.php sends it).
@@ -5472,7 +5473,7 @@ db_query('UPDATE accounts SET deathpower=114 WHERE acctid=?',true,[(int)$argv[1]
         # without depending on the development server's accept-queue scheduling.
         with socket.socket() as sock:sock.bind(('127.0.0.1',0));port=sock.getsockname()[1]
         log=tempfile.TemporaryFile(mode='w+t')
-        server=subprocess.Popen([shutil.which('php'),'-d','display_errors=1','-d','error_reporting=-1','-S',f'127.0.0.1:{port}','-t',str(ROOT)],cwd=ROOT,stdout=subprocess.DEVNULL,stderr=log)
+        server=subprocess.Popen([shutil.which('php'),'-d','display_errors=1','-d','error_reporting=-1',*mail_capture.default_args(),'-S',f'127.0.0.1:{port}','-t',str(ROOT)],cwd=ROOT,stdout=subprocess.DEVNULL,stderr=log)
         try:
             wait_until_ready(server,port,'Second loopback PHP server')
             with self._ramius_fixture() as f:
@@ -5681,7 +5682,7 @@ $db=$GLOBALS['dbinfo']['connection'];$db->beginTransaction();db_query('SELECT ac
         import threading
         with socket.socket() as sock:sock.bind(('127.0.0.1',0));port=sock.getsockname()[1]
         log=tempfile.TemporaryFile(mode='w+t')
-        server=subprocess.Popen([shutil.which('php'),'-d','display_errors=1','-d','error_reporting=-1','-S',f'127.0.0.1:{port}','-t',str(ROOT)],cwd=ROOT,stdout=subprocess.DEVNULL,stderr=log)
+        server=subprocess.Popen([shutil.which('php'),'-d','display_errors=1','-d','error_reporting=-1',*mail_capture.default_args(),'-S',f'127.0.0.1:{port}','-t',str(ROOT)],cwd=ROOT,stdout=subprocess.DEVNULL,stderr=log)
         try:
             wait_until_ready(server,port,'Second loopback PHP server')
             with self._mail_fixture() as f:
@@ -7486,7 +7487,7 @@ function MODULE_dohook($hook,$args) {
             online=self._security_client(login='EditorTarget',password='Replacement editor password')
             with socket.socket() as sock:sock.bind(('127.0.0.1',0));port=sock.getsockname()[1]
             log=tempfile.TemporaryFile(mode='w+t');import threading
-            server=subprocess.Popen([shutil.which('php'),'-d','display_errors=1','-d','error_reporting=-1','-S',f'127.0.0.1:{port}','-t',str(ROOT)],cwd=ROOT,stdout=subprocess.DEVNULL,stderr=log)
+            server=subprocess.Popen([shutil.which('php'),'-d','display_errors=1','-d','error_reporting=-1',*mail_capture.default_args(),'-S',f'127.0.0.1:{port}','-t',str(ROOT)],cwd=ROOT,stdout=subprocess.DEVNULL,stderr=log)
             started=f['signals']/f'{f["module"]}-started';release=f['signals']/f'{f["module"]}-release';results=[]
             try:
                 wait_until_ready(server,port,'Second loopback PHP server')
@@ -8492,7 +8493,7 @@ function MODULE_dohook($hook,$args) {
         cache=tempfile.TemporaryDirectory(prefix='resurrection-cache-');prepend=tempfile.NamedTemporaryFile(mode='w',suffix='.php')
         prepend.write("<?php $DB_USEDATACACHE=1; $DB_DATACACHEPATH='"+cache.name+"';\n");prepend.flush()
         with socket.socket() as sock:sock.bind(('127.0.0.1',0));port=sock.getsockname()[1]
-        server=subprocess.Popen([shutil.which('php'),'-d','display_errors=1','-d','error_reporting=-1','-d','zend.exception_ignore_args=1',
+        server=subprocess.Popen([shutil.which('php'),'-d','display_errors=1','-d','error_reporting=-1','-d','zend.exception_ignore_args=1',*mail_capture.default_args(),
                                  '-d','auto_prepend_file='+prepend.name,'-S',f'127.0.0.1:{port}','-t',str(ROOT)],cwd=ROOT,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
         try:
             wait_until_ready(server,port,'Second loopback PHP server')
@@ -9494,7 +9495,7 @@ echo json_encode(systemmail((int)$argv[1],['Trusted %s','notice'],['Hello %s','J
             q("INSERT INTO module_hooks(modulename,location,`function`,whenactive,priority) VALUES (?,'clan-withdraw',?,'',60)",[module,module+'_dohook'])
             with socket.socket() as sock:sock.bind(('127.0.0.1',0));port=sock.getsockname()[1]
             log=tempfile.TemporaryFile(mode='w+t')
-            server=subprocess.Popen([shutil.which('php'),'-d','display_errors=1','-d','error_reporting=-1','-S',f'127.0.0.1:{port}','-t',str(ROOT)],cwd=ROOT,stdout=subprocess.DEVNULL,stderr=log)
+            server=subprocess.Popen([shutil.which('php'),'-d','display_errors=1','-d','error_reporting=-1',*mail_capture.default_args(),'-S',f'127.0.0.1:{port}','-t',str(ROOT)],cwd=ROOT,stdout=subprocess.DEVNULL,stderr=log)
             try:
                 wait_until_ready(server,port,'Second loopback PHP server')
                 login(64)
@@ -10082,7 +10083,7 @@ function MODULE_dohook($hook,$args) {
                 sock.bind(('127.0.0.1', 0))
                 port = sock.getsockname()[1]
             log = tempfile.TemporaryFile(mode='w+t')
-            server = subprocess.Popen([shutil.which('php'), '-d', 'display_errors=1', '-d', 'error_reporting=-1',
+            server = subprocess.Popen([shutil.which('php'), '-d', 'display_errors=1', '-d', 'error_reporting=-1', *mail_capture.default_args(),
                                        '-S', f'127.0.0.1:{port}', '-t', tree], cwd=tree, stdout=subprocess.DEVNULL, stderr=log,
                                       env=dict({k: v for k, v in os.environ.items() if k != 'LOGD_DBCONNECT'}, **(env or {})))
             try:
@@ -10729,7 +10730,7 @@ function MODULE_dohook($hook,$args) {
             def redirect_request(self, *args): return None
         with socket.socket() as sock:
             sock.bind(('127.0.0.1',0)); second_port=sock.getsockname()[1]
-        server=subprocess.Popen([shutil.which('php'),'-d','display_errors=1','-S',f'127.0.0.1:{second_port}','-t',str(ROOT)],
+        server=subprocess.Popen([shutil.which('php'),'-d','display_errors=1',*mail_capture.default_args(),'-S',f'127.0.0.1:{second_port}','-t',str(ROOT)],
             cwd=ROOT,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
         def client(port):
             opener=urllib.request.build_opener(urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar()),NoRedirect)

@@ -33,6 +33,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from php_runtime import supported_php  # noqa: E402
 from loopback_server import start_php_server  # noqa: E402
+import mail_capture  # noqa: E402
 
 COPYRIGHT = 'Game Design and Code: Copyright &copy; 2002-2005, Eric Stevens & JT Traub, &copy; 2006-2007, Dragonprime Development Team'
 LICENSE = "This work is licensed under a <a rel='license' href='http://creativecommons.org/licenses/by-nc-sa/2.0/' target='_blank'>Creative Commons License</a>."
@@ -212,7 +213,8 @@ class SetupPageTests(unittest.TestCase):
         `served`, the given ini settings and environment. Yields its port once it answers; fails with a clear message
         (and the server's output) if it exits or never answers. tree() and a test's second server both use it."""
         arguments = [self.php, '-d', 'display_errors=0', '-d', 'log_errors=1', '-d', 'error_log=' + str(served.log),
-                     '-d', 'session.save_path=' + str(served.sessions), '-d', 'auto_prepend_file=' + str(self.prepend)]
+                     '-d', 'session.save_path=' + str(served.sessions), '-d', 'auto_prepend_file=' + str(self.prepend),
+                     *mail_capture.default_args()]
         for key, value in (ini or {}).items():
             arguments += ['-d', f'{key}={value}']
         environment = {k: v for k, v in os.environ.items() if k != 'LOGD_DBCONNECT'}

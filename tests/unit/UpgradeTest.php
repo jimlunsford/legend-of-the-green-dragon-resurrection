@@ -14,6 +14,8 @@ use Resurrection\Upgrade\UpgradeStopped;
  */
 final class UpgradeTest extends TestCase
 {
+    use RealStepsAside;
+
     private const string FIXTURES = __DIR__ . '/../fixtures/upgrade-steps';
     private const string LANGUAGES = 'en,English,fr,Français,dk,Danish,de,Deutsch,es,Español,it,Italian';
     private static ?string $config = null;
@@ -110,7 +112,7 @@ final class UpgradeTest extends TestCase
 
     public function testCatalogOrdersStepsByNumberAndChecksTheirFiles(): void
     {
-        self::assertSame([], StepCatalog::ids(dirname(__DIR__, 2) . '/upgrades'), 'No release exists yet, so there are no real steps.');
+        self::assertSame(['0001-account-mail'], StepCatalog::ids(dirname(__DIR__, 2) . '/upgrades'), 'The real steps, in number order (Phase 6 task 13a added the first).');
         self::assertSame(['0001-first', '0002-second', '0010-tenth'], StepCatalog::ids(self::directory('order')));
         $directory = sys_get_temp_dir() . '/resurrection-steps-' . bin2hex(random_bytes(6));
         mkdir($directory, 0700);
@@ -172,7 +174,7 @@ final class UpgradeTest extends TestCase
         $before = resurrection_database_snapshot();
         $refusal = 'Upgrade refused. Take a fresh backup of the database first, then run again with --backup-confirmed. Some upgrade changes cannot be rolled back: MySQL and MariaDB commit a table change the moment it runs, so if an upgrade stops partway, the backup is the way back. To see what would change without changing anything, use --dry-run. docs/MODERN-INSTALLATION.md, "Upgrading", says how to take and restore a backup. Nothing was changed.' . "\n";
         self::assertSame([1, '', $refusal], $this->command());
-        $current = "The database is current: 0 of 0 upgrade steps applied, and every installed bundled module is at its version. Nothing was changed.\n";
+        $current = "The database is current: 1 of 1 upgrade steps applied, and every installed bundled module is at its version. Nothing was changed.\n";
         self::assertSame([0, $current, ''], $this->command('--dry-run'));
         self::assertSame([0, $current, ''], $this->command('--backup-confirmed'));
         self::assertSame([1, '', "Upgrade refused. Give --dry-run or --backup-confirmed, not both. Nothing was changed.\n"], $this->command('--dry-run', '--backup-confirmed'));
@@ -182,27 +184,130 @@ final class UpgradeTest extends TestCase
 
     public function testAMissingLedgerIsBehindAndTheUpgradeCreatesIt(): void
     {
-        // A development database installed before the upgrade system has no ledger. With no real steps yet, the ledger
-        // of the installed test database is empty, so dropping it loses nothing.
+        // A development database installed before the upgrade system has no ledger. Dropping the installed test
+        // database's ledger loses only its record of the real steps, whose changes that database already has (a fresh
+        // install has them): the upgrade creates the ledger, runs each real step, which finds its changes there and
+        // makes none, and records it. Each step's applied time is put back after, so the database is as it was.
         $this->connect();
+        $real = dirname(__DIR__, 2) . '/upgrades';
+        $steps = StepCatalog::ids($real);
+        self::assertSame($steps, self::ledger());
+        $times = db_query('SELECT step,applied FROM upgrade_steps ORDER BY step');
         $before = resurrection_database_snapshot();
-        self::assertSame([], $before['rows']['upgrade_steps']);
+        $fresh = self::withoutLedgerTimes();
+        $pending = array_map(static fn (string $id): string => '- step ' . $id . ': ' . StepCatalog::load($real, $id)['description'], $steps);
+        $applied = array_map(static fn (string $id): string => '- applied and recorded step ' . $id, $steps);
         db_query('DROP TABLE upgrade_steps');
         try {
             self::assertSame('behind', resurrection_database_state());
             $missing = resurrection_database_snapshot();
             self::assertArrayNotHasKey('upgrade_steps', $missing['tables']);
-            self::assertSame([0, "Pending:\n- create the upgrade ledger (the upgrade_steps table)\nDry run: nothing was changed.\n", ''], $this->command('--dry-run'));
+            self::assertSame([0, implode("\n", ['Pending:', '- create the upgrade ledger (the upgrade_steps table)', ...$pending, 'Dry run: nothing was changed.']) . "\n", ''], $this->command('--dry-run'));
             self::assertSame($missing, resurrection_database_snapshot());
-            self::assertSame([0, "Pending:\n- create the upgrade ledger (the upgrade_steps table)\nApplying:\n- created the upgrade ledger (the upgrade_steps table)\n"
-                . "Upgrade complete: applied 0 upgrade step(s) and 0 module upgrade(s). The database is current.\n", ''], $this->command('--backup-confirmed'));
+            self::assertSame([0, implode("\n", ['Pending:', '- create the upgrade ledger (the upgrade_steps table)', ...$pending, 'Applying:', '- created the upgrade ledger (the upgrade_steps table)', ...$applied,
+                'Upgrade complete: applied ' . count($steps) . ' upgrade step(s) and 0 module upgrade(s). The database is current.']) . "\n", ''], $this->command('--backup-confirmed'));
+            // The same table as a fresh install's, the same steps recorded, and nothing else changed.
+            self::assertSame($fresh, self::withoutLedgerTimes());
         } finally {
             if (!db_table_exists('upgrade_steps')) { db_query(table_create_from_descriptor('upgrade_steps', resurrection_upgrade_ledger_descriptor())); }
+            foreach ($times as $row) {
+                db_query('DELETE FROM upgrade_steps WHERE step=?', true, [$row['step']]);
+                db_query('INSERT INTO upgrade_steps (step,applied) VALUES (?,?)', true, [$row['step'], $row['applied']]);
+            }
         }
-        // The same table as a fresh install's, and nothing else changed.
         self::assertSame($before, resurrection_database_snapshot());
         $GLOBALS['settings'] = null;
         self::assertSame('current', resurrection_database_state());
+    }
+
+    /**
+     * Undo what upgrade step 0001 adds, as a database from before it: its two tables and its column, and its ledger row.
+     * Valid only when that loses nothing: both tables empty and every emailverified its default.
+     * @param list<string> $objects which of 'account_tokens', 'account_mail_log', 'emailverified' to remove
+     */
+    private static function undoAccountMail(array $objects): void
+    {
+        self::assertSame([], db_query('SELECT tokenid FROM account_tokens'), 'Fixture invalid: account_tokens has rows.');
+        self::assertSame([], db_query('SELECT eventid FROM account_mail_log'), 'Fixture invalid: account_mail_log has rows.');
+        self::assertSame([], db_query("SELECT acctid FROM accounts WHERE emailverified<>''"), 'Fixture invalid: an account has an emailverified value.');
+        foreach ($objects as $object) {
+            db_query($object === 'emailverified' ? 'ALTER TABLE accounts DROP COLUMN emailverified' : 'DROP TABLE ' . $object);
+        }
+        self::forget(['0001-account-mail']);
+        $GLOBALS['settings'] = null;
+    }
+
+    public function testAccountMailStepMatchesTheFreshInstall(): void
+    {
+        // Phase 6 task 13a: the first real step. On a database without it, the upgrade brings back exactly the fresh
+        // install's schema and rows; run again, it changes nothing.
+        $this->connect();
+        $real = dirname(__DIR__, 2) . '/upgrades';
+        $times = db_query('SELECT step,applied FROM upgrade_steps ORDER BY step');
+        $original = resurrection_database_snapshot();
+        $fresh = self::withoutLedgerTimes();
+        try {
+            self::undoAccountMail(['account_tokens', 'account_mail_log', 'emailverified']);
+            $old = resurrection_database_snapshot();
+            self::assertArrayNotHasKey('account_tokens', $old['tables']);
+            self::assertArrayNotHasKey('account_mail_log', $old['tables']);
+            self::assertNotContains('emailverified', array_column($old['tables']['accounts']['columns'], 'name'));
+            self::assertSame('behind', resurrection_database_state());
+            self::assertSame(['Pending:', '- step 0001-account-mail: Add account mail: the account_tokens and account_mail_log tables and the accounts.emailverified column', 'Dry run: nothing was changed.'],
+                $this->upgrade($real, false));
+            self::assertSame($old, resurrection_database_snapshot());
+            self::assertSame(['Pending:', '- step 0001-account-mail: Add account mail: the account_tokens and account_mail_log tables and the accounts.emailverified column', 'Applying:',
+                '- applied and recorded step 0001-account-mail', 'Upgrade complete: applied 1 upgrade step(s) and 0 module upgrade(s). The database is current.'], $this->upgrade($real, true));
+            self::assertSame($fresh, self::withoutLedgerTimes());
+            // Run again: the database is current and nothing changes. The step itself, run again, changes nothing either.
+            $upgraded = resurrection_database_snapshot();
+            self::assertSame(['The database is current: 1 of 1 upgrade steps applied, and every installed bundled module is at its version. Nothing was changed.'], $this->upgrade($real, true));
+            (StepCatalog::load($real, '0001-account-mail')['apply'])();
+            self::assertSame($upgraded, resurrection_database_snapshot());
+        } finally {
+            foreach ($times as $row) {
+                db_query('DELETE FROM upgrade_steps WHERE step=?', true, [$row['step']]);
+                db_query('INSERT INTO upgrade_steps (step,applied) VALUES (?,?)', true, [$row['step'], $row['applied']]);
+            }
+        }
+        self::assertSame($original, resurrection_database_snapshot());
+        // The step writes its definitions out and reads none from shared code.
+        $source = (string)file_get_contents($real . '/0001-account-mail.php');
+        foreach (['resurrection_', 'require', 'include', 'table_create', 'descriptor'] as $shared) self::assertStringNotContainsString($shared, $source);
+    }
+
+    public function testAccountMailStepStoppedMidwayFinishesOnRerun(): void
+    {
+        // MySQL and MariaDB commit each table change at once, so a run stopped inside the step leaves the changes before
+        // the stop. From the state after each of its three changes (and with each change alone missing), the rerun
+        // checks each change first, makes only the missing ones, records the step, and ends as the fresh install.
+        $this->connect();
+        $real = dirname(__DIR__, 2) . '/upgrades';
+        $times = db_query('SELECT step,applied FROM upgrade_steps ORDER BY step');
+        $original = resurrection_database_snapshot();
+        $fresh = self::withoutLedgerTimes();
+        $states = [
+            'stopped after creating account_tokens' => ['account_mail_log', 'emailverified'],
+            'stopped after creating account_mail_log' => ['emailverified'],
+            'stopped after adding emailverified, before the ledger row' => [],
+            'only account_tokens missing' => ['account_tokens'],
+            'only account_mail_log missing' => ['account_mail_log'],
+        ];
+        try {
+            foreach ($states as $state => $missing) {
+                self::undoAccountMail($missing);
+                self::assertSame('behind', resurrection_database_state(), $state);
+                $lines = $this->upgrade($real, true);
+                self::assertSame('- applied and recorded step 0001-account-mail', $lines[3], $state);
+                self::assertSame($fresh, self::withoutLedgerTimes(), $state);
+            }
+        } finally {
+            foreach ($times as $row) {
+                db_query('DELETE FROM upgrade_steps WHERE step=?', true, [$row['step']]);
+                db_query('INSERT INTO upgrade_steps (step,applied) VALUES (?,?)', true, [$row['step'], $row['applied']]);
+            }
+        }
+        self::assertSame($original, resurrection_database_snapshot());
     }
 
     public function testAnUpgradeFromAnOlderStepMatchesTheFreshInstall(): void
@@ -211,6 +316,7 @@ final class UpgradeTest extends TestCase
         // steps, that install would have recorded all three; each step makes a change the install already has. Undoing
         // them builds the database at an older step, and the upgrade must bring back exactly the fresh install.
         $this->connect();
+        $this->setAsideRealSteps();
         $directory = self::directory('equivalence');
         $steps = StepCatalog::ids($directory);
         self::assertSame(['0001-make-accounts-login-unique', '0002-add-accounts-lastnewday', '0003-seed-server-languages'], $steps);
@@ -256,6 +362,7 @@ final class UpgradeTest extends TestCase
     public function testStepsRunInNumberOrderAndOnlyPendingOnesRun(): void
     {
         $this->connect();
+        $this->setAsideRealSteps();
         $directory = self::directory('order');
         $before = resurrection_database_snapshot();
         $log = static fn () => db_query("SELECT value FROM settings WHERE setting='upgrade_fixture_log'")[0]['value'] ?? null;
@@ -278,6 +385,7 @@ final class UpgradeTest extends TestCase
     public function testAReRunAfterAPartialFailureFinishesTheUpgrade(): void
     {
         $this->connect();
+        $this->setAsideRealSteps();
         $directory = self::directory('partial');
         $before = resurrection_database_snapshot();
         $columns = static fn () => array_column(db_query('SHOW COLUMNS FROM upgrade_fixture_probe'), 'Field');
@@ -317,6 +425,7 @@ final class UpgradeTest extends TestCase
     public function testADryRunListsWhatIsPendingAndChangesNothing(): void
     {
         $this->connect();
+        $this->setAsideRealSteps();
         $before = resurrection_database_snapshot();
         self::assertSame(['Pending:', '- step 0001-create-probe: Create the probe table', '- step 0002-two-changes: Add two probe columns', '- step 0003-insert-row: Insert the probe row',
             'Dry run: nothing was changed.'], $this->upgrade(self::directory('partial'), false));
@@ -326,6 +435,7 @@ final class UpgradeTest extends TestCase
     public function testTheLockKeepsUpgradesInstallsAndMaintenanceApart(): void
     {
         $this->connect();
+        $this->setAsideRealSteps();
         $before = resurrection_database_snapshot();
         $other = new \PDO('mysql:host=' . explode(':', (string)getenv('RESURRECTION_TEST_DB_HOST'))[0] . ';port=' . (explode(':', (string)getenv('RESURRECTION_TEST_DB_HOST'))[1] ?? '3306') . ';dbname=resurrection_test',
             (string)getenv('RESURRECTION_TEST_DB_USER'), (string)getenv('RESURRECTION_TEST_DB_PASSWORD'));
@@ -403,6 +513,7 @@ final class UpgradeTest extends TestCase
         } finally { db_query('UPDATE modules SET version=? WHERE modulename=?', true, [$stored, $module]); }
         // A step missing before one that is applied.
         $directory = self::directory('out-of-order');
+        $this->setAsideRealSteps();
         resurrection_upgrade_record('0002-second');
         try {
             self::assertSame('out-of-order', resurrection_upgrade_state(StepCatalog::ids($directory))['state']);
@@ -412,7 +523,7 @@ final class UpgradeTest extends TestCase
                 self::assertSame('The database\'s upgrade record is out of order: step 0001-first is not applied, but the later step 0002-second is. Steps only run in order, so this is not repaired: restore the backup taken before the last upgrade. Nothing was changed.', $refusal->getMessage());
             }
             self::assertSame($gap, resurrection_database_snapshot());
-        } finally { self::forget(['0002-second']); }
+        } finally { self::forget(['0002-second']); $this->restoreRealSteps(); }
         self::assertSame($before, resurrection_database_snapshot());
     }
 

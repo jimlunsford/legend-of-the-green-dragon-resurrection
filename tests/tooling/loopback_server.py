@@ -12,6 +12,8 @@ import subprocess
 import time
 from pathlib import Path
 
+import mail_capture
+
 
 class ServerStartError(RuntimeError):
     pass
@@ -56,7 +58,10 @@ def wait_until_ready(server, port, name='Loopback PHP test server', timeout=10.0
 
 def start_php_server(arguments, root, cwd, env, output, name='Loopback PHP test server', attempts=3, timeout=10.0):
     """Starts `arguments` (php and its -d options) as `php -S` on a free port serving `root`, its output in the file
-    `output`. Returns (process, port) once it answers; the caller terminates it. Raises ServerStartError otherwise."""
+    `output`. Returns (process, port) once it answers; the caller terminates it. Raises ServerStartError otherwise.
+    `arguments` must point mail() at a capture (mail_capture.py, Phase 6 task 13a): tests never send real mail."""
+    if not mail_capture.has_capture(arguments):
+        raise ValueError('A test server must run with a mail capture: add mail_capture.default_args() or a MailCapture.')
     output = Path(output)
     for attempt in range(1, attempts + 1):
         port = free_port()

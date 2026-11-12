@@ -23,6 +23,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from php_runtime import supported_php  # noqa: E402
 from loopback_server import wait_until_ready  # noqa: E402
+import mail_capture  # noqa: E402
 
 COPYRIGHT = 'Game Design and Code: Copyright &copy; 2002-2005, Eric Stevens & JT Traub, &copy; 2006-2007, Dragonprime Development Team'
 LICENSE = "This work is licensed under a <a rel='license' href='http://creativecommons.org/licenses/by-nc-sa/2.0/' target='_blank'>Creative Commons License</a>."
@@ -80,7 +81,7 @@ class OperatorPageTests(unittest.TestCase):
                 demote = lambda: (os.setgid(NOBODY), os.setuid(NOBODY))
             environment = {k: v for k, v in os.environ.items() if k != 'LOGD_DBCONNECT'}
             server = subprocess.Popen([php, '-d', 'display_errors=1', '-d', 'log_errors=1', '-d', 'error_log=' + str(error_log),
-                                       '-d', 'session.save_path=' + str(sessions), '-S', f'127.0.0.1:{port}', '-t', tree], cwd=tree,
+                                       '-d', 'session.save_path=' + str(sessions), *mail_capture.default_args(), '-S', f'127.0.0.1:{port}', '-t', tree], cwd=tree,
                                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, env=dict(environment, **(env or {})),
                                       preexec_fn=demote)
             try:
@@ -312,8 +313,9 @@ class OperatorPageTests(unittest.TestCase):
         entries = sorted(f for f in listed if f and '/' not in f and f not in ('common.php', 'battle.php', 'dbconnect.php'))
         self.assertGreater(len(internal), 270)
         # Phase 6 task 5a: webcron.php is the 61st; without a configuration it answers its empty 404. Phase 6 task 5b:
-        # setup.php is the 62nd; without a configuration it answers with its install checks.
-        self.assertEqual(62, len(entries))
+        # setup.php is the 62nd; without a configuration it answers with its install checks. Phase 6 task 13a: account.php
+        # is the 63rd; without a configuration it shows the not-installed page.
+        self.assertEqual(63, len(entries))
         with self.tree() as (port, tree, error_log):
             wrong = []
             for path in internal:

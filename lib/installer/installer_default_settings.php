@@ -107,6 +107,10 @@ $default_settings = array(
 	"sourceurl"=>"https://github.com/jimlunsford/legend-of-the-green-dragon-resurrection",
 	// Phase 6 task 3 (S1): the Content Security Policy is enforced (src/Http/SecurityHeaders.php).
 	"csp_mode"=>"enforce",
+	// Phase 6 task 13a (S11): account mail is off until a test mail is confirmed and the switch is turned on.
+	"account_mail"=>0,
+	"account_mail_hourly"=>100,
+	"account_mail_staff"=>1,
 	"emailpetitions"=>0,
 	"multimaster"=>1,
 	"pvpimmunity"=>5,

@@ -114,7 +114,7 @@ final class FreshInstallTest extends TestCase
             file_put_contents($step, "<?php\nreturn ['description' => 'Fixture', 'apply' => static function (): void { throw new LogicException('A fresh install never runs a step.'); }];\n", LOCK_EX);
             try { [$code, $out, $err] = $run('--write-config', $written); } finally { unlink($step); }
             self::assertSame(0, $code, $err . $out);
-            self::assertSame(['9998-fixture-recorded-by-a-fresh-install'], array_column(db_query('SELECT step FROM upgrade_steps'), 'step'));
+            self::assertSame(['0001-account-mail', '9998-fixture-recorded-by-a-fresh-install'], array_column(db_query('SELECT step FROM upgrade_steps ORDER BY step'), 'step'));
             self::assertSame([], db_query("SELECT value FROM settings WHERE setting='installer_version'"));
             foreach ($secrets as $secret) self::assertStringNotContainsString($secret, $out . $err);
             self::assertSame(['tables' => count(resurrection_fresh_schema()) + 2, 'modules_installed' => 24, 'modules_active' => 23,
@@ -220,8 +220,9 @@ final class FreshInstallTest extends TestCase
             self::assertSame(['tables' => count(resurrection_fresh_schema()) + 2, 'modules_installed' => 24, 'modules_active' => 0,
                 'administrator' => 1, 'state' => 'installed', 'modules' => 'none', 'config' => 'existing'], json_decode($out, true, 512, JSON_THROW_ON_ERROR));
             self::assertSame('installed', resurrection_install_state());
-            // No step exists yet, so the install's ledger is empty and the database is current.
-            self::assertSame([], db_query('SELECT step FROM upgrade_steps'));
+            // The install records every real step as applied (it already has their changes), so the database is current.
+            self::assertSame(\Resurrection\Upgrade\StepCatalog::ids(dirname(__DIR__, 2) . '/upgrades'), array_column(db_query('SELECT step FROM upgrade_steps ORDER BY step'), 'step'));
+            self::assertSame(['0001-account-mail'], array_column(db_query('SELECT step FROM upgrade_steps ORDER BY step'), 'step'));
             require_once 'lib/modules.php';
             $GLOBALS['settings'] = null;
             self::assertSame('current', resurrection_database_state());

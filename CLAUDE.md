@@ -118,6 +118,29 @@ The commands (`scripts/install.php`, `scripts/upgrade.php`, `cron.php`) and the 
 - The token, the passwords and the maintenance secret never go in a URL, log, error page, session or saved page. Mark parameters that carry them `#[\SensitiveParameter]`. A page that shows a secret once uses `resurrection_secret_output()` (`lib/pageparts.php`).
 - Screens use the operator frame with the full credits. The credits are copied into `lib/setup/credits.php`, and `SetupCreditsTest` keeps them byte-identical to `common.php`'s. Every change is POST plus CSRF, with no inline script or style.
 
+## Account mail
+
+Account mail (S11; Phase 6 task 13a, `docs/PHASE6-TASK12-ACCOUNT-MAIL-DESIGN-20261112.md`, `lib/account_mail.php`,
+`account.php`). Keep these rules:
+
+- Every email goes through `resurrection_send_email()` (`lib/systemmail.php`). Nothing else calls `mail()`;
+  `MailMessageTest` fails otherwise. Its headers stay fixed, and no player or request value goes into one.
+- A link in a mail comes only from `resurrection_server_url()` (the `serverurl` setting), never from `Host`,
+  `SERVER_NAME` or any other request value. Account mail needs an `https` server URL.
+- A token is 32 random bytes, base64url. Only its SHA-256 hash is stored. Its shape is checked before any lookup; it is
+  bound to its purpose, account, address and `authversion`, expires, opens at most 5 times and is used once.
+- Every parameter that carries a token, or a mail body that holds one, is `#[\SensitiveParameter]`.
+- `account.php` takes the token out of the request before `common.php` runs and exchanges it for a session grant and
+  a 303 to a clean address. A token never goes in a page, a log, a session, a saved page or a referer record. Every
+  link that cannot be used gets the one fixed 400 page.
+- Limits are keyed on `REMOTE_ADDR` only, never a forwarded header, and count every request whether or not an account
+  matched.
+- The switch turns on only when every condition holds; turning it off is always allowed. `requirevalidemail` stays
+  locked until task 13c lifts it as the design says.
+- Tests and CI never send mail. Every test web server runs with a mail capture (`tests/tooling/mail_capture.py`;
+  `start_php_server()` refuses one without); PHPUnit runs with `sendmail_path=/bin/false` (CI's `ini-values`;
+  `MailCaptureGuardTest` and `test_mail_capture.py` fail otherwise). A test that needs a message uses a capture.
+
 ## Tests
 
 - Never remove, skip, or weaken an existing test to get a pass.
@@ -126,6 +149,8 @@ The commands (`scripts/install.php`, `scripts/upgrade.php`, `cron.php`) and the 
 - A new test should fail without the fix and pass with it. Show both.
 - Do not claim a result you did not run. Local results are supporting evidence only. Supported acceptance comes from CI.
 - Never weaken a correct production guard to make a test pass. When a test hits a real 409 or rejection, check the fixture first. Past failures came from fixtures in invalid states, not from bad guards.
+- PHPUnit runs the files in name order on an empty database, and `FreshInstallTest` installs it. A PHPUnit test that
+  needs the installed database must sort after `FreshInstallTest` (the account mail tests are `Mail*Test` for that).
 - The LoGD game day rolls over every 24/`daysperday` hours: with the default 4 and the installer's midnight epoch, at 00:00, 06:00, 12:00 and 18:00 UTC. The web test harness pins the clock (`game_epoch`) when each shard starts, so a shard has a full game day of headroom. Tests that exercise New Day or rollover move the clock explicitly and restore it. Long-running tests must read the authoritative day from the application, not cache it.
 - Keep failed CI runs on record. Never present a superseded run as acceptance.
 
@@ -188,6 +213,11 @@ Recompute only if serialized-state source changes. Never change counts by assump
 - Local MariaDB 10.11 works as a disposable test database. Supporting evidence only.
 - PHPUnit expects an empty database, as in CI. Recreate the disposable DB before a full PHPUnit run.
 - Whenever a task adds or changes tests, PHPUnit must pass locally on both supported PHP versions, 8.4 and 8.5, before publishing (install the 8.4 build beside 8.5 and run `php8.4 vendor/bin/phpunit`). Task 10's tests passed on 8.5 and failed on 8.4 in CI: they used `Dom\ParentNode::$children`, which exists only from PHP 8.5.
+- PHPUnit needs `sendmail_path=/bin/false` locally too, and it can only be set at startup: put it in an ini file in a
+  folder named by `PHP_INI_SCAN_DIR` (for example `PHP_INI_SCAN_DIR=":/path/to/ini"`). `-d` does not reach the child
+  processes the tests start.
+- Run the Python tooling tests from `tests/tooling` or through `scripts/tooling-shards.py`. As root, the test servers
+  run as `nobody`, so a copy of the tree must sit where `nobody` can read it (not under a mode-700 folder).
 - Move temporary fixture/config leftovers out of the repo before lint and commit.
 - Remove each local MySQL container's data volume with the container (`docker rm -f -v`). Leftover volumes filled the session disk and stopped MySQL from starting.
 

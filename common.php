@@ -366,7 +366,8 @@ if ($sendid && !defined('RESURRECTION_WEBCRON')) {
 $_COOKIE['lgi'] = $session['user']['uniqueid'];
 // 1.1.2's referer tracking, bound and fitted to its columns; a failure there never stops the page.
 require_once 'lib/referer_tracking.php';
-if (!defined('RESURRECTION_WEBCRON')) resurrection_track_referer();
+// A page whose address carries a secret (account.php, Phase 6 task 13a) is never tracked: its request URI is never stored.
+if (!defined('RESURRECTION_WEBCRON') && !defined('RESURRECTION_SECRET_URL')) resurrection_track_referer();
 
 if (!isset($session['user']['superuser'])) $session['user']['superuser']=0;
 

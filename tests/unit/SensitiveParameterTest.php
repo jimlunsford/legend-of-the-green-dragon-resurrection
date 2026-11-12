@@ -36,6 +36,13 @@ final class SensitiveParameterTest extends TestCase
         'resurrection_setup_page' => ['secrets'],
         'resurrection_setup_screen_form' => ['typed'],
         'resurrection_setup_screen_maintenance' => ['secret', 'address'],
+        // Phase 6 task 13a: account mail's token, and a mail body that carries its link.
+        'resurrection_account_token_hash' => ['token'],
+        'resurrection_account_token_shape' => ['token'],
+        'resurrection_account_token_open' => ['token'],
+        'resurrection_account_mail_link' => ['token'],
+        'resurrection_account_mail_deliver' => ['body'],
+        'resurrection_send_email' => ['body'],
     ];
 
     public static function setUpBeforeClass(): void
@@ -43,7 +50,7 @@ final class SensitiveParameterTest extends TestCase
         require_once 'lib/names.php';
         ob_start();
         foreach (['constants', 'datacache', 'settings', 'modules', 'output', 'sanitize', 'translator', 'installer/install_run', 'webcron',
-                'pageparts', 'upgrade', 'setup/run'] as $library) {
+                'pageparts', 'upgrade', 'setup/run', 'account_mail', 'account_mail_admin'] as $library) {
             require_once 'lib/' . $library . '.php';
         }
         ob_end_clean();
@@ -98,6 +105,26 @@ final class SensitiveParameterTest extends TestCase
             }
         }
         self::assertGreaterThan(40, $count);
+    }
+
+    public function testNoAccountMailFunctionTakesATokenUnmarked(): void
+    {
+        // Phase 6 task 13a, the same guard for account mail: in its libraries, a parameter named for a token, a mail body
+        // or a link is always marked (the transport, resurrection_send_email(), is in the list above). A grant and a
+        // token row carry only the hash.
+        $count = 0;
+        foreach (['lib/account_mail.php', 'lib/account_mail_admin.php'] as $file) {
+            preg_match_all('/^function (resurrection_\w+)\(/m', (string)file_get_contents($file), $functions);
+            foreach ($functions[1] as $function) {
+                $count++;
+                foreach ((new \ReflectionFunction($function))->getParameters() as $parameter) {
+                    if (preg_match('/\A(token|body|link|secret)\z/', $parameter->getName())) {
+                        self::assertNotSame([], $parameter->getAttributes(\SensitiveParameter::class), $function . '($' . $parameter->getName() . ')');
+                    }
+                }
+            }
+        }
+        self::assertGreaterThan(30, $count);
     }
 
     public function testTheSecretIsReplacedInATrace(): void

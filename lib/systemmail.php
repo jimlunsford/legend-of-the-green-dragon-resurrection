@@ -65,14 +65,22 @@ function systemmail($to, $subject, $body, $from=0, $noemail=false) {
 }
 
 /**
- * The game's external email transport (PHP mail()), shared by mail notifications and the expiration warning.
- * True only when the transport accepted the message; an address that is not a valid email, or a header value
- * containing a line break, is never handed to it.
+ * The game's one external email transport (PHP mail()): mail notifications, the expiration warning, petition notices
+ * and every account mail (lib/account_mail.php) go through it, and nothing else calls mail().
+ *
+ * True only when the transport accepted the message. Nothing is handed to it unless the recipient and the sender pass
+ * resurrection_mail_address_valid() (anchored, plain dot-atom, at most 128 bytes; Phase 6 task 13a) and the subject
+ * holds no CR, LF or NUL. The headers are fixed: From, MIME-Version, a UTF-8 plain-text Content-Type, 8bit, and
+ * Auto-Submitted: auto-generated (no vacation replies); no caller value goes into any header but the subject and From.
+ * A subject outside ASCII is sent as one RFC 2047 encoded word.
  */
-function resurrection_send_email(string $address, string $subject, string $body, string $from): bool {
-    if (filter_var($address, FILTER_VALIDATE_EMAIL) === false || preg_match('/[\r\n]/', $subject . $from)) return false;
+function resurrection_send_email(string $address, string $subject, #[\SensitiveParameter] string $body, string $from): bool {
+    require_once __DIR__ . '/account_mail.php';
+    if (!resurrection_mail_address_valid($address) || !resurrection_mail_address_valid($from) || preg_match('/[\r\n\0]/', $subject)) return false;
+    if (preg_match('/[^\x20-\x7E]/', $subject)) $subject = '=?UTF-8?B?' . base64_encode($subject) . '?=';
+    $headers = ['From: ' . $from, 'MIME-Version: 1.0', 'Content-Type: text/plain; charset=UTF-8', 'Content-Transfer-Encoding: 8bit', 'Auto-Submitted: auto-generated'];
     // A refused delivery warns; the application's error handler turns that into an exception.
-    try { return @mail($address, $subject, $body, 'From: ' . $from); }
+    try { return @mail($address, $subject, $body, implode("\r\n", $headers)); }
     catch (ErrorException $error) { return false; }
 }
 

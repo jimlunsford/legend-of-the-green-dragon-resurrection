@@ -52,7 +52,9 @@ final class EntryGuardTest extends TestCase
         self::assertContains('setup.php', $entries);
         self::assertContains('scripts/install.php', $entries);
         self::assertContains('scripts/upgrade.php', $entries);
-        self::assertCount(64, $entries);
+        // Phase 6 task 13a: account mail's page.
+        self::assertContains('account.php', $entries);
+        self::assertCount(65, $entries);
         // PHPUnit's own entry point.
         self::assertSame(self::DEFINE, $this->firstStatement($root . '/tests/bootstrap.php'));
         self::assertStringContainsString('bootstrap="tests/bootstrap.php"', (string)file_get_contents($root . '/phpunit.xml'));

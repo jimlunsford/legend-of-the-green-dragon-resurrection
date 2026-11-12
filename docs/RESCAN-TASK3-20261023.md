@@ -349,6 +349,16 @@ are not listed.
 | `hof.php` | `$superusermask` | 1 | server | The constant `SU_HIDE_FROM_LEADERBOARD`. |
 | `home.php` | `$newplayer` | 1 | server | `(int)` of the `newestplayer` setting. |
 | `home.php` | `date("Y-m-d H:i:s",strtotime("-".getsetting("LOGINTIMEOUT",900)." seconds"))` | 1 | server | `date()` output: digits, dashes, colons and a space only. |
+| `lib/account_mail.php` | `$log` | 2 | server | `db_identifier(db_prefix('account_mail_log'))`: the Account mail status's last test mail and 24-hour counts; the time is bound. |
+| `lib/account_mail.php` | `$tokens` | 2 | server | `db_identifier(db_prefix('account_tokens'))`: a token's lookup by its hash and its open count; the hash, the times and the cap are bound. |
+| `lib/account_mail.php` | `db_identifier(db_prefix('account_mail_log'))` | 3 | server | `db_identifier()` of a fixed table name (account mail's event log: the record, the limit count and its cleanup). |
+| `lib/account_mail.php` | `db_identifier(db_prefix('account_tokens'))` | 5 | server | `db_identifier()` of a fixed table name (account mail's tokens: issue, claim, spend and cleanup). |
+| `lib/account_mail.php` | `db_identifier(db_prefix('accounts'))` | 6 | server | `db_identifier()` of a fixed table name (the token's account, its authversion and email columns). |
+| `lib/account_mail.php` | `db_identifier(db_prefix('gamelog'))` | 1 | server | `db_identifier()` of a fixed table name (the once-an-hour notice that the global mail limit was reached). |
+| `lib/account_mail.php` | `db_identifier(db_prefix('settings'))` | 3 | server | `db_identifier()` of a fixed table name (account mail's own settings, read and written without the settings cache). |
+| `lib/account_mail.php` | `implode(' AND ', $where)` | 1 | server | Fixed predicates chosen from the constant `RESURRECTION_ACCOUNT_MAIL_LIMITS` row; the times, purposes, keys and account ID are bound. |
+| `lib/account_mail.php` | `implode(',', array_fill(0, count($mail), '?'))` | 1 | server | Placeholders, one per fixed mail purpose; the purposes are bound. |
+| `lib/account_mail.php` | `implode(',', array_fill(0, count($purposes), '?'))` | 1 | server | Placeholders, one per purpose of the constant limit row; the purposes are bound. |
 | `lib/accounts.php` | `implode(',', array_fill(0, count($values), '?'))` | 1 | server | Placeholders; the values are bound. |
 | `lib/accounts.php` | `implode(',', array_map('db_identifier', array_keys($values)))` | 1 | server | `db_identifier()` of the fixed column names of the new account array. |
 | `lib/admin_authority.php` | `$columns` | 1 | server | Fixed column lists from every caller (`donators.php`, `lib/admin_authority.php`, `lib/user/user_del.php`, `lib/user/user_setupban.php`, `lib/user_editor.php`). |
@@ -522,6 +532,10 @@ are not listed.
 | `untranslated.php` | `$lock ? " FOR UPDATE" : ""` | 1 | server | Fixed lock clause chosen by a boolean argument. |
 | `viewpetition.php` | `$sort` | 1 | server | Repeated fixed ` WHEN ? THEN ?`; the status values are bound. |
 | `village.php` | `$newestplayer` | 1 | server | The `newestplayer` setting, written only by `create.php` as the new account's integer ID (not in the settings editor); the page also requires a non-zero integer. |
+| `upgrades/0001-account-mail.php` | `$tail` | 2 | server | The fixed table options (`ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`) of the step's two literal CREATE TABLE statements. |
+| `upgrades/0001-account-mail.php` | `db_identifier(db_prefix('account_mail_log'))` | 1 | server | `db_identifier()` of a fixed table name (the step creates it). |
+| `upgrades/0001-account-mail.php` | `db_identifier(db_prefix('account_tokens'))` | 1 | server | `db_identifier()` of a fixed table name (the step creates it). |
+| `upgrades/0001-account-mail.php` | `db_identifier(db_prefix('accounts'))` | 2 | server | `db_identifier()` of a fixed table name (the step reads its columns and adds `emailverified`). |
 <!-- /sql-sweep-table -->
 
 ## Acceptance, 2026-10-23
@@ -607,3 +621,21 @@ Both are literal table names through the configured prefix and `db_identifier()`
 rows; no request value reaches the SQL text. The scan also flagged a user-facing sentence in `lib/setup/page.php` that
 began with the word "Delete" followed by a path; it is not SQL, so the sentence was reworded ("PHP could not delete
 ...") rather than listed. The test and its matching are unchanged.
+
+## Reviewed list change, 2026-11-12 (Phase 6 task 13a)
+
+Task 13a's account mail (`lib/account_mail.php`) and its upgrade step (`upgrades/0001-account-mail.php`, the first real
+step, which the scan covers as the 2026-10-29 entry said it would) put fixed table names, fixed predicates and
+placeholder lists into SQL text, and `SqlSweepTest` failed locally ("Interpolated into SQL and not reviewed") until they
+were reviewed onto the list:
+
+- Fixed table names through the configured prefix and `db_identifier()`: `account_tokens`, `account_mail_log`,
+  `accounts`, `settings` and `gamelog` in the library; `account_tokens`, `account_mail_log` and `accounts` in the step.
+  `$tokens` and `$log` hold two of them.
+- `implode(' AND ', $where)`: the limit count's predicates, each a fixed string chosen by the constant limit row. Every
+  value (the window's start, the purposes, the requester key, the address key, the account ID) is bound.
+- Two placeholder lists, one per purpose of a fixed list; the purposes are bound.
+- `$tail`: the step's fixed table options, literal in the step file.
+
+No request value reaches the SQL text. The token itself never reaches SQL: only its SHA-256 hash, bound, after the
+format check. The test and its matching are unchanged.

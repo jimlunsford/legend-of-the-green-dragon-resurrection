@@ -58,6 +58,8 @@ parameters:
         - lib/setup/guard.php
         - lib/setup/page.php
         - lib/setup/run.php
+        - lib/account_mail.php
+        - lib/account_mail_admin.php
         - scripts/install.php
         - scripts/upgrade.php
     bootstrapFiles:

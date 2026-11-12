@@ -86,6 +86,31 @@ final class CharacterDeletionTest extends TestCase
         self::assertFalse(resurrection_send_email('player@example.invalid', 'Subject', 'Body', "postmaster@localhost.com\nBcc: x@example.invalid"));
     }
 
+    public function testExpirationWarningLinkComesFromServerUrl(): void
+    {
+        // Phase 6 task 13a, F1: 1.1.2's warning email took the request's SERVER_NAME, SERVER_PORT and REQUEST_URI as the
+        // default for serverurl. The address is now only the configured serverurl, and the request is never read.
+        self::assertStringNotContainsString('$_SERVER[', (string)file_get_contents('lib/char_expiration.php'));
+        ob_start();
+        foreach (['datacache', 'settings', 'output', 'sanitize', 'translator'] as $library) require_once 'lib/' . $library . '.php';
+        ob_end_clean();
+        $saved = [$_SERVER, $GLOBALS['settings'] ?? null];
+        $_SERVER = array_replace($_SERVER, ['SERVER_NAME' => 'evil.example.net', 'SERVER_PORT' => '8443', 'HTTP_HOST' => 'evil.example.net', 'REQUEST_URI' => '/evil/cron.php']);
+        try {
+            $GLOBALS['settings'] = ['serverurl' => 'https://game.example.org/', 'enabletranslation' => 0, 'charset' => 'UTF-8'];
+            $body = resurrection_expire_warning_body();
+            self::assertSame('One or more of your characters in Legend of the Green Dragon at https://game.example.org/ is about to expire.  If you wish to keep this character, you should log on to him or her soon!', $body);
+            // No serverurl, or one that is not valid: the email says so, and nothing from the request is saved or sent.
+            foreach ([[], ['serverurl' => 'javascript:alert(1)'], ['serverurl' => 'http://evil.example.net"/']] as $stored) {
+                $GLOBALS['settings'] = $stored + ['enabletranslation' => 0, 'charset' => 'UTF-8'];
+                $body = resurrection_expire_warning_body();
+                self::assertStringContainsString('at (Server URL not set or not valid) is about to expire', $body);
+                self::assertStringNotContainsString('evil', $body);
+                self::assertArrayNotHasKey('serverurl', array_diff_key($GLOBALS['settings'], $stored), 'No serverurl was saved.');
+            }
+        } finally { [$_SERVER, $GLOBALS['settings']] = $saved; }
+    }
+
     public function testCleanupRefusesToRunOutsideTheDeletionTransaction(): void
     {
         $connection = new class { public function inTransaction(): bool { return false; } };

@@ -37,11 +37,11 @@ with `check_su_access()`. Short names in the evidence column: `CRS` is `CORE-ROU
 
 | Status | Entries |
 |---|---|
-| CLOSED | 91 |
+| CLOSED | 94 |
 | DISABLED | 3 |
-| READ-ONLY | 70 |
+| READ-ONLY | 72 |
 | OPEN | 0 |
-| Total | 164 |
+| Total | 169 |
 
 ## Top-level pages
 
@@ -49,6 +49,9 @@ with `check_su_access()`. Short names in the evidence column: `CRS` is `CORE-ROU
 |---|---|---|---|---|
 | `about.php` | anyone | no | READ-ONLY | No query takes request input. |
 | `about.php?op=license\|listmodules\|setup` | anyone | no | READ-ONLY | One file per op (`lib/about/about_<op>.php`); the module list query takes no request input. |
+| `account.php` | anyone | no | READ-ONLY | Account mail's page (`PHASE6-TASK13A-20261112.md`). With no op or any op but `open` and `confirm`, and for every refused token or missing grant, one fixed page, status 400 ("This link has expired or was already used"); every response `Referrer-Policy: no-referrer`, `Cache-Control: no-store`, `X-Robots-Tag: noindex`; no referer record, no kept page; `tests/tooling/test_account_mail_http.py::test_every_unusable_link_gets_the_same_page`. |
+| `account.php?op=open` | anyone with a link from an account mail | the token's open count, a session grant (in a new session id), `account_mail_log` | CLOSED | GET only. The token (query `t`) is taken out of the request before `common.php`; counted for the requester (30 an hour), then the shape, the hash, unused, unexpired, opened fewer than 5 times and the account's authversion unchanged; exchanged for a 15-minute grant holding its hash, and a 303 to `account.php?op=confirm` with no body (`PHASE6-TASK13A-20261112.md`); `test_test_mail_round_trip_turns_account_mail_on`, `test_every_unusable_link_gets_the_same_page`. |
+| `account.php?op=confirm` | the session holding the grant | test mail confirmed: `account_mail_proof`, the account's `emailverified`, the token used | CLOSED | GET shows what Confirm does; POST with CSRF acts on the token in one transaction (locked, rechecked: live, the account's address the one mailed, the pending test mail, the serverurl and sender unchanged) and rotates the session. Only the `mailtest` purpose in 13a (`PHASE6-TASK13A-20261112.md`); `test_test_mail_round_trip_turns_account_mail_on`. |
 | `armor.php` | player | no | READ-ONLY | Listing bound (`EQUIPMENT-PURCHASE-AUTHORITY-20261015.md`). |
 | `armor.php?op=buy` | player | gold, armor | CLOSED | `EQUIPMENT-PURCHASE-AUTHORITY-20261015.md`; `test_weapon_and_armor_purchase_authority_http`. |
 | `armoreditor.php` | admin SU_EDIT_EQUIPMENT | no | READ-ONLY | `CONTENT-EDITORS-PART1-AUTHORITY-20261016.md`. |
@@ -70,6 +73,8 @@ with `check_su_access()`. Short names in the evidence column: `CRS` is `CORE-ROU
 | `companions.php` | admin SU_EDIT_MOUNTS | no | READ-ONLY | `CONTENT-EDITORS-PART3-AUTHORITY-20261017.md`. |
 | `companions.php?op=add\|edit\|save\|del\|take\|activate\|deactivate&subop=module` | admin SU_EDIT_MOUNTS | companion rows, players' companions, module preferences | CLOSED | `CONTENT-EDITORS-PART3-AUTHORITY-20261017.md`; `test_mount_and_companion_editor_authority_http`. |
 | `configuration.php` | admin SU_EDIT_CONFIG | no | READ-ONLY | Typed editor (`CRS`, configuration row). |
+| `configuration.php?op=accountmail` | admin SU_EDIT_CONFIG | no | READ-ONLY | Account mail's status: the switch and whether it is in effect, the transport, serverurl and the sender with whether each is usable, the administrator's own address, the last and the confirmed test mail, the last 24 hours' counts and the hourly limit; the conditions that are not met (`PHASE6-TASK13A-20261112.md`); `test_test_mail_round_trip_turns_account_mail_on`. |
+| `configuration.php?op=accountmail_test\|accountmail_on\|accountmail_off` | admin SU_EDIT_CONFIG | a test mail to the signed-in administrator's own address (a token, `account_mail_pending`, `account_mail_log`), the `account_mail` switch | CLOSED | POST with CSRF and a one-use action token bound to the account and the switch's state; the test mail at most 5 an hour; on only while every condition holds, off always; each change in the game log (`PHASE6-TASK13A-20261112.md`); `test_test_mail_round_trip_turns_account_mail_on`, `test_forged_host_never_reaches_a_mail`. |
 | `configuration.php?op=save\|modulesettings` | admin SU_EDIT_CONFIG | settings | CLOSED | `CRS`; `test_shared_typed_settings_http`. |
 | `configuration.php?op=webcron` | admin SU_EDIT_CONFIG | no | READ-ONLY | Web maintenance's status: whether it is on, when the address was made and last used, and the last maintenance result; never the address (`PHASE6-TASK5A-SERVICES-WEBCRON-20261106.md`); `test_webcron_rotation_stops_the_old_address`. |
 | `configuration.php?op=webcron_on\|webcron_off\|webcron_new` | admin SU_EDIT_CONFIG | web maintenance settings (a new secret's hash, or none) | CLOSED | POST with CSRF; the new address is shown once, on the page that made it; a new address or off stops the old one at once; each change in the game log (`PHASE6-TASK5A-SERVICES-WEBCRON-20261106.md`); `test_webcron_rotation_stops_the_old_address`. |
@@ -493,3 +498,13 @@ and failure counter `resurrection-setup-failures.php` are not pages: each starts
 and both are in `.gitignore`. `installer.php` still answers 403 and `cron.php` 404.
 
 Counts: CLOSED 91, DISABLED 3, READ-ONLY 70, OPEN 0, total 164.
+
+## Account mail, 2026-11-12
+
+Phase 6 task 13a (`PHASE6-TASK13A-20261112.md`). One top-level page is added, `account.php` (65 here, with `common.php`
+and `battle.php`; `EntryGuardTest` now counts 65 entry points, the two commands included): its bare row (the fixed 400
+page for every other request), `op=open` and `op=confirm` (CLOSED). Game Settings gains its Account mail section:
+`configuration.php?op=accountmail` (READ-ONLY, the status) and
+`configuration.php?op=accountmail_test|accountmail_on|accountmail_off` (CLOSED, POST with CSRF and an action token).
+
+Counts: CLOSED 94, DISABLED 3, READ-ONLY 72, OPEN 0, total 169.

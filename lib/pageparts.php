@@ -370,6 +370,8 @@ function page_footer($saveuser=true){
 	$session['output']=resurrection_secret_kept_copy($output);
 	// The setup page's frame has no session before a grant (Phase 6 task 5b): nothing to replace then.
 	$session['output']=\Resurrection\Security\KeptPage::keep($session['output'], $_SESSION ?? []);
+	// A page that is never kept (account.php, Phase 6 task 13a): saveuser() keeps nothing, the earlier copy stays.
+	if (defined('RESURRECTION_NO_KEPT_PAGE')) $session['output']='';
 	// This session issued the page now kept, so a later replay never issues its actions afresh.
 	unset($_SESSION['kept_page_reissue']);
 	if ($saveuser === true) {

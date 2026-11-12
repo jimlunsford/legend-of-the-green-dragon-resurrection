@@ -55,6 +55,47 @@ function resurrection_install_module_plan(string $choice): array {
     };
 }
 
+/**
+ * Account mail's two tables (Phase 6 task 13a; docs/PHASE6-TASK12-ACCOUNT-MAIL-DESIGN-20261112.md, section 7): every
+ * token, hashed, and the log the limits count. upgrades/0001-account-mail.php holds its own literal copy, because a
+ * step on main never changes.
+ * @return array<string, array<string, array<string, mixed>>>
+ */
+function resurrection_account_mail_schema(): array {
+    return [
+        'account_tokens' => [
+            'tokenid' => ['name' => 'tokenid', 'type' => 'int(11) unsigned', 'extra' => 'auto_increment'],
+            'acctid' => ['name' => 'acctid', 'type' => 'int(11) unsigned', 'default' => '0'],
+            'purpose' => ['name' => 'purpose', 'type' => 'varchar(16)', 'default' => ''],
+            'tokenhash' => ['name' => 'tokenhash', 'type' => 'char(64)', 'default' => ''],
+            'address' => ['name' => 'address', 'type' => 'varchar(128)', 'default' => ''],
+            'authversion' => ['name' => 'authversion', 'type' => 'int unsigned', 'default' => '0'],
+            'created' => ['name' => 'created', 'type' => 'datetime'],
+            'expires' => ['name' => 'expires', 'type' => 'datetime'],
+            'opened' => ['name' => 'opened', 'type' => 'tinyint(4) unsigned', 'default' => '0'],
+            'used' => ['name' => 'used', 'type' => 'datetime', 'null' => true],
+            'key-PRIMARY' => ['name' => 'PRIMARY', 'type' => 'primary key', 'unique' => '1', 'columns' => 'tokenid'],
+            'key-tokenhash' => ['name' => 'tokenhash', 'type' => 'unique key', 'columns' => 'tokenhash'],
+            'key-account' => ['name' => 'account', 'type' => 'key', 'columns' => 'acctid,purpose'],
+            'key-expires' => ['name' => 'expires', 'type' => 'key', 'columns' => 'expires'],
+        ],
+        'account_mail_log' => [
+            'eventid' => ['name' => 'eventid', 'type' => 'int(11) unsigned', 'extra' => 'auto_increment'],
+            'date' => ['name' => 'date', 'type' => 'datetime'],
+            'purpose' => ['name' => 'purpose', 'type' => 'varchar(16)', 'default' => ''],
+            'acctid' => ['name' => 'acctid', 'type' => 'int(11) unsigned', 'default' => '0'],
+            'addresskey' => ['name' => 'addresskey', 'type' => 'char(64)', 'default' => ''],
+            'requesterkey' => ['name' => 'requesterkey', 'type' => 'varchar(40)', 'default' => ''],
+            'result' => ['name' => 'result', 'type' => 'varchar(16)', 'default' => ''],
+            'key-PRIMARY' => ['name' => 'PRIMARY', 'type' => 'primary key', 'unique' => '1', 'columns' => 'eventid'],
+            'key-date' => ['name' => 'date', 'type' => 'key', 'columns' => 'date'],
+            'key-account' => ['name' => 'account', 'type' => 'key', 'columns' => 'purpose,acctid,date'],
+            'key-address' => ['name' => 'address', 'type' => 'key', 'columns' => 'addresskey,date'],
+            'key-requester' => ['name' => 'requester', 'type' => 'key', 'columns' => 'requesterkey,date'],
+        ],
+    ];
+}
+
 /** @return array<string, array<string, array<string, mixed>>> */
 function resurrection_fresh_schema(): array {
     $tables = get_all_tables();
@@ -83,6 +124,10 @@ function resurrection_fresh_schema(): array {
     $tables['accounts']['lastnewday'] = ['name' => 'lastnewday', 'type' => 'varchar(10)', 'default' => ''];
     $tables['accounts']['key-login']['type'] = 'unique key';
     $tables['accounts']['superuser']['default'] = '0';
+    // Account mail (Phase 6 task 13a, S11): the same objects as upgrades/0001-account-mail.php, which a fresh install
+    // records as applied. UpgradeTest holds the two to the same schema.
+    $tables['accounts']['emailverified'] = ['name' => 'emailverified', 'type' => 'varchar(128)', 'default' => ''];
+    foreach (resurrection_account_mail_schema() as $table => $descriptor) { $tables[$table] = $descriptor; }
     // Resurrection's applied upgrade steps (lib/upgrade.php).
     $tables['upgrade_steps'] = resurrection_upgrade_ledger_descriptor();
     return $tables;

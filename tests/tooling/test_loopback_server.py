@@ -12,6 +12,7 @@ import urllib.request
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from loopback_server import ServerStartError, start_php_server, wait_until_ready  # noqa: E402
 from php_runtime import supported_php  # noqa: E402
+import mail_capture  # noqa: E402
 
 
 class LoopbackServerTests(unittest.TestCase):
@@ -29,7 +30,7 @@ class LoopbackServerTests(unittest.TestCase):
 
     def test_a_server_that_starts_answers_on_a_port_the_os_chose(self):
         (self.path / 'index.php').write_text('<?php echo "answered";')
-        server, port = start_php_server([self.php], self.path, self.path, None, self.output)
+        server, port = start_php_server([self.php, *mail_capture.default_args()], self.path, self.path, None, self.output)
         try:
             with urllib.request.urlopen(f'http://127.0.0.1:{port}/index.php', timeout=10) as response:
                 self.assertEqual(b'answered', response.read())
@@ -40,7 +41,7 @@ class LoopbackServerTests(unittest.TestCase):
     def test_a_server_that_exits_fails_with_its_output(self):
         # A document root that does not exist: PHP exits at once.
         with self.assertRaises(ServerStartError) as caught:
-            start_php_server([self.php], self.path / 'missing', self.path, None, self.output)
+            start_php_server([self.php, *mail_capture.default_args()], self.path / 'missing', self.path, None, self.output)
         message = str(caught.exception)
         self.assertRegex(message, r'^Loopback PHP test server on 127\.0\.0\.1:\d+ exited with code \d+ before it answered\.')
         self.assertIn('Server output:', message)
@@ -54,7 +55,7 @@ class LoopbackServerTests(unittest.TestCase):
             holder.listen()
             port = holder.getsockname()[1]
             with self.output.open('w') as sink:
-                server = subprocess.Popen([self.php, '-S', f'127.0.0.1:{port}', '-t', str(self.path)], cwd=self.path,
+                server = subprocess.Popen([self.php, *mail_capture.default_args(), '-S', f'127.0.0.1:{port}', '-t', str(self.path)], cwd=self.path,
                                           stdout=sink, stderr=subprocess.STDOUT)
             try:
                 with self.assertRaises(ServerStartError) as caught:
