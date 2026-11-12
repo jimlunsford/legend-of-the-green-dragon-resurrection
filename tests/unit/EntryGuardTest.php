@@ -8,7 +8,8 @@ use PHPUnit\Framework\TestCase;
  * and src/ (and common.php and battle.php, which only pages include) checks it before anything else and answers a
  * direct request with an empty 404. A command run from the shell (PHP_SAPI cli) is not a web request and is let
  * through: the CLI entry points define the constant too, and the test helpers load single files. The HTTP check (every
- * internal file requested directly gives an empty 404 and no log line) is in tests/tooling/test_hardening_http.py.
+ * internal file requested directly gives an empty 404 and no log line) is
+ * tests/tooling/test_operator_pages.py::test_internal_files_answer_a_direct_request_with_an_empty_404.
  */
 final class EntryGuardTest extends TestCase
 {

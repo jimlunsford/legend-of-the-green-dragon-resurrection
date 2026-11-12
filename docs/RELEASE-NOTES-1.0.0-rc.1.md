@@ -79,6 +79,11 @@ MariaDB 11.4 or MySQL 8.4 with an empty `utf8mb4` database; HTTPS; and a schedul
 After installing, check the server URL (`serverurl`), the admin email (`gameadminemail`) and, if you change the code,
 the public source address (`sourceurl`), and run the checks in the guide's section 8.
 
+Where the game stands on security, area by area, with the evidence and what is left over, and which public hosting
+gates are still open: `docs/SECURITY-STATUS.md`. Before adding a module that is not bundled, read
+`docs/MODULE-AUTHOR-GUIDE.md` (the rules a module must follow) and `docs/MODULE-POLICY.md`: rc.1 installs only its 24
+bundled modules.
+
 ## Known issues
 
 - **No account recovery or email verification (S11).** A player who forgets a password asks an administrator, who

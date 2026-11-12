@@ -177,6 +177,8 @@ Recompute only if serialized-state source changes. Never change counts by assump
 - Evidence lives in `docs/`.
 - Append new evidence. Do not rewrite historical checkpoint entries.
 - Update docs only when facts change.
+- `docs/SECURITY-STATUS.md` is a living record, one current row per security area, with the public hosting gates as a checklist (Phase 6 task 10, S13). A task that changes a security control updates that control's row, and the checklist if a gate moves, in the same commit. Where the record and the code disagree, the code wins: fix the record and list the fix in the task's evidence doc. Its "History (as recorded)" sections stay as written.
+- `docs/MODULE-AUTHOR-GUIDE.md` tells module authors the rules (S10). A task that adds or removes a hook, or changes a helper, class, constant or setting it names, updates it in the same commit; `tests/tooling/test_module_author_guide.py` fails otherwise.
 
 ## Local toolchain notes
 

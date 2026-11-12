@@ -1,5 +1,7 @@
 # Module admission policy
 
+How to write or port a module to the rules every page follows now (hooks, presentation, the Content Security Policy, the entry guard, POST and CSRF, secrets, SQL, versions and upgrades) is in [`MODULE-AUTHOR-GUIDE.md`](MODULE-AUTHOR-GUIDE.md). This policy decides which modules ship.
+
 File presence in the historical archive is not Resurrection support. The archive preserves historical material; Resurrection curates an implementation.
 
 Review every proposed module for provenance, licensing, author attribution, dependencies, runtime compatibility, database behavior, security, gameplay behavior and fit with release goals. Include support files and assets. Never clear a module based on its entrypoint alone.

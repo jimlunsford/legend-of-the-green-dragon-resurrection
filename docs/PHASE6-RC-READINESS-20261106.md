@@ -637,3 +637,20 @@ integrity 42365272387 SUCCESS. The rows above change as follows:
 | B4 | Done up to the tag. Accepted at `01cd708` | as above |
 | S9 | Packet ready, awaiting counsel | `docs/LEGAL-REVIEW-PACKET-20261107.md` |
 | S5 | Done, pending task 8's CI acceptance. The inputs in 6.5 have labels; the player-page targets in 6.6 (shop item buttons, mail icon links, module list links, radio and checkbox hit areas through their labels) are at least 44px at 390 wide. The staff sort headers and the translator "T" links in 6.6 were not part of S5's row and are unchanged | `docs/PHASE6-TASK8-20261112.md` |
+
+## Task 9 accepted; S10 and S13 (recorded 2026-11-12, Phase 6 task 10)
+
+Task 9 is accepted at `2a6e2a7`: Modern core 43181214497 SUCCESS (14/14 jobs, all on `ubuntu-24.04`; the slowest
+17:55), Baseline integrity 43181214600 SUCCESS. Task 8 was accepted at `3dba4d1` (recorded in task 9), so S5 is done.
+The rows above change as follows:
+
+| ID | Status after task 10 | Where |
+|---|---|---|
+| S5 | Done. Accepted at `3dba4d1` | `docs/PHASE6-TASK8-20261112.md` |
+| S9 | Packet ready, awaiting counsel | `docs/LEGAL-REVIEW-PACKET-20261107.md` |
+| S10 | Done, pending task 10's CI acceptance. The guide covers the hooks (`scene`, `creatureportrait`, every hook that fires, what went with the skins and the console), the presentation classes, the CSP, the entry guard, POST, CSRF and action tokens, secrets, SQL, the upgrade rule for module versions and admission; `MODULE-POLICY.md` points to it; a static test keeps every name and example true to the code | `docs/MODULE-AUTHOR-GUIDE.md`, `tests/tooling/test_module_author_guide.py` |
+| S13 | Done, pending task 10's CI acceptance. One current row per area with its evidence by file and test, the public hosting gates as a checklist (6 ticked, 8 open), and the update rule in `CLAUDE.md`; the earlier sections kept as history | `docs/SECURITY-STATUS.md` |
+
+What stands between `main` and the `v1.0.0-rc.1` tag: counsel's answers (S9) and any wording change they bring, Jim's
+go, the version commit and its CI acceptance, then the tag and the package (`ROADMAP.md`, Phase 6;
+`docs/RC-CUT-CHECKLIST.md`).

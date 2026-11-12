@@ -65,6 +65,7 @@ The integrity commands do not execute the application. CI (Modern core, on PHP 8
 - [Licensing and provenance](docs/LICENSING-AND-PROVENANCE.md)
 - [Notice](NOTICE) and [third-party licenses](docs/THIRD-PARTY-LICENSES.md)
 - [Module admission](docs/MODULE-POLICY.md)
+- [Module author guide: writing or porting a module](docs/MODULE-AUTHOR-GUIDE.md)
 - [Security status](docs/SECURITY-STATUS.md)
 - [Compatibility status](docs/COMPATIBILITY-STATUS.md)
 - [Modernization principles](docs/MODERNIZATION-PRINCIPLES.md)

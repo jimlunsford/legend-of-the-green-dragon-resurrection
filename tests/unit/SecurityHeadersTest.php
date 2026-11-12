@@ -6,7 +6,8 @@ use Resurrection\Http\SecurityHeaders;
 
 /**
  * Phase 6 task 3 (S1): the security headers' one place (src/Http/SecurityHeaders.php) and the csp_mode setting. The
- * pages that send them, in each mode, are checked over HTTP in tests/tooling/test_hardening_http.py.
+ * pages that send them, in each mode, are checked over HTTP in
+ * tests/tooling/test_web_application.py::test_security_headers_on_every_page_type_in_each_mode_http.
  */
 final class SecurityHeadersTest extends TestCase
 {
