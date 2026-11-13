@@ -178,8 +178,10 @@ if (file_exists($resurrection_config)){
 	 	page_header("The game has not yet been installed");
 		output("`#Welcome to `@Legend of the Green Dragon`#, a game by Eric Stevens & JT Traub.`n`n");
 		// 1.1.2 linked its web installer here. The install is the command, or setup.php for a host without a shell
-		// (Phase 6 task 5b); both run the same service (docs/MODERN-INSTALLATION.md).
-		output("The game must be installed before it can be played: the operator runs `^php scripts/install.php`# on the server's command line, or, on a host without a shell, opens `^setup.php`# in the browser and follows its steps, as docs/MODERN-INSTALLATION.md describes.");
+		// (Phase 6 task 5b); both run the same service. The host guide is linked online at this version's tag: the
+		// documents are not on the server (Phase 6 task 16, R2; lib/source_link.php).
+		require_once("lib/source_link.php");
+		output("The game must be installed before it can be played: the operator runs `^php scripts/install.php`# on the server's command line, or, on a host without a shell, opens `^setup.php`# in the browser and follows its steps, as %s describes.", resurrection_doc_link('docs/HOST-GUIDE.md', 'the host guide', '5-install'), true);
 		output("`n`nIf you're not sure why you're seeing this message, it's because this game is not properly configured right now. ");
 		output("If you've previously been running the game here, chances are that you lost a file called '`%dbconnect.php`#' from your site.");
 		output("If that's the case, restore that file from your backup: the installer only sets up an empty database and never changes an existing one.");
@@ -305,28 +307,32 @@ if ($resurrection_database_state !== 'current'){
 		output("`#The game is temporarily unavailable while a game upgrade is applied, please be patient, the upgrade will be completed soon.");
 		// 1.1.2 sent admins to its web installer here; the upgrade is now a command (docs/MODERN-INSTALLATION.md).
 		output("An administrator applies the upgrade from the server's command line; the web installer is no longer available.");
-		// Phase 6 task 5b: setup.php is the upgrade's path on a host without a shell.
-		output("The operator applies the upgrade with `^php scripts/upgrade.php --backup-confirmed`# on the server's command line, or, on a host without a shell, opens `^setup.php`# in the browser and follows its steps, as docs/MODERN-INSTALLATION.md describes.");
-		output("If you are the operator: take a fresh backup, see what is pending with `^php scripts/upgrade.php --dry-run`#, then apply it with `^php scripts/upgrade.php --backup-confirmed`# (docs/MODERN-INSTALLATION.md, \"Upgrading\").`n`n");
+		// Phase 6 task 5b: setup.php is the upgrade's path on a host without a shell. Phase 6 task 16 (R2): the host
+		// guide, online at this version's tag (lib/source_link.php).
+		require_once("lib/source_link.php");
+		output("The operator applies the upgrade with `^php scripts/upgrade.php --backup-confirmed`# on the server's command line, or, on a host without a shell, opens `^setup.php`# in the browser and follows its steps, as %s describes.", resurrection_doc_link('docs/HOST-GUIDE.md', 'the host guide', '9-upgrade'), true);
+		output("If you are the operator: take a fresh backup, see what is pending with `^php scripts/upgrade.php --dry-run`#, then apply it with `^php scripts/upgrade.php --backup-confirmed`# (%s).`n`n", resurrection_doc_link('docs/HOST-GUIDE.md', 'the host guide, "Upgrade"', '9-upgrade'), true);
 		output("`@If you don't know what this all means, just sit tight, we're doing an upgrade and will be done soon, you will be automatically returned to the game when the upgrade is complete.");
 		rawoutput("<meta http-equiv='refresh' content='30; url=" . htmlspecialchars((string)$session['user']['restorepage'], ENT_QUOTES) . "'>");
 	} else {
 		// Not an upgrade: this version refuses the database, and waiting does not change that.
 		page_header("Game Unavailable");
+		// Phase 6 task 16 (R2): the host guide, online at this version's tag (lib/source_link.php).
+		require_once("lib/source_link.php");
 		if ($resurrection_database_state === 'ahead') {
 			output("`#The game is unavailable: a newer version of Resurrection has upgraded this database, so this version will not run on it or change it.`n`n");
-			output("If you are the operator: install that newer version again, or restore the backup taken before it upgraded the database (docs/MODERN-INSTALLATION.md, \"Upgrading\").");
+			output("If you are the operator: install that newer version again, or restore the backup taken before it upgraded the database (%s).", resurrection_doc_link('docs/HOST-GUIDE.md', 'the host guide, "Backups and restore"', '10-backups-and-restore'), true);
 		} elseif ($resurrection_database_state === 'out-of-order') {
 			output("`#The game is unavailable: the database's record of applied upgrade steps is out of order, so this version will not run on it.`n`n");
-			output("If you are the operator: `^php scripts/upgrade.php --dry-run`# names the missing step; restore the backup taken before the last upgrade (docs/MODERN-INSTALLATION.md, \"Upgrading\").");
+			output("If you are the operator: `^php scripts/upgrade.php --dry-run`# names the missing step; restore the backup taken before the last upgrade (%s).", resurrection_doc_link('docs/HOST-GUIDE.md', 'the host guide, "Backups and restore"', '10-backups-and-restore'), true);
 		} elseif ($resurrection_database_state === 'unsupported-1.1.2') {
 			output("`#The game is unavailable: this database holds a Legend of the Green Dragon 1.1.2 game, which is unsupported. Resurrection does not upgrade or migrate a 1.1.2 database.`n`n");
-			output("If you are the operator: the only path is a fresh install into an empty database (docs/MODERN-INSTALLATION.md).");
+			output("If you are the operator: the only path is a fresh install into an empty database (%s).", resurrection_doc_link('docs/HOST-GUIDE.md', 'the host guide, "Install"', '5-install'), true);
 		} else {
 			// The operator frame (Phase 6 task 5a): nothing of a running game can work on an incomplete install.
 			resurrection_operator_frame();
 			output("`#The game is unavailable: its database is not a completed installation.`n`n");
-			output("If you are the operator: diagnose the failed install, then recreate the disposable database and install again with `^php scripts/install.php`# or `^setup.php`# (docs/MODERN-INSTALLATION.md).");
+			output("If you are the operator: diagnose the failed install, then recreate the disposable database and install again with `^php scripts/install.php`# or `^setup.php`# (%s).", resurrection_doc_link('docs/HOST-GUIDE.md', 'the host guide, "If an install fails"', '53-if-an-install-fails'), true);
 		}
 	}
 	define("NO_SAVE_USER",true);

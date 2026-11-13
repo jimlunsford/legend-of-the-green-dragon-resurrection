@@ -1,0 +1,46 @@
+Legend of the Green Dragon - Resurrection @VERSION@
+@BUILD@
+
+1. Check the download
+
+   The release page has the zip and its SHA-256 file:
+
+     @ZIP@
+     @ZIP@.sha256
+
+   The zip's SHA-256 must equal the one in the .sha256 file. In the folder that
+   holds both:
+
+     Linux:               sha256sum -c @ZIP@.sha256
+     macOS:               shasum -a 256 -c @ZIP@.sha256
+     Windows PowerShell:  Get-FileHash @ZIP@ -Algorithm SHA256
+                          (compare the Hash it prints with the .sha256 file)
+
+   If it differs, do not use the zip: download it again.
+
+2. Upload the contents of upload/ into your site's folder
+
+   Your site's folder is the docroot, the folder your site's address opens (for
+   example public_html). Upload what is inside upload/, not the upload folder
+   itself, into a new, empty folder. Nothing else in this package goes on the
+   server: these notes, the guide and the sample rules stay on your computer.
+
+3. Then read HOST-GUIDE.md
+
+   HOST-GUIDE.md, beside this file, says what the server must refuse, where the
+   configuration file goes, and how to install with a shell or without one
+   (setup.php). Read it before you install. Online, for this version:
+
+     @GUIDE_URL@
+
+Also in this package:
+
+@NOTES@  THIRD-PARTY-LICENSES.md
+      the licenses of the fonts and other third-party files
+  hosting/
+      sample server rules for nginx, Apache and .htaccess (HOST-GUIDE.md,
+      section 3)
+  LICENSE.txt, README.txt and NOTICE
+      the license and the credits, the same files as in upload/. README.txt is
+      Legend of the Green Dragon 1.1.2's own readme, kept unchanged: its install
+      steps are 1.1.2's and do not apply to Resurrection. Use HOST-GUIDE.md.

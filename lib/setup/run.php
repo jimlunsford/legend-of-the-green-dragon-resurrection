@@ -18,6 +18,8 @@ if (!\defined('RESURRECTION_ENTRY') && \PHP_SAPI !== 'cli') { \http_response_cod
 require_once __DIR__ . '/token.php';
 require_once __DIR__ . '/guard.php';
 require_once __DIR__ . '/page.php';
+// The host guide, linked online at this version's tag: the documents are not on the server (Phase 6 task 16, R2).
+require_once __DIR__ . '/../source_link.php';
 
 use Resurrection\Upgrade\UpgradeRefused;
 use Resurrection\Upgrade\UpgradeStopped;
@@ -299,7 +301,8 @@ function resurrection_setup_upgrade(string $step, array $state, #[\SensitivePara
     } catch (UpgradeRefused $refusal) {
         resurrection_setup_screen_message(409, 'Upgrade refused', 'Upgrade refused. ' . $refusal->getMessage());
     } catch (Throwable) {
-        resurrection_setup_screen_message(500, 'Upgrade refused', 'Upgrade refused or failed (' . ($GLOBALS['resurrection_upgrade_phase'] ?? 'preflight') . '). Check the configuration and docs/MODERN-INSTALLATION.md, "Upgrading".');
+        resurrection_setup_screen_message(500, 'Upgrade refused', 'Upgrade refused or failed (' . ($GLOBALS['resurrection_upgrade_phase'] ?? 'preflight') . '). Check the configuration and the host guide\'s "Upgrade" section.',
+            '<p>' . resurrection_doc_link('docs/HOST-GUIDE.md', 'The host guide, "Upgrade"', '9-upgrade') . '</p>');
     }
     $login = resurrection_setup_post('admin_login');
     if ($step === 'token') resurrection_setup_screen_token_upgrade($directory, $pending, '');
@@ -378,7 +381,8 @@ function resurrection_setup_upgrade_part(string $config, array $grant, string $t
         while (ob_get_level() > $level) ob_end_clean();
         unset($_SESSION['rz_setup_grant']);
         error_log('Resurrection: web upgrade failed (' . preg_replace('/[^A-Za-z0-9_.:-]/', '?', (string)($GLOBALS['resurrection_upgrade_phase'] ?? 'preflight')) . ') at ' . basename($error->getFile()) . ':' . $error->getLine());
-        resurrection_setup_screen_message(500, 'Upgrade failed', 'Upgrade refused or failed (' . ($GLOBALS['resurrection_upgrade_phase'] ?? 'preflight') . ', at ' . basename($error->getFile()) . ':' . $error->getLine() . '). If the upgrade had started, the report says what was applied. Check the configuration and docs/MODERN-INSTALLATION.md, "Upgrading".');
+        resurrection_setup_screen_message(500, 'Upgrade failed', 'Upgrade refused or failed (' . ($GLOBALS['resurrection_upgrade_phase'] ?? 'preflight') . ', at ' . basename($error->getFile()) . ':' . $error->getLine() . '). If the upgrade had started, the report says what was applied. Check the configuration and the host guide\'s "Upgrade" section.',
+            '<p>' . resurrection_doc_link('docs/HOST-GUIDE.md', 'The host guide, "Upgrade"', '9-upgrade') . '</p>');
     }
     while (ob_get_level() > $level) ob_end_clean();
     $applied = min($grant['total'], $grant['applied'] + count($result['steps']) + count($result['modules']));

@@ -195,8 +195,19 @@ function resurrection_editor_locked(array $layout): array {
 /** Why a locked setting is locked, in one line for Game Settings. */
 function resurrection_editor_locked_reason(string $key): string {
     return match ($key) {
-        'requirevalidemail' => 'Locked off. Turn on account mail first (Game Settings, Account mail): a sign-up can confirm its address only while the game can send mail. See "Mail" in the host guide (docs/HOST-GUIDE.md).',
+        'requirevalidemail' => 'Locked off. Turn on account mail first (Game Settings, Account mail): a sign-up can confirm its address only while the game can send mail.',
         default => 'Locked.',
+    };
+}
+
+/**
+ * The host guide section a locked setting's note links, online at this version's tag (Phase 6 task 16, R2;
+ * lib/source_link.php), or null: [path, label, section].
+ * @return array{0:string,1:string,2:string}|null */
+function resurrection_editor_locked_doc(string $key): ?array {
+    return match ($key) {
+        'requirevalidemail' => ['docs/HOST-GUIDE.md', '"Mail" in the host guide', '11-mail'],
+        default => null,
     };
 }
 
@@ -226,9 +237,14 @@ function resurrection_editor_fields(array $schema,array $values,?array $keys=nul
         if (isset($locked[$key])) {
             $held=resurrection_locked_settings()[$key];
             $id='rz-locked-'.$key;
+            $doc='';
+            if (($link=resurrection_editor_locked_doc($key))!==null) {
+                require_once 'lib/source_link.php';
+                $doc=' See '.resurrection_doc_link(...$link).'.';
+            }
             rawoutput('<p class="rz-setting-locked"><label>'.$escape($locked[$key]).' <select disabled aria-describedby="'.$escape($id).'">'
                 .'<option selected>'.($held==='1' ? 'Yes' : 'No').'</option></select></label>'
-                .'<span class="rz-setting-locked-note" id="'.$escape($id).'">'.$escape(resurrection_editor_locked_reason($key)).'</span></p>');
+                .'<span class="rz-setting-locked-note" id="'.$escape($id).'">'.$escape(resurrection_editor_locked_reason($key)).$doc.'</span></p>');
             continue;
         }
         if (!isset($schema[$key])) continue;

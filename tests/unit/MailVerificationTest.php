@@ -265,8 +265,10 @@ final class MailVerificationTest extends TestCase
             self::settings(['account_mail' => 1, 'serverurl' => 'https://game.example.org/', 'gameadminemail' => 'game@example.org', 'account_mail_proof' => $proof]);
             self::assertSame('1', (string)getsetting('requirevalidemail', 0), $label . ', restored');
         }
-        self::assertSame('Locked off. Turn on account mail first (Game Settings, Account mail): a sign-up can confirm its address only while the game can send mail. See "Mail" in the host guide (docs/HOST-GUIDE.md).',
+        // Phase 6 task 16 (R2): the note links "Mail" in the host guide online at this version's tag, not a docs/ path.
+        self::assertSame('Locked off. Turn on account mail first (Game Settings, Account mail): a sign-up can confirm its address only while the game can send mail.',
             resurrection_editor_locked_reason('requirevalidemail'));
+        self::assertSame(['docs/HOST-GUIDE.md', '"Mail" in the host guide', '11-mail'], resurrection_editor_locked_doc('requirevalidemail'));
     }
 
     public function testVerifyMailLimitsAndReplacement(): void

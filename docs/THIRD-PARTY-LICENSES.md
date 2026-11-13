@@ -119,3 +119,23 @@ Every bundled font file and its SHA-256 (`tests/tooling/test_ui_tokens.py` check
 | `assets/fonts/cinzel/cinzel-latin-700-normal.woff2` | `8efa224fe70fef188a39c095e218b81fd31061809f2752537e33a9ec7b9c2263` |
 | `assets/fonts/cinzel/cinzel-latin-ext-500-normal.woff2` | `08eac55c117837a40ede8e3ac455e4752aa5ac7353e3f29a96a67a12043d6647` |
 | `assets/fonts/cinzel/cinzel-latin-ext-700-normal.woff2` | `55b110958b9b614a410cf607c12b1ff2990fa3e5bd0bfacf17e5fd7dce681562` |
+
+## What the release package's `upload/` holds that is not Resurrection's own
+
+Audited in Phase 6 task 16 (2026-11-13, `docs/PHASE6-TASK16-20261113.md`), against `NOTICE` and this file. The
+package's `upload/` is the host guide's "Upload these" list; this file and `NOTICE` travel beside it, at the package's
+top level.
+
+| What | Files | Terms | Where it is recorded |
+|---|---|---|---|
+| Fonts: Cinzel, Alegreya, Alegreya Sans | `assets/fonts/` (16 `.woff2` files and three `OFL.txt`) | SIL Open Font License 1.1, its text beside each family's files | "Bundled fonts" above; `NOTICE` ("Art") |
+| Legend of the Green Dragon 1.1.2's code and text | the pages, `lib/`, `src/`, `templates/`, `modules/` and `scripts/` as changed by Resurrection | CC BY-NC-SA 2.0 and `LICENSE.txt` | `NOTICE`, `LICENSE.txt`, `README.txt` |
+| The 24 bundled modules, from 1.1.2 | `modules/`; credited in each module's `"author"`: Eric Stevens; Darrel Morrone (`dag`, updated by Andrew Senger, JT Traub and Eric Stevens); John Collins (`outhouse`); John J. Collins (`drinks`, modified by JT Traub); Chris Vorndran (changes to `cedrikspotions`); Ville Valtokari (`goldmine`); Talisman (`game_fivesix`) | shipped in 1.1.2's distribution under its license | `NOTICE` ("the module authors credited in the source and in each module"); open item below |
+| 1.1.2's images | `images/new.gif`, `images/newscroll.GIF`, `images/trans.gif`, and `images/somerights20.gif` (Creative Commons' "Some rights reserved" button, which the license block on every page shows); each byte for byte the file at `historical-source-1.1.2` | shipped in 1.1.2's distribution; no asset-level record of their authorship or terms | `LICENSING-AND-PROVENANCE.md` (open item); listed here since task 16 |
+| Resurrection's art | `assets/scenes/`, `assets/portraits/`, `assets/icons/` | Phoenix 2:33 LLC's, CC BY-SA 4.0 (`assets/LICENSE`) | `NOTICE`, `assets/README.md` |
+| Resurrection's interface code | `assets/ui/` (style sheets and scripts written for Resurrection; no third-party library) | the core license | `NOTICE` |
+
+No Composer package, JavaScript library or other third-party file ships in `upload/`. Not accounted for beyond the
+1.1.2 distribution: the authorship and terms of the four inherited images, and the module code by authors other than
+Eric Stevens and JT Traub, which has not been reviewed file by file. Both stay the open items of
+`LICENSING-AND-PROVENANCE.md`.

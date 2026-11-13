@@ -59,7 +59,9 @@ The integrity commands do not execute the application. CI (Modern core, on PHP 8
 ## Project documents
 
 - [Roadmap](ROADMAP.md) and [changes from 1.1.2](docs/CHANGES-FROM-1.1.2.md)
-- [Host guide: running the game on a web server](docs/HOST-GUIDE.md)
+- [Host guide: running the game on a web server](docs/HOST-GUIDE.md). A release's package holds one folder: `upload/`
+  (what goes into the site's folder), and beside it `INSTALL.txt`, the host guide, the release notes, the third-party
+  licenses, the sample server rules in `hosting/` and the license files (host guide, section 2)
 - [Release notes for 1.0.0-rc.1](docs/RELEASE-NOTES-1.0.0-rc.1.md) and the [cut checklist](docs/RC-CUT-CHECKLIST.md)
 - [Versioning](docs/VERSIONING.md)
 - [Licensing and provenance](docs/LICENSING-AND-PROVENANCE.md)

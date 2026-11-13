@@ -39,7 +39,10 @@ python3 scripts/local-play.py restore .local-play/backups/resurrection-DATE.sql
 
 ## Runtime and database
 
-Use a standard PHP 8.4 or 8.5 build with ctype, filter, JSON, mbstring, PDO, PDO MySQL and native sessions (the `ext-*` list in `composer.json`). The game does not depend on PHP's output buffering: it also runs with `output_buffering` off, PHP's default without a `php.ini` (`PHASE4-OUTPUT-BUFFERING-FIX-20261029.md`). For development, install the locked Composer dependencies (PHPUnit and PHPStan); the game itself loads none of them, and a hosted copy has no `vendor/` (`HOST-GUIDE.md`, "What to upload"). The CI pairs are PHP 8.4 with MariaDB 11.4 and PHP 8.5 with MySQL 8.4. A sessionless PHP build cannot run the application.
+Use a standard PHP 8.4 or 8.5 build with ctype, filter, JSON, mbstring, PDO, PDO MySQL and native sessions (the `ext-*` list in `composer.json`). The game does not depend on PHP's output buffering: it also runs with `output_buffering` off, PHP's default without a `php.ini` (`PHASE4-OUTPUT-BUFFERING-FIX-20261029.md`). For development, install the locked Composer dependencies (PHPUnit and PHPStan); the game itself loads none of them, and a hosted copy has no `vendor/` (`HOST-GUIDE.md`, "What to upload"). To host the game, start from the release
+package: its `upload/` folder is exactly what goes into the site's folder, and `INSTALL.txt`, `HOST-GUIDE.md` and the
+other documents sit beside it, never in the docroot (`HOST-GUIDE.md`, section 2). This guide is for local use and
+development. The CI pairs are PHP 8.4 with MariaDB 11.4 and PHP 8.5 with MySQL 8.4. A sessionless PHP build cannot run the application.
 
 Create a dedicated **empty** database and a dedicated account authorized only for that database. Use utf8mb4 at database creation. Application connections explicitly use utf8mb4 and retain server SQL modes while adding STRICT_TRANS_TABLES, NO_ZERO_DATE, NO_ZERO_IN_DATE, ERROR_FOR_DIVISION_BY_ZERO, and NO_ENGINE_SUBSTITUTION. Fresh tables use InnoDB and utf8mb4_unicode_ci. Do not weaken global SQL modes.
 

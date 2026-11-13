@@ -28,6 +28,7 @@ import unittest
 import urllib.error
 import urllib.parse
 import urllib.request
+import zipfile
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -187,14 +188,18 @@ class SetupPageTests(unittest.TestCase):
         return path.stem
 
     @contextmanager
-    def tree(self, config=None, env=None, workers=None, ini=None):
-        """A server on a symlinked copy of the tree. Yields an object with port, path, log (the PHP error log) and
-        sessions (the session folder)."""
+    def tree(self, config=None, env=None, workers=None, ini=None, source=None):
+        """A server on a symlinked copy of the tree, or, given a source folder, on a real copy of that folder alone (the
+        release package's upload/). Yields an object with port, path, log (the PHP error log) and sessions (the session
+        folder)."""
         with tempfile.TemporaryDirectory(prefix='resurrection-setup-tree-') as tree:
             tree = Path(tree)
-            for entry in ROOT.iterdir():
-                if entry.name not in {'dbconnect.php', '.git', 'resurrection-setup.php', 'resurrection-setup-failures.php'}:
-                    os.symlink(entry, tree / entry.name)
+            if source is not None:
+                shutil.copytree(source, tree, dirs_exist_ok=True)
+            else:
+                for entry in ROOT.iterdir():
+                    if entry.name not in {'dbconnect.php', '.git', 'resurrection-setup.php', 'resurrection-setup-failures.php'}:
+                        os.symlink(entry, tree / entry.name)
             if config is not None:
                 (tree / 'dbconnect.php').write_text(config)
             sessions = tree / '.sessions'
@@ -476,6 +481,77 @@ class SetupPageTests(unittest.TestCase):
             self.assertNotIn('has not yet been installed', home)
             status, _, _ = game.request('login.php', {'csrf_token': game.csrf(home), 'name': 'Admin', 'password': ADMIN_PASSWORD})
             self.assertEqual(303, status)
+
+    def test_setup_install_from_the_release_package(self):
+        # Phase 6 task 16 (R1): what a host does with the package. Build it, unzip it, copy only the contents of upload/
+        # into an empty site folder, install through setup.php, and play to the village. Nothing from the checkout is
+        # served, so a file the game needs and the package leaves out fails here.
+        self.empty_db()
+        version = re.search(r"CURRENT = '([^']+)'", (ROOT / 'src' / 'Version.php').read_text()).group(1)
+        top = f'legend-of-the-green-dragon-resurrection-{version}'
+        with tempfile.TemporaryDirectory(prefix='resurrection-package-') as scratch:
+            scratch = Path(scratch)
+            built = subprocess.run([sys.executable, str(ROOT / 'scripts' / 'build-release-package.py'), '--out', str(scratch / 'out')],
+                                   cwd=ROOT, capture_output=True, text=True, timeout=300)
+            self.assertEqual(0, built.returncode, built.stderr)
+            with zipfile.ZipFile(scratch / 'out' / f'{top}.zip') as archive:
+                archive.extractall(scratch / 'unzipped')
+            upload = scratch / 'unzipped' / top / 'upload'
+            self.assertTrue((upload / 'setup.php').is_file(), sorted(p.name for p in (scratch / 'unzipped').rglob('*'))[:20])
+            value = token_value('from the package')
+            with self.tree(source=upload) as served:
+                self.assertFalse((served.path / 'dbconnect.php').exists())
+                self.assertEqual([], sorted(p.name for p in served.path.glob('*.md')))
+                self.token_file(served.path, value)
+                client = Client(served.port)
+                body = self.verify(client, self.start(client), value)
+                # The recommended modules, as a host installs by default: they bring the races a new day asks for.
+                status, headers, body = self.install_form(client, body, extra={'modules': 'recommended'})
+                self.assertScreen(status, headers, body)
+                self.assertIn('The game is installed.', text(body))
+                self.assertFalse((served.path / 'resurrection-setup.php').exists())
+                self.assertEmpty404(Client(served.port).request())
+                game = Client(served.port)
+                status, _, home = game.request('home.php')
+                self.assertEqual(200, status, home[:1000])
+                status, headers, _ = game.request('login.php', {'csrf_token': game.csrf(home), 'name': 'Admin', 'password': ADMIN_PASSWORD})
+                self.assertEqual(303, status)
+                path, visited = headers['Location'], []
+                for _ in range(12):
+                    status, headers, body = game.request(path.lstrip('/'))
+                    visited.append((path, status))
+                    if status in (302, 303):
+                        path = headers['Location']
+                        continue
+                    self.assertEqual(200, status, body[:1000])
+                    if path.startswith('village.php') or path.startswith('/village.php'):
+                        break
+                    path = self.next_nav(game, body, ['newday.php', 'village.php'])
+                    self.assertIsNotNone(path, (visited, text(body)[:1500]))
+                self.assertTrue(visited[-1][0].lstrip('/').startswith('village.php'), visited)
+                self.assertNotRegex(body, ERROR)
+                self.assertIn('forest.php', body)
+                self.assertIn('Version: Resurrection ' + version + ',', text(body))
+                for credit in [COPYRIGHT, ATTRIBUTION]:
+                    self.assertIn(credit, body)
+                self.assertEqual('', served.log.read_text())
+
+    @staticmethod
+    def next_nav(client, body, targets):
+        """Follows the first navigation to one of the targets on a game page, a link or a button form (a POST with the
+        form's fields). Returns the path a link points to, or, for a form, the redirect it answered with."""
+        for target in targets:
+            for form in re.finditer(r'(?s)<form[^>]*action="([^"]*)"[^>]*>(.*?)</form>', body):
+                action = html.unescape(form.group(1))
+                if target in action:
+                    fields = {html.unescape(m.group(1)): html.unescape(m.group(2)) for m in
+                              re.finditer(r'<input[^>]*name="([^"]+)"[^>]*value="([^"]*)"', form.group(2))}
+                    status, headers, _ = client.request(action.lstrip('/'), fields)
+                    return headers['Location'] if status in (302, 303) else action
+            link = re.search(r'href="([^"]*' + re.escape(target) + r'[^"]*)"', body)
+            if link:
+                return html.unescape(link.group(1))
+        return None
 
     def test_setup_install_with_existing_config_and_empty_database(self):
         # State 2: a configuration file made by hand and an empty database. The form has no database fields and the

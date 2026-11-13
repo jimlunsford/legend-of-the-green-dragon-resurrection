@@ -106,6 +106,17 @@ def upload_files():
     return sorted(taken)
 
 
+def package_names():
+    """The names the release package holds beside upload/, and upload/ itself, as the build script makes them
+    (scripts/build-release-package.py, Phase 6 task 16): the guide may name them as the package has them."""
+    import importlib.util
+    spec = importlib.util.spec_from_file_location('build_release_package', ROOT / 'scripts' / 'build-release-package.py')
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    top = module.NAME + '-' + module.version(ROOT) + '/'
+    return {name[len(top):] for name, _ in module.package_entries(ROOT) if not name.startswith(top + 'upload/')} | {'upload'}
+
+
 def shipped_code():
     """The text of everything the game ships and runs (no tests, docs or development tools)."""
     parts = []
@@ -270,11 +281,13 @@ class HostGuideTests(unittest.TestCase):
         text = self.text
         problems = []
         tracked = set(repository_files())
-        known_paths = tracked | {name.rstrip('/') for name in GENERATED + SERVER_MADE}
+        # Phase 6 task 16 (R1): the release package's own names, beside upload/ (scripts/build-release-package.py).
+        package = package_names()
+        known_paths = tracked | {name.rstrip('/') for name in GENERATED + SERVER_MADE} | package
 
         def path_exists(path):
             path = path.rstrip('/')
-            return path in known_paths or any(t.startswith(path + '/') for t in tracked)
+            return path in known_paths or any(t.startswith(path + '/') for t in tracked | package)
 
         spans = re.findall(r'`([^`\n]+)`', re.sub(r'```.*?```', '', text, flags=re.S))
         blocks = re.findall(r'```[a-z]*\n(.*?)```', text, flags=re.S)

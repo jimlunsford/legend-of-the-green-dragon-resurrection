@@ -525,9 +525,12 @@ class AccountVerificationHttpTests(unittest.TestCase):
         status, headers, body = self.page(admin, self.admin, 'configuration.php')
         self.assertPage(status, headers, body)
         locked = re.search(r'<p class="rz-setting-locked"><label>Require users to validate their email address <select disabled[^>]*><option selected>No</option></select></label>'
-                           r'<span class="rz-setting-locked-note" id="[^"]+">([^<]+)</span></p>', body)
+                           r'<span class="rz-setting-locked-note" id="[^"]+">(.+?)</span></p>', body)
         self.assertIsNotNone(locked, 'requirevalidemail is not shown locked while account mail is off')
         self.assertIn('Turn on account mail first', locked.group(1))
+        # Phase 6 task 16 (R2): the note links "Mail" in the host guide, online at this version's tag.
+        self.assertIn('See <a href="https://github.com/jimlunsford/legend-of-the-green-dragon-resurrection/blob/v', locked.group(1))
+        self.assertIn('/docs/HOST-GUIDE.md#11-mail">&quot;Mail&quot; in the host guide</a>.', locked.group(1))
         self.assertNotIn('name="requirevalidemail"', body)
         # With account mail on: a setting like any other, which saves.
         self.setting('account_mail', '1')

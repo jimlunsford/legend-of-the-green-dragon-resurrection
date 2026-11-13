@@ -44,9 +44,20 @@ A shell is not required. Every step below has a way through the panel.
 
 ## 2. What to upload
 
-Take the files from the release package (or from a clone of the repository). Upload only what the game needs. A
-release's package, `legend-of-the-green-dragon-resurrection-<version>.zip`, holds exactly the list below and nothing
-else: unzip it into the empty game folder. From a clone, copy the list yourself.
+Take the files from the release package (or from a clone of the repository). Upload only what the game needs.
+
+A release's package, `legend-of-the-green-dragon-resurrection-<version>.zip`, holds one folder of the same name. In it:
+
+- `upload/`: exactly the list below and nothing else. **Upload the contents of `upload/`** into the empty game folder:
+  the files and folders inside it, not the `upload` folder itself.
+- `INSTALL.txt`: how to check the zip's SHA-256, what to upload, and this guide's address online for the version.
+- This guide (`HOST-GUIDE.md`), the release notes (`RELEASE-NOTES-<version>.md`), `THIRD-PARTY-LICENSES.md`, the sample
+  server rules in `hosting/` (section 3), and copies of `LICENSE.txt`, `README.txt` and `NOTICE`, so the terms can be
+  read before anything is uploaded. These stay on your computer: documents never go in the docroot. `README.txt` is
+  1.1.2's own readme, kept unchanged; its install steps are 1.1.2's and do not apply.
+
+Check the zip before you unzip it: the release page has its `.sha256` file beside it, and `INSTALL.txt` gives the
+command. From a clone of the repository, copy the list below yourself.
 
 ### Upload these
 
@@ -122,12 +133,13 @@ Each of these answers "not found" (404) or "forbidden" (403). Why, in one line e
 
 ### Sample server rules
 
-Three sample files hold these rules. They are samples, not active: the game never reads them, and they sit in
-`docs/`, which you do not upload. Copy the one you need, change the lines marked CHANGE, and check it.
+Three sample files hold these rules. They are samples, not active: the game never reads them. In the release package
+they are in `hosting/`, beside `upload/` (in the repository, in `docs/hosting/`), and neither folder is uploaded. Copy
+the one you need, change the lines marked CHANGE, and check it.
 
-- `docs/hosting/nginx.conf`: nginx with PHP-FPM. Check with `nginx -t`.
-- `docs/hosting/apache.conf`: an Apache 2.4 virtual host, with mod_php or PHP-FPM. Check with `apachectl -t`.
-- `docs/hosting/htaccess`: the same rules for a host where you cannot edit the server's configuration. Upload it into
+- `hosting/nginx.conf`: nginx with PHP-FPM. Check with `nginx -t`.
+- `hosting/apache.conf`: an Apache 2.4 virtual host, with mod_php or PHP-FPM. Check with `apachectl -t`.
+- `hosting/htaccess`: the same rules for a host where you cannot edit the server's configuration. Upload it into
   the game's folder and rename it `.htaccess`. If every page then answers 500, the host does not allow one of its
   directives: delete it again and ask the host (the file's comments say which directives it needs).
 

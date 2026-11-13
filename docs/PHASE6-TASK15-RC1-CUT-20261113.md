@@ -228,3 +228,16 @@ release was made, so the release is on the tag, and the tag is on `2bbc69d`.
 
 Jim tests rc.1 on a real server, from the release's zip, following `docs/HOST-GUIDE.md`. A fix found there goes into
 `main` and a later cut (`1.0.0-rc.2`); the `v1.0.0-rc.1` tag never moves.
+
+## Acceptance (recorded in Phase 6 task 16, 2026-11-13)
+
+Task 15 is accepted at `95ae3f3`. The rc.1 cut is complete.
+
+- Modern core 43461940045: SUCCESS, 14/14 jobs, all on `ubuntu-24.04`. PHP 8.4 shards 15:47, 15:08, 14:17, 10:58,
+  15:53; PHP 8.5 shards 13:28, 11:48, 12:56, 17:57, 13:49. On both legs the release upgrade check installed
+  `v1.0.0-rc.1` and upgraded it to `95ae3f3`, with the same schema and data as a fresh install (41 tables): section 5's
+  first box.
+- Baseline integrity 43461939958: SUCCESS.
+- `c6d4677` (the release cut workflow): Modern core 43458779026 and Baseline integrity 43458778969, both SUCCESS.
+- The release's zip asset digest is `sha256:f8b0a1d4f0bb153f649ff849972bb4a8649efd216ed0fec22bb88001cb4a7857`, the
+  build's SHA-256.

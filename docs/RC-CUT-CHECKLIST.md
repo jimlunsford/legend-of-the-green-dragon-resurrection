@@ -107,13 +107,22 @@ Never move or delete the tag once pushed. `historical-source-1.1.2` is never tou
 
 ## 4. The release package (only on Jim's go)
 
+What the package holds (since Phase 6 task 16, R1; the `1.0.0-rc.1` zip held only the upload): one folder,
+`legend-of-the-green-dragon-resurrection-<version>/`, with `upload/` (exactly the host guide's "Upload these" list, what
+goes into the site's folder), `INSTALL.txt` (made from `docs/package/INSTALL.txt`: check the SHA-256, upload the
+contents of `upload/`, read the host guide, online at the tag), and beside them `HOST-GUIDE.md`,
+`RELEASE-NOTES-<version>.md`, `THIRD-PARTY-LICENSES.md`, `hosting/` with the three sample rule files, and copies of
+`LICENSE.txt`, `README.txt` and `NOTICE`. Check `INSTALL.txt` in the built zip before the release goes out. The
+release cut workflow (`.github/workflows/release-cut.yml`) builds the same package with the same script.
+
 - [x] From a clean checkout of the tag: `python3 scripts/build-release-package.py --out <absolute folder outside the
       tree>`. It writes `legend-of-the-green-dragon-resurrection-1.0.0-rc.1.zip` and its `.zip.sha256`, and prints the
       file count, size and SHA-256. Record all three. For `1.0.0-rc.1`: 753 files, 3,626,284 bytes,
       `f8b0a1d4f0bb153f649ff849972bb4a8649efd216ed0fec22bb88001cb4a7857`, the same as task 14's builds.
 - [x] Build it a second time into another folder; the SHA-256 must match. It matched, in the session and on the runner.
-- [x] Unzip it into an empty docroot, install through `setup.php`, and play to the village and one forest fight (the
-      run recorded in `docs/PHASE6-TASK7-RC-MATERIALS-20261107.md` is the pattern). Done in task 15: 41 tables, 24
+- [x] Unzip it, copy the contents of `upload/` into an empty docroot (before task 16, the whole zip), install through
+      `setup.php`, and play to the village and one forest fight (the run recorded in
+      `docs/PHASE6-TASK7-RC-MATERIALS-20261107.md` is the pattern). Done in task 15: 41 tables, 24
       modules with 23 active, the village and one forest fight, the footer showing `1.0.0-rc.1`.
 - [x] Attach the zip and its `.sha256` nowhere until Jim says where. The script itself never uploads, tags or publishes,
       and it is not in the package (`docs/HOST-GUIDE.md`, "Do not upload"). For `1.0.0-rc.1` Jim said a GitHub
@@ -122,8 +131,9 @@ Never move or delete the tag once pushed. `historical-source-1.1.2` is never tou
 
 ## 5. After the tag
 
-- [ ] The next commit's Modern core shows the release upgrade check installing `v1.0.0-rc.1` and upgrading it, instead
-      of "no release yet".
+- [x] The next commit's Modern core shows the release upgrade check installing `v1.0.0-rc.1` and upgrading it, instead
+      of "no release yet". For `1.0.0-rc.1`: Modern core 43461940045 on `95ae3f3`, both legs ("v1.0.0-rc.1 installed,
+      upgraded to 95ae3f3, and the same schema and data as a fresh install (41 tables)").
 - [ ] `main` keeps `1.0.0-rc.1` (`docs/VERSIONING.md`, "`main`'s version after a tag"). It never goes back to
       `1.0.0-dev`. The next cut's version commit sets `1.0.0-rc.2`, or `1.0.0` for the release.
 - [ ] After `v1.0.0`, the first commit on `main` sets the next number with `-dev` (`1.1.0-dev`, or `1.0.1-dev` when only

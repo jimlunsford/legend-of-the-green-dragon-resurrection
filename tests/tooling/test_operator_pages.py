@@ -128,7 +128,12 @@ class OperatorPageTests(unittest.TestCase):
         # Phase 6 task 5b: the page names both paths, the command and setup.php.
         self.assertIn("The game must be installed before it can be played: the operator runs php scripts/install.php on the "
                       "server's command line, or, on a host without a shell, opens setup.php in the browser and follows its "
-                      'steps, as docs/MODERN-INSTALLATION.md describes.', shown)
+                      'steps, as the host guide describes.', shown)
+        # Phase 6 task 16 (R2): the host guide, linked online at this version's tag; the page names no docs/ path.
+        version = re.search(r"CURRENT = '([^']+)'", (ROOT / 'src' / 'Version.php').read_text()).group(1)
+        self.assertIn('<a href="https://github.com/jimlunsford/legend-of-the-green-dragon-resurrection/blob/v' + version
+                      + '/docs/HOST-GUIDE.md#5-install">the host guide</a>', body)
+        self.assertNotIn('docs/', shown)
         self.assertNotIn('There is no web installer.', shown)
         self.assertIn('restore that file from your backup', shown)
         self.assertNotIn('installer.php', body)
@@ -294,6 +299,11 @@ class OperatorPageTests(unittest.TestCase):
                         self.assertIn('php scripts/install.php', body.decode())
                         self.assertIn('setup.php', body.decode().replace('installer.php', ''))
                         self.assertNotIn('migration', body.decode().lower())
+                        # Phase 6 task 16 (R2): the host guide online at this version's tag, not a docs/ path.
+                        version = re.search(r"CURRENT = '([^']+)'", (ROOT / 'src' / 'Version.php').read_text()).group(1)
+                        self.assertIn('(the host guide: https://github.com/jimlunsford/legend-of-the-green-dragon-resurrection/blob/v'
+                                      + version + '/docs/HOST-GUIDE.md#5-install).', body.decode())
+                        self.assertNotIn('docs/HOST-GUIDE.md)', body.decode())
                     for name, value in expected.items():
                         self.assertEqual([value], headers.get_all(name), f'{label}: {name}')
                     self.assertIsNone(headers['Content-Security-Policy-Report-Only'])

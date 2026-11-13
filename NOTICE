@@ -88,8 +88,8 @@ Commons Attribution-ShareAlike 4.0 International license
 (https://creativecommons.org/licenses/by-sa/4.0/legalcode); see assets/LICENSE
 and assets/README.md. Credit for it: "Art by Phoenix 2:33 LLC, CC BY-SA 4.0".
 That license covers those three folders only: not assets/fonts/ (the SIL Open
-Font License 1.1, see docs/THIRD-PARTY-LICENSES.md) and not assets/ui/ (code,
-under the CC BY-NC-SA 2.0 license above).
+Font License 1.1, see THIRD-PARTY-LICENSES.md) and not assets/ui/ (code, under
+the CC BY-NC-SA 2.0 license above).
 
 The 1.1.2 skins. LoGD 1.1.2 shipped 18 skins in templates/, credited in
 their own footers and stylesheets: Jade (Josh Canning, 2004, of HFS); Mer
@@ -105,5 +105,6 @@ remain, byte for byte with their credits, in the historical-source-1.1.2 tag.
 This is a noncommercial project. It is not endorsed by the original authors
 or by DragonPrime.
 
-Third-party libraries keep their own licenses. See
-docs/THIRD-PARTY-LICENSES.md.
+Third-party libraries keep their own licenses. See THIRD-PARTY-LICENSES.md, in
+the docs folder of the repository and at the top level of the release package,
+beside upload/.

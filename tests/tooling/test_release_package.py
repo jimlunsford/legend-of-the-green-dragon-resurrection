@@ -1,14 +1,18 @@
 """The release package (Phase 6 task 7, docs/PHASE6-TASK7-RC-MATERIALS-20261107.md): scripts/build-release-package.py.
 
-The zip a host uploads holds exactly the host guide's "Upload these" list, as tests/tooling/test_host_guide.py reads it
-(upload_files()), so the guide, its test and the package cannot drift apart; nothing on the guide's "Do not upload" list
-or that the game makes is in it; the license and credit files are byte for byte the tree's; and the same tree gives the
-same bytes. Plain Python and Git, no PHP or database: it runs in every shard and in Baseline integrity.
+The zip holds one folder, legend-of-the-green-dragon-resurrection-<version>/ (Phase 6 task 16, R1). Its upload/ holds
+exactly the host guide's "Upload these" list, as tests/tooling/test_host_guide.py reads it (upload_files()), so the
+guide, its test and the package cannot drift apart; nothing on the guide's "Do not upload" list or that the game makes
+is in it. Beside upload/ are INSTALL.txt, the host guide, the release notes, the third-party licenses, the sample
+server rules in hosting/ and the license files, and nothing else; every file NOTICE names is in the package (R3); the
+license and credit files are byte for byte the tree's; and the same tree gives the same bytes. Plain Python and Git, no
+PHP or database: it runs in every shard and in Baseline integrity.
 """
 import hashlib
 import importlib.util
 import json
 from pathlib import Path
+import re
 import tempfile
 import unittest
 import zipfile
@@ -18,6 +22,16 @@ import test_host_guide
 ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = ROOT / 'scripts' / 'build-release-package.py'
 CREDITS = ['LICENSE.txt', 'README.txt', 'NOTICE', 'assets/LICENSE']
+VERSION = re.search(r"const string CURRENT = '([^']+)';", (ROOT / 'src' / 'Version.php').read_text()).group(1)
+TOP = f'legend-of-the-green-dragon-resurrection-{VERSION}/'
+UPLOAD = TOP + 'upload/'
+# Beside upload/: the package's name and the tree's file it copies (INSTALL.txt is made from docs/package/INSTALL.txt).
+BESIDE = {'HOST-GUIDE.md': 'docs/HOST-GUIDE.md', 'THIRD-PARTY-LICENSES.md': 'docs/THIRD-PARTY-LICENSES.md',
+          'hosting/apache.conf': 'docs/hosting/apache.conf', 'hosting/htaccess': 'docs/hosting/htaccess',
+          'hosting/nginx.conf': 'docs/hosting/nginx.conf', 'LICENSE.txt': 'LICENSE.txt', 'README.txt': 'README.txt',
+          'NOTICE': 'NOTICE'}
+if (ROOT / 'docs' / f'RELEASE-NOTES-{VERSION}.md').is_file():
+    BESIDE[f'RELEASE-NOTES-{VERSION}.md'] = f'docs/RELEASE-NOTES-{VERSION}.md'
 
 
 def load():
@@ -39,18 +53,69 @@ class ReleasePackageTests(unittest.TestCase):
     def tearDownClass(cls):
         cls.scratch.cleanup()
 
-    def names(self):
+    def all_names(self):
         with zipfile.ZipFile(self.first['zip']) as archive:
             return archive.namelist()
 
-    def test_the_package_holds_exactly_the_upload_list(self):
+    def names(self):
+        """The upload/ folder's files, as paths in the site's folder."""
+        return [name[len(UPLOAD):] for name in self.all_names() if name.startswith(UPLOAD)]
+
+    def read(self, name):
+        with zipfile.ZipFile(self.first['zip']) as archive:
+            return archive.read(TOP + name)
+
+    def test_the_package_is_one_folder(self):
+        names = self.all_names()
+        self.assertTrue(names)
+        self.assertEqual([], [name for name in names if not name.startswith(TOP)])
+        self.assertEqual(len(names), self.first['files'])
+
+    def test_upload_holds_exactly_the_upload_list(self):
         expected = test_host_guide.upload_files()
         self.assertEqual(expected, self.names())
-        self.assertEqual(len(expected), self.first['files'])
         # The list's own entries are all there: the two shell commands, the pages, the folders and the credits.
         for name in ['scripts/install.php', 'scripts/upgrade.php', 'index.php', 'setup.php', 'common.php', 'lib/output.php',
                      'src/Version.php', 'templates/resurrection.htm', 'favicon.ico', *CREDITS]:
             self.assertIn(name, self.names())
+        # No document in upload/ but the two notes that travel with their folders.
+        self.assertEqual(['assets/README.md', 'upgrades/README.md'], [n for n in self.names() if n.lower().endswith('.md')])
+
+    def test_the_documents_are_beside_upload(self):
+        beside = sorted(name[len(TOP):] for name in self.all_names() if not name.startswith(UPLOAD))
+        self.assertEqual(sorted([*BESIDE, 'INSTALL.txt']), beside)
+        self.assertIn(f'RELEASE-NOTES-{VERSION}.md', beside)
+        for name, source in BESIDE.items():
+            self.assertEqual((ROOT / source).read_bytes(), self.read(name), name)
+
+    def test_install_txt_says_how_to_check_upload_and_read_on(self):
+        text = self.read('INSTALL.txt').decode('utf-8')
+        zip_name = Path(self.first['zip']).name
+        self.assertIn(f'sha256sum -c {zip_name}.sha256', text)
+        self.assertIn('SHA-256', text)
+        self.assertIn('Upload the contents of upload/ into your site\'s folder', text)
+        self.assertIn('HOST-GUIDE.md', text)
+        self.assertIn(f'https://github.com/jimlunsford/legend-of-the-green-dragon-resurrection/blob/v{VERSION}/docs/HOST-GUIDE.md', text)
+        if '-rc.' in VERSION:
+            self.assertIn('A test build', text)
+            self.assertIn('not certified for public game hosting', text)
+        self.assertNotIn('@', text)  # every marker of docs/package/INSTALL.txt filled
+        self.assertTrue(text.isascii())
+        self.assertLessEqual(max(len(line) for line in text.splitlines()), 120)
+
+    def test_every_file_notice_names_is_in_the_package(self):
+        notice = (ROOT / 'NOTICE').read_text(encoding='utf-8')
+        named = set(re.findall(r'(?<![\w/.-])((?:[\w-]+/)*[\w.-]+\.(?:txt|md|php|htm)|assets/LICENSE)\b', notice))
+        named |= {folder for folder in re.findall(r'(?<![\w/.-])((?:[\w-]+/)+)(?=[\s),.;]|$)', notice, re.M)}
+        self.assertTrue({'LICENSE.txt', 'README.txt', 'THIRD-PARTY-LICENSES.md', 'assets/LICENSE', 'assets/fonts/'} <= named, named)
+        top = {name[len(TOP):] for name in self.all_names()}
+        uploaded = set(self.names())
+        def present(name):
+            if name.endswith('/'):
+                return any(path.startswith(name) for path in uploaded | top)
+            return name in top or name in uploaded
+        missing = [name for name in sorted(named) if not present(name)]
+        self.assertEqual([], missing)
 
     def test_nothing_denied_or_generated_is_inside(self):
         text = test_host_guide.guide()
@@ -63,8 +128,9 @@ class ReleasePackageTests(unittest.TestCase):
             return test_host_guide.matches(item, name)
         inside = [name for name in self.names() for item in denied if named(item, name)]
         self.assertEqual([], inside)
-        for name in self.names():
+        for name in self.all_names():
             self.assertFalse(name.startswith(('/', '../')) or '/../' in name or name.startswith('.'), name)
+        for name in self.names():
             self.assertNotIn(name.split('/')[0], ['tests', 'docs', 'vendor', 'lab', 'local', '.git', '.github'])
         # The upgrade step folder is there even with no step in it: StepCatalog::ids() refuses a missing one.
         self.assertIn('upgrades/README.md', self.names())
@@ -72,9 +138,11 @@ class ReleasePackageTests(unittest.TestCase):
     def test_license_and_credit_files_are_byte_identical_to_the_tree(self):
         with zipfile.ZipFile(self.first['zip']) as archive:
             for name in CREDITS:
-                self.assertEqual((ROOT / name).read_bytes(), archive.read(name), name)
-            for name in archive.namelist():
-                self.assertEqual((ROOT / name).read_bytes(), archive.read(name), name)
+                self.assertEqual((ROOT / name).read_bytes(), archive.read(UPLOAD + name), name)
+            for name in ['LICENSE.txt', 'README.txt', 'NOTICE']:
+                self.assertEqual((ROOT / name).read_bytes(), archive.read(TOP + name), name)
+            for name in self.names():
+                self.assertEqual((ROOT / name).read_bytes(), archive.read(UPLOAD + name), name)
 
     def test_two_builds_give_the_same_bytes(self):
         one, two = Path(self.first['zip']).read_bytes(), Path(self.second['zip']).read_bytes()

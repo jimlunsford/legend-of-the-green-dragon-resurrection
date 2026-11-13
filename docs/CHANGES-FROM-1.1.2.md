@@ -324,3 +324,21 @@ dated and no longer a draft (`docs/PHASE6-TASK14-RC1-VERSION-20261113.md`).
 
 What stands between `main` and the `v1.0.0-rc.1` tag now: this commit's CI acceptance; then the tag and the package
 (`docs/RC-CUT-CHECKLIST.md`, sections 2 to 5).
+
+### Phase 6 task 15: the `v1.0.0-rc.1` tag and pre-release
+
+Task 14 is accepted at `2bbc69d`. The annotated tag `v1.0.0-rc.1` is on it, and the package is published as a GitHub
+pre-release (`docs/PHASE6-TASK15-RC1-CUT-20261113.md`). No game behavior changes. Accepted at `95ae3f3`, Modern core
+43461940045 (all 14 jobs; the release upgrade check installed `v1.0.0-rc.1` and upgraded it on both legs), Baseline
+integrity 43461939958.
+
+### Phase 6 task 16: rc.1 server-test fixes, part 1 (R1 to R3)
+
+Found while installing `1.0.0-rc.1` on a real server (`ROADMAP.md`, "Found in the rc.1 server test";
+`docs/PHASE6-TASK16-20261113.md`). No gameplay, balance or text a player sees changes.
+
+| Area | 1.1.2 | Before (rc.1) | Now | Why | Source |
+|---|---|---|---|---|---|
+| The release package (R1) | A source archive with `README.txt`'s install steps (copy the files, run `installer.php`) | The zip held exactly the upload list at its top, with 1.1.2's `README.txt` as its only readme | One folder, `legend-of-the-green-dragon-resurrection-<version>/`: `upload/` (the upload list, unchanged), `INSTALL.txt` (check the SHA-256, upload the contents of `upload/`, read the host guide), the host guide, the release notes, `THIRD-PARTY-LICENSES.md`, `hosting/` with the sample rules, and copies of `LICENSE.txt`, `README.txt` and `NOTICE` | A host had no correct install instructions in the zip, and the documents must never land in the docroot, so they ship beside the upload | `scripts/build-release-package.py`, `docs/package/INSTALL.txt`, `tests/tooling/test_release_package.py` |
+| Document references in the game's pages (R2) | Pages linked `installer.php` and named no document | The not-installed, "Upgrade Needed" and "Game Unavailable" pages, `setup.php`'s upgrade failures, `installer.php`'s 403 and Game Settings' locked-setting note named `docs/MODERN-INSTALLATION.md` or `docs/HOST-GUIDE.md`, which are not on the server | Each links the host guide's section online at this version's tag (`resurrection_doc_url()`, `resurrection_doc_link()`, built from `RESURRECTION_SOURCE_URL` and `src/Version.php`), opening in place; `installer.php`'s plain-text 403 prints the address. The shell commands' refusal texts are unchanged | The pages sent operators to files that are not on the server; operators read the host guide, not the developer guide | `common.php`, `lib/setup/run.php`, `installer.php`, `lib/typed_editor.php`, `lib/source_link.php`, `tests/unit/DocLinkTest.php` |
+| `NOTICE`'s pointer (R3) | 1.1.2 had no `NOTICE` | It named `docs/THIRD-PARTY-LICENSES.md`, which the zip did not hold | It names `THIRD-PARTY-LICENSES.md` in the repository's docs folder and at the package's top level, and the package holds every file `NOTICE` names; the files in `upload/` that are not Resurrection's own are listed in `docs/THIRD-PARTY-LICENSES.md` | Every file the notice names should be where the notice says | `NOTICE`, `docs/THIRD-PARTY-LICENSES.md`, `tests/tooling/test_release_package.py` |
