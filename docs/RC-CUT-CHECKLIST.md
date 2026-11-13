@@ -2,7 +2,9 @@
 
 How `1.0.0-rc.1` (and any later `1.0.0-rc.N` or `1.0.0`) is cut. Written in Phase 6 task 7 (2026-11-07). For `1.0.0-rc.1`, section 0 is done and section 1 is
 made in Phase 6 task 14 (2026-11-13, `docs/PHASE6-TASK14-RC1-VERSION-20261113.md`), which also brought section 3's tag
-message up to date. No tag exists and no package has been published; `main` is `1.0.0-rc.1` from the version commit on.
+message up to date. Sections 2 to 4 are done in Phase 6 task 15 (2026-11-13,
+`docs/PHASE6-TASK15-RC1-CUT-20261113.md`): the tag `v1.0.0-rc.1` is on the accepted version commit and the package is
+published as a GitHub pre-release. `main` is `1.0.0-rc.1` from the version commit on.
 
 A cut happens only on the maintainer's explicit go (Jim). Every step that tags, publishes or attaches anything waits for
 that go, and a session never does them on its own. The steps are in order; a step that fails stops the cut.
@@ -61,9 +63,11 @@ Push with a normal, non-force `git push`. No tag yet.
 
 The version commit is accepted only when, on that exact commit:
 
-- [ ] Modern core is SUCCESS on both legs (PHP 8.4 with MariaDB 11.4, PHP 8.5 with MySQL 8.4): every `checks`, `http`
-      shard and `result` job, with the actual totals recorded.
-- [ ] Baseline integrity is SUCCESS.
+- [x] Modern core is SUCCESS on both legs (PHP 8.4 with MariaDB 11.4, PHP 8.5 with MySQL 8.4): every `checks`, `http`
+      shard and `result` job, with the actual totals recorded. For `1.0.0-rc.1`: run 43449051336 on `2bbc69d`, all 14
+      jobs, on `ubuntu-24.04` (PHP 8.4 shards 14:44, 10:29, 15:24, 14:50, 13:37; PHP 8.5 shards 17:33, 16:58, 17:46,
+      17:59, 10:32).
+- [x] Baseline integrity is SUCCESS. For `1.0.0-rc.1`: run 43449051323 on `2bbc69d`.
 
 A run that a later push cancelled is not acceptance, and no earlier commit's run stands in for it. A failed run stays on
 record. If anything fails, fix it in a new commit and start this section again on that commit; the tag goes on the
@@ -94,18 +98,27 @@ docs/RELEASE-NOTES-1.0.0-rc.1.md. Hosting: docs/HOST-GUIDE.md.
 (Brought up to date in Phase 6 task 14, 2026-11-13: until then the message listed "no account recovery or email
 verification" among the known issues, which S11 closed.)
 
+- [x] Done for `1.0.0-rc.1` in Phase 6 task 15 (2026-11-13): tag object `522be1c1dfbbb3fe020ebd6586c7b756372d233b`,
+      type commit, on `2bbc69dd50cb62ba3126bc05390b1f84ce34e507`, with the message above byte for byte. The session's
+      network refuses tag pushes, so `.github/workflows/release-cut.yml` made and pushed it (run 43458915150, started
+      by Jim from the Actions tab); the remote tag resolves to `2bbc69d`.
+
 Never move or delete the tag once pushed. `historical-source-1.1.2` is never touched.
 
 ## 4. The release package (only on Jim's go)
 
-- [ ] From a clean checkout of the tag: `python3 scripts/build-release-package.py --out <absolute folder outside the
+- [x] From a clean checkout of the tag: `python3 scripts/build-release-package.py --out <absolute folder outside the
       tree>`. It writes `legend-of-the-green-dragon-resurrection-1.0.0-rc.1.zip` and its `.zip.sha256`, and prints the
-      file count, size and SHA-256. Record all three.
-- [ ] Build it a second time into another folder; the SHA-256 must match.
-- [ ] Unzip it into an empty docroot, install through `setup.php`, and play to the village and one forest fight (the
-      run recorded in `docs/PHASE6-TASK7-RC-MATERIALS-20261107.md` is the pattern).
-- [ ] Attach the zip and its `.sha256` nowhere until Jim says where. The script itself never uploads, tags or publishes,
-      and it is not in the package (`docs/HOST-GUIDE.md`, "Do not upload").
+      file count, size and SHA-256. Record all three. For `1.0.0-rc.1`: 753 files, 3,626,284 bytes,
+      `f8b0a1d4f0bb153f649ff849972bb4a8649efd216ed0fec22bb88001cb4a7857`, the same as task 14's builds.
+- [x] Build it a second time into another folder; the SHA-256 must match. It matched, in the session and on the runner.
+- [x] Unzip it into an empty docroot, install through `setup.php`, and play to the village and one forest fight (the
+      run recorded in `docs/PHASE6-TASK7-RC-MATERIALS-20261107.md` is the pattern). Done in task 15: 41 tables, 24
+      modules with 23 active, the village and one forest fight, the footer showing `1.0.0-rc.1`.
+- [x] Attach the zip and its `.sha256` nowhere until Jim says where. The script itself never uploads, tags or publishes,
+      and it is not in the package (`docs/HOST-GUIDE.md`, "Do not upload"). For `1.0.0-rc.1` Jim said a GitHub
+      pre-release: https://github.com/jimlunsford/legend-of-the-green-dragon-resurrection/releases/tag/v1.0.0-rc.1
+      (not latest; the zip downloaded back has the same SHA-256).
 
 ## 5. After the tag
 
