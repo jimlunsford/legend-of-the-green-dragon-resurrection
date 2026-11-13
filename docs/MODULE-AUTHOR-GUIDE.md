@@ -84,6 +84,10 @@ The `header-graveyard` hook fires as it did in 1.1.2 (where `page_header()` call
   (`string`, `text`, `textarea`, `bool`, `int`, a bounded `int,LOW,HIGH`, `range`, `floatrange`, `amount`, `enum`,
   `enumpretrans`); `title`, `note`, `viewonly`, `invisible`, `hidden`, `bitfield` and `locked` are shown but never
   saved. Any other type is refused, so a module that declares one cannot be configured.
+- **The email address is not saved from the session.** Since Phase 6 task 13c `saveuser()` never writes
+  `emailaddress`, `emailverified` or `emailvalidation`: a module that sets `$session['user']['emailaddress']` changes
+  nothing in the database. A player changes the address in Preferences (with the current password, and while account
+  mail is on only through a link mailed to the new address); an administrator in the user editor.
 
 ### Every hook that fires
 

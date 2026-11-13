@@ -1,15 +1,20 @@
 <?php
 define('RESURRECTION_ENTRY', true);
 /**
- * Account mail's page (Phase 6 tasks 13a and 13b, S11 parts 1 and 2; docs/PHASE6-TASK12-ACCOUNT-MAIL-DESIGN-20261112.md,
- * sections 3.1 to 3.4, and its decisions). A link in an account mail opens it with a token:
+ * Account mail's page (Phase 6 tasks 13a, 13b and 13c, S11; docs/PHASE6-TASK12-ACCOUNT-MAIL-DESIGN-20261112.md,
+ * sections 3 and 4, and its decisions). A link in an account mail opens it with a token:
  *
  * - op=open: the token (query string t) is checked (shape, hash, unused, unexpired, at most 5 openings, the account's
  *   authversion unchanged) and exchanged for a 15-minute grant in a new session id, then a 303 to the clean address
- *   (op=reset for a recovery link, op=confirm for the test mail), with no body. The token is read and removed from the
+ *   (op=reset for a recovery link, op=confirm for the others), with no body. The token is read and removed from the
  *   request before the game starts, so no page, form, session, log, saved page, referer record or restore page ever
- *   holds it. A recovery link opens only while account mail is on.
- * - op=confirm: the test mail grant's page, and its POST (CSRF), which acts on the token in one transaction.
+ *   holds it. A recovery, verify or change link opens only while account mail is on.
+ * - op=confirm: the grant's page (the test mail, or, task 13c, a verify or change link: the account and the address),
+ *   and its POST (CSRF), which acts on the token in one transaction (lib/account_verify.php for verify and change). A
+ *   visitor signed in as another account is told to sign out first. After a change, a notice goes to the old verified
+ *   address once the page is sent.
+ * - op=resend (task 13c): the sign-in refusal of a sign-up that has not confirmed its address, behind the 10-minute
+ *   grant a correct password made in login.php; its POST (CSRF) sends the verify link again, within the limits.
  * - op=forgot (task 13b): the request form while account mail is on, one line while it is off; its POST (CSRF) gets
  *   the same page whatever it matched, and the lookup, the token and the mail run after that page is complete
  *   (lib/account_recovery.php).
@@ -33,7 +38,7 @@ if (is_string($resurrection_account_token) && preg_match('/\A[A-Za-z0-9_-]{43}\z
     });
 }
 $resurrection_account_op = is_string($_GET['op'] ?? null) ? $_GET['op'] : '';
-$resurrection_account_clean = in_array($resurrection_account_op, ['open', 'confirm', 'forgot', 'reset'], true) ? 'op=' . $resurrection_account_op : '';
+$resurrection_account_clean = in_array($resurrection_account_op, ['open', 'confirm', 'forgot', 'reset', 'resend'], true) ? 'op=' . $resurrection_account_op : '';
 $_SERVER['REQUEST_URI'] = 'account.php' . ($resurrection_account_clean === '' ? '' : '?' . $resurrection_account_clean);
 $_SERVER['QUERY_STRING'] = $resurrection_account_clean;
 define('ALLOW_ANONYMOUS', true);
@@ -45,6 +50,7 @@ require_once 'common.php';
 require_once 'lib/web_security.php';
 require_once 'lib/account_mail.php';
 require_once 'lib/account_recovery.php';
+require_once 'lib/account_verify.php';
 
 header('Referrer-Policy: no-referrer');
 header('Cache-Control: no-store');
@@ -67,23 +73,7 @@ function resurrection_account_nav(): void {
     addnav(!empty($session['loggedin']) ? 'Return to the game' : 'Login page', !empty($session['loggedin']) ? 'village.php' : 'index.php');
 }
 
-/**
- * Hold everything the page prints from here on, and when the request ends (page_footer() exits), send it with
- * resurrection_account_after_response(): $work after the page, or, with a floor and no way to complete the response
- * early, before a page held to the floor. The session is written and closed first, so the work never holds it.
- */
-function resurrection_account_send_then(callable $work, float $floor): void {
-    $level = ob_get_level();
-    ob_start();
-    register_shutdown_function(static function () use ($work, $floor, $level): void {
-        $page = '';
-        while (ob_get_level() > $level) $page = (string)ob_get_clean() . $page;
-        if (session_status() === PHP_SESSION_ACTIVE) session_write_close();
-        resurrection_account_after_response($page, $work, (float)($_SERVER['REQUEST_TIME_FLOAT'] ?? microtime(true)), $floor, resurrection_account_response_finisher());
-    });
-}
-
-$op = in_array($resurrection_account_op, ['open', 'confirm', 'forgot', 'reset'], true) ? $resurrection_account_op : '';
+$op = in_array($resurrection_account_op, ['open', 'confirm', 'forgot', 'reset', 'resend'], true) ? $resurrection_account_op : '';
 if ($op === 'forgot') {
     unset($resurrection_account_token);
     page_header('Forgot your password');
@@ -125,8 +115,9 @@ if ($op === 'open') {
         unset($token);
         resurrection_account_expired();
     }
-    // A recovery link opens only while account mail is on (section 6: links mailed earlier get the expired page).
-    $opened = resurrection_account_token_open($token, resurrection_account_mail_on() ? ['mailtest', 'recover'] : ['mailtest']);
+    // A recovery, verify or change link opens only while account mail is on (section 6: links mailed earlier get the
+    // expired page).
+    $opened = resurrection_account_token_open($token, resurrection_account_mail_on() ? ['mailtest', 'recover', 'verify', 'email'] : ['mailtest']);
     unset($token);
     if ($opened === null) resurrection_account_expired();
     resurrection_account_grant_store($opened);
@@ -184,7 +175,88 @@ if ($op === 'reset') {
     resurrection_account_nav();
     page_footer();
 }
+if ($op === 'resend') {
+    // The sign-in refusal for a sign-up that has not confirmed its address (task 13c, 4.1): only with the 10-minute
+    // grant a correct password made, while account mail is on and the account is still pending.
+    $acctid = resurrection_account_resend_grant();
+    $rows = $acctid === null ? [] : db_query('SELECT acctid,login,emailvalidation FROM ' . db_prefix('accounts') . ' WHERE acctid=?', true, [$acctid]);
+    if ($rows === [] || (string)$rows[0]['emailvalidation'] !== RESURRECTION_ACCOUNT_PENDING || !resurrection_account_mail_on()) {
+        unset($_SESSION['account_resend']);
+        resurrection_account_expired();
+    }
+    $said = '';
+    if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
+        resurrection_require_post();
+        $said = match (resurrection_account_verify_send((int)$rows[0]['acctid'])) {
+            'sent' => 'A new link is on its way to the address you signed up with. It works for 24 hours. Check your spam folder too.',
+            'limited' => 'Too many links were sent for this account. Try again later.',
+            default => 'The mail could not be sent. Try again later, or use Petition for Help.',
+        };
+    }
+    page_header('Confirm your email address first');
+    rawoutput('<section class="rz-account" aria-labelledby="rz-account-title"><h2 id="rz-account-title">Confirm your email address first</h2>');
+    if ($said !== '') rawoutput('<p class="rz-setting-refused" role="status">' . htmlspecialchars($said, ENT_QUOTES, 'UTF-8') . '</p>');
+    rawoutput('<p>The account <strong>' . htmlspecialchars((string)$rows[0]['login'], ENT_QUOTES, 'UTF-8') . '</strong> can sign in once its email address is confirmed. Open the link in the mail sent when the account was made, and press Confirm on the page it shows.</p>');
+    rawoutput('<form class="rz-account-form" action="account.php?op=resend" method="POST">' . resurrection_csrf_field()
+        . '<p><input type="submit" class="' . resurrection_button_class(true) . '" value="Send the link again"></p></form></section>');
+    addnav('', 'account.php?op=resend');
+    resurrection_account_nav();
+    page_footer();
+}
 if ($op !== 'confirm') resurrection_account_expired();
+
+// A verify or change link (task 13c, 4.1 and 4.2): its page names the account and the address, and its POST confirms.
+foreach (['verify', 'email'] as $purpose) {
+    $grant = resurrection_account_grant($purpose);
+    if ($grant === null) continue;
+    $view = resurrection_account_mail_on() ? resurrection_account_confirm_view($grant) : null;
+    if ($view === null) { resurrection_account_grant_clear(); resurrection_account_expired(); }
+    if (!empty($session['loggedin']) && (int)($session['user']['acctid'] ?? 0) !== $view['acctid']) {
+        page_header('Sign out first');
+        rawoutput('<section class="rz-account" aria-labelledby="rz-account-title"><h2 id="rz-account-title">Sign out first</h2>');
+        rawoutput('<p>This link is for another account than the one you are signed in as. Sign out, then open the link from the mail again. Nothing has changed.</p></section>');
+        resurrection_account_nav();
+        page_footer();
+    }
+    $login = htmlspecialchars($view['login'], ENT_QUOTES, 'UTF-8');
+    $address = htmlspecialchars($view['address'], ENT_QUOTES, 'UTF-8');
+    if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
+        resurrection_require_post();
+        try { $done = resurrection_account_confirm($grant); }
+        catch (DomainException $error) { resurrection_account_grant_clear(); resurrection_account_expired(); }
+        resurrection_account_grant_clear();
+        resurrection_rotate_session();
+        if ($purpose === 'verify') {
+            page_header('Address confirmed');
+            rawoutput('<section class="rz-account" aria-labelledby="rz-account-title"><h2 id="rz-account-title">Address confirmed</h2>');
+            rawoutput('<p>The address <strong>' . $address . '</strong> is now verified for the account <strong>' . $login . '</strong>. Password recovery by email works for it.</p>');
+            if ($done['pending']) rawoutput('<p>The account can sign in now.</p>');
+            rawoutput('</section>');
+        } else {
+            page_header('Address changed');
+            rawoutput('<section class="rz-account" aria-labelledby="rz-account-title"><h2 id="rz-account-title">Address changed</h2>');
+            rawoutput('<p>The email address of the account <strong>' . $login . '</strong> is now <strong>' . $address . '</strong>, and it is verified.</p>');
+            if ($done['oldverified']) rawoutput('<p>A notice is on its way to the old address.</p>');
+            rawoutput('</section>');
+            if ($done['oldverified']) {
+                resurrection_account_send_then(static function () use ($done): void {
+                    resurrection_account_email_notice($done['acctid'], $done['login'], $done['old'], true);
+                }, 0.0);
+            }
+        }
+        resurrection_account_nav();
+        page_footer();
+    }
+    page_header('Confirm your email address');
+    rawoutput('<section class="rz-account" aria-labelledby="rz-account-title"><h2 id="rz-account-title">Confirm your email address</h2>');
+    rawoutput($purpose === 'verify'
+        ? '<p>Confirm <strong>' . $address . '</strong> as the email address of the account <strong>' . $login . '</strong>. Nothing changes until you press Confirm.</p>'
+        : '<p>Make <strong>' . $address . '</strong> the email address of the account <strong>' . $login . '</strong>. The address changes only when you press Confirm.</p>');
+    rawoutput('<form class="rz-account-form" action="account.php?op=confirm" method="POST">' . resurrection_csrf_field() . '<input type="submit" class="' . resurrection_button_class(true) . '" value="Confirm"></form></section>');
+    addnav('', 'account.php?op=confirm');
+    resurrection_account_nav();
+    page_footer();
+}
 
 $grant = resurrection_account_grant('mailtest');
 if ($grant === null) resurrection_account_expired();

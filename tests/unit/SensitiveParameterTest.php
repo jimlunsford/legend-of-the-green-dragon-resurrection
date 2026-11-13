@@ -46,6 +46,13 @@ final class SensitiveParameterTest extends TestCase
         // Phase 6 task 13b: a recovery mail's body (its links), and the new password on the reset.
         'resurrection_account_recovery_deliver' => ['body'],
         'resurrection_account_recovery_reset' => ['password', 'repeat'],
+        // Phase 6 task 13c: the current password an address change needs, and the sign-in check that tells a pending
+        // sign-up apart.
+        'resurrection_account_email_change_refusal' => ['password'],
+        'resurrection_account_email_change_now' => ['password'],
+        'resurrection_account_email_change_request' => ['password'],
+        'resurrection_authenticate' => ['password'],
+        'resurrection_sign_in_check' => ['password'],
     ];
 
     public static function setUpBeforeClass(): void
@@ -53,7 +60,7 @@ final class SensitiveParameterTest extends TestCase
         require_once 'lib/names.php';
         ob_start();
         foreach (['constants', 'datacache', 'settings', 'modules', 'output', 'sanitize', 'translator', 'installer/install_run', 'webcron',
-                'pageparts', 'upgrade', 'setup/run', 'account_mail', 'account_mail_admin', 'account_recovery'] as $library) {
+                'pageparts', 'upgrade', 'setup/run', 'account_mail', 'account_mail_admin', 'account_recovery', 'account_verify', 'accounts'] as $library) {
             require_once 'lib/' . $library . '.php';
         }
         ob_end_clean();

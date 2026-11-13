@@ -52,13 +52,28 @@ function clearsettings(){
 /**
  * Settings the game holds at one value whatever the settings table stores (Phase 6 task 7): getsetting() returns this
  * value, and Game Settings shows the setting locked and refuses a change (lib/configuration_descriptors.php declares it
- * "locked"). requirevalidemail: with it on, create.php makes no account, and the email verification it stands for does
- * not exist (S11, a known limitation of rc.1). The lock goes when S11 ships.
+ * "locked"). requirevalidemail (Phase 6 task 13c, S11 decision 5; it was held off whatever the state until then): held
+ * off while account mail is not effectively on (a confirmed test mail for the current serverurl and sender, and the
+ * switch on), because without mail no sign-up could confirm its address. While account mail is on it is not held, and
+ * reads and saves as any other setting.
  *
  * @return array<string,string> setting => the value it is held at
  */
 function resurrection_locked_settings(): array {
-	return ['requirevalidemail' => '0'];
+	return resurrection_requirevalidemail_allowed() ? [] : ['requirevalidemail' => '0'];
+}
+
+/** The settings resurrection_locked_settings() may hold; getsetting() asks it only about these. */
+const RESURRECTION_LOCKABLE_SETTINGS = ['requirevalidemail'];
+
+/**
+ * Whether requirevalidemail may be on (decision 5): only while account mail is effectively on. Without a database
+ * connection nothing can be on.
+ */
+function resurrection_requirevalidemail_allowed(): bool {
+	if (empty($GLOBALS['dbinfo']['connection'])) return false;
+	require_once __DIR__ . '/account_mail.php';
+	return resurrection_account_mail_on();
 }
 
 /**
@@ -85,8 +100,10 @@ function resurrection_bounded_setting(string $settingname, mixed $value): mixed 
 function getsetting($settingname,$default){
 	global $settings;
 	global $DB_USEDATACACHE,$DB_DATACACHEPATH;
-	$locked = resurrection_locked_settings();
-	if (array_key_exists((string)$settingname, $locked)) return $locked[(string)$settingname];
+	if (in_array((string)$settingname, RESURRECTION_LOCKABLE_SETTINGS, true)) {
+		$locked = resurrection_locked_settings();
+		if (array_key_exists((string)$settingname, $locked)) return $locked[(string)$settingname];
+	}
 	if ($settingname=="usedatacache") return $DB_USEDATACACHE;
 		elseif ($settingname=="datacachepath") return $DB_DATACACHEPATH;
 	if (!isset($settings[$settingname])) {

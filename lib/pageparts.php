@@ -263,6 +263,12 @@ function page_footer($saveuser=true){
 
 		unset($nestedtags[$key]);
 	}
+	// The verify prompt (Phase 6 task 13c, S11): one line at the top of the content, on a signed-in page that links to
+	// Preferences, while account mail is on and the player's address is not verified and not dismissed for. Never on
+	// account.php (its quiet footer) or an operator page.
+	if (!$operator && !defined('RESURRECTION_QUIET_FOOTER') && !empty($session['loggedin']) && is_array($session['user'] ?? null)) {
+		$output = resurrection_verify_prompt_html() . $output;
+	}
 	// The page's hotkeys (Phase 5 task 6): 1.1.2 wrote an inline key handler script here; the page now carries
 	// its key map as data and loads the static assets/ui/keys.js, which does what that script did.
 	$script.=resurrection_nav_script();
@@ -920,6 +926,24 @@ function resurrection_header_control($page, $kind, $text, $label, $badge, $hot){
  *
  * @return string
  */
+/**
+ * The verify prompt for this page (lib/account_verify.php, resurrection_account_verify_prompt()): its link is the
+ * page's own Preferences nav, so it shows only where the page already lets the player go to Preferences, and its
+ * Dismiss form posts to prefs.php?op=dismissverify, which the page then allows.
+ */
+function resurrection_verify_prompt_html(){
+	global $session;
+	$nav = null;
+	foreach (array_keys(is_array($session['allowednavs'] ?? null) ? $session['allowednavs'] : array()) as $allowed) {
+		if ($allowed === 'prefs.php' || preg_match('/\Aprefs\.php\?c=[0-9]+-[0-9]{6}\z/', (string)$allowed)) { $nav = (string)$allowed; break; }
+	}
+	if ($nav === null || (string)($session['user']['emailaddress'] ?? '') === '') return "";
+	require_once __DIR__ . '/account_verify.php';
+	$html = resurrection_account_verify_prompt($session['user'], $nav);
+	if ($html !== "") addnav("", "prefs.php?op=dismissverify");
+	return $html;
+}
+
 function creditslink(){
 	global $session;
 	$href = null;

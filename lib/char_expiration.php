@@ -148,8 +148,11 @@ function resurrection_expire_characters(int $now): void {
 
     $cutoff = resurrection_expire_warning_cutoff($old, $now);
     if ($cutoff === null) return;
+    // While account mail is on, only verified addresses get the warning (decision 7, F3; Phase 6 task 13c).
+    require_once __DIR__ . '/account_mail.php';
+    $verified = resurrection_account_mail_on() ? " AND emailverified<>'' AND LOWER(emailverified)=LOWER(emailaddress)" : '';
     $rows = db_query('SELECT acctid,emailaddress FROM ' . db_prefix('accounts') .
-        " WHERE laston < ? AND emailaddress!='' AND sentnotice=0 AND (superuser&?)=0 ORDER BY acctid", true, [$cutoff, NO_ACCOUNT_EXPIRATION]);
+        " WHERE laston < ? AND emailaddress!='' AND sentnotice=0 AND (superuser&?)=0" . $verified . " ORDER BY acctid", true, [$cutoff, NO_ACCOUNT_EXPIRATION]);
     if (!$rows) return;
     $subject = translate_inline("LoGD Character Expiration");
     $body = resurrection_expire_warning_body();

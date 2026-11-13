@@ -39,8 +39,18 @@ try {
     resurrection_require_post();
     $name = Input::string($_POST, 'name');
     $password = Input::string($_POST, 'password');
-    $account = resurrection_authenticate($name, $password);
+    $check = resurrection_sign_in_check($name, $password);
     unset($password, $_POST['password']);
+    $account = $check['account'];
+    if (!$account && $check['pending'] !== null) {
+        // A sign-up that has not confirmed its address, with the right password, while account mail is on (Phase 6
+        // task 13c, S11 section 4.1): "Confirm your email address first", with a way to send the link again behind a
+        // 10-minute grant from this sign-in. A wrong password never gets here.
+        require_once 'lib/account_verify.php';
+        resurrection_account_resend_grant_store($check['pending']);
+        header('Location: account.php?op=resend', true, 303);
+        exit();
+    }
     if (!$account) {
         // Fixed event vocabulary only, never a request/session serialization.
         db_query('INSERT INTO ' . db_prefix('faillog') . ' (date,post,ip,acctid,id) VALUES (?,?,?,?,?)', true,

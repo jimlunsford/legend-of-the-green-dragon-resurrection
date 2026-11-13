@@ -1699,7 +1699,7 @@ echo "locked\\n";fflush(STDOUT);$change=json_decode(fgets(STDIN),true,512,JSON_T
                              r'<option selected>No</option></select></label><span class="rz-setting-locked-note" id="([^"]+)">([^<]+)</span></p>',body)
             self.assertIsNotNone(locked,'requirevalidemail is not shown locked')
             self.assertIn('aria-describedby="'+locked.group(1)+'"',body)
-            self.assertIn('Locked off.',locked.group(2)); self.assertIn('Known limitations',locked.group(2))
+            self.assertIn('Locked off.',locked.group(2)); self.assertIn('Turn on account mail first',locked.group(2))
             fields=dict(self._user_editor_form(body,save)); self.assertNotIn('requirevalidemail',fields)
             # A form that turns it on (or sends it at all) is refused, and no setting changes.
             for value in ['1','0']:

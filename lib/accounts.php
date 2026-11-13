@@ -11,8 +11,12 @@ function resurrection_validate_account(string $login, string $email): void {
     }
 }
 
-/** Caller owns the transaction; passwords arrive already hashed by the shared policy. */
-function resurrection_insert_account(string $login, #[\SensitiveParameter] string $hash, string $email, int $privileges = 0, int $sex = 0): int {
+/**
+ * Caller owns the transaction; passwords arrive already hashed by the shared policy. $pending makes a sign-up that must
+ * confirm its address before it can sign in (Phase 6 task 13c, S11 section 4.1): emailvalidation holds the marker
+ * 'rz-pending' (lib/account_verify.php), never a token.
+ */
+function resurrection_insert_account(string $login, #[\SensitiveParameter] string $hash, string $email, int $privileges = 0, int $sex = 0, bool $pending = false): int {
     resurrection_validate_account($login, $email);
     if (password_get_info($hash)['algo'] === null) { throw new InvalidArgumentException('A modern password hash is required.'); }
     $result = db_query('SELECT male,female FROM ' . db_prefix('titles') . ' WHERE dk=0 ORDER BY titleid LIMIT 1');
@@ -28,6 +32,7 @@ function resurrection_insert_account(string $login, #[\SensitiveParameter] strin
         'bufflist' => serialize([]), 'dragonpoints' => serialize([]), 'prefs' => serialize([]),
         'companions' => serialize([]), 'allowednavs' => serialize(['village.php' => true]),
     ];
+    if ($pending) $values['emailvalidation'] = 'rz-pending';
     db_query('INSERT INTO ' . db_prefix('accounts') . ' (' . implode(',', array_map('db_identifier', array_keys($values))) .
         ') VALUES (' . implode(',', array_fill(0, count($values), '?')) . ')', true, array_values($values));
     $id = db_insert_id();
@@ -35,12 +40,12 @@ function resurrection_insert_account(string $login, #[\SensitiveParameter] strin
     return $id;
 }
 
-function resurrection_create_account(string $login, #[\SensitiveParameter] string $password, string $email = '', int $sex = 0): int {
+function resurrection_create_account(string $login, #[\SensitiveParameter] string $password, string $email = '', int $sex = 0, bool $pending = false): int {
     $hash = \Resurrection\Security\Passwords::hash($password);
     $db = $GLOBALS['dbinfo']['connection'];
     $db->beginTransaction();
     try {
-        $id = resurrection_insert_account($login, $hash, $email, 0, $sex);
+        $id = resurrection_insert_account($login, $hash, $email, 0, $sex, $pending);
         $db->commit();
         return $id;
     } catch (Throwable $error) {
@@ -53,16 +58,41 @@ function resurrection_create_account(string $login, #[\SensitiveParameter] strin
  * @return array<string, mixed>|false
  */
 function resurrection_authenticate(string $login, #[\SensitiveParameter] mixed $password): array|false {
+    return resurrection_sign_in_check($login, $password)['account'];
+}
+
+/**
+ * The sign-in check: the account only after verifying a submitted plaintext password, refusing a locked account and an
+ * account whose emailvalidation is not empty. A pending sign-up (emailvalidation 'rz-pending', Phase 6 task 13c, S11
+ * section 4.3) is refused only while account mail is effectively on; when it is, and the password is right, its id
+ * comes back as 'pending', so that the sign-in page can say "Confirm your email address first". A wrong password, a
+ * missing login and a locked account all come back the same: no account, no pending id.
+ * @return array{account: array<string, mixed>|false, pending: int|null}
+ */
+function resurrection_sign_in_check(string $login, #[\SensitiveParameter] mixed $password): array {
     $result = db_query('SELECT * FROM ' . db_prefix('accounts') . ' WHERE login=? LIMIT 1', true, [$login]);
     $row = db_fetch_assoc($result);
-    if (!$row || (int)$row['locked'] !== 0 || $row['emailvalidation'] !== '' ||
-        !\Resurrection\Security\Passwords::verify($password, $row['password'])) { return false; }
+    if (!$row || (int)$row['locked'] !== 0 || !\Resurrection\Security\Passwords::verify($password, $row['password'])) { return ['account' => false, 'pending' => null]; }
+    if ($row['emailvalidation'] !== '') {
+        if ($row['emailvalidation'] !== 'rz-pending') { return ['account' => false, 'pending' => null]; }
+        if (resurrection_account_pending_blocked()) { return ['account' => false, 'pending' => (int)$row['acctid']]; }
+    }
     if (password_needs_rehash($row['password'], PASSWORD_DEFAULT)) {
         $hash = \Resurrection\Security\Passwords::hash($password);
         db_query('UPDATE ' . db_prefix('accounts') . ' SET password=? WHERE acctid=?', true, [$hash, (int)$row['acctid']]);
         $row['password'] = $hash;
     }
-    return $row;
+    return ['account' => $row, 'pending' => null];
+}
+
+/**
+ * Whether a pending sign-up is held back from signing in: while account mail is effectively on (decision 4). Where the
+ * game's settings cannot be read (a page that does not load them), it is held back.
+ */
+function resurrection_account_pending_blocked(): bool {
+    if (!function_exists('getsetting') || !function_exists('db_query')) { return true; }
+    require_once __DIR__ . '/account_mail.php';
+    return resurrection_account_mail_on();
 }
 
 /** Self-service changes require the current password; the caller rotates its session. */

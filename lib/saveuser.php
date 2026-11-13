@@ -10,6 +10,9 @@ require_once __DIR__ . '/../src/Game/DragonPointState.php';
 // addnews ready
 // mail ready
 
+/** Account columns saveuser() never writes (Phase 6 task 13c). */
+const RESURRECTION_SAVEUSER_NEVER = ['emailaddress', 'emailverified', 'emailvalidation'];
+
 function saveuser(){
 	global $session,$dbqueriesthishit,$baseaccount,$companions;
 	if (defined("NO_SAVE_USER")) return false;
@@ -33,6 +36,9 @@ function saveuser(){
         foreach ($session['user'] as $key => $value) {
             if (defined('RESURRECTION_NEWDAY_PRESENTATION') && !in_array($key, ['allowednavs','restorepage','gentime','gentimecount','gensize'], true)) { continue; }
             if ($key === 'password' || !array_key_exists($key, $baseaccount)) { continue; }
+            // The address and its verification change only through their own checked paths (Phase 6 task 13c, S11
+            // section 4.2: Preferences, a confirmation link, the user editor), never through the session's copy.
+            if (in_array($key, RESURRECTION_SAVEUSER_NEVER, true)) { continue; }
             // Every stored collection is encoded by its schema; any other array is refused, never stored unchecked.
             if ($key === 'dragonpoints') { $value = \Resurrection\Game\DragonPointState::encode($value); }
             elseif (is_array($value)) { throw new DomainException('Unencoded stored collection.'); }

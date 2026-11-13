@@ -1,7 +1,7 @@
 # Cutting a test build: the checklist
 
 How `1.0.0-rc.1` (and any later `1.0.0-rc.N` or `1.0.0`) is cut. Written in Phase 6 task 7 (2026-11-07). **Nothing here
-has been done yet.** No tag exists, no package has been published, and `main` is `1.0.0-dev`.
+has been done yet** but the two S11 lines below, which Phase 6 task 13c (2026-11-13) brought up to date. No tag exists, no package has been published, and `main` is `1.0.0-dev`.
 
 A cut happens only on the maintainer's explicit go (Jim). Every step that tags, publishes or attaches anything waits for
 that go, and a session never does them on its own. The steps are in order; a step that fails stops the cut.
@@ -12,8 +12,11 @@ that go, and a session never does them on its own. The steps are in order; a ste
 - [ ] S11 (mail, account recovery and email verification) has landed and been accepted by CI on both legs and
       Baseline, before the version commit: its design and threat model approved by Jim first, then the build, with the
       `requirevalidemail` lock lifted as the design says and the release notes and host guide updated (Jim,
-      2026-11-12: an rc.1 blocker).
-- [ ] The release notes no longer list S11 as a known issue.
+      2026-11-12: an rc.1 blocker). Built: the design approved (task 12, accepted at `ae4bd3b`), 13a and 13b accepted,
+      13c (verification, address changes, the lock lifted, the host guide and release notes) committed in
+      `PHASE6-TASK13C-20261113.md`; this box is ticked when 13c's CI acceptance is recorded.
+- [x] The release notes no longer list S11 as a known issue (Phase 6 task 13c: S11 moved into the changes; the
+      known issues keep that mail is `mail()` only and best effort, and that a link's token reaches the access log).
 - [ ] Every task before the cut is accepted: both Modern core legs and Baseline integrity at SUCCESS on its commit.
 - [ ] The release notes (`docs/RELEASE-NOTES-<version>.md`) list every open item a host or player can hit, checked
       against `ROADMAP.md` at the cut's starting commit.

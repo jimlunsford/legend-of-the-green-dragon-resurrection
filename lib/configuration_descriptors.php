@@ -51,7 +51,8 @@ function resurrection_core_layout(): array {
 		"maxrestartgold"=>"Maximum amount of gold a player will get after a dragonkill,int",
 		"maxrestartgems"=>"Maximum number of gems a player will get after a dragonkill,int",
 		"requireemail"=>"Require users to enter their email address,bool",
-		// Phase 6 task 7: held off (lib/settings.php, resurrection_locked_settings()); shown locked, never saved.
+		// Phase 6 task 7: held off (lib/settings.php, resurrection_locked_settings()); shown locked, never saved. Since
+		// task 13c only while account mail is not on; while it is on, a plain setting (below).
 		"requirevalidemail"=>"Require users to validate their email address,locked",
 		"blockdupeemail"=>"One account per email address,bool",
 
@@ -226,5 +227,8 @@ function resurrection_core_layout(): array {
  // New accounts gain no flags from configuration. 1.1.2's PayPal and LoGDnet settings are no longer declared at all
  // (payments and LoGDnet are removed); rows an existing database stores for them are left alone and never read.
  unset($setup['defaultsuperuser']);
+ // requirevalidemail is held off only while account mail is not on (Phase 6 task 13c, S11 decision 5); while it is on,
+ // it saves as any other yes/no setting, in the same place.
+ if (!array_key_exists('requirevalidemail', resurrection_locked_settings())) $setup['requirevalidemail']="Require users to validate their email address (sign-ups confirm their address by mail before they can sign in),bool";
  return $setup;
 }

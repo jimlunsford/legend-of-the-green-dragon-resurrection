@@ -837,6 +837,10 @@ a.hotmotd { color: var(--accent); }
 .rz-form-section > p.rz-setting-bounded > label > input { width: min(100%, 480px); }
 .rz-setting-bounds { display: block; max-width: 60ch; margin-top: 4px; color: var(--muted); font-family: var(--font-ui); font-size: var(--size-small); }
 .rz-content .rz-setting-refused { padding: 8px 12px; border: 1px solid var(--accent); border-radius: var(--radius-control); font-family: var(--font-ui); font-weight: var(--weight-ui-medium); }
+/* The verify prompt (Phase 6 task 13c, S11): one line above a page's content, with its Dismiss button beside it. */
+.rz-verify-prompt { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 8px 12px; margin: 0 0 16px; border: 1px solid var(--accent); border-radius: var(--radius-control); font-family: var(--font-ui); }
+.rz-verify-prompt p { flex: 1 1 24ch; margin: 0; }
+.rz-verify-prompt form { margin: 0; }
 
 /*
   The MoTD (Phase 5 task 11, lib/motd.php): each item's title in Cinzel, its author and date in --muted, its body in

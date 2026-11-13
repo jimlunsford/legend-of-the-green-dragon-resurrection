@@ -195,7 +195,7 @@ function resurrection_editor_locked(array $layout): array {
 /** Why a locked setting is locked, in one line for Game Settings. */
 function resurrection_editor_locked_reason(string $key): string {
     return match ($key) {
-        'requirevalidemail' => 'Locked off. The game cannot verify email addresses yet, so with this on nobody could create an account. This is a known limitation of this version: see "Known limitations" in the host guide (docs/HOST-GUIDE.md).',
+        'requirevalidemail' => 'Locked off. Turn on account mail first (Game Settings, Account mail): a sign-up can confirm its address only while the game can send mail. See "Mail" in the host guide (docs/HOST-GUIDE.md).',
         default => 'Locked.',
     };
 }

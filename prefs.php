@@ -86,6 +86,13 @@ if ($op=="suicide" && getsetting("selfdelete",0)!=0) {
     $oldvalues = $session['user']['prefs'];
 
 	$post = httpallpost();
+	// The address (Phase 6 task 13c, S11 section 4.2): its own forms and ops, never the preferences form.
+	require_once 'lib/prefs_email.php';
+	$emailnotice = '';
+	if (in_array($op, ['verifyemail', 'changeemail', 'dismissverify'], true)) {
+		$emailnotice = resurrection_prefs_email_op($op);
+		$post = [];
+	}
 	// A page rendered before this release may still post the old hidden field; it is never read. Nor is the Skin
 	// field such a page posts (Phase 5 task 15).
 	unset($post['oldvalues'], $post['template']);
@@ -98,6 +105,9 @@ if ($op=="suicide" && getsetting("selfdelete",0)!=0) {
             "pass1"=>1,
 			"pass2"=>1,
 			"email"=>1,
+			"emailpassword"=>1,
+			"newemail"=>1,
+			RESURRECTION_ACCOUNT_PROMPT_PREF=>1,
 			"bio"=>1
 		);
 		// Check the preferences this post would store before anything is changed.
@@ -161,26 +171,8 @@ if ($op=="suicide" && getsetting("selfdelete",0)!=0) {
 				$session['user']['biotime']=date("Y-m-d H:i:s");
 			}
 		}
-		$email = httppost('email');
-		if ($email!=$session['user']['emailaddress']){
-			if (is_email($email)){
-				if (getsetting("requirevalidemail",0)==1){
-					output("`#Your email cannot be changed, system settings prohibit it.");
-					output("(Emails may only be changed if the server allows more than one account per email.)");
-					output("Use the Petition link to ask the  server administrator to change your email address if this one is no longer valid.`n");
-				}else{
-					output("`#Your email address has been changed.`n");
-					$session['user']['emailaddress']=$email;
-				}
-			}else{
-				if (getsetting("requireemail",0)==1){
-					output("`#That is not a valid email address.`n");
-				}else{
-					output("`#Your email address has been changed.`n");
-					$session['user']['emailaddress']=$email;
-				}
-			}
-		}
+		// 1.1.2 changed the address from this form with no password and no check (F2); a page rendered before this
+		// release may still post the field, which is never read. The address has its own form below (Phase 6 task 13c).
 		output("Settings Saved");
 	}
 
@@ -191,7 +183,6 @@ if ($op=="suicide" && getsetting("selfdelete",0)!=0) {
 		"currentpassword"=>"Current password,password",
         "pass1"=>"New password (12 to 72 bytes),password",
 		"pass2"=>"Retype,password",
-		"email"=>"Email Address",
 		"Display Preferences,title",
 		"language"=>"Language,enum,".getsetting("serverlanguages","en,English,de,Deutsch,fr,Fran�ais,dk,Danish,es,Espa�ol,it,Italian"),
 		"tabconfig"=>"Show config sections in tabs,bool",
@@ -213,7 +204,6 @@ if ($op=="suicide" && getsetting("selfdelete",0)!=0) {
 	);
 	$prefs = $session['user']['prefs'];
 	$prefs['bio'] = $session['user']['bio'];
-	$prefs['email'] = $session['user']['emailaddress'];
 	// Default tabbed config to true
 	if (!isset($prefs['tabconfig'])) $prefs['tabconfig'] = 1;
 
@@ -311,6 +301,7 @@ if ($op=="suicide" && getsetting("selfdelete",0)!=0) {
 	
 	$form = array_merge($form, $msettings);
 	$prefs = array_merge($prefs, $mdata);
+	resurrection_prefs_email_section($emailnotice);
 	rawoutput("<form action='prefs.php?op=save' method='POST'>" . resurrection_csrf_field());
 	// 1.1.2 posted the shown values back as a serialized `oldvalues` field; the stored preferences are compared instead.
 	// Save is the page's primary action (Phase 5 task 9).

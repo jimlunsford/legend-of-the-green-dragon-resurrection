@@ -7,12 +7,11 @@ host: one with a shell (SSH) and one with only a hosting panel (cPanel, Plesk or
 The steps are short. Where a step depends on your kind of host, it says so. Words in `code font` are file names,
 commands, settings or values to type exactly.
 
-**Known limitations of a hosted game (rc.1).** There is no password recovery by email: an administrator resets a
-password in the user editor. There is no email verification: Game Settings shows `requirevalidemail` ("Require users
-to validate their email address") locked off, and the game treats it as off whatever the database holds, because with
-it on nobody could create an account. Both come with S11, planned for rc.1 (Jim, 2026-11-12). Mail from the game is best effort
-("Mail", below). The project's own public
-hosting gates are listed in `ROADMAP.md`, "Public hosting".
+**Known limitations of a hosted game (rc.1).** The game sends mail only through PHP's `mail()`: there is no SMTP
+setting, so the server needs a working mail program. Mail is best effort. Password recovery by email, email
+verification and confirmed address changes work only while account mail is on, and account mail turns on only after
+the game has proved its mail arrives (section 11); until then an administrator resets passwords in the user editor. The
+project's own public hosting gates are listed in `ROADMAP.md`, "Public hosting".
 
 ## 1. What you need
 
@@ -292,8 +291,9 @@ Open Game Settings (`configuration.php`, in the Grotto) as the administrator:
   its pages break under `enforce`. `report-only` blocks nothing and makes the browser report what it would block in
   its console; `off` sends no policy. The other protections (frame, content type, referrer) are sent whatever it
   says.
-- **Require users to validate their email address** (`requirevalidemail`): locked off; Game Settings shows it
-  locked and refuses a change (see the known limitations at the top).
+- **Require users to validate their email address** (`requirevalidemail`): shown locked off, with "Turn on account
+  mail first", until account mail is on (section 11). Then you may turn it on: a new player must confirm their address
+  by mail before they can sign in. If account mail goes off later, the game reads it as off again whatever is stored.
 
 ## 7. Daily maintenance
 
@@ -424,9 +424,10 @@ newer version shows "Game Unavailable" in an older one.
 ## 11. Mail
 
 The game sends mail through PHP's `mail()`: new in-game mail for players who asked for it, petition notices to the
-admin address (when `emailpetitions` is on) and warnings before an inactive character expires. `mail()` needs a mail
-transport on the server (most hosts have one; `sendmail_path` in PHP's settings points to it) and a real
-`gameadminemail` as the sender. Mail from a server address that does not match the site's domain often lands in spam.
+admin address (when `emailpetitions` is on), warnings before an inactive character expires, and account mail (below).
+`mail()` needs a mail transport on the server (most hosts have one; `sendmail_path` in PHP's settings points to it) and
+a real `gameadminemail` as the sender. Mail from a server address that does not match the site's domain often lands in
+spam. There is no SMTP setting.
 
 Mail is best effort. When a message cannot be handed to the transport, the game goes on:
 
@@ -435,7 +436,63 @@ Mail is best effort. When a message cannot be handed to the transport, the game 
 - An expiration warning that could not be sent is tried again at the next maintenance; the game log (char expiration)
   counts them.
 
-Password recovery and email verification do not exist in this version (the known limitations at the top).
+### Account mail
+
+Account mail is the mail that carries a link: password recovery, email verification and the confirmation of a new
+address. It is off after the install, and it turns on only when the game has proved that its mail arrives. While it is
+off, the game works as 1.1.2 did without its recovery and validation mail: players see no recovery link, Preferences
+tells them to use Petition for Help to ask an administrator for a new password, and you reset passwords in the user
+editor.
+
+To turn it on:
+
+1. In Game Settings set **Server URL** to the game's `https://` address and **Admin Email** to a real address on the
+   site's own domain (not the default `postmaster@localhost.com`). Every link in a mail is built from the Server URL,
+   never from the request, so a wrong Server URL means dead links. Add an email address to your own administrator
+   account in Preferences.
+2. In Game Settings, Account mail, press "Send a test mail to my address". The page says whether the server's mail
+   program accepted it. Open the mail and press Confirm on the page its link shows. If it does not arrive within a few
+   minutes, check the spam folder, then the panel's mail log; on a VPS, point PHP's `sendmail_path` at a working relay
+   client.
+3. Press "Turn account mail on". The section lists anything still missing. Changing the Server URL or Admin Email
+   later takes account mail out of effect until a new test mail is confirmed for them; turning it off is always
+   allowed.
+
+While account mail is on:
+
+- **Password recovery.** The sign-in page links to "Forgot your password?". A recovery link goes only to an address
+  the player has verified, works for 30 minutes and once, and every request gets the same answer whatever it matched.
+  Staff accounts may recover too, and every other megauser gets a game mail after a staff reset; "Exclude staff
+  accounts from recovery" in the Account mail section (`account_mail_staff`) turns that off, and you then reset staff
+  passwords in the user editor.
+- **Verification.** A player verifies their address from Preferences ("Verify my address"); the link works for 24
+  hours. A signed-in player whose address is not verified sees a one-line reminder, which they can dismiss.
+- **Address changes.** A player changes their address in Preferences with their current password; the address changes
+  only when the link mailed to the new address is confirmed, and a verified old address gets a notice of the request
+  and of the change, without the new address or a link. While account mail is off, a change takes effect at once
+  (still with the current password) and leaves the address unverified.
+- **Notification mail** (new in-game mail and expiration warnings) goes only to verified addresses.
+- **Require users to validate their email address** (`requirevalidemail`) can be turned on. A new player must then give
+  an address and confirm it by mail before they can sign in; after the right password, the sign-in page offers to send
+  the link again. Unconfirmed sign-ups are removed by daily maintenance after
+  **Days to keep never logged-in accounts? (0 = infinite)** (`expiretrashacct`) days, 1 by default; at 0 they stay
+  until you delete them, and their names stay taken. In the user editor, clearing an account's email validation lets
+  it sign in at once.
+- **Limits.** Each account gets at most 3 recovery or verification mails an hour and 6 a day and 3 address change
+  requests a day, each address at most 5 mails a day, and each network address at most 10 recovery requests, 30 link
+  opens and 5 sign-ups an hour. The whole game sends at most **Most account mail sent in one hour**
+  (`account_mail_hourly`, 100 by default) account mails an hour; the game log (account mail) says when that limit
+  was reached.
+  The limits count the connecting address only (`REMOTE_ADDR`), so behind a proxy every player shares one.
+
+If mail stops working, Game Settings, Account mail shows the mails refused in the last 24 hours, and the game log
+(account mail) has a line for each. Turn account mail off: new players can sign up without verification, and players
+waiting for a confirmation can sign in.
+
+**Access logs.** A link in account mail carries its one-use token in the address. The game never logs or shows it,
+but your web server's access log records the address a player opens, with the token, and keeps it for the link's
+life: 30 minutes for a recovery link, 24 hours for a verification, address change or test mail link. Keep access logs
+and statistics behind the panel login, as for the setup token.
 
 ## 12. Logs
 
@@ -512,4 +569,6 @@ This guide follows the code at the commit that added it. The evidence for each p
 guard, the configuration page, `LOGD_DBCONNECT`, `vendor/`), `docs/PHASE6-TASK4-WEB-OPS-DESIGN-20261106.md` (section 7
 and its decisions), `docs/PHASE6-TASK5A-SERVICES-WEBCRON-20261106.md` (maintenance, web maintenance),
 `docs/PHASE6-TASK5B-SETUP-PAGE-20261106.md` (`setup.php`) and `docs/PHASE6-TASK6-HOST-GUIDE-20261107.md` (this guide,
-the sample rules and their checks). Local play and development are in `docs/MODERN-INSTALLATION.md`.
+the sample rules and their checks). Section 11's account mail follows `docs/PHASE6-TASK12-ACCOUNT-MAIL-DESIGN-20261112.md`
+(section 11) and the tasks that built it: `docs/PHASE6-TASK13A-20261112.md`, `docs/PHASE6-TASK13B-20261112.md` and
+`docs/PHASE6-TASK13C-20261113.md`. Local play and development are in `docs/MODERN-INSTALLATION.md`.

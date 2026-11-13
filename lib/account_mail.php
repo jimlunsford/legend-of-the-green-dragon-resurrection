@@ -475,3 +475,13 @@ function resurrection_account_mail_cleanup(?int $now = null): array {
     db_query('DELETE FROM ' . db_identifier(db_prefix('account_mail_log')) . ' WHERE date<?', true, [date('Y-m-d H:i:s', $now - 30 * 86400)]);
     return ['tokens' => $tokens, 'log' => db_affected_rows()];
 }
+
+/**
+ * Whether a notification mail (in-game mail, the expiration warning) may go to an address (decision 7, F3; Phase 6
+ * task 13c): always while account mail is off, as in 1.1.2; while it is on, only to an address verified for the
+ * account, so a player cannot point a stranger's inbox at the game.
+ */
+function resurrection_account_mail_notify_allowed(string $address, string $verified): bool {
+    if (!resurrection_account_mail_on()) return true;
+    return $address !== '' && $verified !== '' && strtolower($verified) === strtolower($address);
+}

@@ -24,7 +24,7 @@ function systemmail($to, $subject, $body, $from=0, $noemail=false) {
         $ids = array_unique(array_filter([$to, $sender])); sort($ids, SORT_NUMERIC);
         $accounts = [];
         foreach ($ids as $id) {
-            $rows = db_query('SELECT acctid,login,name,superuser,locked,prefs,emailaddress FROM '.db_prefix('accounts').' WHERE acctid=? FOR UPDATE', true, [$id]);
+            $rows = db_query('SELECT acctid,login,name,superuser,locked,prefs,emailaddress,emailverified FROM '.db_prefix('accounts').' WHERE acctid=? FOR UPDATE', true, [$id]);
             if (count($rows) === 1) $accounts[$id] = $rows[0];
         }
         if (!isset($accounts[$to])) {
@@ -103,6 +103,12 @@ function resurrection_systemmail_deliver($to,$subject,$body,$from,$noemail,$row,
 	if (isset($row['emailaddress'])) $emailadd = $row['emailaddress'];
 
 	if (filter_var($emailadd, FILTER_VALIDATE_EMAIL) === false) $email=false;
+	// While account mail is on, a notification goes only to an address verified for the account (decision 7, F3;
+	// Phase 6 task 13c). While it is off, as in 1.1.2.
+	if ($email && !$noemail) {
+		require_once __DIR__ . '/account_mail.php';
+		if (!resurrection_account_mail_notify_allowed((string)$emailadd, (string)($row['emailverified'] ?? ''))) $email=false;
+	}
 	if ($email && !$noemail){
 		if ($serialized&2){
 			$body = \Resurrection\Security\MailContent::translated(\Resurrection\Security\ScalarState::read($body));

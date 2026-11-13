@@ -135,13 +135,20 @@ Account mail (S11; Phase 6 task 13a, `docs/PHASE6-TASK12-ACCOUNT-MAIL-DESIGN-202
   link that cannot be used gets the one fixed 400 page.
 - Limits are keyed on `REMOTE_ADDR` only, never a forwarded header, and count every request whether or not an account
   matched.
-- The switch turns on only when every condition holds; turning it off is always allowed. `requirevalidemail` stays
-  locked until task 13c lifts it as the design says.
+- The switch turns on only when every condition holds; turning it off is always allowed. `requirevalidemail` reads as
+  on only while account mail is effectively on (`resurrection_locked_settings()`, task 13c); never make it hold
+  without account mail, or nobody could sign up and confirm.
 - Password recovery (task 13b, `lib/account_recovery.php`): every forgot-password request that passes CSRF gets the
   same page, status, headers and cookies, whatever it matched. Its work (limits, lookup, token, mail) runs after the
   page is complete (`resurrection_account_after_response()`), with the 1.5-second floor where the server cannot finish
   a response early. A recovery mail goes only to an address verified for the account. `account.php` pages show no
   time-dependent footer (`RESURRECTION_QUIET_FOOTER`); keep them free of anything that differs per request.
+- Verification and the address change (task 13c, `lib/account_verify.php`, `lib/prefs_email.php`): an address is
+  verified only while `emailverified` equals `emailaddress`, so any change leaves it unverified. `saveuser()` never
+  writes `emailaddress`, `emailverified` or `emailvalidation`; an address changes only through Preferences' section
+  (the current password, the anchored check, `blockdupeemail`; while account mail is on only by a confirmed link to
+  the new address) or the user editor. Every confirm page acts only on a POST. While account mail is on, notification
+  mail goes only to verified addresses (`resurrection_account_mail_notify_allowed()`).
 - Tests and CI never send mail. Every test web server runs with a mail capture (`tests/tooling/mail_capture.py`;
   `start_php_server()` refuses one without); PHPUnit runs with `sendmail_path=/bin/false` (CI's `ini-values`;
   `MailCaptureGuardTest` and `test_mail_capture.py` fail otherwise). A test that needs a message uses a capture.

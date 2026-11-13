@@ -61,6 +61,8 @@ parameters:
         - lib/account_mail.php
         - lib/account_mail_admin.php
         - lib/account_recovery.php
+        - lib/account_verify.php
+        - lib/prefs_email.php
         - scripts/install.php
         - scripts/upgrade.php
     bootstrapFiles:

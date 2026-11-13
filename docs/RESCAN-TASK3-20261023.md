@@ -364,6 +364,14 @@ are not listed.
 | `lib/account_recovery.php` | `db_identifier(db_prefix('account_tokens'))` | 2 | server | `db_identifier()` of a fixed table name (the 5-minute rule's count of live recovery tokens, and the reset using up every recovery token of the account). |
 | `lib/account_recovery.php` | `db_identifier(db_prefix('accounts'))` | 2 | server | `db_identifier()` of a fixed table name (the 5-minute rule's account join, and the megausers a staff reset notifies). |
 | `lib/account_recovery.php` | `db_identifier(db_prefix('bans'))` | 1 | server | `db_identifier()` of a fixed table name (`checkban()`'s ban query, without its session side effects); the IP, ID and date are bound. |
+| `lib/account_verify.php` | `$accounts` | 4 | server | `db_identifier(db_prefix('accounts'))`: the confirmation's reads and updates of the account (task 13c); the account ID, the addresses and `authversion` are bound. |
+| `lib/account_verify.php` | `$tokens` | 4 | server | `db_identifier(db_prefix('account_tokens'))`: the change request's companion row and the confirmation's lookup and use of it; the hash, the address, the account ID, the token ID and the times are bound. |
+| `lib/account_verify.php` | `db_identifier(db_prefix('account_tokens'))` | 2 | server | `db_identifier()` of a fixed table name (retiring an account's live tokens of fixed purposes, the confirmation page's token lookup). |
+| `lib/account_verify.php` | `db_identifier(db_prefix('accounts'))` | 6 | server | `db_identifier()` of a fixed table name (the verify mail's and the change request's account read, the change's lock and update, the duplicate address check). |
+| `lib/account_verify.php` | `implode(',', array_fill(0, count($purposes), '?'))` | 1 | server | One `?` placeholder per purpose of a fixed list given in the code; the purposes themselves are bound. |
+| `lib/char_expiration.php` | `$verified` | 1 | server | A fixed condition literal in the function, added while account mail is on (task 13c, F3): only verified addresses get the expiration warning. |
+| `lib/prefs_email.php` | `db_identifier(db_prefix('account_tokens'))` | 1 | server | `db_identifier()` of a fixed table name (whether an address change is waiting for its link); the account ID and the time are bound. |
+| `lib/prefs_email.php` | `db_identifier(db_prefix('accounts'))` | 1 | server | `db_identifier()` of a fixed table name (the same count's account join). |
 | `lib/accounts.php` | `implode(',', array_fill(0, count($values), '?'))` | 1 | server | Placeholders; the values are bound. |
 | `lib/accounts.php` | `implode(',', array_map('db_identifier', array_keys($values)))` | 1 | server | `db_identifier()` of the fixed column names of the new account array. |
 | `lib/admin_authority.php` | `$columns` | 1 | server | Fixed column lists from every caller (`donators.php`, `lib/admin_authority.php`, `lib/user/user_del.php`, `lib/user/user_setupban.php`, `lib/user_editor.php`). |
@@ -658,3 +666,19 @@ list:
 
 No request value reaches the SQL text: the login or address typed on the forgot-password page, the token's hash, the
 times and the account IDs are bound. The test and its matching are unchanged.
+
+## Reviewed list change, 2026-11-13 (Phase 6 task 13c)
+
+Task 13c's email verification and email change (`lib/account_verify.php`, `lib/prefs_email.php`) and the expiration
+warning's verified-only rule (`lib/char_expiration.php`, F3) put fixed table names, one placeholder list and one fixed
+condition into SQL text, and `SqlSweepTest` failed locally ("Interpolated into SQL and not reviewed") until they were
+reviewed onto the list:
+
+- Fixed table names through the configured prefix and `db_identifier()`: `accounts` and `account_tokens`. `$accounts`
+  and `$tokens` hold them.
+- One `?` per purpose for the fixed purpose lists the code passes when it retires an account's live tokens.
+- `$verified`: `AND emailverified<>'' AND LOWER(emailverified)=LOWER(emailaddress)`, a literal, or empty while account
+  mail is off.
+
+No request value reaches the SQL text: the addresses, the password check's account, the tokens' hashes, the times and
+the account IDs are bound. The test and its matching are unchanged.

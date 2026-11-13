@@ -247,3 +247,20 @@ function resurrection_account_quiet_work(callable $work): void {
     catch (Throwable $error) { error_log('Account mail: the work after a response failed (' . $error::class . ').'); }
     finally { ob_end_clean(); }
 }
+
+/**
+ * Hold everything the page prints from here on, and when the request ends (page_footer() exits), send it with
+ * resurrection_account_after_response(): $work after the page, or, with a floor and no way to complete the response
+ * early, before a page held to the floor. The session is written and closed first, so the work never holds it.
+ * (account.php's since task 13b; here since task 13c, which uses it for sign-up's verify mail in create.php too.)
+ */
+function resurrection_account_send_then(callable $work, float $floor): void {
+    $level = ob_get_level();
+    ob_start();
+    register_shutdown_function(static function () use ($work, $floor, $level): void {
+        $page = '';
+        while (ob_get_level() > $level) $page = (string)ob_get_clean() . $page;
+        if (session_status() === PHP_SESSION_ACTIVE) session_write_close();
+        resurrection_account_after_response($page, $work, (float)($_SERVER['REQUEST_TIME_FLOAT'] ?? microtime(true)), $floor, resurrection_account_response_finisher());
+    });
+}

@@ -672,3 +672,17 @@ What stands between `main` and the `v1.0.0-rc.1` tag, in order: task 11's CI acc
 model, approved by Jim; the S11 build, accepted by CI, with the `requirevalidemail` lock lifted as the design says and
 the release notes and host guide updated; Jim's go; the version commit and its CI acceptance; then the tag and the
 package (`ROADMAP.md`, Phase 6; `docs/RC-CUT-CHECKLIST.md`).
+
+## S11 built (recorded 2026-11-13, Phase 6 task 13c)
+
+Task 12 (the S11 design) is accepted at `ae4bd3b`, task 13a at `127c058` and task 13b at `a4c2ea7` (Modern core
+43333363270, all 14 jobs; Baseline integrity 43333363385). Task 13c builds the last part (`docs/PHASE6-TASK13C-20261113.md`).
+The rows above change as follows:
+
+| ID | Status after task 13c | Where |
+|---|---|---|
+| 11.2 | RISK, lower: PHP `mail()` only, best effort; recovery, verification and confirmed address changes exist while the host has account mail on, which needs a confirmed test mail | `docs/HOST-GUIDE.md`, "Mail" |
+| S11 | Built: the foundation (13a), password recovery (13b), and verification, address changes (F2), notifications to verified addresses only (F3), the verify prompt and the `requirevalidemail` lock lifted while account mail is on (13c). Done when 13c is accepted by CI | `docs/SECURITY-STATUS.md` (row "Mail and recovery", gate ticked), `docs/RELEASE-NOTES-1.0.0-rc.1.md`, `docs/HOST-GUIDE.md`, `docs/RC-CUT-CHECKLIST.md` |
+
+What stands between `main` and the `v1.0.0-rc.1` tag, in order: task 13c's CI acceptance; Jim's go; the version
+commit and its CI acceptance; then the tag and the package (`ROADMAP.md`, Phase 6; `docs/RC-CUT-CHECKLIST.md`).

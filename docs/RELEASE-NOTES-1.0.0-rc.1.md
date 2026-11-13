@@ -3,7 +3,7 @@
 **Draft. This test build has not been cut.** There is no `v1.0.0-rc.1` tag and no package yet: the cut happens only on
 the maintainer's go, by `docs/RC-CUT-CHECKLIST.md`. Until then `main` is `1.0.0-dev`. Written in Phase 6 task 7
 (2026-11-07) from `docs/CHANGES-FROM-1.1.2.md`, which holds every change in full with its evidence; brought up to date
-in Phase 6 task 8 (2026-11-12).
+in Phase 6 task 8 (2026-11-12), and for account mail (S11) in Phase 6 task 13c (2026-11-13).
 
 ## What Resurrection is
 
@@ -40,7 +40,15 @@ The level a host or player notices. Each line is a group of rows in `docs/CHANGE
 - **Phone layout.** On a phone, account creation and the companion and mount editors put each label above its field,
   the Warriors list, the Hall of Fame, Dag's bounty list and the module list fit the screen, and an admin table that is
   wider than the screen scrolls inside its own box.
-- **No password recovery by email** in this build (see "Known issues").
+- **Password recovery by email**, once the host has turned account mail on: "Forgot your password?" on the sign-in
+  page mails a link that works for 30 minutes and once, only to an address you have verified. Every request gets the
+  same answer, so it does not tell anyone which names or addresses exist.
+- **Your email address, verified.** Preferences shows whether your address is verified and can mail you a link to
+  verify it; a one-line reminder says so until you do or dismiss it. Changing the address needs your current password,
+  and while account mail is on it changes only when you confirm a link mailed to the new address; a verified old
+  address is told, without the new address.
+- **New accounts may need to confirm their address**, when the host turns on "Require users to validate their email
+  address": the sign-in waits until the link mailed at sign-up is confirmed, and can send it again.
 
 ### For hosts
 
@@ -61,7 +69,14 @@ The level a host or player notices. Each line is a group of rows in `docs/CHANGE
 - **Hardened responses.** Security headers and an enforced Content Security Policy on every page (`csp_mode`), and the
   game's internal files answer a direct request with an empty 404.
 - **Removed surfaces.** LoGDnet, the raw SQL and PHP console, PayPal payments and the payment log, the source viewer
-  (the footer's "View PHP Source" link now opens the public source, `sourceurl`), and password recovery.
+  (the footer's "View PHP Source" link now opens the public source, `sourceurl`), and 1.1.2's password recovery and
+  validation links.
+- **Account mail.** Recovery, verification and address change mail stay off until the host proves the game's mail
+  arrives: an `https://` Server URL, a real sender and a test mail confirmed from Game Settings, Account mail. Then one
+  switch turns it on (and off, always). Links come only from the Server URL; tokens are random, stored only as a hash,
+  bound to their account and purpose, short-lived and used once; every kind of mail has limits. While account mail is
+  on, new-mail and expiration notices go only to verified addresses, and `requirevalidemail` can be turned on; while it
+  is off, it reads as off. Staff accounts can be excluded from recovery. Host guide, "Mail".
 - **Modules.** The 24 bundled modules are certified; a fresh install turns on the 23 recommended ones. Only bundled
   modules install. None of 1.1.2's archive modules is included.
 - **A credit line** under 1.1.2's on every page: "A Phoenix 2:33 LLC Project by Jim Lunsford", with its two links: the
@@ -86,12 +101,12 @@ bundled modules.
 
 ## Known issues
 
-- **No account recovery or email verification (S11).** A player who forgets a password asks an administrator, who
-  resets it in the user editor. Game Settings shows "Require users to validate their email address"
-  (`requirevalidemail`) locked off, and the game treats it as off whatever the database holds, because with it on
-  nobody could create an account. Planned for rc.1; removed when S11 lands (Jim, 2026-11-12: an rc.1 blocker).
-- **Mail is best effort.** The game sends mail with PHP's `mail()`. A message that cannot be handed over is logged and
-  the game goes on (host guide, "Mail").
+- **Mail is best effort, through PHP's `mail()` only.** There is no SMTP setting. A message that cannot be handed over
+  is logged and the game goes on (host guide, "Mail"). Until the host turns account mail on, there is no recovery by
+  email: an administrator resets a password in the user editor.
+- **A link's token reaches the web server's access log.** The game never logs it, but the server records the address
+  a player opens for the link's life (30 minutes for recovery, 24 hours otherwise); the host guide says to keep logs
+  behind the panel login.
 - **1.1.2 behaviors kept as they were** (`ROADMAP.md`, Phase 3, "Recorded, not changed"), among them: a ban reason is
   shown to the banned visitor as raw HTML (staff write it); clearing the `lgi` cookie evades an ID ban; weapon, armor and
   title text allows color codes; the clan-delete hook is not called on disband; the healer resets hitpoints above the
