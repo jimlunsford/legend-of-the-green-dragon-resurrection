@@ -1,6 +1,6 @@
 # Resurrection versioning
 
-Current version: `1.0.0-dev`
+Current version: `1.0.0-rc.1`
 
 Resurrection has its own version numbers, `MAJOR.MINOR.PATCH`. They do not continue Legend of the Green Dragon 1.1.2's: the game it is built from stays "1.1.2 Dragonprime Edition", which the about page and the footer still credit.
 
@@ -8,7 +8,7 @@ Resurrection has its own version numbers, `MAJOR.MINOR.PATCH`. They do not conti
 
 `src/Version.php` sets the version, once. `project.json` and the line above must say the same; `tests/tooling/test_version.py` and `scripts/validate-project.py` fail if they disagree or if the version is not a valid semantic version in one of the forms below. Change it only when a task or release decision says to.
 
-The footer shows "Version: Resurrection 1.0.0-dev, based on LoGD 1.1.2 Dragonprime Edition", and the home page shows the same after "Game server running version:". The version is only shown. Whether a database needs an upgrade is decided by the upgrade steps it has applied, never by this string (`docs/MODERN-INSTALLATION.md`, "Upgrading").
+The footer shows "Version: Resurrection 1.0.0-rc.1, based on LoGD 1.1.2 Dragonprime Edition", and the home page shows the same after "Game server running version:". The version is only shown. Whether a database needs an upgrade is decided by the upgrade steps it has applied, never by this string (`docs/MODERN-INSTALLATION.md`, "Upgrading").
 
 ## What each part means
 
@@ -30,7 +30,7 @@ Gameplay, balance, text and the interface change only when a task decides it, on
 - **After the release's tag** (`v1.0.0`), the first commit on `main` sets the next number with `-dev` (`1.1.0-dev`, or `1.0.1-dev` when only fixes are planned), as above.
 - The version changes only in a version commit: a cut's, on an explicit release decision, or the one right after a release's tag (`docs/RC-CUT-CHECKLIST.md`).
 
-A test build or release gets a tag `vMAJOR.MINOR.PATCH` or `vMAJOR.MINOR.PATCH-rc.N` (for example `v1.0.0-rc.1`), only on an explicit release decision. No such tag exists yet. `-dev` versions are never tagged.
+A test build or release gets a tag `vMAJOR.MINOR.PATCH` or `vMAJOR.MINOR.PATCH-rc.N` (for example `v1.0.0-rc.1`), only on an explicit release decision. The version commit for `1.0.0-rc.1` was made on 2026-11-13 (Jim's go); its tag, `v1.0.0-rc.1`, goes on that commit once CI accepts it, and from then on `main` keeps `1.0.0-rc.1` until the next cut. `-dev` versions are never tagged.
 
 ## Upgrades
 

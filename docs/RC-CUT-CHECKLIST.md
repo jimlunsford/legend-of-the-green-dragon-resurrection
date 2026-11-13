@@ -1,25 +1,31 @@
 # Cutting a test build: the checklist
 
-How `1.0.0-rc.1` (and any later `1.0.0-rc.N` or `1.0.0`) is cut. Written in Phase 6 task 7 (2026-11-07). **Nothing here
-has been done yet** but the two S11 lines below, which Phase 6 task 13c (2026-11-13) brought up to date. No tag exists, no package has been published, and `main` is `1.0.0-dev`.
+How `1.0.0-rc.1` (and any later `1.0.0-rc.N` or `1.0.0`) is cut. Written in Phase 6 task 7 (2026-11-07). For `1.0.0-rc.1`, section 0 is done and section 1 is
+made in Phase 6 task 14 (2026-11-13, `docs/PHASE6-TASK14-RC1-VERSION-20261113.md`), which also brought section 3's tag
+message up to date. No tag exists and no package has been published; `main` is `1.0.0-rc.1` from the version commit on.
 
 A cut happens only on the maintainer's explicit go (Jim). Every step that tags, publishes or attaches anything waits for
 that go, and a session never does them on its own. The steps are in order; a step that fails stops the cut.
 
 ## 0. Before the cut starts
 
-- [ ] Jim has said go for this cut, naming the version (`1.0.0-rc.1`).
-- [ ] S11 (mail, account recovery and email verification) has landed and been accepted by CI on both legs and
+- [x] Jim has said go for this cut, naming the version (`1.0.0-rc.1`): on 2026-11-13, "cut 1.0.0-rc.1, tag first,
+      then test it on a server" (recorded in `ROADMAP.md`, Jim's decisions of 2026-11-13).
+- [x] S11 (mail, account recovery and email verification) has landed and been accepted by CI on both legs and
       Baseline, before the version commit: its design and threat model approved by Jim first, then the build, with the
       `requirevalidemail` lock lifted as the design says and the release notes and host guide updated (Jim,
       2026-11-12: an rc.1 blocker). Built: the design approved (task 12, accepted at `ae4bd3b`), 13a and 13b accepted,
       13c (verification, address changes, the lock lifted, the host guide and release notes) committed in
-      `PHASE6-TASK13C-20261113.md`; this box is ticked when 13c's CI acceptance is recorded.
+      `PHASE6-TASK13C-20261113.md` and accepted at `0c034db` (Modern core 43369500162, all 14 jobs; Baseline integrity
+      43369499961), recorded in Phase 6 task 14.
 - [x] The release notes no longer list S11 as a known issue (Phase 6 task 13c: S11 moved into the changes; the
       known issues keep that mail is `mail()` only and best effort, and that a link's token reaches the access log).
-- [ ] Every task before the cut is accepted: both Modern core legs and Baseline integrity at SUCCESS on its commit.
-- [ ] The release notes (`docs/RELEASE-NOTES-<version>.md`) list every open item a host or player can hit, checked
-      against `ROADMAP.md` at the cut's starting commit.
+- [x] Every task before the cut is accepted: both Modern core legs and Baseline integrity at SUCCESS on its commit.
+      Checked in Phase 6 task 14: every Phase 6 task from 1 to 13c is ticked in `ROADMAP.md` with its accepted runs,
+      the last being 13c at `0c034db`.
+- [x] The release notes (`docs/RELEASE-NOTES-<version>.md`) list every open item a host or player can hit, checked
+      against `ROADMAP.md` at the cut's starting commit. Checked in Phase 6 task 14 against `ROADMAP.md` at
+      `0c034db`: the open items N1, N3, N8 and N11 and the missing abuse controls were added to the known issues.
 
 ## 1. The version commit
 
@@ -80,9 +86,13 @@ had no independent security review, and it is not certified for public game host
 Based on Legend of the Green Dragon 1.1.2 DragonPrime Edition by Eric Stevens and JT Traub and the DragonPrime
 Development Team. Licensed under CC BY-NC-SA 2.0 (LICENSE.txt). Resurrection's changes: Phoenix 2:33 LLC (NOTICE).
 
-Fresh installs only; no 1.1.2 database is upgraded. Known issues, among them no account recovery or email
-verification: docs/RELEASE-NOTES-1.0.0-rc.1.md. Hosting: docs/HOST-GUIDE.md.
+Fresh installs only; no 1.1.2 database is upgraded. Known issues, among them mail only through PHP's mail(), best
+effort, mail links in the web server's access log, no abuse controls yet, and 1.1.2 behaviors kept as recorded:
+docs/RELEASE-NOTES-1.0.0-rc.1.md. Hosting: docs/HOST-GUIDE.md.
 ```
+
+(Brought up to date in Phase 6 task 14, 2026-11-13: until then the message listed "no account recovery or email
+verification" among the known issues, which S11 closed.)
 
 Never move or delete the tag once pushed. `historical-source-1.1.2` is never touched.
 

@@ -1,6 +1,6 @@
 # Legend of the Green Dragon - Resurrection
 
-**Release readiness (Phase 6). No Resurrection release has been cut yet: `main` is version `1.0.0-dev`, and the first test build, `1.0.0-rc.1`, waits on S11 (account recovery and email verification) and the maintainer's go.**
+**Release readiness (Phase 6). `main` is version `1.0.0-rc.1`, the first test build: a candidate for hosts to try, not the release, and not certified for public game hosting. Its tag, `v1.0.0-rc.1`, follows once CI accepts the version commit.**
 
 **The historical source contains known high-severity security defects and unsupported runtime assumptions. Do not deploy the historical baseline to the public Internet.**
 
@@ -60,7 +60,7 @@ The integrity commands do not execute the application. CI (Modern core, on PHP 8
 
 - [Roadmap](ROADMAP.md) and [changes from 1.1.2](docs/CHANGES-FROM-1.1.2.md)
 - [Host guide: running the game on a web server](docs/HOST-GUIDE.md)
-- [Release notes for 1.0.0-rc.1 (draft; not cut)](docs/RELEASE-NOTES-1.0.0-rc.1.md) and the [cut checklist](docs/RC-CUT-CHECKLIST.md)
+- [Release notes for 1.0.0-rc.1](docs/RELEASE-NOTES-1.0.0-rc.1.md) and the [cut checklist](docs/RC-CUT-CHECKLIST.md)
 - [Versioning](docs/VERSIONING.md)
 - [Licensing and provenance](docs/LICENSING-AND-PROVENANCE.md)
 - [Notice](NOTICE) and [third-party licenses](docs/THIRD-PARTY-LICENSES.md)

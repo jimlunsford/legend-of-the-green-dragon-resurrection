@@ -46,7 +46,7 @@ def current():
 class VersionTests(unittest.TestCase):
     def test_code_project_and_docs_agree_on_a_valid_version(self):
         self.assertEqual([], problems(*current()))
-        self.assertEqual('1.0.0-dev', CODE.search(current()[0]).group(1))
+        self.assertEqual('1.0.0-rc.1', CODE.search(current()[0]).group(1))
 
     def test_a_disagreement_or_an_invalid_version_fails(self):
         code, project, doc = current()
@@ -57,7 +57,7 @@ class VersionTests(unittest.TestCase):
         cases = {
             'project.json differs': (code, with_project('1.0.1'), doc),
             'project.json unset': (code, with_project(None), doc),
-            'the doc differs': (code, project, doc.replace(f'Current version: `{version}`', 'Current version: `1.0.0-rc.1`')),
+            'the doc differs': (code, project, doc.replace(f'Current version: `{version}`', 'Current version: `1.0.1`')),
             'the doc does not say': (code, project, doc.replace(f'Current version: `{version}`', 'The version is in src/Version.php.')),
             'the code differs': (code.replace(f"'{version}'", "'1.1.0'"), project, doc),
         }

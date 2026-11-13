@@ -1,9 +1,7 @@
 # Release notes: Legend of the Green Dragon - Resurrection 1.0.0-rc.1
 
-**Draft. This test build has not been cut.** There is no `v1.0.0-rc.1` tag and no package yet: the cut happens only on
-the maintainer's go, by `docs/RC-CUT-CHECKLIST.md`. Until then `main` is `1.0.0-dev`. Written in Phase 6 task 7
-(2026-11-07) from `docs/CHANGES-FROM-1.1.2.md`, which holds every change in full with its evidence; brought up to date
-in Phase 6 task 8 (2026-11-12), and for account mail (S11) in Phase 6 task 13c (2026-11-13).
+2026-11-13. Cut by `docs/RC-CUT-CHECKLIST.md` on the maintainer's go; the tag is `v1.0.0-rc.1`. Written from
+`docs/CHANGES-FROM-1.1.2.md`, which holds every change in full with its evidence.
 
 ## What Resurrection is
 
@@ -116,6 +114,13 @@ bundled modules.
 - **Modules beyond the bundled 24** are not supported: installed module code is trusted PHP.
 - **Maintenance is not one transaction.** A failed run repeats its date-based cleanups on the next run.
 - **No 1.1.2 migration**, by design: install fresh.
+- **No abuse controls yet:** no sign-in throttling and no limit on posting floods; account creation is limited only
+  while sign-ups must confirm their address (5 an hour from one network address).
+- **Game Settings lists some settings that do nothing** (`newdaycron`, `show_notices`, the `notify_*` settings, and
+  `beta` and `betaperplayer`, whose page is not in the game).
+- **Asset URLs carry no version**, so a long browser cache of the styles and pictures can outlast an upgrade; do not
+  set far-future caching for `assets/`.
+- **Small targets on phones:** the sort headers and "Edit" links on some staff tables, and translator mode's links.
 - **Not certified for public hosting.** The project's own gates (`ROADMAP.md`, "Public hosting") are not all met, and no
   independent security review has been done. `project.json` keeps `public_game_hosting_approved` at `false`.
 - **Licensing (S9): closed by decision.** Jim decided on 2026-11-12 not to seek legal counsel: the project meets the

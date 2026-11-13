@@ -16,7 +16,8 @@ tokens", "Security headers and CSP", "Secrets in kept pages" and "Mail and recov
 Phase 6 task 13a (2026-11-12, `PHASE6-TASK13A-20261112.md`); the rows "Passwords" and "Mail and recovery", the S11 gate
 and the open item on recovery were updated at Phase 6 task 13b (2026-11-12, `PHASE6-TASK13B-20261112.md`); the row "Mail
 and recovery", the S11 gate and the open items on recovery and mail were updated at Phase 6
-task 13c (2026-11-13, `PHASE6-TASK13C-20261113.md`). Status words:
+task 13c (2026-11-13, `PHASE6-TASK13C-20261113.md`); the open item on stale form tokens, fixed in Phase 6 task 9 (accepted
+at `2a6e2a7`), was taken off the list at Phase 6 task 14 (2026-11-13). Status words:
 
 - **IN PLACE**: the control is in the code and CI tests it.
 - **LIMITED**: a control is in the code, with a known gap (the last column).
@@ -162,8 +163,6 @@ Open:
   a link's token reaches the web server's access log for the link's life.
 - **Installed module code is trusted PHP (S04).** Only the 24 bundled modules are certified.
 - **Maintenance is not one transaction (S13).** A failed run repeats its date-based cleanups.
-- **Stale form tokens after signing in again during the new day.** The replayed page's buttons answer "Invalid form
-  submission." (403); reloading the page works (`ROADMAP.md`, "Found during Phase 6").
 - **The recorded 1.1.2 behaviors** (`PHASE6-RC-READINESS-20261106.md`, section 8), among them a ban reason shown as raw
   HTML (staff write it) and an ID ban that clearing the `lgi` cookie evades.
 - **The public hosting gates** (`ROADMAP.md`, "Public hosting"): abuse controls, production TLS, proxy and session

@@ -11,7 +11,7 @@ if (!\defined('RESURRECTION_ENTRY') && \PHP_SAPI !== 'cli') { \http_response_cod
 final class Version
 {
     /** MAJOR.MINOR.PATCH, with -dev while developing toward a release and -rc.N for a test build. */
-    public const string CURRENT = '1.0.0-dev';
+    public const string CURRENT = '1.0.0-rc.1';
 
     /** The preserved game this one is built from, exactly as 1.1.2 named itself ($logd_version in common.php). */
     public const string BASE = '1.1.2 Dragonprime Edition';

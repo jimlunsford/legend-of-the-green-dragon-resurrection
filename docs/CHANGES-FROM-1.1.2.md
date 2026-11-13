@@ -313,3 +313,14 @@ Task 13b is accepted at `a4c2ea7` (Modern core 43333363270, all 14 jobs; Baselin
 
 What stands between `main` and the `v1.0.0-rc.1` tag now: this task's CI acceptance; Jim's go; the version commit and
 its CI acceptance; and then the tag and the package.
+
+### Phase 6 task 14: the `1.0.0-rc.1` version commit
+
+Task 13c is accepted at `0c034db` (Modern core 43369500162, all 14 jobs; Baseline integrity 43369499961); S11 is
+complete. On Jim's go of 2026-11-13, the version commit sets the version to `1.0.0-rc.1` (`src/Version.php`,
+`project.json` with `phase` `release-candidate`, `docs/VERSIONING.md`), so the footer and the home page show "Version:
+Resurrection 1.0.0-rc.1, based on LoGD 1.1.2 Dragonprime Edition". No game behavior changes. The release notes are
+dated and no longer a draft (`docs/PHASE6-TASK14-RC1-VERSION-20261113.md`).
+
+What stands between `main` and the `v1.0.0-rc.1` tag now: this commit's CI acceptance; then the tag and the package
+(`docs/RC-CUT-CHECKLIST.md`, sections 2 to 5).

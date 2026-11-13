@@ -686,3 +686,13 @@ The rows above change as follows:
 
 What stands between `main` and the `v1.0.0-rc.1` tag, in order: task 13c's CI acceptance; Jim's go; the version
 commit and its CI acceptance; then the tag and the package (`ROADMAP.md`, Phase 6; `docs/RC-CUT-CHECKLIST.md`).
+
+## S11 done and Jim's go (recorded 2026-11-13, Phase 6 task 14)
+
+Task 13c is accepted at `0c034db` (Modern core 43369500162, all 14 jobs; Baseline integrity 43369499961), so S11 is
+done: row S11 above is closed, and row 11.2 stays a RISK as the previous section says (PHP `mail()` only, best effort).
+Jim said go on 2026-11-13: cut `1.0.0-rc.1`, tag first, then test it on a server. Task 14 makes the version commit
+(`docs/PHASE6-TASK14-RC1-VERSION-20261113.md`); no tag yet.
+
+What stands between `main` and the `v1.0.0-rc.1` tag, in order: the version commit's CI acceptance; then the tag and
+the package (`docs/RC-CUT-CHECKLIST.md`, sections 2 to 5).
