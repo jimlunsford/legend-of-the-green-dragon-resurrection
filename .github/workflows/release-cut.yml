@@ -1,0 +1,148 @@
+name: Release cut
+# Phase 6 task 15 (2026-11-13): cuts a test build or release on the maintainer's go, run by hand from the Actions tab
+# (docs/RC-CUT-CHECKLIST.md, sections 3 and 4). Sessions cannot push tags, so this workflow does it: the annotated tag
+# on the CI-accepted version commit with section 3's message byte for byte, the package built twice, and one GitHub
+# pre-release with the zip and its .sha256. Every input is checked before anything is written; a tag that already
+# exists is never moved, deleted or recreated, and an existing release is never touched.
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: The version to cut, exactly as src/Version.php has it
+        required: true
+        default: 1.0.0-rc.1
+      commit:
+        description: The CI-accepted version commit (full SHA) the tag goes on
+        required: true
+        default: 2bbc69dd50cb62ba3126bc05390b1f84ce34e507
+      message_sha256:
+        description: SHA-256 of the tag message taken from the checklist's section 3 at that commit
+        required: true
+        default: 41bf462a2044affbe85eb9b40d25f76c27e2ed5caf92d42ee8876f5311a090bd
+      package_sha256:
+        description: SHA-256 the package must have (the build recorded for the version commit)
+        required: true
+        default: f8b0a1d4f0bb153f649ff849972bb4a8649efd216ed0fec22bb88001cb4a7857
+permissions:
+  contents: read
+concurrency:
+  group: release-cut
+  cancel-in-progress: false
+jobs:
+  cut:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    env:
+      VERSION: ${{ inputs.version }}
+      COMMIT: ${{ inputs.commit }}
+      MESSAGE_SHA256: ${{ inputs.message_sha256 }}
+      PACKAGE_SHA256: ${{ inputs.package_sha256 }}
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - name: Check out the version commit with complete history and tags
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1, node24, verified 2026-11-06
+        with:
+          ref: ${{ inputs.commit }}
+          fetch-depth: 0
+          fetch-tags: true
+      - name: Preflight
+        run: |
+          set -euo pipefail
+          [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-rc\.[1-9][0-9]*)?$ ]] || { echo "::error::Not a release version: $VERSION"; exit 1; }
+          [[ "$COMMIT" =~ ^[0-9a-f]{40}$ ]] || { echo "::error::Not a full commit SHA: $COMMIT"; exit 1; }
+          [[ "$MESSAGE_SHA256" =~ ^[0-9a-f]{64}$ && "$PACKAGE_SHA256" =~ ^[0-9a-f]{64}$ ]] || { echo "::error::Not a SHA-256"; exit 1; }
+          echo "TAG=v$VERSION" >> "$GITHUB_ENV"
+          test "$(git rev-parse HEAD)" = "$COMMIT"
+          git fetch --quiet origin main
+          git merge-base --is-ancestor "$COMMIT" origin/main || { echo "::error::$COMMIT is not on main"; exit 1; }
+          grep -qxF "    public const string CURRENT = '$VERSION';" src/Version.php || { echo "::error::src/Version.php is not $VERSION"; exit 1; }
+          test -s "docs/RELEASE-NOTES-$VERSION.md"
+          test "$(git rev-parse historical-source-1.1.2)" = 51cab4fbe58a234651a3177a56289b18bc152b4d
+          test "$(git rev-parse 'historical-source-1.1.2^{commit}')" = bdc29df9bc344774b41e0ad7cae7f6ed2f7512e2
+          python3 scripts/verify-historical-baseline.py
+          python3 scripts/validate-project.py
+          git status --porcelain | wc -l | grep -qx 0
+      - name: Take the tag message from the checklist's section 3
+        run: |
+          set -euo pipefail
+          python3 -I - docs/RC-CUT-CHECKLIST.md "$RUNNER_TEMP/tag-message.txt" <<'PY'
+          import sys
+          text = open(sys.argv[1], encoding='utf-8').read()
+          section = text.index('## 3. The tag')
+          start = text.index('```\n', section) + 4
+          end = text.index('\n```', start)
+          open(sys.argv[2], 'w', encoding='utf-8', newline='\n').write(text[start:end] + '\n')
+          PY
+          cat "$RUNNER_TEMP/tag-message.txt"
+          head -n 1 "$RUNNER_TEMP/tag-message.txt" | grep -qF " $VERSION" || { echo "::error::The message does not name $VERSION"; exit 1; }
+          echo "$MESSAGE_SHA256  $RUNNER_TEMP/tag-message.txt" | sha256sum -c -
+      - name: Tag
+        run: |
+          set -euo pipefail
+          if git ls-remote --exit-code origin "refs/tags/$TAG" > /dev/null; then
+            # Already pushed (a rerun): accept it only if it is exactly this tag, and never change it.
+            git fetch --quiet origin "refs/tags/$TAG:refs/tags/$TAG"
+            test "$(git cat-file -t "$TAG")" = tag
+            test "$(git rev-parse "$TAG^{commit}")" = "$COMMIT"
+            git cat-file -p "$TAG" | sed '1,/^$/d' | cmp - "$RUNNER_TEMP/tag-message.txt"
+            echo "$TAG already exists on $COMMIT with the exact message; left as it is."
+          else
+            git config user.name 'github-actions[bot]'
+            git config user.email '41898099+github-actions[bot]@users.noreply.github.com'
+            git tag -a "$TAG" "$COMMIT" -F "$RUNNER_TEMP/tag-message.txt"
+            git cat-file -p "$TAG" | sed '1,/^$/d' | cmp - "$RUNNER_TEMP/tag-message.txt"
+            git push origin "refs/tags/$TAG"
+          fi
+          echo "Tag object: $(git rev-parse "$TAG")"
+          git cat-file -p "$TAG"
+          echo "Remote:"
+          git ls-remote --tags origin | awk -v t="refs/tags/$TAG" '$2 == t || $2 == t "^{}"' | tee "$RUNNER_TEMP/remote-tag.txt"
+          test "$(awk -v t="refs/tags/$TAG^{}" '$2 == t {print $1}' "$RUNNER_TEMP/remote-tag.txt")" = "$COMMIT"
+          test "$(awk -v t="refs/tags/$TAG" '$2 == t {print $1}' "$RUNNER_TEMP/remote-tag.txt")" = "$(git rev-parse "$TAG")"
+      - name: Build the package twice
+        run: |
+          set -euo pipefail
+          git checkout --quiet --detach "$TAG"
+          git status --porcelain | wc -l | grep -qx 0
+          for n in 1 2; do
+            mkdir "$RUNNER_TEMP/build$n"
+            python3 scripts/build-release-package.py --out "$RUNNER_TEMP/build$n"
+          done
+          name="legend-of-the-green-dragon-resurrection-$VERSION.zip"
+          cat "$RUNNER_TEMP/build1/$name.sha256" "$RUNNER_TEMP/build2/$name.sha256"
+          cmp "$RUNNER_TEMP/build1/$name" "$RUNNER_TEMP/build2/$name"
+          echo "$PACKAGE_SHA256  $name" | cmp - "$RUNNER_TEMP/build1/$name.sha256"
+          echo "NAME=$name" >> "$GITHUB_ENV"
+      - name: Publish the pre-release
+        run: |
+          set -euo pipefail
+          if gh release view "$TAG" > /dev/null 2>&1; then echo "::error::A release for $TAG already exists; not touched."; exit 1; fi
+          case "$VERSION" in *-rc.*) ;; *) echo "::error::This workflow publishes test builds (-rc.N) only."; exit 1 ;; esac
+          git show "$TAG:docs/RELEASE-NOTES-$VERSION.md" > "$RUNNER_TEMP/notes.md"
+          gh release create "$TAG" --verify-tag --prerelease --latest=false \
+            --title "Legend of the Green Dragon - Resurrection $VERSION" \
+            --notes-file "$RUNNER_TEMP/notes.md" \
+            "$RUNNER_TEMP/build1/$NAME" "$RUNNER_TEMP/build1/$NAME.sha256"
+      - name: Check the release and download the zip back
+        run: |
+          set -euo pipefail
+          gh release view "$TAG"
+          gh release view "$TAG" --json tagName,name,isPrerelease,isDraft,url,assets \
+            --jq '{tagName, name, isPrerelease, isDraft, url, assets: [.assets[] | {name, size}]}'
+          test "$(gh release view "$TAG" --json isPrerelease --jq .isPrerelease)" = true
+          test "$(gh release view "$TAG" --json isDraft --jq .isDraft)" = false
+          test "$(gh release view "$TAG" --json tagName --jq .tagName)" = "$TAG"
+          test "$(gh release view "$TAG" --json assets --jq '.assets | length')" = 2
+          test "$(gh release view "$TAG" --json assets --jq ".assets[] | select(.name == \"$NAME\") | .size")" = "$(stat -c %s "$RUNNER_TEMP/build1/$NAME")"
+          test "$(gh release view "$TAG" --json assets --jq ".assets[] | select(.name == \"$NAME.sha256\") | .size")" = "$(stat -c %s "$RUNNER_TEMP/build1/$NAME.sha256")"
+          latest="$(gh api "repos/$GH_REPO/releases/latest" --jq .tag_name 2>/dev/null || true)"
+          echo "Latest release: ${latest:-none}"
+          test "$latest" != "$TAG"
+          mkdir "$RUNNER_TEMP/download"
+          gh release download "$TAG" --dir "$RUNNER_TEMP/download"
+          (cd "$RUNNER_TEMP/download" && sha256sum "$NAME" && sha256sum -c "$NAME.sha256")
+          echo "$PACKAGE_SHA256  $RUNNER_TEMP/download/$NAME" | sha256sum -c -

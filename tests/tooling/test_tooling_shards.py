@@ -102,7 +102,9 @@ class ToolingShardTests(unittest.TestCase):
                   'shivammathur/setup-php': 'eb7c497e18156a6bbabfef1d3a82760b9eda3962 # 2.40.0'}
         seen = set()
         workflows = sorted((ROOT / '.github' / 'workflows').glob('*.yml'))
-        self.assertEqual(['baseline-integrity.yml', 'modern-core-leg.yml', 'modern-core.yml'], [w.name for w in workflows])
+        # Phase 6 task 15: release-cut.yml, run by hand to cut a test build (docs/RC-CUT-CHECKLIST.md).
+        self.assertEqual(['baseline-integrity.yml', 'modern-core-leg.yml', 'modern-core.yml', 'release-cut.yml'],
+                         [w.name for w in workflows])
         for path in workflows:
             text = path.read_text()
             jobs = re.split(r'(?m)^  (?=[a-z][a-z0-9_-]*:\s*$)', text[text.index('\njobs:\n'):])[1:]
