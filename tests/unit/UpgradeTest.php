@@ -168,17 +168,24 @@ final class UpgradeTest extends TestCase
             'resurrection_bundled_module_versions() must list each bundled module file\'s version.');
     }
 
+    /** The host guide online at this version's tag, which the command's messages link (Phase 6 task 17, R4). */
+    private static function guide(): string
+    {
+        require_once 'src/Version.php';
+        return 'https://github.com/jimlunsford/legend-of-the-green-dragon-resurrection/blob/v' . \Resurrection\Version::CURRENT . '/docs/HOST-GUIDE.md';
+    }
+
     public function testACurrentDatabaseIsLeftUntouchedAndApplyingNeedsABackup(): void
     {
         $this->connect();
         $before = resurrection_database_snapshot();
-        $refusal = 'Upgrade refused. Take a fresh backup of the database first, then run again with --backup-confirmed. Some upgrade changes cannot be rolled back: MySQL and MariaDB commit a table change the moment it runs, so if an upgrade stops partway, the backup is the way back. To see what would change without changing anything, use --dry-run. docs/MODERN-INSTALLATION.md, "Upgrading", says how to take and restore a backup. Nothing was changed.' . "\n";
+        $refusal = 'Upgrade refused. Take a fresh backup of the database first, then run again with --backup-confirmed. Some upgrade changes cannot be rolled back: MySQL and MariaDB commit a table change the moment it runs, so if an upgrade stops partway, the backup is the way back. To see what would change without changing anything, use --dry-run. The host guide says how to take and restore a backup ("Backups and restore": ' . self::guide() . '#10-backups-and-restore). Nothing was changed.' . "\n";
         self::assertSame([1, '', $refusal], $this->command());
         $current = "The database is current: 1 of 1 upgrade steps applied, and every installed bundled module is at its version. Nothing was changed.\n";
         self::assertSame([0, $current, ''], $this->command('--dry-run'));
         self::assertSame([0, $current, ''], $this->command('--backup-confirmed'));
         self::assertSame([1, '', "Upgrade refused. Give --dry-run or --backup-confirmed, not both. Nothing was changed.\n"], $this->command('--dry-run', '--backup-confirmed'));
-        self::assertSame([1, '', "Upgrade refused. Unknown option. Use --dry-run or --backup-confirmed (docs/MODERN-INSTALLATION.md, \"Upgrading\"). Nothing was changed.\n"], $this->command('--force'));
+        self::assertSame([1, '', 'Upgrade refused. Unknown option. Use --dry-run or --backup-confirmed (the host guide, "Upgrade": ' . self::guide() . "#9-upgrade). Nothing was changed.\n"], $this->command('--force'));
         self::assertSame($before, resurrection_database_snapshot());
     }
 

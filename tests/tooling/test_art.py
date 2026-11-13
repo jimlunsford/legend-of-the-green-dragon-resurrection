@@ -4,8 +4,8 @@ The art comes from the command chat with its SHA-256 checksums and is committed 
 assets/scenes/, assets/portraits/ and assets/icons/ must be one of the files below, unchanged (batch 4's portraits:
 the ones assets/portraits/SHA256SUMS lists, Phase 5 task 14). Every SVG under assets/ must stay a
 plain drawing (no script, no event attribute, no foreignObject, no href or other external reference), use only the art
-palette in docs/UI-DESIGN-SPEC.md, and stay under 16 KB. assets/LICENSE licenses exactly three folders under
-CC BY-SA 4.0.
+palette in docs/UI-DESIGN-SPEC.md, and stay under 16 KB. assets/LICENSE licenses exactly four folders and the game's
+four icon files under CC BY-SA 4.0 (assets/brand/ and the icon files since Phase 6 task 17).
 
 Static: runs wherever the suite runs, with or without a supported PHP (Baseline integrity too).
 """
@@ -18,6 +18,7 @@ ROOT = Path(__file__).resolve().parents[2]
 ASSETS = ROOT / 'assets'
 SPEC = ROOT / 'docs' / 'UI-DESIGN-SPEC.md'
 SIZE_LIMIT = 16 * 1024
+ICON_FILES = ('favicon.ico', 'favicon.png', 'favicon.svg', 'apple-touch-icon.png')
 
 # Batch 1, as the command chat supplied it (Jim, 2026-10-30), then batches 2 and 3 (batch 4 in PORTRAIT_KIT, below). A change to the art is a new file from the
 # command chat, added here with its checksum.
@@ -235,15 +236,19 @@ class ArtTests(unittest.TestCase):
         self.assertEqual([('fill', 'red'), ('stroke', '#ABCDEF'), ('stop-color', 'blue'), ('fill', 'rgb(1,2,3)')],
                          colors('<rect fill="red" stroke="#ABCDEF" stop-color="blue" style="fill: rgb(1,2,3)"/>'))
 
-    def test_the_license_names_exactly_its_three_folders(self):
+    def test_the_license_names_exactly_its_folders_and_icon_files(self):
         license_text = (ASSETS / 'LICENSE').read_text(encoding='utf-8')
         self.assertIn('Copyright (c) 2026 Phoenix 2:33 LLC', license_text)
         self.assertIn('Creative Commons Attribution-ShareAlike 4.0 International', license_text)
         self.assertIn('Art by Phoenix 2:33 LLC, CC BY-SA 4.0', license_text)
-        # The scope: the folders listed as covered, before "nothing else", are exactly these three.
+        # The scope: the folders listed as covered, before "nothing else", are exactly these four (assets/brand/ since
+        # Phase 6 task 17, the icon's source), and the files exactly the game's four icon files.
         scope, _, excluded = license_text.partition('nothing else')
-        self.assertEqual(['assets/icons/', 'assets/portraits/', 'assets/scenes/'],
+        self.assertEqual(['assets/brand/', 'assets/icons/', 'assets/portraits/', 'assets/scenes/'],
                          sorted(set(re.findall(r'assets/[a-z]+/', scope))))
+        self.assertEqual(sorted(ICON_FILES), sorted(set(re.findall(r'(?<![/\w.-])((?:favicon|apple-touch-icon)\.[a-z]+)\b', scope))))
+        for name in ICON_FILES:
+            self.assertTrue((ROOT / name).is_file(), name)
         self.assertEqual(['assets/fonts/', 'assets/ui/'], sorted(set(re.findall(r'^\s+(assets/[a-z]+/)', excluded, re.M))))
         # The license's own text follows, from section 1 to the end.
         self.assertIn('Section 1 – Definitions.', license_text)
@@ -251,7 +256,7 @@ class ArtTests(unittest.TestCase):
         for name in ('NOTICE', 'assets/README.md'):
             text = re.sub(r'\s+', ' ', (ROOT / name).read_text())
             self.assertIn('Art by Phoenix 2:33 LLC, CC BY-SA 4.0', text, name)
-            for folder in ('scenes/', 'portraits/', 'icons/'):
+            for folder in ('scenes/', 'portraits/', 'icons/', 'brand/', *ICON_FILES):
                 self.assertIn(folder, text, name)
 
 

@@ -98,7 +98,7 @@ Since Phase 6 task 5a each operation is one service, and the services are the on
 - `resurrection_upgrade_run()` and `resurrection_upgrade()` (`lib/upgrade.php`)
 - `resurrection_maintenance_run()` (`lib/maintenance.php`)
 
-The commands (`scripts/install.php`, `scripts/upgrade.php`, `cron.php`) and the web pages (`webcron.php`, `setup.php`) are thin front ends: they parse arguments or the request, read the environment, print and set exit codes or the response, and call the service. Change the behavior in the service, never in one front end. The commands' locks, lock names, refusal texts, JSON and exit codes stay as they are; their existing tests are the proof.
+The commands (`scripts/install.php`, `scripts/upgrade.php`, `cron.php`) and the web pages (`webcron.php`, `setup.php`) are thin front ends: they parse arguments or the request, read the environment, print and set exit codes or the response, and call the service. Change the behavior in the service, never in one front end. The commands' locks, lock names, JSON and exit codes stay as they are; their existing tests are the proof. The rule that their refusal texts stay word for word was for task 5a's refactor, whose tests proved it changed no behavior. A message may now change on purpose, in the same commit as the tests that pin it (Jim, 2026-11-13; Phase 6 task 17 made the four that named `docs/MODERN-INSTALLATION.md` link the host guide).
 
 ## Web setup page
 

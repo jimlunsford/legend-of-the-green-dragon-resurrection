@@ -747,7 +747,7 @@ The rules:
 
 Every color the batch 1 files use. Future art stays within it, or extends it here in the task that adds the art.
 Batch 2 (the location scenes, task 12), batch 3 (the character panel's icons, task 13) and batch 4 (the foe
-portraits, task 14) use only these colors.
+portraits, task 14) use only these colors. The icon (`assets/brand/resurrection-eye.svg`, Phase 6 task 17) added two.
 Colors that are also UI tokens are named; transparency comes from `opacity` and `stroke-opacity`, not from new colors.
 
 | Color | Token | Use in batch 1 |
@@ -756,6 +756,7 @@ Colors that are also UI tokens are named; transparency comes from `opacity` and 
 | `#0C130F` | | Forest, nearest trees |
 | `#0E0C0A` | | Portrait silhouettes |
 | `#101814` | | Village and fallback, near tree line |
+| `#12100D` | `--ground` | The icon's tile and the eye's pupil (Phase 6 task 17) |
 | `#142019` | | Forest, middle trees |
 | `#16201B` | | Forest sky |
 | `#16211B` | | Village and fallback, far tree line |
@@ -777,6 +778,7 @@ Colors that are also UI tokens are named; transparency comes from `opacity` and 
 | `#2E2620` | | Dwarf's beard |
 | `#30271C` | | Village roofs |
 | `#3A3329` | `--border` | Dwarf's helm, the village's stone |
+| `#3E6B33` | | The icon's iris ring (Phase 6 task 17) |
 | `#6B563F` | | Inn sign bracket |
 | `#7FB069` | `--health` | Troll's frame |
 | `#8FB8D9` | `--magic` | Elf's frame and jewel |

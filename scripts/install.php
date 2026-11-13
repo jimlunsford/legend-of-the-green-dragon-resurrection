@@ -25,6 +25,8 @@ set_error_handler(static function (int $severity, string $message, string $file,
 try {
     require 'src/Configuration/ConfigFile.php';
     require 'src/Configuration/ConfigLocation.php';
+    // The messages link the host guide online at this version's tag (Phase 6 task 17, R4; lib/source_link.php).
+    require 'lib/source_link.php';
     $modules = 'recommended';
     $writeConfig = false;
     $allowServed = false;
@@ -33,7 +35,7 @@ try {
         if ($argument === '--write-config') { $writeConfig = true; }
         elseif ($argument === '--allow-served-path') { $allowServed = true; }
         elseif (str_starts_with($argument, '--modules=')) { $modules = substr($argument, strlen('--modules=')); }
-        elseif (str_starts_with($argument, '--')) { throw new \Resurrection\Installation\InstallRefused('Unknown option. See docs/MODERN-INSTALLATION.md.'); }
+        elseif (str_starts_with($argument, '--')) { throw new \Resurrection\Installation\InstallRefused('Unknown option. See the host guide, "Install": ' . resurrection_doc_url('docs/HOST-GUIDE.md', '5-install')); }
         else { $paths[] = $argument; }
     }
     if (count($paths) > 1) { throw new \Resurrection\Installation\InstallRefused('Give one configuration file.'); }

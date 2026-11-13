@@ -82,14 +82,16 @@ line above, and if one is missing it draws its built-in frame
 (src/Ui/SafeFrame.php), which carries them. A host may change their copy of
 the code under the license.
 
-Art. The original art in assets/scenes/, assets/portraits/ and assets/icons/
-is Copyright (c) 2026 Phoenix 2:33 LLC and licensed under the Creative
-Commons Attribution-ShareAlike 4.0 International license
+Art. The original art in assets/scenes/, assets/portraits/, assets/icons/ and
+assets/brand/, and the game's icon built from it (favicon.ico, favicon.png,
+favicon.svg and apple-touch-icon.png in the game's top folder), is Copyright
+(c) 2026 Phoenix 2:33 LLC and licensed under the Creative Commons
+Attribution-ShareAlike 4.0 International license
 (https://creativecommons.org/licenses/by-sa/4.0/legalcode); see assets/LICENSE
 and assets/README.md. Credit for it: "Art by Phoenix 2:33 LLC, CC BY-SA 4.0".
-That license covers those three folders only: not assets/fonts/ (the SIL Open
-Font License 1.1, see THIRD-PARTY-LICENSES.md) and not assets/ui/ (code, under
-the CC BY-NC-SA 2.0 license above).
+That license covers those four folders and those four files only: not
+assets/fonts/ (the SIL Open Font License 1.1, see THIRD-PARTY-LICENSES.md) and
+not assets/ui/ (code, under the CC BY-NC-SA 2.0 license above).
 
 The 1.1.2 skins. LoGD 1.1.2 shipped 18 skins in templates/, credited in
 their own footers and stylesheets: Jade (Josh Canning, 2004, of HFS); Mer

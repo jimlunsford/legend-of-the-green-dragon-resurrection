@@ -23,6 +23,21 @@ Found while installing rc.1 on a real server (`ROADMAP.md`, "Found in the rc.1 s
 - **R3: `NOTICE` names only files the package holds.** It pointed at `docs/THIRD-PARTY-LICENSES.md`, which the rc.1
   zip did not hold. It now names `THIRD-PARTY-LICENSES.md`, in the repository's docs folder and at the package's top
   level.
+- **R4: the shell commands link the host guide too.** Four messages named `docs/MODERN-INSTALLATION.md`: an unknown
+  option to `scripts/install.php` or `scripts/upgrade.php`, the upgrade without `--backup-confirmed`, and a failed
+  upgrade. Each now names the host guide's matching section ("Install", "Upgrade", "Backups and restore") online at the
+  running version's tag.
+- **R5: a new icon.** The game's own icon, a dragon eye, replaces 1.1.2's favicon: `favicon.ico` (16, 32 and 48 px),
+  `favicon.png`, `favicon.svg` and `apple-touch-icon.png` in the game's folder, linked from every page. They are new
+  files to upload (host guide, section 2); its art is CC BY-SA 4.0 like the rest (`assets/LICENSE`).
+
+### Provenance
+
+- **Two things have no record beyond the 1.1.2 distribution:** the authorship of the four images inherited from 1.1.2
+  (`images/new.gif`, `images/newscroll.GIF`, `images/trans.gif`, `images/somerights20.gif`), and the bundled
+  modules' code by authors other than 1.1.2's own (named in each module and in `THIRD-PARTY-LICENSES.md`). Both ship
+  as part of the Legend of the Green Dragon 1.1.2 distribution, under its license (CC BY-NC-SA 2.0 and `LICENSE.txt`),
+  as 1.1.2 shipped them. Nothing was removed.
 
 ## Known issues
 
@@ -51,14 +66,10 @@ Carried from rc.1:
   set far-future caching for `assets/`.
 - **Small targets on phones:** the sort headers and "Edit" links on some staff tables, and translator mode's links.
 - **Not certified for public hosting.** The project's own gates (`ROADMAP.md`, "Public hosting") are not all met, and no
-  independent security review has been done. `project.json` keeps `public_game_hosting_approved` at `false`.
+  independent security review has been done. `project.json` keeps `public_game_hosting_approved` at `false`. Since
+  Jim's decision of 2026-11-13, the gates the code does not meet belong to whoever runs a public server (host guide,
+  at its top): Resurrection is finished as a showcase project at `1.0.0`, with bug fixes only after it.
 - **Licensing (S9): closed by decision.** Jim decided on 2026-11-12 not to seek legal counsel: the project meets the
   licenses as written, and every statement of the credit stays within what they allow (section 4(d) of CC BY-NC-SA
   2.0, quoted in `NOTICE`). The legal review packet was not sent and is kept as a record
   (`docs/LEGAL-REVIEW-PACKET-20261107.md`). No file is labeled AGPL.
-
-New in this draft:
-
-- **The shell commands still name `docs/MODERN-INSTALLATION.md`** in four messages: an unknown option to either
-  command, the upgrade without `--backup-confirmed`, and a failed upgrade. Their texts are kept as they are for now; the host guide, section
-  9, covers the same ground.

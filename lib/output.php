@@ -149,6 +149,19 @@ function resurrection_behaviors_script(){
 	return "<script src=\"assets/ui/behaviors.js\" defer></script>";
 }
 
+/**
+ * The game's icons for a page's head (Phase 6 task 17, R5): the dragon eye as favicon.ico (16, 32 and 48 px),
+ * favicon.svg and apple-touch-icon.png in the game's folder (scripts/art/build_favicon.py). The paths are relative, so a
+ * game in a subfolder finds them. Every frame's head carries them: the template's page and popup heads and the safe
+ * frame through {headscript}, which the operator pages and setup.php draw through too. 1.1.2 wrote one shortcut icon
+ * link to its own favicon.ico here.
+ */
+function resurrection_icon_links(){
+	return "<link rel=\"icon\" href=\"favicon.ico\" sizes=\"any\">"
+		."<link rel=\"icon\" href=\"favicon.svg\" type=\"image/svg+xml\">"
+		."<link rel=\"apple-touch-icon\" href=\"apple-touch-icon.png\">";
+}
+
 /** An attribute value, escaped for either quote. */
 function resurrection_attribute_value(string $value): string {
 	return htmlspecialchars($value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');

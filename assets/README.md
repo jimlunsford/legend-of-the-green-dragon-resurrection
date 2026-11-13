@@ -8,11 +8,14 @@ The art is original SVG drawn by Claude for Phoenix 2:33 LLC and approved by Jim
 Phoenix 2:33 LLC and licensed under the Creative Commons Attribution-ShareAlike 4.0 International license
 (CC BY-SA 4.0); the full text is in [`LICENSE`](LICENSE).
 
-The license covers exactly three folders:
+The license covers exactly four folders and four files:
 
 - `scenes/`
 - `portraits/`
 - `icons/`
+- `brand/`: the source of the game's icon, the dragon eye (Phase 6 task 17)
+- the icon built from it, in the game's top folder: `favicon.ico`, `favicon.png`, `favicon.svg` and
+  `apple-touch-icon.png` (`scripts/art/build_favicon.py`)
 
 It does not cover `fonts/` (each font family keeps the SIL Open Font License 1.1 in its own `OFL.txt`, see
 `docs/THIRD-PARTY-LICENSES.md`) or `ui/` (the stylesheets are code, under the core license: CC BY-NC-SA 2.0 and
@@ -26,7 +29,7 @@ Credit to use wherever the art is shown or shared outside the game:
 
 ```
 assets/
-  LICENSE                     CC BY-SA 4.0 for scenes/, portraits/ and icons/
+  LICENSE                     CC BY-SA 4.0 for scenes/, portraits/, icons/, brand/ and the game's icon files
   README.md                   this file
   scenes/<place>.svg          scene banners, 1200x320: village, forest, fallback, and the 17 places of batch 2
   portraits/race/<race>.svg   race portraits, 200x240: human, elf, dwarf, troll, unknown
@@ -37,6 +40,8 @@ assets/
   portraits/master/<id>.svg              each seeded training master, by masterid
   portraits/SHA256SUMS                   the SHA-256 of batch 4's 313 SVGs (paths relative to assets/)
   icons/<name>.svg            line icons on a 24px grid: the 18 character panel icons of batch 3
+  brand/resurrection-eye.svg  the game's icon, the dragon eye, 64x64; scripts/art/build_favicon.py builds favicon.ico,
+                              favicon.png, favicon.svg and apple-touch-icon.png from it (Phase 6 task 17)
   fonts/<family>/             woff2 faces and OFL.txt (SIL OFL 1.1)
   ui/                         tokens.css, fonts.css, resurrection.css
 ```

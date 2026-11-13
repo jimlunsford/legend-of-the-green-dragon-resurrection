@@ -10150,6 +10150,11 @@ function MODULE_dohook($hook,$args) {
                     self.assertSecurityHeaders(headers, mode, f'{mode} {path}')
                     # Every page loads the behaviors script, and nothing inline.
                     self.assertIn('<script src="assets/ui/behaviors.js" defer></script>', body, f'{mode} {path}')
+                    # Phase 6 task 17 (R5): the game's three icon links in the head, a popup's too.
+                    head = body[:body.index('</head>')]
+                    for link in ['<link rel="icon" href="favicon.ico" sizes="any">', '<link rel="icon" href="favicon.svg" type="image/svg+xml">',
+                                 '<link rel="apple-touch-icon" href="apple-touch-icon.png">']:
+                        self.assertEqual(1, head.count(link), f'{mode} {path}: {link}')
                 # No settings before these answer: the policy is always enforced.
                 for path, status in [('installer.php', 403), ('index.php', 302)]:
                     code, headers, _ = self._headers(self.port, path)

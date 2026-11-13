@@ -76,7 +76,8 @@ class ReleasePackageTests(unittest.TestCase):
         self.assertEqual(expected, self.names())
         # The list's own entries are all there: the two shell commands, the pages, the folders and the credits.
         for name in ['scripts/install.php', 'scripts/upgrade.php', 'index.php', 'setup.php', 'common.php', 'lib/output.php',
-                     'src/Version.php', 'templates/resurrection.htm', 'favicon.ico', *CREDITS]:
+                     'src/Version.php', 'templates/resurrection.htm', 'favicon.ico', 'favicon.png', 'favicon.svg',
+                     'apple-touch-icon.png', 'assets/brand/resurrection-eye.svg', *CREDITS]:
             self.assertIn(name, self.names())
         # No document in upload/ but the two notes that travel with their folders.
         self.assertEqual(['assets/README.md', 'upgrades/README.md'], [n for n in self.names() if n.lower().endswith('.md')])

@@ -8,7 +8,7 @@ define('RESURRECTION_ENTRY', true);
 // CONFIG is the install's configuration file (default dbconnect.php). --dry-run lists what is pending and changes
 // nothing. Applying needs --backup-confirmed: MySQL and MariaDB commit a table change the moment it runs, so an upgrade
 // that stops partway cannot be rolled back, and a backup taken just before it is the way back
-// (docs/MODERN-INSTALLATION.md, "Upgrading"). The command holds the install's and maintenance's database locks while
+// (the host guide, "Upgrade" and "Backups and restore"). The command holds the install's and maintenance's database locks while
 // it runs, applies the pending steps in upgrades/ in order, records each once it succeeded, runs any pending bundled
 // module upgrade, and stops at the first failure (lib/upgrade.php).
 //
@@ -25,6 +25,9 @@ set_error_handler(static function (int $severity, string $message, string $file,
 require 'src/Upgrade/UpgradeRefused.php';
 require 'src/Upgrade/UpgradeStopped.php';
 require 'src/Configuration/ConfigLocation.php';
+// The messages link the host guide online at this version's tag: the documents are not on the server (Phase 6 task 17,
+// R4; lib/source_link.php).
+require 'lib/source_link.php';
 use Resurrection\Upgrade\UpgradeRefused;
 use Resurrection\Upgrade\UpgradeStopped;
 
@@ -36,13 +39,13 @@ try {
     foreach (array_slice($argv ?? [], 1) as $argument) {
         if ($argument === '--dry-run') { $dryRun = true; }
         elseif ($argument === '--backup-confirmed') { $backup = true; }
-        elseif (str_starts_with($argument, '--')) { throw new UpgradeRefused('Unknown option. Use --dry-run or --backup-confirmed (docs/MODERN-INSTALLATION.md, "Upgrading"). Nothing was changed.'); }
+        elseif (str_starts_with($argument, '--')) { throw new UpgradeRefused('Unknown option. Use --dry-run or --backup-confirmed (the host guide, "Upgrade": ' . resurrection_doc_url('docs/HOST-GUIDE.md', '9-upgrade') . '). Nothing was changed.'); }
         else { $paths[] = $argument; }
     }
     if (count($paths) > 1) { throw new UpgradeRefused('Give one configuration file. Nothing was changed.'); }
     if ($dryRun && $backup) { throw new UpgradeRefused('Give --dry-run or --backup-confirmed, not both. Nothing was changed.'); }
     if (!$dryRun && !$backup) {
-        throw new UpgradeRefused('Take a fresh backup of the database first, then run again with --backup-confirmed. Some upgrade changes cannot be rolled back: MySQL and MariaDB commit a table change the moment it runs, so if an upgrade stops partway, the backup is the way back. To see what would change without changing anything, use --dry-run. docs/MODERN-INSTALLATION.md, "Upgrading", says how to take and restore a backup. Nothing was changed.');
+        throw new UpgradeRefused('Take a fresh backup of the database first, then run again with --backup-confirmed. Some upgrade changes cannot be rolled back: MySQL and MariaDB commit a table change the moment it runs, so if an upgrade stops partway, the backup is the way back. To see what would change without changing anything, use --dry-run. The host guide says how to take and restore a backup ("Backups and restore": ' . resurrection_doc_url('docs/HOST-GUIDE.md', '10-backups-and-restore') . '). Nothing was changed.');
     }
     $located = \Resurrection\Configuration\ConfigLocation::fromEnvironment();
     if ($located !== null) {
@@ -70,6 +73,6 @@ try {
     fwrite(STDERR, $stopped->getMessage() . "\n");
 } catch (Throwable $error) {
     // No exception message, trace, SQL, submitted values or configuration in the output.
-    fwrite(STDERR, 'Upgrade refused or failed (' . ($GLOBALS['resurrection_upgrade_phase'] ?? 'preflight') . ', at ' . basename($error->getFile()) . ':' . $error->getLine() . '). If the upgrade had started, the report above says what was applied. Check the configuration and docs/MODERN-INSTALLATION.md, "Upgrading".' . "\n");
+    fwrite(STDERR, 'Upgrade refused or failed (' . ($GLOBALS['resurrection_upgrade_phase'] ?? 'preflight') . ', at ' . basename($error->getFile()) . ':' . $error->getLine() . '). If the upgrade had started, the report above says what was applied. Check the configuration and the host guide, "Upgrade": ' . resurrection_doc_url('docs/HOST-GUIDE.md', '9-upgrade') . "\n");
 }
 exit($code);

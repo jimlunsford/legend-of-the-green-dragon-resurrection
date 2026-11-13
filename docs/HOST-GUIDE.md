@@ -10,8 +10,12 @@ commands, settings or values to type exactly.
 **Known limitations of a hosted game (rc.1).** The game sends mail only through PHP's `mail()`: there is no SMTP
 setting, so the server needs a working mail program. Mail is best effort. Password recovery by email, email
 verification and confirmed address changes work only while account mail is on, and account mail turns on only after
-the game has proved its mail arrives (section 11); until then an administrator resets passwords in the user editor. The
-project's own public hosting gates are listed in `ROADMAP.md`, "Public hosting".
+the game has proved its mail arrives (section 11); until then an administrator resets passwords in the user editor.
+
+**Public hosting is yours to decide.** Resurrection is a showcase project, finished at `1.0.0` (after it, bug fixes
+only). The project's public hosting gates that the code does not meet belong to whoever runs a public server: abuse
+controls, production TLS, proxy and session settings, keeping internal files private, isolation and least privilege,
+tested backups and restores, monitoring, and an independent review. They are listed in `ROADMAP.md`, "Public hosting".
 
 ## 1. What you need
 
@@ -72,7 +76,7 @@ Into the site's folder (the docroot, the folder the site's address opens, for ex
 - `upgrades/`
 - `scripts/install.php` and `scripts/upgrade.php`, inside a scripts folder: the shell path uses them
 - `*.php`: every PHP file in the top folder, including `common.php` and `battle.php`, which the pages include
-- `favicon.ico` and `favicon.png`
+- `favicon.ico`, `favicon.png`, `favicon.svg` and `apple-touch-icon.png`: the game's icons
 - `LICENSE.txt`, `README.txt` and `NOTICE`: the license and the credits (section 6, "The credits")
 
 ### Do not upload
@@ -106,7 +110,7 @@ site; then that sub-folder is the game's folder.
 - `assets/`: the style sheets, scripts, fonts and art
 - `images/`: the few 1.1.2 images still used
 - `templates/`: the page template (harmless to serve)
-- `favicon.ico`, `favicon.png`
+- `favicon.ico`, `favicon.png`, `favicon.svg`, `apple-touch-icon.png`: the game's icons (the dragon eye)
 - `LICENSE.txt`, `README.txt`, `NOTICE`: the license and credits
 - `.well-known/`: certificate renewals (your panel may create it)
 

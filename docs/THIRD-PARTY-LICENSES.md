@@ -135,7 +135,16 @@ top level.
 | Resurrection's art | `assets/scenes/`, `assets/portraits/`, `assets/icons/` | Phoenix 2:33 LLC's, CC BY-SA 4.0 (`assets/LICENSE`) | `NOTICE`, `assets/README.md` |
 | Resurrection's interface code | `assets/ui/` (style sheets and scripts written for Resurrection; no third-party library) | the core license | `NOTICE` |
 
-No Composer package, JavaScript library or other third-party file ships in `upload/`. Not accounted for beyond the
-1.1.2 distribution: the authorship and terms of the four inherited images, and the module code by authors other than
-Eric Stevens and JT Traub, which has not been reviewed file by file. Both stay the open items of
-`LICENSING-AND-PROVENANCE.md`.
+No Composer package, JavaScript library or other third-party file ships in `upload/`.
+
+Provenance note (Phase 6 task 17, 2026-11-13). Two things in `upload/` have no record of their own beyond the 1.1.2
+distribution, and this project cannot account for them further:
+
+- the authorship of the four images inherited from 1.1.2 (`images/new.gif`, `images/newscroll.GIF`,
+  `images/trans.gif` and `images/somerights20.gif`);
+- the bundled modules' code by authors other than 1.1.2's own (Eric Stevens and JT Traub): the module authors named
+  in the table above.
+
+Both ship as part of the Legend of the Green Dragon 1.1.2 distribution, under that distribution's license (CC BY-NC-SA
+2.0 and `LICENSE.txt`), exactly as 1.1.2 shipped them; the module authors' credits stay in each module. Nothing was
+removed. They remain the open items of `LICENSING-AND-PROVENANCE.md`.

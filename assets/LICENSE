@@ -2,15 +2,20 @@ Legend of the Green Dragon - Resurrection: original art
 
 Copyright (c) 2026 Phoenix 2:33 LLC
 
-The art in these three folders is licensed under the Creative Commons
-Attribution-ShareAlike 4.0 International license (CC BY-SA 4.0),
+The art in these four folders, and the game's four icon files in its top
+folder, is licensed under the Creative Commons Attribution-ShareAlike 4.0
+International license (CC BY-SA 4.0),
 https://creativecommons.org/licenses/by-sa/4.0/ :
 
     assets/scenes/
     assets/portraits/
     assets/icons/
+    assets/brand/       the icon's source, the dragon eye
+    favicon.ico, favicon.png, favicon.svg, apple-touch-icon.png
+                        the icon, built from assets/brand/resurrection-eye.svg
 
-This license covers those three folders and nothing else. It does not cover:
+This license covers those four folders and those four files and nothing else.
+It does not cover:
 
     assets/fonts/   the bundled fonts, under the SIL Open Font License 1.1,
                     each with its own OFL.txt (docs/THIRD-PARTY-LICENSES.md)

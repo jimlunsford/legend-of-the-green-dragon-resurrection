@@ -15,19 +15,11 @@ final class DocLinkTest extends TestCase
      * Shipped files that may name a document, and why. Nothing here is text a page shows.
      * - lib/source_link.php: the helper's own check of a document path.
      * - src/Upgrade/StepCatalog.php: 'README.md' is the note that ships inside upgrades/, which the catalog skips.
-     * - scripts/install.php, scripts/upgrade.php: the commands' refusal texts stay as they are (CLAUDE.md, "Install,
-     *   upgrade and maintenance services"; tests/unit/UpgradeTest.php is their proof). Their doc names are R2's open
-     *   part, recorded in docs/PHASE6-TASK16-20261113.md.
+     * The commands' messages name the host guide through the helper since Phase 6 task 17 (R4), so they have no exception.
      */
     private const array EXCEPTIONS = [
         'lib/source_link.php' => ['#\Adocs/[A-Za-z0-9][A-Za-z0-9._-]*\.md\z#'],
         'src/Upgrade/StepCatalog.php' => ['README.md'],
-        'scripts/install.php' => ['Unknown option. See docs/MODERN-INSTALLATION.md.'],
-        'scripts/upgrade.php' => [
-            'Unknown option. Use --dry-run or --backup-confirmed (docs/MODERN-INSTALLATION.md, "Upgrading"). Nothing was changed.',
-            'Take a fresh backup of the database first, then run again with --backup-confirmed. Some upgrade changes cannot be rolled back: MySQL and MariaDB commit a table change the moment it runs, so if an upgrade stops partway, the backup is the way back. To see what would change without changing anything, use --dry-run. docs/MODERN-INSTALLATION.md, "Upgrading", says how to take and restore a backup. Nothing was changed.',
-            '). If the upgrade had started, the report above says what was applied. Check the configuration and docs/MODERN-INSTALLATION.md, "Upgrading".',
-        ],
     ];
 
     private const string NAMES_A_DOCUMENT = '#docs/|\b[\w.-]+\.md\b#';

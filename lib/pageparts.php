@@ -245,10 +245,10 @@ function page_footer($saveuser=true){
 	}else{
 		$session['needtoviewmotd']=false;
 	}
-	// {headscript}: the icon and the page behaviors (Phase 6 task 3). 1.1.2 could also write an inline script here (its
-	// $headscript, which nothing in the game set after the MoTD popup went in Phase 5 task 4); no page prints one now.
-	$pre_headscript = "<LINK REL=\"shortcut icon\" HREF=\"favicon.ico\" TYPE=\"image/x-icon\"/>";
-	$header = str_replace("{headscript}",$pre_headscript.resurrection_behaviors_script(),$header);
+	// {headscript}: the icons (Phase 6 task 17; 1.1.2 wrote one shortcut icon link here) and the page behaviors (Phase 6
+	// task 3). 1.1.2 could also write an inline script here (its $headscript, which nothing in the game set after the MoTD
+	// popup went in Phase 5 task 4); no page prints one now.
+	$header = str_replace("{headscript}",resurrection_icon_links().resurrection_behaviors_script(),$header);
 
 	$script = "";
 
@@ -442,8 +442,8 @@ function popup_header($title="Legend of the Green Dragon"){
 
 	$header = $template['popuphead'];
 	$header = str_replace("{title}", $title, $header);
-	// The page behaviors (Phase 6 task 3): a popup's confirmations, previews and warnings too.
-	$header = str_replace("{headscript}", resurrection_behaviors_script(), $header);
+	// The icons (Phase 6 task 17) and the page behaviors (Phase 6 task 3): a popup's confirmations, previews and warnings too.
+	$header = str_replace("{headscript}", resurrection_icon_links() . resurrection_behaviors_script(), $header);
 	$header .= resurrection_template_notice();
 }
 

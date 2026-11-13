@@ -394,6 +394,21 @@ final class TemplateRenderTest extends TestCase
     }
 
     /** A finished page of the new template: no error, no template warning, the copyright line once. */
+    /**
+     * The game's icons in the page's head, once each (Phase 6 task 17, R5): favicon.ico (sizes any), favicon.svg and the
+     * apple-touch-icon, by relative paths, and no other icon link (1.1.2's shortcut icon is gone).
+     */
+    private function assertIconLinks(string $page, string $label): void
+    {
+        $head = substr($page, 0, (int)strpos($page, '</head>'));
+        foreach (['<link rel="icon" href="favicon.ico" sizes="any">', '<link rel="icon" href="favicon.svg" type="image/svg+xml">',
+            '<link rel="apple-touch-icon" href="apple-touch-icon.png">'] as $link) {
+            self::assertSame(1, substr_count($head, $link), $label . ': ' . $link);
+            self::assertSame(1, substr_count($page, $link), $label . ': ' . $link . ' only in the head');
+        }
+        self::assertSame(3, preg_match_all('/<link\b[^>]*\brel="(?:shortcut icon|icon|apple-touch-icon)"/i', $page), $label);
+    }
+
     private function assertCleanPage(string $page, string $script): void
     {
         self::assertStringStartsWith("<!DOCTYPE html>\n<html lang=\"en\">", $page, $script);
@@ -409,6 +424,7 @@ final class TemplateRenderTest extends TestCase
         self::assertSame(1, substr_count($page, 'Phoenix 2:33 LLC'), $script);
         self::assertGreaterThan(strpos($page, self::COPYRIGHT), strpos($page, self::ATTRIBUTION), $script);
         self::assertStringEndsWith("</html>\n", $page, $script);
+        $this->assertIconLinks($page, $script);
     }
 
     /**
@@ -431,6 +447,7 @@ final class TemplateRenderTest extends TestCase
         self::assertSame(1, substr_count($page, 'Creative Commons License</a>'), $label);
         self::assertSame(1, substr_count($page, self::ATTRIBUTION), $label);
         self::assertGreaterThan(strpos($page, self::COPYRIGHT), strpos($page, self::ATTRIBUTION), $label);
+        $this->assertIconLinks($page, $label);
         self::assertStringEndsWith("</html>\n", $page, $label);
     }
 
