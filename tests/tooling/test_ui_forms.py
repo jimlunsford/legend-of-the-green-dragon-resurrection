@@ -370,7 +370,7 @@ class PhoneTablesTest(unittest.TestCase):
         """Phase 6 task 18 (N3, N8): the staff tables' sort headers and Edit, Ban and Log links, and translator mode's T
         links, are at least 44 x 44 on a phone. The browser check measures them at 390 (docs/PHASE6-TASK18-20261114.md);
         the about pages' own markup stays 1.1.2's (test_license_text)."""
-        rule = self.phone_rule('.rz-content tr.trhead a, .rz-content a.rz-tap-phone, a.t, a.thot')
+        rule = self.phone_rule('.rz-content tr.trhead a, .rz-content a.rz-tap-phone, .rz-content button.rz-tap-phone, a.t, a.thot')
         for value in ('display: inline-flex;', 'min-width: var(--touch-target);', 'min-height: var(--touch-target);'):
             self.assertIn(value, rule, value)
         self.assertNotRegex(self.outside, r'\.rz-tap-phone\b')
@@ -378,12 +378,19 @@ class PhoneTablesTest(unittest.TestCase):
         links = {'lib/user/user_.php': ("<a class='rz-tap-phone' href='user.php?op=edit&userid=",
                                         "<a class='rz-tap-phone' href='user.php?op=setupban&userid=",
                                         "<a class='rz-tap-phone' href='user.php?op=debuglog&userid="),
-                 'titleedit.php': ("<a class='rz-tap-phone' href='titleedit.php?op=edit&id=$id'>",),
-                 'creatures.php': ("<a class='rz-tap-phone' href='creatures.php?op=edit&creatureid=$cid'>",)}
+                 'titleedit.php': ("<a class='rz-tap-phone' href='titleedit.php?op=edit&id=$id'>",
+                                   # Task 18's fix: the Delete button in the same cell (its last argument, true).
+                                   "resurrection_content_context('del', $row), $del, $delconfirm, true) . \"]</td>\");"),
+                 'creatures.php': ("<a class='rz-tap-phone' href='creatures.php?op=edit&creatureid=$cid'>",
+                                   "resurrection_content_context('del', $row), $del, $confirm, true) . \" ]</td><td>\");")}
         for path, needles in links.items():
             source = (ROOT / path).read_text()
             for needle in needles:
                 self.assertIn(needle, source, path)
+        # The delete form's button carries the class when asked to, and only then (the other editors are unchanged).
+        editor = (ROOT / 'lib' / 'content_editor.php').read_text()
+        self.assertIn("\"<button type='submit'\" . ($tapPhone ? \" class='rz-link-button rz-tap-phone'\" : resurrection_presentation('link-button')) . \">\"", editor)
+        self.assertIn('string $label, string $confirm, bool $tapPhone = false): string {', editor)
         # The T link's class is the translator's (lib/translator.php), the same on every page, the about pages among them.
         self.assertIn('class=\'t".', (ROOT / 'lib' / 'translator.php').read_text())
 

@@ -1028,9 +1028,11 @@ a.hotmotd { color: var(--accent); }
     Phase 6 task 18 (N3, N8): the staff tables' sort headers (modules.php, user.php) and their Edit, Ban and Log links
     (rz-tap-phone: user.php, titleedit.php, creatures.php), and translator mode's T link after each text (a.t, a.thot,
     lib/translator.php), are tap targets on a phone. The about pages' own markup is unchanged; their T links are the
-    translator's, not theirs.
+    translator's, not theirs. Its fix: the Title and Creature Editors' Delete and Del buttons beside the Edit links
+    carry the same class (button.rz-tap-phone), so this rule, not only the general button rule below, makes them
+    whole tap targets.
   */
-  .rz-content tr.trhead a, .rz-content a.rz-tap-phone, a.t, a.thot {
+  .rz-content tr.trhead a, .rz-content a.rz-tap-phone, .rz-content button.rz-tap-phone, a.t, a.thot {
     display: inline-flex; align-items: center; justify-content: center;
     min-width: var(--touch-target); min-height: var(--touch-target); vertical-align: middle;
   }

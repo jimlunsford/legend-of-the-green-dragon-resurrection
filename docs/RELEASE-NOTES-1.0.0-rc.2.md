@@ -50,7 +50,13 @@ The four known-issue fixes of the finish line (Jim's decision of 2026-11-13; `do
   an upgrade browsers fetch each changed file. Hosts may now cache `assets/ui/` and `assets/fonts/` for a long time;
   images keep plain URLs, so let browsers revalidate them (host guide, section 9).
 - **Phone tap targets.** On a phone, the sort headers and the Edit, Ban and Log links on the staff tables (Module
-  Manager, User Editor, Title Editor, Creature Editor), and translator mode's T links, are at least 44 x 44.
+  Manager, User Editor, Title Editor, Creature Editor), the Title and Creature Editors' Delete and Del buttons, and
+  translator mode's T links, are at least 44 x 44.
+- **The upgrade from rc.1 runs one step.** Upgrade step `0002-signin-limits` is the first upgrade step a released game
+  runs: it adds the three sign-in limit settings with their defaults (5, 20 and 50) where the database has none, and
+  leaves any value already stored alone. Back up the database first, then run `php scripts/upgrade.php
+  --backup-confirmed` or the upgrade on `setup.php` (host guide, "Upgrade"). A fresh install records the step as
+  applied.
 
 ### Provenance
 

@@ -78,6 +78,14 @@ Do not start a subsystem the task prompt does not name.
 - Resurrection has its own numbers, `MAJOR.MINOR.PATCH`. They do not continue 1.1.2's.
 - The first release is 1.0.0. Test builds are `1.0.0-rc.N`.
 - Every release must upgrade cleanly from the one before.
+- A new setting written by the fresh install, or any other change to the installed schema or rows, needs an upgrade
+  step in `upgrades/` (the rules in `upgrades/README.md`) in the same commit. A released database must upgrade to
+  exactly what a fresh install gives (Phase 6 task 18's fix: its three sign-in limit settings shipped without one, and
+  `0002-signin-limits.php` added it).
+- Before every push, run the release upgrade check locally in both its modes, the same way CI does: on an empty test
+  database, `python3 scripts/release-upgrade-check.py` and then `python3 scripts/release-upgrade-check.py --release-ref HEAD`,
+  with `RESURRECTION_TEST_DB_HOST`, `RESURRECTION_TEST_DB_USER`, `RESURRECTION_TEST_DB_PASSWORD` and
+  `RESURRECTION_TEST_DB_NAME` set. Both must pass.
 - No 1.1.2 server will be upgraded. All installs are fresh.
 - Do not change a version string unless a task prompt says to.
 

@@ -549,6 +549,7 @@ are not listed.
 | `upgrades/0001-account-mail.php` | `db_identifier(db_prefix('account_mail_log'))` | 1 | server | `db_identifier()` of a fixed table name (the step creates it). |
 | `upgrades/0001-account-mail.php` | `db_identifier(db_prefix('account_tokens'))` | 1 | server | `db_identifier()` of a fixed table name (the step creates it). |
 | `upgrades/0001-account-mail.php` | `db_identifier(db_prefix('accounts'))` | 2 | server | `db_identifier()` of a fixed table name (the step reads its columns and adds `emailverified`). |
+| `upgrades/0002-signin-limits.php` | `db_identifier(db_prefix('settings'))` | 2 | server | `db_identifier()` of a fixed table name (the step looks for each sign-in limit row and adds a missing one; the names and values are bound). |
 <!-- /sql-sweep-table -->
 
 ## Acceptance, 2026-10-23
@@ -682,3 +683,14 @@ reviewed onto the list:
 
 No request value reaches the SQL text: the addresses, the password check's account, the tokens' hashes, the times and
 the account IDs are bound. The test and its matching are unchanged.
+
+## Reviewed list change, 2026-11-14 (Phase 6 task 18's fix)
+
+Task 18's fix adds upgrade step `upgrades/0002-signin-limits.php`, which puts one fixed table name into SQL text, and
+`SqlSweepTest` failed locally ("Interpolated into SQL and not reviewed") until it was reviewed onto the list:
+
+- A fixed table name through the configured prefix and `db_identifier()`: `settings`, at its two sites (the lookup of
+  each row and the insert of a missing one).
+
+No request value reaches the SQL text: the three setting names and their default values are literals in the step,
+and they are bound. The test and its matching are unchanged.

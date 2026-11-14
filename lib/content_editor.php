@@ -107,10 +107,14 @@ function resurrection_content_form(string $url, string $scope, string $context, 
     return "<form method='POST' action='" . htmlspecialchars($url, ENT_QUOTES, 'UTF-8') . "'$attributes>" . resurrection_action_fields($scope, $context);
 }
 
-/** The 1.1.2 "Del" link, with its confirmation, as a protected POST form bound to the row shown. */
-function resurrection_content_delete_form(string $url, string $scope, string $context, string $label, string $confirm): string {
+/**
+ * The 1.1.2 "Del" link, with its confirmation, as a protected POST form bound to the row shown. $tapPhone adds
+ * rz-tap-phone, which makes the button a whole 44 x 44 tap target on a phone (Phase 6 task 18 fix, N3: the Title and
+ * Creature Editors, beside their Edit links).
+ */
+function resurrection_content_delete_form(string $url, string $scope, string $context, string $label, string $confirm, bool $tapPhone = false): string {
     return resurrection_content_form($url, $scope, $context, resurrection_presentation('inline-form-flush') . resurrection_confirm_attribute($confirm)) .
-        "<button type='submit'" . resurrection_presentation('link-button') . ">" .
+        "<button type='submit'" . ($tapPhone ? " class='rz-link-button rz-tap-phone'" : resurrection_presentation('link-button')) . ">" .
         htmlspecialchars($label, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '</button></form>';
 }
 

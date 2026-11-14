@@ -78,9 +78,9 @@ if ($op == ""){
 	while($row = db_fetch_assoc($result)) {
 		$id = (int)$row['titleid'];
 		rawoutput("<tr class='".($i%2?"trlight":"trdark")."'>");
-		// The Edit link is a tap target on a phone (rz-tap-phone, Phase 6 task 18, N3); the Delete button already is.
+		// The Edit link and the Delete button are tap targets on a phone (rz-tap-phone, Phase 6 task 18 and its fix, N3).
 		rawoutput("<td>[<a class='rz-tap-phone' href='titleedit.php?op=edit&id=$id'>$edit</a>|" .
-			resurrection_content_delete_form("titleedit.php?op=delete&id=$id", "title-del-$id", resurrection_content_context('del', $row), $del, $delconfirm) . "]</td>");
+			resurrection_content_delete_form("titleedit.php?op=delete&id=$id", "title-del-$id", resurrection_content_context('del', $row), $del, $delconfirm, true) . "]</td>");
 		addnav("","titleedit.php?op=edit&id=$id");
 		rawoutput("<td>");
 		output_notl("`&%s`0",$row['dk']);

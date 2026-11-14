@@ -5,6 +5,7 @@ Each file here is one numbered database upgrade step. `php scripts/upgrade.php` 
 The steps:
 
 - `0001-account-mail.php` (Phase 6 task 13a, before the first release): account mail's two tables, `account_tokens` and `account_mail_log`, and the `accounts.emailverified` column (`docs/PHASE6-TASK12-ACCOUNT-MAIL-DESIGN-20261112.md`, section 7). Each change is checked before it is made, no row is changed, and its definitions are written out in the step, never read from shared code.
+- `0002-signin-limits.php` (Phase 6 task 18, before `1.0.0-rc.2`): the three sign-in limit settings (`signin_fail_pair` 5, `signin_fail_address` 20, `signin_fail_account` 50), which the fresh install stores. Each row is added only when it is missing, so a value an administrator already set is kept, and a rerun changes nothing. It is the first step a released game runs (`v1.0.0-rc.1` already has 0001).
 
 ## Writing a step
 

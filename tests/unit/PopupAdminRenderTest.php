@@ -424,6 +424,11 @@ final class PopupAdminRenderTest extends TestCase
         $table = $creatures->querySelector('.rz-content table.rz-grid');
         self::assertNotNull($table);
         self::assertNotNull($table->querySelector('a[href^="creatures.php?op=edit&creatureid="]'));
+        // The Del button beside each Edit link is a phone tap target too (Phase 6 task 18's fix, N3).
+        self::assertNotNull($table->querySelector('form[action^="creatures.php?op=del&creatureid="] button.rz-link-button.rz-tap-phone'));
+        $titles = $this->document($this->page('titleedit.php'));
+        self::assertNotNull($titles->querySelector('.rz-content a.rz-tap-phone[href^="titleedit.php?op=edit&id="]'));
+        self::assertNotNull($titles->querySelector('.rz-content form[action^="titleedit.php?op=delete&id="] button.rz-link-button.rz-tap-phone'));
         $edit = $this->document($this->page('creatures.php?op=edit&creatureid={creature}'));
         self::assertNotNull($edit->querySelector('.rz-content form[action="creatures.php?op=save"] table.rz-showform'));
 

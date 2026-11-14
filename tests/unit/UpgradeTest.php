@@ -112,7 +112,7 @@ final class UpgradeTest extends TestCase
 
     public function testCatalogOrdersStepsByNumberAndChecksTheirFiles(): void
     {
-        self::assertSame(['0001-account-mail'], StepCatalog::ids(dirname(__DIR__, 2) . '/upgrades'), 'The real steps, in number order (Phase 6 task 13a added the first).');
+        self::assertSame(['0001-account-mail', '0002-signin-limits'], StepCatalog::ids(dirname(__DIR__, 2) . '/upgrades'), 'The real steps, in number order (Phase 6 task 13a added the first, task 18\'s fix the second).');
         self::assertSame(['0001-first', '0002-second', '0010-tenth'], StepCatalog::ids(self::directory('order')));
         $directory = sys_get_temp_dir() . '/resurrection-steps-' . bin2hex(random_bytes(6));
         mkdir($directory, 0700);
@@ -181,7 +181,7 @@ final class UpgradeTest extends TestCase
         $before = resurrection_database_snapshot();
         $refusal = 'Upgrade refused. Take a fresh backup of the database first, then run again with --backup-confirmed. Some upgrade changes cannot be rolled back: MySQL and MariaDB commit a table change the moment it runs, so if an upgrade stops partway, the backup is the way back. To see what would change without changing anything, use --dry-run. The host guide says how to take and restore a backup ("Backups and restore": ' . self::guide() . '#10-backups-and-restore). Nothing was changed.' . "\n";
         self::assertSame([1, '', $refusal], $this->command());
-        $current = "The database is current: 1 of 1 upgrade steps applied, and every installed bundled module is at its version. Nothing was changed.\n";
+        $current = "The database is current: 2 of 2 upgrade steps applied, and every installed bundled module is at its version. Nothing was changed.\n";
         self::assertSame([0, $current, ''], $this->command('--dry-run'));
         self::assertSame([0, $current, ''], $this->command('--backup-confirmed'));
         self::assertSame([1, '', "Upgrade refused. Give --dry-run or --backup-confirmed, not both. Nothing was changed.\n"], $this->command('--dry-run', '--backup-confirmed'));
@@ -229,7 +229,9 @@ final class UpgradeTest extends TestCase
 
     /**
      * Undo what upgrade step 0001 adds, as a database from before it: its two tables and its column, and its ledger row.
-     * Valid only when that loses nothing: both tables empty and every emailverified its default.
+     * Valid only when that loses nothing: both tables empty and every emailverified its default. A database from before
+     * 0001 is from before 0002 too (steps run in order), so 0002's rows and ledger row go as well: valid only while the
+     * three sign-in limits hold their defaults.
      * @param list<string> $objects which of 'account_tokens', 'account_mail_log', 'emailverified' to remove
      */
     private static function undoAccountMail(array $objects): void
@@ -241,6 +243,11 @@ final class UpgradeTest extends TestCase
             db_query($object === 'emailverified' ? 'ALTER TABLE accounts DROP COLUMN emailverified' : 'DROP TABLE ' . $object);
         }
         self::forget(['0001-account-mail']);
+        self::assertSame(['signin_fail_account' => '50', 'signin_fail_address' => '20', 'signin_fail_pair' => '5'],
+            array_column(db_query("SELECT setting,value FROM settings WHERE setting IN ('signin_fail_pair','signin_fail_address','signin_fail_account') ORDER BY setting"), 'value', 'setting'),
+            'Fixture invalid: a sign-in limit is not its default.');
+        db_query("DELETE FROM settings WHERE setting IN ('signin_fail_pair','signin_fail_address','signin_fail_account')");
+        self::forget(['0002-signin-limits']);
         $GLOBALS['settings'] = null;
     }
 
@@ -260,15 +267,17 @@ final class UpgradeTest extends TestCase
             self::assertArrayNotHasKey('account_mail_log', $old['tables']);
             self::assertNotContains('emailverified', array_column($old['tables']['accounts']['columns'], 'name'));
             self::assertSame('behind', resurrection_database_state());
-            self::assertSame(['Pending:', '- step 0001-account-mail: Add account mail: the account_tokens and account_mail_log tables and the accounts.emailverified column', 'Dry run: nothing was changed.'],
+            self::assertSame(['Pending:', '- step 0001-account-mail: Add account mail: the account_tokens and account_mail_log tables and the accounts.emailverified column',
+                '- step 0002-signin-limits: Add the sign-in limit settings with their defaults: signin_fail_pair, signin_fail_address and signin_fail_account', 'Dry run: nothing was changed.'],
                 $this->upgrade($real, false));
             self::assertSame($old, resurrection_database_snapshot());
-            self::assertSame(['Pending:', '- step 0001-account-mail: Add account mail: the account_tokens and account_mail_log tables and the accounts.emailverified column', 'Applying:',
-                '- applied and recorded step 0001-account-mail', 'Upgrade complete: applied 1 upgrade step(s) and 0 module upgrade(s). The database is current.'], $this->upgrade($real, true));
+            self::assertSame(['Pending:', '- step 0001-account-mail: Add account mail: the account_tokens and account_mail_log tables and the accounts.emailverified column',
+                '- step 0002-signin-limits: Add the sign-in limit settings with their defaults: signin_fail_pair, signin_fail_address and signin_fail_account', 'Applying:', '- applied and recorded step 0001-account-mail', '- applied and recorded step 0002-signin-limits',
+                'Upgrade complete: applied 2 upgrade step(s) and 0 module upgrade(s). The database is current.'], $this->upgrade($real, true));
             self::assertSame($fresh, self::withoutLedgerTimes());
             // Run again: the database is current and nothing changes. The step itself, run again, changes nothing either.
             $upgraded = resurrection_database_snapshot();
-            self::assertSame(['The database is current: 1 of 1 upgrade steps applied, and every installed bundled module is at its version. Nothing was changed.'], $this->upgrade($real, true));
+            self::assertSame(['The database is current: 2 of 2 upgrade steps applied, and every installed bundled module is at its version. Nothing was changed.'], $this->upgrade($real, true));
             (StepCatalog::load($real, '0001-account-mail')['apply'])();
             self::assertSame($upgraded, resurrection_database_snapshot());
         } finally {
@@ -276,11 +285,82 @@ final class UpgradeTest extends TestCase
                 db_query('DELETE FROM upgrade_steps WHERE step=?', true, [$row['step']]);
                 db_query('INSERT INTO upgrade_steps (step,applied) VALUES (?,?)', true, [$row['step'], $row['applied']]);
             }
+            // The sign-in limits undoAccountMail() removed, if a failure left them out (0002 adds only missing rows).
+            (StepCatalog::load($real, '0002-signin-limits')['apply'])();
         }
         self::assertSame($original, resurrection_database_snapshot());
         // The step writes its definitions out and reads none from shared code.
         $source = (string)file_get_contents($real . '/0001-account-mail.php');
         foreach (['resurrection_', 'require', 'include', 'table_create', 'descriptor'] as $shared) self::assertStringNotContainsString($shared, $source);
+    }
+
+    public function testSignInLimitsStepAddsMissingRowsAndKeepsAChangedOne(): void
+    {
+        // Phase 6 task 18's fix: the fresh install stores the three sign-in limits; a database installed from
+        // v1.0.0-rc.1 has no rows. Step 0002 adds each missing row with its default, so the upgraded database matches
+        // the fresh install; it keeps a row that exists, whatever its value, changes no other row, and a rerun changes
+        // nothing.
+        $this->connect();
+        $real = dirname(__DIR__, 2) . '/upgrades';
+        $names = ['signin_fail_pair', 'signin_fail_address', 'signin_fail_account'];
+        $limits = static fn (): array => array_column(db_query("SELECT setting,value FROM settings WHERE setting IN ('signin_fail_pair','signin_fail_address','signin_fail_account') ORDER BY setting"), 'value', 'setting');
+        $remove = static function (array $settings): void { foreach ($settings as $setting) db_query('DELETE FROM settings WHERE setting=?', true, [$setting]); };
+        $times = db_query('SELECT step,applied FROM upgrade_steps ORDER BY step');
+        $saved = $limits();
+        $original = resurrection_database_snapshot();
+        try {
+            // The test database is installed fresh: its limits are the defaults, so it is the fresh install to match.
+            self::assertSame(['signin_fail_account' => '50', 'signin_fail_address' => '20', 'signin_fail_pair' => '5'], $saved, 'Fixture invalid: the limits are not the defaults.');
+            $fresh = self::withoutLedgerTimes();
+            // A database from before the step: no rows, and 0002 not recorded.
+            $remove($names);
+            self::forget(['0002-signin-limits']);
+            $GLOBALS['settings'] = null;
+            $old = resurrection_database_snapshot();
+            self::assertSame([], $limits());
+            self::assertSame('behind', resurrection_database_state());
+            $pending = '- step 0002-signin-limits: Add the sign-in limit settings with their defaults: signin_fail_pair, signin_fail_address and signin_fail_account';
+            self::assertSame(['Pending:', $pending, 'Dry run: nothing was changed.'], $this->upgrade($real, false));
+            self::assertSame($old, resurrection_database_snapshot());
+            self::assertSame(['Pending:', $pending, 'Applying:', '- applied and recorded step 0002-signin-limits',
+                'Upgrade complete: applied 1 upgrade step(s) and 0 module upgrade(s). The database is current.'], $this->upgrade($real, true));
+            self::assertSame($fresh, self::withoutLedgerTimes());
+            // Run again: current, and nothing changes. The step itself, run again, changes nothing either.
+            $upgraded = resurrection_database_snapshot();
+            self::assertSame(['The database is current: 2 of 2 upgrade steps applied, and every installed bundled module is at its version. Nothing was changed.'], $this->upgrade($real, true));
+            (StepCatalog::load($real, '0002-signin-limits')['apply'])();
+            self::assertSame($upgraded, resurrection_database_snapshot());
+            // An administrator already set the pair limit to 8 and the address limit to its lowest, 5, and one row is
+            // missing: the step adds only the missing row, keeps both values, and changes no other row.
+            db_query("UPDATE settings SET value='8' WHERE setting='signin_fail_pair'");
+            db_query("UPDATE settings SET value='5' WHERE setting='signin_fail_address'");
+            $remove(['signin_fail_account']);
+            $before = resurrection_database_snapshot();
+            (StepCatalog::load($real, '0002-signin-limits')['apply'])();
+            $after = resurrection_database_snapshot();
+            self::assertSame(['signin_fail_account' => '50', 'signin_fail_address' => '5', 'signin_fail_pair' => '8'], $limits());
+            $added = array_values(array_diff($after['rows']['settings'], $before['rows']['settings']));
+            self::assertSame([json_encode(['setting' => 'signin_fail_account', 'value' => '50'])], $added);
+            self::assertSame([], array_diff($before['rows']['settings'], $after['rows']['settings']), 'no settings row changed or removed');
+            unset($before['rows']['settings'], $after['rows']['settings']);
+            self::assertSame($before, $after, 'no other table changed');
+            (StepCatalog::load($real, '0002-signin-limits')['apply'])();
+            self::assertSame(['signin_fail_account' => '50', 'signin_fail_address' => '5', 'signin_fail_pair' => '8'], $limits(), 'a rerun keeps them');
+        } finally {
+            $remove($names);
+            foreach ($saved as $setting => $value) db_query('INSERT INTO settings (setting,value) VALUES (?,?)', true, [$setting, $value]);
+            foreach ($times as $row) {
+                db_query('DELETE FROM upgrade_steps WHERE step=?', true, [$row['step']]);
+                db_query('INSERT INTO upgrade_steps (step,applied) VALUES (?,?)', true, [$row['step'], $row['applied']]);
+            }
+            $GLOBALS['settings'] = null;
+        }
+        self::assertSame($original, resurrection_database_snapshot());
+        // The step writes its values out, reads none from shared code, and touches only the settings table.
+        $source = (string)file_get_contents($real . '/0002-signin-limits.php');
+        foreach (['resurrection_', 'require', 'include', 'getsetting', 'savesetting', 'UPDATE', 'DELETE', 'REPLACE'] as $shared) self::assertStringNotContainsString($shared, $source);
+        self::assertSame(2, substr_count($source, "db_prefix('settings')"));
+        self::assertStringContainsString("['signin_fail_pair' => '5', 'signin_fail_address' => '20', 'signin_fail_account' => '50']", $source);
     }
 
     public function testAccountMailStepStoppedMidwayFinishesOnRerun(): void
@@ -305,7 +385,7 @@ final class UpgradeTest extends TestCase
                 self::undoAccountMail($missing);
                 self::assertSame('behind', resurrection_database_state(), $state);
                 $lines = $this->upgrade($real, true);
-                self::assertSame('- applied and recorded step 0001-account-mail', $lines[3], $state);
+                self::assertSame(['- applied and recorded step 0001-account-mail', '- applied and recorded step 0002-signin-limits'], array_slice($lines, 4, 2), $state);
                 self::assertSame($fresh, self::withoutLedgerTimes(), $state);
             }
         } finally {
@@ -313,6 +393,8 @@ final class UpgradeTest extends TestCase
                 db_query('DELETE FROM upgrade_steps WHERE step=?', true, [$row['step']]);
                 db_query('INSERT INTO upgrade_steps (step,applied) VALUES (?,?)', true, [$row['step'], $row['applied']]);
             }
+            // The sign-in limits undoAccountMail() removed, if a failure left them out (0002 adds only missing rows).
+            (StepCatalog::load($real, '0002-signin-limits')['apply'])();
         }
         self::assertSame($original, resurrection_database_snapshot());
     }
