@@ -3,6 +3,7 @@ declare(strict_types=1);
 namespace Resurrection\Tests;
 use PHPUnit\Framework\TestCase;
 use Resurrection\Configuration\LegacyConfig;
+require_once __DIR__ . '/../../src/Ui/AssetUrl.php';
 
 /**
  * Forms and buttons on real pages (Phase 5 task 9, docs/PHASE5-TASK9-FORMS-20261031.md). In the Resurrection template:
@@ -96,7 +97,7 @@ final class FormsRenderTest extends TestCase
             foreach (self::PAGES as $url) {
                 $signedIn = !in_array($url, ['create.php', 'petition.php'], true);
                 $page = $this->visit($tree, $work, $url, $signedIn ? $session : null, $player);
-                self::assertStringContainsString('<link rel="stylesheet" href="assets/ui/resurrection.css">', $page, $url);
+                self::assertStringContainsString('<link rel="stylesheet" href="' . \Resurrection\Ui\AssetUrl::versioned('assets/ui/resurrection.css') . '">', $page, $url);
                 $document = \Dom\HTMLDocument::createFromString($page, LIBXML_NOERROR);
                 $this->assertPrimaries($document, $url);
                 $this->assertLabelled($document, $url);
@@ -233,7 +234,7 @@ final class FormsRenderTest extends TestCase
                 self::assertTrue($element->hasAttribute('src'), 'inline script in the content');
             }
         }
-        self::assertSame(1, substr_count($page, '<script src="assets/ui/showform.js" defer></script>'));
+        self::assertSame(1, substr_count($page, '<script src="' . \Resurrection\Ui\AssetUrl::versioned('assets/ui/showform.js') . '" defer></script>'));
         self::assertNotNull($document->querySelector('.rz-content input.rz-button-danger[data-rz-confirm]'));
     }
 

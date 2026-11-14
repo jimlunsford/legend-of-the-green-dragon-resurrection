@@ -111,6 +111,10 @@ $default_settings = array(
 	"account_mail"=>0,
 	"account_mail_hourly"=>100,
 	"account_mail_staff"=>1,
+	// Phase 6 task 18 (F4): sign-in throttling's limits (lib/signin_throttle.php).
+	"signin_fail_pair"=>5,
+	"signin_fail_address"=>20,
+	"signin_fail_account"=>50,
 	"emailpetitions"=>0,
 	"multimaster"=>1,
 	"pvpimmunity"=>5,

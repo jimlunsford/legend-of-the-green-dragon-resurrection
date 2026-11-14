@@ -34,6 +34,7 @@ ROOT = Path(__file__).resolve().parents[2]
 ICON_LINKS = ['<link rel="icon" href="favicon.ico" sizes="any">', '<link rel="icon" href="favicon.svg" type="image/svg+xml">',
               '<link rel="apple-touch-icon" href="apple-touch-icon.png">']  # Phase 6 task 17 (R5): in every frame's head
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+from asset_urls import asset_url  # noqa: E402
 from php_runtime import supported_php  # noqa: E402
 from loopback_server import start_php_server  # noqa: E402
 import mail_capture  # noqa: E402
@@ -259,7 +260,7 @@ class SetupPageTests(unittest.TestCase):
             self.assertEqual(1, body.count(credit), credit)
         for panel in ['motd.php', 'petition.php', 'mail.php', 'Online Characters', 'rz-tabbar']:
             self.assertNotIn(panel, body, panel)
-        self.assertIn('<script src="assets/ui/behaviors.js" defer></script>', body)
+        self.assertIn('<script src="' + asset_url('assets/ui/behaviors.js') + '" defer></script>', body)
         head = body[:body.index('</head>')]
         for link in ICON_LINKS:
             self.assertEqual(1, head.count(link), link)

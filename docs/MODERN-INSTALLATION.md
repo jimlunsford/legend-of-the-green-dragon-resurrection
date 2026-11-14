@@ -109,7 +109,7 @@ A successful login rotates the session ID and CSRF token. A database authenticat
 
 ## Scheduler
 
-Fresh installs set newdaycron=1. Global maintenance is run locally with:
+Fresh installs still store newdaycron=1, which nothing reads (Phase 6 task 18 took it out of Game Settings): maintenance runs only when a scheduler starts it. Global maintenance is run locally with:
 
 ```sh
 php cron.php

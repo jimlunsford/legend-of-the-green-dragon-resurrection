@@ -101,6 +101,12 @@ function prepare_template($force=false){
 		resurrection_template_refused($templatemessage);
 		$template=\Resurrection\Ui\SafeFrame::parts();
 	}
+	// The stylesheet and script URLs the frame prints carry the file's version (Phase 6 task 18, N1): after the checks,
+	// which read the template as written.
+	require_once __DIR__ . '/../src/Ui/AssetUrl.php';
+	foreach ($template as $part => $text) {
+		if (is_string($text)) $template[$part] = \Resurrection\Ui\AssetUrl::rewrite($text);
+	}
 	// The copyright line, as in 1.1.2. In 1.1.2 a refused skin skipped this (its fallback showed the credit line without
 	// the license block); the safe frame carries both.
 	{

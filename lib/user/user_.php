@@ -50,9 +50,10 @@ if ($display == 1){
 		rawoutput("<tr class='".($rn%2?"trlight":"trdark")."'>");
 		rawoutput("<td nowrap>");
 		// Del is a protected POST bound to this account; GET never deletes.
-		rawoutput("[ <a href='user.php?op=edit&userid={$row['acctid']}$m'>$ed</a> | <form method='POST' action='user.php?op=del&userid={$row['acctid']}'" . resurrection_presentation('inline-form') . resurrection_confirm_attribute($conf) . ">" .
+		// The links are tap targets on a phone (rz-tap-phone, Phase 6 task 18, N3); the Del button already is.
+		rawoutput("[ <a class='rz-tap-phone' href='user.php?op=edit&userid={$row['acctid']}$m'>$ed</a> | <form method='POST' action='user.php?op=del&userid={$row['acctid']}'" . resurrection_presentation('inline-form') . resurrection_confirm_attribute($conf) . ">" .
 			resurrection_action_fields('user-delete-' . (int)$row['acctid'], resurrection_user_delete_context($row)) .
-			"<button type='submit' class='button'>" . htmlspecialchars($del, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . "</button></form> | <a href='user.php?op=setupban&userid={$row['acctid']}'>$ban</a> | <a href='user.php?op=debuglog&userid={$row['acctid']}'>$log</a> ]");
+			"<button type='submit' class='button'>" . htmlspecialchars($del, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . "</button></form> | <a class='rz-tap-phone' href='user.php?op=setupban&userid={$row['acctid']}'>$ban</a> | <a class='rz-tap-phone' href='user.php?op=debuglog&userid={$row['acctid']}'>$log</a> ]");
 		addnav("","user.php?op=edit&userid={$row['acctid']}$m");
 		addnav("","user.php?op=del&userid={$row['acctid']}");
 		addnav("","user.php?op=setupban&userid={$row['acctid']}");

@@ -32,8 +32,10 @@ final class BoundedSettingsTest extends TestCase
         } finally {
             $settings = $saved;
         }
-        // Phase 6 task 13a adds account_mail_hourly (10 to 1000 mails an hour); LOGINTIMEOUT's range is unchanged.
-        self::assertSame(['LOGINTIMEOUT' => [300, 86400], 'account_mail_hourly' => [10, 1000]], resurrection_bounded_settings());
+        // Phase 6 task 13a adds account_mail_hourly (10 to 1000 mails an hour); task 18 the three sign-in limits
+        // (lib/signin_throttle.php). LOGINTIMEOUT's and account_mail_hourly's ranges are unchanged.
+        self::assertSame(['LOGINTIMEOUT' => [300, 86400], 'account_mail_hourly' => [10, 1000],
+            'signin_fail_pair' => [3, 100], 'signin_fail_address' => [5, 1000], 'signin_fail_account' => [20, 1000]], resurrection_bounded_settings());
         self::assertSame('abc', resurrection_bounded_setting('maxonline', 'abc'));
     }
 

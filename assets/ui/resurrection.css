@@ -5,8 +5,8 @@
   literals equal to --breakpoint-stack (900px) and --breakpoint-phone (600px), because a custom property cannot be
   used in a media query. Plain CSS, no build step, no request outside the game.
 */
-@import url('fonts.css');
-@import url('tokens.css');
+@import url('fonts.css?v=e9d8b6daabb6');
+@import url('tokens.css?v=5e7eb30da5ad');
 
 *, *::before, *::after { box-sizing: border-box; }
 
@@ -1024,6 +1024,16 @@ a.hotmotd { color: var(--accent); }
   .rz-attribution a { display: inline-flex; align-items: center; min-height: var(--touch-target); }
   /* The mail popup's Inbox and Write links (task 11 restyles the mail pages). */
   .rz-popup .rz-content td > a.motd { display: inline-flex; align-items: center; justify-content: center; min-width: var(--touch-target); min-height: var(--touch-target); }
+  /*
+    Phase 6 task 18 (N3, N8): the staff tables' sort headers (modules.php, user.php) and their Edit, Ban and Log links
+    (rz-tap-phone: user.php, titleedit.php, creatures.php), and translator mode's T link after each text (a.t, a.thot,
+    lib/translator.php), are tap targets on a phone. The about pages' own markup is unchanged; their T links are the
+    translator's, not theirs.
+  */
+  .rz-content tr.trhead a, .rz-content a.rz-tap-phone, a.t, a.thot {
+    display: inline-flex; align-items: center; justify-content: center;
+    min-width: var(--touch-target); min-height: var(--touch-target); vertical-align: middle;
+  }
   /* A form's buttons (a shop's item buttons among them) are at least a tap target wide. */
   .rz-content button, .rz-content input[type=submit], .rz-content input[type=button] { min-width: var(--touch-target); min-height: var(--touch-target); }
   .rz-field input { width: 100%; }

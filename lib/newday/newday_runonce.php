@@ -32,6 +32,11 @@ if (!\defined('RESURRECTION_ENTRY') && \PHP_SAPI !== 'cli') { \http_response_cod
 	require_once("lib/account_mail.php");
 	resurrection_account_mail_cleanup();
 
+	// Failed and throttled sign-ins and setup.php's failures (Phase 6 task 18, F4): faillog rows older than 30 days.
+	// 1.1.2 deleted them from login.php, on each failed sign-in; until this task nothing deleted them.
+	require_once("lib/signin_throttle.php");
+	resurrection_faillog_cleanup();
+
 	//Clean up old mails
 	$sql = "DELETE FROM " . db_prefix("mail") . " WHERE sent<'".date("Y-m-d H:i:s",strtotime("-".getsetting("oldmail",14)."days"))."'";
 	db_query($sql);

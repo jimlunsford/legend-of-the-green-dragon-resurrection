@@ -14,7 +14,7 @@ the game has proved its mail arrives (section 11); until then an administrator r
 
 **Public hosting is yours to decide.** Resurrection is a showcase project, finished at `1.0.0` (after it, bug fixes
 only). The project's public hosting gates that the code does not meet belong to whoever runs a public server: abuse
-controls, production TLS, proxy and session settings, keeping internal files private, isolation and least privilege,
+controls beyond the game's sign-in limits (section 6), production TLS, proxy and session settings, keeping internal files private, isolation and least privilege,
 tested backups and restores, monitoring, and an independent review. They are listed in `ROADMAP.md`, "Public hosting".
 
 ## 1. What you need
@@ -87,7 +87,7 @@ The game does not use these. If one is uploaded by mistake, the server rules in 
   `composer install` in the site's folder.
 - `.git/`, `.github/`, `.gitignore`: the project's history and its own automation.
 - `tests/`, `lab/`, `local/`, `docs/`: tests, the historical lab, local play and the project's documents.
-- `scripts/art/`, `scripts/build-release-package.py`, `scripts/lint-php.py`, `scripts/local-play.py`,
+- `scripts/art/`, `scripts/asset-versions.py`, `scripts/build-release-package.py`, `scripts/lint-php.py`, `scripts/local-play.py`,
   `scripts/release-upgrade-check.py`, `scripts/tooling-shards.py`, `scripts/validate-project.py`,
   `scripts/verify-historical-baseline.py`: the project's own tools (everything in the scripts folder but the two
   commands above).
@@ -307,6 +307,22 @@ Open Game Settings (`configuration.php`, in the Grotto) as the administrator:
   its pages break under `enforce`. `report-only` blocks nothing and makes the browser report what it would block in
   its console; `off` sends no policy. The other protections (frame, content type, referrer) are sent whatever it
   says.
+- **Sign-in Limits.** The game refuses sign-ins for a while after too many failures, counted in the database's
+  `faillog` table. Three limits, each a number Game Settings keeps inside its range:
+  - **Failed sign-ins allowed for one name from one address in 15 minutes** (`signin_fail_pair`): default 5, 3 to 100.
+  - **Failed sign-ins allowed from one address in 15 minutes** (`signin_fail_address`): default 20, 5 to 1000.
+  - **Failed sign-ins allowed for one name from all addresses in one hour** (`signin_fail_account`): default 50, 20 to
+    1000. It is high on purpose: lower, anyone could keep a player out by failing on purpose.
+
+  Over a limit, every attempt gets the same "Too many attempts. Try again in N minutes." and no password is checked.
+  The waits end by themselves; there is nothing to reset. A wrong password and a name no account has get the same
+  answer, so the sign-in form does not show which logins exist. The address is the one PHP sees (`REMOTE_ADDR`; for
+  IPv6, its /64), never a header the visitor can send such as `X-Forwarded-For`. **Behind a proxy or a CDN**, PHP sees
+  the proxy's address for every visitor, so they all share one address's limit (20 failures in 15 minutes, among
+  them). Make the server set the visitor's real address from the proxy's header only for requests that come from the
+  proxy (in nginx, its real IP module's set_real_ip_from and real_ip_header; in Apache, mod_remoteip's
+  RemoteIPHeader and RemoteIPTrustedProxy), or raise `signin_fail_address`. Limits on account creation and on posting are not the
+  game's: a public server needs its own (see the top of this guide).
 - **Require users to validate their email address** (`requirevalidemail`): shown locked off, with "Turn on account
   mail first", until account mail is on (section 11). Then you may turn it on: a new player must confirm their address
   by mail before they can sign in. If account mail goes off later, the game reads it as off again whatever is stored.
@@ -411,6 +427,10 @@ New versions can change the database. Upgrades go one release at a time. Read th
      page shows "Applied N of M". A part cut off by the host's time limit is not recorded and runs again on the next
      Continue. When the page says the database is current, the token file is deleted.
 4. **Check**: the "Upgrade Needed" page is gone, the footer shows the new version, and the checks in section 8 pass.
+   Browsers fetch the new style sheets, scripts and fonts by themselves: every one of their addresses carries a
+   version (`?v=` and part of the file's hash) that changes when the file changes. So the server may let browsers
+   cache `assets/ui/` and `assets/fonts/` for a long time. Images carry no version: let browsers check them again
+   (the server's default), or keep their cache short.
 5. When all is well, delete the old folder.
 
 ## 10. Backups and restore
@@ -528,8 +548,9 @@ and statistics behind the panel login, as for the setup token.
 
 - **`cron.php`'s error output**: the scheduler's mail or log (section 7).
 - **In the game**, for administrators: the Game Log (`gamelog.php`) for game events such as maintenance, settings
-  changes and petitions; each player's debug log in the user editor; failed sign-ins (also the setup page's failed
-  upgrade attempts) in the database's `faillog` table.
+  changes and petitions; each player's debug log in the user editor; failed sign-ins (`invalid_credentials`),
+  sign-ins refused by the limits (`signin_throttled`) and the setup page's failed upgrade attempts in the database's
+  `faillog` table. Daily maintenance deletes its rows older than 30 days.
 - The game does not rotate or trim the server's logs: that is the host's (most panels do it).
 
 ## 13. Troubleshooting
@@ -571,6 +592,10 @@ configuration file or database cannot be used. Open the home page to see which.
 **The token is refused.** The page says why: no file yet, a file PHP cannot read, lines that are not exactly as shown,
 older than 60 minutes, more than 5 minutes ahead of the server's clock, or already used. Create a new file with a new
 value.
+
+**"Too many attempts" on sign-in.** A sign-in limit holds (section 6): wait the minutes it
+names. If every player gets it at once, the server probably sees one proxy's address for all of them (section 6,
+"Behind a proxy or a CDN").
 
 **Every page answers 500 right after adding `.htaccess`.** The host does not allow a directive in it. Delete it
 (section 3).

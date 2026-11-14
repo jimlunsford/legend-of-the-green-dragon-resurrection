@@ -3,6 +3,7 @@ if (!\defined('RESURRECTION_ENTRY') && \PHP_SAPI !== 'cli') { \http_response_cod
 require_once __DIR__ . '/../src/Security/ScalarState.php';
 require_once __DIR__ . '/../src/Compatibility/array_cursor.php';
 require_once __DIR__ . '/../src/Compatibility/LegacySprintf.php';
+require_once __DIR__ . '/../src/Ui/AssetUrl.php';
 /**
  * Library Functions for page output.
  *		translator ready
@@ -135,7 +136,8 @@ function resurrection_form_script(){
 	static $done = false;
 	if ($done) return "";
 	$done = true;
-	return "<script src=\"assets/ui/showform.js\" defer></script>";
+	// The URL carries the file's version (Phase 6 task 18, N1; src/Ui/AssetUrl.php).
+	return "<script src=\"".\Resurrection\Ui\AssetUrl::versioned('assets/ui/showform.js')."\" defer></script>";
 }
 
 /**
@@ -146,7 +148,8 @@ function resurrection_form_script(){
  * @return string
  */
 function resurrection_behaviors_script(){
-	return "<script src=\"assets/ui/behaviors.js\" defer></script>";
+	// The URL carries the file's version (Phase 6 task 18, N1; src/Ui/AssetUrl.php).
+	return "<script src=\"".\Resurrection\Ui\AssetUrl::versioned('assets/ui/behaviors.js')."\" defer></script>";
 }
 
 /**

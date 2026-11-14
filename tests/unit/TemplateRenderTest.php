@@ -3,6 +3,7 @@ declare(strict_types=1);
 namespace Resurrection\Tests;
 use PHPUnit\Framework\TestCase;
 use Resurrection\Configuration\LegacyConfig;
+require_once __DIR__ . '/../../src/Ui/AssetUrl.php';
 
 /**
  * The Resurrection UI's template (templates/resurrection.htm), the default since Phase 5 task 3, renders real pages:
@@ -412,7 +413,7 @@ final class TemplateRenderTest extends TestCase
     private function assertCleanPage(string $page, string $script): void
     {
         self::assertStringStartsWith("<!DOCTYPE html>\n<html lang=\"en\">", $page, $script);
-        self::assertStringContainsString('<link rel="stylesheet" href="assets/ui/resurrection.css">', $page, $script);
+        self::assertStringContainsString('<link rel="stylesheet" href="' . \Resurrection\Ui\AssetUrl::versioned('assets/ui/resurrection.css') . '">', $page, $script);
         self::assertStringNotContainsString('Runtime error', $page, $script);
         self::assertStringNotContainsString('template part was not found', $page, $script);
         self::assertStringNotContainsString('piece was not found', $page, $script);
@@ -436,9 +437,9 @@ final class TemplateRenderTest extends TestCase
     {
         self::assertStringStartsWith("<!DOCTYPE html>\n<html lang=\"en\">", $page, $label);
         self::assertStringContainsString($popup ? '<body class="rz-page rz-popup rz-safe-frame">' : '<body class="rz-page rz-safe-frame">', $page, $label);
-        self::assertStringContainsString('<link rel="stylesheet" href="assets/ui/resurrection.css">', $page, $label);
+        self::assertStringContainsString('<link rel="stylesheet" href="' . \Resurrection\Ui\AssetUrl::versioned('assets/ui/resurrection.css') . '">', $page, $label);
         // The frame's own rule is a stylesheet of its own, before the main one (Phase 6 task 3; until then a <style>).
-        self::assertStringContainsString("<link rel=\"stylesheet\" href=\"assets/ui/safeframe.css\">\n<link rel=\"stylesheet\" href=\"assets/ui/resurrection.css\">", $page, $label);
+        self::assertStringContainsString('<link rel="stylesheet" href="' . \Resurrection\Ui\AssetUrl::versioned('assets/ui/safeframe.css') . "\">\n<link rel=\"stylesheet\" href=\"" . \Resurrection\Ui\AssetUrl::versioned('assets/ui/resurrection.css') . '">', $page, $label);
         self::assertStringNotContainsString('<style', $page, $label);
         self::assertStringNotContainsString('template part was not found', $page, $label);
         self::assertStringNotContainsString('piece was not found', $page, $label);
@@ -472,7 +473,7 @@ final class TemplateRenderTest extends TestCase
         }
         self::assertNotSame([], $keyed, $script);
         // The key map is the key script's data-rz-keys attribute (Phase 6 task 3; until then a JSON script element).
-        self::assertSame(1, preg_match("#<script src=\"assets/ui/keys.js\" defer data-rz-keys='([^']*)'></script>#", $page, $json), $script);
+        self::assertSame(1, preg_match("#<script src=\"" . preg_quote(\Resurrection\Ui\AssetUrl::versioned('assets/ui/keys.js'), '#') . "\" defer data-rz-keys='([^']*)'></script>#", $page, $json), $script);
         $map = json_decode($json[1], true);
         self::assertIsArray($map);
         self::assertSame(count($keyed), count($map), $script);
@@ -527,7 +528,7 @@ final class TemplateRenderTest extends TestCase
     private function assertPhone(string $page, array $tabs, ?string $portrait, ?array $head = null): void
     {
         self::assertSame(1, substr_count($page, '<nav class="rz-tabbar"'));
-        self::assertSame(1, preg_match('#</footer>\n<nav class="rz-tabbar" aria-label="Sections">(.*?)</nav>\n<script src="assets/ui/tabs.js" defer></script>\n</body>#s', $page, $bar), 'tab bar');
+        self::assertSame(1, preg_match('#</footer>\n<nav class="rz-tabbar" aria-label="Sections">(.*?)</nav>\n<script src="' . preg_quote(\Resurrection\Ui\AssetUrl::versioned('assets/ui/tabs.js'), '#') . '" defer></script>\n</body>#s', $page, $bar), 'tab bar');
         self::assertSame(count($tabs), preg_match_all('#<a class="rz-tab" href="\#([a-z-]+)">([^<]*)</a>\n#', $bar[1], $found, PREG_SET_ORDER));
         self::assertSame($tabs, array_combine(array_column($found, 1), array_column($found, 2)));
         foreach (array_keys($tabs) as $target) {

@@ -116,7 +116,8 @@ if ($op=="" || $op=="search"){
 		$cid = (int)$row['creatureid'];
 		$clevel = (int)$row['creaturelevel'];
 		rawoutput("<tr class='".($i%2==0?"trdark":"trlight")."'>", true);
-		rawoutput("<td>[ <a href='creatures.php?op=edit&creatureid=$cid'>");
+		// The Edit link is a tap target on a phone (rz-tap-phone, Phase 6 task 18, N3); the Del button already is.
+		rawoutput("<td>[ <a class='rz-tap-phone' href='creatures.php?op=edit&creatureid=$cid'>");
 		output_notl("%s", $edit);
 		rawoutput("</a> | " . resurrection_content_delete_form("creatures.php?op=del&creatureid=$cid&level=$clevel", "creature-del-$cid", resurrection_content_context('del', $row), $del, $confirm) . " ]</td><td>");
 		addnav("","creatures.php?op=edit&creatureid=$cid");

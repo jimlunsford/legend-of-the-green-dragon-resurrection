@@ -23,6 +23,7 @@ import urllib.request
 from xml.etree import ElementTree
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+from asset_urls import asset_url  # noqa: E402
 from loopback_server import wait_until_ready  # noqa: E402
 import mail_capture  # noqa: E402
 
@@ -10149,7 +10150,7 @@ function MODULE_dohook($hook,$args) {
                     self.assertIn(needle, body, f'{mode} {path}')
                     self.assertSecurityHeaders(headers, mode, f'{mode} {path}')
                     # Every page loads the behaviors script, and nothing inline.
-                    self.assertIn('<script src="assets/ui/behaviors.js" defer></script>', body, f'{mode} {path}')
+                    self.assertIn('<script src="' + asset_url('assets/ui/behaviors.js') + '" defer></script>', body, f'{mode} {path}')
                     # Phase 6 task 17 (R5): the game's three icon links in the head, a popup's too.
                     head = body[:body.index('</head>')]
                     for link in ['<link rel="icon" href="favicon.ico" sizes="any">', '<link rel="icon" href="favicon.svg" type="image/svg+xml">',
@@ -11589,6 +11590,8 @@ function MODULE_dohook($hook,$args) {
         self.assertIn('Your account was created', body)
         self.assertNotIn(password, body)
         stored_hash = self.query('SELECT password FROM accounts WHERE login=?', ['WebPlayer'])[0]['password']
+        # The rows this test's attempts write: earlier tests in the shard may leave sign-in rows of their own names.
+        last_event = int(self.query('SELECT COALESCE(MAX(eventid),0) AS last FROM faillog')[0]['last'])
         for rejected in ['wrong password', stored_hash]:
             status, headers, _ = request('login.php', {'csrf_token': csrf, 'name': 'WebPlayer', 'password': rejected})
             self.assertEqual(303, status)
@@ -11598,9 +11601,12 @@ function MODULE_dohook($hook,$args) {
         self.assertEqual(400, status)
         logs = self.query('SELECT post,id FROM faillog')
         self.assertTrue(logs)
-        for record in logs:
-            self.assertEqual('invalid_credentials', record['post'])
-            self.assertEqual('', record['id'])
+        # Fixed words only. Since Phase 6 task 18 the id column holds the sign-in name's key (lib/signin_throttle.php),
+        # never a value the request sent: 32 hex characters of SHA-256 over the name as the database compares logins.
+        # Each of the two rejected passwords wrote one row; the malformed one (400) wrote none.
+        name_key = hashlib.sha256(b'signin:webplayer').hexdigest()[:32]
+        mine = self.query('SELECT post,id FROM faillog WHERE eventid>? ORDER BY eventid', [last_event])
+        self.assertEqual([{'post': 'invalid_credentials', 'id': name_key}] * 2, mine)
         for secret in [password, stored_hash, initial_id, csrf]:
             self.assertNotIn(secret, json.dumps(logs))
         status, headers, _ = request('login.php', {'csrf_token': csrf, 'name': 'WebPlayer', 'password': password})

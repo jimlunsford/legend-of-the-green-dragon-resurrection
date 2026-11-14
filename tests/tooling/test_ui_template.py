@@ -258,7 +258,7 @@ class TemplateTests(unittest.TestCase):
             self.assertNotIn(inline, output, inline)
         # The map is the key script's data-rz-keys attribute (Phase 6 task 3; until then a JSON script element).
         self.assertNotIn('<script type=\\"application/json\\"', pageparts)
-        self.assertIn('<script src=\\"assets/ui/keys.js\\" defer data-rz-keys=\'".$json."\'></script>', pageparts)
+        self.assertIn('return "<script src=\\"".\\Resurrection\\Ui\\AssetUrl::versioned(\'assets/ui/keys.js\')."\\" defer data-rz-keys=\'".$json."\'></script>";', pageparts)
         keys = (ROOT / 'assets' / 'ui' / 'keys.js').read_text()
         self.assertTrue(keys.isascii())
         self.assertIn("document.querySelector('script[data-rz-keys]')", keys)
@@ -355,7 +355,7 @@ class TemplateTests(unittest.TestCase):
             for piece in ('{tabbar}', '{phonehead}', 'rz-more', 'rz-tab'):
                 self.assertNotIn(piece, self.parts[part], f'{part}: {piece}')
         # The script that marks the current tab: static, ASCII, no unsafe calls.
-        self.assertIn('"<script src=\\"assets/ui/tabs.js\\" defer></script>"', function)
+        self.assertIn('"<script src=\\"".\\Resurrection\\Ui\\AssetUrl::versioned(\'assets/ui/tabs.js\')."\\" defer></script>"', function)
         tabs = (ROOT / 'assets' / 'ui' / 'tabs.js').read_text()
         self.assertTrue(tabs.isascii())
         for unsafe in ('eval(', 'innerHTML', 'document.write', 'new Function', 'http:', 'https:', 'import ', 'location.'):
@@ -428,7 +428,8 @@ class TemplateTests(unittest.TestCase):
         for href in re.findall(r'<link[^>]*href="([^"]+)"', self.text):
             self.assertTrue((ROOT / href).is_file(), href)
         css = (ROOT / 'assets' / 'ui' / 'resurrection.css').read_text()
-        self.assertEqual(['fonts.css', 'tokens.css'], re.findall(r"@import url\('([^']+)'\);", css))
+        # Each import carries its file's version (Phase 6 task 18, N1; scripts/asset-versions.py).
+        self.assertEqual(['fonts.css', 'tokens.css'], re.findall(r"@import url\('([^'?]+)\?v=[0-9a-f]{12}'\);", css))
         for name in ('fonts.css', 'tokens.css'):
             self.assertTrue((ROOT / 'assets' / 'ui' / name).is_file(), name)
         self.assertTrue(css.isascii())

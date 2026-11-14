@@ -220,7 +220,7 @@ class TabsTest(unittest.TestCase):
         output = (ROOT / 'lib' / 'output.php').read_text()
         script = output[slice(*function_body(output, 'resurrection_form_script'))]
         self.assertIn('if ($done) return "";', script)
-        self.assertIn('return "<script src=\\"assets/ui/showform.js\\" defer></script>";', script)
+        self.assertIn('return "<script src=\\"".\\Resurrection\\Ui\\AssetUrl::versioned(\'assets/ui/showform.js\')."\\" defer></script>";', script)
 
     def test_the_form_script(self):
         script = SCRIPT.read_text()
@@ -365,6 +365,27 @@ class PhoneTablesTest(unittest.TestCase):
         for value in ('display: table;', 'max-width: none;', 'overflow: visible;'):
             self.assertIn(value, rule, value)
         self.assertNotIn('anywhere', self.phone_rule('.rz-fit td, .rz-fit th'))
+
+    def test_staff_and_translator_links_are_tap_targets_on_a_phone(self):
+        """Phase 6 task 18 (N3, N8): the staff tables' sort headers and Edit, Ban and Log links, and translator mode's T
+        links, are at least 44 x 44 on a phone. The browser check measures them at 390 (docs/PHASE6-TASK18-20261114.md);
+        the about pages' own markup stays 1.1.2's (test_license_text)."""
+        rule = self.phone_rule('.rz-content tr.trhead a, .rz-content a.rz-tap-phone, a.t, a.thot')
+        for value in ('display: inline-flex;', 'min-width: var(--touch-target);', 'min-height: var(--touch-target);'):
+            self.assertIn(value, rule, value)
+        self.assertNotRegex(self.outside, r'\.rz-tap-phone\b')
+        self.assertNotRegex(self.outside, r'(?m)^\s*a\.t\b')
+        links = {'lib/user/user_.php': ("<a class='rz-tap-phone' href='user.php?op=edit&userid=",
+                                        "<a class='rz-tap-phone' href='user.php?op=setupban&userid=",
+                                        "<a class='rz-tap-phone' href='user.php?op=debuglog&userid="),
+                 'titleedit.php': ("<a class='rz-tap-phone' href='titleedit.php?op=edit&id=$id'>",),
+                 'creatures.php': ("<a class='rz-tap-phone' href='creatures.php?op=edit&creatureid=$cid'>",)}
+        for path, needles in links.items():
+            source = (ROOT / path).read_text()
+            for needle in needles:
+                self.assertIn(needle, source, path)
+        # The T link's class is the translator's (lib/translator.php), the same on every page, the about pages among them.
+        self.assertIn('class=\'t".', (ROOT / 'lib' / 'translator.php').read_text())
 
     def test_desktop_is_unchanged(self):
         for name in ('rz-stack', 'rz-fit'):

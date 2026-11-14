@@ -2,6 +2,7 @@
 declare(strict_types=1);
 namespace Resurrection\Tests;
 use PHPUnit\Framework\TestCase;
+require_once __DIR__ . '/../../src/Ui/AssetUrl.php';
 
 /**
  * The navigation (Phase 5 task 6, docs/PHASE5-TASK6-NAVIGATION-20261030.md): navs rendered by the game's own nav code
@@ -163,7 +164,7 @@ final class NavigationTest extends TestCase
         // The map rides in {script} as data, on the static script (its data-rz-keys attribute since Phase 6 task 3); no
         // inline key handler and no script element without a src.
         $script = (string)$page['script'];
-        self::assertSame(1, preg_match("#\\A<script src=\"assets/ui/keys.js\" defer data-rz-keys='([^']*)'></script>\\z#s", $script, $json), $script);
+        self::assertSame(1, preg_match("#\\A<script src=\"" . preg_quote(\Resurrection\Ui\AssetUrl::versioned('assets/ui/keys.js'), '#') . "\" defer data-rz-keys='([^']*)'></script>\\z#s", $script, $json), $script);
         self::assertSame($page['keys'], json_decode($json[1], true));
         foreach (['onkeypress', 'keyevent', 'window.location', 'window.open', '<!--', '&', '<b>'] as $absent) {
             self::assertStringNotContainsString($absent, $json[1], $absent);

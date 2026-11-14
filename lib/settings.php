@@ -81,12 +81,18 @@ function resurrection_requirevalidemail_allowed(): bool {
  * nearest bound, and Game Settings refuses a value outside it (lib/configuration_descriptors.php declares the bounds
  * from here). LOGINTIMEOUT: with 0, or a few seconds, every player is signed out on their next page load; above a day,
  * a closed browser stays signed in for days. account_mail_hourly (Phase 6 task 13a): the most account mail the game
- * sends in an hour; 0 would stop it, and above 1000 a host's mail quota is no protection.
+ * sends in an hour; 0 would stop it, and above 1000 a host's mail quota is no protection. The sign-in limits (Phase 6
+ * task 18, lib/signin_throttle.php): signin_fail_pair, failures for one name from one address in 15 minutes (below 3
+ * a typo locks a player out, above 100 it stops no guesser); signin_fail_address, failures from one address in 15
+ * minutes (below 5 a shared address locks out its players, above 1000 it is no limit); signin_fail_account, failures
+ * for one name from every address in an hour (below 20 anyone could keep a player out by failing on purpose, above
+ * 1000 it is no limit).
  *
  * @return array<string,array{0:int,1:int}> setting => [lowest, highest]
  */
 function resurrection_bounded_settings(): array {
-	return ['LOGINTIMEOUT' => [300, 86400], 'account_mail_hourly' => [10, 1000]];
+	return ['LOGINTIMEOUT' => [300, 86400], 'account_mail_hourly' => [10, 1000],
+		'signin_fail_pair' => [3, 100], 'signin_fail_address' => [5, 1000], 'signin_fail_account' => [20, 1000]];
 }
 
 /** A bounded setting's value held inside its range (an integer); any other setting's value unchanged. */

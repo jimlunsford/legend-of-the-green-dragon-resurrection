@@ -3,6 +3,7 @@ declare(strict_types=1);
 namespace Resurrection\Tests;
 use PHPUnit\Framework\TestCase;
 use Resurrection\Configuration\LegacyConfig;
+require_once __DIR__ . '/../../src/Ui/AssetUrl.php';
 
 /**
  * The popups (mail, petition, MoTD, the translator tool) and the admin and superuser screens on real pages (Phase 5
@@ -160,7 +161,7 @@ final class PopupAdminRenderTest extends TestCase
         foreach (self::POPUPS + self::ADMIN as $label => $url) {
             $page = $this->page($url);
             self::assertStringStartsWith("<!DOCTYPE html>\n<html lang=\"en\">", $page, $label);
-            self::assertStringContainsString('<link rel="stylesheet" href="assets/ui/resurrection.css">', $page, $label);
+            self::assertStringContainsString('<link rel="stylesheet" href="' . \Resurrection\Ui\AssetUrl::versioned('assets/ui/resurrection.css') . '">', $page, $label);
             self::assertSame(1, substr_count($page, self::COPYRIGHT), $label);
             self::assertSame(1, substr_count($page, self::ATTRIBUTION), $label);
             self::assertGreaterThan(strpos($page, self::COPYRIGHT), strpos($page, self::ATTRIBUTION), $label);
@@ -213,7 +214,7 @@ final class PopupAdminRenderTest extends TestCase
         self::assertNull($inbox->querySelector('.rz-content .rz-button-primary'), 'the inbox has no primary action');
         self::assertSame('mail.php?op=process', $inbox->querySelector('form.rz-inbox-form')?->getAttribute('action'));
         self::assertNotNull($inbox->querySelector('form.rz-inbox-form input[name="csrf_token"]'));
-        self::assertNotNull($inbox->querySelector('script[src="assets/ui/showform.js"]'));
+        self::assertNotNull($inbox->querySelector('script[src^="assets/ui/showform.js?v="]'));
         self::assertStringStartsWith('You currently have 3 messages in your inbox.', trim((string)$inbox->querySelector('.rz-content p.rz-mail-note')?->textContent));
         self::assertSame('Mail Box', trim((string)$inbox->querySelector('.rz-content h2.rz-mail-heading')?->textContent));
         $this->assertNoItalics($inbox, 'mail inbox');
@@ -401,8 +402,23 @@ final class PopupAdminRenderTest extends TestCase
         }
         self::assertSame('Game Setup', trim((string)$tabs->item(0)?->textContent));
         self::assertNull($configuration->querySelector('input[name="showFormTabIndex"]'));
+        // Phase 6 task 18: the settings nothing reads are gone (N11); the beta pair stays, with its note; the three
+        // sign-in limits are number fields inside their bounds (F4).
+        foreach (['newdaycron', 'show_notices', 'notify_on_warn', 'notify_on_error', 'notify_address', 'notify_every'] as $name) {
+            self::assertNull($configuration->querySelector('[name="' . $name . '"]'), $name);
+        }
+        foreach (['beta', 'betaperplayer'] as $name) self::assertNotNull($configuration->querySelector('[name="' . $name . '"]'), $name);
+        foreach (['beta', 'betaperplayer'] as $name) {
+            self::assertStringContainsString('(Does nothing in this game: its beta page pavilion.php is not part of it.)', (string)$configuration->querySelector('[name="' . $name . '"]')?->parentNode?->textContent, $name);
+        }
+        self::assertStringNotContainsString('Error Notification', (string)$configuration->querySelector('.rz-content')?->textContent);
+        foreach (['signin_fail_pair' => ['3', '100', '5'], 'signin_fail_address' => ['5', '1000', '20'], 'signin_fail_account' => ['20', '1000', '50']] as $name => [$min, $max, $value]) {
+            $field = $configuration->querySelector('input[name="' . $name . '"]');
+            self::assertNotNull($field, $name);
+            self::assertSame(['number', $min, $max, $value], [$field->getAttribute('type'), $field->getAttribute('min'), $field->getAttribute('max'), $field->getAttribute('value')], $name);
+        }
         self::assertNull($configuration->querySelector('.rz-content .rz-button-primary'), 'Save stays secondary');
-        self::assertNotNull($configuration->querySelector('script[src="assets/ui/showform.js"]'));
+        self::assertNotNull($configuration->querySelector('script[src^="assets/ui/showform.js?v="]'));
 
         $creatures = $this->document($this->page('creatures.php'));
         $table = $creatures->querySelector('.rz-content table.rz-grid');
@@ -484,6 +500,21 @@ final class PopupAdminRenderTest extends TestCase
      * One GET in the staff session, with the URL as the account's one allowed navigation. The translator's pages (the
      * tool and the untranslated texts) run in a second session of the same account with the translator's flag added.
      */
+    /**
+     * Every stylesheet and script URL on a rendered page carries ?v= and its file's version (Phase 6 task 18, N1): the
+     * first 12 hex characters of the file's SHA-256. At least the stylesheet and behaviors.js are on every page.
+     */
+    public static function assertAssetsVersioned(string $page, string $label): void
+    {
+        preg_match_all('#\b(?:href|src)="(assets/ui/[^"]+)"#', $page, $found);
+        self::assertNotEmpty(array_filter($found[1], static fn (string $u): bool => str_starts_with($u, 'assets/ui/resurrection.css')), $label);
+        self::assertNotEmpty(array_filter($found[1], static fn (string $u): bool => str_starts_with($u, 'assets/ui/behaviors.js')), $label);
+        foreach ($found[1] as $url) {
+            self::assertSame(1, preg_match('#\A(assets/ui/[a-z]+\.(?:css|js))\?v=([0-9a-f]{12})\z#', $url, $part), $label . ': ' . $url);
+            self::assertSame(substr((string)hash_file('sha256', dirname(__DIR__, 2) . '/' . $part[1]), 0, 12), $part[2], $label . ': ' . $url);
+        }
+    }
+
     private function page(string $url): string
     {
         $url = strtr($url, array_combine(array_map(fn ($k) => '{' . $k . '}', array_keys(self::$ids)), array_values(self::$ids)));
@@ -511,6 +542,7 @@ final class PopupAdminRenderTest extends TestCase
         self::assertSame(0, $code, $url . ': ' . $err . substr($out, 0, 2000));
         self::assertSame('', $err, $url);
         self::assertStringContainsString('</html>', $out, $url . ': ' . substr($out, 0, 2000));
+        self::assertAssetsVersioned($out, $url);
         if (getenv('RESURRECTION_POPUP_RENDER_DUMP')) {
             file_put_contents(getenv('RESURRECTION_POPUP_RENDER_DUMP') . '/' . preg_replace('/[^a-z0-9]+/i', '-', $url) . '.html', $out);
         }

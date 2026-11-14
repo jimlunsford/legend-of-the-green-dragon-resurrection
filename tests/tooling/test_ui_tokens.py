@@ -190,7 +190,10 @@ class UiTokenTests(unittest.TestCase):
             urls = [m.group(2) for m in CSS_URL.finditer(face)]
             self.assertEqual(1, len(urls), face)
             self.assertTrue(urls[0].startswith('../fonts/'), urls[0])
-            used.append(str((FONTS_CSS.parent / urls[0]).resolve().relative_to(ROOT)))
+            # The URL carries the font file's version (Phase 6 task 18, N1; scripts/asset-versions.py).
+            path, _, query = urls[0].partition('?')
+            self.assertRegex(query, r'\Av=[0-9a-f]{12}\Z', urls[0])
+            used.append(str((FONTS_CSS.parent / path).resolve().relative_to(ROOT)))
         self.assertEqual(sorted(records), sorted(used))
 
     def test_no_resource_request_leaves_the_game(self):

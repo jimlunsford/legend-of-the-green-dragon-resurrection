@@ -2,6 +2,7 @@
 if (!\defined('RESURRECTION_ENTRY') && \PHP_SAPI !== 'cli') { \http_response_code(404); exit; }
 require_once __DIR__ . '/../src/Compatibility/array_cursor.php';
 require_once __DIR__ . '/../src/Security/KeptPage.php';
+require_once __DIR__ . '/../src/Ui/AssetUrl.php';
 /**
  * Library (supporting) functions for page output
  *		addnews ready
@@ -1071,7 +1072,7 @@ function resurrection_nav_script(){
 	if (count($keys) == 0) return "";
 	$json = json_encode($keys, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_INVALID_UTF8_SUBSTITUTE);
 	$json = str_replace(array("{", "}"), array("\\u007b", "\\u007d"), $json);
-	return "<script src=\"assets/ui/keys.js\" defer data-rz-keys='".$json."'></script>";
+	return "<script src=\"".\Resurrection\Ui\AssetUrl::versioned('assets/ui/keys.js')."\" defer data-rz-keys='".$json."'></script>";
 }
 
 /**
@@ -1437,7 +1438,7 @@ function resurrection_tabbar_html($navs){
 			"label"=>htmlspecialchars(trim(full_sanitize(translate_inline($label, "common"))), ENT_QUOTES|ENT_SUBSTITUTE, "UTF-8")));
 	}
 	// The static script that marks the tab whose section is in view; every tab works without it.
-	return templatereplace("tabbar", array("tabs"=>$out))."<script src=\"assets/ui/tabs.js\" defer></script>";
+	return templatereplace("tabbar", array("tabs"=>$out))."<script src=\"".\Resurrection\Ui\AssetUrl::versioned('assets/ui/tabs.js')."\" defer></script>";
 }
 
 /**

@@ -39,6 +39,19 @@ try {
     resurrection_require_post();
     $name = Input::string($_POST, 'name');
     $password = Input::string($_POST, 'password');
+    // Sign-in throttling (Phase 6 task 18, F4; lib/signin_throttle.php): over any limit, one message, no password
+    // checked, and a signin_throttled row of its own. 1.1.2 had no throttle: after 10 failures in a day from one
+    // address on existing accounts it banned the address and mailed the admins.
+    require_once 'lib/signin_throttle.php';
+    $wait = resurrection_signin_throttled($name);
+    if ($wait !== null) {
+        unset($password, $_POST['password']);
+        resurrection_signin_record(RESURRECTION_SIGNIN_THROTTLED, $name);
+        $session['message'] = '`4' . resurrection_signin_throttle_message($wait) . '`0';
+        $session['login_incorrect'] = true;
+        header('Location: index.php', true, 303);
+        exit();
+    }
     $check = resurrection_sign_in_check($name, $password);
     unset($password, $_POST['password']);
     $account = $check['account'];
@@ -52,9 +65,9 @@ try {
         exit();
     }
     if (!$account) {
-        // Fixed event vocabulary only, never a request/session serialization.
-        db_query('INSERT INTO ' . db_prefix('faillog') . ' (date,post,ip,acctid,id) VALUES (?,?,?,?,?)', true,
-            [date('Y-m-d H:i:s'), 'invalid_credentials', $_SERVER['REMOTE_ADDR'] ?? '', 0, '']);
+        // Fixed event vocabulary only, never a request/session serialization: the word, the requester key and the
+        // sign-in name's key, the same whether or not an account has the name (Phase 6 task 18).
+        resurrection_signin_record(RESURRECTION_SIGNIN_FAILED, $name);
         $session['message'] = '`4Error, your login was incorrect`0';
         // home.php links to password recovery beside this message while account mail is on (Phase 6 task 13b).
         $session['login_incorrect'] = true;

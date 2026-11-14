@@ -31,6 +31,27 @@ Found while installing rc.1 on a real server (`ROADMAP.md`, "Found in the rc.1 s
   `favicon.png`, `favicon.svg` and `apple-touch-icon.png` in the game's folder, linked from every page. They are new
   files to upload (host guide, section 2); its art is CC BY-SA 4.0 like the rest (`assets/LICENSE`).
 
+### Known issues fixed (Phase 6 task 18)
+
+The four known-issue fixes of the finish line (Jim's decision of 2026-11-13; `docs/PHASE6-TASK18-20261114.md`).
+
+- **Sign-in throttling.** Failed sign-ins are counted, and too many are refused for a while with "Too many attempts.
+  Try again in N minutes.", whatever the case, without checking the password. Three limits in Game Settings, "Sign-in
+  Limits", each kept inside its range: one name from one address, 5 in 15 minutes; one address, 20 in 15 minutes; one
+  name from every address, 50 in an hour (high on purpose, so nobody can keep a player out). The address is the one
+  PHP sees, never a forwarded header: behind a proxy, set the visitor's address in the server (host guide, section 6).
+  The waits end by themselves; a successful sign-in clears nothing. A name no account has now answers exactly as a
+  wrong password does, in time too, so the sign-in form no longer shows which logins exist. Daily maintenance deletes
+  `faillog` rows older than 30 days.
+- **Game Settings lists only settings that do something.** `newdaycron`, `show_notices` and the four `notify_*`
+  settings are gone from it (nothing read them; a stored value is left alone). `beta` and `betaperplayer` are still
+  read by the code, so they stay, and each label says it does nothing in this game.
+- **Versioned asset URLs.** Every stylesheet, script and font URL carries `?v=` and part of the file's hash, so after
+  an upgrade browsers fetch each changed file. Hosts may now cache `assets/ui/` and `assets/fonts/` for a long time;
+  images keep plain URLs, so let browsers revalidate them (host guide, section 9).
+- **Phone tap targets.** On a phone, the sort headers and the Edit, Ban and Log links on the staff tables (Module
+  Manager, User Editor, Title Editor, Creature Editor), and translator mode's T links, are at least 44 x 44.
+
 ### Provenance
 
 - **Two things have no record beyond the 1.1.2 distribution:** the authorship of the four images inherited from 1.1.2
@@ -58,13 +79,10 @@ Carried from rc.1:
 - **Modules beyond the bundled 24** are not supported: installed module code is trusted PHP.
 - **Maintenance is not one transaction.** A failed run repeats its date-based cleanups on the next run.
 - **No 1.1.2 migration**, by design: install fresh.
-- **No abuse controls yet:** no sign-in throttling and no limit on posting floods; account creation is limited only
-  while sign-ups must confirm their address (5 an hour from one network address).
-- **Game Settings lists some settings that do nothing** (`newdaycron`, `show_notices`, the `notify_*` settings, and
-  `beta` and `betaperplayer`, whose page is not in the game).
-- **Asset URLs carry no version**, so a long browser cache of the styles and pictures can outlast an upgrade; do not
-  set far-future caching for `assets/`.
-- **Small targets on phones:** the sort headers and "Edit" links on some staff tables, and translator mode's links.
+- **Abuse controls beyond sign-in throttling are the operator's:** no limit on posting floods; account creation is
+  limited only while sign-ups must confirm their address (5 an hour from one network address).
+- **Images carry no version** in their URLs: a long browser cache of the pictures can outlast an upgrade, so do not
+  set far-future caching for `assets/` images (the art does not change after `1.0.0`).
 - **Not certified for public hosting.** The project's own gates (`ROADMAP.md`, "Public hosting") are not all met, and no
   independent security review has been done. `project.json` keeps `public_game_hosting_approved` at `false`. Since
   Jim's decision of 2026-11-13, the gates the code does not meet belong to whoever runs a public server (host guide,

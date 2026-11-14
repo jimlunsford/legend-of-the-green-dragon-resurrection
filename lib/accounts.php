@@ -70,9 +70,17 @@ function resurrection_authenticate(string $login, #[\SensitiveParameter] mixed $
  * @return array{account: array<string, mixed>|false, pending: int|null}
  */
 function resurrection_sign_in_check(string $login, #[\SensitiveParameter] mixed $password): array {
-    $result = db_query('SELECT * FROM ' . db_prefix('accounts') . ' WHERE login=? LIMIT 1', true, [$login]);
-    $row = db_fetch_assoc($result);
-    if (!$row || (int)$row['locked'] !== 0 || !\Resurrection\Security\Passwords::verify($password, $row['password'])) { return ['account' => false, 'pending' => null]; }
+    require_once __DIR__ . '/signin_throttle.php';
+    $row = false;
+    if (resurrection_signin_name_usable($login)) {
+        $result = db_query('SELECT * FROM ' . db_prefix('accounts') . ' WHERE login=? LIMIT 1', true, [$login]);
+        $row = db_fetch_assoc($result);
+    }
+    // Every sign-in checks a password (Phase 6 task 18, F4): a name no account has is checked against a fixed hash of
+    // the same cost, and a locked account's own hash is checked too, so the time taken does not show which it was.
+    // Until then only an existing login's password was checked.
+    $verified = \Resurrection\Security\Passwords::verify($password, $row ? $row['password'] : RESURRECTION_SIGNIN_DUMMY_HASH);
+    if (!$row || (int)$row['locked'] !== 0 || !$verified) { return ['account' => false, 'pending' => null]; }
     if ($row['emailvalidation'] !== '') {
         if ($row['emailvalidation'] !== 'rz-pending') { return ['account' => false, 'pending' => null]; }
         if (resurrection_account_pending_blocked()) { return ['account' => false, 'pending' => (int)$row['acctid']]; }

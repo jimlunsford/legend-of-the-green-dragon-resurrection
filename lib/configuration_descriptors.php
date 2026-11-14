@@ -36,9 +36,18 @@ function resurrection_core_layout(): array {
 		"Every page sends a Content Security Policy that lets the browser run only the game's own script and style files. Every page the game ships passes it. Choose Report only or Off on purpose: only for a third-party module that still prints inline script or inline style (its pages break under Enforce). Report only sends the policy as Content-Security-Policy-Report-Only: the browser blocks nothing and reports what it would block in its console. Off sends no policy. The frame and content-type protection and the Referrer-Policy are sent whatever this says.,note",
 		"csp_mode"=>"Content Security Policy,enum,enforce,Enforce (the default),report-only,Report only,off,Off",
 
+		// Phase 6 task 18 (F4): sign-in throttling (lib/signin_throttle.php); bounded (lib/settings.php). No comma in a note.
+		"Sign-in Limits,title",
+		"signin_fail_pair"=>"Failed sign-ins allowed for one name from one address in 15 minutes,int,".implode(',', resurrection_bounded_settings()['signin_fail_pair']),
+		"signin_fail_address"=>"Failed sign-ins allowed from one address in 15 minutes,int,".implode(',', resurrection_bounded_settings()['signin_fail_address']),
+		"signin_fail_account"=>"Failed sign-ins allowed for one name from all addresses in one hour,int,".implode(',', resurrection_bounded_settings()['signin_fail_account']),
+
 		"Beta Setup,title",
-		"beta"=>"Enable beta features for all players?,bool",
-		"betaperplayer"=>"Enable beta features per player?,bool",
+		// Phase 6 task 18 (N11): kept, because code reads them (common.php, village.php, moderate.php, lib/commentary.php),
+		// but nothing they gate is in the game, and each label says so (Game Settings shows no notes). 1.1.2's labels
+		// were "Enable beta features for all players?" and "Enable beta features per player?".
+		"beta"=>"Enable beta features for all players? (Does nothing in this game: its beta page pavilion.php is not part of it.),bool",
+		"betaperplayer"=>"Enable beta features per player? (Does nothing in this game: its beta page pavilion.php is not part of it.),bool",
 
 		"Account Creation,title",
 		"defaultsuperuser"=>
@@ -108,10 +117,8 @@ function resurrection_core_layout(): array {
 		"New Days,title",
 		"daysperday"=>"Game days per calendar day,range,1,6,1",
 		"specialtybonus"=>"Extra daily uses in specialty area,range,0,5,1",
-		"newdaycron"=>"Let the newday-runonce run via a cronjob,bool",
-		"The directory is necessary! Do not forget to set the correct one in cron.php in your main game folder!!! ONLY experienced admins should use cron jobbing here,note",
-		"`bAlso make sure you setup a cronjob on your machine using confixx/plesk/cpanel or any other admin panel pointing to the cron.php file in your main folder`b,note",
-		"If you do not know what a Cronjob is... leave it turned off. If you want to know more... check out: <a href='http://wiki.dragonprime.net/index.php?title=Cronjob'>http://wiki.dragonprime.net/index.php?title=Cronjob</a>,note",
+		// Phase 6 task 18 (N11): newdaycron and its three notes removed; nothing reads it (daily maintenance runs only from
+		// cron.php or webcron.php). A stored row is left alone.
 		"resurrectionturns"=>"Modify (+ or -) the number of turns deducted after a resurrection as an absolute (number) or relative (number followed by %),amount",
 
 		"Forest,title",
@@ -212,13 +219,9 @@ function resurrection_core_layout(): array {
 		"tl_maxallowed"=>"Collect untranslated texts if you have fewer player than this logged in. (0 never collects),int",
 		"charset"=>"Which charset should be used for htmlentities?,enum,UTF-8,UTF-8",
 
-		"Error Notification,title",
-		"Note: you MUST have data caching turned on if you want to use this feature.  Also the first error within any 24 hour period will not generate a notice; I'm sorry: that's really just how it is for technical reasons.,note",
-		"show_notices"=>"Show PHP Notice output?,bool",
-		"notify_on_warn"=>"Send notification on site warnings?,bool",
-		"notify_on_error"=>"Send notification on site errors?,bool",
-		"notify_address"=>"Address to notify",
-		"notify_every"=>"Only notify every how many minutes for each distinct error?,int",
+		// Phase 6 task 18 (N11): the Error Notification section removed (show_notices, notify_on_warn, notify_on_error,
+		// notify_address, notify_every and its note); nothing reads them since 1.1.2's lib/errorhandler.php is gone.
+		// Stored rows are left alone.
 
 		"Miscellaneous Settings,title",
 		"allowspecialswitch"=>"The Barkeeper may help you to switch your specialty?,bool",

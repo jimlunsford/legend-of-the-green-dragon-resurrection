@@ -219,6 +219,9 @@ function resurrection_editor_bounds_note(string $key, array $descriptor): string
     return match ($key) {
         'LOGINTIMEOUT' => $range.' seconds (5 minutes to 1 day). Below that, players are signed out almost at once; above it, a closed browser stays signed in for days. A stored value outside the range is used as the nearest end of it.',
         'account_mail_hourly' => $range.' mails an hour. Many hosts cap mail at 100 to 500 an hour; past this limit account mail waits for the next hour. A stored value outside the range is used as the nearest end of it.',
+        'signin_fail_pair' => $range.' failures (the default is 5). Below that, a few typos lock a player out; above it, one guesser gets many tries. A stored value outside the range is used as the nearest end of it.',
+        'signin_fail_address' => $range.' failures (the default is 20). Below that, players who share an address lock each other out; above it, one address can guess at many names. A stored value outside the range is used as the nearest end of it.',
+        'signin_fail_account' => $range.' failures (the default is 50). Kept high on purpose: below 20, anyone could keep a player out by failing on purpose. A stored value outside the range is used as the nearest end of it.',
         default => $range.'.',
     };
 }

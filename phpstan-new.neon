@@ -63,6 +63,7 @@ parameters:
         - lib/account_recovery.php
         - lib/account_verify.php
         - lib/prefs_email.php
+        - lib/signin_throttle.php
         - scripts/install.php
         - scripts/upgrade.php
     bootstrapFiles:

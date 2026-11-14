@@ -3,6 +3,7 @@ declare(strict_types=1);
 namespace Resurrection\Tests;
 use PHPUnit\Framework\TestCase;
 use Resurrection\Configuration\LegacyConfig;
+require_once __DIR__ . '/../../src/Ui/AssetUrl.php';
 
 /**
  * The game must not depend on PHP's output buffering (docs/PHASE4-OUTPUT-BUFFERING-FIX-20261029.md). With
@@ -66,7 +67,7 @@ final class OutputBufferingTest extends TestCase
             // directly after the <!--!header--> marker in templates/resurrection.htm (Phase 5 task 3; before it, jade's
             // "\r\n<!DOCTYPE"). The defect put lib/all_tables.php's "\n" first.
             self::assertStringStartsWith("<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n", $out);
-            self::assertStringContainsString('<link rel="stylesheet" href="assets/ui/resurrection.css">', $out);
+            self::assertStringContainsString('<link rel="stylesheet" href="' . \Resurrection\Ui\AssetUrl::versioned('assets/ui/resurrection.css') . '">', $out);
             self::assertStringContainsString('<title>Legend of the Green Dragon', $out);
             self::assertStringNotContainsString((string)getenv('RESURRECTION_TEST_DB_PASSWORD'), $out);
         } finally {
