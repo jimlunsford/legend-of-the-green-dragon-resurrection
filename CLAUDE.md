@@ -165,6 +165,15 @@ Account mail (S11; Phase 6 task 13a, `docs/PHASE6-TASK12-ACCOUNT-MAIL-DESIGN-202
   needs the installed database must sort after `FreshInstallTest` (the account mail tests are `Mail*Test` for that).
 - The LoGD game day rolls over every 24/`daysperday` hours: with the default 4 and the installer's midnight epoch, at 00:00, 06:00, 12:00 and 18:00 UTC. The web test harness pins the clock (`game_epoch`) when each shard starts, so a shard has a full game day of headroom. Tests that exercise New Day or rollover move the clock explicitly and restore it. Long-running tests must read the authoritative day from the application, not cache it.
 - Keep failed CI runs on record. Never present a superseded run as acceptance.
+- No test may skip in CI. A check that needs a tool CI lacks is a local script check, recorded in the evidence doc
+  (Phase 6 task 17's CI fix: the favicon redraw is `python3 scripts/art/build_favicon.py --check`, not a test). The
+  shard runner fails a shard with any skip, and PHPUnit runs with `failOnSkipped`. Baseline integrity is the one
+  exception, by design: it runs every tooling test on the runner's PHP 8.3 with no database, so the tests that need
+  PHP 8.4 or the database skip there, and each of them runs, unskipped, in its Modern core shard.
+- Before a push, run the new and changed tests with the local extras hidden, so a skip shows up locally: the shard
+  that holds each one (`python3 scripts/tooling-shards.py --shards 5` lists them) as
+  `PLAYWRIGHT_BROWSERS_PATH="$(mktemp -d)" python3 scripts/tooling-shards.py --shards 5 --shard N`, which hides
+  Playwright's browsers and fails on any skip, and PHPUnit as usual, which fails on any skip.
 
 Local verification, proportionate to the change:
 

@@ -1,0 +1,10 @@
+{
+  "source": {"name": "assets/brand/resurrection-eye.svg", "sha256": "22ba6aa87ec9f198499f48399d47f14105f47333516731aeca2879748111b7b6"},
+  "rasterizer": {"chromium": "153.0.8010.12", "playwright": "1.63.0"},
+  "files": [
+    {"name": "favicon.ico", "bytes": 4062, "dimensions": [[16, 16], [32, 32], [48, 48]], "sha256": "8ef2abadc73ee883d75390d8d80d0250b691ab1bf851717339f5fe2d2c0f4194"},
+    {"name": "favicon.png", "bytes": 1249, "dimensions": [[32, 32]], "sha256": "1b080ca1f1332a4c63793bf3c9fddba5159887222be90340335ffb0d290006d8"},
+    {"name": "favicon.svg", "bytes": 543, "dimensions": [[64, 64]], "sha256": "22ba6aa87ec9f198499f48399d47f14105f47333516731aeca2879748111b7b6"},
+    {"name": "apple-touch-icon.png", "bytes": 9166, "dimensions": [[180, 180]], "sha256": "aa4c19f8a09917273c785c7d430bd8e69f8c7ab0340f74bf6b52e08b6de4d357"}
+  ]
+}
