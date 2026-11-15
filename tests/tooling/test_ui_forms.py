@@ -13,6 +13,7 @@ The rendered pages (one primary per form, the tabs' aria-selected) are checked
 in tests/unit/FormsRenderTest.php.
 """
 from pathlib import Path
+import importlib.util
 import re
 import unittest
 
@@ -393,6 +394,38 @@ class PhoneTablesTest(unittest.TestCase):
         self.assertIn('string $label, string $confirm, bool $tapPhone = false): string {', editor)
         # The T link's class is the translator's (lib/translator.php), the same on every page, the about pages among them.
         self.assertIn('class=\'t".', (ROOT / 'lib' / 'translator.php').read_text())
+
+    def test_every_tap_target_is_44_on_a_phone(self):
+        """Phase 6 task 19 (N3, N8 site-wide): every other target the tap-target crawl found under 44 x 44 at 390, by
+        selector, under the phone breakpoint only, with running text the one exemption. The crawl itself
+        (tests/browser/tap_targets.py) needs a browser, which CI does not have: it is a local check, and its results are
+        in docs/PHASE6-TASK19-20261115.md."""
+        rule = self.phone_rule('.rz-content td > a, .rz-content li.rz-comment > a, .rz-content a[href^="moderate.php?area="],\n'
+                               '  .rz-content a[href^="motd.php"], .rz-content a[data-rz-append],\n'
+                               '  .rz-content a[href^="petition.php?op="]:not(form a), .rz-content a[href^="mail.php?op=write"]:has(> img)')
+        for value in ('display: inline-flex;', 'min-width: var(--touch-target);', 'min-height: var(--touch-target);'):
+            self.assertIn(value, rule, value)
+        self.assertIn('min-height: var(--touch-target);', self.phone_rule('.rz-content a.rz-mail-subject'))
+        label = self.phone_rule('.rz-content li.rz-comment > input[type="checkbox"] + label.rz-sr')
+        for value in ('position: static;', 'clip: auto;', 'min-height: var(--touch-target);'):
+            self.assertIn(value, label, value)
+        for selector in ('td > a', 'li.rz-comment > a', 'moderate.php?area=', 'a[data-rz-append]', 'a.rz-mail-subject {',
+                         'petition.php?op=', 'mail.php?op=write', 'label.rz-sr'):
+            self.assertNotIn(selector, self.outside, selector)
+        # The moderation label is the screen readers' one (lib/output.php), shown only here.
+        self.assertIn('resurrection_label_for("comment-{$commentids[$i]}", "Select this comment")', (ROOT / 'lib' / 'commentary.php').read_text())
+        # The exemptions: running text only, each with its reason, the same in the check and in the spec.
+        spec = importlib.util.spec_from_file_location('tap_targets', ROOT / 'tests' / 'browser' / 'tap_targets.py')
+        check = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(check)
+        self.assertEqual(['about.php', 'petition.php', 'viewpetition.php'], [page for page, _, _, _ in check.EXEMPT])
+        self.assertTrue(all(len(reason) > 40 for _, _, _, reason in check.EXEMPT))
+        self.assertEqual(44, check.TOUCH)
+        design = (ROOT / 'docs' / 'UI-DESIGN-SPEC.md').read_text()
+        self.assertIn('**Tap targets (Phase 6 task 19, N3 and N8 site-wide).**', design)
+        for page in ('`about.php`: the links inside its 1.1.2 paragraphs', '`petition.php`: "FAQ" in the petition form', '`viewpetition.php`: an address'):
+            self.assertIn(page, design, page)
+        self.assertIn('`python3 tests/browser/tap_targets.py`', design)
 
     def test_desktop_is_unchanged(self):
         for name in ('rz-stack', 'rz-fit'):

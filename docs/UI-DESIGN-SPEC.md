@@ -799,6 +799,21 @@ Colors that are also UI tokens are named; transparency comes from `opacity` and 
 - Touch targets 44px or more in both directions (nav rows, tabs, buttons, inputs). On a phone (task 8) also the skip
   link, the footer's Credits and source links, the attribution's two links (taller, never smaller), a form's buttons,
   the commentary's paging links and the mail popup's Inbox and Write links.
+- **Tap targets (Phase 6 task 19, N3 and N8 site-wide).** On a phone (390 x 844), every visible link, button, select,
+  checkbox and radio on every page is at least 44 x 44 px, a checkbox or radio by its label; the rules sit in
+  `assets/ui/resurrection.css` under `--breakpoint-phone` only, so the desktop does not change. The one exemption is
+  running text: a link inside a sentence of game prose, where a 44 px box would break the sentence. A link alone in a
+  table cell or a nav row is never running text. The exemptions, each named in `tests/browser/tap_targets.py`:
+  - `about.php`: the links inside its 1.1.2 paragraphs ("by Seth Able Robinson", "under a Creative Commons License",
+    "at DragonPrime"), whose markup stays 1.1.2's byte for byte;
+  - `petition.php`: "FAQ" in the petition form's sentence "please check out the FAQ.";
+  - `viewpetition.php`: an address inside the petition's own text, which the page turns into a mailto link where it
+    stands.
+
+  `python3 tests/browser/tap_targets.py` checks it: it crawls every page four roles reach (signed out, a living player,
+  a dead player, a superuser; the popups included) and fails on any other target under 44 x 44. It needs a browser,
+  which CI does not have, so it is a local check, recorded in the task's evidence doc; its `--old-css` mode checks that
+  a phone-only change moves nothing at 1440.
 - Real links (`<a href>`), real buttons and labelled inputs: no click handlers on plain elements.
 - Alt text or `aria-label` on every image; decorative art gets `alt=""` and the information is in text.
 

@@ -49,9 +49,11 @@ The four known-issue fixes of the finish line (Jim's decision of 2026-11-13; `do
 - **Versioned asset URLs.** Every stylesheet, script and font URL carries `?v=` and part of the file's hash, so after
   an upgrade browsers fetch each changed file. Hosts may now cache `assets/ui/` and `assets/fonts/` for a long time;
   images keep plain URLs, so let browsers revalidate them (host guide, section 9).
-- **Phone tap targets.** On a phone, the sort headers and the Edit, Ban and Log links on the staff tables (Module
-  Manager, User Editor, Title Editor, Creature Editor), the Title and Creature Editors' Delete and Del buttons, and
-  translator mode's T links, are at least 44 x 44.
+- **Phone tap targets, on every page.** On a phone, every link, button, select, checkbox and radio is at least 44 x 44:
+  the staff tables' sort headers and their Edit, Del, Ban and Log links on every editor, the Module Manager's actions,
+  the Warriors list's names, a comment's speaker and the moderation pages' Ban links, checkboxes and area links, the
+  FAQ's links, the MoTD's Add and Return links, the inbox's subjects, and translator mode's T links (tasks 18 and 19).
+  The one exception is a link inside a sentence, such as the credits on the About page. The desktop is unchanged.
 - **The upgrade from rc.1 runs one step.** Upgrade step `0002-signin-limits` is the first upgrade step a released game
   runs: it adds the three sign-in limit settings with their defaults (5, 20 and 50) where the database has none, and
   leaves any value already stored alone. Back up the database first, then run `php scripts/upgrade.php

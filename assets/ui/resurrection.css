@@ -1036,6 +1036,33 @@ a.hotmotd { color: var(--accent); }
     display: inline-flex; align-items: center; justify-content: center;
     min-width: var(--touch-target); min-height: var(--touch-target); vertical-align: middle;
   }
+  /*
+    Phase 6 task 19 (N3, N8 site-wide; docs/UI-DESIGN-SPEC.md, "Tap targets"): every other target the tap-target crawl
+    found under 44 x 44 at 390 (tests/browser/tap_targets.py), by selector, so no page's markup changes: a link alone in
+    a table cell (every editor's Edit links, the Module Manager's actions, the Warriors list, the petition list's View),
+    a comment's speaker and its Ban link, the moderation pages' area links, the MoTD's Add, Add Poll Item and Return
+    links, the FAQ's contents and Return to Contents links (not the petition form's sentence), and the petition's
+    write-a-mail icon. The mail list's subjects and the moderation checkbox's label are below. Running text stays as it
+    is (the exemptions in the spec).
+  */
+  .rz-content td > a, .rz-content li.rz-comment > a, .rz-content a[href^="moderate.php?area="],
+  .rz-content a[href^="motd.php"], .rz-content a[data-rz-append],
+  .rz-content a[href^="petition.php?op="]:not(form a), .rz-content a[href^="mail.php?op=write"]:has(> img) {
+    display: inline-flex; align-items: center; justify-content: center;
+    min-width: var(--touch-target); min-height: var(--touch-target); vertical-align: middle;
+  }
+  /* The FAQ's contents links stay on the line of their bullet, their text wrapping inside the box (task 19). */
+  .rz-content a[href^="petition.php?op="]:not(form a) { max-width: calc(100% - 1em); }
+  /* A mail's subject in the list is a full-width row (task 19). */
+  .rz-content a.rz-mail-subject { display: flex; align-items: center; min-height: var(--touch-target); }
+  /*
+    The moderation pages' "Select this comment" label (task 19): read by screen readers only on the desktop, it shows on
+    a phone beside its checkbox, a 44 px tall tap target.
+  */
+  .rz-content li.rz-comment > input[type="checkbox"] + label.rz-sr {
+    position: static; width: auto; height: auto; margin: 0 4px 0 0; overflow: visible; clip: auto; white-space: normal;
+    display: inline-flex; align-items: center; min-height: var(--touch-target); vertical-align: middle;
+  }
   /* A form's buttons (a shop's item buttons among them) are at least a tap target wide. */
   .rz-content button, .rz-content input[type=submit], .rz-content input[type=button] { min-width: var(--touch-target); min-height: var(--touch-target); }
   .rz-field input { width: 100%; }
