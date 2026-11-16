@@ -1,8 +1,9 @@
 # Release notes: Legend of the Green Dragon - Resurrection 1.0.0-rc.2
 
-Draft. This test build has not been cut. Started in Phase 6 task 16 (2026-11-13) from what the rc.1 server test found;
-each change is recorded in full in `docs/CHANGES-FROM-1.1.2.md`. Read with the rc.1 notes,
-`docs/RELEASE-NOTES-1.0.0-rc.1.md`: everything there still holds unless this page says otherwise.
+2026-11-16. Cut by `docs/RC-CUT-CHECKLIST.md` on the maintainer's go; the tag is `v1.0.0-rc.2`. The second test
+build: what Jim's rc.1 server test found (R1 to R9) and the four known-issue fixes. Each change is recorded in full in
+`docs/CHANGES-FROM-1.1.2.md`. Read with the rc.1 notes, `docs/RELEASE-NOTES-1.0.0-rc.1.md`: everything there still
+holds unless this page says otherwise.
 
 ## What changed since 1.0.0-rc.1
 
@@ -76,19 +77,6 @@ Jim's second round of play on the rc.1 server, 2026-11-15 (`docs/PHASE6-TASK20-2
   `php_admin_value[error_log]`, or look in the site's nginx error log for lines with `FastCGI sent in stderr`. The
   sample nginx rules now name the site's `error_log`.
 
-### Upgrading from rc.1
-
-- **The upgrade from rc.1 runs two steps.** Back up the database first, then run `php scripts/upgrade.php
-  --backup-confirmed` or the upgrade on `setup.php` (host guide, "Upgrade"). A fresh install records both as applied.
-  - `0002-signin-limits` (task 18), the first upgrade step a released game runs: it adds the three sign-in limit
-    settings with their defaults (5, 20 and 50) where the database has none, and leaves any value already stored
-    alone.
-  - `0003-utf8-seed-text` (task 20): it writes "Unélith" for master 5, "Français" and "Español" in
-    `serverlanguages`, and "kyrpä*" in the nasty word list, each only where the value is still exactly what rc.1's
-    install wrote. A value an administrator changed is left alone, and a rerun changes nothing. Where the game's data
-    cache is on (Game Settings; off by default), the settings can show the old text for up to a minute and the word
-    list for up to 10 minutes, until the cache expires.
-
 ### Provenance
 
 - **Two things have no record beyond the 1.1.2 distribution:** the authorship of the four images inherited from 1.1.2
@@ -97,9 +85,22 @@ Jim's second round of play on the rc.1 server, 2026-11-15 (`docs/PHASE6-TASK20-2
   as part of the Legend of the Green Dragon 1.1.2 distribution, under its license (CC BY-NC-SA 2.0 and `LICENSE.txt`),
   as 1.1.2 shipped them. Nothing was removed.
 
+## Upgrading from rc.1
+
+Follow the host guide's upgrade steps (`HOST-GUIDE.md`, section 9, "Upgrade"): back up the database and the
+configuration file, upload the new version into a new folder, then run `php scripts/upgrade.php --backup-confirmed` or
+the upgrade on `setup.php`. Two upgrade steps run, in order; a fresh install records both as applied:
+
+- `0002-signin-limits`: adds the three sign-in limit settings with their defaults (5, 20 and 50) where the database has
+  none, and leaves any value already stored alone.
+- `0003-utf8-seed-text`: writes "Unélith" for master 5, "Français" and "Español" in `serverlanguages`, and "kyrpä*" in
+  the nasty word list, each only where the value is still exactly what rc.1's install wrote. A value an administrator
+  changed is left alone, and a rerun changes nothing. Where the game's data cache is on (off by default), the settings
+  can show the old text for up to a minute and the word list for up to 10 minutes.
+
 ## Known issues
 
-Carried from rc.1:
+Carried from rc.1, and one found in its server test (the Dark Horse clicks):
 
 - **Mail is best effort, through PHP's `mail()` only.** There is no SMTP setting. A message that cannot be handed over
   is logged and the game goes on (host guide, "Mail"). Until the host turns account mail on, there is no recovery by
@@ -111,8 +112,10 @@ Carried from rc.1:
   shown to the banned visitor as raw HTML (staff write it); clearing the `lgi` cookie evades an ID ban; weapon, armor and
   title text allows color codes; the clan-delete hook is not called on disband; the healer resets hitpoints above the
   maximum on view; the Graveyard views sober a dead player; the MoTD archive skips its first month.
-- **1.1.2 data oddities:** two creatures are both "Loneliness", and master 5's name has a replacement character where
-  1.1.2 lost a byte.
+- **A 1.1.2 data oddity:** two creatures are both "Loneliness". (Master 5's broken name, carried from rc.1, is fixed:
+  R9 above.)
+- **The Dark Horse Tavern's games need many clicks on Continue** between rounds (dice, stones, five-six). Found in the
+  rc.1 server test; left as it is, and recorded in `ROADMAP.md` as an item for after `1.0.0`.
 - **Modules beyond the bundled 24** are not supported: installed module code is trusted PHP.
 - **Maintenance is not one transaction.** A failed run repeats its date-based cleanups on the next run.
 - **No 1.1.2 migration**, by design: install fresh.

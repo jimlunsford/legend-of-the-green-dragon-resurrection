@@ -410,3 +410,15 @@ rc.1 server test on 2026-11-15 (`ROADMAP.md`, R6 to R9; `docs/PHASE6-TASK20-2026
 | Seed text with lost letters (R9) | Latin-1 bytes in a Latin-1 game: master 5 "Unélith", `serverlanguages` "Français" and "Español", the nasty word "kyrpä*" | The installer carried U+FFFD (as the historical tag's file does) where those letters were lost, so the pages showed "Un?lith" or "Un�lith"; `prefs.php`'s default language list had the same | The UTF-8 text 1.1.2 meant, in a fresh install and `prefs.php`; upgrade step `upgrades/0003-utf8-seed-text.php` writes it into an rc.1 database, each value only where it is still exactly the rc.1 bytes, so an administrator's edit stays, and a rerun changes nothing | A UTF-8 game showed its own seed data broken | `lib/installer/installer_sqlstatements.php`, `prefs.php`, `upgrades/0003-utf8-seed-text.php`, `tests/unit/UpgradeTest.php`, `tests/unit/FreshInstallTest.php`, `tests/tooling/test_utf8_text.py`, `tests/tooling/test_web_application.py` (`test_master_five_reads_unelith_in_the_training_and_the_masters_editor`) |
 | The censor's look-alike letters | Raw Latin-1 bytes in the patterns (`ª`, `À` to `Å`, `ç`, `§` and others) | The same raw bytes, so the file was not valid UTF-8 | The same bytes as PCRE octal escapes (`\252`, `\300`, ...): 184 patterns compare byte for byte with 1.1.2's, and match the same 194 of 81,696 test strings. The file is ASCII | Every shipped text file is valid UTF-8 | `lib/censor.php`, `tests/tooling/test_utf8_text.py` |
 | The host guide's logs | n/a | Section 12 named "the host's error log, or `error_log`" | Section 1 sets `error_log` to a file the PHP user can write (with PHP-FPM, `php_admin_value[error_log]` in the pool); section 12 says where PHP's errors go without it (nginx's site error log, lines with `FastCGI sent in stderr`) and lists the new line; the sample nginx rules name the site's `error_log` | Jim found the crash only in nginx's log | `docs/HOST-GUIDE.md`, `docs/hosting/nginx.conf` |
+
+### Phase 6 task 21: the `1.0.0-rc.2` version commit
+
+Task 20 is accepted at `27c3f94` (Modern core 43789198080, all 14 jobs; Baseline integrity 43789198083). On Jim's go of
+2026-11-16, the version commit sets the version to `1.0.0-rc.2` (`src/Version.php`, `project.json` with `phase`
+`release-candidate`, `docs/VERSIONING.md`), so the footer and the home page show "Version: Resurrection 1.0.0-rc.2,
+based on LoGD 1.1.2 Dragonprime Edition", and the links the game prints to the host guide point at the `v1.0.0-rc.2`
+tag. No game behavior changes. The rc.2 release notes are dated and no longer a draft, and rc.2's tag message is in
+`docs/RC-CUT-CHECKLIST.md`, section 3 (`docs/PHASE6-TASK21-RC2-VERSION-20261116.md`).
+
+What stands between `main` and the `v1.0.0-rc.2` tag now: this commit's CI acceptance; then Jim runs the release cut
+workflow, which makes the tag, the package and the pre-release (`docs/RC-CUT-CHECKLIST.md`, sections 2 to 5).
