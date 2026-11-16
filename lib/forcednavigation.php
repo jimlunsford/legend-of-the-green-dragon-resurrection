@@ -74,6 +74,8 @@ function do_forced_nav($anonymous,$overrideforced){
 		db_free_result($result);
 		if (isset($session['allowednavs'][$REQUEST_URI]) && $session['allowednavs'][$REQUEST_URI] && $overrideforced!==true){
 			$session['allowednavs']=array();
+			// A game page under forced navigation: a refused form here answers in the game's frame (Phase 6 task 22).
+			$GLOBALS['resurrection_forced_nav_page']=true;
 		}else{
 			if ($overrideforced!==true){
 				redirect("badnav.php","Navigation not allowed to $REQUEST_URI");

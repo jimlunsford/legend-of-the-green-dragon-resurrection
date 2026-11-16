@@ -8,10 +8,10 @@ published as a GitHub pre-release. `main` is `1.0.0-rc.1` from the version commi
 
 For `1.0.0-rc.2` (Jim's go of 2026-11-16, "the same as rc.1"): section 0 is done, section 1 is made in Phase 6 task 21
 (2026-11-16, `docs/PHASE6-TASK21-RC2-VERSION-20261116.md`), which also writes rc.2's tag message in section 3 and runs
-the release cut workflow against a stand-in `origin`. Sections 2 to 4 follow: CI's acceptance of the version commit,
-then Jim runs the release cut workflow (`.github/workflows/release-cut.yml`) from the Actions tab with the inputs task
-21 records, and the workflow makes the tag, builds the package and publishes the pre-release. rc.1's record below stays
-as history.
+the release cut workflow against a stand-in `origin`. Sections 2 to 4 are done (recorded in Phase 6 task 22,
+`docs/PHASE6-TASK22-20261116.md`): CI accepted the version commit `100103d`, and the release cut workflow, run on Jim's
+request with task 21's inputs, made the tag `v1.0.0-rc.2`, built the package and published the pre-release. rc.1's
+record below stays as history.
 
 A cut happens only on the maintainer's explicit go (Jim). Every step that tags, publishes or attaches anything waits for
 that go, and a session never does them on its own. The steps are in order; a step that fails stops the cut.
@@ -90,7 +90,9 @@ The version commit is accepted only when, on that exact commit:
       jobs, on `ubuntu-24.04` (PHP 8.4 shards 14:44, 10:29, 15:24, 14:50, 13:37; PHP 8.5 shards 17:33, 16:58, 17:46,
       17:59, 10:32).
 - [x] Baseline integrity is SUCCESS. For `1.0.0-rc.1`: run 43449051323 on `2bbc69d`.
-- [ ] For `1.0.0-rc.2`: both of the above on task 21's version commit.
+- [x] For `1.0.0-rc.2`: both of the above on task 21's version commit, `100103d`: Modern core 43852203138, all 14
+      jobs (PHP 8.4 shards 9:51, 9:18, 10:43, 15:46, 14:36; PHP 8.5 shards 14:09, 11:15, 17:46, 14:05, 11:23);
+      Baseline integrity 43852203104.
 
 A run that a later push cancelled is not acceptance, and no earlier commit's run stands in for it. A failed run stays on
 record. If anything fails, fix it in a new commit and start this section again on that commit; the tag goes on the
@@ -124,7 +126,10 @@ docs/RELEASE-NOTES-1.0.0-rc.2.md. Hosting: docs/HOST-GUIDE.md.
 (Written in Phase 6 task 21, 2026-11-16, in rc.1's shape. Each line checked against the code and the documents at the
 version commit in its evidence doc.)
 
-- [ ] For `1.0.0-rc.2`: the tag, made by the release cut workflow on Jim's run, after section 2.
+- [x] For `1.0.0-rc.2`: the tag, made by the release cut workflow (run 43944843726, started with task 21's four inputs
+      on Jim's request, 2026-11-16): tag object `147ad5a2800ccff279b8e35f5b56ae1fe877c2d2`, annotated, on
+      `100103d76f3e1903e006e0503920054b285040f1`, with the message above byte for byte (861 bytes, SHA-256
+      `4b5b7465…b2ed`). `v1.0.0-rc.1` and `historical-source-1.1.2` are unchanged.
 
 History: the tag message for `1.0.0-rc.1`, exactly as tagged:
 
@@ -171,13 +176,16 @@ release cut workflow (`.github/workflows/release-cut.yml`) builds the same packa
       `setup.php`, and play to the village and one forest fight (the run recorded in
       `docs/PHASE6-TASK7-RC-MATERIALS-20261107.md` is the pattern). Done in task 15: 41 tables, 24
       modules with 23 active, the village and one forest fight, the footer showing `1.0.0-rc.1`.
-- [ ] For `1.0.0-rc.2`: the same, by the release cut workflow from the tag. Task 21 built the version commit's package
+- [x] For `1.0.0-rc.2`: the same, by the release cut workflow from the tag. Task 21 built the version commit's package
       twice (its SHA-256 is the workflow's `package_sha256` input), installed it fresh through `setup.php`, and
-      upgraded the rc.1 package's install to it.
+      upgraded the rc.1 package's install to it. The workflow's build, 3,867,683 bytes, is `sha256:133625b3…e439`, the
+      same.
 - [x] Attach the zip and its `.sha256` nowhere until Jim says where. The script itself never uploads, tags or publishes,
       and it is not in the package (`docs/HOST-GUIDE.md`, "Do not upload"). For `1.0.0-rc.1` Jim said a GitHub
       pre-release: https://github.com/jimlunsford/legend-of-the-green-dragon-resurrection/releases/tag/v1.0.0-rc.1
-      (not latest; the zip downloaded back has the same SHA-256).
+      (not latest; the zip downloaded back has the same SHA-256). For `1.0.0-rc.2`, the same way:
+      https://github.com/jimlunsford/legend-of-the-green-dragon-resurrection/releases/tag/v1.0.0-rc.2 (a pre-release,
+      not latest; the zip's digest equals the build).
 
 ## 5. After the tag
 
@@ -187,7 +195,8 @@ release cut workflow (`.github/workflows/release-cut.yml`) builds the same packa
 - [x] `main` kept `1.0.0-rc.1` (`docs/VERSIONING.md`, "`main`'s version after a tag") until the next cut's version
       commit set `1.0.0-rc.2` (task 21). It never goes back to `1.0.0-dev`. After `v1.0.0-rc.2`, `main` keeps
       `1.0.0-rc.2` until the next cut sets `1.0.0-rc.3` or `1.0.0`.
-- [ ] For `1.0.0-rc.2`: the next commit's Modern core installs `v1.0.0-rc.2` and upgrades it.
+- [ ] For `1.0.0-rc.2`: the next commit's Modern core installs `v1.0.0-rc.2` and upgrades it (Phase 6 task 22's commit;
+      locally its check installed `v1.0.0-rc.2`).
 - [ ] After `v1.0.0`, the first commit on `main` sets the next number with `-dev` (`1.1.0-dev`, or `1.0.1-dev` when only
       fixes are planned).
 - [ ] Record the tag, the accepted runs and the package's SHA-256 in `ROADMAP.md` and the cut's evidence doc.

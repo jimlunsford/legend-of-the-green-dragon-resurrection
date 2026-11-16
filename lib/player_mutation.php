@@ -19,8 +19,8 @@ function resurrection_consume_action(string $scope, string $context): void {
     try {
         \Resurrection\Security\ActionToken::consume($_SESSION, $scope, $context, $_POST['action_token'] ?? null);
     } catch (DomainException $error) {
-        http_response_code(409);
-        exit('Expired or repeated action.');
+        // The stale token stays refused, with the same status; a game page answers in its frame (Phase 6 task 22).
+        resurrection_refuse_action(409, 'Expired or repeated action.');
     }
 }
 

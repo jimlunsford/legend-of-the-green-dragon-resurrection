@@ -216,7 +216,7 @@ function resurrection_user_editor_save(int $userid, array $userinfo): void {
         if (resurrection_admin_account($userid, 'acctid') === null) throw new OutOfBoundsException('Account not found.');
     } catch (Throwable $error) { resurrection_admin_failure($error, 'the user editor'); }
     $snapshot = $_SESSION['user_editor_snapshots'][$userid] ?? null;
-    if (!is_array($snapshot)) { http_response_code(409); exit('Expired or repeated action.'); }
+    if (!is_array($snapshot)) resurrection_refuse_action(409, 'Expired or repeated action.');
     resurrection_consume_action('user-edit-' . $userid, resurrection_user_editor_context($snapshot));
     unset($_SESSION['user_editor_snapshots'][$userid]);
     $shown = resurrection_user_editor_displayed($schema, $snapshot);

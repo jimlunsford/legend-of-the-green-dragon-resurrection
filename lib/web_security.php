@@ -7,10 +7,74 @@ function resurrection_require_post(): void {
     try {
         \Resurrection\Security\Csrf::requirePost($_SESSION, $_SERVER['REQUEST_METHOD'] ?? '', $_POST['csrf_token'] ?? null);
     } catch (DomainException $error) {
-        http_response_code(403);
-        header('Cache-Control: no-store');
-        exit('Invalid form submission.');
+        resurrection_refuse_action(403, 'Invalid form submission.');
     }
+}
+
+/**
+ * Whether this request is a game page under forced navigation (Phase 6 task 22, R10): a signed-in player's page whose
+ * address do_forced_nav() checked against the allowed navs (lib/forcednavigation.php), rendered in the game frame.
+ * Not a popup or page outside forced navigation (mail, MoTD, petitions, the translator, account.php, badnav.php,
+ * a module that overrides it), not a page before common.php (setup.php, account.php's token exchange), not a visitor
+ * signed out, and not newday.php: the new-day questions are replayed with this session's tokens on the next request,
+ * so a refusal there is no dead end, and their plain refusals stay as they were.
+ */
+function resurrection_refusal_framed(): bool {
+    global $session, $SCRIPT_NAME;
+    return PHP_SAPI !== 'cli' && !empty($GLOBALS['resurrection_forced_nav_page']) && !headers_sent() &&
+        function_exists('page_header') && function_exists('page_footer') &&
+        !empty($session['loggedin']) && !empty($session['user']['acctid']) && ($SCRIPT_NAME ?? '') !== 'newday.php';
+}
+
+/**
+ * Refuse a form: the CSRF refusal (403) or a spent, stale or missing action token (409) (Phase 6 task 22, R10). The
+ * status and the refusal stay as they were; nothing the form asked for is done. Outside a game page (see
+ * resurrection_refusal_framed()) the answer is the plain text it always was.
+ *
+ * On a game page the answer is the game's frame, with the credits, one fixed message and a way out the player may
+ * follow, so a refused action is never a dead end:
+ * - 409: the request carried this session's CSRF token, so it came from this session's own page. The page shown is
+ *   kept in place of the refused form, its nav (back to the village, or the Shades for the dead) joins the navs the
+ *   last page allowed (a repeated press of a game's button leaves that game's page open), and the return page becomes
+ *   that nav, so neither badnav.php nor a later sign-in sends the player back to the refused form. Nothing else about
+ *   the player is written (saveuser() under RESURRECTION_REFUSAL_PRESENTATION).
+ * - 403: the request may not come from this session at all, so it changes nothing, not even the navigation: the
+ *   page is shown, never kept or saved, and its link goes to badnav.php, which shows the player's own last page
+ *   again with this session's form tokens.
+ */
+function resurrection_refuse_action(int $status, string $plain): never {
+    global $session, $output, $navbysection, $navsection, $baseaccount;
+    http_response_code($status);
+    header('Cache-Control: no-store');
+    if (!resurrection_refusal_framed()) exit($plain);
+    require_once __DIR__ . '/villagenav.php';
+    if (!defined('RESURRECTION_REFUSAL_PRESENTATION')) define('RESURRECTION_REFUSAL_PRESENTATION', true);
+    // Whatever the refused page began to print or offer is dropped: only the refusal and its way out remain.
+    $output = '';
+    $navbysection = [];
+    $navsection = '';
+    $session['allowednavs'] = [];
+    tlschema('refusal');
+    page_header('That action has expired');
+    output('`$That action has expired. Nothing was changed.`0');
+    tlschema();
+    if ($status === 403) {
+        // Nothing of this session changes either: the sign-in's one fresh replay of the kept page stays available.
+        if (!empty($_SESSION['kept_page_reissue'])) register_shutdown_function(static function (): void { $_SESSION['kept_page_reissue'] = true; });
+        tlschema('refusal');
+        addnav('Return to the game', 'badnav.php');
+        tlschema();
+        page_footer(false);
+        exit; // page_footer() always exits; this states it for the never return type.
+    }
+    // The navs the last page allowed stay allowed (forced navigation emptied the session's copy for this request).
+    require_once __DIR__ . '/../src/Security/NavigationState.php';
+    try { $session['allowednavs'] = \Resurrection\Security\NavigationState::read($baseaccount['allowednavs'] ?? ''); }
+    catch (DomainException $error) { $session['allowednavs'] = []; }
+    villagenav();
+    $session['user']['restorepage'] = !empty($session['user']['alive']) ? 'village.php' : 'shades.php';
+    page_footer();
+    exit;
 }
 
 function resurrection_csrf_field(): string { return \Resurrection\Security\Csrf::field($_SESSION); }

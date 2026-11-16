@@ -197,3 +197,18 @@ Supporting evidence only; CI is the acceptance. Run on this commit's tree.
 
 CI acceptance of this commit. Then Jim runs the Release cut workflow from the Actions tab with the four inputs in the
 task report (the checklist's sections 3 and 4), and tests rc.2 on his server, including the rc.1 upgrade.
+
+## Acceptance and the cut (recorded in Phase 6 task 22, 2026-11-16)
+
+- **Accepted** at `100103d`: Modern core 43852203138 passed all 14 jobs. The PHP 8.4 `http` jobs took 9:51, 9:18,
+  10:43, 15:46 and 14:36; the PHP 8.5 ones 14:09, 11:15, 17:46, 14:05 and 11:23. Baseline integrity 43852203104
+  passed.
+- **The cut**, checked by the command chat on 2026-11-16: the Release cut workflow, run 43944843726, passed, started
+  with the four inputs of this task's report on Jim's request.
+  - The tag `v1.0.0-rc.2`: annotated, tag object `147ad5a2800ccff279b8e35f5b56ae1fe877c2d2`, on `100103d`; its
+    message is 861 bytes, SHA-256 `4b5b7465…b2ed`, the checklist's section 3.
+  - The pre-release,
+    https://github.com/jimlunsford/legend-of-the-green-dragon-resurrection/releases/tag/v1.0.0-rc.2: a pre-release,
+    not latest. Its zip is 3,867,683 bytes with the digest `sha256:133625b3…e439`, equal to this task's build.
+  - `v1.0.0-rc.1` and `historical-source-1.1.2` are unchanged.
+- Jim's server test of rc.2 (upgraded from rc.1) found R10, fixed in task 22 (`PHASE6-TASK22-20261116.md`).

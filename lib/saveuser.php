@@ -34,7 +34,7 @@ function saveuser(){
         $assignments = [];
         $parameters = [];
         foreach ($session['user'] as $key => $value) {
-            if (defined('RESURRECTION_NEWDAY_PRESENTATION') && !in_array($key, ['allowednavs','restorepage','gentime','gentimecount','gensize'], true)) { continue; }
+            if ((defined('RESURRECTION_NEWDAY_PRESENTATION') || defined('RESURRECTION_REFUSAL_PRESENTATION')) && !in_array($key, ['allowednavs','restorepage','gentime','gentimecount','gensize'], true)) { continue; }
             if ($key === 'password' || !array_key_exists($key, $baseaccount)) { continue; }
             // The address and its verification change only through their own checked paths (Phase 6 task 13c, S11
             // section 4.2: Preferences, a confirmation link, the user editor), never through the session's copy.

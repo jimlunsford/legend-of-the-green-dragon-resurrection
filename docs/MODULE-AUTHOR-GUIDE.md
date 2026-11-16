@@ -208,10 +208,10 @@ or replayed form is refused.
 | Helper | What it does |
 | --- | --- |
 | `resurrection_csrf_field()` | the hidden CSRF field for a form |
-| `resurrection_require_post()` | stops the request with 403 "Invalid form submission." unless it is a POST with the session's token |
+| `resurrection_require_post()` | stops the request with 403 unless it is a POST with the session's token: on a game page, the game's frame with "That action has expired. Nothing was changed." and a link back to the player's own page, saving nothing; elsewhere the plain text "Invalid form submission." (`resurrection_refuse_action()`) |
 | `resurrection_action_fields()` | the CSRF field and a one-use action token for a scope and a context |
 | `resurrection_content_form()` | the opening `<form method='POST'>` tag with both, the action allowed as a navigation target (`addnav('', $url)`) |
-| `resurrection_consume_action()` | checks both and uses the token up; 409 "Expired or repeated action." if it is gone or does not match |
+| `resurrection_consume_action()` | checks both and uses the token up; 409 if it is gone or does not match: on a game page, the same framed message with a way back to the village (or the Shades), kept as the player's last page; elsewhere the plain text "Expired or repeated action." |
 | `resurrection_player_mutation()` | runs your change in one transaction with the player's account locked and checked again; a `DomainException` rolls it back |
 
 The **scope** names the action (your module's name, or `mymodule-buy`). The **context** binds the token to the state

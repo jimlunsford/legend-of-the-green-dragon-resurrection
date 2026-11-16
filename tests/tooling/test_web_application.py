@@ -11072,6 +11072,135 @@ function MODULE_dohook($hook,$args) {
             self.query('UPDATE accounts SET '+','.join(k+'=?' for k in original)+' WHERE acctid=?',[*original.values(),player])
             self.query('UPDATE modules SET active=0')
 
+    REFUSAL_TEXT = 'That action has expired. Nothing was changed.'
+    REFUSAL_CREDITS = ['Game Design and Code: Copyright &copy; 2002-2005, Eric Stevens & JT Traub, &copy; 2006-2007, Dragonprime Development Team',
+                       "This work is licensed under a <a rel='license' href='http://creativecommons.org/licenses/by-nc-sa/2.0/' target='_blank'>Creative Commons License</a>.",
+                       '<p class="rz-attribution">A <a href="https://phoenix233.com" target="_blank" rel="noopener">Phoenix 2:33 LLC</a>'
+                       ' Project by <a href="https://jimlunsford.com" target="_blank" rel="noopener">Jim Lunsford</a></p>']
+
+    @contextmanager
+    def _refusal_fixture(self):
+        """Phase 6 task 22 (R10): WebPlayer as a plain player (no Grotto), alive in the forest on the current game day,
+        signed in with no forced allowance after the first page: every later page is reached by its own links, as a
+        player reaches it. Puts back every column and the kept page it changes."""
+        player=self.query('SELECT acctid FROM accounts WHERE login=?',['WebPlayer'])[0]['acctid']
+        columns=['alive','hitpoints','maxhitpoints','turns','gold','specialinc','specialmisc','badguy','lastnewday','allowednavs',
+                 'restorepage','superuser','race','specialty','location']
+        original=self.query('SELECT '+','.join(columns)+' FROM accounts WHERE acctid=?',[player])[0]
+        kept=self.query('SELECT output FROM accounts_output WHERE acctid=?',[player])
+        try:
+            self.query("UPDATE accounts SET alive=1,hitpoints=maxhitpoints,turns=10,specialinc='',specialmisc='',badguy='',superuser=0,"
+                       "race=IF(race IN ('','0'),'Human',race),specialty=IF(specialty='','DA',specialty),lastnewday=? WHERE acctid=?",
+                       [self._current_game_day(),player])
+            self.query('UPDATE accounts SET hitpoints=10 WHERE acctid=? AND hitpoints<=0',[player])
+            call=self._security_client()
+            def links(body): return [html.unescape(link) for link in re.findall(r'href=[\'"]([^\'"#]+)',body)]
+            def account(*keys): return self.query('SELECT '+','.join(keys)+' FROM accounts WHERE acctid=?',[player])[0]
+            def forest_search_form():
+                self._security_allow(player,'forest.php'); status,body=call('forest.php'); self.assertEqual(200,status,body[-2000:])
+                search=next(link for link in links(body) if re.fullmatch(r'forest\.php\?op=search&c=[0-9a-z-]+',link))
+                status,body=call(search); self.assertEqual(200,status,body[-2000:])
+                return self._security_fields(body,'forest.php?op=search'),body
+            def roll_over():
+                day=self._current_game_day()
+                yesterday=time.strftime('%Y-%m-%d',time.gmtime(time.mktime(time.strptime(day,'%Y-%m-%d'))-86400))
+                self.query('UPDATE accounts SET lastnewday=? WHERE acctid=?',[yesterday,player])
+            def framed(status,body,expected):
+                # The refusal keeps its status and is the game's page: frame, credits, the fixed message, a way out.
+                self.assertEqual(expected,status,body[:500])
+                self.assertIn('<title>That action has expired',body,body[:500])
+                self.assertIn(self.REFUSAL_TEXT,re.sub(r'\s+',' ',re.sub(r'<[^>]+>','',body)))
+                for credit in self.REFUSAL_CREDITS: self.assertIn(credit,body)
+                self.assertNotIn('<form method="POST" action="forest.php?op=search"',body)
+                self.assertNotIn('superuser.php',links(body))
+            yield dict(player=player,call=call,links=links,account=account,forest_search_form=forest_search_form,
+                       roll_over=roll_over,framed=framed)
+        finally:
+            self.query('UPDATE accounts SET '+','.join(k+'=?' for k in original)+' WHERE acctid=?',[*original.values(),player])
+            self.query('DELETE FROM accounts_output WHERE acctid=?',[player])
+            if kept: self.query('INSERT INTO accounts_output (acctid,output) VALUES (?,?)',[player,kept[0]['output']])
+
+    def test_a_forest_search_after_the_day_rolls_over_is_refused_before_it_is_spent_http(self):
+        """Phase 6 task 22, R10's cause, from Jim's rc.2 server test: the game day rolled over while he was in the
+        forest (he had come in through the Dark Horse Tavern, never through the village, whose page starts a due new
+        day). The search form (forest.php?op=search) never checked the new day; its POST spent the form's action token
+        and then refused the search for the new day, plainly ("Forest combat unavailable."). The refused request kept
+        nothing, so every later page went to badnav.php, which replays the kept page: that search form, its token now
+        spent and left empty, refused as "Expired or repeated action." on every press. A search when the new day is due
+        now begins the new day, as 1.1.2's search link did (checkday()), and one posted after the rollover is refused
+        before its token is spent, in the game's frame with the way back."""
+        with self._refusal_fixture() as f:
+            call=f['call']; fields,_=f['forest_search_form']()
+            before=f['account']('turns','gold','badguy','specialinc','hitpoints')
+            f['roll_over']()
+            status,body=call('forest.php?op=search',fields)
+            f['framed'](status,body,409)
+            self.assertEqual(before,f['account']('turns','gold','badguy','specialinc','hitpoints'))
+            self.assertEqual('village.php',f['account']('restorepage')['restorepage'])
+            # Every search link the forest offers begins the due new day instead of offering a search to refuse.
+            self._security_allow(f['player'],'forest.php'); _,forest=call('forest.php')
+            searches=[link for link in f['links'](forest) if link.startswith('forest.php?op=search')]
+            self.assertGreaterEqual(len(searches),2,forest[-2000:])
+            for link in searches:
+                self._security_allow(f['player'],link); status,body=call(link)
+                self.assertEqual(302,status,link+' '+body[:500])
+                self.assertEqual('a:1:{s:10:"newday.php";b:1;}',f['account']('allowednavs')['allowednavs'])
+            self.assertEqual(before,f['account']('turns','gold','badguy','specialinc','hitpoints'))
+
+    def test_a_refused_action_answers_in_the_game_frame_with_a_way_to_the_village_http(self):
+        """Phase 6 task 22 (R10): a refused action on a game page was a bare text page with no link. A player without
+        the Grotto (Jim got out through it) had nowhere to go. Now the 409 of a stale action token and the 403 of a
+        refused form answer in the game's frame, with the credits and the fixed message, and the same status; the
+        refused action still does nothing and its stale token stays refused. From the 409, the village is one click."""
+        with self._refusal_fixture() as f:
+            call,player=f['call'],f['player']
+            self.assertEqual('0',f['account']('superuser')['superuser'])
+            fields,_=f['forest_search_form']()
+            # The state the form was issued for changes before it is posted: its token is stale.
+            self.query('UPDATE accounts SET gold=gold+1 WHERE acctid=?',[player]); before=f['account']('turns','gold','badguy')
+            status,body=call('forest.php?op=search',fields)
+            f['framed'](status,body,409)
+            self.assertEqual(before,f['account']('turns','gold','badguy'))
+            village=[link for link in f['links'](body) if link.startswith('village.php')]
+            self.assertEqual(1,len(village),body[-3000:])
+            status,page=call(village[0]); self.assertEqual(200,status,page[:500]); self.assertIn('<title>Degolburg Square',page)
+            # The stale token stays refused with the same status, whatever allows its address.
+            self._security_allow(player,'forest.php?op=search')
+            status,body=call('forest.php?op=search',fields); f['framed'](status,body,409)
+            self.assertEqual(before,f['account']('turns','gold','badguy'))
+            # A refused form (403) is framed too, and changes nothing at all: not the navs, not the kept page.
+            fields,_=f['forest_search_form']()
+            navs=f['account']('allowednavs','restorepage'); kept=self.query('SELECT output FROM accounts_output WHERE acctid=?',[player])
+            status,body=call('forest.php?op=search',dict(fields,csrf_token='0'*64)); f['framed'](status,body,403)
+            self.assertTrue(any(link.startswith('badnav.php') for link in f['links'](body)),body[-2000:])
+            self.assertEqual(navs,f['account']('allowednavs','restorepage'))
+            self.assertEqual(kept,self.query('SELECT output FROM accounts_output WHERE acctid=?',[player]))
+            # Its way out shows the player's own page again, with this session's working form.
+            status,body=call('badnav.php'); self.assertEqual(200,status)
+            status,body=call('forest.php?op=search',self._security_fields(body,'forest.php?op=search'))
+            self.assertEqual(200,status,body[:1000]); self.assertNotIn(self.REFUSAL_TEXT,body)
+
+    def test_badnav_never_sends_a_player_back_to_a_refused_form_http(self):
+        """Phase 6 task 22 (R10): after a refusal, forced navigation sent every request to badnav.php, which replayed
+        the kept page, the refused form, with its token spent: refused again on every press, a loop only an address the
+        player could not know broke. Now the refusal is the kept page, with its way to the village, and the return page
+        after a sign-in is the village, so no request leads back to the refused form."""
+        with self._refusal_fixture() as f:
+            call,player=f['call'],f['player']
+            fields,_=f['forest_search_form']()
+            self.query('UPDATE accounts SET gold=gold+1 WHERE acctid=?',[player])
+            status,body=call('forest.php?op=search',fields); self.assertEqual(409,status)
+            for path in ['village.php','forest.php','inn.php','stables.php']:
+                status,_=call(path); self.assertEqual(302,status,path)
+                status,body=call('badnav.php'); f['framed'](status,body,200)
+            self.assertEqual('village.php',f['account']('restorepage')['restorepage'])
+            kept=self.query('SELECT output FROM accounts_output WHERE acctid=?',[player])[0]['output']
+            self.assertIn(self.REFUSAL_TEXT,kept); self.assertNotIn('action="forest.php?op=search"',kept)
+            # Signed in again: the return page is the village, never the refused form.
+            again=self._security_client(); status,body=again('badnav.php'); f['framed'](status,body,200)
+            village=[link for link in f['links'](body) if link.startswith('village.php')]
+            status,page=again(village[0]); self.assertEqual(200,status); self.assertIn('<title>Degolburg Square',page)
+
     def test_a_caught_failure_answered_500_leaves_one_log_line_http(self):
         """Phase 6 task 20, the logging check: an uncaught error gets PHP's own line (R6 reached the host's nginx log
         that way), but a failure the game catches and answers 500 ("Tavern exit was not completed.") logged nothing.
