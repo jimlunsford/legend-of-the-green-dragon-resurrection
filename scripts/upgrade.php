@@ -1,5 +1,6 @@
 <?php
 define('RESURRECTION_ENTRY', true);
+require_once __DIR__ . '/../src/autoload.php';
 // Supported upgrade command. Never expose this entrypoint over HTTP.
 //
 //   php scripts/upgrade.php --dry-run [CONFIG]

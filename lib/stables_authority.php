@@ -77,5 +77,5 @@ function resurrection_stables_fields(): void {
 function resurrection_stables_failure(Throwable $error): never {
     if ($error instanceof InvalidArgumentException) { http_response_code(400); exit('Invalid stables request.'); }
     if ($error instanceof DomainException) { http_response_code(409); exit('Your stable situation changed. Return to the stables and try again.'); }
-    http_response_code(500); exit('Nothing was changed. Return to the stables and try again.');
+    \Resurrection\Http\FailureLog::record($error); http_response_code(500); exit('Nothing was changed. Return to the stables and try again.');
 }

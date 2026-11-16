@@ -1,5 +1,6 @@
 <?php
 define('RESURRECTION_ENTRY', true);
+require_once __DIR__ . '/src/autoload.php';
 require_once __DIR__ . '/src/Security/ScalarState.php';
 require_once __DIR__ . '/src/Game/BuffState.php';
 require_once __DIR__ . '/src/Compatibility/array_cursor.php';
@@ -23,7 +24,7 @@ if (($_GET['subop'] ?? '') === 'module') {
         resurrection_object_editor('mounts',$editorModule,$editorId,$editorOp==='save');
         page_footer();
     } catch (InvalidArgumentException|DomainException $error) { http_response_code(400); exit('Invalid or stale object preferences.'); }
-    catch (Throwable $error) { http_response_code(500); exit('Preferences were not saved.'); }
+    catch (Throwable $error) { \Resurrection\Http\FailureLog::record($error); http_response_code(500); exit('Preferences were not saved.'); }
     exit;
 }
 require_once("lib/mount_companion_editor.php");

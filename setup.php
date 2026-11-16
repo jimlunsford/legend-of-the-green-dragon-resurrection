@@ -1,5 +1,6 @@
 <?php
 define('RESURRECTION_ENTRY', true);
+require_once __DIR__ . '/src/autoload.php';
 // The web setup page (Phase 6 task 5b; docs/PHASE6-TASK4-WEB-OPS-DESIGN-20261106.md, section 3): installs a new game,
 // or upgrades one whose database is behind the code, for a host without a shell. It is a front end over the same
 // services as scripts/install.php and scripts/upgrade.php (lib/setup/run.php). It answers only while the game is not

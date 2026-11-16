@@ -2595,6 +2595,57 @@ function fixturefightoptions_dohook($hook,$args) { $args['fixture_injected']=1; 
                 # Experience was not spent, but is below level 11's 19121 requirement.
                 self.assertEqual(200,f['training_action'](f['training_form']('challenge'),'challenge')[0]); self.assertEqual('11',f['training_snapshot']()[0]['level']); self.assertEqual('',f['training_snapshot']()[0]['badguy'])
 
+    def test_ready_to_challenge_line_at_the_requirement_and_gone_after_training(self):
+        """Phase 6 task 20 (R8): on Jim's rc.1 server the experience bar filled and nothing said what LoGD requires next,
+        a challenge at the Warrior Training. One line, in the character panel and the phone header: shown at the
+        requirement and not one point below it, linked to the training where the page offers it (the village), plain
+        on a page that does not (no link that would break forced navigation), and gone once the player has levelled."""
+        line='You are ready to challenge your master at'
+        with self._training_fixture() as f, self._specialty_terminal_capture():
+            f['training_master'](hp=10000,attack=0,defense=0)
+            def page(path):
+                code,body=f['request'](path); self.assertEqual(200,code,body[:3000]); return body
+            def lines(body):
+                return re.findall(r'<p class="rz-levelready">(.*?)</p>',body,re.S)
+            # Level 10 needs 15143 (lib/experience.php): one point short, no line.
+            f['prepare_training'](experience=15142); body=page('village.php')
+            self.assertEqual([],lines(body)); self.assertNotIn(line,body)
+            # At the requirement: the panel's line and the phone header's, each linking the village's own training nav.
+            f['prepare_training'](experience=15143); body=page('village.php')
+            found=lines(body); self.assertEqual(2,len(found),body[-3000:])
+            for text in found:
+                self.assertRegex(text,r'\A'+line+r' <a class="rz-levelready-link" href="train\.php(\?c=[0-9]+-[0-9]{6})?">the Warrior Training</a>\.\Z')
+            # One in the phone header's bars, one in the character panel.
+            at=[m.start() for m in re.finditer('class="rz-levelready"',body)]
+            phone=body.index('class="rz-phonehead-bars"'); panel=body.index('class="rz-stats"')
+            self.assertTrue(any(phone<i<phone+4000 for i in at)); self.assertTrue(any(i>panel for i in at))
+            # A page that does not offer the training says it in plain text.
+            body=page('bank.php'); found=lines(body); self.assertEqual(2,len(found),body[-3000:])
+            for text in found: self.assertEqual(line+' the Warrior Training.',text)
+            # Beat the master: level 11 needs 19121, so the line is gone.
+            f['enter'](attack=0,defense=1000,specialty='TS',experience=15143)
+            row=f['training_snapshot']()[0]; state=f['decode'](row['badguy']); state['enemies'][0]['creaturehealth']=10
+            buff={'proof':{'name':'Fixture','schema':'train','effectmsg':'','effectnodmgmsg':'','effectfailmsg':'','rounds':3,'allowintrain':1,'minioncount':1,'minbadguydamage':10,'maxbadguydamage':10}}
+            self.query('UPDATE accounts SET badguy=?,bufflist=? WHERE acctid=?',[f['encode'](state),f['encode'](buff),f['player']])
+            code,body=f['training_action'](f['training_form']()); self.assertEqual(200,code,body[:3000])
+            self.assertEqual('11',f['training_snapshot']()[0]['level']); self.assertEqual([],lines(body))
+            self.assertEqual([],lines(page('village.php')))
+
+    def test_master_five_reads_unelith_in_the_training_and_the_masters_editor(self):
+        """Phase 6 task 20 (R9): Jim's rc.1 server showed master 5 as "Un?lith", because the installer carried U+FFFD where
+        1.1.2's Latin-1 letter had been lost. A fresh install now writes "Unélith", and the pages show it as UTF-8."""
+        self.assertEqual('Unélith',self.query('SELECT creaturename FROM masters WHERE creatureid=5')[0]['creaturename'])
+        with self._training_fixture() as f:
+            f['prepare_training'](level=5,experience=0)
+            # The game's output writes the letter as an entity (Un&eacute;lith); either way the browser shows Unélith.
+            code,body=f['request']('train.php'); self.assertEqual(200,code,body[:3000]); body=html.unescape(body)
+            self.assertIn('Unélith stands ready to evaluate you.',body); self.assertNotIn('\ufffd',body)
+        with self._content_editor_fixture() as f:
+            f['login'](4)
+            for path in ['masters.php','masters.php?op=edit&id=5']:
+                code,body=f['request'](path); self.assertEqual(200,code,body[:3000]); body=html.unescape(body)
+                self.assertIn('Unélith',body,path); self.assertNotIn('\ufffd',body,path)
+
     def test_training_settlement_rollback_and_defeat(self):
         with self._training_fixture() as f, self._specialty_terminal_capture() as terminal:
             for win in [True,False]:
@@ -10960,6 +11011,92 @@ function MODULE_dohook($hook,$args) {
             for row in settings:
                 self.query('INSERT INTO module_settings (modulename,setting,value) VALUES (?,?,?)',['game_fivesix',row['setting'],row['value']])
             self.query('DELETE FROM module_userprefs WHERE modulename=? AND userid=?',['game_fivesix',player])
+            self.query('UPDATE modules SET active=0')
+
+    def test_darkhorse_round_trip_back_to_the_forest_after_every_game_http(self):
+        """Phase 6 task 20 (R6): on Jim's rc.1 server, leaving the Dark Horse Tavern after its dice and stones games
+        answered 500 on forest.php three times. The exit path (lib/darkhorse_entry.php) read the finished wager without
+        the class that checks it: Class "Resurrection\\Game\\StonesState" not found at DarkHorseState.php:50. Every
+        wager-state class goes through that path, so each game's finished wager is left behind once: enter the hut from
+        the forest, play, leave, and land on forest.php."""
+        player=self.query('SELECT acctid FROM accounts WHERE login=?',['WebPlayer'])[0]['acctid']
+        original=self.query('SELECT hashorse,specialinc,specialmisc,gold,turns,allowednavs FROM accounts WHERE acctid=?',[player])[0]
+        forest_saved=self.query('SELECT value FROM settings WHERE setting=?',['forestchance'])
+        fivesix=self.query('SELECT setting,value FROM module_settings WHERE modulename=?',['game_fivesix'])
+        games=['darkhorse','game_dice','game_stones','game_fivesix']
+        call=self._security_client()
+        def request(path,data=None):
+            self._security_allow(player,path); status,body=call(path,data)
+            self.assertEqual(200,status,path+' '+body[-3000:]); return body
+        def account(): return self.query('SELECT specialinc,specialmisc FROM accounts WHERE acctid=?',[player])[0]
+        def wager(): return json.loads(account()['specialmisc'])
+        def form(body,url,**extra): return {**self._security_fields(body,url),**extra}
+        try:
+            self.query('UPDATE modules SET active=0')
+            self.query('UPDATE modules SET active=1 WHERE modulename IN (?,?,?,?)',games)
+            self.query('INSERT INTO settings(setting,value) VALUES (?,?) ON DUPLICATE KEY UPDATE value=VALUES(value)',['forestchance','100'])
+            for key,value in [('cost','5'),('dailyuses','0'),('jackpot','100'),('maxjackpot','5000')]:
+                self.query('INSERT INTO module_settings (modulename,setting,value) VALUES (?,?,?) ON DUPLICATE KEY UPDATE value=VALUES(value)',['game_fivesix',key,value])
+            for played in [['game_dice','game_stones'],['game_fivesix'],['game_dice']]:
+                self.query("UPDATE accounts SET hashorse=0,specialinc='',specialmisc='',gold=1000,turns=10 WHERE acctid=?",[player])
+                # Into the hut from the forest, as a player finds it.
+                body=request('forest.php?op=search'); request('forest.php?op=search',form(body,'forest.php?op=search'))
+                self.assertIn('cluster of trees',request('forest.php')); self.assertEqual('module:darkhorse',account()['specialinc'])
+                request('forest.php?op=tavern')
+                for game in played:
+                    request('forest.php?op=oldman')
+                    url='runmodule.php?module='+game; body=request(url)
+                    if game=='game_dice':
+                        body=request(url,form(body,url,action='bet',bet='10')); body=request(url,form(body,url,action='keep'))
+                    elif game=='game_stones':
+                        body=request(url,form(body,url,action='choose',side='likepair')); body=request(url,form(body,url,action='bet',bet='10'))
+                        for _ in range(60):
+                            if wager()['stage']=='complete': break
+                            step=re.search(r'name="action" value="(draw|settle)"',body); self.assertIsNotNone(step,body[-2000:])
+                            body=request(url,form(body,url,action=step.group(1)))
+                    else:
+                        body=request(url,form(body,url,action='roll'))
+                    self.assertEqual((game,'complete'),(wager()['game'],wager()['stage']))
+                # Out of the hut: the exit reads the finished wager, then the forest.
+                leave='forest.php?op=leave'; body=request(leave)
+                body=request(leave,form(body,leave)); self.assertIn('You duck out of the tavern',body)
+                self.assertEqual('',account()['specialinc'])
+                self.assertIn('The Forest',request('forest.php'))
+        finally:
+            self.query('DELETE FROM settings WHERE setting=?',['forestchance'])
+            if forest_saved: self.query('INSERT INTO settings(setting,value) VALUES (?,?)',['forestchance',forest_saved[0]['value']])
+            self.query('DELETE FROM module_settings WHERE modulename=?',['game_fivesix'])
+            for row in fivesix:
+                self.query('INSERT INTO module_settings (modulename,setting,value) VALUES (?,?,?)',['game_fivesix',row['setting'],row['value']])
+            self.query('DELETE FROM module_userprefs WHERE modulename=? AND userid=?',['game_fivesix',player])
+            self.query('UPDATE accounts SET '+','.join(k+'=?' for k in original)+' WHERE acctid=?',[*original.values(),player])
+            self.query('UPDATE modules SET active=0')
+
+    def test_a_caught_failure_answered_500_leaves_one_log_line_http(self):
+        """Phase 6 task 20, the logging check: an uncaught error gets PHP's own line (R6 reached the host's nginx log
+        that way), but a failure the game catches and answers 500 ("Tavern exit was not completed.") logged nothing.
+        The tavern's exit, its account write refused by the database: one line, with the page, class, file and line."""
+        player=self.query('SELECT acctid FROM accounts WHERE login=?',['WebPlayer'])[0]['acctid']
+        original=self.query('SELECT specialinc,specialmisc,allowednavs FROM accounts WHERE acctid=?',[player])[0]
+        call=self._security_client(); leave='forest.php?op=leave'
+        def request(path,data=None): self._security_allow(player,path); return call(path,data)
+        def log():
+            self.server_log.seek(0); return self.server_log.read().splitlines()
+        try:
+            self.query('UPDATE modules SET active=1 WHERE modulename=?',['darkhorse'])
+            self.query("UPDATE accounts SET specialinc='module:darkhorse',specialmisc='' WHERE acctid=?",[player])
+            status,body=request(leave); self.assertEqual(200,status,body[-2000:]); form=self._security_fields(body,leave)
+            self.query("ALTER TABLE accounts ADD CONSTRAINT fixture_exit_failure CHECK (login <> 'WebPlayer' OR specialinc <> '')")
+            before=log(); status,body=request(leave,form)
+            self.assertEqual(500,status); self.assertIn('Tavern exit was not completed.',body)
+            self.assertEqual('module:darkhorse',self.query('SELECT specialinc FROM accounts WHERE acctid=?',[player])[0]['specialinc'])
+            new=[line for line in log()[len(before):] if 'Resurrection:' in line]
+            self.assertEqual(1,len(new),'\n'.join(log()[len(before):])[-2000:])
+            self.assertRegex(new[0],r'Resurrection: forest\.php failed: [A-Za-z\\]+ at [a-z_/]+\.php:\d+$')
+        finally:
+            if self.query("SELECT CONSTRAINT_NAME FROM information_schema.TABLE_CONSTRAINTS WHERE CONSTRAINT_SCHEMA=DATABASE() AND TABLE_NAME='accounts' AND CONSTRAINT_NAME='fixture_exit_failure'"):
+                self.query('ALTER TABLE accounts DROP CONSTRAINT fixture_exit_failure')
+            self.query('UPDATE accounts SET '+','.join(k+'=?' for k in original)+' WHERE acctid=?',[*original.values(),player])
             self.query('UPDATE modules SET active=0')
 
     def test_module_audrey_village_authority(self):

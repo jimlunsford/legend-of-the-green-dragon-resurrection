@@ -163,7 +163,7 @@ function lovers_run(){
     } catch (DomainException $error) {
         http_response_code(409); exit('Lovers is unavailable.');
     } catch (Throwable $error) {
-        http_response_code(500); exit('Lovers interaction was not completed. Request a fresh form.');
+        \Resurrection\Http\FailureLog::record($error); http_response_code(500); exit('Lovers interaction was not completed. Request a fresh form.');
     }
 	addnav("Return");
 	addnav("I?Return to the Inn","inn.php");

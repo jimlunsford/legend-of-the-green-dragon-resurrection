@@ -116,6 +116,7 @@ final class SafeFrame
 <!--!stattile--><div class="rz-stattile"><span class="rz-stattile-label">{icon}{label}</span><span class="rz-stattile-value">{value}{note}</span></div>
 <!--!equiprows--><div class="rz-equiprows">{rows}</div>
 <!--!equiprow--><div class="rz-equiprow"><span class="rz-equiprow-label">{icon}{label}</span><span class="rz-equiprow-value">{value}</span></div>
+<!--!levelready--><p class="rz-levelready">{text}</p>
 <!--!labelicon--><img class="rz-labelicon" src="{src}" alt="" aria-hidden="true" width="{width}" height="{height}">
 <!--!navhead--><h2 class="rz-navhead">{title}</h2>
 <!--!navhelp--><div class="rz-navhelp">{text}</div>

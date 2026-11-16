@@ -101,25 +101,26 @@ function nasty_word_list(){
 	$row = db_fetch_assoc($result);
 	$search = " ".($row['words'] ?? "")." ";
 	$search = preg_replace('/(?<=.)(?<!\\\\)\'(?=.)/', '\\\'', $search);
-	$search = str_replace("a",'[a4@ªÀÁÂÃÄÅàáâãäå]',$search);
-	$search = str_replace("b",'[bß]',$search);
-	$search = str_replace("d",'[dÐÞþ]',$search);
-	$search = str_replace("e",'[e3ÉÊËÈèéêë]',$search);
-	$search = str_replace("n",'[nÑñ]',$search);
-	$search = str_replace("o",'[o°º0ÒÓÔÕÖØðòóôõöø¤]',$search);
-	$search = str_replace("p",'[pÞþ¶]',$search);
-	$search = str_replace("r",'[r®]',$search);
-//	$search = str_replace("s",'[sz$§]',$search);
-	$search = preg_replace('/(?<!\\\\)s/','[sz$§]',$search);
+	$search = str_replace("a",'[a4@\252\300\301\302\303\304\305\340\341\342\343\344\345]',$search);
+	$search = str_replace("b",'[b\337]',$search);
+	$search = str_replace("d",'[d\320\336\376]',$search);
+	$search = str_replace("e",'[e3\311\312\313\310\350\351\352\353]',$search);
+	$search = str_replace("n",'[n\321\361]',$search);
+	$search = str_replace("o",'[o\260\2720\322\323\324\325\326\330\360\362\363\364\365\366\370\244]',$search);
+	$search = str_replace("p",'[p\336\376\266]',$search);
+	$search = str_replace("r",'[r\256]',$search);
+//	$search = str_replace("s",'[sz$\247]',$search);
+	// A replacement string reads \NN as a back reference, so the escape's own backslash is doubled here (task 20).
+	$search = preg_replace('/(?<!\\\\)s/','[sz$\\\\247]',$search);
 	$search = str_replace("t",'[t7+]',$search);
-	$search = str_replace("u",'[uÛÜÙÚùúûüµ]',$search);
-	$search = str_replace("x",'[x×¤]',$search);
-	$search = str_replace("y",'[yÝ¥ýÿ]',$search);
+	$search = str_replace("u",'[u\333\334\331\332\371\372\373\374\265]',$search);
+	$search = str_replace("x",'[x\327\244]',$search);
+	$search = str_replace("y",'[y\335\245\375\377]',$search);
 	//these must happen in exactly this order:
-	$search = str_replace("l",'[l1!£]',$search);
-	$search = str_replace("i",'[li1!¡ÌÍÎÏìíîï]',$search);
+	$search = str_replace("l",'[l1!\243]',$search);
+	$search = str_replace("i",'[li1!\241\314\315\316\317\354\355\356\357]',$search);
 	$search = str_replace("k",'c',$search);
-	$search = str_replace("c",'[c\\(kç©¢]',$search);
+	$search = str_replace("c",'[c\\(k\347\251\242]',$search);
 	$start = "'\\b";
 	$end = "\\b'iU";
 	$ws = "[^[:space:]\\t]*"; //whitespace (\w is not hungry enough)

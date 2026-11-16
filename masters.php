@@ -1,5 +1,6 @@
 <?php
 define('RESURRECTION_ENTRY', true);
+require_once __DIR__ . '/src/autoload.php';
 // Initially written as a module by Chris Vorndran.
 // Moved into core by JT Traub
 

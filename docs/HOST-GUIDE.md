@@ -38,6 +38,11 @@ tested backups and restores, monitoring, and an independent review. They are lis
   ("Daily maintenance", below).
 - **PHP settings** (in `php.ini`, or your panel's PHP settings page):
   - `display_errors` off and `log_errors` on, so errors go to the log and never to a player.
+  - `error_log` set to a file the site's PHP user can write, so you know where that log is (section 12). With PHP-FPM,
+    set it in the site's pool file, for example
+    `php_admin_value[error_log] = /var/log/php/resurrection-error.log` with `php_admin_flag[log_errors] = on`, and
+    create the folder with the pool's user as its owner. `log_errors` on its own is not enough: with no `error_log`,
+    PHP-FPM hands each error to the web server, and nginx writes it into the site's nginx error log.
   - `memory_limit` 32M or more (the game asks for 64M itself where the host allows it).
   - `expose_php` off, so PHP does not announce its version.
   - `zend.exception_ignore_args` on (the game also sets it).
@@ -532,8 +537,14 @@ and statistics behind the panel login, as for the setup token.
 
 ## 12. Logs
 
-- **The PHP error log** (the host's error log, or `error_log` in PHP's settings): errors, with the file and line
-  only, never SQL, passwords or keys. Lines the game writes itself:
+- **The PHP error log**: the file named by `error_log` in PHP's settings (section 1; with PHP-FPM, the pool's
+  `php_admin_value[error_log]`). Where `error_log` is not set, PHP-FPM sends each error to the web server: nginx writes
+  it into the site's nginx error log, in a line with `FastCGI sent in stderr` and then PHP's message, and Apache with
+  PHP-FPM writes it into the site's Apache error log. The sample nginx rules name that log on their `error_log` line,
+  `error_log /var/log/nginx/resurrection.error.log;` (`docs/hosting/nginx.conf`); without that line it is nginx's own
+  log, often `/var/log/nginx/error.log`. Errors are logged with the file and line, never SQL, passwords or keys. An
+  error the game does not catch gets PHP's own line, `PHP Fatal error:  Uncaught <class>: <message> in <file>:<line>`.
+  Lines the game writes itself:
 
   | Line | Means |
   |---|---|
@@ -542,6 +553,7 @@ and statistics behind the panel login, as for the setup token.
   | `Resurrection: web install failed (...) at ...` | A `setup.php` install failed partway (section 5.3) |
   | `Resurrection: web upgrade failed (...) at ...` | A `setup.php` upgrade part failed; the page said what was applied |
   | `Resurrection: web maintenance failed at ...` | A web maintenance run failed; Game Settings' status line says failed |
+  | `Resurrection: <page> failed: <class> at <file>:<line>` | A page caught a failure and told the player that nothing was changed (a 5xx): report it with the file and line |
   | `Mail notification failed after game mail commit.` | `mail()` refused a message (section 11) |
   | `Character expiration failed for one account; it was left unchanged.` | Maintenance could not delete one expired character; it tries again next time |
   | `Runtime error in <file>:<line>` (inside a PHP "Uncaught" line) | A fault in the game or a module: report it with the file and line |

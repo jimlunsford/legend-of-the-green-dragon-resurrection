@@ -282,7 +282,7 @@ function outhouse_run(){
             outhouse_action();
         });
     } catch (DomainException | InvalidArgumentException $error) { http_response_code(409); exit('Outhouse action rejected.'); }
-    catch (Throwable $error) { http_response_code(500); exit('Outhouse action was not completed.'); }
+    catch (Throwable $error) { \Resurrection\Http\FailureLog::record($error); http_response_code(500); exit('Outhouse action was not completed.'); }
     page_footer();
 }
 ?>

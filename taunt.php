@@ -1,5 +1,6 @@
 <?php
 define('RESURRECTION_ENTRY', true);
+require_once __DIR__ . '/src/autoload.php';
 // addnews ready
 // mail ready
 // translator ready

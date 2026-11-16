@@ -1,5 +1,6 @@
 <?php
 define('RESURRECTION_ENTRY', true);
+require_once __DIR__ . '/src/autoload.php';
 // 1.1.2's web installer is disabled: it cannot safely distinguish upgrade
 // authorization from anonymous first use. Installs are fresh only, through
 // scripts/install.php from a shell or setup.php on a host without one.

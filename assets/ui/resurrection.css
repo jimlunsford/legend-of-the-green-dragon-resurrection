@@ -548,6 +548,8 @@ input[type="checkbox"], input[type="radio"] { width: 20px; height: 20px; accent-
 .rz-statbar-experience .rz-statbar-fill { background: var(--accent); }
 .rz-statbar-caption { color: var(--muted); font-size: var(--size-small); }
 .rz-statbar-caption:empty { display: none; }
+/* Phase 6 task 20 (R8): the ready-to-challenge line under the experience bar, in the panel and the phone header. */
+.rz-levelready { margin: 0; color: var(--text); font-size: var(--size-small); font-weight: var(--weight-ui-bold); }
 
 /* A bar's fill width (Phase 6 task 3, S1): the template's statbar, statbarcap, phonebar and fighterbar parts draw the
    fill as rz-fill-{percent}, the whole percent from resurrection_charpanel_percent(), because the Content Security
@@ -1156,6 +1158,9 @@ a.hotmotd { color: var(--accent); }
   .rz-phonebar-track { height: var(--bar-height-compact); background: var(--track); border-radius: var(--radius-bar); overflow: hidden; }
   .rz-phonebar-fill { height: 100%; max-width: 100%; border-radius: var(--radius-bar); background: var(--health); }
   .rz-phonebar-experience .rz-phonebar-fill { background: var(--accent); }
+  /* The ready-to-challenge line (task 20) spans both bars; its link is a 44 px tap target, as every link here is. */
+  .rz-phonehead-bars .rz-levelready { grid-column: 1 / -1; }
+  .rz-levelready-link { display: inline-flex; align-items: center; min-height: var(--touch-target); }
 
   /* The page's navs as tiles: two columns, 48px or taller, the label wrapping, no key badge (no keyboard here). */
   .rz-nav-panel { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; padding: 0; background: none; border: 0; }

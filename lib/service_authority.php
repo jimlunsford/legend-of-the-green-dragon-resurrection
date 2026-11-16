@@ -46,7 +46,7 @@ function resurrection_service_fields(): void {
 function resurrection_service_failure(Throwable $error, string $place): never {
     if ($error instanceof InvalidArgumentException) { http_response_code(400); exit('Invalid request.'); }
     if ($error instanceof DomainException) { http_response_code(409); exit("Your situation changed. Return to $place and try again."); }
-    http_response_code(500); exit("Nothing was changed. Return to $place and try again.");
+    \Resurrection\Http\FailureLog::record($error); http_response_code(500); exit("Nothing was changed. Return to $place and try again.");
 }
 
 function resurrection_service_posted(): bool {

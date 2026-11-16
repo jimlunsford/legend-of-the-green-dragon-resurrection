@@ -93,7 +93,7 @@ function resurrection_content_failure(Throwable $error, string $page): never {
     if ($error instanceof InvalidArgumentException) { http_response_code(400); exit('Invalid request.'); }
     if ($error instanceof OutOfBoundsException) { http_response_code(404); exit("Not found. Return to $page."); }
     if ($error instanceof DomainException) { http_response_code(409); exit("This changed. Reload $page before acting."); }
-    http_response_code(500); exit("Nothing was changed. Reload $page and try again.");
+    \Resurrection\Http\FailureLog::record($error); http_response_code(500); exit("Nothing was changed. Reload $page and try again.");
 }
 
 /** 1.1.2 changed rows on GET links. Those operations now act only on their protected POST forms. */

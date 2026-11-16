@@ -92,7 +92,7 @@ function resurrection_bank_mutation(callable $action, array $participants = []):
 function resurrection_bank_failure(Throwable $error): never {
     if ($error instanceof InvalidArgumentException) { http_response_code(400); exit('Invalid bank request.'); }
     if ($error instanceof DomainException) { http_response_code(409); exit('Your account changed. Return to the bank and try again.'); }
-    http_response_code(500); exit('Nothing was changed. Return to the bank and try again.');
+    \Resurrection\Http\FailureLog::record($error); http_response_code(500); exit('Nothing was changed. Return to the bank and try again.');
 }
 
 function resurrection_bank_attribute(mixed $text): string {

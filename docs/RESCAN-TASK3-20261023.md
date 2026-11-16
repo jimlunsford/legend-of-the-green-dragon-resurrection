@@ -550,6 +550,9 @@ are not listed.
 | `upgrades/0001-account-mail.php` | `db_identifier(db_prefix('account_tokens'))` | 1 | server | `db_identifier()` of a fixed table name (the step creates it). |
 | `upgrades/0001-account-mail.php` | `db_identifier(db_prefix('accounts'))` | 2 | server | `db_identifier()` of a fixed table name (the step reads its columns and adds `emailverified`). |
 | `upgrades/0002-signin-limits.php` | `db_identifier(db_prefix('settings'))` | 2 | server | `db_identifier()` of a fixed table name (the step looks for each sign-in limit row and adds a missing one; the names and values are bound). |
+| `upgrades/0003-utf8-seed-text.php` | `db_identifier(db_prefix('masters'))` | 1 | server | `db_identifier()` of a fixed table name (the step rewrites master 5's name only where it still holds the broken seed value; both values are bound). |
+| `upgrades/0003-utf8-seed-text.php` | `db_identifier(db_prefix('nastywords'))` | 1 | server | `db_identifier()` of a fixed table name (the step rewrites the nasty word list only where it still holds the broken seed value; both values are bound). |
+| `upgrades/0003-utf8-seed-text.php` | `db_identifier(db_prefix('settings'))` | 1 | server | `db_identifier()` of a fixed table name (the step rewrites `serverlanguages` only where it still holds the broken seed value; both values are bound). |
 <!-- /sql-sweep-table -->
 
 ## Acceptance, 2026-10-23
@@ -694,3 +697,14 @@ Task 18's fix adds upgrade step `upgrades/0002-signin-limits.php`, which puts on
 
 No request value reaches the SQL text: the three setting names and their default values are literals in the step,
 and they are bound. The test and its matching are unchanged.
+
+## Reviewed list change, 2026-11-16 (Phase 6 task 20)
+
+Task 20 adds upgrade step `upgrades/0003-utf8-seed-text.php` (R9), which puts three fixed table names into SQL text,
+and `SqlSweepTest` failed locally ("Interpolated into SQL and not reviewed") until they were reviewed onto the list:
+
+- A fixed table name through the configured prefix and `db_identifier()`: `masters`, `settings` and `nastywords`, one
+  site each (an UPDATE of one seed row, only where it still holds the broken value).
+
+No request value reaches the SQL text: the old and new values are literals in the step, and they are bound. The test
+and its matching are unchanged.

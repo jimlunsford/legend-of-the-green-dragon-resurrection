@@ -1,5 +1,6 @@
 <?php
 define('RESURRECTION_ENTRY', true);
+require_once __DIR__ . '/src/autoload.php';
 require_once 'common.php';
 require_once 'lib/titles.php';
 require_once 'lib/taunt.php';

@@ -112,7 +112,7 @@ final class UpgradeTest extends TestCase
 
     public function testCatalogOrdersStepsByNumberAndChecksTheirFiles(): void
     {
-        self::assertSame(['0001-account-mail', '0002-signin-limits'], StepCatalog::ids(dirname(__DIR__, 2) . '/upgrades'), 'The real steps, in number order (Phase 6 task 13a added the first, task 18\'s fix the second).');
+        self::assertSame(['0001-account-mail', '0002-signin-limits', '0003-utf8-seed-text'], StepCatalog::ids(dirname(__DIR__, 2) . '/upgrades'), 'The real steps, in number order (Phase 6 task 13a added the first, task 18\'s fix the second, task 20 the third).');
         self::assertSame(['0001-first', '0002-second', '0010-tenth'], StepCatalog::ids(self::directory('order')));
         $directory = sys_get_temp_dir() . '/resurrection-steps-' . bin2hex(random_bytes(6));
         mkdir($directory, 0700);
@@ -181,7 +181,7 @@ final class UpgradeTest extends TestCase
         $before = resurrection_database_snapshot();
         $refusal = 'Upgrade refused. Take a fresh backup of the database first, then run again with --backup-confirmed. Some upgrade changes cannot be rolled back: MySQL and MariaDB commit a table change the moment it runs, so if an upgrade stops partway, the backup is the way back. To see what would change without changing anything, use --dry-run. The host guide says how to take and restore a backup ("Backups and restore": ' . self::guide() . '#10-backups-and-restore). Nothing was changed.' . "\n";
         self::assertSame([1, '', $refusal], $this->command());
-        $current = "The database is current: 2 of 2 upgrade steps applied, and every installed bundled module is at its version. Nothing was changed.\n";
+        $current = "The database is current: 3 of 3 upgrade steps applied, and every installed bundled module is at its version. Nothing was changed.\n";
         self::assertSame([0, $current, ''], $this->command('--dry-run'));
         self::assertSame([0, $current, ''], $this->command('--backup-confirmed'));
         self::assertSame([1, '', "Upgrade refused. Give --dry-run or --backup-confirmed, not both. Nothing was changed.\n"], $this->command('--dry-run', '--backup-confirmed'));
@@ -248,7 +248,41 @@ final class UpgradeTest extends TestCase
             'Fixture invalid: a sign-in limit is not its default.');
         db_query("DELETE FROM settings WHERE setting IN ('signin_fail_pair','signin_fail_address','signin_fail_account')");
         self::forget(['0002-signin-limits']);
+        // And from before 0003 (Phase 6 task 20): the three seed values as an rc.1 install wrote them.
+        self::undoSeedText();
         $GLOBALS['settings'] = null;
+    }
+
+    /**
+     * The three seed values step 0003 rewrites, back to the broken bytes a v1.0.0-rc.1 install wrote (its own
+     * installer's lines: master 5, serverlanguages, the nasty word list), and 0003's ledger row removed. Valid only
+     * while they hold the fresh install's values.
+     */
+    private static function undoSeedText(): void
+    {
+        foreach (self::seedText() as [$sql, $fixed, $broken, $read]) {
+            self::assertSame($fixed, $read(), 'Fixture invalid: a seed value is not the fresh install\'s.');
+            db_query($sql, true, [$broken]);
+            self::assertSame($broken, $read());
+        }
+        self::forget(['0003-utf8-seed-text']);
+    }
+
+    /** @return list<array{string, string, string, \Closure(): string}> each seed row: its UPDATE, the fixed value, rc.1's value, a reader */
+    private static function seedText(): array
+    {
+        $rc1 = (string)shell_exec('git -C ' . escapeshellarg(dirname(__DIR__, 2)) . ' show v1.0.0-rc.1:lib/installer/installer_sqlstatements.php');
+        self::assertStringContainsString("VALUES (5,'Un\u{FFFD}lith'", $rc1, 'v1.0.0-rc.1 seeds master 5 with the replacement character');
+        preg_match('/VALUES \("(\*damn\*[^"]*)", "nasty"\)/', $rc1, $words);
+        preg_match("/'serverlanguages','([^']*)'/", $rc1, $languages);
+        self::assertCount(2, $words);
+        self::assertCount(2, $languages);
+        $value = static fn (string $sql): \Closure => static fn (): string => (string)(db_query($sql)[0]['v'] ?? '');
+        return [
+            ['UPDATE masters SET creaturename=? WHERE creatureid=5', 'Unélith', 'Un' . "\u{FFFD}" . 'lith', $value('SELECT creaturename AS v FROM masters WHERE creatureid=5')],
+            ["UPDATE settings SET value=? WHERE setting='serverlanguages'", 'en,English,fr,Français,dk,Danish,de,Deutsch,es,Español,it,Italian', $languages[1], $value("SELECT value AS v FROM settings WHERE setting='serverlanguages'")],
+            ["UPDATE nastywords SET words=? WHERE type='nasty'", str_replace('kyrp' . "\u{FFFD}" . '*', 'kyrpä*', $words[1]), $words[1], $value("SELECT words AS v FROM nastywords WHERE type='nasty'")],
+        ];
     }
 
     public function testAccountMailStepMatchesTheFreshInstall(): void
@@ -268,16 +302,16 @@ final class UpgradeTest extends TestCase
             self::assertNotContains('emailverified', array_column($old['tables']['accounts']['columns'], 'name'));
             self::assertSame('behind', resurrection_database_state());
             self::assertSame(['Pending:', '- step 0001-account-mail: Add account mail: the account_tokens and account_mail_log tables and the accounts.emailverified column',
-                '- step 0002-signin-limits: Add the sign-in limit settings with their defaults: signin_fail_pair, signin_fail_address and signin_fail_account', 'Dry run: nothing was changed.'],
+                '- step 0002-signin-limits: Add the sign-in limit settings with their defaults: signin_fail_pair, signin_fail_address and signin_fail_account', '- step 0003-utf8-seed-text: Write the UTF-8 text 1.1.2 meant into three seed values: master 5 (Unélith), serverlanguages (Français, Español) and the nasty word list (kyrpä*)', 'Dry run: nothing was changed.'],
                 $this->upgrade($real, false));
             self::assertSame($old, resurrection_database_snapshot());
             self::assertSame(['Pending:', '- step 0001-account-mail: Add account mail: the account_tokens and account_mail_log tables and the accounts.emailverified column',
-                '- step 0002-signin-limits: Add the sign-in limit settings with their defaults: signin_fail_pair, signin_fail_address and signin_fail_account', 'Applying:', '- applied and recorded step 0001-account-mail', '- applied and recorded step 0002-signin-limits',
-                'Upgrade complete: applied 2 upgrade step(s) and 0 module upgrade(s). The database is current.'], $this->upgrade($real, true));
+                '- step 0002-signin-limits: Add the sign-in limit settings with their defaults: signin_fail_pair, signin_fail_address and signin_fail_account', '- step 0003-utf8-seed-text: Write the UTF-8 text 1.1.2 meant into three seed values: master 5 (Unélith), serverlanguages (Français, Español) and the nasty word list (kyrpä*)', 'Applying:', '- applied and recorded step 0001-account-mail', '- applied and recorded step 0002-signin-limits', '- applied and recorded step 0003-utf8-seed-text',
+                'Upgrade complete: applied 3 upgrade step(s) and 0 module upgrade(s). The database is current.'], $this->upgrade($real, true));
             self::assertSame($fresh, self::withoutLedgerTimes());
             // Run again: the database is current and nothing changes. The step itself, run again, changes nothing either.
             $upgraded = resurrection_database_snapshot();
-            self::assertSame(['The database is current: 2 of 2 upgrade steps applied, and every installed bundled module is at its version. Nothing was changed.'], $this->upgrade($real, true));
+            self::assertSame(['The database is current: 3 of 3 upgrade steps applied, and every installed bundled module is at its version. Nothing was changed.'], $this->upgrade($real, true));
             (StepCatalog::load($real, '0001-account-mail')['apply'])();
             self::assertSame($upgraded, resurrection_database_snapshot());
         } finally {
@@ -285,8 +319,10 @@ final class UpgradeTest extends TestCase
                 db_query('DELETE FROM upgrade_steps WHERE step=?', true, [$row['step']]);
                 db_query('INSERT INTO upgrade_steps (step,applied) VALUES (?,?)', true, [$row['step'], $row['applied']]);
             }
-            // The sign-in limits undoAccountMail() removed, if a failure left them out (0002 adds only missing rows).
+            // The sign-in limits undoAccountMail() removed, if a failure left them out (0002 adds only missing rows), and
+            // the seed text it set back (0003 changes only the broken values).
             (StepCatalog::load($real, '0002-signin-limits')['apply'])();
+            (StepCatalog::load($real, '0003-utf8-seed-text')['apply'])();
         }
         self::assertSame($original, resurrection_database_snapshot());
         // The step writes its definitions out and reads none from shared code.
@@ -312,22 +348,24 @@ final class UpgradeTest extends TestCase
             // The test database is installed fresh: its limits are the defaults, so it is the fresh install to match.
             self::assertSame(['signin_fail_account' => '50', 'signin_fail_address' => '20', 'signin_fail_pair' => '5'], $saved, 'Fixture invalid: the limits are not the defaults.');
             $fresh = self::withoutLedgerTimes();
-            // A database from before the step: no rows, and 0002 not recorded.
+            // A database from before the step: no rows, and 0002 not recorded; so from before 0003 too (Phase 6 task 20).
             $remove($names);
             self::forget(['0002-signin-limits']);
+            self::undoSeedText();
             $GLOBALS['settings'] = null;
             $old = resurrection_database_snapshot();
             self::assertSame([], $limits());
             self::assertSame('behind', resurrection_database_state());
             $pending = '- step 0002-signin-limits: Add the sign-in limit settings with their defaults: signin_fail_pair, signin_fail_address and signin_fail_account';
-            self::assertSame(['Pending:', $pending, 'Dry run: nothing was changed.'], $this->upgrade($real, false));
+            $seed = '- step 0003-utf8-seed-text: Write the UTF-8 text 1.1.2 meant into three seed values: master 5 (Unélith), serverlanguages (Français, Español) and the nasty word list (kyrpä*)';
+            self::assertSame(['Pending:', $pending, $seed, 'Dry run: nothing was changed.'], $this->upgrade($real, false));
             self::assertSame($old, resurrection_database_snapshot());
-            self::assertSame(['Pending:', $pending, 'Applying:', '- applied and recorded step 0002-signin-limits',
-                'Upgrade complete: applied 1 upgrade step(s) and 0 module upgrade(s). The database is current.'], $this->upgrade($real, true));
+            self::assertSame(['Pending:', $pending, $seed, 'Applying:', '- applied and recorded step 0002-signin-limits', '- applied and recorded step 0003-utf8-seed-text',
+                'Upgrade complete: applied 2 upgrade step(s) and 0 module upgrade(s). The database is current.'], $this->upgrade($real, true));
             self::assertSame($fresh, self::withoutLedgerTimes());
             // Run again: current, and nothing changes. The step itself, run again, changes nothing either.
             $upgraded = resurrection_database_snapshot();
-            self::assertSame(['The database is current: 2 of 2 upgrade steps applied, and every installed bundled module is at its version. Nothing was changed.'], $this->upgrade($real, true));
+            self::assertSame(['The database is current: 3 of 3 upgrade steps applied, and every installed bundled module is at its version. Nothing was changed.'], $this->upgrade($real, true));
             (StepCatalog::load($real, '0002-signin-limits')['apply'])();
             self::assertSame($upgraded, resurrection_database_snapshot());
             // An administrator already set the pair limit to 8 and the address limit to its lowest, 5, and one row is
@@ -353,6 +391,7 @@ final class UpgradeTest extends TestCase
                 db_query('DELETE FROM upgrade_steps WHERE step=?', true, [$row['step']]);
                 db_query('INSERT INTO upgrade_steps (step,applied) VALUES (?,?)', true, [$row['step'], $row['applied']]);
             }
+            (StepCatalog::load($real, '0003-utf8-seed-text')['apply'])();
             $GLOBALS['settings'] = null;
         }
         self::assertSame($original, resurrection_database_snapshot());
@@ -361,6 +400,70 @@ final class UpgradeTest extends TestCase
         foreach (['resurrection_', 'require', 'include', 'getsetting', 'savesetting', 'UPDATE', 'DELETE', 'REPLACE'] as $shared) self::assertStringNotContainsString($shared, $source);
         self::assertSame(2, substr_count($source, "db_prefix('settings')"));
         self::assertStringContainsString("['signin_fail_pair' => '5', 'signin_fail_address' => '20', 'signin_fail_account' => '50']", $source);
+    }
+
+    public function testSeedTextStepFixesTheBrokenValuesAndLeavesAnEditedOne(): void
+    {
+        // Phase 6 task 20 (R9): v1.0.0-rc.1 seeded master 5, serverlanguages and the nasty word list with U+FFFD where
+        // 1.1.2 had Latin-1 letters. Step 0003 writes the text 1.1.2 meant wherever the row still holds exactly rc.1's
+        // value, so the upgraded database matches the fresh install; a value an administrator edited is left alone, no
+        // other row changes, and a rerun changes nothing.
+        $this->connect();
+        $real = dirname(__DIR__, 2) . '/upgrades';
+        $times = db_query('SELECT step,applied FROM upgrade_steps ORDER BY step');
+        $original = resurrection_database_snapshot();
+        $fresh = self::withoutLedgerTimes();
+        $seed = self::seedText();
+        try {
+            self::undoSeedText();
+            $old = resurrection_database_snapshot();
+            self::assertSame('behind', resurrection_database_state());
+            $pending = '- step 0003-utf8-seed-text: Write the UTF-8 text 1.1.2 meant into three seed values: master 5 (Unélith), serverlanguages (Français, Español) and the nasty word list (kyrpä*)';
+            self::assertSame(['Pending:', $pending, 'Dry run: nothing was changed.'], $this->upgrade($real, false));
+            self::assertSame($old, resurrection_database_snapshot());
+            self::assertSame(['Pending:', $pending, 'Applying:', '- applied and recorded step 0003-utf8-seed-text',
+                'Upgrade complete: applied 1 upgrade step(s) and 0 module upgrade(s). The database is current.'], $this->upgrade($real, true));
+            self::assertSame($fresh, self::withoutLedgerTimes());
+            foreach ($seed as [, $fixed, , $read]) self::assertSame($fixed, $read());
+            self::assertSame('Unélith', $seed[0][3]());
+            // Run again: current, and nothing changes. The step itself, run again, changes nothing either.
+            $upgraded = resurrection_database_snapshot();
+            self::assertSame(['The database is current: 3 of 3 upgrade steps applied, and every installed bundled module is at its version. Nothing was changed.'], $this->upgrade($real, true));
+            (StepCatalog::load($real, '0003-utf8-seed-text')['apply'])();
+            self::assertSame($upgraded, resurrection_database_snapshot());
+            // An administrator renamed master 5 (to a name that still carries the replacement character) and edited the
+            // word list; serverlanguages is still rc.1's. The step fixes only serverlanguages and keeps both edits.
+            foreach ($seed as [$sql, , $broken]) db_query($sql, true, [$broken]);
+            $renamed = 'Un' . "\u{FFFD}" . 'lith the Wise';
+            db_query($seed[0][0], true, [$renamed]);
+            $words = $seed[2][2] . ' extra';
+            db_query($seed[2][0], true, [$words]);
+            $before = resurrection_database_snapshot();
+            (StepCatalog::load($real, '0003-utf8-seed-text')['apply'])();
+            $after = resurrection_database_snapshot();
+            self::assertSame($renamed, $seed[0][3]());
+            self::assertSame($seed[1][1], $seed[1][3]());
+            self::assertSame($words, $seed[2][3]());
+            $changed = array_keys(array_filter($after['rows'], static fn (array $rows, string $table): bool => $rows !== $before['rows'][$table], ARRAY_FILTER_USE_BOTH));
+            self::assertSame(['settings'], $changed, 'only the settings row changed');
+            self::assertCount(1, array_diff($after['rows']['settings'], $before['rows']['settings']));
+            (StepCatalog::load($real, '0003-utf8-seed-text')['apply'])();
+            self::assertSame($after, resurrection_database_snapshot(), 'a rerun changes nothing');
+        } finally {
+            foreach ($seed as [$sql, $fixed]) db_query($sql, true, [$fixed]);
+            foreach ($times as $row) {
+                db_query('DELETE FROM upgrade_steps WHERE step=?', true, [$row['step']]);
+                db_query('INSERT INTO upgrade_steps (step,applied) VALUES (?,?)', true, [$row['step'], $row['applied']]);
+            }
+            $GLOBALS['settings'] = null;
+        }
+        self::assertSame($original, resurrection_database_snapshot());
+        // The step writes its values out and reads none from shared code; the installer seeds the fixed text.
+        $source = (string)file_get_contents($real . '/0003-utf8-seed-text.php');
+        foreach (['resurrection_', 'require', 'include', 'getsetting', 'savesetting', 'INSERT', 'DELETE', 'REPLACE'] as $shared) self::assertStringNotContainsString($shared, $source);
+        $installer = (string)file_get_contents(dirname(__DIR__, 2) . '/lib/installer/installer_sqlstatements.php');
+        self::assertStringNotContainsString("\u{FFFD}", $installer);
+        foreach (["(5,'Unélith'", 'fr,Français', 'es,Español', ' kyrpä* '] as $text) self::assertStringContainsString($text, $installer);
     }
 
     public function testAccountMailStepStoppedMidwayFinishesOnRerun(): void
@@ -385,7 +488,7 @@ final class UpgradeTest extends TestCase
                 self::undoAccountMail($missing);
                 self::assertSame('behind', resurrection_database_state(), $state);
                 $lines = $this->upgrade($real, true);
-                self::assertSame(['- applied and recorded step 0001-account-mail', '- applied and recorded step 0002-signin-limits'], array_slice($lines, 4, 2), $state);
+                self::assertSame(['- applied and recorded step 0001-account-mail', '- applied and recorded step 0002-signin-limits', '- applied and recorded step 0003-utf8-seed-text'], array_slice($lines, 5, 3), $state);
                 self::assertSame($fresh, self::withoutLedgerTimes(), $state);
             }
         } finally {
@@ -393,8 +496,10 @@ final class UpgradeTest extends TestCase
                 db_query('DELETE FROM upgrade_steps WHERE step=?', true, [$row['step']]);
                 db_query('INSERT INTO upgrade_steps (step,applied) VALUES (?,?)', true, [$row['step'], $row['applied']]);
             }
-            // The sign-in limits undoAccountMail() removed, if a failure left them out (0002 adds only missing rows).
+            // The sign-in limits undoAccountMail() removed, if a failure left them out (0002 adds only missing rows), and
+            // the seed text it set back (0003 changes only the broken values).
             (StepCatalog::load($real, '0002-signin-limits')['apply'])();
+            (StepCatalog::load($real, '0003-utf8-seed-text')['apply'])();
         }
         self::assertSame($original, resurrection_database_snapshot());
     }

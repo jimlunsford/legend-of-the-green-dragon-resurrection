@@ -54,11 +54,40 @@ The four known-issue fixes of the finish line (Jim's decision of 2026-11-13; `do
   the Warriors list's names, a comment's speaker and the moderation pages' Ban links, checkboxes and area links, the
   FAQ's links, the MoTD's Add and Return links, the inbox's subjects, and translator mode's T links (tasks 18 and 19).
   The one exception is a link inside a sentence, such as the credits on the About page. The desktop is unchanged.
-- **The upgrade from rc.1 runs one step.** Upgrade step `0002-signin-limits` is the first upgrade step a released game
-  runs: it adds the three sign-in limit settings with their defaults (5, 20 and 50) where the database has none, and
-  leaves any value already stored alone. Back up the database first, then run `php scripts/upgrade.php
-  --backup-confirmed` or the upgrade on `setup.php` (host guide, "Upgrade"). A fresh install records the step as
-  applied.
+### Found in the rc.1 server test, part 2 (Phase 6 task 20)
+
+Jim's second round of play on the rc.1 server, 2026-11-15 (`docs/PHASE6-TASK20-20261116.md`).
+
+- **R6: leaving the Dark Horse Tavern no longer crashes.** After a game of stones, dice or five-six, "Leave the
+  tavern" led to the forest answering "500 Internal Server Error" on every request: a class the tavern reads was never
+  loaded. It now lands on the forest.
+- **R7: the game loads its own classes.** One small loader, `src/autoload.php`, finds any `Resurrection\` class under
+  `src/`; every page and command loads it first. Nothing to set up and no `vendor/` folder needed.
+- **R8: the game says when you can level.** When a character's experience reaches the next level's requirement, a line
+  in the character panel and the phone header says "You are ready to challenge your master at the Warrior Training.",
+  with a link to the training where the page offers it.
+- **R9: the seed text is UTF-8.** Master 5 showed as "Un?lith": the rc.1 install wrote a replacement character where
+  1.1.2's letters were lost. A fresh install now writes "Unélith", "Français", "Español" and "kyrpä*" (the nasty word
+  list), and `prefs.php`'s default language list matches. On an rc.1 database, upgrade step `0003` writes them (below).
+  Every text file the package ships is valid UTF-8.
+- **Logs name every caught failure.** A page that catches a failure and answers "Nothing was changed" with a 500 now
+  writes one line to PHP's error log, `Resurrection: <page> failed: <class> at <file>:<line>`, never the message.
+  The host guide says where PHP's errors go (sections 1 and 12): set the PHP-FPM pool's
+  `php_admin_value[error_log]`, or look in the site's nginx error log for lines with `FastCGI sent in stderr`. The
+  sample nginx rules now name the site's `error_log`.
+
+### Upgrading from rc.1
+
+- **The upgrade from rc.1 runs two steps.** Back up the database first, then run `php scripts/upgrade.php
+  --backup-confirmed` or the upgrade on `setup.php` (host guide, "Upgrade"). A fresh install records both as applied.
+  - `0002-signin-limits` (task 18), the first upgrade step a released game runs: it adds the three sign-in limit
+    settings with their defaults (5, 20 and 50) where the database has none, and leaves any value already stored
+    alone.
+  - `0003-utf8-seed-text` (task 20): it writes "Unélith" for master 5, "Français" and "Español" in
+    `serverlanguages`, and "kyrpä*" in the nasty word list, each only where the value is still exactly what rc.1's
+    install wrote. A value an administrator changed is left alone, and a rerun changes nothing. Where the game's data
+    cache is on (Game Settings; off by default), the settings can show the old text for up to a minute and the word
+    list for up to 10 minutes, until the cache expires.
 
 ### Provenance
 

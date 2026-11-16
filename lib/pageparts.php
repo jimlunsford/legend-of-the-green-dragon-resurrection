@@ -1218,6 +1218,7 @@ function resurrection_charpanel($standard, $buffs, $spirits, $modded){
 			"percent"=>resurrection_charpanel_percent($exp, $next), "note"=>$expnote);
 		if (($v = $changed("Personal Info", "Experience")) !== null) { $xp['current'] = $v; unset($xp['max']); }
 		$str .= resurrection_charpanel_bar($xp);
+		$str .= resurrection_levelready_html();
 	}
 
 	// The tiles: a number each (spirits a word), with the bonus, penalty or temporary-stat note beside it.
@@ -1294,6 +1295,35 @@ function resurrection_charpanel($standard, $buffs, $spirits, $modded){
 	}
 	$str .= templatereplace("statend");
 	return appoencode($str, true);
+}
+
+/**
+ * Phase 6 task 20 (R8): one line under the experience bar, in the character panel and the phone header, once the
+ * player's experience has reached what the next level needs: LoGD levels up only by beating your master at the
+ * Warrior Training, and the full bar alone never said so. The same test as the training's own (lib/training_combat.php:
+ * a challenge needs experience at least exp_for_next_level()), alive and below level 15 (the level cap, where the panel
+ * already says to seek out the Green Dragon). It changes nothing in the game.
+ *
+ * "the Warrior Training" links to the training only where the page already lets the player go there (the village's
+ * own nav, as the verify prompt links Preferences and the footer links Credits), so it never breaks forced
+ * navigation; on any other page the line says the same in plain text.
+ *
+ * @return string the levelready part, or nothing
+ */
+function resurrection_levelready_html(){
+	global $session;
+	require_once __DIR__ . '/experience.php';
+	$u = $session['user'] ?? array();
+	if (empty($session['loggedin']) || empty($u['alive']) || (int)($u['level'] ?? 0) < 1 || (int)$u['level'] >= 15) return "";
+	if ((float)($u['experience'] ?? 0) < (float)exp_for_next_level((int)$u['level'], (int)($u['dragonkills'] ?? 0))) return "";
+	$nav = null;
+	foreach (array_keys(is_array($session['allowednavs'] ?? null) ? $session['allowednavs'] : array()) as $allowed) {
+		if ($allowed === 'train.php' || preg_match('/\Atrain\.php\?c=[0-9]+-[0-9]{6}\z/', (string)$allowed)) { $nav = (string)$allowed; break; }
+	}
+	$place = htmlspecialchars(translate_inline("the Warrior Training"), ENT_QUOTES|ENT_SUBSTITUTE, "UTF-8");
+	if ($nav !== null) $place = '<a class="rz-levelready-link" href="'.htmlspecialchars($nav, ENT_QUOTES, "UTF-8").'">'.$place.'</a>';
+	$text = htmlspecialchars(translate_inline("You are ready to challenge your master at %s."), ENT_QUOTES|ENT_SUBSTITUTE, "UTF-8");
+	return templatereplace("levelready", array("text"=>sprintf($text, $place)));
 }
 
 /**
@@ -1404,6 +1434,7 @@ function resurrection_phonehead_html(){
 			"percent"=>$max === null ? "100" : resurrection_charpanel_percent($current, $max),
 		));
 	}
+	$barstr .= resurrection_levelready_html();
 	return templatereplace("phonehead", array(
 		"portrait"=>$portrait,
 		"name"=>$plain($u['name']),

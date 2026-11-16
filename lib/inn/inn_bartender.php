@@ -56,7 +56,7 @@ if ($act==""){
 			});
 		} catch (InvalidArgumentException $error) { http_response_code(400); exit('Invalid bribe.');
 		} catch (DomainException $error) { http_response_code(409); exit('Your situation changed. Return to the bartender and try again.');
-		} catch (Throwable $error) { http_response_code(500); exit('Nothing was paid. Return to the bartender and try again.'); }
+		} catch (Throwable $error) { \Resurrection\Http\FailureLog::record($error); http_response_code(500); exit('Nothing was paid. Return to the bartender and try again.'); }
 		if (!$bribe['try']){
 			if ($type=="gem") output("You don't have %s gems!", $amt);
 			else output("You don't have %s gold!", $amt);
@@ -152,7 +152,7 @@ if ($act==""){
 			});
 		} catch (InvalidArgumentException $error) { http_response_code(400); exit('Invalid specialty.');
 		} catch (DomainException $error) { http_response_code(409); exit('Your situation changed. Return to the bartender and try again.');
-		} catch (Throwable $error) { http_response_code(500); exit('Your specialty was not changed. Return to the bartender and try again.'); }
+		} catch (Throwable $error) { \Resurrection\Http\FailureLog::record($error); http_response_code(500); exit('Your specialty was not changed. Return to the bartender and try again.'); }
 		unset($_SESSION['inn_bribe']);
 		output("\"`3Ok then,`0\" %s`0 says, \"`3You're all set.`0\"`n`n\"`2That's it?`0\" you ask him.`n`n",$barkeep);
 		output("\"`3Yep.  What'd you expect, some sort of fancy arcane ritual???`0\"  %s`0 begins laughing loudly.",$barkeep);

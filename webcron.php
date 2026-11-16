@@ -1,5 +1,6 @@
 <?php
 define('RESURRECTION_ENTRY', true);
+require_once __DIR__ . '/src/autoload.php';
 // Web maintenance (Phase 6 task 5a; docs/PHASE6-TASK4-WEB-OPS-DESIGN-20261106.md, section 4): for a host whose
 // scheduler can only fetch an address. It runs what cron.php runs, resurrection_maintenance_run(), under the same lock
 // and day marker. Off by default; Game Settings turns it on and shows the address once.

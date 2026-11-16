@@ -1,5 +1,6 @@
 <?php
 define('RESURRECTION_ENTRY', true);
+require_once __DIR__ . '/src/autoload.php';
 // translator ready
 // addnews ready
 // mail ready
@@ -24,7 +25,7 @@ try {
 } catch (DomainException $error) {
     http_response_code(409); exit('Mail unavailable or form expired. Please reopen the address form.');
 } catch (Throwable $error) {
-    http_response_code(500); exit('Mail could not be committed. Please open a fresh form.');
+    \Resurrection\Http\FailureLog::record($error); http_response_code(500); exit('Mail could not be committed. Please open a fresh form.');
 }
 
 if (in_array($op, ['del', 'process', 'unread'], true)) {

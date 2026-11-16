@@ -1,5 +1,6 @@
 <?php
 define('RESURRECTION_ENTRY', true);
+require_once __DIR__ . '/src/autoload.php';
 //Author: Lonny Luberts - 3/18/2005
 //Heavily modified by JT Traub
 require_once("common.php");

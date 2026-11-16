@@ -118,7 +118,7 @@ function resurrection_specialty_onboarding(): void {
     } catch (DomainException $error) {
         http_response_code(409); exit('Specialty selection is unavailable.');
     } catch (Throwable $error) {
-        http_response_code(500); exit('Specialty selection was not completed. Request a fresh form.');
+        \Resurrection\Http\FailureLog::record($error); http_response_code(500); exit('Specialty selection was not completed. Request a fresh form.');
     }
     page_footer();
 }

@@ -111,5 +111,5 @@ function resurrection_equipment_request(): int {
 function resurrection_equipment_failure(Throwable $error): never {
     if ($error instanceof InvalidArgumentException) { http_response_code(400); exit('Invalid purchase request.'); }
     if ($error instanceof DomainException) { http_response_code(409); exit('Your purchase changed. Return to the shop and try again.'); }
-    http_response_code(500); exit('Nothing was changed. Return to the shop and try again.');
+    \Resurrection\Http\FailureLog::record($error); http_response_code(500); exit('Nothing was changed. Return to the shop and try again.');
 }

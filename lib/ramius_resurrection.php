@@ -119,7 +119,7 @@ function resurrection_ramius(string $stage): never {
     } catch (DomainException $error) {
         http_response_code(409); exit('Ramius resurrection is unavailable. Complete any due New Day or encounter, or ask an administrator to repair stored state.');
     } catch (Throwable $error) {
-        http_response_code(500); exit('Resurrection was not completed. Request a fresh form.');
+        \Resurrection\Http\FailureLog::record($error); http_response_code(500); exit('Resurrection was not completed. Request a fresh form.');
     }
     exit;
 }

@@ -86,7 +86,7 @@ function resurrection_module_unlock(): void {
 function resurrection_module_failure(Throwable $error): never {
     if ($error instanceof InvalidArgumentException) { http_response_code(400); exit('Invalid module request.'); }
     if ($error instanceof DomainException) { http_response_code(409); exit('This module changed. Reload the module manager before acting.'); }
-    http_response_code(500); exit('Nothing was changed. Reload the module manager and try again.');
+    \Resurrection\Http\FailureLog::record($error); http_response_code(500); exit('Nothing was changed. Reload the module manager and try again.');
 }
 
 /**

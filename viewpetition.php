@@ -1,5 +1,6 @@
 <?php
 define('RESURRECTION_ENTRY', true);
+require_once __DIR__ . '/src/autoload.php';
 require_once __DIR__ . '/src/Compatibility/array_cursor.php';
 // translator ready
 // addnews ready
@@ -57,7 +58,7 @@ if ($op == "setstat") {
 	} catch (InvalidArgumentException $error) { http_response_code(400); exit('Invalid petition status.');
 	} catch (OutOfBoundsException $error) { http_response_code(404); exit('Petition not found.');
 	} catch (DomainException $error) { http_response_code(409); exit('Petition changed. Reload before acting.');
-	} catch (Throwable $error) { http_response_code(500); exit('Petition status was not changed.'); }
+	} catch (Throwable $error) { \Resurrection\Http\FailureLog::record($error); http_response_code(500); exit('Petition status was not changed.'); }
 	// As in 1.1.2, a status change returns to the petition list.
 	$op = "";
 }

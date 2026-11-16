@@ -121,6 +121,6 @@ function resurrection_forest_specialty(): never {
         else { addnav('Return to the village','village.php'); }
     } catch (InvalidArgumentException) { http_response_code(400); exit('Invalid specialty action.'); }
     catch (DomainException) { http_response_code(409); exit('Specialty combat is unavailable. Request a fresh form.'); }
-    catch (Throwable) { http_response_code(500); exit('Specialty combat was not completed. Request a fresh form.'); }
+    catch (Throwable $error) { \Resurrection\Http\FailureLog::record($error); http_response_code(500); exit('Specialty combat was not completed. Request a fresh form.'); }
     page_footer(); exit;
 }

@@ -1,5 +1,6 @@
 <?php
 define('RESURRECTION_ENTRY', true);
+require_once __DIR__ . '/src/autoload.php';
 // Torment never offers specialties. Hiding navigation is not authorization.
 foreach (['skill','l'] as $field) {
     if (array_key_exists($field, $_GET) || array_key_exists($field, $_POST)) {

@@ -1,5 +1,6 @@
 <?php
 define('RESURRECTION_ENTRY', true);
+require_once __DIR__ . '/src/autoload.php';
 require_once __DIR__ . '/src/Compatibility/array_cursor.php';
 // addnews ready
 // mail ready
@@ -64,7 +65,7 @@ if ($op=="suicide" && getsetting("selfdelete",0)!=0) {
 	} catch (ResurrectionCharacterDeletionVetoed $error) {
 		http_response_code(409); exit('Your character was not deleted.');
 	} catch (Throwable $error) {
-		http_response_code(500); exit('Nothing was changed. Return to your preferences and try again.');
+		\Resurrection\Http\FailureLog::record($error); http_response_code(500); exit('Nothing was changed. Return to your preferences and try again.');
 	}
 	output("Your character has been deleted!");
 	addnav("Login Page", "index.php");
@@ -184,7 +185,7 @@ if ($op=="suicide" && getsetting("selfdelete",0)!=0) {
         "pass1"=>"New password (12 to 72 bytes),password",
 		"pass2"=>"Retype,password",
 		"Display Preferences,title",
-		"language"=>"Language,enum,".getsetting("serverlanguages","en,English,de,Deutsch,fr,Fran�ais,dk,Danish,es,Espa�ol,it,Italian"),
+		"language"=>"Language,enum,".getsetting("serverlanguages","en,English,de,Deutsch,fr,Français,dk,Danish,es,Español,it,Italian"),
 		"tabconfig"=>"Show config sections in tabs,bool",
 		"Game Behavior Preferences,title",
 		"emailonmail"=>"Send email when you get new Ye Olde Mail?,bool",

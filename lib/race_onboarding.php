@@ -94,7 +94,7 @@ function resurrection_race_onboarding(): void {
     } catch (DomainException $error) {
         http_response_code(409); exit('Race selection is unavailable.');
     } catch (Throwable $error) {
-        http_response_code(500); exit('Race selection was not completed. Request a fresh form.');
+        \Resurrection\Http\FailureLog::record($error); http_response_code(500); exit('Race selection was not completed. Request a fresh form.');
     }
     page_footer();
 }

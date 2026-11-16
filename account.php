@@ -1,5 +1,6 @@
 <?php
 define('RESURRECTION_ENTRY', true);
+require_once __DIR__ . '/src/autoload.php';
 /**
  * Account mail's page (Phase 6 tasks 13a, 13b and 13c, S11; docs/PHASE6-TASK12-ACCOUNT-MAIL-DESIGN-20261112.md,
  * sections 3 and 4, and its decisions). A link in an account mail opens it with a token:

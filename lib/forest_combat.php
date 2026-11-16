@@ -155,6 +155,6 @@ function resurrection_forest_combat(): never {
         elseif ($session['user']['specialinc']==='') { addnav('The Forest','forest.php'); addnav('Return to the village','village.php'); }
     } catch (InvalidArgumentException) { http_response_code(400); exit('Invalid Forest action.'); }
     catch (DomainException) { http_response_code(409); exit('Forest combat unavailable. Stored state was preserved; reload for a fresh form, or request operator repair if it remains invalid.'); }
-    catch (Throwable) { http_response_code(500); exit('Forest action was not completed. Request a fresh form.'); }
+    catch (Throwable $error) { \Resurrection\Http\FailureLog::record($error); http_response_code(500); exit('Forest action was not completed. Request a fresh form.'); }
     page_footer(); exit;
 }

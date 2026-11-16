@@ -390,7 +390,7 @@ function cedrikspotions_run(){
                     if (isset($session['bufflist']['transmute']['rounds']) && $session['bufflist']['transmute']['rounds']>2147483647) throw new DomainException('Potion duration exceeds bounds.');
                 });
             } catch (DomainException|InvalidArgumentException $error) { http_response_code(400); exit('Potion purchase rejected.'); }
-            catch (Throwable $error) { http_response_code(500); exit('Potion purchase was not completed.'); }
+            catch (Throwable $error) { \Resurrection\Http\FailureLog::record($error); http_response_code(500); exit('Potion purchase was not completed.'); }
 		}
 		addnav("I?Return to the Inn","inn.php");
 		villagenav();

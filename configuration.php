@@ -1,5 +1,6 @@
 <?php
 define('RESURRECTION_ENTRY', true);
+require_once __DIR__ . '/src/autoload.php';
 require_once 'common.php';
 require_once 'lib/typed_editor.php';
 require_once 'lib/configuration_descriptors.php';
@@ -81,4 +82,4 @@ try {
     page_footer();
 } catch (InvalidArgumentException|DomainException $error) {
     http_response_code(400); exit('Invalid or stale settings.');
-} catch (Throwable $error) { http_response_code(500); exit('Settings were not saved.'); }
+} catch (Throwable $error) { \Resurrection\Http\FailureLog::record($error); http_response_code(500); exit('Settings were not saved.'); }

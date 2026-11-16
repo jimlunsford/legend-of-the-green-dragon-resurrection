@@ -36,7 +36,7 @@ function resurrection_tool_transaction(callable $action, string $page): mixed {
     } catch (Throwable $error) {
         if ($db->inTransaction()) $db->rollBack();
         if ($error instanceof DomainException) { http_response_code(409); exit("This changed. Reload $page before acting."); }
-        http_response_code(500); exit("Nothing was changed. Reload $page and try again.");
+        \Resurrection\Http\FailureLog::record($error); http_response_code(500); exit("Nothing was changed. Reload $page and try again.");
     }
 }
 

@@ -125,7 +125,7 @@ function sethsong_run(){
                 sethsong_sing();
             }); }
             catch (DomainException | InvalidArgumentException $error) { http_response_code(409); exit("Song unavailable."); }
-            catch (Throwable $error) { http_response_code(500); exit("Song was not completed."); }
+            catch (Throwable $error) { \Resurrection\Http\FailureLog::record($error); http_response_code(500); exit("Song was not completed."); }
         } else {
             output('Listen to %s`0 the Bard?',getsetting('bard','`^Seth'));
             $url='runmodule.php?module=sethsong';

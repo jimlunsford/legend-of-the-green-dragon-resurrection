@@ -32,7 +32,7 @@ function resurrection_darkhorse_enter(): bool {
             $session['user']['specialinc']='module:darkhorse';
         });
     } catch (DomainException $error) { http_response_code(409); exit('Tavern entry changed.'); }
-    catch (Throwable $error) { http_response_code(500); exit('Tavern entry was not completed.'); }
+    catch (Throwable $error) { \Resurrection\Http\FailureLog::record($error); http_response_code(500); exit('Tavern entry was not completed.'); }
     return true;
 }
 
@@ -53,7 +53,7 @@ function resurrection_darkhorse_leave(string $url): bool {
     resurrection_consume_action('darkhorse-leave',$context);
     try { resurrection_player_mutation(function () { global $session; $session['user']['specialinc']=''; }); }
     catch (DomainException $error) { http_response_code(409); exit('Tavern state changed.'); }
-    catch (Throwable $error) { http_response_code(500); exit('Tavern exit was not completed.'); }
+    catch (Throwable $error) { \Resurrection\Http\FailureLog::record($error); http_response_code(500); exit('Tavern exit was not completed.'); }
     unset($_SESSION['darkhorse_return']);
     return true;
 }

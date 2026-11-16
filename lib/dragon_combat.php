@@ -162,5 +162,5 @@ function resurrection_dragon_controller(): void {
         if ($op !== 'prologue1') resurrection_dragon_forms();
     } catch (InvalidArgumentException) { http_response_code(400); exit('Invalid Dragon action.'); }
     catch (DomainException) { http_response_code(409); exit('Dragon state changed or is unavailable. Request a fresh form.'); }
-    catch (Throwable) { http_response_code(500); exit('Dragon action was not completed. Request a fresh form.'); }
+    catch (Throwable $error) { \Resurrection\Http\FailureLog::record($error); http_response_code(500); exit('Dragon action was not completed. Request a fresh form.'); }
 }

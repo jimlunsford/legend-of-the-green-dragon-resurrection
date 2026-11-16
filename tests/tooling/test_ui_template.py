@@ -40,6 +40,8 @@ PART_KEYS = {
     'statbarcap': {'kind', 'icon', 'label', 'current', 'note', 'percent', 'caption'},
     'stattile': {'icon', 'label', 'value', 'note'}, 'equiprow': {'icon', 'label', 'value'},
     'labelicon': {'src', 'width', 'height'},
+    # The ready-to-challenge line (Phase 6 task 20, R8): resurrection_levelready_html() in lib/pageparts.php.
+    'levelready': {'text'},
     # The battle screen (Phase 5 task 10): lib/battle_view.php; a foe's portrait on its card (Phase 5 task 14).
     'battle': {'screen'}, 'fighters': {'cards'}, 'fighter': {'kind', 'state', 'name', 'sub', 'hp', 'portrait'},
     'fighterportrait': {'src', 'alt', 'width', 'height'},

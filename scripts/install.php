@@ -1,5 +1,6 @@
 <?php
 define('RESURRECTION_ENTRY', true);
+require_once __DIR__ . '/../src/autoload.php';
 // Supported local installation command. Never expose this entrypoint over HTTP.
 //
 //   php scripts/install.php [--modules=recommended|none] [CONFIG]

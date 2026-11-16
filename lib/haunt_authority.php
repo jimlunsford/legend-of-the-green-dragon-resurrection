@@ -72,5 +72,5 @@ function resurrection_haunt_mutation(callable $action, int $target): mixed {
 function resurrection_haunt_failure(Throwable $error): never {
     if ($error instanceof InvalidArgumentException) { http_response_code(400); exit('Invalid haunt request.'); }
     if ($error instanceof DomainException) { http_response_code(409); exit('Your haunt changed. Return to the Mausoleum and try again.'); }
-    http_response_code(500); exit('Nothing was changed. Return to the Mausoleum and try again.');
+    \Resurrection\Http\FailureLog::record($error); http_response_code(500); exit('Nothing was changed. Return to the Mausoleum and try again.');
 }

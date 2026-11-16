@@ -317,7 +317,7 @@ function crazyaudrey_run(){
         http_response_code(409);
         output("This visit is unavailable. Return to the Village and try again.");
     } catch (Throwable $error) {
-        http_response_code(500); exit("Audrey visit was not completed.");
+        \Resurrection\Http\FailureLog::record($error); http_response_code(500); exit("Audrey visit was not completed.");
     }
 	if ($op != "baskets") {
 		require_once("lib/villagenav.php");

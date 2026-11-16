@@ -212,5 +212,5 @@ function resurrection_training(): never {
         page_footer(); exit;
     } catch (InvalidArgumentException) { http_response_code(400); exit('Invalid training action.'); }
     catch (DomainException) { http_response_code(409); exit('Training unavailable. Stored state was preserved. Reload for a fresh form, or request operator repair if state remains invalid.'); }
-    catch (Throwable) { http_response_code(500); exit('Training action was not completed. Request a fresh form.'); }
+    catch (Throwable $error) { \Resurrection\Http\FailureLog::record($error); http_response_code(500); exit('Training action was not completed. Request a fresh form.'); }
 }

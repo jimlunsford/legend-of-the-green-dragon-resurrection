@@ -167,6 +167,6 @@ function resurrection_newday_daily(): void {
     } catch (DomainException $error) {
         http_response_code(409); exit('New Day is unavailable. Request a fresh form or ask an administrator to repair stored state.');
     } catch (Throwable $error) {
-        http_response_code(500); exit('New Day was not completed. Request a fresh form.');
+        \Resurrection\Http\FailureLog::record($error); http_response_code(500); exit('New Day was not completed. Request a fresh form.');
     }
 }

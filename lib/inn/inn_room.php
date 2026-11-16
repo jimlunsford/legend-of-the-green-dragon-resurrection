@@ -37,7 +37,7 @@ if ($pay !== '' && ($_SERVER['REQUEST_METHOD'] ?? '') === 'POST'){
 		});
 	} catch (InvalidArgumentException $error) { http_response_code(400); exit('Invalid room request.');
 	} catch (DomainException $error) { http_response_code(409); exit('Your situation changed. Return to the inn and ask again.');
-	} catch (Throwable $error) { http_response_code(500); exit('The room was not rented. Return to the inn and ask again.'); }
+	} catch (Throwable $error) { \Resurrection\Http\FailureLog::record($error); http_response_code(500); exit('The room was not rented. Return to the inn and ask again.'); }
 	if ($paid) {
 		resurrection_end_session();
 		header('Location: index.php', true, 303);

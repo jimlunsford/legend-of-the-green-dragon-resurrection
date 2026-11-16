@@ -1,11 +1,12 @@
 <?php
 define('RESURRECTION_ENTRY', true);
+require_once __DIR__ . '/src/autoload.php';
 // translator ready
 // addnews ready
 // mail ready
 try { require_once 'common.php'; }
 catch (DomainException) { http_response_code(409); exit('Invalid stored PvP state. Stored state was preserved.'); }
-catch (Throwable) { http_response_code(500); exit('PvP could not be loaded. Stored state was preserved.'); }
+catch (Throwable $error) { \Resurrection\Http\FailureLog::record($error); http_response_code(500); exit('PvP could not be loaded. Stored state was preserved.'); }
 require_once("lib/fightnav.php");
 require_once("lib/battle_view.php");
 require_once("lib/pvpwarning.php");

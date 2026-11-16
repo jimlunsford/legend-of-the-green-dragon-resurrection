@@ -1,5 +1,6 @@
 <?php
 define('RESURRECTION_ENTRY', true);
+require_once __DIR__ . '/src/autoload.php';
 // translator ready
 // addnews ready
 // mail ready
@@ -22,7 +23,7 @@ if (($_GET['subop'] ?? '') === 'module') {
         resurrection_object_editor('creatures',$editorModule,$editorId,$editorOp==='save');
         page_footer();
     } catch (InvalidArgumentException|DomainException $error) { http_response_code(400); exit('Invalid or stale object preferences.'); }
-    catch (Throwable $error) { http_response_code(500); exit('Preferences were not saved.'); }
+    catch (Throwable $error) { \Resurrection\Http\FailureLog::record($error); http_response_code(500); exit('Preferences were not saved.'); }
     exit;
 }
 

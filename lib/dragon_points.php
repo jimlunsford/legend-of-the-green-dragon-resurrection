@@ -128,6 +128,6 @@ function resurrection_dragon_point_boundary(): void {
     } catch (DomainException $error) {
         http_response_code(409); exit('Dragon Point allocation is unavailable. Request a fresh form or ask an administrator to repair stored state.');
     } catch (Throwable $error) {
-        http_response_code(500); exit('Dragon Point allocation was not completed. Request a fresh form.');
+        \Resurrection\Http\FailureLog::record($error); http_response_code(500); exit('Dragon Point allocation was not completed. Request a fresh form.');
     }
 }

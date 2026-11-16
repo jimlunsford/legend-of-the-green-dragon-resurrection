@@ -1,5 +1,6 @@
 <?php
 define('RESURRECTION_ENTRY', true);
+require_once __DIR__ . '/src/autoload.php';
 // addnews ready
 // translator ready
 // mail ready
@@ -44,7 +45,7 @@ if ($op == "fleedragon") {
 			});
 		} catch (InvalidArgumentException $error) { http_response_code(400); exit('Invalid inn request.');
 		} catch (DomainException $error) { http_response_code(409); exit('There is no dragon to run from.');
-		} catch (Throwable $error) { http_response_code(500); exit('You did not get away. Try again.'); }
+		} catch (Throwable $error) { \Resurrection\Http\FailureLog::record($error); http_response_code(500); exit('You did not get away. Try again.'); }
 		unset($_SESSION['inn_flee']);
 		$fled = true;
 	}

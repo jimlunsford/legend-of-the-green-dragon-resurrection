@@ -111,7 +111,7 @@ function resurrection_clan_fields(array $extra = []): void {
 function resurrection_clan_failure(Throwable $error): never {
     if ($error instanceof InvalidArgumentException) { http_response_code(400); exit('Invalid clan request.'); }
     if ($error instanceof DomainException) { http_response_code(409); exit('Your clan situation changed. Return to the clan halls and try again.'); }
-    http_response_code(500); exit('Nothing was changed. Return to the clan halls and try again.');
+    \Resurrection\Http\FailureLog::record($error); http_response_code(500); exit('Nothing was changed. Return to the clan halls and try again.');
 }
 
 /** A clan the application list offers: it exists, has a member above applicant and no module hides it. */

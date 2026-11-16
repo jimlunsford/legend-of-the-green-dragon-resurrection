@@ -1,5 +1,6 @@
 <?php
 define('RESURRECTION_ENTRY', true);
+require_once __DIR__ . '/src/autoload.php';
 // Global maintenance is a CLI operation. Player New Day routes are unchanged.
 //
 // The maintenance itself is one service, resurrection_maintenance_run() in lib/maintenance.php (Phase 6 task 5a),

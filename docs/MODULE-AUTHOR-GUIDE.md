@@ -260,6 +260,12 @@ function mymodule_run(){
 Settings and preferences saved from the module manager and the user editor are already POSTs with CSRF and an action
 token; a module needs none of this for them.
 
+Every `Resurrection\` class under `src/` loads itself: every page and command requires `src/autoload.php` first, so a
+module needs no `require` for `\Resurrection\Http\Input` or any other of them. A module that catches a failure and
+answers it with a 5xx writes one line to PHP's error log first, `\Resurrection\Http\FailureLog::record($error)`: it
+names the page, the class and the file and line, never the message, which can carry SQL or a submitted value
+(`tests/unit/FailureLogTest.php` checks every shipped module).
+
 ## 6. Secrets on a page
 
 1.1.2 keeps each signed-in player's last page in the database (`accounts_output`): `badnav.php` shows it again, and the

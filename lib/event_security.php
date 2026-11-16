@@ -55,6 +55,6 @@ function resurrection_run_event(string $module,string $type,string $baseLink,cal
             $run();
         });
     } catch (DomainException $error) { http_response_code(409); exit('Event state changed.'); }
-    catch (Throwable $error) { http_response_code(500); exit('Event could not be completed. Reload before retrying.'); }
+    catch (Throwable $error) { \Resurrection\Http\FailureLog::record($error); http_response_code(500); exit('Event could not be completed. Reload before retrying.'); }
     if ($session['user']['specialinc']==='') unset($_SESSION['event_action']);
 }

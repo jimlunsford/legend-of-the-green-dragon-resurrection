@@ -162,5 +162,5 @@ function resurrection_graveyard_combat(): never {
         page_footer(); exit;
     } catch (InvalidArgumentException) { http_response_code(400); exit('Invalid Graveyard action.'); }
     catch (DomainException) { http_response_code(409); exit('Graveyard combat unavailable. Stored state was preserved. Reload for a fresh form, or request operator repair if state remains invalid.'); }
-    catch (Throwable) { http_response_code(500); exit('Graveyard action was not completed. Request a fresh form.'); }
+    catch (Throwable $error) { \Resurrection\Http\FailureLog::record($error); http_response_code(500); exit('Graveyard action was not completed. Request a fresh form.'); }
 }
