@@ -15,8 +15,15 @@ record below stays as history.
 
 For `1.0.0-rc.3` (Jim's go of 2026-11-16, "same as rc.2"): section 0 is done, section 1 is made in Phase 6 task 23
 (`docs/PHASE6-TASK23-RC3-VERSION-20261117.md`), which also writes rc.3's tag message in section 3 and runs the release
+cut workflow against a stand-in `origin`. Sections 2 to 4 are done (recorded in Phase 6 task 24,
+`docs/PHASE6-TASK24-20261117.md`): CI accepted the version commit `0632351`, and the release cut workflow, run on Jim's
+request with task 23's inputs, made the tag `v1.0.0-rc.3`, built the package and published the pre-release. rc.1's and
+rc.2's records stay as history.
+
+For `1.0.0-rc.4` (Jim's go of 2026-11-17, "go rc.4"): section 0 is done, section 1 is made in Phase 6 task 25
+(`docs/PHASE6-TASK25-RC4-VERSION-20261117.md`), which also writes rc.4's tag message in section 3 and runs the release
 cut workflow against a stand-in `origin`. Sections 2 to 4 follow: CI's acceptance of the version commit, then the
-release cut workflow, which Jim runs. rc.1's and rc.2's records stay as history.
+release cut workflow, which Jim runs. rc.1's, rc.2's and rc.3's records stay as history.
 
 A cut happens only on the maintainer's explicit go (Jim). Every step that tags, publishes or attaches anything waits for
 that go, and a session never does them on its own. The steps are in order; a step that fails stops the cut.
@@ -67,12 +74,25 @@ For `1.0.0-rc.3`:
       `1.0.0`), stays a known issue. They say an rc.2 database runs no upgrade step and an rc.1 database runs 0002 and
       0003.
 
+For `1.0.0-rc.4`:
+
+- [x] Jim has said go, naming the version: on 2026-11-17, "go rc.4": the version commit first, then, after CI accepts
+      it, the tag and the GitHub pre-release from the release cut workflow, which Jim runs (recorded in `ROADMAP.md`,
+      Jim's decisions of 2026-11-17).
+- [x] Every task before the cut is accepted: the rc.3 server-test fix (task 24, R11) at `91559fa` (Modern core
+      44126961634, all 14 jobs; Baseline integrity 44126961852), recorded in Phase 6 task 25.
+- [x] The release notes (`docs/RELEASE-NOTES-1.0.0-rc.4.md`) list every open item a host or player can hit, checked
+      in Phase 6 task 25 against `ROADMAP.md` at `91559fa` with Jim's decision of 2026-11-17: R11 is done and listed as
+      the change; the three open items, all after `1.0.0` (the Dark Horse games' many Continue clicks, the forest menu
+      while a fight is stored, the other bare refusals on player pages), are known issues. They say an rc.3 or rc.2
+      database runs no upgrade step and an rc.1 database runs 0002 and 0003.
+
 ## 1. The version commit
 
 One commit on `main`, made from the expected starting SHA, that changes the version and nothing else of substance:
 
 - `src/Version.php`: `CURRENT` to the new version (`'1.0.0-rc.1'`; `'1.0.0-rc.2'` in task 21; `'1.0.0-rc.3'` in
-  task 23).
+  task 23; `'1.0.0-rc.4'` in task 25).
 - `project.json`: `version` to the same, and `phase` to what the cut says (for example `release-candidate`).
 - `docs/VERSIONING.md`: the "Current version:" line to the same, and "No such tag exists yet" to what will be true
   after the tag.
@@ -98,8 +118,8 @@ Checks before pushing it (each must pass; record the output in the cut's evidenc
 
 Push with a normal, non-force `git push`. No tag yet.
 
-For `1.0.0-rc.2` these checks ran in Phase 6 task 21, and for `1.0.0-rc.3` in Phase 6 task 23; their output is in
-each task's evidence doc.
+For `1.0.0-rc.2` these checks ran in Phase 6 task 21, for `1.0.0-rc.3` in Phase 6 task 23, and for `1.0.0-rc.4` in
+Phase 6 task 25; their output is in each task's evidence doc.
 
 ## 2. CI acceptance of the version commit
 
@@ -117,6 +137,7 @@ The version commit is accepted only when, on that exact commit:
       jobs (PHP 8.4 checks 2:23, shards 13:28, 14:16, 9:46, 16:17, 16:14; PHP 8.5 checks 2:37, shards 12:41, 12:03,
       16:53, 10:58, 10:44; on both legs the release upgrade check installed `v1.0.0-rc.2` and upgraded it to `0632351`,
       41 tables, and `--release-ref HEAD` matched too); Baseline integrity 43999469169 (recorded in task 24).
+- [ ] For `1.0.0-rc.4`: both of the above on task 25's version commit.
 
 A run that a later push cancelled is not acceptance, and no earlier commit's run stands in for it. A failed run stays on
 record. If anything fails, fix it in a new commit and start this section again on that commit; the tag goes on the
@@ -124,13 +145,36 @@ commit CI accepted.
 
 ## 3. The tag (only on Jim's go)
 
-An annotated tag on the accepted version commit, named `v<version>` (`v1.0.0-rc.3` for this cut). It matches the release
+An annotated tag on the accepted version commit, named `v<version>` (`v1.0.0-rc.4` for this cut). It matches the release
 tag pattern the release upgrade check reads (`scripts/release-upgrade-check.py`, `vMAJOR.MINOR.PATCH` or
 `vMAJOR.MINOR.PATCH-rc.N`), so from the next commit on every Modern core run installs it and upgrades it to the commit
 under test.
 
-The tag message for `1.0.0-rc.3`, exactly. The release cut workflow takes the first fenced block after this section's
+The tag message for `1.0.0-rc.4`, exactly. The release cut workflow takes the first fenced block after this section's
 heading, so this block stays first:
+
+```
+Legend of the Green Dragon - Resurrection 1.0.0-rc.4
+
+The fourth test build of Resurrection 1.0.0: a candidate for hosts and players to try. It is not the release, it has
+had no independent security review, and it is not certified for public game hosting.
+
+Based on Legend of the Green Dragon 1.1.2 DragonPrime Edition by Eric Stevens and JT Traub and the DragonPrime
+Development Team. Licensed under CC BY-NC-SA 2.0 (LICENSE.txt). Resurrection's changes: Phoenix 2:33 LLC (NOTICE).
+
+Fresh installs, or an upgrade from 1.0.0-rc.3 or 1.0.0-rc.2 (no step) or 1.0.0-rc.1 (steps 0002 and 0003); no 1.1.2
+database is upgraded. Known issues, among them mail only through PHP's mail(), best effort, mail links in the web
+server's access log, abuse controls beyond sign-in throttling left to the operator, and 1.1.2 behaviors kept as
+recorded: docs/RELEASE-NOTES-1.0.0-rc.4.md. Hosting: docs/HOST-GUIDE.md.
+```
+
+(Written in Phase 6 task 25, 2026-11-17, in rc.3's shape. Each line checked against the code and the documents at the
+version commit in its evidence doc.)
+
+- [ ] For `1.0.0-rc.4`: the tag, made by the release cut workflow after CI accepts the version commit, on Jim's
+      request, with the message above byte for byte.
+
+History: the tag message for `1.0.0-rc.3`, exactly as tagged:
 
 ```
 Legend of the Green Dragon - Resurrection 1.0.0-rc.3
@@ -243,6 +287,9 @@ release cut workflow (`.github/workflows/release-cut.yml`) builds the same packa
       upgraded the rc.2 and rc.1 packages' installs to it. The workflow's build, 3,868,683 bytes, is
       `sha256:6fe8b132…3569`, the same; the zip downloaded back has that SHA-256, as its `.sha256` says (recorded in
       task 24).
+- [ ] For `1.0.0-rc.4`: the same, by the release cut workflow from the tag. Task 25 built the version commit's package
+      twice (its SHA-256 is the workflow's `package_sha256` input), installed it fresh through `setup.php`, and
+      upgraded the rc.3, rc.2 and rc.1 packages' installs to it.
 
 ## 5. After the tag
 
@@ -252,13 +299,15 @@ release cut workflow (`.github/workflows/release-cut.yml`) builds the same packa
 - [x] `main` kept `1.0.0-rc.1` (`docs/VERSIONING.md`, "`main`'s version after a tag") until the next cut's version
       commit set `1.0.0-rc.2` (task 21). It never goes back to `1.0.0-dev`. After `v1.0.0-rc.2`, `main` keeps
       `1.0.0-rc.2` until the next cut's version commit set `1.0.0-rc.3` (task 23). After `v1.0.0-rc.3`, `main` keeps
-      `1.0.0-rc.3` until the next cut sets `1.0.0-rc.4` or `1.0.0`.
+      `1.0.0-rc.3` until the next cut's version commit set `1.0.0-rc.4` (task 25). After `v1.0.0-rc.4`, `main` keeps
+      `1.0.0-rc.4` until the next cut sets `1.0.0-rc.5` or `1.0.0`.
 - [x] For `1.0.0-rc.2`: the next commit's Modern core installs `v1.0.0-rc.2` and upgrades it. Modern core
       43971175438 on Phase 6 task 22's commit, `088b43c`, both legs ("v1.0.0-rc.2 installed, upgraded to 088b43c, and
       the same schema and data as a fresh install (41 tables)"; recorded in task 23).
-- [ ] For `1.0.0-rc.3`: the next commit's Modern core installs `v1.0.0-rc.3` and upgrades it. The next commit is
-      Phase 6 task 24's (R11); its local check installed `v1.0.0-rc.3` and upgraded it on both legs, and its Modern core
-      run is the record.
+- [x] For `1.0.0-rc.3`: the next commit's Modern core installs `v1.0.0-rc.3` and upgrades it. Modern core
+      44126961634 on Phase 6 task 24's commit, `91559fa`, both legs ("v1.0.0-rc.3 installed, upgraded to 91559fa, and
+      the same schema and data as a fresh install (41 tables)"; recorded in task 25).
+- [ ] For `1.0.0-rc.4`: the next commit's Modern core installs `v1.0.0-rc.4` and upgrades it.
 - [ ] After `v1.0.0`, the first commit on `main` sets the next number with `-dev` (`1.1.0-dev`, or `1.0.1-dev` when only
       fixes are planned).
 - [ ] Record the tag, the accepted runs and the package's SHA-256 in `ROADMAP.md` and the cut's evidence doc.

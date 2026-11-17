@@ -1,6 +1,6 @@
 # Legend of the Green Dragon - Resurrection
 
-**Release readiness (Phase 6). `main` is version `1.0.0-rc.3`, the third test build: a candidate for hosts to try, not the release, and not certified for public game hosting. Its tag, `v1.0.0-rc.3`, follows once CI accepts the version commit.**
+**Release readiness (Phase 6). `main` is version `1.0.0-rc.4`, the fourth test build: a candidate for hosts to try, not the release, and not certified for public game hosting. Its tag, `v1.0.0-rc.4`, follows once CI accepts the version commit.**
 
 **The historical source contains known high-severity security defects and unsupported runtime assumptions. Do not deploy the historical baseline to the public Internet.**
 
@@ -14,7 +14,7 @@ Phases 1 to 4 modernized the implementation and kept the game as it was: runtime
 
 - Not the original LoGD project or an official DragonPrime continuation.
 - Not endorsed by the original authors.
-- Not released yet, and not certified for public game hosting: the test builds are meant for hosts to try, with the known limitations in their [release notes](docs/RELEASE-NOTES-1.0.0-rc.3.md); the project's own public hosting gates are in [ROADMAP.md](ROADMAP.md), "Public hosting".
+- Not released yet, and not certified for public game hosting: the test builds are meant for hosts to try, with the known limitations in their [release notes](docs/RELEASE-NOTES-1.0.0-rc.4.md); the project's own public hosting gates are in [ROADMAP.md](ROADMAP.md), "Public hosting".
 - Not a reconstruction of an exact old server, player community or historical database.
 
 ## Historical source
@@ -62,7 +62,7 @@ The integrity commands do not execute the application. CI (Modern core, on PHP 8
 - [Host guide: running the game on a web server](docs/HOST-GUIDE.md). A release's package holds one folder: `upload/`
   (what goes into the site's folder), and beside it `INSTALL.txt`, the host guide, the release notes, the third-party
   licenses, the sample server rules in `hosting/` and the license files (host guide, section 2)
-- [Release notes for 1.0.0-rc.3](docs/RELEASE-NOTES-1.0.0-rc.3.md) (and for [1.0.0-rc.2](docs/RELEASE-NOTES-1.0.0-rc.2.md) and [1.0.0-rc.1](docs/RELEASE-NOTES-1.0.0-rc.1.md)) and the [cut checklist](docs/RC-CUT-CHECKLIST.md)
+- [Release notes for 1.0.0-rc.4](docs/RELEASE-NOTES-1.0.0-rc.4.md) (and for [1.0.0-rc.3](docs/RELEASE-NOTES-1.0.0-rc.3.md), [1.0.0-rc.2](docs/RELEASE-NOTES-1.0.0-rc.2.md) and [1.0.0-rc.1](docs/RELEASE-NOTES-1.0.0-rc.1.md)) and the [cut checklist](docs/RC-CUT-CHECKLIST.md)
 - [Versioning](docs/VERSIONING.md)
 - [Licensing and provenance](docs/LICENSING-AND-PROVENANCE.md)
 - [Notice](NOTICE) and [third-party licenses](docs/THIRD-PARTY-LICENSES.md)

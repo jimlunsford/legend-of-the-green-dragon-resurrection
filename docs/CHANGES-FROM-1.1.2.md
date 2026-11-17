@@ -470,3 +470,17 @@ plainly. No balance changes; the version stays `1.0.0-rc.3`.
 
 `forest.php` with no `op` still shows the forest, as 1.1.2's did, while a fight is stored: its search links now lead to
 that fight. Other pages that refuse with bare text are listed, not changed, in `docs/PHASE6-TASK24-20261117.md`.
+
+### Phase 6 task 25: the `1.0.0-rc.4` version commit
+
+Task 24 is accepted at `91559fa` (Modern core 44126961634, all 14 jobs; Baseline integrity 44126961852). On Jim's go of
+2026-11-17 ("go rc.4"), the version commit sets the version to `1.0.0-rc.4` (`src/Version.php`, `project.json` with
+`phase` `release-candidate`, `docs/VERSIONING.md`), so the footer and the home page show "Version: Resurrection
+1.0.0-rc.4, based on LoGD 1.1.2 Dragonprime Edition", and the links the game prints to the host guide point at the
+`v1.0.0-rc.4` tag. The rc.4 release notes are dated and no longer a draft, and rc.4's tag message is in
+`docs/RC-CUT-CHECKLIST.md`, section 3. No behavior change; no stored row changes, so no upgrade step. Jim's decision of
+2026-11-17 keeps `forest.php` with no `op` showing the forest menu while a fight is stored, as 1.1.2 did, for `1.0.0`
+(`docs/PHASE6-TASK25-RC4-VERSION-20261117.md`).
+
+What stands between `main` and the `v1.0.0-rc.4` tag now: this commit's CI acceptance; then Jim runs the release cut
+workflow, which makes the tag, the package and the pre-release (`docs/RC-CUT-CHECKLIST.md`, sections 2 to 5).

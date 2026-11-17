@@ -46,7 +46,7 @@ def current():
 class VersionTests(unittest.TestCase):
     def test_code_project_and_docs_agree_on_a_valid_version(self):
         self.assertEqual([], problems(*current()))
-        self.assertEqual('1.0.0-rc.3', CODE.search(current()[0]).group(1))
+        self.assertEqual('1.0.0-rc.4', CODE.search(current()[0]).group(1))
 
     def test_a_disagreement_or_an_invalid_version_fails(self):
         code, project, doc = current()
