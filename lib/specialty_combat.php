@@ -119,8 +119,17 @@ function resurrection_forest_specialty(): never {
         addnav('Continue','forest.php?op=specialty');
         if ($session['user']['badguy'] !== '') resurrection_combat_forms();
         else { addnav('Return to the village','village.php'); }
-    } catch (InvalidArgumentException) { http_response_code(400); exit('Invalid specialty action.'); }
-    catch (DomainException) { http_response_code(409); exit('Specialty combat is unavailable. Request a fresh form.'); }
-    catch (Throwable $error) { \Resurrection\Http\FailureLog::record($error); http_response_code(500); exit('Specialty combat was not completed. Request a fresh form.'); }
+    } catch (InvalidArgumentException) { resurrection_forest_specialty_refuse(400,'Invalid specialty action.'); }
+    catch (DomainException) { resurrection_forest_specialty_refuse(409,'Specialty combat is unavailable. Request a fresh form.'); }
+    catch (Throwable $error) { \Resurrection\Http\FailureLog::record($error); resurrection_forest_specialty_refuse(500,'Specialty combat was not completed. Request a fresh form.'); }
     page_footer(); exit;
+}
+
+/**
+ * A refused Forest specialty round in the game's frame (Phase 6 task 24, R11: forest.php?op=specialty is a kept page,
+ * badnav.php's and the new day's Continue): the same status and message, with the forest's way out (lib/forest_combat.php).
+ */
+function resurrection_forest_specialty_refuse(int $status, string $plain): never {
+    require_once __DIR__ . '/forest_combat.php';
+    resurrection_forest_refuse($status,$plain);
 }

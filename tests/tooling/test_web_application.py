@@ -11188,6 +11188,158 @@ function MODULE_dohook($hook,$args) {
                 self._security_allow(player,'forest.php'); status,body=call('forest.php')
                 self.assertEqual(200,status,body[:1000]); self.assertNotIn('Forest combat unavailable',body)
 
+    def _forest_without_events(self):
+        # A search is a fight, not a forest event (the setting put back afterwards).
+        chance=self.query("SELECT value FROM settings WHERE setting='forestchance'")
+        self.query("INSERT INTO settings(setting,value) VALUES ('forestchance','0') ON DUPLICATE KEY UPDATE value='0'")
+        self.addCleanup(lambda: [self.query("DELETE FROM settings WHERE setting='forestchance'")]+
+                        [self.query("INSERT INTO settings(setting,value) VALUES ('forestchance',?)",[row['value']]) for row in chance])
+
+    def _continue_into_the_kept_fight(self, f, prepare=None):
+        """Phase 6 task 24 (R11), Jim's path on his rc.3 server: in a fight when the game day rolls over, the forest's
+        search link (302 to the new day, which keeps it as the return page), the new day, then the new day's Continue,
+        followed as the player follows it. Returns the Continue page and the fight's state before and after it."""
+        call,player=f['call'],f['player']
+        self._security_allow(player,'forest.php'); status,forest=call('forest.php'); self.assertEqual(200,status,forest[:500])
+        search=next(link for link in f['links'](forest) if re.fullmatch(r'forest\.php\?op=search&c=[0-9a-z-]+',link))
+        fields,_=f['forest_search_form']()
+        status,body=call('forest.php?op=search',fields); self.assertEqual(200,status,body[:1000])
+        fight=f['account']('badguy')['badguy']; self.assertNotEqual('',fight)
+        if prepare: self.query('UPDATE accounts SET '+prepare+' WHERE acctid=?',[player])
+        f['roll_over']()
+        self._security_allow(player,search); status,body=call(search); self.assertEqual(302,status,body[:500])
+        self.assertTrue(f['account']('restorepage')['restorepage'].startswith('forest.php?op=search'))
+        status,body=call('newday.php'); self.assertEqual(200,status,body[:1000]); self.assertIn('Begin New Day',body)
+        status,body=call('newday.php?continue=1',self._security_fields(body)|{'newday':'normal'}); self.assertEqual(200,status,body[:2000])
+        self.assertEqual(('1',self._current_game_day()),tuple(str(v) for v in f['account']('alive','lastnewday').values()))
+        cont=[link for link in f['links'](body) if link.startswith('forest.php')]
+        self.assertEqual(1,len(cont),body[-3000:]); self.assertRegex(cont[0],r'^forest\.php\?op=search(&c=[0-9a-z-]+)?$')
+        before=f['account']('badguy','hitpoints','turns','gold','experience','alive')
+        self.assertEqual(fight,before['badguy'])
+        status,page=call(cont[0])
+        return status,page,before
+
+    def _play_the_fight_to_its_end(self, f, page):
+        for _ in range(200):
+            if f['account']('badguy')['badguy']=='': break
+            status,page=f['call']('forest.php?op=fight',self._security_fields(page,'forest.php?op=fight'))
+            self.assertEqual(200,status,page[:2000]); self.assertNotIn(self.REFUSAL_TEXT,page)
+        self.assertEqual('',f['account']('badguy')['badguy'])
+        return page
+
+    def test_the_new_days_continue_after_a_search_link_shows_the_kept_fight_http(self):
+        """Phase 6 task 24, R11, from Jim's rc.3 server, 2026-11-17 (level 2, 10 forest fights): the new day's Continue
+        answered the plain 409 "Forest combat unavailable. Stored state was preserved; reload for a fresh form, or
+        request operator repair if it remains invalid.", with no link. He was in a fight when the game day rolled over;
+        the search link began the new day (task 23) and stayed the return page, so Continue went to it, and a search
+        while a fight is stored was refused ("Encounter already active"), plainly. Now the search link shows that fight,
+        the page forest.php shows, with nothing spent or reset, and the fight plays on to its end."""
+        self._forest_without_events()
+        with self._refusal_fixture() as f:
+            status,page,before=self._continue_into_the_kept_fight(f)
+            self.assertEqual(200,status,page[:2000]); self.assertNotIn('Forest combat unavailable',page)
+            self.assertIn('<form method="POST" action="forest.php?op=fight"',page)
+            self.assertIn('<form method="POST" action="forest.php?op=run"',page)
+            self.assertNotIn('action="forest.php?op=search"',page)
+            self.assertEqual(before,f['account']('badguy','hitpoints','turns','gold','experience','alive'))
+            end=self._play_the_fight_to_its_end(f,page)
+            self.assertTrue(any(link.startswith(('village.php','forest.php','shades.php')) for link in f['links'](end)),end[-2000:])
+
+    def test_the_new_days_continue_shows_the_kept_fight_to_a_player_who_was_dead_or_had_no_hitpoints_http(self):
+        """Phase 6 task 24 (R11): Jim's path for a player who was dead, or had no hitpoints, with the fight still
+        stored: the new day brings them back, and its Continue shows the fight, as for any player, never the plain
+        refusal; nothing is spent, and the fight plays on to its end."""
+        self._forest_without_events()
+        for name,prepare in [('dead','alive=0,hitpoints=0'),('no hitpoints','hitpoints=0')]:
+            with self.subTest(name), self._refusal_fixture() as f:
+                status,page,before=self._continue_into_the_kept_fight(f,prepare)
+                self.assertEqual(200,status,page[:2000]); self.assertNotIn('Forest combat unavailable',page)
+                self.assertIn('<form method="POST" action="forest.php?op=fight"',page)
+                self.assertGreater(int(before['hitpoints']),0)
+                self.assertEqual(before,f['account']('badguy','hitpoints','turns','gold','experience','alive'))
+                self._play_the_fight_to_its_end(f,page)
+
+    def test_a_search_with_no_forest_fights_left_is_the_tired_page_in_the_forest_http(self):
+        """Phase 6 task 24: with no forest fights left, the search link offered a search form whose POST answered the
+        plain 409 "Forest combat unavailable. ...". 1.1.2 printed "You are too tired to search the forest any longer
+        today.  Perhaps tomorrow you will have more energy." and stayed in the forest (its forest.php, line 58). Both now
+        show that text in the game's frame with the forest's own navs; nothing is spent."""
+        self._forest_without_events()
+        tired='You are too tired to search the forest any longer today. Perhaps tomorrow you will have more energy.'
+        with self._refusal_fixture() as f:
+            call,player=f['call'],f['player']
+            fields,_=f['forest_search_form']()
+            self.query('UPDATE accounts SET turns=0 WHERE acctid=?',[player])
+            before=f['account']('turns','gold','badguy','hitpoints','experience','specialinc')
+            self._security_allow(player,'forest.php'); status,forest=call('forest.php'); self.assertEqual(200,status)
+            search=next(link for link in f['links'](forest) if re.fullmatch(r'forest\.php\?op=search&c=[0-9a-z-]+',link))
+            for name,data in [('the link',None),('the form',fields)]:
+                with self.subTest(name):
+                    self._security_allow(player,'forest.php?op=search' if data else search)
+                    status,body=call('forest.php?op=search' if data else search,data)
+                    self.assertEqual(200,status,body[:2000])
+                    text=re.sub(r'\s+',' ',html.unescape(re.sub(r'<[^>]+>','',body)))
+                    self.assertIn(tired,text); self.assertIn('<title>The Forest',body)
+                    self.assertNotIn('Forest combat unavailable',body); self.assertNotIn(self.REFUSAL_TEXT,text)
+                    self.assertNotIn('<form method="POST" action="forest.php?op=search"',body)
+                    for credit in self.REFUSAL_CREDITS: self.assertIn(credit,body)
+                    links=f['links'](body)
+                    for nav in ['healer.php','village.php']: self.assertTrue(any(link.startswith(nav) for link in links),nav+' '+body[-3000:])
+                    self.assertTrue(any(re.fullmatch(r'forest\.php\?op=search&c=[0-9a-z-]+',link) for link in links),body[-3000:])
+                    self.assertEqual(before,f['account']('turns','gold','badguy','hitpoints','experience','specialinc'))
+            # The forest's own links work from it.
+            village=next(link for link in f['links'](body) if link.startswith('village.php'))
+            status,page=call(village); self.assertEqual(200,status,page[:500])
+
+    def test_a_search_posted_while_a_fight_is_stored_is_refused_with_the_way_back_to_the_fight_http(self):
+        """Phase 6 task 24 (R11): a search posted while a fight is stored answered the plain 409 with no link. It is
+        refused in the game's frame, with the same status, and its one way out leads back to the fight; nothing about
+        the fight or the player changes."""
+        self._forest_without_events()
+        with self._refusal_fixture() as f:
+            call,player=f['call'],f['player']
+            stale,_=f['forest_search_form'](); fields,_=f['forest_search_form']()
+            status,body=call('forest.php?op=search',fields); self.assertEqual(200,status,body[:1000])
+            before=f['account']('badguy','turns','gold','hitpoints','experience'); self.assertNotEqual('',before['badguy'])
+            self._security_allow(player,'forest.php?op=search')
+            status,body=call('forest.php?op=search',stale)
+            f['framed'](status,body,409)
+            self.assertEqual(before,f['account']('badguy','turns','gold','hitpoints','experience'))
+            self.assertEqual('forest.php?op=fight',f['account']('restorepage')['restorepage'])
+            links=f['links'](body)
+            self.assertFalse(any(link.startswith('village.php') for link in links),body[-3000:])
+            way=[link for link in links if link.startswith('forest.php')]; self.assertEqual(1,len(way),body[-3000:])
+            self.assertRegex(way[0],r'^forest\.php\?op=fight&c=[0-9a-z-]+$')
+            status,page=call(way[0]); self.assertEqual(200,status,page[:2000])
+            self.assertIn('<form method="POST" action="forest.php?op=fight"',page)
+            self.assertEqual(before,f['account']('badguy','turns','gold','hitpoints','experience'))
+
+    def test_a_refused_forest_page_answers_in_the_game_frame_with_a_way_out_http(self):
+        """Phase 6 task 24 (R11): the forest's other refusals (400 "Invalid Forest action.", 409 "Forest combat
+        unavailable. ...", the specialty round's 409 "Specialty combat is unavailable. ...") were bare text with no
+        link. They keep their status and message, in the game's frame, with the forest as the way out while the forest
+        works, else the village, or the Shades for the dead."""
+        with self._refusal_fixture() as f:
+            call,player=f['call'],f['player']
+            def refused(path,status,message,way):
+                self._security_allow(player,path); code,body=call(path)
+                self.assertEqual(status,code,body[:1000])
+                self.assertIn('<title>The Forest',body)
+                self.assertIn(message,re.sub(r'\s+',' ',html.unescape(re.sub(r'<[^>]+>','',body))))
+                for credit in self.REFUSAL_CREDITS: self.assertIn(credit,body)
+                self.assertEqual([way],[re.sub(r'[?&]c=[0-9a-z-]+$','',link) for link in f['links'](body) if link.startswith(('forest.php','village.php','shades.php'))],body[-3000:])
+                self.assertEqual(way,f['account']('restorepage')['restorepage'])
+                return body
+            before=f['account']('turns','gold','badguy','hitpoints','alive')
+            refused('forest.php?op=search&bogus=1',400,'Invalid Forest action.','forest.php')
+            refused('forest.php?op=fight',409,'Forest combat unavailable. Stored state was preserved','forest.php')
+            refused('forest.php?op=specialty',409,'Specialty combat is unavailable. Request a fresh form.','forest.php')
+            self.assertEqual(before,f['account']('turns','gold','badguy','hitpoints','alive'))
+            self.query('UPDATE accounts SET alive=0,hitpoints=0 WHERE acctid=?',[player])
+            body=refused('forest.php?op=search',409,'Forest combat unavailable. Stored state was preserved','shades.php')
+            status,page=call(next(link for link in f['links'](body) if link.startswith('shades.php')))
+            self.assertEqual(200,status,page[:500]); self.assertIn('<title>Land of the Shades',page)
+
     def test_a_refused_action_answers_in_the_game_frame_with_a_way_to_the_village_http(self):
         """Phase 6 task 22 (R10): a refused action on a game page was a bare text page with no link. A player without
         the Grotto (Jim got out through it) had nowhere to go. Now the 409 of a stale action token and the 403 of a

@@ -451,3 +451,22 @@ section 3. One behavior change, on Jim's choice of 2026-11-16 to fix it in this 
 
 What stands between `main` and the `v1.0.0-rc.3` tag now: this commit's CI acceptance; then Jim runs the release cut
 workflow, which makes the tag, the package and the pre-release (`docs/RC-CUT-CHECKLIST.md`, sections 2 to 5).
+
+### Phase 6 task 24: R11, the forest after the new day's Continue
+
+Task 23 is accepted at `0632351` (Modern core 43999468955, all 14 jobs; Baseline integrity 43999469169), and Jim cut
+`v1.0.0-rc.3` from it (release cut run 44055317395). On his rc.3 server on 2026-11-17 (level 2, 10 forest fights), the
+new day's Continue answered the plain 409 "Forest combat unavailable. Stored state was preserved; reload for a fresh
+form, or request operator repair if it remains invalid.", with no link (`ROADMAP.md`, R11;
+`docs/PHASE6-TASK24-20261117.md`). He was in a fight when the game day rolled over: the search link began the new day
+(task 23) and stayed the return page, so Continue went to it, and a search while a fight is stored was refused,
+plainly. No balance changes; the version stays `1.0.0-rc.3`.
+
+| Area | 1.1.2 | Before (rc.3) | Now | Why | Source |
+|---|---|---|---|---|---|
+| A forest search while a fight is stored | The search link (`forest.php?op=search`) started a new search: the new encounter replaced the stored fight, so a search was a way out of any fight | The search link and a posted search answered the plain 409 "Forest combat unavailable. ..." ("Encounter already active"), with no link | The search link shows the stored fight, the fight page (`forest.php?op=fight`), with nothing spent or reset, and it plays on. A search posted is refused in the game's frame (task 22's refusal, the same 409), with its one way out back to the fight, made the return page | The new day's Continue to the search link left Jim with no way on. The fight stays the player's rather than 1.1.2's replacement, which let any search escape a fight | `lib/forest_combat.php`, `tests/tooling/test_web_application.py` (`test_the_new_days_continue_after_a_search_link_shows_the_kept_fight_http`, `test_the_new_days_continue_shows_the_kept_fight_to_a_player_who_was_dead_or_had_no_hitpoints_http`, `test_a_search_posted_while_a_fight_is_stored_is_refused_with_the_way_back_to_the_fight_http`) |
+| A forest search with no forest fights left | "You are too tired to search the forest any longer today.  Perhaps tomorrow you will have more energy.", with the forest (its `forest.php`, line 58) | The search link showed a search form; its POST answered the plain 409 "Forest combat unavailable. ..." | 1.1.2's text, in the game's frame with the forest's own navs, for the link and for a form posted (with its CSRF token); nothing is spent | 1.1.2's page, restored | `lib/forest_combat.php` (`resurrection_forest_tired()`), `tests/tooling/test_web_application.py` (`test_a_search_with_no_forest_fights_left_is_the_tired_page_in_the_forest_http`) |
+| The forest's other refusals (400 "Invalid Forest action.", 409 "Forest combat unavailable. ...", 500 "Forest action was not completed. ...", and the specialty round's 400, 409 and 500) | No such refusals | Bare text with no link | The same status and message in the game's frame, with one way out: back to the fight while one is stored and valid, else the forest while the forest works for the player, else the village (the Shades for the dead), made the return page. Only the navigation is written; a 500 is still logged (`FailureLog`). Pages outside forced navigation keep the plain text | The same dead end as R10, for any kept page, `badnav.php` replay or Continue that lands on a refused forest page | `lib/web_security.php` (`resurrection_refuse_page()`), `lib/forest_combat.php`, `lib/specialty_combat.php`, `tests/tooling/test_web_application.py` (`test_a_refused_forest_page_answers_in_the_game_frame_with_a_way_out_http`) |
+
+`forest.php` with no `op` still shows the forest, as 1.1.2's did, while a fight is stored: its search links now lead to
+that fight. Other pages that refuse with bare text are listed, not changed, in `docs/PHASE6-TASK24-20261117.md`.

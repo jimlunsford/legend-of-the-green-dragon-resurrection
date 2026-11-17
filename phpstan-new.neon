@@ -71,6 +71,7 @@ parameters:
     scanFiles:
         - lib/forestoutcomes.php
         - lib/forest_encounter.php
+        - lib/forest.php
         - lib/extended-battle.php
         - lib/battle-skills.php
         - lib/datetime.php

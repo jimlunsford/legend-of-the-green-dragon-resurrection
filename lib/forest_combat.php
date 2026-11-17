@@ -96,7 +96,25 @@ function resurrection_forest_combat(): never {
             if (($_SERVER['REQUEST_METHOD'] ?? '')==='GET') checkday();
             else resurrection_refuse_action(409,'Forest combat unavailable. Stored state was preserved; reload for a fresh form, or request operator repair if it remains invalid.');
         }
+        // A search while a fight is stored (Phase 6 task 24, R11: the new day's Continue to the search link that began
+        // it): its link shows that fight, the page forest.php shows, with nothing spent or reset; a search posted is
+        // refused in the game's frame with the way back to the fight. 1.1.2's search replaced the fight with a new one,
+        // so a search was a way out of any fight; the stored fight stays the player's.
+        if ($op==='search' && $session['user']['badguy']!=='' && $session['user']['specialinc']==='') {
+            if (($_SERVER['REQUEST_METHOD'] ?? '')==='GET') { $op='fight'; $entry=false; }
+            else {
+                resurrection_require_post();
+                resurrection_refuse_action(409,'Forest combat unavailable. Stored state was preserved; reload for a fresh form, or request operator repair if it remains invalid.',
+                    resurrection_forest_way());
+            }
+        }
         $state=resurrection_forest_state($entry);
+        // A search with no forest fights left is 1.1.2's tired page (its forest.php, line 58) with the forest's navs,
+        // never a search form or a refusal; nothing is spent (Phase 6 task 24).
+        if ($op==='search' && (int)$session['user']['turns']<=0) {
+            if (($_SERVER['REQUEST_METHOD'] ?? '')!=='GET') resurrection_require_post();
+            resurrection_forest_tired();
+        }
         page_header('The Forest');
         $context=resurrection_forest_context($entry);
         if (($_SERVER['REQUEST_METHOD'] ?? '') === 'GET') {
@@ -170,8 +188,39 @@ function resurrection_forest_combat(): never {
         });
         if ($session['user']['badguy']!=='' && $session['user']['specialinc']==='') resurrection_forest_forms();
         elseif ($session['user']['specialinc']==='') { addnav('The Forest','forest.php'); addnav('Return to the village','village.php'); }
-    } catch (InvalidArgumentException) { http_response_code(400); exit('Invalid Forest action.'); }
-    catch (DomainException) { http_response_code(409); exit('Forest combat unavailable. Stored state was preserved; reload for a fresh form, or request operator repair if it remains invalid.'); }
-    catch (Throwable $error) { \Resurrection\Http\FailureLog::record($error); http_response_code(500); exit('Forest action was not completed. Request a fresh form.'); }
+    } catch (InvalidArgumentException) { resurrection_forest_refuse(400,'Invalid Forest action.'); }
+    catch (DomainException) { resurrection_forest_refuse(409,'Forest combat unavailable. Stored state was preserved; reload for a fresh form, or request operator repair if it remains invalid.'); }
+    catch (Throwable $error) { \Resurrection\Http\FailureLog::record($error); resurrection_forest_refuse(500,'Forest action was not completed. Request a fresh form.'); }
+    page_footer(); exit;
+}
+
+/**
+ * The way out of a refused forest page (Phase 6 task 24, R11): back to the stored fight (its page, forest.php?op=fight)
+ * while one is stored and valid, the forest while the forest works for the player, else null, the village (the Shades
+ * for the dead) of resurrection_refuse_page() and resurrection_refuse_action().
+ *
+ * @return array{0: string, 1: string}|null
+ */
+function resurrection_forest_way(): ?array {
+    global $session;
+    $fight=$session['user']['badguy']!=='';
+    try { resurrection_forest_state(!$fight); }
+    catch (Throwable) { return null; }
+    return $fight ? ['Return to the fight','forest.php?op=fight'] : ['Return to the forest','forest.php'];
+}
+
+/** A forest refusal in the game's frame (Phase 6 task 24, R11): the same status and message, with the way out. */
+function resurrection_forest_refuse(int $status, string $plain): never {
+    resurrection_refuse_page($status,$plain,'The Forest',$plain,resurrection_forest_way());
+}
+
+/** 1.1.2's search with no forest fights left: the tired text and the forest, nothing spent (Phase 6 task 24). */
+function resurrection_forest_tired(): never {
+    require_once __DIR__ . '/forest.php';
+    page_header('The Forest');
+    tlschema('forest');
+    output("`\$`bYou are too tired to search the forest any longer today.  Perhaps tomorrow you will have more energy.`b`0");
+    tlschema();
+    forest();
     page_footer(); exit;
 }

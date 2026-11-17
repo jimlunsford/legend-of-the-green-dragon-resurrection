@@ -113,7 +113,10 @@ The version commit is accepted only when, on that exact commit:
 - [x] For `1.0.0-rc.2`: both of the above on task 21's version commit, `100103d`: Modern core 43852203138, all 14
       jobs (PHP 8.4 shards 9:51, 9:18, 10:43, 15:46, 14:36; PHP 8.5 shards 14:09, 11:15, 17:46, 14:05, 11:23);
       Baseline integrity 43852203104.
-- [ ] For `1.0.0-rc.3`: both of the above on task 23's version commit.
+- [x] For `1.0.0-rc.3`: both of the above on task 23's version commit, `0632351`: Modern core 43999468955, all 14
+      jobs (PHP 8.4 checks 2:23, shards 13:28, 14:16, 9:46, 16:17, 16:14; PHP 8.5 checks 2:37, shards 12:41, 12:03,
+      16:53, 10:58, 10:44; on both legs the release upgrade check installed `v1.0.0-rc.2` and upgraded it to `0632351`,
+      41 tables, and `--release-ref HEAD` matched too); Baseline integrity 43999469169 (recorded in task 24).
 
 A run that a later push cancelled is not acceptance, and no earlier commit's run stands in for it. A failed run stays on
 record. If anything fails, fix it in a new commit and start this section again on that commit; the tag goes on the
@@ -147,8 +150,11 @@ docs/RELEASE-NOTES-1.0.0-rc.3.md. Hosting: docs/HOST-GUIDE.md.
 (Written in Phase 6 task 23, 2026-11-16, in rc.2's shape. Each line checked against the code and the documents at the
 version commit in its evidence doc.)
 
-- [ ] For `1.0.0-rc.3`: the tag, made by the release cut workflow after CI accepts the version commit, on Jim's
-      request, with the message above byte for byte.
+- [x] For `1.0.0-rc.3`: the tag, made by the release cut workflow (run 44055317395, started with task 23's four inputs
+      on Jim's request, 2026-11-17): tag object `dec02e9ff601fb445b577d870602aaae6ee91a4a`, annotated, by
+      `github-actions[bot]`, on `0632351b9ca410e09971fe79b93992d66b8a658b`, with the message above byte for byte (884
+      bytes, SHA-256 `8bd23545…e027de`). `v1.0.0-rc.1`, `v1.0.0-rc.2` and `historical-source-1.1.2` are unchanged
+      (recorded in task 24).
 
 History: the tag message for `1.0.0-rc.2`, exactly as tagged:
 
@@ -229,10 +235,14 @@ release cut workflow (`.github/workflows/release-cut.yml`) builds the same packa
       pre-release: https://github.com/jimlunsford/legend-of-the-green-dragon-resurrection/releases/tag/v1.0.0-rc.1
       (not latest; the zip downloaded back has the same SHA-256). For `1.0.0-rc.2`, the same way:
       https://github.com/jimlunsford/legend-of-the-green-dragon-resurrection/releases/tag/v1.0.0-rc.2 (a pre-release,
+      not latest; the zip's digest equals the build). For `1.0.0-rc.3`, the same way:
+      https://github.com/jimlunsford/legend-of-the-green-dragon-resurrection/releases/tag/v1.0.0-rc.3 (a pre-release,
       not latest; the zip's digest equals the build).
-- [ ] For `1.0.0-rc.3`: the same, by the release cut workflow from the tag. Task 23 built the version commit's package
+- [x] For `1.0.0-rc.3`: the same, by the release cut workflow from the tag. Task 23 built the version commit's package
       twice (its SHA-256 is the workflow's `package_sha256` input), installed it fresh through `setup.php`, and
-      upgraded the rc.2 and rc.1 packages' installs to it.
+      upgraded the rc.2 and rc.1 packages' installs to it. The workflow's build, 3,868,683 bytes, is
+      `sha256:6fe8b132…3569`, the same; the zip downloaded back has that SHA-256, as its `.sha256` says (recorded in
+      task 24).
 
 ## 5. After the tag
 
@@ -246,7 +256,9 @@ release cut workflow (`.github/workflows/release-cut.yml`) builds the same packa
 - [x] For `1.0.0-rc.2`: the next commit's Modern core installs `v1.0.0-rc.2` and upgrades it. Modern core
       43971175438 on Phase 6 task 22's commit, `088b43c`, both legs ("v1.0.0-rc.2 installed, upgraded to 088b43c, and
       the same schema and data as a fresh install (41 tables)"; recorded in task 23).
-- [ ] For `1.0.0-rc.3`: the next commit's Modern core installs `v1.0.0-rc.3` and upgrades it.
+- [ ] For `1.0.0-rc.3`: the next commit's Modern core installs `v1.0.0-rc.3` and upgrades it. The next commit is
+      Phase 6 task 24's (R11); its local check installed `v1.0.0-rc.3` and upgraded it on both legs, and its Modern core
+      run is the record.
 - [ ] After `v1.0.0`, the first commit on `main` sets the next number with `-dev` (`1.1.0-dev`, or `1.0.1-dev` when only
       fixes are planned).
 - [ ] Record the tag, the accepted runs and the package's SHA-256 in `ROADMAP.md` and the cut's evidence doc.

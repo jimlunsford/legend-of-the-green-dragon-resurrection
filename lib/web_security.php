@@ -41,8 +41,13 @@ function resurrection_refusal_framed(): bool {
  * - 403: the request may not come from this session at all, so it changes nothing, not even the navigation: the
  *   page is shown, never kept or saved, and its link goes to badnav.php, which shows the player's own last page
  *   again with this session's form tokens.
+ *
+ * $way, [label, address], replaces the 409's way back to the village (Phase 6 task 24, R11: a search pressed while a
+ * fight is stored goes back to that fight).
+ *
+ * @param array{0: string, 1: string}|null $way
  */
-function resurrection_refuse_action(int $status, string $plain): never {
+function resurrection_refuse_action(int $status, string $plain, ?array $way = null): never {
     global $session, $output, $navbysection, $navsection, $baseaccount;
     http_response_code($status);
     header('Cache-Control: no-store');
@@ -71,10 +76,59 @@ function resurrection_refuse_action(int $status, string $plain): never {
     require_once __DIR__ . '/../src/Security/NavigationState.php';
     try { $session['allowednavs'] = \Resurrection\Security\NavigationState::read($baseaccount['allowednavs'] ?? ''); }
     catch (DomainException $error) { $session['allowednavs'] = []; }
-    villagenav();
-    $session['user']['restorepage'] = !empty($session['user']['alive']) ? 'village.php' : 'shades.php';
+    if ($way !== null) {
+        addnav($way[0], $way[1]);
+        $session['user']['restorepage'] = $way[1];
+    } else {
+        villagenav();
+        $session['user']['restorepage'] = !empty($session['user']['alive']) ? 'village.php' : 'shades.php';
+    }
     page_footer();
     exit;
+}
+
+/**
+ * Refuse a game page's request in the game's frame with one way out (Phase 6 task 24, R11): the forest's refusals
+ * ("Forest combat unavailable" and the others) were plain text pages with no link, so a page the player came back to
+ * (the new day's Continue, a kept page, a sign-in) could leave them nowhere to go. The status is unchanged, with
+ * `Cache-Control: no-store`, and nothing the request asked for is done.
+ *
+ * On a game page (resurrection_refusal_framed()) the answer is the frame with $title, $message and one nav: $way,
+ * [label, address], or the village (the Shades for the dead) without one. The page is kept, and the return page becomes
+ * that nav, so badnav.php and a later sign-in lead to the way out. Only the navigation is written (saveuser() under
+ * RESURRECTION_REFUSAL_PRESENTATION), so whatever the refused request changed in the session is never stored. Anywhere
+ * else, or if the frame itself fails, the answer is $plain, as before.
+ *
+ * @param array{0: string, 1: string}|null $way
+ */
+function resurrection_refuse_page(int $status, string $plain, string $title, string $message, ?array $way = null): never {
+    global $session, $output, $navbysection, $navsection;
+    static $framing = false;
+    http_response_code($status);
+    header('Cache-Control: no-store');
+    if ($framing || !resurrection_refusal_framed()) exit($plain);
+    $framing = true;
+    try {
+        require_once __DIR__ . '/villagenav.php';
+        if (!defined('RESURRECTION_REFUSAL_PRESENTATION')) define('RESURRECTION_REFUSAL_PRESENTATION', true);
+        $output = '';
+        $navbysection = [];
+        $navsection = '';
+        $session['allowednavs'] = [];
+        page_header($title);
+        output_notl('`$%s`0', translate_inline($message));
+        if ($way !== null) {
+            addnav($way[0], $way[1]);
+            $session['user']['restorepage'] = $way[1];
+        } else {
+            villagenav();
+            $session['user']['restorepage'] = !empty($session['user']['alive']) ? 'village.php' : 'shades.php';
+        }
+        page_footer();
+    } catch (Throwable) {
+        // The frame could not be drawn: the plain answer, as before.
+    }
+    exit($plain);
 }
 
 function resurrection_csrf_field(): string { return \Resurrection\Security\Csrf::field($_SESSION); }

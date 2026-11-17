@@ -304,3 +304,26 @@ Supporting evidence only; CI is the acceptance. Run on this commit's tree.
 CI acceptance of this commit. Then Jim runs the Release cut workflow from the Actions tab with the four inputs in the
 task report (the checklist's sections 3 and 4), and tests rc.3 on his server, including the rc.2 upgrade. Then
 `1.0.0`, and the showcase README (task 24).
+
+## Acceptance and the rc.3 cut (recorded in Phase 6 task 24, 2026-11-17)
+
+Given in Jim's task 24 brief and checked again in task 24 against the repository's API and the tag itself:
+
+- **Task 23 accepted** at `0632351`: Modern core 43999468955, SUCCESS, all 14 jobs. PHP 8.4: `checks` 2:23; `http`
+  13:28, 14:16, 9:46, 16:17, 16:14. PHP 8.5: `checks` 2:37; `http` 12:41, 12:03, 16:53, 10:58, 10:44 (slowest 16:53,
+  PHP 8.5 `http (3)`). On both legs the release upgrade check installed `v1.0.0-rc.2` and upgraded it to `0632351`
+  ("the same schema and data as a fresh install (41 tables)"), and `--release-ref HEAD` matched too. Baseline integrity
+  43999469169, SUCCESS. Each job's times were taken again from the run's job list, and the two upgrade check lines
+  from both `checks` job logs.
+- **The cut:** release cut run 44055317395, SUCCESS (`workflow_dispatch` on `0632351`, 2026-11-17 09:24 UTC).
+  - Tag `v1.0.0-rc.3`: annotated, tag object `dec02e9ff601fb445b577d870602aaae6ee91a4a`, by `github-actions[bot]`, on
+    `0632351b9ca410e09971fe79b93992d66b8a658b`. Its message is 884 bytes, SHA-256
+    `8bd2354597b07bbf84e25997cb64aede8183cb84b3e5e2abad3140fee8e027de`, byte for byte the block in
+    `docs/RC-CUT-CHECKLIST.md`, section 3.
+  - The pre-release, https://github.com/jimlunsford/legend-of-the-green-dragon-resurrection/releases/tag/v1.0.0-rc.3:
+    a pre-release, not a draft and not latest (the repository has no latest release). Its
+    `legend-of-the-green-dragon-resurrection-1.0.0-rc.3.zip` is 3,868,683 bytes, digest
+    `sha256:6fe8b1323f140bdc2b2ef3ce45d7ee0a917f5a40689e7f462b210570d5603569`, the `package_sha256` this task's build
+    gave; downloaded back, the zip has that SHA-256 and its `.sha256` file says the same.
+  - `v1.0.0-rc.1` (`522be1c`), `v1.0.0-rc.2` (`147ad5a`) and `historical-source-1.1.2` (`51cab4f`) are unchanged.
+- Jim's rc.3 server test then found R11 (`docs/PHASE6-TASK24-20261117.md`).
