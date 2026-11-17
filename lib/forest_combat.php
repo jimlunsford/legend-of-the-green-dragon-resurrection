@@ -86,15 +86,17 @@ function resurrection_forest_combat(): never {
         if (!is_string($op) || !in_array($op,['search','fight','run','newtarget','dragon'],true)) throw new InvalidArgumentException();
         if (array_diff(array_keys($_GET),['op','c','type','auto','newtarget']) !== []) throw new InvalidArgumentException();
         $entry=in_array($op,['search','dragon'],true);
-        $state=resurrection_forest_state($entry);
         // A search after the game day rolled over begins the new day, as 1.1.2's search link did (checkday()); its form
         // never offers a search the POST then refuses, and a search posted after the rollover is refused before its
         // action is spent, in the game's frame with the way back (Phase 6 task 22, R10). Unfinished onboarding (no race
-        // or specialty) is not a rollover: its search keeps the refusal below, as before.
+        // or specialty) is not a rollover: its search keeps the refusal below, as before. The check comes before the
+        // forest state's, as 1.1.2's checkday() came first: a dead, 0 HP or mid-fight player's search after the rollover
+        // begins the new day too, not the plain refusal (Phase 6 task 23, Jim's rc.2 server, 2026-11-16).
         if ($op==='search' && resurrection_forest_day_rolled_over()) {
             if (($_SERVER['REQUEST_METHOD'] ?? '')==='GET') checkday();
             else resurrection_refuse_action(409,'Forest combat unavailable. Stored state was preserved; reload for a fresh form, or request operator repair if it remains invalid.');
         }
+        $state=resurrection_forest_state($entry);
         page_header('The Forest');
         $context=resurrection_forest_context($entry);
         if (($_SERVER['REQUEST_METHOD'] ?? '') === 'GET') {

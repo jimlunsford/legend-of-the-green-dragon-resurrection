@@ -1,9 +1,9 @@
 # Release notes: Legend of the Green Dragon - Resurrection 1.0.0-rc.3
 
-Draft. This test build has not been cut. Started in Phase 6 task 22 (2026-11-16) from what Jim's rc.2 server test
-found; each change is recorded in full in `docs/CHANGES-FROM-1.1.2.md`. Read with the rc.2 notes,
-`docs/RELEASE-NOTES-1.0.0-rc.2.md`, and the rc.1 notes, `docs/RELEASE-NOTES-1.0.0-rc.1.md`: everything there still
-holds unless this page says otherwise.
+2026-11-16. Cut by `docs/RC-CUT-CHECKLIST.md` on the maintainer's go; the tag is `v1.0.0-rc.3`. The third test
+build: what Jim's rc.2 server test found (R10). Each change is recorded in full in `docs/CHANGES-FROM-1.1.2.md`. Read
+with the rc.2 notes, `docs/RELEASE-NOTES-1.0.0-rc.2.md`, and the rc.1 notes, `docs/RELEASE-NOTES-1.0.0-rc.1.md`:
+everything there still holds unless this page says otherwise.
 
 ## What changed since 1.0.0-rc.2
 
@@ -23,11 +23,24 @@ Found in the rc.2 server test, 2026-11-16 (`docs/PHASE6-TASK22-20261116.md`).
     page, and nothing is saved. The refused action still does nothing, and the same status codes are sent. Pages
     outside the game's navigation (mail, the MoTD, petitions, the translator, account links, the new day's questions)
     keep their plain refusals.
+  - **The search link on its own, also seen on Jim's rc.2 server** (2026-11-16): after a game-day rollover, the link
+    itself, `forest.php?op=search&c=...`, answered the plain "Forest combat unavailable. Stored state was preserved;
+    reload for a fresh form, or request operator repair if it remains invalid.", and going to the village started the
+    new day and cleared it. The link answers that only for a player the forest cannot take as they are: dead, with no
+    hitpoints, or in a fight. The rollover check now comes before that check, as 1.1.2's search began with the new
+    day, so for them too the link begins the new day, and after it the forest works (Phase 6 task 23,
+    `docs/PHASE6-TASK23-RC3-VERSION-20261117.md`).
 
-## Upgrading from rc.2
+## Upgrading
 
-No upgrade step: rc.3 changes no stored row. Follow the host guide's upgrade steps (`HOST-GUIDE.md`, section 9,
-"Upgrade"). From rc.1, the upgrade applies steps `0002` and `0003` as the rc.2 notes say.
+Follow the host guide's upgrade steps (`HOST-GUIDE.md`, section 9, "Upgrade"): back up the database and the
+configuration file, upload the new version into a new folder, then run `php scripts/upgrade.php --backup-confirmed` or
+the upgrade on `setup.php`. A fresh install records every step as applied.
+
+- **From rc.2:** no upgrade step runs. rc.3 changes no stored row; the upgrade finds the database current.
+- **From rc.1:** two steps run, in order, as the rc.2 notes say ("Upgrading from rc.1"): `0002-signin-limits` (the
+  three sign-in limit settings, where the database has none) and `0003-utf8-seed-text` (the UTF-8 seed text, such as
+  master 5's "Unélith", where it is still exactly what rc.1 wrote).
 
 ## Known issues
 

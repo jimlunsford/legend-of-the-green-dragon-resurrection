@@ -2,7 +2,7 @@
 
 **NOT RELEASED. NOT CERTIFIED FOR PUBLIC GAME HOSTING.**
 
-No Resurrection release has been cut. `main` is `1.0.0-rc.2`, the second test build: it is meant for hosts to try, with the limitations its [release notes](docs/RELEASE-NOTES-1.0.0-rc.2.md) list, and with the [host guide](docs/HOST-GUIDE.md)'s rules. It has had no independent security review, and the project's own public hosting gates ([ROADMAP.md](ROADMAP.md), "Public hosting") are not all met: `project.json` keeps `public_game_hosting_approved` at `false`.
+No Resurrection release has been cut. `main` is `1.0.0-rc.3`, the third test build: it is meant for hosts to try, with the limitations its [release notes](docs/RELEASE-NOTES-1.0.0-rc.3.md) list, and with the [host guide](docs/HOST-GUIDE.md)'s rules. It has had no independent security review, and the project's own public hosting gates ([ROADMAP.md](ROADMAP.md), "Public hosting") are not all met: `project.json` keeps `public_game_hosting_approved` at `false`.
 
 This repository also keeps the vulnerable historical 1.1.2 source, unchanged, under the tag `historical-source-1.1.2`. Never run it on an Internet-facing server, including a temporary demo hostname.
 

@@ -11147,6 +11147,47 @@ function MODULE_dohook($hook,$args) {
                 self.assertEqual('a:1:{s:10:"newday.php";b:1;}',f['account']('allowednavs')['allowednavs'])
             self.assertEqual(before,f['account']('turns','gold','badguy','specialinc','hitpoints'))
 
+    def test_a_search_link_after_the_rollover_begins_the_new_day_for_a_dead_hurt_or_fighting_player_http(self):
+        """Phase 6 task 23, from Jim's rc.2 server, 2026-11-16: after a game-day rollover, the search link itself (a GET,
+        forest.php?op=search&c=...) answered the plain 409 "Forest combat unavailable. Stored state was preserved; ...",
+        and going to the village started the new day and cleared it. A GET of the search answers that only when the
+        forest state is refused: the player is dead, has no hitpoints, or is in a fight. Task 22's rollover check ran
+        after that state check, so those players still got the plain refusal. 1.1.2's search ran checkday() first; now
+        the rollover check comes first too, so the link begins the new day for them as for any player, and after it
+        the forest works."""
+        def fight(f):
+            fields,_=f['forest_search_form']()
+            status,body=f['call']('forest.php?op=search',fields); self.assertEqual(200,status,body[:1000])
+            self.assertNotEqual('',f['account']('badguy')['badguy'])
+        # A search is a fight, not a forest event (the setting put back afterwards).
+        chance=self.query("SELECT value FROM settings WHERE setting='forestchance'")
+        self.query("INSERT INTO settings(setting,value) VALUES ('forestchance','0') ON DUPLICATE KEY UPDATE value='0'")
+        self.addCleanup(lambda: [self.query("DELETE FROM settings WHERE setting='forestchance'")]+
+                        [self.query("INSERT INTO settings(setting,value) VALUES ('forestchance',?)",[row['value']]) for row in chance])
+        for name,prepare in [('dead',"alive=0,hitpoints=0"),('no hitpoints',"hitpoints=0"),('in a fight',fight)]:
+            with self.subTest(name), self._refusal_fixture() as f:
+                call,player=f['call'],f['player']
+                # The forest's own search link, as Jim pressed it.
+                self._security_allow(player,'forest.php'); status,forest=call('forest.php'); self.assertEqual(200,status,forest[:500])
+                search=next(link for link in f['links'](forest) if re.fullmatch(r'forest\.php\?op=search&c=[0-9a-z-]+',link))
+                if callable(prepare): prepare(f)
+                else: self.query('UPDATE accounts SET '+prepare+' WHERE acctid=?',[player])
+                before=f['account']('alive','hitpoints','turns','gold','badguy')
+                f['roll_over']()
+                self._security_allow(player,search); status,body=call(search)
+                self.assertEqual(302,status,body[:500]); self.assertNotIn('Forest combat unavailable',body)
+                self.assertEqual('a:1:{s:10:"newday.php";b:1;}',f['account']('allowednavs')['allowednavs'])
+                self.assertEqual(before,f['account']('alive','hitpoints','turns','gold','badguy'))
+                # The new day, played as the player plays it, then the forest.
+                status,body=call('newday.php'); self.assertEqual(200,status,body[:1000]); self.assertIn('Begin New Day',body)
+                status,body=call('newday.php?continue=1',self._security_fields(body)|{'newday':'normal'})
+                self.assertEqual(200,status,body[:2000])
+                after=f['account']('alive','hitpoints','maxhitpoints','lastnewday')
+                self.assertEqual(('1',self._current_game_day()),(str(after['alive']),after['lastnewday']))
+                self.assertGreaterEqual(int(after['hitpoints']),int(after['maxhitpoints']))
+                self._security_allow(player,'forest.php'); status,body=call('forest.php')
+                self.assertEqual(200,status,body[:1000]); self.assertNotIn('Forest combat unavailable',body)
+
     def test_a_refused_action_answers_in_the_game_frame_with_a_way_to_the_village_http(self):
         """Phase 6 task 22 (R10): a refused action on a game page was a bare text page with no link. A player without
         the Grotto (Jim got out through it) had nowhere to go. Now the 409 of a stale action token and the 403 of a
