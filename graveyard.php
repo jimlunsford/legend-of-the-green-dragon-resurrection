@@ -24,6 +24,14 @@ if (in_array($_GET['op'] ?? null, ['question','resurrection'], true)) {
 }
 // Combat is routed before event handling, checkday and legacy presentation mutations.
 $op=$_GET['op'] ?? '';
+// A GET of the graveyard's own page begins a due new day first, before the torment route checks the player's state, as
+// 1.1.2's graveyard.php called checkday() before its search and fights (Phase 6 task 26, the sweep after R12: a page
+// shown on the old game day offered the search form, and pressing it gave the bare 409). Nothing is spent. A torment
+// stored at the rollover is kept: it shows and plays to its end, as the forest's and training's kept fights do. The
+// living, the ritual and the events are as before.
+if (($_SERVER['REQUEST_METHOD'] ?? '')==='GET' && in_array($op,['','search','fight','run'],true) && !array_key_exists('eventhandler',$_GET) &&
+    !empty($session['user']['loggedin']) && empty($session['user']['alive']) && $session['user']['specialinc']==='' &&
+    $session['user']['badguy']==='') resurrection_checkday_on_rollover();
 if (in_array($op,['search','fight','run'],true) || ($op==='' && $session['user']['specialinc']==='' && !array_key_exists('eventhandler',$_GET))) {
     require_once 'lib/graveyard_combat.php';
     resurrection_graveyard_combat();

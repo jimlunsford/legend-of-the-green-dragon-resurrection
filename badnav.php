@@ -12,7 +12,11 @@ require_once("lib/villagenav.php");
 tlschema("badnav");
 
 if ($session['user']['loggedin'] && $session['loggedin']){
-	// page_footer() clears the session copy of the last page, so it is usually absent here (1.1.2 read it as "").
+	// page_footer() clears the session copy of the last page, so it is usually absent here (1.1.2 read it as ""). The
+	// kept page itself is read below: when it is one that begins a due new day (it carries checkday()'s mark) and the
+	// game day has rolled over, the new day begins here, and its Continue returns to that page (Phase 6 task 26, R12:
+	// a sign-in replays the kept page through here, where 1.1.2's sign-in loaded the return page and so ran its
+	// checkday()). Unfinished onboarding is not a rollover; such a page is replayed as before.
 	if (strpos($session['output'] ?? '',"<!--CheckNewDay()-->")){
 		checkday();
 	}
@@ -28,6 +32,7 @@ if ($session['user']['loggedin'] && $session['loggedin']){
 	$sql="SELECT output FROM ".db_prefix("accounts_output")." WHERE acctid={$session['user']['acctid']};";
 	$result=db_query($sql);
 	$row=db_fetch_assoc($result);
+	if (is_array($row) && str_contains((string)$row['output'], "<!--CheckNewDay()-->") && resurrection_day_rolled_over()) checkday();
 	if (!is_array($session['allowednavs']) ||
 			count($session['allowednavs'])==0 || $row['output']=="") {
 		$session['allowednavs']=array();

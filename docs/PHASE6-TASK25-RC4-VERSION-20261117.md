@@ -343,3 +343,31 @@ the local candidate `7c1d348`, whose tree is this commit's except this evidence 
 CI acceptance of this commit. Then Jim runs the Release cut workflow from the Actions tab with the four inputs in the
 task report (the checklist's sections 3 and 4), and tests rc.4 on his server, including an upgrade from rc.3. Then
 `1.0.0`, and the showcase README (task 26).
+
+## Acceptance and the rc.4 cut (recorded in Phase 6 task 26, 2026-11-18)
+
+Given in Jim's task 26 brief and checked again in task 26 against the repository's REST API and the tag itself:
+
+- **Task 25 accepted** at `8aa67b8`: Modern core 44141402100, SUCCESS, all 14 jobs. PHP 8.4: `checks` 2:19; `http`
+  10:50, 10:03, 16:31, 10:25, 10:22; `result` 0:03. PHP 8.5: `checks` 2:43; `http` 12:00, 11:41, 16:08, 10:45, 16:49;
+  `result` 0:03 (slowest 16:49, PHP 8.5 `http (5)`; the run's wall time 16:58). On both legs the release upgrade check
+  installed `v1.0.0-rc.3` and upgraded it to `8aa67b8` ("v1.0.0-rc.3 installed, upgraded to 8aa67b8, and the same
+  schema and data as a fresh install (41 tables)"), and `--release-ref HEAD` matched too ("HEAD installed, upgraded to
+  8aa67b8, and the same schema and data as a fresh install (41 tables)"). Baseline integrity 44141401926, SUCCESS.
+  Each job's times were taken again from the run's job list, and the two upgrade check lines from both `checks` job
+  logs.
+- **The cut:** release cut run 44146251504, SUCCESS (`workflow_dispatch` on `8aa67b8`, 2026-11-17).
+  - Tag `v1.0.0-rc.4`: annotated, tag object `f3de19861d76bdd4f8526c70af0a69d614217af7`, by `github-actions[bot]`
+    (2026-11-17 18:17:49 UTC), on `8aa67b8429e433a3f1b3b8b997ef5d2d3233b918`. Its message is 899 bytes, SHA-256
+    `c61d49fb0cc717509e58fd80317c993b0d1b43e33888aafa84ab249f5c1322b8`, byte for byte the block in
+    `docs/RC-CUT-CHECKLIST.md`, section 3.
+  - The pre-release, https://github.com/jimlunsford/legend-of-the-green-dragon-resurrection/releases/tag/v1.0.0-rc.4:
+    a pre-release, not a draft and not latest (the repository has no latest release: `/releases/latest` answers 404).
+    Its `legend-of-the-green-dragon-resurrection-1.0.0-rc.4.zip` is 3,874,626 bytes, SHA-256
+    `cb56e85e120b9a0789762f55f509bfc78ae66b3462f6def383da8daed9c797df`, the `package_sha256` this task's build gave;
+    downloaded back through the REST API (the release's asset, not `gh release download`, which needs GraphQL), the zip
+    has that SHA-256 and its `.sha256` file says the same.
+  - `v1.0.0-rc.1` (`522be1c`), `v1.0.0-rc.2` (`147ad5a`), `v1.0.0-rc.3` (`dec02e9`) and `historical-source-1.1.2`
+    (`51cab4f`, on `bdc29df`, tree `4013a0c`) are unchanged.
+- Jim's rc.4 server test then found R12 and R13 (`docs/PHASE6-TASK26-20261118.md`). The checklist's section 5 box for
+  rc.4 stays open until task 26's commit's Modern core installs `v1.0.0-rc.4` and upgrades it.

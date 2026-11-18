@@ -108,8 +108,25 @@ function resurrection_training(): never {
     global $session,$companions;
     try {
         $op=\Resurrection\Http\Input::choice($_GET,'op',['','question','challenge','autochallenge','fight','run'],'');
+        $get=($_SERVER['REQUEST_METHOD'] ?? '')==='GET';
+        // Every page of the yard a GET shows begins a due new day first, before the training state is checked, as 1.1.2's
+        // train.php called checkday() and as task 23 ordered the forest's search: nothing is spent, and the new day's
+        // Continue returns here (Phase 6 task 26, R12: the yard kept as the return page showed the Challenge form on the
+        // old game day, and pressing it gave a bare 409). Unfinished onboarding is not a rollover; its yard is shown as
+        // before, and its Challenge is refused below.
+        // The page leaves checkday()'s mark whatever it shows (a fight's round too), so that a replay after the rollover
+        // (badnav.php, as a sign-in does) begins the new day first, and its Continue comes back here.
+        if ($get) resurrection_checkday_on_rollover();
+        else output_notl('<!--CheckNewDay()-->',true);
+        // A Challenge posted after the rollover (from a page loaded before it) is refused before its action is spent,
+        // with one way out: the yard, whose GET begins the new day and whose Continue comes back to it. seenmaster is
+        // not set.
+        if (!$get && in_array($op,['challenge','autochallenge'],true) && resurrection_day_rolled_over()) {
+            resurrection_require_post();
+            resurrection_training_refuse(409,'Training unavailable. Stored state was preserved. Reload for a fresh form, or request operator repair if state remains invalid.');
+        }
         page_header("Bluspring's Warrior Training");
-        if (($_SERVER['REQUEST_METHOD'] ?? '')==='GET' && $session['user']['level']>=15 && $session['user']['badguy']==='') {
+        if ($get && $session['user']['level']>=15 && $session['user']['badguy']==='') {
             output('There is nothing left for you here but memories.'); villagenav(); page_footer(); exit;
         }
         $context=resurrection_training_context();
@@ -210,7 +227,32 @@ function resurrection_training(): never {
             villagenav();
         }
         page_footer(); exit;
-    } catch (InvalidArgumentException) { http_response_code(400); exit('Invalid training action.'); }
-    catch (DomainException) { http_response_code(409); exit('Training unavailable. Stored state was preserved. Reload for a fresh form, or request operator repair if state remains invalid.'); }
-    catch (Throwable $error) { \Resurrection\Http\FailureLog::record($error); http_response_code(500); exit('Training action was not completed. Request a fresh form.'); }
+    } catch (InvalidArgumentException) { resurrection_training_refuse(400,'Invalid training action.'); }
+    catch (DomainException) { resurrection_training_refuse(409,'Training unavailable. Stored state was preserved. Reload for a fresh form, or request operator repair if state remains invalid.'); }
+    catch (Throwable $error) { \Resurrection\Http\FailureLog::record($error); resurrection_training_refuse(500,'Training action was not completed. Request a fresh form.'); }
+}
+
+/**
+ * The way out of a refused training page (Phase 6 task 26, R12): the yard while the game day has rolled over (its GET
+ * begins the new day, whose Continue comes back to it); else back to the master fight while one is stored and valid;
+ * else the yard while training works for the player; else null, the village (the Shades for the dead) of
+ * resurrection_refuse_page().
+ *
+ * @return array{0: string, 1: string}|null
+ */
+function resurrection_training_way(): ?array {
+    global $session;
+    if (empty($session['loggedin'])) return null;
+    if (resurrection_day_rolled_over()) return ['Begin the new day','train.php'];
+    try {
+        restore_buff_fields();
+        try { $state=resurrection_training_state(); }
+        finally { calculate_buff_fields(); }
+    } catch (Throwable) { return null; }
+    return $state['combat']!==[] ? ['Return to the fight','train.php?op=fight'] : ['Return to the training yard','train.php'];
+}
+
+/** A training refusal in the game's frame (Phase 6 task 26, R12): the same status and message, with the way out. */
+function resurrection_training_refuse(int $status, string $plain): never {
+    resurrection_refuse_page($status,$plain,"Bluspring's Warrior Training",$plain,resurrection_training_way());
 }

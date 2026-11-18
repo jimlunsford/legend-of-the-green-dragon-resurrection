@@ -75,15 +75,17 @@ function resurrection_combat_forms(string $type = 'forest'): void {
     }
 }
 
-/** Forest owns the round AND its outcome; do not nest this inside PvP's transaction. */
+/**
+ * Forest owns the round AND its outcome; do not nest this inside PvP's transaction. Only the POST runs here: the GET of
+ * forest.php?op=specialty is the forest's own page (forest.php, Phase 6 task 26, R13).
+ */
 function resurrection_forest_specialty(): never {
     global $session;
-    page_header('Special Abilities');
+    // The round's page is the forest fight, as the ordinary Fight round shows it (Phase 6 task 26, R13; 1.1.2 ran an
+    // ability inside the fight, forest.php?op=fight&skill=..&l=..).
+    page_header('The Forest');
     try {
         $specialty = resurrection_combat_specialty();
-        if (($_SERVER['REQUEST_METHOD'] ?? '') === 'GET') {
-            resurrection_combat_forms(); page_footer(); exit;
-        }
         $context = resurrection_combat_context($specialty);
         resurrection_consume_action('forest-specialty',$context);
         if (array_diff(array_keys($_POST),['csrf_token','action_token','level']) !== [] ||
@@ -116,9 +118,11 @@ function resurrection_forest_specialty(): never {
             }
             restore_buff_fields();
         });
-        addnav('Continue','forest.php?op=specialty');
-        if ($session['user']['badguy'] !== '') resurrection_combat_forms();
-        else { addnav('Return to the village','village.php'); }
+        // While the fight goes on: the enemies (battle.php), the Fight and Run forms, the abilities with uses left and the
+        // autofight forms where the settings allow them; after a win or a loss, the forest's outcome and its navs. Never a
+        // Continue to a page with nothing to press (Phase 6 task 26, R13).
+        require_once __DIR__ . '/forest_combat.php';
+        resurrection_forest_round_navs();
     } catch (InvalidArgumentException) { resurrection_forest_specialty_refuse(400,'Invalid specialty action.'); }
     catch (DomainException) { resurrection_forest_specialty_refuse(409,'Specialty combat is unavailable. Request a fresh form.'); }
     catch (Throwable $error) { \Resurrection\Http\FailureLog::record($error); resurrection_forest_specialty_refuse(500,'Specialty combat was not completed. Request a fresh form.'); }

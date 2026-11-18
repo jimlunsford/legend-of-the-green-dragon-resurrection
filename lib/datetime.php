@@ -82,7 +82,9 @@ function checkday() {
 			} else {
 				$session=$revertsession;
 				require_once __DIR__ . '/../src/Security/NavigationState.php';
-				if (\Resurrection\Security\NavigationState::validRestorePage($REQUEST_URI)) $session['user']['restorepage']=$REQUEST_URI;
+				// badnav.php replays the kept page; the return page stays that page's address, so the new day's Continue
+				// goes back to it (Phase 6 task 26, R12), where badnav.php itself would be sent to the village.
+				if (\Resurrection\Security\NavigationState::validRestorePage($REQUEST_URI) && !preg_match('/\Abadnav\.php/', $REQUEST_URI)) $session['user']['restorepage']=$REQUEST_URI;
 				$session['allowednavs']=array();
 				addnav("","newday.php");
 				redirect("newday.php");
@@ -113,6 +115,29 @@ function is_new_day($now=0){
 		return true;
 	}
 	return false;
+}
+
+/**
+ * Whether the game day has rolled over since the player's last new day: is_new_day() without its onboarding test
+ * (unfinished race, specialty or Dragon Point choices also make is_new_day() true, and are not a rollover). A page that
+ * shows a form the rollover would then refuse begins the new day first with checkday() when this holds, as 1.1.2's
+ * pages called checkday() before their own checks (Phase 6 task 22 for the forest's search; task 26 for training, the
+ * graveyard and the inn's flight from the Dragon).
+ */
+function resurrection_day_rolled_over(): bool {
+	global $session;
+	if (empty($session['user']['lastnewday'])) return is_new_day();
+	return $session['user']['lastnewday'] !== gmdate('Y-m-d', gametime());
+}
+
+/**
+ * A page whose form the rollover would refuse (Phase 6 task 26, R12): begins the due new day now (checkday(), which
+ * keeps this page as the return page), or else leaves checkday()'s mark, so that badnav.php begins it first when this
+ * page is replayed after the rollover (a sign-in replays the kept page).
+ */
+function resurrection_checkday_on_rollover(): void {
+	if (resurrection_day_rolled_over()) checkday();
+	output_notl("<!--CheckNewDay()-->",true);
 }
 
 function getgametime(){

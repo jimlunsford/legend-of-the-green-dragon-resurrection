@@ -37,11 +37,11 @@ with `check_su_access()`. Short names in the evidence column: `CRS` is `CORE-ROU
 
 | Status | Entries |
 |---|---|
-| CLOSED | 101 |
+| CLOSED | 102 |
 | DISABLED | 3 |
 | READ-ONLY | 72 |
 | OPEN | 0 |
-| Total | 176 |
+| Total | 177 |
 
 ## Top-level pages
 
@@ -173,6 +173,7 @@ with `check_su_access()`. Short names in the evidence column: `CRS` is `CORE-ROU
 | `titleedit.php?op=add\|edit\|save\|delete\|reset` | admin SU_EDIT_USERS | titles, players' titles | CLOSED | `CONTENT-EDITORS-PART1-AUTHORITY-20261016.md`; `test_taunt_and_title_editor_authority_http`. |
 | `train.php` | player | no | READ-ONLY | `TRAINING-MASTER-AUTHORITY-20260927.md`. |
 | `train.php?op=challenge\|autochallenge\|question` | player | training combat, levels | CLOSED | `TRAINING-MASTER-AUTHORITY-20260927.md`; `test_training_entry_authority_and_stale_round`, `test_training_victory_zero_negative_replay_and_next_level`. |
+| `train.php?op=fight` | player | training combat, levels | CLOSED | `TRAINING-MASTER-AUTHORITY-20260927.md`: the master fight's round (POST, its form built from the op; a GET shows the stored fight). Listed in Phase 6 task 26, when a refused training page's one way out, back to a stored master fight, became a literal link to it (`resurrection_training_way()`, `docs/PHASE6-TASK26-20261118.md`); `test_training_entry_authority_and_stale_round`, `test_every_training_refusal_answers_in_the_game_frame_with_one_way_out_http`. |
 | `translatortool.php` | admin SU_IS_TRANSLATOR | no | READ-ONLY | `RESCAN-TASK2-20261022.md`: `u` and `t` checked text, read once, escaped; the namespace lookup bound; `test_translator_tools_authority_http`. |
 | `translatortool.php?op=save` | admin SU_IS_TRANSLATOR | translations | CLOSED | `RESCAN-TASK2-20261022.md`: POST with CSRF and a one-use intent bound to the namespace, text and rows shown; one transaction, bound; Save No Close goes only to this tool's list; `test_translator_tools_authority_http`. |
 | `translatortool.php?op=list` | admin SU_IS_TRANSLATOR | no | READ-ONLY | `RESCAN-TASK2-20261022.md`: `u` bound; output escaped; `test_translator_tools_authority_http`. |

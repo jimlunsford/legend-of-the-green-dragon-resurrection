@@ -10,7 +10,9 @@ if (!\defined('RESURRECTION_ENTRY') && \PHP_SAPI !== 'cli') { \http_response_cod
 		invalidatedatacache("list.php-warsonline");
 	}
 	$session['user']['age']++;
-	$session['user']['seenmaster']=0;
+	// A master fight kept across the rollover is this day's challenge (Phase 6 task 26, R12): seenmaster stays set while
+	// it is stored, so the fight shows and plays to its end, and no second challenge follows it today.
+	if (!resurrection_newday_master_fight_kept()) $session['user']['seenmaster']=0;
 	output("You open your eyes to discover that a new day has been bestowed upon you. It is day number `^%s.`0",$session['user']['age']);
 	output("You feel refreshed enough to take on the world!`n");
 	output("`2Turns for today set to `^%s`2.`n",$turnsperday);
@@ -117,7 +119,7 @@ if (!\defined('RESURRECTION_ENTRY') && \PHP_SAPI !== 'cli') { \http_response_cod
 	$session['user']['transferredtoday'] = 0;
 	$session['user']['amountouttoday'] = 0;
 	$session['user']['seendragon'] = 0;
-	$session['user']['seenmaster'] = 0;
+	if (!resurrection_newday_master_fight_kept()) $session['user']['seenmaster'] = 0;
 	$session['user']['fedmount'] = 0;
 	if ($resurrection!="true"){
 		$session['user']['soulpoints']=50 + 5 * $session['user']['level'];

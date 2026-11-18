@@ -70,11 +70,20 @@ function resurrection_forest_forms(): void {
     resurrection_combat_forms();
 }
 
-/** Whether the game day has rolled over since the player's last new day (is_new_day() without its onboarding test). */
-function resurrection_forest_day_rolled_over(): bool {
+/**
+ * What follows a forest round, the Fight round's and a special ability's alike (Phase 6 task 26, R13): while the fight
+ * goes on, the fight's forms (resurrection_forest_forms()); after its end, the forest and the village; during an event,
+ * the event's own navs.
+ */
+function resurrection_forest_round_navs(): void {
     global $session;
-    if (empty($session['user']['lastnewday'])) return is_new_day();
-    return $session['user']['lastnewday'] !== gmdate('Y-m-d', gametime());
+    if ($session['user']['badguy']!=='' && $session['user']['specialinc']==='') resurrection_forest_forms();
+    elseif ($session['user']['specialinc']==='') { addnav('The Forest','forest.php'); addnav('Return to the village','village.php'); }
+}
+
+/** Whether the game day has rolled over since the player's last new day (resurrection_day_rolled_over(), lib/datetime.php). */
+function resurrection_forest_day_rolled_over(): bool {
+    return resurrection_day_rolled_over();
 }
 
 /** GET is presentation only. Invalid state is preserved for explicit operator repair. */
@@ -186,8 +195,7 @@ function resurrection_forest_combat(): never {
             else resurrection_forest_state();
             } finally { restore_buff_fields(); }
         });
-        if ($session['user']['badguy']!=='' && $session['user']['specialinc']==='') resurrection_forest_forms();
-        elseif ($session['user']['specialinc']==='') { addnav('The Forest','forest.php'); addnav('Return to the village','village.php'); }
+        resurrection_forest_round_navs();
     } catch (InvalidArgumentException) { resurrection_forest_refuse(400,'Invalid Forest action.'); }
     catch (DomainException) { resurrection_forest_refuse(409,'Forest combat unavailable. Stored state was preserved; reload for a fresh form, or request operator repair if it remains invalid.'); }
     catch (Throwable $error) { \Resurrection\Http\FailureLog::record($error); resurrection_forest_refuse(500,'Forest action was not completed. Request a fresh form.'); }

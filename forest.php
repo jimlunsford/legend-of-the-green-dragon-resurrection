@@ -13,7 +13,14 @@ require_once("lib/events.php");
 require_once("lib/battle-skills.php");
 
 require_once __DIR__ . '/lib/specialty_combat.php';
-if (httpget('op') === 'specialty') resurrection_forest_specialty();
+// A GET of the specialty round's page (a kept page: the return page, badnav.php, the new day's Continue) shows what
+// forest.php shows: the stored fight, as the search link does since Phase 6 task 24, or the forest when none is stored.
+// Nothing is spent. Its POST is the round (Phase 6 task 26, R13: the GET showed only the abilities with uses left, and
+// with none left, nothing a player could press).
+if (httpget('op') === 'specialty') {
+    if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'GET') resurrection_forest_specialty();
+    $_GET['op'] = $session['user']['badguy'] !== '' && $session['user']['specialinc'] === '' ? 'fight' : '';
+}
 // Legacy specialty URLs in Forest cannot spend a round, uses or rewards.
 if (array_key_exists('skill', $_GET) || array_key_exists('l', $_GET) ||
     array_key_exists('skill', $_POST) || array_key_exists('l', $_POST)) {

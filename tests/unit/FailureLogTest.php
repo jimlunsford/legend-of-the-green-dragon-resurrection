@@ -10,9 +10,15 @@ use Resurrection\Http\FailureLog;
  * error handler turns a warning into an ErrorException that keeps its file and line, and nothing in the game turns
  * log_errors off. What logged nothing was a failure the game catches and answers with a 5xx ("Nothing was changed"):
  * 32 catch blocks and 11 failure helpers. Each now writes FailureLog's one line first; this test keeps it that way.
+ * Since Phase 6 tasks 24 and 26 a page may answer its 5xx through a refusal helper in the game's frame
+ * (resurrection_forest_refuse(500, ...), resurrection_training_refuse(500, ...)) or record the refusal for one
+ * (train.php's $resurrection_train_refusal = [500, ...]): such a block answers a 5xx too, and is held to the same rule.
  */
 final class FailureLogTest extends TestCase
 {
+    /** A 5xx answered directly, through a refusal helper, or recorded for one (Phase 6 tasks 24 and 26). */
+    private const ANSWERS_5XX = '/http_response_code\(\s*5\d\d|_refuse\w*\(\s*5\d\d|_refusal\s*=\s*\[\s*5\d\d/';
+
     public function testTheLineNamesThePageTheClassTheFileAndTheLineAndNothingElse(): void
     {
         $saved = $_SERVER['SCRIPT_NAME'] ?? null;
@@ -76,7 +82,7 @@ final class FailureLogTest extends TestCase
             preg_match_all('/catch\s*\(\s*\\\\?Throwable\b[^)]*\)\s*\{/', $source, $found, PREG_OFFSET_CAPTURE);
             foreach ($found[0] as [$text, $offset]) {
                 $block = $this->block($source, $offset + strlen($text));
-                if (!preg_match('/http_response_code\(\s*5\d\d/', $block)) continue;
+                if (!preg_match(self::ANSWERS_5XX, $block)) continue;
                 $catches++;
                 if (!str_contains($block, 'FailureLog::record(') && !str_contains($block, 'error_log(')) $silent[] = $file . ':' . (substr_count($source, "\n", 0, $offset) + 1);
             }
@@ -84,7 +90,7 @@ final class FailureLogTest extends TestCase
             preg_match_all('/function\s+\w+\s*\([^)]*\\\\?Throwable\s+\$\w+[^)]*\)[^{]*\{/', $source, $found, PREG_OFFSET_CAPTURE);
             foreach ($found[0] as [$text, $offset]) {
                 $block = $this->block($source, $offset + strlen($text));
-                if (!preg_match('/http_response_code\(\s*5\d\d/', $block)) continue;
+                if (!preg_match(self::ANSWERS_5XX, $block)) continue;
                 $helpers++;
                 if (!str_contains($block, 'FailureLog::record(') && !str_contains($block, 'error_log(')) $silent[] = $file . ':' . (substr_count($source, "\n", 0, $offset) + 1);
             }

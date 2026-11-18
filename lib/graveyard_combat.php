@@ -154,6 +154,9 @@ function resurrection_graveyard_combat(): never {
         } else {
             // After a torment's last round, the graveyard's own page follows the battle screen.
             resurrection_battle_close();
+            // Its search form is one the rollover refuses: checkday()'s mark lets a replay after the rollover begin the new
+            // day first (badnav.php; Phase 6 task 26, the sweep after R12).
+            output_notl('<!--CheckNewDay()-->',true);
             $skipgraveyardtext=false; $deathoverlord=getsetting('deathoverlord','`$Ramius');
             $graveyardCombatContext=$context;
             require __DIR__.'/graveyard/case_default.php';

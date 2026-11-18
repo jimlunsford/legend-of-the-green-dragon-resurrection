@@ -108,6 +108,21 @@ function resurrection_newday_eligible(): bool {
     return is_new_day();
 }
 
+/**
+ * Whether a master fight is stored, as the challenge stored it, with seenmaster set (Phase 6 task 26, R12). 1.1.2's new
+ * day reset seenmaster whatever was stored; training accepts a stored master fight only while seenmaster is set (the
+ * challenge sets both in one transaction), so a fight kept across the rollover became a 409 with no way out. While one
+ * is stored the new day leaves seenmaster as it is: the kept fight is the day's challenge, played to its end, and a
+ * victory resets it as before (multimaster). Any other value is not a master fight, and the day resets it as 1.1.2's did.
+ */
+function resurrection_newday_master_fight_kept(): bool {
+    global $session;
+    if ($session['user']['badguy'] === '' || (int)$session['user']['seenmaster'] !== 1) return false;
+    try { $state = \Resurrection\Security\ScalarState::read($session['user']['badguy']); }
+    catch (Throwable) { return false; }
+    return is_array($state) && is_array($state['options'] ?? null) && ($state['options']['type'] ?? null) === 'train';
+}
+
 function resurrection_newday_continue(): void {
     global $session;
     $route = cmd_sanitize((string)$session['user']['restorepage']);

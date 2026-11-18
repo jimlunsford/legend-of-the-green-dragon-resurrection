@@ -31,7 +31,15 @@ if (!in_array($act, ['listupstairs', 'specialty'], true)) unset($_SESSION['inn_b
 $fled = false;
 if ($op == "fleedragon") {
 	// Only the Dragon encounter the Forest displayed may be fled, once; GET shows the choice.
-	if (!resurrection_inn_flee_offered()) { http_response_code(409); exit('There is no dragon to run from.'); }
+	// Its GET begins a due new day first, as 1.1.2's inn.php called checkday() before every op (Phase 6 task 26, the
+	// sweep after R12). The new day ends the encounter, so the Continue back here finds no Dragon: on a GET that refusal
+	// keeps its status and message, in the game's frame, with the way into the inn (the Shades for the dead).
+	if (($_SERVER['REQUEST_METHOD'] ?? '') === 'GET') resurrection_checkday_on_rollover();
+	if (!resurrection_inn_flee_offered()) {
+		if (($_SERVER['REQUEST_METHOD'] ?? '') === 'GET') resurrection_refuse_page(409, 'There is no dragon to run from.', sanitize($iname),
+			'There is no dragon to run from.', !empty($session['user']['alive']) ? ['Return to the inn', 'inn.php'] : null);
+		http_response_code(409); exit('There is no dragon to run from.');
+	}
 	if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
 		try {
 			resurrection_inn_fields();
