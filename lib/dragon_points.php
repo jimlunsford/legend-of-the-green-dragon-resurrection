@@ -1,6 +1,7 @@
 <?php
 if (!\defined('RESURRECTION_ENTRY') && \PHP_SAPI !== 'cli') { \http_response_code(404); exit; }
 require_once __DIR__ . '/player_mutation.php';
+require_once __DIR__ . '/newday_daily.php';
 require_once __DIR__ . '/../src/Game/DragonPointState.php';
 use Resurrection\Game\DragonPointState;
 
@@ -67,7 +68,7 @@ function resurrection_dragon_point_boundary(): void {
     try {
         $unspent = resurrection_dragon_point_state();
         if (isset($_GET['dk']) || isset($_GET['pdk']) || isset($_POST['dk']) || isset($_POST['pdk'])) {
-            http_response_code(403); exit('Dragon Point allocation requires a fresh form.');
+            resurrection_newday_refuse(403, 'Dragon Point allocation requires a form. Nothing was changed.');
         }
         $resline = httpget('resurrection') === 'true' ? '&resurrection=true' : '';
         $posting = array_intersect(array_keys($_POST), ['allocation','type','hp','ff','at','de']) !== [];
@@ -124,10 +125,10 @@ function resurrection_dragon_point_boundary(): void {
             page_footer();
         }
     } catch (InvalidArgumentException $error) {
-        http_response_code(400); exit('Invalid Dragon Point allocation. Request a fresh form.');
+        resurrection_newday_refuse(400, 'Invalid Dragon Point allocation. Nothing was changed.');
     } catch (DomainException $error) {
-        http_response_code(409); exit('Dragon Point allocation is unavailable. Request a fresh form or ask an administrator to repair stored state.');
+        resurrection_newday_refuse(409, 'Dragon Point allocation is unavailable. Nothing was changed.');
     } catch (Throwable $error) {
-        \Resurrection\Http\FailureLog::record($error); http_response_code(500); exit('Dragon Point allocation was not completed. Request a fresh form.');
+        \Resurrection\Http\FailureLog::record($error); resurrection_newday_refuse(500, 'Dragon Point allocation was not completed. Nothing was changed.');
     }
 }

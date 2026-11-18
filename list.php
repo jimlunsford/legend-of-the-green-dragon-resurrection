@@ -44,7 +44,10 @@ try {
 	$page = isset($_GET['page']) ? \Resurrection\Http\Input::integer($_GET, 'page', 0, 0) : "";
 	$n = $op == "search" ? \Resurrection\Http\Input::string($_POST, 'name') : '';
 	if (!mb_check_encoding($n, 'UTF-8') || strlen($n) > 255) throw new InvalidArgumentException('Invalid name.');
-} catch (InvalidArgumentException $error) { http_response_code(400); exit('Invalid list request.'); }
+} catch (InvalidArgumentException $error) {
+	// In the game's frame with the way back to the list (Phase 6 task 27, no dead ends).
+	resurrection_refuse_page(400, 'Invalid list request.', 'List Warriors', 'Invalid list request.', ['Return to the list', 'list.php']);
+}
 $search = "";
 $searchparams = array();
 $limit = "";

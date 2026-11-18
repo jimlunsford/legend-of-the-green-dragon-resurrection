@@ -46,8 +46,8 @@ function resurrection_motd_text(mixed $value, int $characters, int $bytes): stri
 function resurrection_motd_failure(Throwable $error): never {
 	if ($error instanceof InvalidArgumentException) { http_response_code(400); exit('Invalid request.'); }
 	if ($error instanceof OutOfBoundsException) { http_response_code(404); exit('That item no longer exists.'); }
-	if ($error instanceof DomainException) { http_response_code(409); exit('This changed. Reload the MoTD before acting.'); }
-	\Resurrection\Http\FailureLog::record($error); http_response_code(500); exit('Nothing was changed. Reload the MoTD and try again.');
+	if ($error instanceof DomainException) { http_response_code(409); exit('This changed in the meantime, so nothing was changed.'); }
+	\Resurrection\Http\FailureLog::record($error); http_response_code(500); exit('That was not completed. Nothing was changed.');
 }
 
 /** One transaction for a MoTD write; the caches are cleared after commit. */

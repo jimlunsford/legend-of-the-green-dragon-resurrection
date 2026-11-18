@@ -23,7 +23,7 @@ if ($act==""){
 		if ($type !== '' && !in_array($amt, resurrection_inn_bribe_tiers((int)$session['user']['level'])[$type], true)) {
 			throw new InvalidArgumentException('Bribe not offered.');
 		}
-	} catch (InvalidArgumentException $error) { http_response_code(400); exit('Invalid bribe.'); }
+	} catch (InvalidArgumentException $error) { resurrection_inn_refuse(400, 'Invalid bribe.', RESURRECTION_INN_BARTENDER_WAY); }
 	if ($type==""){
 		output("While you know that you won't always get what you want, sometimes the way to a man's information is through your purse.");
 		output("It's also always been said that more is better.`n`n");
@@ -54,9 +54,9 @@ if ($act==""){
 				$chance = resurrection_inn_bribe_chance($type, $amt, (int)$session['user']['level']);
 				return ['try'=>true, 'success'=>e_rand(0,100) < $chance];
 			});
-		} catch (InvalidArgumentException $error) { http_response_code(400); exit('Invalid bribe.');
-		} catch (DomainException $error) { http_response_code(409); exit('Your situation changed. Return to the bartender and try again.');
-		} catch (Throwable $error) { \Resurrection\Http\FailureLog::record($error); http_response_code(500); exit('Nothing was paid. Return to the bartender and try again.'); }
+		} catch (InvalidArgumentException $error) { resurrection_inn_refuse(400, 'Invalid bribe.', RESURRECTION_INN_BARTENDER_WAY);
+		} catch (DomainException $error) { resurrection_inn_refuse(409, 'Your situation changed. Return to the bartender and try again.', RESURRECTION_INN_BARTENDER_WAY);
+		} catch (Throwable $error) { \Resurrection\Http\FailureLog::record($error); resurrection_inn_refuse(500, 'Nothing was paid. Return to the bartender and try again.', RESURRECTION_INN_BARTENDER_WAY); }
 		if (!$bribe['try']){
 			if ($type=="gem") output("You don't have %s gems!", $amt);
 			else output("You don't have %s gold!", $amt);
@@ -89,7 +89,7 @@ if ($act==""){
 		}
 	}
 }else if ($act=="listupstairs"){
-	if (!resurrection_inn_bribed() || !getsetting("pvp",1)) { http_response_code(403); exit('The bartender has nothing to tell you.'); }
+	if (!resurrection_inn_bribed() || !getsetting("pvp",1)) resurrection_inn_refuse(403, 'The bartender has nothing to tell you.', RESURRECTION_INN_BARTENDER_WAY);
 	addnav("Refresh the list","inn.php?op=bartender&act=listupstairs");
 	output("%s`0 lays out a set of keys on the counter top, and tells you which key opens whose room.  The choice is yours, you may sneak in and attack any one of them.",$barkeep);
 	pvplist($iname,"pvp.php", "?act=attack&inn=1");
@@ -116,7 +116,7 @@ if ($act==""){
 	addnav("",$REQUEST_URI);
 }else if($act=="specialty"){
 	// The switch requires a successful bribe, is allowed by the server setting, and only offers active bundled specialties.
-	if (!resurrection_inn_bribed() || !getsetting("allowspecialswitch", true)) { http_response_code(403); exit('The bartender has nothing to tell you.'); }
+	if (!resurrection_inn_bribed() || !getsetting("allowspecialswitch", true)) resurrection_inn_refuse(403, 'The bartender has nothing to tell you.', RESURRECTION_INN_BARTENDER_WAY);
 	$choices = resurrection_specialty_choices();
 	$specialtyurl = "inn.php?op=bartender&act=specialty";
 	if (!$post){
@@ -150,9 +150,9 @@ if ($act==""){
 				// Only the selection changes: each specialty keeps its stored skill and uses, as the bartender says.
 				$session['user']['specialty'] = $specialty;
 			});
-		} catch (InvalidArgumentException $error) { http_response_code(400); exit('Invalid specialty.');
-		} catch (DomainException $error) { http_response_code(409); exit('Your situation changed. Return to the bartender and try again.');
-		} catch (Throwable $error) { \Resurrection\Http\FailureLog::record($error); http_response_code(500); exit('Your specialty was not changed. Return to the bartender and try again.'); }
+		} catch (InvalidArgumentException $error) { resurrection_inn_refuse(400, 'Invalid specialty.', RESURRECTION_INN_BARTENDER_WAY);
+		} catch (DomainException $error) { resurrection_inn_refuse(409, 'Your situation changed. Return to the bartender and try again.', RESURRECTION_INN_BARTENDER_WAY);
+		} catch (Throwable $error) { \Resurrection\Http\FailureLog::record($error); resurrection_inn_refuse(500, 'Your specialty was not changed. Return to the bartender and try again.', RESURRECTION_INN_BARTENDER_WAY); }
 		unset($_SESSION['inn_bribe']);
 		output("\"`3Ok then,`0\" %s`0 says, \"`3You're all set.`0\"`n`n\"`2That's it?`0\" you ask him.`n`n",$barkeep);
 		output("\"`3Yep.  What'd you expect, some sort of fancy arcane ritual???`0\"  %s`0 begins laughing loudly.",$barkeep);

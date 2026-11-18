@@ -30,7 +30,10 @@ try {
 	$op = \Resurrection\Http\Input::choice($_GET, 'op', ['', 'kills', 'money', 'gems', 'charm', 'tough', 'resurrects', 'days'], '');
 	$subop = \Resurrection\Http\Input::choice($_GET, 'subop', ['', 'most', 'least'], '');
 	$page = \Resurrection\Http\Input::integer($_GET, 'page', 0, 0);
-} catch (InvalidArgumentException $error) { http_response_code(400); exit('Invalid Hall of Fame request.'); }
+} catch (InvalidArgumentException $error) {
+	// In the game's frame with the way back to the Hall of Fame (Phase 6 task 27, no dead ends).
+	resurrection_refuse_page(400, 'Invalid Hall of Fame request.', 'Hall of Fame', 'Invalid Hall of Fame request.', ['Return to the Hall of Fame', 'hof.php']);
+}
 if ($op == "") $op = "kills";
 if ($subop == "") $subop = "most";
 

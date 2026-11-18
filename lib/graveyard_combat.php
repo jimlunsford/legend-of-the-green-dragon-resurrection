@@ -35,6 +35,27 @@ function resurrection_graveyard_torment(array $player): array {
     foreach ($rows[0] as $key=>$value) if ((string)$state['enemies'][0][$key] !== (string)$value) throw new DomainException('Torment identity changed.');
     return $state;
 }
+/**
+ * The way out of a graveyard refusal (Phase 6 task 27, no dead ends): back to the torment while one is stored and valid,
+ * else the graveyard while its state passes, for the dead; else null (the Shades for the dead, the village for the
+ * living). Each is a GET that only shows its page.
+ * @return array{0: string, 1: string}|null
+ */
+function resurrection_graveyard_way(): ?array {
+    global $session;
+    if (empty($session['loggedin']) || !empty($session['user']['alive'])) return null;
+    restore_buff_fields();
+    try { $state=resurrection_graveyard_state(); }
+    catch (Throwable) { return null; }
+    finally { calculate_buff_fields(); }
+    return $state!==[] ? ['Return to the fight','graveyard.php?op=fight'] : ['Return to the graveyard','graveyard.php'];
+}
+
+/** A graveyard refusal in the game's frame (Phase 6 task 27): the same status and message, with the way out. */
+function resurrection_graveyard_refuse(int $status, string $message): never {
+    resurrection_refuse_page($status,$message,'The Graveyard',$message,resurrection_graveyard_way());
+}
+
 function resurrection_graveyard_context(): string {
     global $session,$companions;
     restore_buff_fields();
@@ -163,7 +184,7 @@ function resurrection_graveyard_combat(): never {
             if ($session['user']['gravefights']<=0) output('Your soul can bear no more torment in this afterlife.');
         }
         page_footer(); exit;
-    } catch (InvalidArgumentException) { http_response_code(400); exit('Invalid Graveyard action.'); }
-    catch (DomainException) { http_response_code(409); exit('Graveyard combat unavailable. Stored state was preserved. Reload for a fresh form, or request operator repair if state remains invalid.'); }
-    catch (Throwable $error) { \Resurrection\Http\FailureLog::record($error); http_response_code(500); exit('Graveyard action was not completed. Request a fresh form.'); }
+    } catch (InvalidArgumentException) { resurrection_graveyard_refuse(400, 'Invalid Graveyard action.'); }
+    catch (DomainException) { resurrection_graveyard_refuse(409, 'Graveyard combat unavailable. Nothing was changed.'); }
+    catch (Throwable $error) { \Resurrection\Http\FailureLog::record($error); resurrection_graveyard_refuse(500, 'Graveyard action was not completed. Nothing was changed.'); }
 }

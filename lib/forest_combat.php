@@ -86,7 +86,7 @@ function resurrection_forest_day_rolled_over(): bool {
     return resurrection_day_rolled_over();
 }
 
-/** GET is presentation only. Invalid state is preserved for explicit operator repair. */
+/** GET is presentation only. Invalid state is preserved for the user editor's repair (the host guide, section 12). */
 function resurrection_forest_combat(): never {
     global $session, $companions;
     $op=httpget('op');
@@ -103,7 +103,7 @@ function resurrection_forest_combat(): never {
         // begins the new day too, not the plain refusal (Phase 6 task 23, Jim's rc.2 server, 2026-11-16).
         if ($op==='search' && resurrection_forest_day_rolled_over()) {
             if (($_SERVER['REQUEST_METHOD'] ?? '')==='GET') checkday();
-            else resurrection_refuse_action(409,'Forest combat unavailable. Stored state was preserved; reload for a fresh form, or request operator repair if it remains invalid.');
+            else resurrection_refuse_action(409,'Forest combat unavailable. Nothing was changed.');
         }
         // A search while a fight is stored (Phase 6 task 24, R11: the new day's Continue to the search link that began
         // it): its link shows that fight, the page forest.php shows, with nothing spent or reset; a search posted is
@@ -113,7 +113,7 @@ function resurrection_forest_combat(): never {
             if (($_SERVER['REQUEST_METHOD'] ?? '')==='GET') { $op='fight'; $entry=false; }
             else {
                 resurrection_require_post();
-                resurrection_refuse_action(409,'Forest combat unavailable. Stored state was preserved; reload for a fresh form, or request operator repair if it remains invalid.',
+                resurrection_refuse_action(409,'Forest combat unavailable. Nothing was changed.',
                     resurrection_forest_way());
             }
         }
@@ -197,8 +197,8 @@ function resurrection_forest_combat(): never {
         });
         resurrection_forest_round_navs();
     } catch (InvalidArgumentException) { resurrection_forest_refuse(400,'Invalid Forest action.'); }
-    catch (DomainException) { resurrection_forest_refuse(409,'Forest combat unavailable. Stored state was preserved; reload for a fresh form, or request operator repair if it remains invalid.'); }
-    catch (Throwable $error) { \Resurrection\Http\FailureLog::record($error); resurrection_forest_refuse(500,'Forest action was not completed. Request a fresh form.'); }
+    catch (DomainException) { resurrection_forest_refuse(409,'Forest combat unavailable. Nothing was changed.'); }
+    catch (Throwable $error) { \Resurrection\Http\FailureLog::record($error); resurrection_forest_refuse(500,'Forest action was not completed. Nothing was changed.'); }
     page_footer(); exit;
 }
 

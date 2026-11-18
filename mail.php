@@ -23,9 +23,9 @@ try {
 } catch (InvalidArgumentException $error) {
     http_response_code(400); exit('Invalid mail request.');
 } catch (DomainException $error) {
-    http_response_code(409); exit('Mail unavailable or form expired. Please reopen the address form.');
+    http_response_code(409); exit('Mail unavailable or form expired. Nothing was sent.');
 } catch (Throwable $error) {
-    \Resurrection\Http\FailureLog::record($error); http_response_code(500); exit('Mail could not be committed. Please open a fresh form.');
+    \Resurrection\Http\FailureLog::record($error); http_response_code(500); exit('Mail could not be sent. Nothing was changed.');
 }
 
 if (in_array($op, ['del', 'process', 'unread'], true)) {

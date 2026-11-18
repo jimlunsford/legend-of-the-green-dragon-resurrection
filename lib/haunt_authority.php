@@ -69,8 +69,19 @@ function resurrection_haunt_mutation(callable $action, int $target): mixed {
     return $result;
 }
 
+/**
+ * A Mausoleum refusal (haunting, its search, soul restoration) in the game's frame (Phase 6 task 27, no dead ends): the
+ * same status and message, with one way out, back to the Mausoleum (graveyard.php?op=enter; a GET only shows it) for
+ * the dead, the village for the living.
+ */
+function resurrection_mausoleum_refuse(int $status, string $message): never {
+    global $session;
+    resurrection_refuse_page($status, $message, 'The Graveyard', $message,
+        !empty($session['loggedin']) && empty($session['user']['alive']) ? ['Return to the Mausoleum', 'graveyard.php?op=enter'] : null);
+}
+
 function resurrection_haunt_failure(Throwable $error): never {
-    if ($error instanceof InvalidArgumentException) { http_response_code(400); exit('Invalid haunt request.'); }
-    if ($error instanceof DomainException) { http_response_code(409); exit('Your haunt changed. Return to the Mausoleum and try again.'); }
-    \Resurrection\Http\FailureLog::record($error); http_response_code(500); exit('Nothing was changed. Return to the Mausoleum and try again.');
+    if ($error instanceof InvalidArgumentException) resurrection_mausoleum_refuse(400, 'Invalid haunt request.');
+    if ($error instanceof DomainException) resurrection_mausoleum_refuse(409, 'Your haunt changed. Return to the Mausoleum and try again.');
+    \Resurrection\Http\FailureLog::record($error); resurrection_mausoleum_refuse(500, 'Nothing was changed. Return to the Mausoleum and try again.');
 }

@@ -4,9 +4,19 @@ require_once __DIR__ . '/src/autoload.php';
 // translator ready
 // addnews ready
 // mail ready
+// A refusal while common.php loads answers in the game's frame when the page got as far as forced navigation, with
+// PvP's way out (Phase 6 task 27, no dead ends, as train.php since task 26); before that, the plain text, as before.
+$resurrection_pvp_refusal = null;
 try { require_once 'common.php'; }
-catch (DomainException) { http_response_code(409); exit('Invalid stored PvP state. Stored state was preserved.'); }
-catch (Throwable $error) { \Resurrection\Http\FailureLog::record($error); http_response_code(500); exit('PvP could not be loaded. Stored state was preserved.'); }
+catch (DomainException) { $resurrection_pvp_refusal = [409, 'Invalid stored PvP state. Nothing was changed.']; }
+catch (Throwable $error) { \Resurrection\Http\FailureLog::record($error); $resurrection_pvp_refusal = [500, 'PvP could not be loaded. Nothing was changed.']; }
+if ($resurrection_pvp_refusal !== null) {
+    if (function_exists('resurrection_refusal_framed') && resurrection_refusal_framed()) {
+        require_once __DIR__ . '/lib/pvp_combat.php';
+        resurrection_pvp_refuse(...$resurrection_pvp_refusal);
+    }
+    http_response_code($resurrection_pvp_refusal[0]); exit($resurrection_pvp_refusal[1]);
+}
 require_once("lib/fightnav.php");
 require_once("lib/battle_view.php");
 require_once("lib/pvpwarning.php");
@@ -28,7 +38,7 @@ $act = '';
 require_once 'lib/player_mutation.php';
 require_once 'lib/pvp_combat.php';
 try { resurrection_pvp_participants(false); }
-catch (DomainException) { http_response_code(409); exit('Invalid stored PvP participants. Stored state was preserved.'); }
+catch (DomainException) { resurrection_pvp_refuse(409, 'Invalid stored PvP participants. Nothing was changed.'); }
 try {
     $act = \Resurrection\Http\Input::choice($_GET,'act',['','attack'],'');
     $op = \Resurrection\Http\Input::choice($_GET,'op',['','fight','run'],'');
@@ -41,12 +51,12 @@ try {
     if (array_diff(array_keys($_GET),['act','op','inn','auto','name','c']) !== []) throw new InvalidArgumentException();
     $targetId = $act === 'attack' ? \Resurrection\Http\Input::integer($_GET,'name',0,1) : 0;
     if ($act === 'attack' && ($targetId < 1 || $targetId > 2147483647 || $op !== '')) throw new InvalidArgumentException();
-} catch (InvalidArgumentException $error) { http_response_code(400); exit('Invalid PvP action.'); }
+} catch (InvalidArgumentException $error) { resurrection_pvp_refuse(400, 'Invalid PvP action.'); }
 
 if ($op === '' && $act === '') {
     if ($session['user']['badguy'] !== '') {
         try { \Resurrection\Security\PvpState::read($session['user']['badguy'],(int)$session['user']['acctid']); }
-        catch (DomainException $error) { http_response_code(409); exit('A different or invalid combat is pending.'); }
+        catch (DomainException $error) { resurrection_pvp_refuse(409, 'A different or invalid combat is pending.'); }
         resurrection_pvp_form('pvp.php?op=fight','pvp-round',resurrection_pvp_context(),'Fight','main',true);
     } else {
         checkday(); pvpwarning();
@@ -59,11 +69,11 @@ if ($op === '' && $act === '') {
 $url = 'pvp.php?' . http_build_query($_GET);
 $scope = $act === 'attack' ? 'pvp-enter' : 'pvp-round';
 try { $context = resurrection_pvp_context($targetId); }
-catch (DomainException) { http_response_code(409); exit('Invalid stored PvP state. Stored state was preserved.'); }
+catch (DomainException) { resurrection_pvp_refuse(409, 'Invalid stored PvP state. Nothing was changed.'); }
 if (($_SERVER['REQUEST_METHOD'] ?? '') === 'GET') {
     if ($act !== 'attack') {
         try { \Resurrection\Security\PvpState::read($session['user']['badguy'],(int)$session['user']['acctid']); }
-        catch (DomainException $error) { http_response_code(409); exit('No active PvP combat.'); }
+        catch (DomainException $error) { resurrection_pvp_refuse(409, 'No active PvP combat.'); }
     }
     if ($act === 'attack') resurrection_pvp_form($url,$scope,$context,'Attack');
     else resurrection_pvp_form($url,$scope,$context,'Fight','main',true);
@@ -166,11 +176,11 @@ try {
     }, [$act === 'attack' ? $targetId : \Resurrection\Security\PvpState::read($session['user']['badguy'],(int)$session['user']['acctid'])['options']['target']]);
 } catch (DomainException $error) {
     unset($GLOBALS['mail_notifications']);
-    http_response_code(409); exit('PvP action no longer available. Reload before retrying.');
+    resurrection_pvp_refuse(409, 'PvP action no longer available. Nothing was changed.');
 } catch (Throwable $error) {
     error_log('PvP transaction failed: '.get_class($error).' at '.basename($error->getFile()).':'.$error->getLine());
     unset($GLOBALS['mail_notifications']);
-    http_response_code(500); exit('PvP action failed. No result was committed. Reload before retrying.');
+    resurrection_pvp_refuse(500, 'PvP action failed. Nothing was changed.');
 }
 $notifications = $GLOBALS['mail_notifications'];
 unset($GLOBALS['mail_notifications']);

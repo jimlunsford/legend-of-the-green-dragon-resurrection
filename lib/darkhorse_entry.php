@@ -2,6 +2,18 @@
 if (!\defined('RESURRECTION_ENTRY') && \PHP_SAPI !== 'cli') { \http_response_code(404); exit; }
 require_once __DIR__.'/player_mutation.php';
 
+/**
+ * A Dark Horse Tavern refusal in the game's frame (Phase 6 task 27, no dead ends): the same status and message, with one
+ * way out: the tavern's main room while the player is in it (its GET only shows it, through the forest's event), else
+ * the forest; the village for the dead.
+ */
+function resurrection_darkhorse_refuse(int $status, string $message): never {
+    global $session;
+    $return = in_array($_SESSION['darkhorse_return'] ?? '', ['forest.php', 'travel.php'], true) ? $_SESSION['darkhorse_return'] : 'forest.php';
+    $way = ($session['user']['specialinc'] ?? '') === 'module:darkhorse' ? ['Return to the Main Room', $return . '?op=tavern'] : ['Return to the forest', 'forest.php'];
+    resurrection_refuse_page($status, $message, 'The Forest', $message, !empty($session['user']['alive']) ? $way : null);
+}
+
 /** Mount and preference identity come exclusively from the authenticated account. */
 function resurrection_darkhorse_mount_context(bool $lock=false): string {
     global $session;
@@ -17,7 +29,7 @@ function resurrection_darkhorse_mount_context(bool $lock=false): string {
 function resurrection_darkhorse_enter(): bool {
     global $session;
     try { $context=resurrection_darkhorse_mount_context(); }
-    catch (DomainException $error) { http_response_code(403); exit('Tavern unavailable.'); }
+    catch (DomainException $error) { resurrection_darkhorse_refuse(403, 'Tavern unavailable.'); }
     $url='runmodule.php?module=darkhorse&op=enter';
     if (($_SERVER['REQUEST_METHOD'] ?? '')!=='POST') {
         addnav('',$url);
@@ -31,8 +43,8 @@ function resurrection_darkhorse_enter(): bool {
             if (resurrection_darkhorse_mount_context(true)!==$context || !in_array($session['user']['specialinc'],['','module:darkhorse'],true)) throw new DomainException('Entry changed.');
             $session['user']['specialinc']='module:darkhorse';
         });
-    } catch (DomainException $error) { http_response_code(409); exit('Tavern entry changed.'); }
-    catch (Throwable $error) { \Resurrection\Http\FailureLog::record($error); http_response_code(500); exit('Tavern entry was not completed.'); }
+    } catch (DomainException $error) { resurrection_darkhorse_refuse(409, 'Tavern entry changed.'); }
+    catch (Throwable $error) { \Resurrection\Http\FailureLog::record($error); resurrection_darkhorse_refuse(500, 'Tavern entry was not completed.'); }
     return true;
 }
 
@@ -43,7 +55,7 @@ function resurrection_darkhorse_leave(string $url): bool {
     try {
         $state=\Resurrection\Game\DarkHorseState::read((string)$session['user']['specialmisc'],(int)$session['user']['acctid']);
         if ($state['active'] ?? false) throw new DomainException('Active wager.');
-    } catch (DomainException $error) { http_response_code(409); exit('Resolve the current wager first.'); }
+    } catch (DomainException $error) { resurrection_darkhorse_refuse(409, 'Resolve the current wager first.'); }
     $context=hash('sha256',json_encode([(int)$session['user']['acctid'],$url,$session['user']['specialinc'],$session['user']['specialmisc']],JSON_THROW_ON_ERROR));
     if (($_SERVER['REQUEST_METHOD'] ?? '')!=='POST') {
         addnav('',$url);
@@ -52,8 +64,8 @@ function resurrection_darkhorse_leave(string $url): bool {
     }
     resurrection_consume_action('darkhorse-leave',$context);
     try { resurrection_player_mutation(function () { global $session; $session['user']['specialinc']=''; }); }
-    catch (DomainException $error) { http_response_code(409); exit('Tavern state changed.'); }
-    catch (Throwable $error) { \Resurrection\Http\FailureLog::record($error); http_response_code(500); exit('Tavern exit was not completed.'); }
+    catch (DomainException $error) { resurrection_darkhorse_refuse(409, 'Tavern state changed.'); }
+    catch (Throwable $error) { \Resurrection\Http\FailureLog::record($error); resurrection_darkhorse_refuse(500, 'Tavern exit was not completed.'); }
     unset($_SESSION['darkhorse_return']);
     return true;
 }

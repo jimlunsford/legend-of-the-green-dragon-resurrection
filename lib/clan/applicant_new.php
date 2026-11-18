@@ -7,7 +7,7 @@ if (!\defined('RESURRECTION_ENTRY') && \PHP_SAPI !== 'cli') { \http_response_cod
 				resurrection_clan_fields(['clanname','clanshort']);
 				$ocn = \Resurrection\Http\Input::string($_POST, 'clanname');
 				$ocs = \Resurrection\Http\Input::string($_POST, 'clanshort');
-			} catch (InvalidArgumentException $error) { http_response_code(400); exit('Invalid clan request.'); }
+			} catch (InvalidArgumentException $error) { resurrection_clan_refuse(400, 'Invalid clan request.'); }
 			// 1.1.2 compared an addslashes() copy with magic-quoted input; names are compared and bound raw now.
 			$clanname = full_sanitize($ocn);
 			$clanname = preg_replace("'[^[:alpha:] \\'-]'","",$clanname);

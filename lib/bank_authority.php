@@ -89,10 +89,19 @@ function resurrection_bank_mutation(callable $action, array $participants = []):
     return $result;
 }
 
+/**
+ * A bank refusal in the game's frame (Phase 6 task 27, no dead ends): the same status and message, with one way out,
+ * back to the bank (a GET of bank.php only shows it); the Shades for the dead.
+ */
+function resurrection_bank_refuse(int $status, string $message): never {
+    global $session;
+    resurrection_refuse_page($status, $message, 'Ye Olde Bank', $message, !empty($session['user']['alive']) ? ['Return to the bank', 'bank.php'] : null);
+}
+
 function resurrection_bank_failure(Throwable $error): never {
-    if ($error instanceof InvalidArgumentException) { http_response_code(400); exit('Invalid bank request.'); }
-    if ($error instanceof DomainException) { http_response_code(409); exit('Your account changed. Return to the bank and try again.'); }
-    \Resurrection\Http\FailureLog::record($error); http_response_code(500); exit('Nothing was changed. Return to the bank and try again.');
+    if ($error instanceof InvalidArgumentException) resurrection_bank_refuse(400, 'Invalid bank request.');
+    if ($error instanceof DomainException) resurrection_bank_refuse(409, 'Your account changed. Return to the bank and try again.');
+    \Resurrection\Http\FailureLog::record($error); resurrection_bank_refuse(500, 'Nothing was changed. Return to the bank and try again.');
 }
 
 function resurrection_bank_attribute(mixed $text): string {

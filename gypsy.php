@@ -21,7 +21,7 @@ $cost = resurrection_gypsy_cost();
 // moderators; 1.1.2 relied on allowed navigation alone.
 $seance = (int)($session['resurrection_seance'] ?? 0) === (int)$session['user']['acctid'] ||
 	($session['user']['superuser'] & SU_EDIT_COMMENTS);
-if ($op=="talk" && !$seance) { http_response_code(403); exit('The seance has not been paid for.'); }
+if ($op=="talk" && !$seance) resurrection_service_refuse(403, 'The seance has not been paid for.', 'the gypsy');
 
 addcommentary();
 

@@ -107,11 +107,22 @@ function resurrection_clan_fields(array $extra = []): void {
     }
 }
 
+/**
+ * A clan refusal in the game's frame (Phase 6 task 27, no dead ends): the same status and message, with one way out,
+ * back to the clan halls (a GET of clan.php only shows them) unless the caller names another; the Shades for the dead.
+ * @param array{0: string, 1: string}|null $way
+ */
+function resurrection_clan_refuse(int $status, string $message, ?array $way = null): never {
+    global $session;
+    resurrection_refuse_page($status, $message, 'Clan Halls', $message,
+        !empty($session['user']['alive']) ? ($way ?? ['Return to the clan halls', 'clan.php']) : null);
+}
+
 /** Typed POST outcome codes shared by the clan routes. */
 function resurrection_clan_failure(Throwable $error): never {
-    if ($error instanceof InvalidArgumentException) { http_response_code(400); exit('Invalid clan request.'); }
-    if ($error instanceof DomainException) { http_response_code(409); exit('Your clan situation changed. Return to the clan halls and try again.'); }
-    \Resurrection\Http\FailureLog::record($error); http_response_code(500); exit('Nothing was changed. Return to the clan halls and try again.');
+    if ($error instanceof InvalidArgumentException) resurrection_clan_refuse(400, 'Invalid clan request.');
+    if ($error instanceof DomainException) resurrection_clan_refuse(409, 'Your clan situation changed. Return to the clan halls and try again.');
+    \Resurrection\Http\FailureLog::record($error); resurrection_clan_refuse(500, 'Nothing was changed. Return to the clan halls and try again.');
 }
 
 /** A clan the application list offers: it exists, has a member above applicant and no module hides it. */

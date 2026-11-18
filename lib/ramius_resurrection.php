@@ -7,6 +7,16 @@ require_once __DIR__.'/../src/Game/RamiusState.php';
 use Resurrection\Game\NewDayState;
 use Resurrection\Game\RamiusState;
 
+/**
+ * A refusal of Ramius's question or resurrection in the game's frame (Phase 6 task 27, no dead ends): the same status
+ * and message, with one way out: the graveyard for the dead (its GET only shows it), else the village.
+ */
+function resurrection_ramius_refuse(int $status, string $message): never {
+    global $session;
+    resurrection_refuse_page($status, $message, 'The Graveyard', $message,
+        !empty($session['loggedin']) && empty($session['user']['alive']) ? ['Return to the graveyard', 'graveyard.php'] : null);
+}
+
 /** Reject duplicate/nested/normalized query names before dispatch or prerequisite writes. */
 function resurrection_ramius_query(string $route): void {
     try {
@@ -19,7 +29,7 @@ function resurrection_ramius_query(string $route): void {
             }
         } elseif (array_diff(array_keys($_GET), ['op','c']) !== []) throw new InvalidArgumentException('Invalid favor query.');
     } catch (InvalidArgumentException $error) {
-        http_response_code(400); exit('Invalid resurrection route.');
+        resurrection_ramius_refuse(400, 'Invalid resurrection route.');
     }
 }
 
@@ -107,7 +117,7 @@ function resurrection_ramius(string $stage): never {
             addnav('Continue', 'village.php?c=1');
             page_footer();
         }
-        if ($_SERVER['REQUEST_METHOD'] !== 'GET') { http_response_code(405); exit('Use a resurrection form.'); }
+        if ($_SERVER['REQUEST_METHOD'] !== 'GET') resurrection_ramius_refuse(405, 'Use a resurrection form.');
         tlschema('graveyard');
         page_header('The Graveyard');
         $deathoverlord = getsetting('deathoverlord', '`$Ramius');
@@ -115,11 +125,11 @@ function resurrection_ramius(string $stage): never {
         else require __DIR__.'/graveyard/case_resurrection.php';
         page_footer();
     } catch (InvalidArgumentException $error) {
-        http_response_code(400); exit('Invalid resurrection form. Request a fresh form.');
+        resurrection_ramius_refuse(400, 'Invalid resurrection form. Nothing was changed.');
     } catch (DomainException $error) {
-        http_response_code(409); exit('Ramius resurrection is unavailable. Complete any due New Day or encounter, or ask an administrator to repair stored state.');
+        resurrection_ramius_refuse(409, 'Ramius resurrection is unavailable. Complete any due New Day or encounter first. Nothing was changed.');
     } catch (Throwable $error) {
-        \Resurrection\Http\FailureLog::record($error); http_response_code(500); exit('Resurrection was not completed. Request a fresh form.');
+        \Resurrection\Http\FailureLog::record($error); resurrection_ramius_refuse(500, 'Resurrection was not completed. Nothing was changed.');
     }
     exit;
 }

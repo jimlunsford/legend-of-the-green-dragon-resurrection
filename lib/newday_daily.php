@@ -9,6 +9,29 @@ require_once __DIR__ . '/../src/Game/TransmutationState.php';
 require_once __DIR__ . '/../src/Game/Expression.php';
 use Resurrection\Game\NewDayState;
 
+/**
+ * The way out of a refusal on newday.php (Phase 6 task 27, no dead ends): back to the new day (its GET shows the
+ * question or form the player is at: Dragon Points, race, specialty, the new day; with resurrection=true, Ramius's), or
+ * null (the village; the Shades for the dead) when the new day's own stored-state checks refuse, so that its page would
+ * refuse again.
+ * @return array{0: string, 1: string}|null
+ */
+function resurrection_newday_way(): ?array {
+    global $session;
+    if (empty($session['loggedin'])) return null;
+    try {
+        if (function_exists('resurrection_dragon_point_state')) resurrection_dragon_point_state();
+        if ($session['user']['race'] && $session['user']['race'] !== RACE_UNKNOWN && $session['user']['specialty'] !== '' &&
+            function_exists('resurrection_dragon_point_state')) resurrection_newday_validate();
+    } catch (Throwable) { return null; }
+    return ['Return to the new day', 'newday.php' . (httpget('resurrection') === 'true' ? '?resurrection=true' : '')];
+}
+
+/** A refusal on newday.php in the game's frame (Phase 6 task 27): the same status and message, with the way out. */
+function resurrection_newday_refuse(int $status, string $message): never {
+    resurrection_refuse_page($status, $message, 'It is a new day!', $message, resurrection_newday_way());
+}
+
 /** Read authoritative sources afresh; never invoke gameplay hooks while issuing a form.
  * @return array<string,mixed>
  */
@@ -165,7 +188,7 @@ function resurrection_newday_daily(): void {
             resurrection_newday_continue();
             page_footer();
         }
-        if ($_SERVER['REQUEST_METHOD'] !== 'GET') { http_response_code(405); exit('Use a New Day form.'); }
+        if ($_SERVER['REQUEST_METHOD'] !== 'GET') resurrection_newday_refuse(405, 'Use a New Day form.');
         page_header('It is a new day!');
         if (resurrection_newday_eligible()) {
             $url = 'newday.php?continue=1'; addnav('', $url);
@@ -178,10 +201,10 @@ function resurrection_newday_daily(): void {
         }
         page_footer();
     } catch (InvalidArgumentException $error) {
-        http_response_code(400); exit('Invalid New Day form. Request a fresh form.');
+        resurrection_newday_refuse(400, 'Invalid New Day form. Nothing was changed.');
     } catch (DomainException $error) {
-        http_response_code(409); exit('New Day is unavailable. Request a fresh form or ask an administrator to repair stored state.');
+        resurrection_newday_refuse(409, 'New Day is unavailable. Nothing was changed.');
     } catch (Throwable $error) {
-        \Resurrection\Http\FailureLog::record($error); http_response_code(500); exit('New Day was not completed. Request a fresh form.');
+        \Resurrection\Http\FailureLog::record($error); resurrection_newday_refuse(500, 'New Day was not completed. Nothing was changed.');
     }
 }

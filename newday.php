@@ -20,12 +20,13 @@ resurrection_dragon_point_boundary();
 
 require_once('lib/race_onboarding.php');
 require_once('lib/specialty_onboarding.php');
-if (isset($_GET['setspecialty'])) { http_response_code(403); exit('Specialty selection requires a form.'); }
+// 1.1.2's selection links are refused in the game's frame with the way back to the new day (Phase 6 task 27).
+if (isset($_GET['setspecialty'])) resurrection_newday_refuse(403, 'Specialty selection requires a form.');
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && !isset($_POST['setrace']) && (isset($_POST['setspecialty']) || ($_POST['onboarding'] ?? null) === 'specialty')) {
     $resline = httpget('resurrection') === 'true' ? '&resurrection=true' : '';
     resurrection_specialty_onboarding();
 }
-if (isset($_GET['setrace'])) { http_response_code(403); exit('Race selection requires a form.'); }
+if (isset($_GET['setrace'])) resurrection_newday_refuse(403, 'Race selection requires a form.');
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && (isset($_POST['setrace']) || isset($_POST['onboarding']) ||
     !$session['user']['race'] || $session['user']['race'] === RACE_UNKNOWN)) {
     $resline = httpget('resurrection') === 'true' ? '&resurrection=true' : '';

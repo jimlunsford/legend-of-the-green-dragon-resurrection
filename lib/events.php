@@ -44,8 +44,10 @@ function handle_event($location, $baseLink=false, $needHeader=false)
         // A disabled secured encounter must not silently consume its persisted state.
         if (str_starts_with($specialinc,'module:')) {
             $pending=substr($specialinc,7);
+            // In the game's frame (Phase 6 task 27, no dead ends). Its way out is the village (the Shades for the
+            // dead): the forest would refuse the same pending event again.
             if (resurrection_secured_event($pending) && !is_module_active($pending)) {
-                http_response_code(403); exit('Event unavailable.');
+                resurrection_refuse_page(403, 'Event unavailable.', 'Something Special!', 'Event unavailable.');
             }
         }
 		$session['user']['specialinc'] = "";

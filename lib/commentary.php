@@ -38,18 +38,42 @@ function commentarylocs() {
 	return $comsecs;
 }
 
+/**
+ * The page a commentary refusal goes back to (Phase 6 task 27, no dead ends): the page the comment form or moderation
+ * link was on, its own address without the commentary's parameters (a GET of it only shows the page and its comments),
+ * or null (the village; the Shades for the dead) when that address is not a page of the game.
+ * @return array{0: string, 1: string}|null
+ */
+function resurrection_commentary_way(): ?array {
+    global $REQUEST_URI;
+    require_once 'lib/sanitize.php';
+    $parts = parse_url(comscroll_sanitize((string)$REQUEST_URI));
+    $page = basename((string)($parts['path'] ?? ''));
+    if (!is_array($parts) || !preg_match('/\A[a-z][a-z0-9_]*\.php\z/', $page)) return null;
+    parse_str((string)($parts['query'] ?? ''), $query);
+    unset($query['removecomment'], $query['comment'], $query['refresh'], $query['c'], $query['comscroll']);
+    return ['Return to the page', $page . ($query !== [] ? '?' . http_build_query($query) : '')];
+}
+
+/** A commentary refusal in the game's frame (Phase 6 task 27): the same status and message, with the way back. */
+function resurrection_commentary_refuse(int $status, string $message): never {
+    resurrection_refuse_page($status, $message, 'Commentary', $message, resurrection_commentary_way());
+}
+
 function addcommentary() {
 	global $session, $emptypost;
     require_once 'lib/web_security.php';
     require_once 'lib/commentary_security.php';
-    if (isset($_GET['removecomment'])) { http_response_code(405); exit('Use POST for moderation.'); }
+    if (isset($_GET['removecomment'])) resurrection_commentary_refuse(405, 'Use POST for moderation.');
     if (isset($_POST['removecomment'])) {
+        // The request may not come from this session's page (its CSRF check): the expired-action answer, which changes
+        // nothing and goes back to the player's own last page (resurrection_refuse_action(), Phase 6 task 22).
         try { resurrection_delete_comment($session, $_SESSION, $_SERVER['REQUEST_METHOD'] ?? '', $_POST); }
-        catch (DomainException|InvalidArgumentException $error) { http_response_code(403); exit('Invalid moderation request.'); }
+        catch (DomainException|InvalidArgumentException $error) { resurrection_refuse_action(403, 'Invalid moderation request.'); }
     }
     if (!isset($_POST['insertcommentary'])) { return; }
     resurrection_require_post();
-    if (!$session['loggedin']) { http_response_code(403); exit('Sign in to comment.'); }
+    if (!$session['loggedin']) resurrection_commentary_refuse(403, 'Sign in to comment.');
     try {
         $section = \Resurrection\Http\Input::string($_POST, 'section');
         $comment = trim(\Resurrection\Http\Input::string($_POST, 'insertcommentary'));
@@ -57,7 +81,7 @@ function addcommentary() {
         if (!isset($_SESSION['commentary_sections'][$section])) { throw new DomainException('Section not available.'); }
         $talkline = $_SESSION['commentary_sections'][$section]['talkline'];
         $schema = $_SESSION['commentary_sections'][$section]['schema'];
-    } catch (DomainException|InvalidArgumentException $error) { http_response_code(400); exit('Invalid comment.'); }
+    } catch (DomainException|InvalidArgumentException $error) { resurrection_commentary_refuse(400, 'Invalid comment.'); }
 
 	if (array_key_exists('commentcounter',$session) &&
 			$session['commentcounter']==$counter) {

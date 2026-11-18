@@ -7,9 +7,9 @@ if (!\defined('RESURRECTION_ENTRY') && \PHP_SAPI !== 'cli') { \http_response_cod
 	} catch (InvalidArgumentException $error) { resurrection_clan_failure($error); }
 	$moderator = ($session['user']['superuser'] & SU_EDIT_COMMENTS) == SU_EDIT_COMMENTS;
 	$row1 = resurrection_clan_text_row($detail);
-	if ($row1 === null) { http_response_code(404); exit('No such clan.'); }
+	if ($row1 === null) resurrection_clan_refuse(404, 'No such clan.', ['Return to the clan list', 'clan.php?op=list']);
 	if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST'){
-		if (!$moderator) { http_response_code(403); exit('Only moderators may change clan details.'); }
+		if (!$moderator) resurrection_clan_refuse(403, 'Only moderators may change clan details.', ['Return to the clan', 'clan.php?detail=' . $detail]);
 		try {
 			resurrection_clan_fields(['clanname','clanshort','block','unblock']);
 			$clanname = \Resurrection\Http\Input::string($_POST, 'clanname');

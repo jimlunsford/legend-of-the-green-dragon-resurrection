@@ -216,6 +216,21 @@ or replayed form is refused.
 | `resurrection_checkday_on_rollover()` | on the GET of a page whose form a new day would refuse: begins the due new day first (`checkday()`, whose Continue comes back to your page), else leaves `checkday()`'s mark, so a replay of the page after the rollover (`badnav.php`, as a sign-in does) begins it first. `resurrection_day_rolled_over()` says whether the game day has rolled over since the player's new day (unfinished race or specialty choices are not a rollover); refuse a POST that arrives after it with `resurrection_refuse_page()`, before your action token is used |
 | `resurrection_player_mutation()` | runs your change in one transaction with the player's account locked and checked again; a `DomainException` rolls it back |
 
+**How a module refuses.** Never answer a player with a bare status and text (a status code set, then an exit with a
+line of text): the page has no frame and no link, so the player is stuck (Jim's rc.2 to rc.4 server tests found three
+such dead ends). Refuse with `resurrection_refuse_page()`, or, for an expired or repeated form, let
+`resurrection_require_post()` and `resurrection_consume_action()` answer. Give exactly one way out, chosen in this order (Phase 6 task 27):
+
+1. While a fight your module stored is waiting on its own route, that fight.
+2. Else the page the request came from, when a GET of it only shows it (a form page, never an address that acts).
+3. Else pass `null`: the village, or the Shades for the dead.
+
+The message says what did not happen and that nothing was changed ("You did not buy a lantern. Nothing was
+changed."). It never tells the player to reload, to ask for a fresh form, to repair stored state or to ask an
+administrator; that guidance is the host's (host guide, section 12). In this repository,
+`tests/tooling/test_no_bare_refusals.py` finds every bare status and text in every PHP file, bundled modules included,
+and fails on one outside its listed exceptions.
+
 The **scope** names the action (your module's name, or `mymodule-buy`). The **context** binds the token to the state
 it was shown for: the account and what the form does, such as the player's id and the step. Never put `authversion` or
 anything else that changes on every sign-in in a context, or a page kept from before a new sign-in can never be sent
@@ -249,8 +264,9 @@ function mymodule_run(){
 			output('You buy a lantern.`n');
 		});
 	} catch (DomainException $error) {
-		http_response_code(409);
-		exit('Lantern purchase rejected.');
+		// The way out is the seller's page: its GET only shows the form.
+		resurrection_refuse_page(409, 'You did not buy a lantern. Nothing was changed.', 'The Lantern Seller',
+			'You did not buy a lantern. Nothing was changed.', ['Return to the Lantern Seller', $url]);
 	}
 	addnav('Return to the Forest', 'forest.php');
 	page_footer();

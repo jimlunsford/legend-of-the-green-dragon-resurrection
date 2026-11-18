@@ -15,7 +15,10 @@ try {
 	$op = \Resurrection\Http\Input::choice($_GET, 'op', ['', 'block', 'unblock'], '');
 	$userid = \Resurrection\Http\Input::integer($_GET, 'userid', 0, 1);
 	if ($userid > RESURRECTION_ADMIN_MAX_ID || ($op !== '' && $userid === 0)) throw new InvalidArgumentException('Invalid account.');
-} catch (InvalidArgumentException $error) { http_response_code(400); exit('Invalid bio request.'); }
+} catch (InvalidArgumentException $error) {
+	// In the game's frame with the way back to the bios (Phase 6 task 27, no dead ends).
+	resurrection_refuse_page(400, 'Invalid bio request.', 'User Bios', 'Invalid bio request.', ['Return to the bios', 'bios.php']);
+}
 // 1.1.2 blocked and unblocked on these GET links, mailing before an unchecked UPDATE. Only the protected
 // POST forms below act; the notice and the account write now commit together.
 if ($op != "") resurrection_bio_moderate($op, $userid);

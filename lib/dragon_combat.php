@@ -115,6 +115,29 @@ function resurrection_dragon_round(string $op, string $level, string $auto): voi
     restore_buff_fields();
 }
 
+/**
+ * The way out of a Dragon refusal (Phase 6 task 27, no dead ends): the slain Dragon's epilogue while it waits, the fight
+ * while one is stored and valid, the cave's entrance while the player may begin, else null (the village; the Shades for
+ * the dead). Each is a GET that only shows its page.
+ * @return array{0: string, 1: string}|null
+ */
+function resurrection_dragon_way(): ?array {
+    global $session;
+    // dragon.php with no op shows the stored fight, else the cave's entrance.
+    foreach ([['prologue1', 'Continue', 'dragon.php?op=prologue1'], ['fight', 'Return to the fight', 'dragon.php'],
+        ['begin', 'Return to the cave', 'dragon.php']] as [$op, $label, $address]) {
+        if ($op === 'fight' && ($session['user']['badguy'] ?? '') === '') continue;
+        try { resurrection_dragon_authority($op); return [$label, $address]; }
+        catch (Throwable) { /* not this state */ }
+    }
+    return null;
+}
+
+/** A Dragon refusal in the game's frame (Phase 6 task 27): the same status and message, with the way out. */
+function resurrection_dragon_refuse(int $status, string $message): never {
+    resurrection_refuse_page($status, $message, 'The Green Dragon!', $message, resurrection_dragon_way());
+}
+
 function resurrection_dragon_controller(): void {
     global $session;
     try {
@@ -160,7 +183,7 @@ function resurrection_dragon_controller(): void {
             } else resurrection_dragon_round($op,$level,$auto);
         });
         if ($op !== 'prologue1') resurrection_dragon_forms();
-    } catch (InvalidArgumentException) { http_response_code(400); exit('Invalid Dragon action.'); }
-    catch (DomainException) { http_response_code(409); exit('Dragon state changed or is unavailable. Request a fresh form.'); }
-    catch (Throwable $error) { \Resurrection\Http\FailureLog::record($error); http_response_code(500); exit('Dragon action was not completed. Request a fresh form.'); }
+    } catch (InvalidArgumentException) { resurrection_dragon_refuse(400, 'Invalid Dragon action.'); }
+    catch (DomainException) { resurrection_dragon_refuse(409, 'Dragon state changed or is unavailable. Nothing was changed.'); }
+    catch (Throwable $error) { \Resurrection\Http\FailureLog::record($error); resurrection_dragon_refuse(500, 'Dragon action was not completed. Nothing was changed.'); }
 }

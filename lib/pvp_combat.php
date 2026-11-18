@@ -6,6 +6,30 @@ require_once __DIR__ . '/../src/Game/BuffState.php';
 require_once __DIR__ . '/../src/Game/CompanionState.php';
 require_once __DIR__ . '/../src/Game/Expression.php';
 
+/**
+ * The way out of a PvP refusal (Phase 6 task 27, no dead ends): back to the PvP fight while one is stored and valid,
+ * else the fields' list of players (pvp.php's GET only shows it); null (the village; the Shades for the dead) when PvP's
+ * own stored-state checks refuse, or another route's fight is stored, so that pvp.php would refuse again.
+ * @return array{0: string, 1: string}|null
+ */
+function resurrection_pvp_way(): ?array {
+    global $session;
+    if (empty($session['loggedin']) || empty($session['user']['alive'])) return null;
+    try {
+        resurrection_pvp_participants(false);
+        if ($session['user']['badguy'] !== '') {
+            \Resurrection\Security\PvpState::read($session['user']['badguy'], (int)$session['user']['acctid']);
+            return ['Return to the fight', 'pvp.php'];
+        }
+    } catch (Throwable) { return null; }
+    return ['Return to the fields', 'pvp.php'];
+}
+
+/** A PvP refusal in the game's frame (Phase 6 task 27): the same status and message, with the way out. */
+function resurrection_pvp_refuse(int $status, string $message): never {
+    resurrection_refuse_page($status, $message, 'PvP Combat!', $message, resurrection_pvp_way());
+}
+
 /** Stable gameplay snapshot, excluding navigation, transport and performance bookkeeping. */
 function resurrection_pvp_account_hash(int $id, bool $actor=false): string {
     global $session,$companions;

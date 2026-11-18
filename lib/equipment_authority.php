@@ -108,8 +108,19 @@ function resurrection_equipment_request(): int {
     return $id;
 }
 
+/**
+ * A shop refusal in the game's frame (Phase 6 task 27, no dead ends): the same status and message, with one way out,
+ * back to the shop the request came from (weapons.php or armor.php; a GET only shows it); the Shades for the dead.
+ */
+function resurrection_equipment_refuse(int $status, string $message): never {
+    global $session, $SCRIPT_NAME;
+    $shop = ($SCRIPT_NAME ?? '') === 'armor.php' ? 'armor.php' : 'weapons.php';
+    $title = is_string($GLOBALS['texts']['title'] ?? null) ? $GLOBALS['texts']['title'] : ($shop === 'armor.php' ? 'Pegasus Armor' : "MightyE's Weapons");
+    resurrection_refuse_page($status, $message, $title, $message, !empty($session['user']['alive']) ? ['Return to the shop', $shop] : null);
+}
+
 function resurrection_equipment_failure(Throwable $error): never {
-    if ($error instanceof InvalidArgumentException) { http_response_code(400); exit('Invalid purchase request.'); }
-    if ($error instanceof DomainException) { http_response_code(409); exit('Your purchase changed. Return to the shop and try again.'); }
-    \Resurrection\Http\FailureLog::record($error); http_response_code(500); exit('Nothing was changed. Return to the shop and try again.');
+    if ($error instanceof InvalidArgumentException) resurrection_equipment_refuse(400, 'Invalid purchase request.');
+    if ($error instanceof DomainException) resurrection_equipment_refuse(409, 'Your purchase changed. Return to the shop and try again.');
+    \Resurrection\Http\FailureLog::record($error); resurrection_equipment_refuse(500, 'Nothing was changed. Return to the shop and try again.');
 }

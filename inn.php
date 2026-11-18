@@ -25,21 +25,18 @@ $op = httpget('op');
 require_once("lib/inn_economy.php");
 try {
 	$act = $op == "bartender" ? \Resurrection\Http\Input::choice($_GET, 'act', ['', 'bribe', 'listupstairs', 'colors', 'specialty'], '') : '';
-} catch (InvalidArgumentException $error) { http_response_code(400); exit('Invalid inn request.'); }
+} catch (InvalidArgumentException $error) { resurrection_inn_refuse(400, 'Invalid inn request.'); }
 // A bribe answers only the services offered on that answer; leaving them forfeits it.
 if (!in_array($act, ['listupstairs', 'specialty'], true)) unset($_SESSION['inn_bribe']);
 $fled = false;
 if ($op == "fleedragon") {
 	// Only the Dragon encounter the Forest displayed may be fled, once; GET shows the choice.
 	// Its GET begins a due new day first, as 1.1.2's inn.php called checkday() before every op (Phase 6 task 26, the
-	// sweep after R12). The new day ends the encounter, so the Continue back here finds no Dragon: on a GET that refusal
-	// keeps its status and message, in the game's frame, with the way into the inn (the Shades for the dead).
+	// sweep after R12). The new day ends the encounter, so the Continue back here finds no Dragon: that refusal keeps
+	// its status and message, in the game's frame, with the way into the inn (the Shades for the dead); a POST too since
+	// Phase 6 task 27 (no dead ends).
 	if (($_SERVER['REQUEST_METHOD'] ?? '') === 'GET') resurrection_checkday_on_rollover();
-	if (!resurrection_inn_flee_offered()) {
-		if (($_SERVER['REQUEST_METHOD'] ?? '') === 'GET') resurrection_refuse_page(409, 'There is no dragon to run from.', sanitize($iname),
-			'There is no dragon to run from.', !empty($session['user']['alive']) ? ['Return to the inn', 'inn.php'] : null);
-		http_response_code(409); exit('There is no dragon to run from.');
-	}
+	if (!resurrection_inn_flee_offered()) resurrection_inn_refuse(409, 'There is no dragon to run from.');
 	if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
 		try {
 			resurrection_inn_fields();
@@ -51,9 +48,9 @@ if ($op == "fleedragon") {
 				$session['user']['location'] = $vname;
 				if ($session['user']['charm'] > 0) $session['user']['charm']--;
 			});
-		} catch (InvalidArgumentException $error) { http_response_code(400); exit('Invalid inn request.');
-		} catch (DomainException $error) { http_response_code(409); exit('There is no dragon to run from.');
-		} catch (Throwable $error) { \Resurrection\Http\FailureLog::record($error); http_response_code(500); exit('You did not get away. Try again.'); }
+		} catch (InvalidArgumentException $error) { resurrection_inn_refuse(400, 'Invalid inn request.', resurrection_inn_flee_way());
+		} catch (DomainException $error) { resurrection_inn_refuse(409, 'There is no dragon to run from.', resurrection_inn_flee_way());
+		} catch (Throwable $error) { \Resurrection\Http\FailureLog::record($error); resurrection_inn_refuse(500, 'You did not get away. Try again.', resurrection_inn_flee_way()); }
 		unset($_SESSION['inn_flee']);
 		$fled = true;
 	}

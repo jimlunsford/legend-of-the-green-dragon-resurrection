@@ -317,7 +317,9 @@ release cut workflow (`.github/workflows/release-cut.yml`) builds the same packa
 - [x] For `1.0.0-rc.3`: the next commit's Modern core installs `v1.0.0-rc.3` and upgrades it. Modern core
       44126961634 on Phase 6 task 24's commit, `91559fa`, both legs ("v1.0.0-rc.3 installed, upgraded to 91559fa, and
       the same schema and data as a fresh install (41 tables)"; recorded in task 25).
-- [ ] For `1.0.0-rc.4`: the next commit's Modern core installs `v1.0.0-rc.4` and upgrades it.
+- [x] For `1.0.0-rc.4`: the next commit's Modern core installs `v1.0.0-rc.4` and upgrades it. Modern core
+      44337851502 on Phase 6 task 26's commit, `8ab8888`, both legs ("v1.0.0-rc.4 installed, upgraded to 8ab8888, and
+      the same schema and data as a fresh install (41 tables)"; recorded in task 27).
 - [ ] After `v1.0.0`, the first commit on `main` sets the next number with `-dev` (`1.1.0-dev`, or `1.0.1-dev` when only
       fixes are planned).
 - [ ] Record the tag, the accepted runs and the package's SHA-256 in `ROADMAP.md` and the cut's evidence doc.

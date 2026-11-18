@@ -15,15 +15,16 @@ function resurrection_require_post(): void {
  * Whether this request is a game page under forced navigation (Phase 6 task 22, R10): a signed-in player's page whose
  * address do_forced_nav() checked against the allowed navs (lib/forcednavigation.php), rendered in the game frame.
  * Not a popup or page outside forced navigation (mail, MoTD, petitions, the translator, account.php, badnav.php,
- * a module that overrides it), not a page before common.php (setup.php, account.php's token exchange), not a visitor
- * signed out, and not newday.php: the new-day questions are replayed with this session's tokens on the next request,
- * so a refusal there is no dead end, and their plain refusals stay as they were.
+ * a module that overrides it), not a page before common.php (setup.php, account.php's token exchange), and not a
+ * visitor signed out. newday.php is a game page too since Phase 6 task 27 (no dead ends): task 22 left its refusals
+ * plain because the next request replays its questions with this session's tokens, but a plain page has no link to
+ * make that next request, so its refusals answer in the frame with the way back to the new day.
  */
 function resurrection_refusal_framed(): bool {
-    global $session, $SCRIPT_NAME;
+    global $session;
     return PHP_SAPI !== 'cli' && !empty($GLOBALS['resurrection_forced_nav_page']) && !headers_sent() &&
         function_exists('page_header') && function_exists('page_footer') &&
-        !empty($session['loggedin']) && !empty($session['user']['acctid']) && ($SCRIPT_NAME ?? '') !== 'newday.php';
+        !empty($session['loggedin']) && !empty($session['user']['acctid']);
 }
 
 /**
@@ -54,8 +55,10 @@ function resurrection_refuse_action(int $status, string $plain, ?array $way = nu
     if (!resurrection_refusal_framed()) exit($plain);
     require_once __DIR__ . '/villagenav.php';
     if (!defined('RESURRECTION_REFUSAL_PRESENTATION')) define('RESURRECTION_REFUSAL_PRESENTATION', true);
-    // Whatever the refused page began to print or offer is dropped: only the refusal and its way out remain.
+    // Whatever the refused page began to print or offer is dropped: only the refusal and its way out remain, without
+    // the battle screen of a round that was rolled back (Phase 6 task 27).
     $output = '';
+    $GLOBALS['resurrection_battle'] = null;
     $navbysection = [];
     $navsection = '';
     $session['allowednavs'] = [];
@@ -111,7 +114,10 @@ function resurrection_refuse_page(int $status, string $plain, string $title, str
     try {
         require_once __DIR__ . '/villagenav.php';
         if (!defined('RESURRECTION_REFUSAL_PRESENTATION')) define('RESURRECTION_REFUSAL_PRESENTATION', true);
+        // Only the refusal and its way out: not what the page printed, nor the battle screen of a round that was rolled
+        // back (Phase 6 task 27: a Dragon, graveyard or PvP round the database refused showed the round it undid).
         $output = '';
+        $GLOBALS['resurrection_battle'] = null;
         $navbysection = [];
         $navsection = '';
         $session['allowednavs'] = [];

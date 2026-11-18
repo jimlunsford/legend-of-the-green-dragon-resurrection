@@ -16,9 +16,11 @@ tlschema("prefs");
 require_once 'lib/accounts.php';
 require_once 'lib/charcleanup.php';
 require_once 'lib/player_mutation.php';
+// Every refusal here answers in the game's frame with the way back to the preferences (Phase 6 task 27, no dead ends).
+require_once 'lib/prefs_email.php';
 if ($_POST || httpget('op') === 'suicide') { resurrection_require_post(); }
 foreach ($_POST as $key => $value) {
-    if (!is_string($value)) { http_response_code(400); exit('Invalid preference.'); }
+    if (!is_string($value)) resurrection_prefs_refuse(400, 'Invalid preference.');
 }
 // Validate every module namespace before any preference or account write.
 // Visibility in showform is not permission to write an arbitrary internal preference.
@@ -27,17 +29,17 @@ foreach ($_POST as $field => $value) {
     $parts = explode('___', $field);
     if (count($parts) !== 2 || !preg_match('/\A[A-Za-z][A-Za-z0-9_]*\z/', $parts[0]) ||
         !preg_match('/\A(?:user_|check_)[A-Za-z0-9_]+\z/', $parts[1])) {
-        http_response_code(400); exit('Invalid preference namespace.');
+        resurrection_prefs_refuse(400, 'Invalid preference namespace.');
     }
     [$prefModule, $prefName] = $parts;
-    if (!injectmodule($prefModule, false)) { http_response_code(403); exit('Preference module unavailable.'); }
+    if (!injectmodule($prefModule, false)) resurrection_prefs_refuse(403, 'Preference module unavailable.');
     $prefInfo = get_module_info($prefModule);
     if (!array_key_exists($prefName, $prefInfo['prefs'] ?? [])) {
-        http_response_code(400); exit('Unknown user preference.');
+        resurrection_prefs_refuse(400, 'Unknown user preference.');
     }
     // None of the 24 bundled modules exposes user_/check_ preferences. Keep
     // future modules fail-closed until their value descriptor has a typed parser.
-    http_response_code(400); exit('Unsupported user preference descriptor.');
+    resurrection_prefs_refuse(400, 'Unsupported user preference descriptor.');
 }
 // 1.1.2's Skin preference posted here and set the template cookie; the skins and the preference are gone (Phase 5
 // task 15). A page rendered before this change may still post the old field; it is never read (see below).
@@ -54,7 +56,7 @@ if ($op=="suicide" && getsetting("selfdelete",0)!=0) {
 	$userid = (int)$session['user']['acctid'];
 	require_once("lib/admin_authority.php");
 	// One-use intent bound to this account; the cleanup, the account row and the news line commit together.
-	if (array_diff(array_keys($_POST), ['csrf_token', 'action_token']) !== []) { http_response_code(400); exit('Invalid request.'); }
+	if (array_diff(array_keys($_POST), ['csrf_token', 'action_token']) !== []) resurrection_prefs_refuse(400, 'Invalid request.');
 	resurrection_consume_action('prefs-suicide', resurrection_suicide_context($session['user']));
 	try {
 		resurrection_admin_mutation(function () use ($userid) {
@@ -63,9 +65,9 @@ if ($op=="suicide" && getsetting("selfdelete",0)!=0) {
 			addnews("`#%s quietly passed from this world.",$session['user']['name']);
 		}, $userid);
 	} catch (ResurrectionCharacterDeletionVetoed $error) {
-		http_response_code(409); exit('Your character was not deleted.');
+		resurrection_prefs_refuse(409, 'Your character was not deleted.');
 	} catch (Throwable $error) {
-		\Resurrection\Http\FailureLog::record($error); http_response_code(500); exit('Nothing was changed. Return to your preferences and try again.');
+		\Resurrection\Http\FailureLog::record($error); resurrection_prefs_refuse(500, 'Nothing was changed. Return to your preferences and try again.');
 	}
 	output("Your character has been deleted!");
 	addnav("Login Page", "index.php");
@@ -121,8 +123,7 @@ if ($op=="suicide" && getsetting("selfdelete",0)!=0) {
 			$candidate = \Resurrection\Security\PreferenceState::map($candidate);
 			\Resurrection\Security\PreferenceState::encode($candidate);
 		} catch (DomainException $error) {
-			http_response_code(400);
-			exit('Your preferences were not saved: a value is not valid. Nothing was changed.');
+			resurrection_prefs_refuse(400, 'Your preferences were not saved: a value is not valid. Nothing was changed.');
 		}
         $pass1 = $_POST['pass1'] ?? '';
         $pass2 = $_POST['pass2'] ?? '';

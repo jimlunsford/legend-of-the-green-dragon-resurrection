@@ -558,6 +558,12 @@ and statistics behind the panel login, as for the setup token.
   | `Character expiration failed for one account; it was left unchanged.` | Maintenance could not delete one expired character; it tries again next time |
   | `Runtime error in <file>:<line>` (inside a PHP "Uncaught" line) | A fault in the game or a module: report it with the file and line |
 
+- **A player who keeps meeting the same refusal**: a refusal on the game's own pages says what did not happen and that
+  nothing was changed, with one link onward; it never asks the player to repair anything or to contact you. A 5xx writes the `Resurrection: <page> failed` line above. A 409 that comes back on every try means a
+  value stored on the account (the preferences, the buff list, the companions, the Dragon Point history, the return
+  page or a stored fight) is not one the game accepts: open the player in the user editor (`user.php`, the Edit Users
+  flag) and use **Repair stored state** (`user.php?op=repair`). It shows only the values that fail, each with one fixed
+  repair, and writes a debug log line naming the field and the administrator.
 - **`cron.php`'s error output**: the scheduler's mail or log (section 7).
 - **In the game**, for administrators: the Game Log (`gamelog.php`) for game events such as maintenance, settings
   changes and petitions; each player's debug log in the user editor; failed sign-ins (`invalid_credentials`),

@@ -10,8 +10,8 @@ if (array_diff(array_keys($_GET), ['op','c']) !== [] ||
 // training's way out; before that, the plain text, as before. The 400 above comes before common.php and stays plain.
 $resurrection_train_refusal = null;
 try { require_once 'common.php'; }
-catch (DomainException) { $resurrection_train_refusal = [409, 'Invalid stored training state. Stored state was preserved.']; }
-catch (Throwable $error) { \Resurrection\Http\FailureLog::record($error); $resurrection_train_refusal = [500, 'Training could not be loaded. Stored state was preserved.']; }
+catch (DomainException) { $resurrection_train_refusal = [409, 'Invalid stored training state. Nothing was changed.']; }
+catch (Throwable $error) { \Resurrection\Http\FailureLog::record($error); $resurrection_train_refusal = [500, 'Training could not be loaded. Nothing was changed.']; }
 if ($resurrection_train_refusal !== null) {
     if (function_exists('resurrection_refusal_framed') && resurrection_refusal_framed()) {
         require_once __DIR__ . '/lib/training_combat.php';

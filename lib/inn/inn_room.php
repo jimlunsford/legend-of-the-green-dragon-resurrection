@@ -9,7 +9,7 @@ $bankexpense = $prices['bank'];
 $fee = $prices['fee'];
 try {
 	$pay = \Resurrection\Http\Input::choice($_GET, 'pay', ['', '1', '2'], '');
-} catch (InvalidArgumentException $error) { http_response_code(400); exit('Invalid room request.'); }
+} catch (InvalidArgumentException $error) { resurrection_inn_refuse(400, 'Invalid room request.'); }
 $roomurl = "inn.php?op=room&pay=$pay";
 if ($pay !== '' && ($_SERVER['REQUEST_METHOD'] ?? '') === 'POST'){
 	// Room rental, its debit and the logout are one protected, locked player mutation.
@@ -35,9 +35,9 @@ if ($pay !== '' && ($_SERVER['REQUEST_METHOD'] ?? '') === 'POST'){
 			$session['user']['authversion'] = (int)$session['user']['authversion'] + 1;
 			return true;
 		});
-	} catch (InvalidArgumentException $error) { http_response_code(400); exit('Invalid room request.');
-	} catch (DomainException $error) { http_response_code(409); exit('Your situation changed. Return to the inn and ask again.');
-	} catch (Throwable $error) { \Resurrection\Http\FailureLog::record($error); http_response_code(500); exit('The room was not rented. Return to the inn and ask again.'); }
+	} catch (InvalidArgumentException $error) { resurrection_inn_refuse(400, 'Invalid room request.');
+	} catch (DomainException $error) { resurrection_inn_refuse(409, 'Your situation changed. Return to the inn and ask again.');
+	} catch (Throwable $error) { \Resurrection\Http\FailureLog::record($error); resurrection_inn_refuse(500, 'The room was not rented. Return to the inn and ask again.'); }
 	if ($paid) {
 		resurrection_end_session();
 		header('Location: index.php', true, 303);

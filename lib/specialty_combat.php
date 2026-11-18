@@ -124,8 +124,8 @@ function resurrection_forest_specialty(): never {
         require_once __DIR__ . '/forest_combat.php';
         resurrection_forest_round_navs();
     } catch (InvalidArgumentException) { resurrection_forest_specialty_refuse(400,'Invalid specialty action.'); }
-    catch (DomainException) { resurrection_forest_specialty_refuse(409,'Specialty combat is unavailable. Request a fresh form.'); }
-    catch (Throwable $error) { \Resurrection\Http\FailureLog::record($error); resurrection_forest_specialty_refuse(500,'Specialty combat was not completed. Request a fresh form.'); }
+    catch (DomainException) { resurrection_forest_specialty_refuse(409,'Specialty combat is unavailable. Nothing was changed.'); }
+    catch (Throwable $error) { \Resurrection\Http\FailureLog::record($error); resurrection_forest_specialty_refuse(500,'Specialty combat was not completed. Nothing was changed.'); }
     page_footer(); exit;
 }
 

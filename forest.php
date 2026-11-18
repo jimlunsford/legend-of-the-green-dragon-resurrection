@@ -21,13 +21,22 @@ if (httpget('op') === 'specialty') {
     if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'GET') resurrection_forest_specialty();
     $_GET['op'] = $session['user']['badguy'] !== '' && $session['user']['specialinc'] === '' ? 'fight' : '';
 }
-// Legacy specialty URLs in Forest cannot spend a round, uses or rewards.
+require_once __DIR__ . '/lib/forest_combat.php';
+// Legacy specialty URLs in Forest cannot spend a round, uses or rewards. Refused in the game's frame with the forest's
+// way out (Phase 6 task 27, no dead ends): the stored fight, else the forest.
 if (array_key_exists('skill', $_GET) || array_key_exists('l', $_GET) ||
     array_key_exists('skill', $_POST) || array_key_exists('l', $_POST)) {
-    http_response_code(400); exit('Use the current specialty form.');
+    resurrection_forest_refuse(400, 'Use the current specialty form.');
 }
 
-require_once __DIR__ . '/lib/forest_combat.php';
+// forest.php with no op while a forest fight is stored shows that fight, as its search link does since Phase 6 task 24
+// (Phase 6 task 27, DO 4): the GET presentation of the fight route, so nothing is spent. 1.1.2 showed the forest menu,
+// and this page's test, httpget('op') === '', never matched a missing op (httpget() returns false for one). With no
+// fight stored, or one the forest's state check refuses (another route's, or the player dead), the forest as before.
+if (!array_key_exists('op', $_GET) && ($_SERVER['REQUEST_METHOD'] ?? '') === 'GET' && $session['user']['badguy'] !== '' &&
+    $session['user']['specialinc'] === '' && resurrection_forest_way() === ['Return to the fight', 'forest.php?op=fight']) {
+    $_GET['op'] = '';
+}
 if ($session['user']['specialinc'] === '' && (in_array(httpget('op'), ['fight','run','newtarget','search','dragon'], true) ||
     (httpget('op') === '' && $session['user']['badguy'] !== ''))) {
     resurrection_forest_combat();

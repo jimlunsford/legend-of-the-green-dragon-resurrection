@@ -74,8 +74,18 @@ function resurrection_stables_fields(): void {
     if (array_diff(array_keys($_POST), ['csrf_token', 'action_token']) !== []) throw new InvalidArgumentException('Unexpected field.');
 }
 
+/**
+ * A stables refusal in the game's frame (Phase 6 task 27, no dead ends): the same status and message, with one way out,
+ * back to the stables (a GET of stables.php only shows them); the Shades for the dead.
+ */
+function resurrection_stables_refuse(int $status, string $message): never {
+    global $session;
+    $title = is_string($GLOBALS['texts']['title'] ?? null) ? $GLOBALS['texts']['title'] : "Merick's Stables";
+    resurrection_refuse_page($status, $message, $title, $message, !empty($session['user']['alive']) ? ['Return to the stables', 'stables.php'] : null);
+}
+
 function resurrection_stables_failure(Throwable $error): never {
-    if ($error instanceof InvalidArgumentException) { http_response_code(400); exit('Invalid stables request.'); }
-    if ($error instanceof DomainException) { http_response_code(409); exit('Your stable situation changed. Return to the stables and try again.'); }
-    \Resurrection\Http\FailureLog::record($error); http_response_code(500); exit('Nothing was changed. Return to the stables and try again.');
+    if ($error instanceof InvalidArgumentException) resurrection_stables_refuse(400, 'Invalid stables request.');
+    if ($error instanceof DomainException) resurrection_stables_refuse(409, 'Your stable situation changed. Return to the stables and try again.');
+    \Resurrection\Http\FailureLog::record($error); resurrection_stables_refuse(500, 'Nothing was changed. Return to the stables and try again.');
 }

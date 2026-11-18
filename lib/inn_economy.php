@@ -1,6 +1,30 @@
 <?php
 if (!\defined('RESURRECTION_ENTRY') && \PHP_SAPI !== 'cli') { \http_response_code(404); exit; }
 require_once __DIR__ . '/specialty_onboarding.php';
+require_once __DIR__ . '/sanitize.php';
+
+/**
+ * An inn refusal in the game's frame (Phase 6 task 27, no dead ends): the same status and message, with one way out,
+ * back to the inn page the request came from (a GET only shows it): the inn, unless the caller names the bartender or
+ * the flight from the Dragon; the Shades for the dead.
+ * @param array{0: string, 1: string}|null $way
+ */
+function resurrection_inn_refuse(int $status, string $message, ?array $way = null): never {
+    global $session;
+    resurrection_refuse_page($status, $message, sanitize(getsetting('innname', LOCATION_INN)), $message,
+        !empty($session['user']['alive']) ? ($way ?? ['Return to the inn', 'inn.php']) : null);
+}
+
+/** The bartender's page, the way out of a refused bribe or specialty switch (Phase 6 task 27). */
+const RESURRECTION_INN_BARTENDER_WAY = ['Return to the bartender', 'inn.php?op=bartender'];
+
+/**
+ * The flight from the Dragon while it is still offered, else the inn (Phase 6 task 27).
+ * @return array{0: string, 1: string}
+ */
+function resurrection_inn_flee_way(): array {
+    return resurrection_inn_flee_offered() ? ['Return to the cave', 'inn.php?op=fleedragon'] : ['Return to the inn', 'inn.php'];
+}
 
 /**
  * Historical room prices: expense = round(level * (10 + ln level)); the bank adds the innfee setting,

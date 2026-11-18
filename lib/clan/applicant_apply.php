@@ -2,10 +2,10 @@
 if (!\defined('RESURRECTION_ENTRY') && \PHP_SAPI !== 'cli') { \http_response_code(404); exit; }
 		require_once("lib/clan_authority.php");
 		try { $to = \Resurrection\Http\Input::integer($_GET, 'to', 0, 0); }
-		catch (InvalidArgumentException $error) { http_response_code(400); exit('Invalid clan request.'); }
+		catch (InvalidArgumentException $error) { resurrection_clan_refuse(400, 'Invalid clan request.'); }
 		if ($to>0){
 			// Only a clan the application list offers, to a player in no clan; GET only asks.
-			if (!resurrection_clan_offered($to) || (int)$session['user']['clanid'] !== 0) { http_response_code(409); exit('That clan is not accepting your application.'); }
+			if (!resurrection_clan_offered($to) || (int)$session['user']['clanid'] !== 0) resurrection_clan_refuse(409, 'That clan is not accepting your application.', ['Return to the clan list', 'clan.php?op=list']);
 			$applyurl = "clan.php?op=apply&to=$to";
 			$actor = resurrection_clan_account((int)$session['user']['acctid']);
 			if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {

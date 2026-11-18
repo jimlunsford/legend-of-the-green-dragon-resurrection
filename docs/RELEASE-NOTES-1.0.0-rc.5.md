@@ -1,7 +1,7 @@
 # Release notes: Legend of the Green Dragon - Resurrection 1.0.0-rc.5
 
 Draft. This test build has not been cut. Started in Phase 6 task 26 (2026-11-18) from what Jim's rc.4 server test
-found; each change is recorded in full in `docs/CHANGES-FROM-1.1.2.md`. Read with the rc.4 notes,
+found, with no dead ends, part 1, from task 27; each change is recorded in full in `docs/CHANGES-FROM-1.1.2.md`. Read with the rc.4 notes,
 `docs/RELEASE-NOTES-1.0.0-rc.4.md`, the rc.3 notes, `docs/RELEASE-NOTES-1.0.0-rc.3.md`, the rc.2 notes,
 `docs/RELEASE-NOTES-1.0.0-rc.2.md`, and the rc.1 notes, `docs/RELEASE-NOTES-1.0.0-rc.1.md`: everything there still
 holds unless this page says otherwise.
@@ -42,6 +42,27 @@ Found in the rc.4 server test, 2026-11-18 (`docs/PHASE6-TASK26-20261118.md`).
   - The Dragon's fight already showed Fight and the abilities after an ability (and, as in 1.1.2, no Run from the
     Dragon). Player fights, the training yard and the graveyard offer no abilities.
 
+No dead ends, part 1 (`docs/PHASE6-TASK27-20261118.md`):
+
+- **A refused request no longer leaves a page with nothing to press.** Before, many pages answered an old link, a form
+  pressed twice or a choice that was no longer there with a bare line of text and no links. Now every page of the game
+  itself answers in the game's frame, with the same message and one link onward: back to the fight while one is going
+  on, else back to the page the request came from (the bank, a shop, the inn, the clan list, the new day, your
+  preferences, and so on), else the village, or the Shades for the dead. That link is also where the next sign-in
+  brings you back. This covers the bank, the inn and its bartender, the clan halls, the talk on every page, the Green
+  Dragon and Dragon Points, the weapon and armor shops, the forest's events, the Dark Horse Tavern's door, the
+  graveyard and the Mausoleum, the gypsy, the healer, the stables, the new day and its race and specialty choices, the
+  preferences, player fights, Ramius, the Hall of Fame, the warrior list and the bios.
+- **Refusals say what happened.** A refusal now says what did not happen and that nothing was changed, for example
+  "Training unavailable. Nothing was changed.", instead of asking you to reload, to ask for a fresh form or to have an
+  administrator repair your character.
+- **A refused fight round shows nothing of the round.** When the game could not save a round of a fight (the Green
+  Dragon's, the graveyard's, a player fight's), the refusal showed the round above its message as if it had happened.
+  Now it shows only the message and its link.
+- **The forest shows your fight.** Opening the forest while a forest fight is waiting (from the village, for example)
+  now shows that fight, ready to go on, instead of the forest's menu. Nothing is used up. With no fight waiting, the
+  forest is as before.
+
 ## Upgrading
 
 Follow the host guide's upgrade steps (`HOST-GUIDE.md`, section 9, "Upgrade"): back up the database and the
@@ -67,17 +88,15 @@ Carried from rc.4:
   title text allows color codes; the clan-delete hook is not called on disband; the healer resets hitpoints above the
   maximum on view; the Graveyard views sober a dead player; the MoTD archive skips its first month.
 - **A 1.1.2 data oddity:** two creatures are both "Loneliness".
-- **The Dark Horse Tavern's games need many clicks on Continue** between rounds (dice, stones, five-six). Recorded in
-  `ROADMAP.md` as an item for after `1.0.0`.
-- **The forest's own page shows the forest menu while a fight is waiting**, as 1.1.2's did, not the fight. Its search
-  links lead straight back into that fight, so a player is never stuck. Recorded in `ROADMAP.md` as an item for after
-  `1.0.0`.
-- **Some pages still refuse with a bare line of text.** Outside the forest, the training yard and the inn's flight
-  from the Dragon, a page that refuses a request (an old link, a form pressed twice, a missing choice) can still answer
-  with a line of text and no links. The game's next page shows the player's last page again, which usually has a way
-  on; R10, R11 and R12 were cases where it did not, and all three are fixed. Task 24 listed 211 such refusals by file
-  and line (`docs/PHASE6-TASK24-20261117.md`, section 6); task 26 framed training's and the inn's. Recorded in
-  `ROADMAP.md` as an item for after `1.0.0`.
+- **The Dark Horse Tavern's games need many clicks on Continue** between rounds (dice, stones, five-six). To be fixed
+  before `1.0.0` (`ROADMAP.md`, task 28).
+- **The bundled modules' own pages can still refuse with a bare line of text**: the Dark Horse Tavern's games and its
+  rooms, Cedrik's potions, the Drinks, the lovers, the outhouse, Seth's songs, Crazy Audrey and the Dag's bounties.
+  An old link or a form pressed twice there can still answer with a line of text and no links; the game's next page
+  shows your last page again. To be fixed before `1.0.0` (`ROADMAP.md`, task 28).
+- **A page that only an administrator's choice can fix:** when no race (or no specialty) is active on a game, the
+  new day's question says so and asks you to contact an administrator, with nothing to press. A host who turns every
+  race or specialty off sees this; the game installs with them on.
 - **Modules beyond the bundled 24** are not supported: installed module code is trusted PHP.
 - **Maintenance is not one transaction.** A failed run repeats its date-based cleanups on the next run.
 - **No 1.1.2 migration**, by design: install fresh.

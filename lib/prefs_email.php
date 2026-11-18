@@ -11,6 +11,14 @@ if (!\defined('RESURRECTION_ENTRY') && \PHP_SAPI !== 'cli') { \http_response_cod
 require_once __DIR__ . '/account_verify.php';
 require_once __DIR__ . '/player_mutation.php';
 
+/**
+ * A Preferences refusal in the game's frame (Phase 6 task 27, no dead ends): the same status and message, with one way
+ * out, back to the preferences (a GET of prefs.php only shows them).
+ */
+function resurrection_prefs_refuse(int $status, string $message): never {
+    resurrection_refuse_page($status, $message, 'Preferences', $message, ['Return to your preferences', 'prefs.php']);
+}
+
 /** The action token context of the verify button: the account and the address it was shown for. */
 function resurrection_prefs_verify_context(): string {
     global $session;
@@ -30,12 +38,12 @@ function resurrection_prefs_email_op(string $op): string {
     resurrection_require_post();
     $acctid = (int)$session['user']['acctid'];
     if ($op === 'dismissverify') {
-        if (array_diff(array_keys($_POST), ['csrf_token']) !== []) { http_response_code(400); exit('Invalid request.'); }
+        if (array_diff(array_keys($_POST), ['csrf_token']) !== []) resurrection_prefs_refuse(400, 'Invalid request.');
         $session['user']['prefs'][RESURRECTION_ACCOUNT_PROMPT_PREF] = resurrection_account_mail_address_key((string)$session['user']['emailaddress']);
         return 'The reminder is hidden until your address changes.';
     }
     if ($op === 'verifyemail') {
-        if (array_diff(array_keys($_POST), ['csrf_token', 'action_token']) !== []) { http_response_code(400); exit('Invalid request.'); }
+        if (array_diff(array_keys($_POST), ['csrf_token', 'action_token']) !== []) resurrection_prefs_refuse(400, 'Invalid request.');
         resurrection_consume_action('prefs-verify', resurrection_prefs_verify_context());
         return match (resurrection_account_verify_send($acctid)) {
             'sent' => 'A link to confirm your address is on its way to it. It works for 24 hours. Check your spam folder too.',
@@ -46,7 +54,7 @@ function resurrection_prefs_email_op(string $op): string {
             default => 'The mail could not be sent. Try again later.',
         };
     }
-    if (array_diff(array_keys($_POST), ['csrf_token', 'action_token', 'emailpassword', 'newemail']) !== []) { http_response_code(400); exit('Invalid request.'); }
+    if (array_diff(array_keys($_POST), ['csrf_token', 'action_token', 'emailpassword', 'newemail']) !== []) resurrection_prefs_refuse(400, 'Invalid request.');
     resurrection_consume_action('prefs-email', resurrection_prefs_change_context());
     $password = $_POST['emailpassword'] ?? '';
     $new = trim((string)($_POST['newemail'] ?? ''));

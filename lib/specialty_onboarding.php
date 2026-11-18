@@ -1,6 +1,7 @@
 <?php
 if (!\defined('RESURRECTION_ENTRY') && \PHP_SAPI !== 'cli') { \http_response_code(404); exit; }
 require_once __DIR__ . '/player_mutation.php';
+require_once __DIR__ . '/newday_daily.php';
 
 /**
  * The shipped specialty identities, resolved only through active installed modules.
@@ -114,11 +115,11 @@ function resurrection_specialty_onboarding(): void {
             resurrection_require_post();
         }
     } catch (InvalidArgumentException $error) {
-        http_response_code(400); exit('Invalid specialty selection.');
+        resurrection_newday_refuse(400, 'Invalid specialty selection.');
     } catch (DomainException $error) {
-        http_response_code(409); exit('Specialty selection is unavailable.');
+        resurrection_newday_refuse(409, 'Specialty selection is unavailable.');
     } catch (Throwable $error) {
-        \Resurrection\Http\FailureLog::record($error); http_response_code(500); exit('Specialty selection was not completed. Request a fresh form.');
+        \Resurrection\Http\FailureLog::record($error); resurrection_newday_refuse(500, 'Specialty selection was not completed. Nothing was changed.');
     }
     page_footer();
 }

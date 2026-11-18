@@ -3179,7 +3179,16 @@ function fixturefightoptions_dohook($hook,$args) { $args['fixture_injected']=1; 
                         e({'fight':'1','heal':'1.5','magic':'0','defend':False}),e({'evil':'1'}),e({'fight':'1','magic':'-1'})]:
                     with self.subTest(abilities=abilities):
                         q('UPDATE companions SET abilities=? WHERE companionid=1',[abilities])
-                        status,body,before=hire(1); self.assertEqual(500,status,body[:500]); self.assertIn('Nothing was changed',body); self.assertEqual(before,snap())
+                        status,body,before=hire(1); self.assertEqual(500,status,body[:500]); self.assertIn('Nothing was changed',body)
+                        # Since Phase 6 task 27 (no dead ends) the refusal answers in the game's frame with the one way back to
+                        # the camp, and keeps that page for the player in place of the camp's, as every framed refusal keeps
+                        # its page; nothing else of the account is written.
+                        after=snap(); self.assertEqual(before[0],after[0])
+                        self.assertIn('A Mercenary Camp',html.unescape(re.search(r'<title>([^<]*)',body).group(1)))
+                        navs=[html.unescape(link) for link in re.findall(r'<a href="([^"#]+)"[^>]*class="rz-navitem nav"',body)]
+                        self.assertEqual(['mercenarycamp.php'],[re.sub(r'[?&]c=[0-9a-z-]+$','',link) for link in navs],body[-3000:])
+                        self.assertEqual('mercenarycamp.php',q('SELECT restorepage FROM accounts WHERE acctid=?',[player])[0]['restorepage'])
+                        self.assertIn('Nothing was changed',after[1][0]['output'])
                 q('UPDATE companions SET abilities=? WHERE companionid=1',[rows[0]['abilities']])
                 # The Dark Arts skeleton warrior, raised in the forest, fights in an ordinary round and keeps its exact form.
                 weak=e({'enemies':[dict(f['enemy'],creatureattack=1,creaturedefense=0)],'options':{'type':'forest','didsurprise':1}})
@@ -10105,6 +10114,12 @@ function MODULE_dohook($hook,$args) {
                 reset(); request=self._security_client(); self._security_allow(player,'prefs.php')
                 status,body=request('prefs.php'); self.assertEqual(200,status,body[:2000]); self.assertNotIn('oldvalues',body)
                 csrf=re.search(r'name=[\'"]csrf_token[\'"] value=[\'"]([a-f0-9]{64})',body).group(1)
+                # Since Phase 6 task 27 (no dead ends) the refusal answers in the game's frame with the way back to the
+                # preferences: it writes the navigation only (that way out as the one allowed nav and the return page, the
+                # page timing and the kept page) and, as every page shown does, the time the player was last seen;
+                # nothing else of the account changes.
+                navigation=['allowednavs','restorepage','gentime','gentimecount','gensize','laston']
+                unframed=lambda shot: ([{k:v for k,v in row.items() if k not in navigation} for row in shot[0]],shot[2])
                 for field,value in [('timestamp','9'),('tabconfig','yes'),('timeoffset','soon'),('language',"en' OR 1=1 -- "),('5','x'),('bad[]','x')]:
                     with self.subTest(field=field,value=value):
                         before=snapshot()
@@ -10112,7 +10127,12 @@ function MODULE_dohook($hook,$args) {
                             'pass1':'Synthetic new password 1','pass2':'Synthetic new password 1'})
                         # prefs.php already refused a posted array as 'Invalid preference.'
                         self.assertEqual(400,status,body[:2000]); self.assertIn('Invalid preference.' if field=='bad[]' else 'Your preferences were not saved',body)
-                        self.assertEqual(before,snapshot())
+                        after=snapshot(); self.assertEqual(unframed(before),unframed(after))
+                        way=[html.unescape(link) for link in re.findall(r'<a href="([^"#]+)"[^>]*class="rz-navitem nav"',body)]
+                        self.assertEqual(['prefs.php'],[re.sub(r'[?&]c=[0-9a-z-]+$','',link) for link in way],body[-3000:])
+                        self.assertEqual('prefs.php',after[0][0]['restorepage'])
+                        # The way out is the preferences' form again, as a player would follow it.
+                        status,body=request(way[0]); self.assertEqual(200,status,body[:2000]); self.assertIn('prefs.php?op=save',body)
                 status,body=request('prefs.php?op=save',{'csrf_token':csrf,'timestamp':'1','timeoffset':''})
                 self.assertEqual(200,status,body[:2000]); self.assertIn('Settings Saved',body)
                 prefs=q('SELECT prefs FROM accounts WHERE acctid=?',[player])[0]['prefs']
@@ -11343,13 +11363,13 @@ function MODULE_dohook($hook,$args) {
                 return body
             before=f['account']('turns','gold','badguy','hitpoints','alive')
             refused('forest.php?op=search&bogus=1',400,'Invalid Forest action.','forest.php')
-            refused('forest.php?op=fight',409,'Forest combat unavailable. Stored state was preserved','forest.php')
+            refused('forest.php?op=fight',409,'Forest combat unavailable. Nothing was changed.','forest.php')
             # Since Phase 6 task 26 (R13) the GET of the specialty round's page is forest.php's page (the forest, with no fight
             # stored); the round's own refusal is its POST's.
-            refused('forest.php?op=specialty',409,'Specialty combat is unavailable. Request a fresh form.','forest.php',{'level':'1'})
+            refused('forest.php?op=specialty',409,'Specialty combat is unavailable. Nothing was changed.','forest.php',{'level':'1'})
             self.assertEqual(before,f['account']('turns','gold','badguy','hitpoints','alive'))
             self.query('UPDATE accounts SET alive=0,hitpoints=0 WHERE acctid=?',[player])
-            body=refused('forest.php?op=search',409,'Forest combat unavailable. Stored state was preserved','shades.php')
+            body=refused('forest.php?op=search',409,'Forest combat unavailable. Nothing was changed.','shades.php')
             status,page=call(next(link for link in f['links'](body) if link.startswith('shades.php')))
             self.assertEqual(200,status,page[:500]); self.assertIn('<title>Land of the Shades',page)
 
@@ -11460,7 +11480,8 @@ function MODULE_dohook($hook,$args) {
             _,village,_=f['follow'](end,'village.php')
             self.assertIn('<title>Degolburg Square',village)
 
-    TRAINING_UNAVAILABLE = 'Training unavailable. Stored state was preserved. Reload for a fresh form, or request operator repair if state remains invalid.'
+    # Phase 6 task 27 (DO 3): the player is told what did not happen and that nothing was changed, not to repair state.
+    TRAINING_UNAVAILABLE = 'Training unavailable. Nothing was changed.'
 
     def _training_framed(self, f, status, body, expected, message, way):
         """A training refusal (Phase 6 task 26, R12): its status and message kept, in the game's frame with the credits,
@@ -11555,14 +11576,14 @@ function MODULE_dohook($hook,$args) {
             try:
                 self._security_allow(player,'train.php?op=challenge'); code,_,body=f['request']('train.php?op=challenge',fields)
             finally: self.query('ALTER TABLE accounts DROP CONSTRAINT fixture_training_failure')
-            self._training_framed(f,code,body,500,'Training action was not completed. Request a fresh form.','train.php')
+            self._training_framed(f,code,body,500,'Training action was not completed. Nothing was changed.','train.php')
             self.assertEqual(before,f['account'](*columns))
             # train.php's own 500, a failure while common.php loads (here the clans table is gone).
             self.query('RENAME TABLE clans TO fixture_clans_gone')
             try:
                 self._security_allow(player,'train.php'); code,_,body=f['request']('train.php')
             finally: self.query('RENAME TABLE fixture_clans_gone TO clans')
-            self._training_framed(f,code,body,500,'Training could not be loaded. Stored state was preserved.','train.php')
+            self._training_framed(f,code,body,500,'Training could not be loaded. Nothing was changed.','train.php')
             # With a master fight stored, the way out is the fight.
             self._security_allow(player,'train.php'); _,yard,_=f['get']('train.php')
             status,body=f['post']('train.php?op=challenge',f['form'](yard,'train.php?op=challenge')); self.assertEqual(200,status,body[:1500])
@@ -11721,6 +11742,323 @@ function MODULE_dohook($hook,$args) {
             self.assertNotIn('action="forest.php?op=fight"',page)
             self.assertTrue(any(link.startswith('forest.php?op=search') for link in f['links'](page)),page[-3000:])
             self.assertEqual(uses,f['uses']())
+
+    # Phase 6 task 27 (no dead ends, part 1): every refusal on the game's own player pages answers in the game's frame
+    # with one way out. The tests below reach one refusal of each page family the way a player does (the page's own
+    # links and forms, signed in through the real form, every redirect followed by its Location), with fixtures only for
+    # state: the player's starting state, a change made elsewhere, the database refusing a write (a CHECK constraint on
+    # one column), or an address the game never links, allowed as a tampered link would be.
+
+    def _one_way_out(self, f, status, body, expected, title, message, way, landing):
+        """A framed refusal: the status, the game's frame with the credits, the message, one way out, which is also the
+        return page (the page after the next sign-in); following it gives a working page. Returns that page."""
+        self.assertEqual(expected,status,re.sub(r'\s+',' ',re.sub(r'<[^>]+>',' ',body))[:1500])
+        framed=re.search(r'<title>([^<]*)',body)
+        self.assertIsNotNone(framed,'a bare refusal, no frame and no link: '+body[:500])
+        self.assertIn(title,html.unescape(framed.group(1)),body[:500])
+        self.assertIn(message,re.sub(r'\s+',' ',html.unescape(re.sub(r'<[^>]+>','',body))))
+        for credit in self.REFUSAL_CREDITS: self.assertIn(credit,body)
+        # Nothing of the refused request: no battle screen of a round the refusal rolled back.
+        self.assertNotIn('class="rz-battle"',body,'the refusal shows a battle screen for a round that did not happen')
+        navs=f['navs'](body)
+        self.assertEqual([way],[re.sub(r'[?&]c=[0-9a-z-]+$','',link) for link in navs],body[-3000:])
+        self.assertEqual(way,re.sub(r'[?&]c=[0-9a-z-]+$','',f['account']('restorepage')['restorepage']))
+        _,page,chain=f['get'](navs[0])
+        self.assertIn(landing,html.unescape(re.search(r'<title>([^<]*)',page).group(1)),' -> '.join(chain)+' '+page[:1500])
+        return page
+
+    @contextmanager
+    def _refused_write(self, login, column, value):
+        """The database refuses this player's write of the column while it would leave value (a fixture for a failure
+        the page catches and answers 500)."""
+        self.assertRegex(login+column+str(value),r'\A\w*\Z')
+        value=f"'{value}'" if isinstance(value,str) else int(value)
+        self.query(f"ALTER TABLE accounts ADD CONSTRAINT fixture_refused_{column} CHECK (login <> '{login}' OR `{column}` = {value})")
+        try: yield
+        finally: self.query(f'ALTER TABLE accounts DROP CONSTRAINT fixture_refused_{column}')
+
+    def test_village_pages_refuse_in_the_game_frame_with_the_way_back_http(self):
+        """Phase 6 task 27, no dead ends: the bank, the list, the Hall of Fame, the preferences, the village's talk, the
+        inn's rooms and bartender, the weapon and armor shops, the gypsy, the stables, the healer and the bios answered a
+        refusal as a bare status and text with no link. Each now answers in the game's frame with the way back to the
+        page the request came from (a GET of it only shows it), status and message kept, and nothing changed.
+        The gold payments and the mount are refused by the database (a fixture); the rest are typed or tampered."""
+        with self._yard_fixture('VillageRefusals') as f:
+            self.query("UPDATE accounts SET gold=5000,gems=20,goldinbank=0,hitpoints=50,maxhitpoints=100,hashorse=0,"
+                       "boughtroomtoday=0,weapon='Fists',armor='T-Shirt',weaponvalue=0,armorvalue=0 WHERE acctid=?",[f['player']])
+            columns=('gold','gems','goldinbank','hitpoints','hashorse','boughtroomtoday','weapon','armor')
+            before=f['account'](*columns)
+            def village(body):
+                return body if 'Degolburg Square' in body else f['follow'](body,'village.php')[1]
+            _,body,_=f['sign_in']()
+            # The bank: an amount typed as a word.
+            _,bank,_=f['follow'](body,'bank.php'); _,deposit,_=f['follow'](bank,'bank.php?op=deposit')
+            status,body=f['post']('bank.php?op=depositfinish',self._security_fields(deposit,'bank.php?op=depositfinish')|{'amount':'ten'})
+            body=self._one_way_out(f,status,body,400,'Ye Olde Bank','Invalid bank request.','bank.php','Ye Olde Bank')
+            # The list: a name longer than the search takes.
+            _,listed,_=f['follow'](village(body),'list.php')
+            status,body=f['post']('list.php?op=search',{'name':'a'*300})
+            body=self._one_way_out(f,status,body,400,'List Warriors','Invalid list request.','list.php','List Warriors')
+            # The Hall of Fame: an address it never links, allowed as a tampered link would be.
+            _,hof,_=f['follow'](village(body),'hof.php')
+            self._security_allow(f['player'],'hof.php?op=bogus'); status,_,body=f['request']('hof.php?op=bogus')
+            body=self._one_way_out(f,status,body,400,'Hall of Fame','Invalid Hall of Fame request.','hof.php','Hall of Fame')
+            # The preferences: an hour offset typed as a word.
+            _,prefs,_=f['follow'](village(body),'prefs.php'); stored=f['account']('prefs')
+            status,body=f['post']('prefs.php?op=save',{'csrf_token':self._security_fields(prefs,'prefs.php?op=changeemail')['csrf_token'],'timeoffset':'soon'})
+            body=self._one_way_out(f,status,body,400,'Preferences','Your preferences were not saved: a value is not valid. Nothing was changed.','prefs.php','Preferences')
+            self.assertEqual(stored,f['account']('prefs'))
+            # The village's talk: a comment form whose section was edited to one the page did not offer.
+            square=village(body)
+            talk=re.search(r'<form[^>]*action=[\'"]village\.php\?comment=1[\'"][^>]*>(.*?)</form>',square,re.S).group(1)
+            fields={name:html.unescape(value) for name,value in re.findall(r'name=[\'"]([a-z_]+)[\'"][^>]*value=[\'"]([^\'"]*)',talk)}
+            status,body=f['post']('village.php?comment=1',fields|{'insertcommentary':'Hello','section':'not-offered'})
+            body=self._one_way_out(f,status,body,400,'Commentary','Invalid comment.','village.php','Degolburg Square')
+            # Every gold payment below: the database refuses the write, the page answers 500.
+            with self._refused_write('VillageRefusals','gold',5000):
+                _,inn,_=f['follow'](body,'inn.php'); _,room,_=f['follow'](inn,'inn.php?op=room'); _,pay,_=f['follow'](room,'inn.php?op=room&pay=1')
+                status,body=f['post']('inn.php?op=room&pay=1',self._security_fields(pay,'inn.php?op=room&pay=1'))
+                body=self._one_way_out(f,status,body,500,"The Boar's Head Inn",'The room was not rented. Return to the inn and ask again.','inn.php',"The Boar's Head Inn")
+                _,bar,_=f['follow'](body,'inn.php?op=bartender'); _,bribe,_=f['follow'](bar,'inn.php?op=bartender&act=bribe')
+                _,offer,_=f['follow'](bribe,'inn.php?op=bartender&act=bribe&type=gold')
+                action=html.unescape(re.search(r'<form[^>]*action="(inn\.php\?op=bartender&amp;act=bribe&amp;type=gold&amp;amt=\d+)"',offer).group(1))
+                status,body=f['post'](action,self._security_fields(offer,action))
+                body=self._one_way_out(f,status,body,500,"The Boar's Head Inn",'Nothing was paid. Return to the bartender and try again.','inn.php?op=bartender',"The Boar's Head Inn")
+                for shop,title in [('weapons.php',"MightyE's Weapons"),('armor.php','Pegasus Armor')]:
+                    _,page,_=f['follow'](village(body),shop)
+                    status,body=f['post'](shop+'?op=buy&id=1',self._security_fields(page,shop+'?op=buy&id=1'))
+                    body=self._one_way_out(f,status,body,500,title,'Nothing was changed. Return to the shop and try again.',shop,title)
+                _,gypsy,_=f['follow'](village(body),'gypsy.php'); _,pay,_=f['follow'](gypsy,'gypsy.php?op=pay')
+                status,body=f['post']('gypsy.php?op=pay',self._security_fields(pay,'gypsy.php?op=pay'))
+                body=self._one_way_out(f,status,body,500,"Gypsy Seer's tent",'Nothing was changed. Return to the gypsy and try again.','gypsy.php',"Gypsy Seer's tent")
+                _,forest,_=f['follow'](village(body),'forest.php'); _,healer,_=f['follow'](forest,'healer.php')
+                _,potion,_=f['follow'](healer,'healer.php?op=buy&pct=100')
+                action=html.unescape(re.search(r'<form[^>]*action=[\'"](healer\.php\?op=buy&(?:amp;)?pct=100[^\'"]*)[\'"]',potion).group(1))
+                status,body=f['post'](action,self._security_fields(potion,action))
+                body=self._one_way_out(f,status,body,500,"Healer's Hut",'Nothing was changed. Return to the healer and try again.','healer.php',"Healer's Hut")
+            # The stables: the database refuses the mount.
+            with self._refused_write('VillageRefusals','hashorse',0):
+                _,stables,_=f['follow'](village(body),'stables.php'); _,mount,_=f['follow'](stables,'stables.php?op=examine&id=1')
+                _,buy,_=f['follow'](mount,'stables.php?op=buymount&id=1')
+                action=html.unescape(re.search(r'<form[^>]*action=[\'"](stables\.php\?op=confirmbuy[^\'"]*)[\'"]',buy).group(1))
+                status,body=f['post'](action,self._security_fields(buy,action))
+                body=self._one_way_out(f,status,body,500,"Merick's Stables",'Nothing was changed. Return to the stables and try again.','stables.php',"Merick's Stables")
+            self.assertEqual(before,f['account'](*columns))
+            # The bios, a moderator's page: an address it never links, allowed as a tampered link would be.
+            self.query('UPDATE accounts SET superuser=16 WHERE acctid=?',[f['player']])
+            self._security_allow(f['player'],'bios.php?op=block&userid=99999999999'); status,_,body=f['request']('bios.php?op=block&userid=99999999999')
+            self._one_way_out(f,status,body,400,'User Bios','Invalid bio request.','bios.php','User Bios')
+
+    def test_the_graveyard_haunting_and_ramius_refuse_with_the_way_back_for_the_dead_http(self):
+        """Phase 6 task 27, no dead ends: the graveyard's torment, the Mausoleum's haunting and Ramius's resurrection
+        answered a refusal as a bare status and text with no link. Each now answers in the game's frame with the way
+        back to the graveyard or the Mausoleum, status and message kept, and nothing changed. The torment's search and
+        the haunt are refused by the database (a fixture); Ramius's favor drops elsewhere before the player asks."""
+        with self._yard_fixture('DeadRefusals') as f:
+            target=self._security_target('DeadRefusalsTarget')
+            try:
+                self.query("UPDATE accounts SET name='Haunted Fixture',level=10,hauntedby='',locked=0 WHERE acctid=?",[target])
+                self.query("UPDATE accounts SET alive=0,hitpoints=0,deathpower=150,gravefights=10,soulpoints=50 WHERE acctid=?",[f['player']])
+                columns=('alive','deathpower','gravefights','soulpoints','badguy','resurrections')
+                before=f['account'](*columns)
+                _,shades,_=f['sign_in'](); self.assertIn('Land of the Shades',shades)
+                _,yard,_=f['follow'](shades,'graveyard.php')
+                with self._refused_write('DeadRefusals','gravefights',10):
+                    status,body=f['post']('graveyard.php?op=search',self._security_fields(yard,'graveyard.php?op=search'))
+                    body=self._one_way_out(f,status,body,500,'The Graveyard','Graveyard action was not completed. Nothing was changed.','graveyard.php','The Graveyard')
+                _,mausoleum,_=f['follow'](body,'graveyard.php?op=enter'); _,question,_=f['follow'](mausoleum,'graveyard.php?op=question')
+                _,haunt,_=f['follow'](question,'graveyard.php?op=haunt')
+                status,found=f['post']('graveyard.php?op=haunt2',{'name':'Haunted Fixture'}); self.assertEqual(200,status,found[:1500])
+                _,confirm,_=f['follow'](found,'graveyard.php?op=haunt3&name=DeadRefusalsTarget')
+                with self._refused_write('DeadRefusals','deathpower',150):
+                    status,body=f['post']('graveyard.php?op=haunt3&name=DeadRefusalsTarget',self._security_fields(confirm,'graveyard.php?op=haunt3&name=DeadRefusalsTarget'))
+                    body=self._one_way_out(f,status,body,500,'The Graveyard','Nothing was changed. Return to the Mausoleum and try again.','graveyard.php?op=enter','The Graveyard')
+                self.assertEqual('',self.query('SELECT hauntedby FROM accounts WHERE acctid=?',[target])[0]['hauntedby'])
+                self.assertEqual(before,f['account'](*columns))
+                _,question,_=f['follow'](body,'graveyard.php?op=question')
+                self.query('UPDATE accounts SET deathpower=99 WHERE acctid=?',[f['player']])
+                status,_,body=f['request'](next(link for link in f['navs'](question) if link.startswith('graveyard.php?op=resurrection')))
+                self._one_way_out(f,status,body,409,'The Graveyard','Ramius resurrection is unavailable. Complete any due New Day or encounter first. Nothing was changed.','graveyard.php','The Graveyard')
+                self.assertEqual(('0','99'),(str(f['account']('alive')['alive']),str(f['account']('deathpower')['deathpower'])))
+            finally:
+                for table, column in [('accounts_output','acctid'),('accounts','acctid')]:
+                    self.query(f'DELETE FROM {table} WHERE {column}=?',[target])
+
+    def test_clan_and_pvp_refusals_answer_in_the_game_frame_with_the_way_back_http(self):
+        """Phase 6 task 27, no dead ends: the clan halls (a clan gone before the player opens it, a clan that stopped
+        taking applications) and the fields of PvP (an attack the database refuses, a fixture) answered a refusal as a
+        bare status and text with no link. Each now answers in the game's frame with the way back to the clan list or
+        the fields, status and message kept, and nothing changed."""
+        with self._yard_fixture('ClanPvpRefusals') as f:
+            others=[self._security_target('ClanPvpLeaderA'),self._security_target('ClanPvpLeaderB')]
+            try:
+                clans=[]
+                for short,leader in zip(['RFA','RFB'],others):
+                    self.query("INSERT INTO clans (clanname,clanshort) VALUES (?,?)",['Refusal Fixture '+short,short])
+                    clans.append(self.query('SELECT clanid FROM clans WHERE clanshort=?',[short])[0]['clanid'])
+                    self.query("UPDATE accounts SET name=?,clanid=?,clanrank=31,level=10,experience=20000,alive=1,locked=0,slaydragon=0,"
+                               "loggedin=0,laston='2000-01-01 00:00:00',age=20,dragonkills=0,pk=0,pvpflag='2000-01-01 00:00:00',"
+                               "location='Degolburg',hitpoints=100,maxhitpoints=100,badguy='' WHERE acctid=?",['Leader '+short,clans[-1],leader])
+                self.query("UPDATE accounts SET clanid=0,clanrank=0,playerfights=10,age=20 WHERE acctid=?",[f['player']])
+                columns=('clanid','clanrank','playerfights','badguy','gold','experience','hitpoints')
+                before=f['account'](*columns)
+                _,village,_=f['sign_in']()
+                # The clan list: the first clan is gone (disbanded elsewhere) before the player opens it.
+                _,halls,_=f['follow'](village,'clan.php'); _,listing,_=f['follow'](halls,'clan.php?op=list')
+                detail=next(link for link in f['links'](listing) if link.startswith(f'clan.php?detail={clans[0]}'))
+                self.query('UPDATE accounts SET clanid=0,clanrank=0 WHERE acctid=?',[others[0]]); self.query('DELETE FROM clans WHERE clanid=?',[clans[0]])
+                status,_,body=f['request'](detail)
+                body=self._one_way_out(f,status,body,404,'Clan Halls','No such clan.','clan.php?op=list','Clan Listing')
+                # The applications: the second clan stops taking them (its last member leaves) before the player asks.
+                _,halls,_=f['get'](next(link for link in f['navs'](body) if re.fullmatch(r'clan\.php(\?c=[0-9a-z-]+)?',link)))
+                _,apply,_=f['follow'](halls,'clan.php?op=apply')
+                link=next(link for link in f['links'](apply) if link.startswith(f'clan.php?op=apply&to={clans[1]}'))
+                self.query('UPDATE accounts SET clanid=0,clanrank=0 WHERE acctid=?',[others[1]])
+                status,_,body=f['request'](link)
+                body=self._one_way_out(f,status,body,409,'Clan Halls','That clan is not accepting your application.','clan.php?op=list','Clan Listing')
+                # The fields: the database refuses the attack.
+                _,fields,_=f['follow'](body,'village.php'); _,fields,_=f['follow'](fields,'pvp.php')
+                attack=next(link for link in f['links'](fields) if link.startswith(f'pvp.php?act=attack&name={others[0]}'))
+                _,form,_=f['get'](attack)
+                action=re.sub(r'[?&]c=[0-9a-z-]+$','',attack)
+                with self._refused_write('ClanPvpRefusals','playerfights',10):
+                    status,body=f['post'](action,self._security_fields(form,action))
+                    self._one_way_out(f,status,body,500,'PvP Combat!','PvP action failed. Nothing was changed.','pvp.php','PvP Combat!')
+                self.assertEqual(before,f['account'](*columns))
+            finally:
+                self.query("DELETE FROM clans WHERE clanshort IN ('RFA','RFB')")
+                for other in others:
+                    for table, column in [('accounts_output','acctid'),('accounts','acctid')]:
+                        self.query(f'DELETE FROM {table} WHERE {column}=?',[other])
+
+    def test_the_dragon_new_day_onboarding_and_dragon_points_refuse_with_the_way_back_http(self):
+        """Phase 6 task 27, no dead ends: the Green Dragon's cave, the New Day, its race and specialty questions and the
+        Dragon Point allocation answered a refusal as a bare status and text with no link (newday.php's refusals stayed
+        plain by design until this task). Each now answers in the game's frame with the way back to the cave or the new
+        day, status and message kept, and nothing changed. One Dragon Point of two spent is refused as typed; the
+        cave's Confront, the race, the specialty and the New Day itself are refused by the database (a fixture)."""
+        registry=self.query("SELECT modulename,active FROM modules WHERE modulename IN ('racehuman','specialtymysticpower')")
+        with self._yard_fixture('DayRefusals') as f:
+          try:
+            self.query("UPDATE accounts SET level=15,experience=100000,seendragon=0,hitpoints=150,maxhitpoints=150 WHERE acctid=?",[f['player']])
+            _,village,_=f['sign_in']()
+            _,forest,_=f['follow'](village,'forest.php'); _,seek,_=f['follow'](forest,'forest.php?op=dragon')
+            status,cave=f['post']('forest.php?op=dragon',f['form'](seek,'forest.php?op=dragon')); self.assertEqual(200,status,cave[:1500])
+            _,begin,_=f['follow'](cave,'dragon.php')
+            with self._refused_write('DayRefusals','badguy',''):
+                status,body=f['post']('dragon.php?op=begin',self._security_fields(begin,'dragon.php?op=begin'))
+                body=self._one_way_out(f,status,body,500,'The Green Dragon!','Dragon action was not completed. Nothing was changed.','dragon.php','The Green Dragon!')
+            self.assertIn('Confront the Green Dragon',body); self.assertEqual('',f['account']('badguy')['badguy'])
+            # A new character's next day, after two Dragon kills: the points, the race, the specialty, the day (one
+            # race and one specialty active).
+            f['request'].logout()
+            self.query("UPDATE modules SET active=1 WHERE modulename IN ('racehuman','specialtymysticpower')")
+            self.query("UPDATE accounts SET level=1,experience=0,seendragon=0,hitpoints=10,maxhitpoints=10,race='',specialty='',dragonkills=2,"
+                       "dragonpoints='a:0:{}',turns=0,badguy='',restorepage='',allowednavs='a:1:{s:11:\"village.php\";b:1;}' WHERE acctid=?",[f['player']])
+            f['roll_over']()
+            columns=('race','specialty','dragonpoints','maxhitpoints','turns','lastnewday','age')
+            before=f['account'](*columns)
+            path,body,chain=f['sign_in'](); self.assertEqual('newday.php',path,' -> '.join(chain))
+            action=html.unescape(re.search(r'<form id="dkForm" method="POST" action="([^"]+)"',body).group(1))
+            spend=self._security_fields(body,action)|{'allocation':'bulk','hp':'1','ff':'0','at':'0','de':'0'}
+            status,body=f['post'](action,spend)
+            body=self._one_way_out(f,status,body,400,'It is a new day!','Invalid Dragon Point allocation. Nothing was changed.','newday.php','Dragon Points')
+            self.assertEqual(before,f['account'](*columns))
+            action=html.unescape(re.search(r'<form id="dkForm" method="POST" action="([^"]+)"',body).group(1))
+            status,body=f['post'](action,self._security_fields(body,action)|{'allocation':'bulk','hp':'2','ff':'0','at':'0','de':'0'})
+            self.assertEqual(200,status,body[:1500]); _,body,_=f['follow'](body,'newday.php?continue=1')
+            for question,column,value in [('race','race','Human'),('specialty','specialty','MP')]:
+                self.assertIn('set'+question,body)
+                with self._refused_write('DayRefusals',column,''):
+                    status,body=f['post']('newday.php?continue=1',self._security_fields(body)|{'onboarding':question,'set'+question:value})
+                    body=self._one_way_out(f,status,body,500,'It is a new day!',f'{question.capitalize()} selection was not completed. Nothing was changed.','newday.php','')
+                self.assertIn('set'+question,body); self.assertEqual('',f['account'](column)[column])
+                status,body=f['post']('newday.php?continue=1',self._security_fields(body)|{'onboarding':question,'set'+question:value})
+                self.assertEqual(200,status,body[:1500]); self.assertEqual(value,f['account'](column)[column])
+                _,body,_=f['follow'](body,'newday.php?continue=1')
+            with self._refused_write('DayRefusals','turns',0):
+                status,body=f['post']('newday.php?continue=1',self._security_fields(body)|{'newday':'normal'})
+                body=self._one_way_out(f,status,body,500,'It is a new day!','New Day was not completed. Nothing was changed.','newday.php','')
+            self.assertEqual(before['lastnewday'],f['account']('lastnewday')['lastnewday'])
+            page=f['new_day'](body)
+            self.assertNotEqual('0',str(f['account']('turns')['turns']))
+            _,village,_=f['follow'](page,'village.php'); self.assertIn('<title>Degolburg Square',village)
+          finally:
+            for row in registry: self.query('UPDATE modules SET active=? WHERE modulename=?',[row['active'],row['modulename']])
+
+    @contextmanager
+    def _forest_fixture(self, login):
+        """The yard fixture's player in the forest with findgold the one active module, creatures that last a few rounds
+        (put back afterwards, in one statement: a fixture query per row starts a PHP process each)."""
+        creatures=self.query('SELECT creatureid,creaturehealth,creatureattack,creaturedefense FROM creatures')
+        registry=self.query("SELECT modulename,active FROM modules WHERE modulename='findgold'")
+        with self._yard_fixture(login) as f:
+            try:
+                self.query("UPDATE modules SET active=1 WHERE modulename='findgold'")
+                self.query('UPDATE creatures SET creaturehealth=400,creatureattack=1,creaturedefense=1')
+                self.query('UPDATE accounts SET gold=5000,hitpoints=1000,maxhitpoints=1000,attack=30 WHERE acctid=?',[f['player']])
+                yield f
+            finally:
+                stats=['creaturehealth','creatureattack','creaturedefense']
+                self.query('UPDATE creatures SET '+','.join(f'{stat}=CASE creatureid '+' '.join('WHEN ? THEN ?' for _ in creatures)+' END' for stat in stats),
+                           [value for stat in stats for row in creatures for value in (row['creatureid'],row[stat])])
+                for row in registry: self.query('UPDATE modules SET active=? WHERE modulename=?',[row['active'],row['modulename']])
+
+    def test_a_forest_event_refusal_answers_in_the_game_frame_with_the_way_back_http(self):
+        """Phase 6 task 27, no dead ends: a forest event's refusal (here the database refusing the gold the event gives,
+        a fixture) answered a bare status and text with no link. It now answers in the game's frame with the way back to
+        the forest, which shows the event still pending; the event then completes."""
+        with self._forest_fixture('EventRefusals') as f:
+            self.query("UPDATE settings SET value='100' WHERE setting='forestchance'")
+            _,village,_=f['sign_in']()
+            _,forest,_=f['follow'](village,'forest.php'); _,search,_=f['follow'](forest,'forest.php?op=search')
+            status,event=f['post']('forest.php?op=search',f['form'](search,'forest.php?op=search')|{'type':''})
+            self.assertEqual(200,status,event[:1500]); self.assertEqual('module:findgold',f['account']('specialinc')['specialinc'])
+            _,event,_=f['follow'](event,'forest.php')
+            with self._refused_write('EventRefusals','gold',5000):
+                status,body=f['post']('forest.php?op=',f['form'](event,'forest.php?op='))
+                body=self._one_way_out(f,status,body,500,'The Forest','Event could not be completed. Nothing was changed.','forest.php','')
+            self.assertEqual(('module:findgold','5000'),(f['account']('specialinc')['specialinc'],str(f['account']('gold')['gold'])))
+            status,body=f['post']('forest.php?op=',f['form'](body,'forest.php?op='))
+            self.assertEqual(200,status,body[:1500]); self.assertEqual('',f['account']('specialinc')['specialinc'])
+            self.assertGreater(int(f['account']('gold')['gold']),5000)
+
+    def test_the_forest_with_no_op_shows_the_stored_fight_or_the_forest_http(self):
+        """Phase 6 task 27, DO 4: forest.php with no op while a forest fight is stored showed the forest menu, as 1.1.2's
+        did (its search links led back into the fight). It now shows that fight, with Fight, Run and autofight, and
+        nothing is spent; with no fight stored it is the forest, as before. The player reaches it as one can: a fight's
+        form pressed twice is refused with the way to the village, whose forest link is forest.php. The fight is played
+        to its end."""
+        with self._forest_fixture('ForestNoOp') as f:
+            _,village,_=f['sign_in']()
+            _,forest,_=f['follow'](village,'forest.php'); _,search,_=f['follow'](forest,'forest.php?op=search')
+            status,fight=f['post']('forest.php?op=search',f['form'](search,'forest.php?op=search')|{'type':''})
+            self.assertEqual(200,status,fight[:1500]); self._the_fights_forms(fight)
+            # The first page's Fight pressed again after a round: refused, with the way to the village.
+            first=f['form'](fight,'forest.php?op=fight')
+            status,body=f['post']('forest.php?op=fight',first); self.assertEqual(200,status,body[:1500])
+            status,refused=f['post']('forest.php?op=fight',first); self.assertEqual(409,status,refused[:1500])
+            self.assertIn(self.REFUSAL_TEXT,re.sub(r'\s+',' ',re.sub(r'<[^>]+>','',refused)))
+            _,village,_=f['follow'](refused,'village.php'); self.assertIn('<title>Degolburg Square',village)
+            columns=('badguy','hitpoints','turns','gold','experience','bufflist','specialinc')
+            before=f['account'](*columns); self.assertNotEqual('',before['badguy'])
+            # The village's forest link, forest.php with no op: the stored fight, nothing spent.
+            path,page,_=f['follow'](village,'forest.php')
+            self.assertRegex(path,r'\Aforest\.php(\?c=[0-9a-z-]+)?\Z')
+            self._the_fights_forms(page); self.assertIn('<title>The Forest',page)
+            self.assertNotIn('forest.php?op=search',' '.join(f['links'](page)))
+            self.assertEqual(before,f['account'](*columns))
+            # Played to its end with its autofight ("Until current enemy dies").
+            for _ in range(10):
+                if f['account']('badguy')['badguy']=='': break
+                full=[part for part in re.findall(r'<form method="POST" action="forest\.php\?op=fight">(.*?)</form>',page,re.S) if 'value="full"' in part]
+                status,page=f['post']('forest.php?op=fight',self._security_fields(full[0])|{'rounds':'full'}); self.assertEqual(200,status,page[:2000])
+            self.assertEqual('',f['account']('badguy')['badguy'])
+            # With no fight stored, forest.php is the forest.
+            path,page,_=f['follow'](page,'forest.php')
+            self.assertRegex(path,r'\Aforest\.php(\?c=[0-9a-z-]+)?\Z'); self.assertIn('<title>The Forest',page)
+            self.assertNotIn('action="forest.php?op=fight"',page)
+            self.assertTrue(any(link.startswith('forest.php?op=search') for link in f['links'](page)),page[-3000:])
 
     def test_a_refused_action_answers_in_the_game_frame_with_a_way_to_the_village_http(self):
         """Phase 6 task 22 (R10): a refused action on a game page was a bare text page with no link. A player without
@@ -12270,7 +12608,12 @@ function MODULE_dohook($hook,$args) {
             # The earlier session's form stays refused, and changes nothing.
             status, _, body = request('newday.php?continue=1', first | {'onboarding': 'specialty', 'setspecialty': 'MP'})
             self.assertEqual(403, status, body[:500])
-            self.assertEqual('Invalid form submission.', body)
+            # Since Phase 6 task 27 (no dead ends) newday.php's refusals are in the game's frame, not the bare text: the
+            # 403 changes nothing, and its one way out is badnav.php, the player's own last page again.
+            self.assertIn(self.REFUSAL_TEXT, re.sub(r'\s+', ' ', re.sub(r'<[^>]+>', '', body)))
+            for credit in self.REFUSAL_CREDITS: self.assertIn(credit, body)
+            self.assertIn('badnav.php', [re.sub(r'[?&]c=[0-9a-z-]+$', '', html.unescape(link)) for link in re.findall(r'href=[\'"]([^\'"#]+)', body)])
+            self.assertNotIn('setspecialty', body)
             # Its intent with this session's CSRF token is refused too: an intent belongs to the session that issued it.
             status, _, body = request('newday.php?continue=1', {'csrf_token': again['csrf_token'], 'action_token': first['action_token'],
                                                                 'onboarding': 'specialty', 'setspecialty': 'MP'})

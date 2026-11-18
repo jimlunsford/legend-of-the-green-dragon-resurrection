@@ -123,7 +123,7 @@ function resurrection_training(): never {
         // not set.
         if (!$get && in_array($op,['challenge','autochallenge'],true) && resurrection_day_rolled_over()) {
             resurrection_require_post();
-            resurrection_training_refuse(409,'Training unavailable. Stored state was preserved. Reload for a fresh form, or request operator repair if state remains invalid.');
+            resurrection_training_refuse(409,'Training unavailable. Nothing was changed.');
         }
         page_header("Bluspring's Warrior Training");
         if ($get && $session['user']['level']>=15 && $session['user']['badguy']==='') {
@@ -228,8 +228,8 @@ function resurrection_training(): never {
         }
         page_footer(); exit;
     } catch (InvalidArgumentException) { resurrection_training_refuse(400,'Invalid training action.'); }
-    catch (DomainException) { resurrection_training_refuse(409,'Training unavailable. Stored state was preserved. Reload for a fresh form, or request operator repair if state remains invalid.'); }
-    catch (Throwable $error) { \Resurrection\Http\FailureLog::record($error); resurrection_training_refuse(500,'Training action was not completed. Request a fresh form.'); }
+    catch (DomainException) { resurrection_training_refuse(409,'Training unavailable. Nothing was changed.'); }
+    catch (Throwable $error) { \Resurrection\Http\FailureLog::record($error); resurrection_training_refuse(500,'Training action was not completed. Nothing was changed.'); }
 }
 
 /**

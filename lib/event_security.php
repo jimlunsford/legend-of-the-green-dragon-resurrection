@@ -11,6 +11,17 @@ function resurrection_event_context(string $module,string $type): void {
     $_SESSION['event_action']=['module'=>$module,'type'=>$type,'generation'=>bin2hex(random_bytes(32))];
 }
 
+/**
+ * A forest event's refusal in the game's frame (Phase 6 task 27, no dead ends): the same status and message, with one
+ * way out, back to the forest, whose GET shows the event still pending (its confirmation) or the forest; the village
+ * for an event outside the forest, the Shades for the dead.
+ */
+function resurrection_event_refuse(int $status, string $message, string $baseLink = 'forest.php?'): never {
+    global $session;
+    resurrection_refuse_page($status, $message, $baseLink === 'forest.php?' ? 'The Forest' : 'Something Special!', $message,
+        !empty($session['user']['alive']) && $baseLink === 'forest.php?' ? ['Return to the forest', 'forest.php'] : null);
+}
+
 /** Dispatch a single current-event action. GET only presents an explicit confirmation. */
 function resurrection_run_event(string $module,string $type,string $baseLink,callable $run): void {
     global $session;
@@ -23,17 +34,17 @@ function resurrection_run_event(string $module,string $type,string $baseLink,cal
     if (empty($session['loggedin']) || !is_module_active($module) || !is_array($context) ||
         ($context['module'] ?? '')!==$module || ($context['type'] ?? '')!==$type ||
         !in_array($baseLink,['forest.php?','travel.php?'],true)) {
-        http_response_code(403); exit('Event unavailable.');
+        resurrection_event_refuse(403, 'Event unavailable.', $baseLink);
     }
     try { $op=\Resurrection\Http\Input::choice($_GET,'op',$operations[$module],''); }
-    catch (InvalidArgumentException $error) { http_response_code(400); exit('Invalid event action.'); }
+    catch (InvalidArgumentException $error) { resurrection_event_refuse(400, 'Invalid event action.', $baseLink); }
     // Selection can arrive from forest search; the selected event begins at its own entrance.
     if ($op==='search') $op='';
     $url=$baseLink.'op='.rawurlencode($op);
     $intent=$context['generation'].':'.$op;
     if ($module==='goldmine') {
         try { $intent.=':'.hash('sha256',json_encode(goldmine_authority(),JSON_THROW_ON_ERROR)); }
-        catch (DomainException $error) { http_response_code(409); exit('Invalid mine state.'); }
+        catch (DomainException $error) { resurrection_event_refuse(409, 'Invalid mine state.', $baseLink); }
     }
     if (($_SERVER['REQUEST_METHOD'] ?? '')!=='POST') {
         $session['user']['specialinc']='module:'.$module;
@@ -54,7 +65,7 @@ function resurrection_run_event(string $module,string $type,string $baseLink,cal
             httpset('op',$op);
             $run();
         });
-    } catch (DomainException $error) { http_response_code(409); exit('Event state changed.'); }
-    catch (Throwable $error) { \Resurrection\Http\FailureLog::record($error); http_response_code(500); exit('Event could not be completed. Reload before retrying.'); }
+    } catch (DomainException $error) { resurrection_event_refuse(409, 'Event state changed.', $baseLink); }
+    catch (Throwable $error) { \Resurrection\Http\FailureLog::record($error); resurrection_event_refuse(500, 'Event could not be completed. Nothing was changed.', $baseLink); }
     if ($session['user']['specialinc']==='') unset($_SESSION['event_action']);
 }

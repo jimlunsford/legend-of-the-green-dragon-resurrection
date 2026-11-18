@@ -21,8 +21,7 @@ $display = array('depositfinish'=>'deposit', 'withdrawfinish'=>'withdraw', 'tran
 if (!$posted && isset($display[$op])) $op = $display[$op];
 // 1.1.2 enforced these only by hiding the navigation.
 if (in_array($op, array('transfer','transfer2','transfer3'), true) && !resurrection_bank_transfers_allowed()) {
-	http_response_code(403);
-	exit('Transfers are not available.');
+	resurrection_bank_refuse(403, 'Transfers are not available.');
 }
 $indebt = translate_inline("`@Elessa`6 tells you that she refuses to transfer money for someone who is in debt.");
 if ($op==""){

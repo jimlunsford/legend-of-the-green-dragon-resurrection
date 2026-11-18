@@ -43,10 +43,26 @@ function resurrection_service_fields(): void {
     if (array_diff(array_keys($_POST), ['csrf_token', 'action_token']) !== []) throw new InvalidArgumentException('Unexpected field.');
 }
 
+/**
+ * A paid service's refusal in the game's frame (Phase 6 task 27, no dead ends): the same status and message, with one
+ * way out, back to the service the request came from ($place: the camp, the gypsy or the healer; a GET only asks);
+ * the Shades for the dead.
+ */
+function resurrection_service_refuse(int $status, string $message, string $place): never {
+    global $session;
+    $services = [
+        'the camp' => ['mercenarycamp.php', 'Return to the camp', is_string($GLOBALS['texts']['title'] ?? null) ? $GLOBALS['texts']['title'] : 'Mercenary Camp'],
+        'the gypsy' => ['gypsy.php', 'Return to the gypsy', "Gypsy Seer's tent"],
+        'the healer' => ['healer.php', 'Return to the healer', "Healer's Hut"],
+    ];
+    [$page, $label, $title] = $services[$place] ?? ['village.php', 'Return to the village', 'Legend of the Green Dragon'];
+    resurrection_refuse_page($status, $message, $title, $message, !empty($session['user']['alive']) ? [$label, $page] : null);
+}
+
 function resurrection_service_failure(Throwable $error, string $place): never {
-    if ($error instanceof InvalidArgumentException) { http_response_code(400); exit('Invalid request.'); }
-    if ($error instanceof DomainException) { http_response_code(409); exit("Your situation changed. Return to $place and try again."); }
-    \Resurrection\Http\FailureLog::record($error); http_response_code(500); exit("Nothing was changed. Return to $place and try again.");
+    if ($error instanceof InvalidArgumentException) resurrection_service_refuse(400, 'Invalid request.', $place);
+    if ($error instanceof DomainException) resurrection_service_refuse(409, "Your situation changed. Return to $place and try again.", $place);
+    \Resurrection\Http\FailureLog::record($error); resurrection_service_refuse(500, "Nothing was changed. Return to $place and try again.", $place);
 }
 
 function resurrection_service_posted(): bool {
