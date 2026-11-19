@@ -1,10 +1,10 @@
 # Release notes: Legend of the Green Dragon - Resurrection 1.0.0-rc.5
 
-Draft. This test build has not been cut. Started in Phase 6 task 26 (2026-11-18) from what Jim's rc.4 server test
-found, with no dead ends, part 1, from task 27, and part 2, from task 28; each change is recorded in full in `docs/CHANGES-FROM-1.1.2.md`. Read with the rc.4 notes,
-`docs/RELEASE-NOTES-1.0.0-rc.4.md`, the rc.3 notes, `docs/RELEASE-NOTES-1.0.0-rc.3.md`, the rc.2 notes,
-`docs/RELEASE-NOTES-1.0.0-rc.2.md`, and the rc.1 notes, `docs/RELEASE-NOTES-1.0.0-rc.1.md`: everything there still
-holds unless this page says otherwise.
+2026-11-19. Cut by `docs/RC-CUT-CHECKLIST.md` on the maintainer's go; the tag is `v1.0.0-rc.5`. The fifth test
+build: what Jim's rc.4 server test found (R12 and R13), and no dead ends, parts 1 and 2. Each change is recorded in
+full in `docs/CHANGES-FROM-1.1.2.md`. Read with the rc.4 notes, `docs/RELEASE-NOTES-1.0.0-rc.4.md`, the rc.3 notes,
+`docs/RELEASE-NOTES-1.0.0-rc.3.md`, the rc.2 notes, `docs/RELEASE-NOTES-1.0.0-rc.2.md`, and the rc.1 notes,
+`docs/RELEASE-NOTES-1.0.0-rc.1.md`: everything there still holds unless this page says otherwise.
 
 ## What changed since 1.0.0-rc.4
 
@@ -112,6 +112,8 @@ Carried from rc.4:
 - **The Dark Horse Tavern's door takes one press more than 1.1.2's, each way.** Riding in on a mount and leaving the
   tavern each show a page with one button to confirm, because the game changes your state only by a button, never by
   a link; 1.1.2 did both with a link.
+- **Refusals on the staff tools and on pages outside the game itself (the sign-in, mail, the MoTD, petitions) stay
+  plain on purpose:** a line of text, as before.
 - **Modules beyond the bundled 24** are not supported: installed module code is trusted PHP.
 - **Maintenance is not one transaction.** A failed run repeats its date-based cleanups on the next run.
 - **No 1.1.2 migration**, by design: install fresh.

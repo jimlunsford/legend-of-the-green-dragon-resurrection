@@ -542,3 +542,17 @@ step; the version stays `1.0.0-rc.4`. The full tables are in `docs/PHASE6-TASK28
 | The Dark Horse Tavern's door | Riding in on a mount and leaving the tavern: one link each | A link to a page with one confirming button, each way (two presses) | Unchanged, recorded for Jim | Entering and leaving change the player (the forest's special event, the wager): Resurrection changes state only by a POST with CSRF and an action token, never by a GET link, and the navigation panel holds only links | `lib/darkhorse_entry.php` |
 | A player's name in the character panel, the Hall of Fame and the talk on every page | Printed as HTML (`charstats()`'s `appoencode(..., true)`, the Hall of Fame's and the commentary's raw output) | The same: the test fixture's name, `` `2O'Reilly \ 雪 %_! <img src=x> ``, written straight into the database, showed a broken image there (task 27's screenshots) | As text with its color codes rendered (`resurrection_appoencode_closed()`), as the header, the battle cards, the lists and the bios already showed it | No player-written path can put markup in a name (sign-up takes a letter, then letters and digits; a clan's names are letters; the title and custom title are staff fields, and the titles editor's text reaches names through a Dragon kill), so this is a display fix, not a security one; it closes the staff-written way | `lib/pageparts.php`, `hof.php`, `lib/commentary.php` |
 | The new day with every race (or every specialty) module off | "No Races Installed": the player made Human, "So we'll call you a 'human' and get on with it.", a line asking the admin to install races, and Continue (the GET itself set the race); the same for specialties, "a student of the mystical powers" (`MP`) | "No active bundled races are available. Please ask an administrator to activate a race." and nothing to press: the day never came | 1.1.2's page and its fallback, Human or `MP`, set by one Continue (a POST with its action token; the GET changes nothing), then on with the day; no line about an administrator. The host guide (section 13) says what a host sees and how to give the choice back | No dead ends; 1.1.2 let the day go on, so this does the same | `lib/race_onboarding.php`, `lib/specialty_onboarding.php` |
+
+### Phase 6 task 29: the `1.0.0-rc.5` version commit
+
+Tasks 26, 27 and 28 are accepted: task 26 at `8ab8888` (Modern core 44337851502), task 27 at `c45337e` (Modern core
+44400078528) and task 28 at `4aaa47a` (Modern core 44453802484, all 14 jobs; Baseline integrity 44453802448). On Jim's
+go of 2026-11-18 (rc.5 cut and server-tested, the same way as rc.4, before `1.0.0`), the version commit sets the
+version to `1.0.0-rc.5` (`src/Version.php`, `project.json` with `phase` `release-candidate`, `docs/VERSIONING.md`), so
+the footer and the home page show "Version: Resurrection 1.0.0-rc.5, based on LoGD 1.1.2 Dragonprime Edition", and the
+links the game prints to the host guide point at the `v1.0.0-rc.5` tag. The rc.5 release notes are dated and no longer
+a draft, and rc.5's tag message is in `docs/RC-CUT-CHECKLIST.md`, section 3. No behavior change; no stored row changes,
+so no upgrade step (`docs/PHASE6-TASK29-RC5-VERSION-20261119.md`).
+
+What stands between `main` and the `v1.0.0-rc.5` tag now: this commit's CI acceptance; then Jim runs the release cut
+workflow, which makes the tag, the package and the pre-release (`docs/RC-CUT-CHECKLIST.md`, sections 2 to 5).
