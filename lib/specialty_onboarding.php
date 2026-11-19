@@ -3,6 +3,9 @@ if (!\defined('RESURRECTION_ENTRY') && \PHP_SAPI !== 'cli') { \http_response_cod
 require_once __DIR__ . '/player_mutation.php';
 require_once __DIR__ . '/newday_daily.php';
 
+/** The specialty 1.1.2 gave a player when no specialty module was installed (lib/newday/setspecialty.php). */
+const RESURRECTION_SPECIALTY_FALLBACK = 'MP';
+
 /**
  * The shipped specialty identities, resolved only through active installed modules.
  * @return array<string, string>
@@ -84,29 +87,42 @@ function resurrection_specialty_onboarding(): void {
         resurrection_specialty_eligible();
         $choices = resurrection_specialty_choices();
         $context = resurrection_specialty_context($choices);
-        page_header('A little history about yourself');
+        // With no specialty module active, 1.1.2 made the player a student of the mystical powers and went on
+        // (lib/newday/setspecialty.php, "No Specialties Installed"); so does this page, by its one Continue (Phase 6 task 28).
+        page_header($choices === [] ? 'No Specialties Installed' : 'A little history about yourself');
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             resurrection_consume_action('specialty-onboarding', $context);
             if (array_diff(array_keys($_POST), ['csrf_token','action_token','onboarding','setspecialty']) !== [] ||
                 array_diff(array_keys($_GET), ['continue','resurrection','c']) !== []) throw new InvalidArgumentException('Unexpected field.');
             \Resurrection\Http\Input::choice($_POST, 'onboarding', ['specialty'], '');
-            $specialty = \Resurrection\Http\Input::choice($_POST, 'setspecialty', array_keys($choices), '');
+            $specialty = \Resurrection\Http\Input::choice($_POST, 'setspecialty', $choices === [] ? [RESURRECTION_SPECIALTY_FALLBACK] : array_keys($choices), '');
             resurrection_player_mutation(function () use ($specialty, $context) {
                 global $session;
                 resurrection_specialty_eligible();
                 $locked = resurrection_specialty_choices(true);
                 $preferences = resurrection_specialty_preferences($locked, true);
-                if (resurrection_specialty_context($locked) !== $context || !isset($locked[$specialty])) throw new DomainException('Specialty state changed.');
+                if (resurrection_specialty_context($locked) !== $context) throw new DomainException('Specialty state changed.');
+                if ($locked === []) {
+                    // 1.1.2's fallback: no specialty module to tell, so no preferences and no set-specialty hook.
+                    if ($specialty !== RESURRECTION_SPECIALTY_FALLBACK) throw new DomainException('Specialty state changed.');
+                    $session['user']['specialty'] = $specialty;
+                    return;
+                }
+                if (!isset($locked[$specialty])) throw new DomainException('Specialty state changed.');
                 $session['user']['specialty'] = $specialty;
                 foreach ($preferences[$locked[$specialty]] as $key => $value) {
                     set_module_pref($key, $value, $locked[$specialty]);
                 }
                 modulehook('set-specialty', [], false, $locked[$specialty]);
             });
+            // The fallback has no specialty's story to show: on to the rest of the new day, as 1.1.2's one Continue went.
+            if ($choices === []) redirect('newday.php?continue=1' . $resline, 'No specialty module active.');
             addnav('Continue', 'newday.php?continue=1' . $resline);
         } elseif ($_SERVER['REQUEST_METHOD'] === 'GET') {
             if ($choices === []) {
-                output('No active bundled specialties are available. Please ask an administrator to activate a specialty.');
+                output('Since there are no suitable specialties available, we\'ll make you a student of the mystical powers and get on with it.');
+                require_once __DIR__ . '/race_onboarding.php';
+                resurrection_onboarding_fallback_form('specialty', 'setspecialty', RESURRECTION_SPECIALTY_FALLBACK, $context);
             } else {
                 output('What do you recall doing as a child?`n`n');
                 foreach ($choices as $module) modulehook('choose-specialty', [], false, $module);

@@ -894,10 +894,20 @@ function resurrectionrandomfixture_dohook($hook,$args) { mt_srand((int)getsettin
             for key,value in [('race','Horrible Gelatinous Blob'),('specialinc','module:goldmine'),('dragonkills',1),('specialty','MP'),('age',999)]:
                 setup(); forms,_=form(); self.query('UPDATE accounts SET '+key+'=? WHERE acctid=?',[value,player]); before=state()
                 self.assertEqual(409,call(url,forms['DA'])[0]); self.assertEqual(before,state())
-            # No implicit GET fallback when every bundled specialty is inactive.
+            # No implicit GET fallback when every bundled specialty is inactive: the GET changes nothing and offers 1.1.2's
+            # fallback, the mystical powers, by one Continue, so the page is never a dead end (Phase 6 task 28). Only that
+            # value is taken, with no preferences and no hook, and the day goes on.
             setup()
             for module in specialties.values(): self.query('UPDATE modules SET active=0 WHERE modulename=?',[module])
-            before=state(); offered,body=form(); self.assertEqual({},offered); self.assertIn('No active bundled specialties',body); self.assertEqual(before,state())
+            before=state(); offered,body=form(); self.assertEqual({'MP'},set(offered)); self.assertEqual(before,state())
+            self.assertIn("Since there are no suitable specialties available, we'll make you a student of the mystical powers and get on with it.",html.unescape(body))
+            self.assertNotIn('No active bundled specialties',body); self.assertNotIn('administrator',body)
+            for patch in [{'setspecialty':'DA'},{'setspecialty':'specialtymysticpower'},{'setspecialty':''}]:
+                offered,_=form(); before=state()
+                self.assertEqual(400,call(url,offered['MP']|patch)[0]); self.assertEqual(before,state())
+            offered,_=form(); before=state(); status,_=call(url,offered['MP']); self.assertEqual(302,status)
+            self.assertEqual(before|{'specialty':'MP'},state())
+            self.assertEqual(409,adversarial(url,offered['MP'])[0]); self.assertEqual(before|{'specialty':'MP'},state())
         finally:
             self.query('DELETE FROM module_userprefs WHERE userid=?',[player])
             for row in prefs: self.query('INSERT INTO module_userprefs(modulename,setting,userid,value) VALUES (?,?,?,?)',[row['modulename'],row['setting'],row['userid'],row['value']])
@@ -1180,10 +1190,20 @@ echo "locked\\n";fflush(STDOUT);$change=json_decode(fgets(STDIN),true,512,JSON_T
             for key,value in [('race','Elf'),('specialinc','module:goldmine'),('dragonkills',1),('specialty','MP'),('age',999)]:
                 setup(); forms,_=form(); self.query('UPDATE accounts SET '+key+'=? WHERE acctid=?',[value,player]); before=state()
                 self.assertEqual(409,call(url,forms['Human'])[0]); self.assertEqual(before,state())
-            # No implicit GET fallback is allowed when every bundled race is inactive.
+            # No implicit GET fallback is allowed when every bundled race is inactive: the GET changes nothing and offers
+            # 1.1.2's fallback, Human, by one Continue, so the page is never a dead end (Phase 6 task 28). Only that value
+            # is taken, with no race hook, and the day goes on.
             setup()
             for module in races.values(): self.query('UPDATE modules SET active=0 WHERE modulename=?',[module])
-            before=state(); offered,body=form(); self.assertEqual({},offered); self.assertIn('No active bundled races',body); self.assertEqual(before,state())
+            before=state(); offered,body=form(); self.assertEqual({'Human'},set(offered)); self.assertEqual(before,state())
+            self.assertIn("No races were installed in this game. So we'll call you a 'human' and get on with it.",html.unescape(body))
+            self.assertNotIn('No active bundled races',body); self.assertNotIn('administrator',body)
+            for patch in [{'setrace':'Elf'},{'setrace':'racehuman'},{'setrace':''}]:
+                offered,_=form(); before=state()
+                self.assertEqual(400,call(url,offered['Human']|patch)[0]); self.assertEqual(before,state())
+            offered,_=form(); before=state(); status,_=call(url,offered['Human']); self.assertEqual(302,status)
+            self.assertEqual(before|{'race':'Human','location':village},state())
+            self.assertEqual(409,adversarial(url,offered['Human'])[0]); self.assertEqual(before|{'race':'Human','location':village},state())
         finally:
             self.query('UPDATE accounts SET '+','.join(k+'=?' for k in original if k!='acctid')+' WHERE acctid=?',[*[v for k,v in original.items() if k!='acctid'],player])
             for row in modules: self.query('UPDATE modules SET active=? WHERE modulename=?',[row['active'],row['modulename']])
@@ -12141,6 +12161,277 @@ function MODULE_dohook($hook,$args) {
             self.query('UPDATE accounts SET '+','.join(k+'=?' for k in original)+' WHERE acctid=?',[*original.values(),player])
             self.query('UPDATE modules SET active=0')
 
+    def test_the_bundled_modules_refuse_in_the_game_frame_with_one_way_out_http(self):
+        """Phase 6 task 28, no dead ends, part 2: the bundled modules answered a refusal as a bare status and text with no
+        link. Each now answers in the game's frame with one way out, status kept, nothing changed: Crazy Audrey's pet (the
+        gold gone meanwhile), the lovers (the day's visit used meanwhile), Seth's song (the day's song heard meanwhile), a
+        drink (the gold gone meanwhile), Cedrik's potions (a gem count of 0 typed), Dag's bounty (an amount typed as a word)
+        and the outhouse (the gold gone meanwhile). Every page is reached by its own links and forms; the fixtures set
+        only state."""
+        modules=['crazyaudrey','lovers','sethsong','drinks','cedrikspotions','dag','outhouse']
+        registry=self.query('SELECT modulename,active FROM modules')
+        audrey=self.query("SELECT value FROM module_settings WHERE modulename='crazyaudrey' AND setting='villagepercent'")
+        inn="The Boar's Head Inn"
+        try:
+            self.query('UPDATE modules SET active=0')
+            self.query('UPDATE modules SET active=1 WHERE modulename IN ('+','.join('?' for _ in modules)+')',modules)
+            self.query("INSERT INTO module_settings(modulename,setting,value) VALUES ('crazyaudrey','villagepercent','100') ON DUPLICATE KEY UPDATE value='100'")
+            with self._yard_fixture('ModuleRefusals') as f:
+                player=f['player']
+                def pref(module,setting,value):
+                    self.query('INSERT INTO module_userprefs(modulename,setting,userid,value) VALUES (?,?,?,?) ON DUPLICATE KEY UPDATE value=VALUES(value)',[module,setting,player,str(value)])
+                def wealth(): return f['account']('gold','gems','charm','hitpoints','turns')
+                def refused(status,body,expected,title,message,way,landing):
+                    stored=wealth(); page=self._one_way_out(f,status,body,expected,title,message+' Nothing was changed.',way,landing)
+                    self.assertEqual(stored,wealth()); return page
+                self.query('UPDATE accounts SET gold=5000,gems=20,sex=0,marriedto=0,charm=10 WHERE acctid=?',[player])
+                _,village,_=f['sign_in']()
+                # Crazy Audrey: her pet's Continue, after the gold went elsewhere.
+                _,pet,_=f['follow'](village,'runmodule.php?module=crazyaudrey&op=pet')
+                fields=self._security_fields(pet,'runmodule.php?module=crazyaudrey&op=pet')
+                self.query('UPDATE accounts SET gold=0 WHERE acctid=?',[player])
+                status,body=f['post']('runmodule.php?module=crazyaudrey&op=pet',fields)
+                village=refused(status,body,409,'Crazy Audrey','This visit is unavailable.','village.php','Degolburg Square')
+                self.query('UPDATE accounts SET gold=5000 WHERE acctid=?',[player])
+                # The lovers: the inn's flirt link, after the day's visit was used.
+                _,body,_=f['follow'](village,'inn.php')
+                pref('lovers','seenlover',1)
+                flirt=[link for link in f['links'](body) if link.startswith('runmodule.php?module=lovers&op=flirt')][0]
+                status,location,body=f['request'](flirt)
+                body=refused(status,body,409,inn,'Lovers is unavailable.','inn.php',inn)
+                pref('lovers','seenlover',0)
+                # Seth's song: the bard's form, the database refusing the song's count (a fixture).
+                _,bard,_=f['follow'](body,'runmodule.php?module=sethsong')
+                fields=self._security_fields(bard,'runmodule.php?module=sethsong')
+                pref('sethsong','been',0)
+                self.query(f"ALTER TABLE module_userprefs ADD CONSTRAINT fixture_refused_song CHECK (userid <> {int(player)} OR modulename <> 'sethsong' OR setting <> 'been' OR value = '0')")
+                try:
+                    status,body=f['post']('runmodule.php?module=sethsong',fields)
+                    body=refused(status,body,500,inn,'The song was not completed.','runmodule.php?module=sethsong',inn)
+                finally: self.query('ALTER TABLE module_userprefs DROP CONSTRAINT fixture_refused_song')
+                self.assertIn('Listen to',html.unescape(body))
+                # A drink: the bartender's drink form, after the gold went elsewhere.
+                _,bar,_=f['follow'](f['follow'](body,'inn.php')[1],'inn.php?op=bartender')
+                drink,confirm,_=f['follow'](bar,'runmodule.php?module=drinks&act=buy&id=')
+                drink=re.sub(r'&c=[0-9a-z-]+$','',drink); fields=self._security_fields(confirm,drink)
+                self.query('UPDATE accounts SET gold=0 WHERE acctid=?',[player])
+                status,body=f['post'](drink,fields)
+                body=refused(status,body,400,inn,'Drink unavailable, limit reached, or insufficient funds.','inn.php?op=bartender',inn)
+                self.query('UPDATE accounts SET gold=5000 WHERE acctid=?',[player])
+                # Cedrik's potions: a gem count of 0 typed into the form.
+                _,gems,_=f['follow'](body,'runmodule.php?module=cedrikspotions&op=gems')
+                action=html.unescape(re.search(r'<form action=[\'"]([^\'"]+)[\'"] method=[\'"]POST',gems).group(1))
+                status,body=f['post'](action,self._security_fields(gems,action)|{'wish':'1','gemcount':'0'})
+                body=refused(status,body,400,inn,'Invalid potion request.','runmodule.php?module=cedrikspotions&op=gems',inn)
+                # Dag's bounty: an amount typed as a word.
+                _,body,_=f['follow'](body,'inn.php')
+                _,dag,_=f['follow'](body,'runmodule.php?module=dag')
+                _,place,_=f['follow'](dag,'runmodule.php?module=dag&op=addbounty')
+                fields=self._security_fields(place,'runmodule.php?module=dag&op=finalize')|{'contractname':'Nobody','amount':'ten'}
+                status,body=f['post']('runmodule.php?module=dag&op=finalize',fields)
+                body=refused(status,body,400,"Dag Durnick's Table",'Invalid bounty input.','runmodule.php?module=dag',"Dag Durnick's Table")
+                # The outhouse: the private toilet's Continue, after the gold went elsewhere.
+                _,body,_=f['follow'](body,'inn.php'); _,body,_=f['follow'](body,'village.php')
+                _,forest,_=f['follow'](body,'forest.php')
+                _,outhouse,_=f['follow'](forest,'runmodule.php?module=outhouse')
+                _,pay,_=f['follow'](outhouse,'runmodule.php?module=outhouse&op=pay')
+                fields=self._security_fields(pay,'runmodule.php?module=outhouse&op=pay')
+                self.query('UPDATE accounts SET gold=0 WHERE acctid=?',[player])
+                status,body=f['post']('runmodule.php?module=outhouse&op=pay',fields)
+                refused(status,body,409,'The Outhouses','Outhouse action rejected.','forest.php','The Forest')
+        finally:
+            self.query("DELETE FROM module_settings WHERE modulename='crazyaudrey' AND setting='villagepercent'")
+            for row in audrey: self.query("INSERT INTO module_settings(modulename,setting,value) VALUES ('crazyaudrey','villagepercent',?)",[row['value']])
+            self.query('DELETE FROM module_userprefs WHERE userid=(SELECT acctid FROM accounts WHERE login=?)',['ModuleRefusals'])
+            for row in registry: self.query('UPDATE modules SET active=? WHERE modulename=?',[row['active'],row['modulename']])
+
+    @contextmanager
+    def _dark_horse_fixture(self, login):
+        """The yard fixture's player with 1,000 gold and the Dark Horse Tavern the forest's one event: yields the fixture
+        with tavern(), the forest's search and the event's Enter, which returns the Main Room; press(url, body, **extra),
+        one press of a page's own form; wager(), the stored wager; buttons(body), the form buttons a page offers."""
+        games=['darkhorse','game_dice','game_stones','game_fivesix']
+        registry=self.query('SELECT modulename,active FROM modules')
+        fivesix=self.query("SELECT setting,value FROM module_settings WHERE modulename='game_fivesix'")
+        try:
+            self.query('UPDATE modules SET active=0')
+            self.query('UPDATE modules SET active=1 WHERE modulename IN (?,?,?,?)',games)
+            for key,value in [('cost','5'),('dailyuses','0'),('jackpot','100'),('maxjackpot','5000')]:
+                self.query('INSERT INTO module_settings (modulename,setting,value) VALUES (?,?,?) ON DUPLICATE KEY UPDATE value=VALUES(value)',['game_fivesix',key,value])
+            with self._yard_fixture(login) as f:
+                self.query("UPDATE settings SET value='100' WHERE setting='forestchance'")
+                self.query('UPDATE accounts SET gold=1000,hashorse=0 WHERE acctid=?',[f['player']])
+                def tavern():
+                    _,village,_=f['sign_in']()
+                    _,forest,_=f['follow'](village,'forest.php'); _,search,_=f['follow'](forest,'forest.php?op=search')
+                    status,event=f['post']('forest.php?op=search',f['form'](search,'forest.php?op=search')|{'type':''})
+                    self.assertEqual('module:darkhorse',f['account']('specialinc')['specialinc'])
+                    _,event,_=f['follow'](event,'forest.php'); self.assertIn('cluster of trees',event)
+                    return f['follow'](event,'forest.php?op=tavern')[1]
+                def press(url,body,**extra):
+                    status,page=f['post'](url,self._security_fields(body,url)|extra); self.assertEqual(200,status,page[:1500]); return page
+                def wager(): return json.loads(f['account']('specialmisc')['specialmisc'])
+                def buttons(body): return re.findall(r'<button name="([a-z]+)" value="([a-z]+)"',body)+[('action',v) for v in re.findall(r'name="action" value="([a-z]+)"',body)]
+                yield f|dict(tavern=tavern,press=press,wager=wager,buttons=buttons)
+        finally:
+            self.query("DELETE FROM module_settings WHERE modulename='game_fivesix'")
+            for row in fivesix: self.query('INSERT INTO module_settings (modulename,setting,value) VALUES (?,?,?)',['game_fivesix',row['setting'],row['value']])
+            self.query('DELETE FROM module_userprefs WHERE userid=(SELECT acctid FROM accounts WHERE login=?)',[login])
+            for row in registry: self.query('UPDATE modules SET active=? WHERE modulename=?',[row['active'],row['modulename']])
+
+    def test_the_dark_horse_games_take_no_more_presses_a_round_than_1_1_2_http(self):
+        """Phase 6 task 28: the Dark Horse Tavern's games, played as a player finds them in the forest, take no more
+        presses a round than 1.1.2's. Dice: the Bet, a Pass for each roll passed and the Keep, whose page shows the result
+        and the next round's Bet (1.1.2's added a Play again). Stones: the choice, one press for each pair drawn, the Bet
+        drawing the first as 1.1.2's did (it drew none, one more press), and the settling press, whose page shows the next
+        game's choice. Five-six: one Roll a round, whose page shows the result and the next Roll (1.1.2's added a Play
+        again). The exit is its link and the confirming press."""
+        with self._dark_horse_fixture('DarkHorsePresses') as f:
+            press,wager,buttons=f['press'],f['wager'],f['buttons']
+            tavern=f['tavern']()
+            # Dice: one round, Bet, Pass and Keep.
+            _,oldman,_=f['follow'](tavern,'forest.php?op=oldman')
+            _,dice,_=f['follow'](oldman,'runmodule.php?module=game_dice'); url='runmodule.php?module=game_dice'
+            body=press(url,dice,action='bet',bet='10'); presses=1
+            self.assertIn('Your roll:',body); self.assertIn(('action','pass'),buttons(body)); self.assertIn(('action','keep'),buttons(body))
+            body=press(url,body,action='pass'); presses+=1
+            body=press(url,body,action='keep'); presses+=1
+            self.assertEqual(('complete',3),(wager()['stage'],presses))
+            self.assertIn('Result:',body); self.assertIn(('action','bet'),buttons(body))
+            # Stones: the choice, one press for each pair drawn, the last settling.
+            _,oldman,_=f['follow'](body,'forest.php?op=oldman')
+            _,stones,_=f['follow'](oldman,'runmodule.php?module=game_stones'); url='runmodule.php?module=game_stones'
+            body=press(url,stones,action='choose',side='likepair'); presses=1
+            body=press(url,body,action='bet',bet='10'); presses+=1
+            self.assertEqual(1,body.count('withdraws two stones'),"the bet draws the first pair, as 1.1.2's did: "+body[-2000:])
+            pairs=1
+            for _ in range(20):
+                if wager()['stage']=='complete': break
+                step=re.search(r'name="action" value="(draw|settle)"',body).group(1)
+                body=press(url,body,action=step); presses+=1
+                self.assertEqual(1 if step=='draw' else 0,body.count('withdraws two stones'),body[-2000:]); pairs+=step=='draw'
+            self.assertEqual('complete',wager()['stage'])
+            self.assertEqual(pairs+2,presses)
+            self.assertIn(('side','likepair'),buttons(body))
+            # Five-six: one Roll a round, twice.
+            _,oldman,_=f['follow'](body,'forest.php?op=oldman')
+            _,page,_=f['follow'](oldman,'runmodule.php?module=game_fivesix'); url='runmodule.php?module=game_fivesix'
+            for _ in range(2):
+                page=press(url,page,action='roll')
+                self.assertEqual(('game_fivesix','complete'),(wager()['game'],wager()['stage'])); self.assertIn(('action','roll'),buttons(page))
+            # Out of the tavern: its exit and the confirming press, then the forest.
+            _,body,_=f['follow'](page,'forest.php?op=tavern'); _,leave,_=f['follow'](body,'forest.php?op=leave')
+            body=press('forest.php?op=leave',leave); self.assertIn('You duck out of the tavern',body)
+            self.assertEqual('',f['account']('specialinc')['specialinc'])
+
+    def test_the_dark_horse_tavern_and_games_refuse_in_the_frame_with_one_way_out_http(self):
+        """Phase 6 task 28, no dead ends, part 2: the Dark Horse Tavern and its games answered a refusal as a bare status
+        and text with no link. Each now answers in the game's frame with one way out, status kept, nothing changed: the
+        bartender's search with a name too long (to the Main Room), a dice or stones bet over the gold, typed, and a
+        five-six roll after the gold went elsewhere (each to its game)."""
+        with self._dark_horse_fixture('DarkHorseRefusals') as f:
+            player=f['player']
+            def refused(status,body,expected,title,message,way,landing):
+                stored=f['account']('gold','specialmisc','specialinc')
+                page=self._one_way_out(f,status,body,expected,title,message+' Nothing was changed.',way,landing)
+                self.assertEqual(stored,f['account']('gold','specialmisc','specialinc')); return page
+            tavern=f['tavern'](); main=html.unescape(re.search(r'<title>([^<]*)',tavern).group(1))
+            _,bartender,_=f['follow'](tavern,'forest.php?op=bartender'); _,enemies,_=f['follow'](bartender,'forest.php?op=bartender&what=enemies')
+            status,body=f['post']('forest.php?op=bartender&what=enemies&subop=search',{'name':'a'*60})
+            tavern=refused(status,body,400,'The Forest','Invalid search.','forest.php?op=tavern',main)
+            _,oldman,_=f['follow'](tavern,'forest.php?op=oldman')
+            _,dice,_=f['follow'](oldman,'runmodule.php?module=game_dice'); url='runmodule.php?module=game_dice'
+            status,body=f['post'](url,self._security_fields(dice,url)|{'action':'bet','bet':'999999'})
+            body=refused(status,body,400,'A Game of Dice','Invalid dice action.',url,'A Game of Dice')
+            self.assertIn(('action','bet'),f['buttons'](body))
+            _,oldman,_=f['follow'](body,'forest.php?op=oldman')
+            _,page,_=f['follow'](oldman,'runmodule.php?module=game_fivesix'); url='runmodule.php?module=game_fivesix'
+            fields=self._security_fields(page,url)|{'action':'roll'}
+            self.query('UPDATE accounts SET gold=0 WHERE acctid=?',[player])
+            status,body=f['post'](url,fields)
+            body=refused(status,body,400,'A Game of Dice','Invalid or unavailable roll.',url,'A Game of Dice')
+            self.query('UPDATE accounts SET gold=1000 WHERE acctid=?',[player])
+            self.assertIn(('action','roll'),f['buttons'](body))
+            _,oldman,_=f['follow'](body,'forest.php?op=oldman')
+            _,stones,_=f['follow'](oldman,'runmodule.php?module=game_stones'); url='runmodule.php?module=game_stones'
+            body=f['press'](url,stones,action='choose',side='likepair')
+            status,body=f['post'](url,self._security_fields(body,url)|{'action':'bet','bet':'999999'})
+            body=refused(status,body,400,'A Game of Stones','Invalid Stones action.',url,'A Game of Stones')
+            self.assertIn('How much do you bet?',html.unescape(body))
+
+    def test_the_players_name_shows_as_text_with_its_colors_everywhere_http(self):
+        """Phase 6 task 28: the character panel, the Hall of Fame and the talk on every page printed a player's name as
+        HTML (1.1.2's appoencode(..., true)), so the test fixture's name, `2O'Reilly \\ 雪 %_! <img src=x>, written
+        straight into the database, showed a broken image. No player can choose such a name (sign-up takes letters and
+        digits, the title and custom title are staff fields, a clan's names are letters), so this is a display fix: every
+        place shows the name as written, as text, with its color code rendered, as the header does."""
+        shown=r"O(?:'|&#0?39;)Reilly \\ 雪 %_! &lt;img src=x&gt;"
+        with self._yard_fixture('NameAsText') as f:
+            player=f['player']
+            self.query('UPDATE accounts SET gold=2000000000,goldinbank=0 WHERE acctid=?',[player])
+            try:
+                def as_text(where,body,colored=True):
+                    self.assertNotRegex(body,r'(?i)<img src=x',where)
+                    self.assertRegex(body,shown,where)
+                    if colored: self.assertRegex(body,r"<span class=['\"]colDkGreen['\"]>"+shown,where)
+                _,village,_=f['sign_in']()
+                # The character panel and the header.
+                panel=re.search(r'<aside class="rz-character" id="rz-character".*?</aside>',village,re.S)
+                self.assertIsNotNone(panel,village[-3000:]); as_text('the character panel',panel.group(0))
+                as_text('the header',re.search(r'<header class="rz-header">.*?</header>',village,re.S).group(0),colored=False)
+                # The village's talk, posted by its own form.
+                talk=re.search(r'<form[^>]*action=[\'"]village\.php\?comment=1[\'"][^>]*>(.*?)</form>',village,re.S).group(1)
+                fields={name:html.unescape(value) for name,value in re.findall(r'name=[\'"]([a-z_]+)[\'"][^>]*value=[\'"]([^\'"]*)',talk)}
+                status,village=f['post']('village.php?comment=1',fields|{'insertcommentary':'Hello there'})
+                self.assertEqual(200,status,village[:1500])
+                said=re.search(r'<div class=["\']rz-comment[^>]*>(?:(?!</div>).)*Hello there',village,re.S) or re.search(r'.{0,600}Hello there',village,re.S)
+                as_text('the talk',said.group(0))
+                # The Hall of Fame's gold ranking, where the player leads.
+                _,hof,_=f['follow'](village,'hof.php'); _,richest,_=f['follow'](hof,'hof.php?op=money')
+                as_text('the Hall of Fame',re.search(r"<table[^>]*class='rz-fit'.*?</table>",richest,re.S).group(0))
+                # The warriors list and the player's bio from it.
+                _,village,_=f['follow'](richest,'village.php'); _,listed,_=f['follow'](village,'list.php')
+                as_text('the warriors list',listed[listed.index('rz-content'):])
+                _,bio,_=f['follow'](listed,'bio.php?char='+str(player))
+                as_text('the bio',bio[bio.index('rz-content'):])
+            finally:
+                self.query("DELETE FROM commentary WHERE author=?",[player])
+
+    def test_a_new_day_with_no_race_or_specialty_module_goes_on_http(self):
+        """Phase 6 task 28, no dead ends, part 2: with every race and every specialty module turned off, the new day's
+        race question was a page with nothing to press ("No active bundled races are available. Please ask an
+        administrator to activate a race.") and the day never came. 1.1.2 made the player Human, then a student of the
+        mystical powers, and went on; so does this, by one Continue each, and the day completes."""
+        modules=['racedwarf','raceelf','racehuman','racetroll','specialtydarkarts','specialtymysticpower','specialtythiefskills']
+        registry=self.query('SELECT modulename,active FROM modules WHERE modulename IN ('+','.join('?' for _ in modules)+')',modules)
+        with self._yard_fixture('NoRaceDay') as f:
+            try:
+                self.query('UPDATE modules SET active=0 WHERE modulename IN ('+','.join('?' for _ in modules)+')',modules)
+                self.query("UPDATE accounts SET race='',specialty='',turns=0 WHERE acctid=?",[f['player']])
+                f['roll_over']()
+                def continue_fields(body):
+                    """The page's one form, Continue, as a browser sends it: its every field."""
+                    forms=re.findall(r'<form method="POST" action="newday\.php\?continue=1">(.*?)</form>',body,re.S)
+                    self.assertEqual(1,len(forms),body[-3000:]); self.assertIn('>Continue</button>',forms[0])
+                    return {name:html.unescape(value) for name,value in re.findall(r'<input type="hidden" name="([a-z_]+)" value="([^"]*)"',forms[0])}
+                def press_continue(body):
+                    status,location,page=f['request']('newday.php?continue=1',continue_fields(body))
+                    self.assertEqual(302,status,page[:1500]); return f['get'](location)[1]
+                path,body,chain=f['sign_in'](); self.assertEqual('newday.php',path,' -> '.join(chain))
+                self.assertIn('<title>No Races Installed',body)
+                self.assertIn("No races were installed in this game. So we'll call you a 'human' and get on with it.",html.unescape(body))
+                self.assertNotIn('administrator',body); self.assertEqual('',f['account']('race')['race'])
+                body=press_continue(body); self.assertEqual('Human',f['account']('race')['race'])
+                self.assertIn('<title>No Specialties Installed',body)
+                self.assertIn("Since there are no suitable specialties available, we'll make you a student of the mystical powers and get on with it.",html.unescape(body))
+                self.assertNotIn('administrator',body)
+                body=press_continue(body); self.assertEqual('MP',f['account']('specialty')['specialty'])
+                page=f['new_day'](body)
+                self.assertNotEqual('0',str(f['account']('turns')['turns']))
+                _,village,_=f['follow'](page,'village.php'); self.assertIn('<title>Degolburg Square',village)
+            finally:
+                for row in registry: self.query('UPDATE modules SET active=? WHERE modulename=?',[row['active'],row['modulename']])
+
     def test_module_audrey_village_authority(self):
         class NoRedirect(urllib.request.HTTPRedirectHandler):
             def redirect_request(self, *args): return None
@@ -12961,10 +13252,13 @@ function MODULE_dohook($hook,$args) {
             self.assertEqual(409, status)
             status, _, body = request(game_url)
             fields = game_fields(body, action='bet', bet='-10')
-            status, _, _ = request(game_url, fields)
+            status, _, body = request(game_url, fields)
             self.assertEqual(400, status)
+            self.assertIn('Invalid Stones action. Nothing was changed.', body)
             self.assertEqual('100', self.query('SELECT gold FROM accounts WHERE acctid=?', [player_id])[0]['gold'])
-            status, _, body = request(game_url)
+            # The refusal is framed (Phase 6 task 28): its one way out is the game's own page, with the bet form again.
+            status, _, body = request(issued_link(body, 'runmodule.php?module=game_stones'))
+            self.assertEqual(200, status)
             fields = game_fields(body, action='bet', bet='10')
             status, _, body = request(game_url, fields)
             self.assertEqual(200, status)
@@ -12978,10 +13272,12 @@ function MODULE_dohook($hook,$args) {
                     before_failure=self.query('SELECT gold,specialmisc FROM accounts WHERE acctid=?',[player_id])[0]
                     self.wager_failure('game_stones',player_id)
                     try:
-                        status,_,_=request(game_url,fields); self.assertEqual(503,status)
+                        status,_,body=request(game_url,fields); self.assertEqual(503,status)
+                        self.assertIn('Game temporarily unavailable. Nothing was changed.',body)
                         self.assertEqual(before_failure,self.query('SELECT gold,specialmisc FROM accounts WHERE acctid=?',[player_id])[0])
                     finally: self.remove_wager_failure()
-                    status,_,body=request(game_url); self.assertEqual(200,status)
+                    # The framed refusal's one way out is the game's own page (Phase 6 task 28).
+                    status,_,body=request(issued_link(body,'runmodule.php?module=game_stones')); self.assertEqual(200,status)
                     fields=game_fields(body,action=action)
                 status, _, body = request(game_url, fields)
                 self.assertEqual(200, status)
@@ -12999,10 +13295,11 @@ function MODULE_dohook($hook,$args) {
             else:
                 self.fail('Stones did not complete within its finite draw limit')
             self.query('UPDATE accounts SET specialmisc=? WHERE acctid=?', ['O:8:"stdClass":0:{}', player_id])
-            status, _, _ = request(game_url)
-            self.assertEqual(409, status)
-            self.query('UPDATE accounts SET specialmisc=?,gold=? WHERE acctid=?', ['[]', prior_gold, player_id])
             status, _, body = request(game_url)
+            self.assertEqual(409, status)
+            self.assertIn('Invalid Stones state. Nothing was changed.', body)
+            self.query('UPDATE accounts SET specialmisc=?,gold=? WHERE acctid=?', ['[]', prior_gold, player_id])
+            # The framed refusal's one way out is the Main Room (Phase 6 task 28).
             status, _, body = request(issued_link(body, 'forest.php?op=tavern'))
             self.assertEqual(200, status)
             status, _, body = request(issued_link(body, 'forest.php?op=leave'))

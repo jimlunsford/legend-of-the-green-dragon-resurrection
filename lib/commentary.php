@@ -325,8 +325,14 @@ function viewcommentary($section,$message="Interject your own commentary?",$limi
 
 		$row['comment'] = holidayize($row['comment'],'comment');
 		$row['name'] = holidayize($row['name'] ?? '', 'comment');
+		// The author's name for the ban reason (made plain below), and for the page as text: its color codes rendered
+		// and its HTML escaped, as every other page shows a name (Phase 6 task 28; 1.1.2 printed its markup as HTML).
+		$rawname = $row['name'];
+		if ($row['name'] !== '') $row['name'] = resurrection_appoencode_closed($row['name']);
 		if ($row['clanrank']) {
-			$row['name'] = ($row['clanshort']>""?"{$clanrankcolors[ceil($row['clanrank']/10)]}&lt;`2{$row['clanshort']}{$clanrankcolors[ceil($row['clanrank']/10)]}&gt; `&":"").$row['name'];
+			$prefix = ($row['clanshort']>""?"{$clanrankcolors[ceil($row['clanrank']/10)]}&lt;`2{$row['clanshort']}{$clanrankcolors[ceil($row['clanrank']/10)]}&gt; `&":"");
+			$row['name'] = $prefix.$row['name'];
+			$rawname = $prefix.$rawname;
 		}
 		if ($ft=="::" || $ft=="/me" || $ft==":"){
 			$x = strpos($row['comment'],$ft);
@@ -335,7 +341,7 @@ function viewcommentary($section,$message="Interject your own commentary?",$limi
 					$op[$i] = str_replace("&amp;","&",HTMLEntities(substr($row['comment'],0,$x), ENT_COMPAT, getsetting("charset", "ISO-8859-1")))."`0<a href='$link'".resurrection_presentation('plain-link').">\n`&{$row['name']}`0</a>\n`& ".str_replace("&amp;","&",HTMLEntities(substr($row['comment'],$x+strlen($ft)), ENT_COMPAT, getsetting("charset", "ISO-8859-1")))."`0`n";
 				else
 					$op[$i] = str_replace("&amp;","&",HTMLEntities(substr($row['comment'],0,$x), ENT_COMPAT, getsetting("charset", "ISO-8859-1")))."`0`&{$row['name']}`0`& ".str_replace("&amp;","&",HTMLEntities(substr($row['comment'],$x+strlen($ft)), ENT_COMPAT, getsetting("charset", "ISO-8859-1")))."`0`n";
-				$rawc[$i] = str_replace("&amp;","&",HTMLEntities(substr($row['comment'],0,$x), ENT_COMPAT, getsetting("charset", "ISO-8859-1")))."`0`&{$row['name']}`0`& ".str_replace("&amp;","&",HTMLEntities(substr($row['comment'],$x+strlen($ft)), ENT_COMPAT, getsetting("charset", "ISO-8859-1")))."`0`n";
+				$rawc[$i] = str_replace("&amp;","&",HTMLEntities(substr($row['comment'],0,$x), ENT_COMPAT, getsetting("charset", "ISO-8859-1")))."`0`&{$rawname}`0`& ".str_replace("&amp;","&",HTMLEntities(substr($row['comment'],$x+strlen($ft)), ENT_COMPAT, getsetting("charset", "ISO-8859-1")))."`0`n";
 			}
 		}
 		if ($ft=="/game" && !$row['name']) {
@@ -352,7 +358,7 @@ function viewcommentary($section,$message="Interject your own commentary?",$limi
 				$op[$i] = str_replace("&amp;","&",HTMLEntities($row['comment'], ENT_COMPAT, getsetting("charset", "ISO-8859-1")));
 			else
 				$op[$i] = "`&{$row['name']}`3 says, \"`#".str_replace("&amp;","&",HTMLEntities($row['comment'], ENT_COMPAT, getsetting("charset", "ISO-8859-1")))."`3\"`0`n";
-			$rawc[$i] = "`&{$row['name']}`3 says, \"`#".str_replace("&amp;","&",HTMLEntities($row['comment'], ENT_COMPAT, getsetting("charset", "ISO-8859-1")))."`3\"`0`n";
+			$rawc[$i] = "`&{$rawname}`3 says, \"`#".str_replace("&amp;","&",HTMLEntities($row['comment'], ENT_COMPAT, getsetting("charset", "ISO-8859-1")))."`3\"`0`n";
 		}
 		
 		if (!array_key_exists('timestamp', $session['user']['prefs']))

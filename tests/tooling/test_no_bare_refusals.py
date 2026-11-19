@@ -1,9 +1,10 @@
-"""No bare refusal on the game's own player pages (Phase 6 task 27, no dead ends, part 1).
+"""No bare refusal on the game's own player pages or the bundled modules' (Phase 6 tasks 27 and 28, no dead ends).
 
 Jim's rc.2 to rc.4 server tests found three dead ends in a row (R10, R12, R13), each a player path that ended on a bare
 status and text: an http_response_code() with a 4xx or 5xx status, then an exit or die with text, and no frame or link.
 Task 27 framed every such refusal on the game's own player pages through resurrection_refuse_page() and
-resurrection_refuse_action() (lib/web_security.php), each with one way out. This test keeps it so.
+resurrection_refuse_action() (lib/web_security.php), each with one way out; task 28 did the same for the bundled
+modules (modules/), whose 55 bare refusals in 13 files it listed as task 28's. This test keeps it so.
 
 It scans every PHP file in the tree (vendor/ and .git/ aside) and finds each bare refusal: an http_response_code() whose
 status is a 4xx or 5xx literal or any expression (a helper's $status), followed, in the same block and before a framed
@@ -16,8 +17,8 @@ The exceptions are:
 - group two: pages outside forced navigation, or before a game page is drawn, plain by design;
 - group three: the superuser editors and tools;
 - the plain refusals task 27 kept on player pages: the include-only 404s ("Not an application endpoint"), the refusals
-  that run before common.php and forced navigation load, and the framed helpers' own plain fallbacks;
-- modules/: task 28's, listed with their counts, to be emptied there.
+  that run before common.php and forced navigation load, and the framed helpers' own plain fallbacks.
+No bundled module keeps one (task 28). A module file listed here would need its own reason, by name, not a group's.
 """
 from pathlib import Path
 import os
@@ -29,7 +30,6 @@ SKIP_DIRS = {'.git', 'vendor', 'node_modules'}
 
 GROUP_TWO = 'group two: outside forced navigation or before a game page is drawn; plain by design (task 22, task 24 section 6)'
 GROUP_THREE = 'group three: a superuser editor or tool (staff, not a player page)'
-TASK_28 = 'task 28: a bundled module (modules/), framed in no dead ends, part 2'
 
 # file: (bare refusals, reason). Every count is exact: a new refusal in a listed file fails as a new file does.
 EXCEPTIONS = {
@@ -81,23 +81,6 @@ EXCEPTIONS = {
     'pvp.php': (1, "the load-time fallback: plain only when the page never reached forced navigation (else framed by PvP's way out)"),
     'lib/web_security.php': (2, "the framed helpers' own plain fallback, for a request outside a game page or a frame that fails"),
 }
-# Task 28's: the bundled modules, framed in no dead ends, part 2.
-MODULES = {
-    'modules/cedrikspotions.php': 5,
-    'modules/crazyaudrey.php': 2,
-    'modules/dag/misc_functions.php': 6,
-    'modules/dag/run.php': 2,
-    'modules/darkhorse.php': 10,
-    'modules/drinks/misc_functions.php': 6,
-    'modules/drinks/run.php': 3,
-    'modules/game_dice.php': 3,
-    'modules/game_fivesix.php': 3,
-    'modules/game_stones.php': 6,
-    'modules/lovers.php': 3,
-    'modules/outhouse.php': 3,
-    'modules/sethsong.php': 3,
-}
-EXCEPTIONS.update({name: (count, TASK_28) for name, count in MODULES.items()})
 
 STATUS_CALL = re.compile(r'\\?\bhttp_response_code\s*\(')
 HEADER_STATUS = re.compile(r"""\\?\bheader\s*\(\s*['"]\s*HTTP/[\d.]+\s+([45]\d\d)""", re.I)
@@ -298,11 +281,13 @@ class NoBareRefusalTests(unittest.TestCase):
     def test_no_bare_refusal_outside_the_listed_exceptions(self):
         self.assertEqual([], problems(tree_files()))
 
-    def test_every_exception_has_a_reason_and_modules_are_task_28s(self):
+    def test_every_exception_has_a_reason_and_no_module_shares_a_groups(self):
         for name, (count, reason) in EXCEPTIONS.items():
             self.assertGreater(count, 0, name)
             self.assertGreater(len(reason), 20, name)
-            self.assertEqual(name.startswith('modules/'), reason == TASK_28, name)
+            # Task 28 framed every bundled module's refusal: a module listed here has a reason of its own, by name.
+            if name.startswith('modules/'):
+                self.assertFalse(reason.startswith((GROUP_TWO, GROUP_THREE)), name)
 
     def test_a_bare_refusal_planted_in_a_game_page_fails(self):
         files = tree_files()

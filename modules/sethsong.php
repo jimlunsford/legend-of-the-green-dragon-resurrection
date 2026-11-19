@@ -92,13 +92,23 @@ function sethsong_dohook($hookname,$args){
 	return $args;
 }
 
+/**
+ * A refused song in the game's frame (Phase 6 task 28, no dead ends, part 2): the status and message, and one way out,
+ * the bard (runmodule.php?module=sethsong), whose GET only asks whether to listen, or the inn when the bard's own page
+ * would refuse the same stored state again ($toBard false). The Shades for the dead.
+ */
+function sethsong_refuse(int $status, string $message, bool $toBard = true): never {
+    require_once 'lib/inn_economy.php';
+    resurrection_inn_refuse($status, $message, $toBard ? ['Return to the bard', 'runmodule.php?module=sethsong'] : null);
+}
+
 function sethsong_run(){
     global $session;
     require_once 'lib/typed_editor.php';
     $context=(string)$session['user']['acctid'].':'.(string)$session['user']['lasthit'];
     if ($_SERVER['REQUEST_METHOD']==='POST') resurrection_consume_action('sethsong',$context);
     try { sethsong_validate_state(); }
-    catch (DomainException | InvalidArgumentException $error) { http_response_code(409); exit('Invalid song state.'); }
+    catch (DomainException | InvalidArgumentException $error) { sethsong_refuse(409, 'Invalid song state. Nothing was changed.', false); }
 	$op=httpget('op');
 	$visits=get_module_setting("visits");
 	$been=get_module_pref("been");
@@ -124,8 +134,8 @@ function sethsong_run(){
                 if (get_module_pref('been','sethsong') >= get_module_setting('visits','sethsong')) throw new DomainException('Visit limit reached.');
                 sethsong_sing();
             }); }
-            catch (DomainException | InvalidArgumentException $error) { http_response_code(409); exit("Song unavailable."); }
-            catch (Throwable $error) { \Resurrection\Http\FailureLog::record($error); http_response_code(500); exit("Song was not completed."); }
+            catch (DomainException | InvalidArgumentException $error) { sethsong_refuse(409, 'Song unavailable. Nothing was changed.'); }
+            catch (Throwable $error) { \Resurrection\Http\FailureLog::record($error); sethsong_refuse(500, 'The song was not completed. Nothing was changed.'); }
         } else {
             output('Listen to %s`0 the Bard?',getsetting('bard','`^Seth'));
             $url='runmodule.php?module=sethsong';

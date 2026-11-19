@@ -12,15 +12,15 @@ function drinks_run_private(){
 	}elseif ($act=="buy"){
         require_once 'modules/drinks/security.php';
         try { $id = \Resurrection\Http\Input::integer($_GET,'id',0,1); }
-        catch (InvalidArgumentException $error) { http_response_code(400); exit('Invalid drink ID.'); }
+        catch (InvalidArgumentException $error) { drinks_refuse(400, 'Invalid drink ID. Nothing was changed.'); }
         $rows=db_query('SELECT * FROM ' . db_prefix('drinks') . ' WHERE drinkid=? AND active=1',true,[$id]);
-        if (count($rows)!==1) { http_response_code(404); exit('Drink unavailable.'); }
+        if (count($rows)!==1) drinks_refuse(404, 'Drink unavailable. Nothing was changed.');
         $row=$rows[0];
         $result=null;
         if ($_SERVER['REQUEST_METHOD']==='POST') {
             resurrection_consume_action('drinks-buy',(string)$id);
             try { $result=drinks_purchase($id); }
-            catch (DomainException $error) { http_response_code(400); exit('Drink unavailable, limit reached, or insufficient funds.'); }
+            catch (DomainException $error) { drinks_refuse(400, 'Drink unavailable, limit reached, or insufficient funds. Nothing was changed.'); }
             $row=$result['drink'];
         }
         $texts=drinks_gettexts();
@@ -58,5 +58,20 @@ function drinks_run_private(){
 		villagenav();
 		page_footer();
 	}
+}
+
+/**
+ * A refused drink in the game's frame (Phase 6 task 28, no dead ends, part 2): the status and message, and one way out,
+ * the bar the drink was ordered at: the page the drinks' texts name for a bar of a module's own (the dwarves' Great
+ * Kegs of Ale), else the inn's bartender, whose GET only shows the drinks; the Shades for the dead.
+ */
+function drinks_refuse(int $status, string $message): never {
+    global $session;
+    require_once 'modules/drinks/misc_functions.php';
+    require_once 'lib/inn_economy.php';
+    $texts = modulehook('drinks-text', drinks_gettexts());
+    $own = ($texts['return'] ?? '') > '' && is_string($texts['returnlink'] ?? null);
+    resurrection_refuse_page($status, $message, sanitize(is_string($texts['title'] ?? null) ? $texts['title'] : getsetting('innname', LOCATION_INN)), $message,
+        !empty($session['user']['alive']) ? ($own ? ['Return to the bar', $texts['returnlink']] : RESURRECTION_INN_BARTENDER_WAY) : null);
 }
 ?>

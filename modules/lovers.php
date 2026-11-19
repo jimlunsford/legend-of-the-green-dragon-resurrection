@@ -159,17 +159,27 @@ function lovers_run(){
             }
         }
     } catch (InvalidArgumentException $error) {
-        http_response_code(400); exit('Invalid Lovers action.');
+        lovers_refuse(400, 'Invalid Lovers action. Nothing was changed.');
     } catch (DomainException $error) {
-        http_response_code(409); exit('Lovers is unavailable.');
+        lovers_refuse(409, 'Lovers is unavailable. Nothing was changed.');
     } catch (Throwable $error) {
-        \Resurrection\Http\FailureLog::record($error); http_response_code(500); exit('Lovers interaction was not completed. Request a fresh form.');
+        \Resurrection\Http\FailureLog::record($error); lovers_refuse(500, 'Lovers interaction was not completed. Nothing was changed.');
     }
 	addnav("Return");
 	addnav("I?Return to the Inn","inn.php");
 	villagenav();
 	rawoutput("</span>");
 	page_footer();
+}
+
+/**
+ * A refused visit in the game's frame (Phase 6 task 28, no dead ends, part 2): the status and message, and one way out,
+ * the inn the lovers live in (inn.php); not the flirt page, whose GET checks the same state and would refuse it again.
+ * The Shades for the dead.
+ */
+function lovers_refuse(int $status, string $message): never {
+    require_once 'lib/inn_economy.php';
+    resurrection_inn_refuse($status, $message);
 }
 
 function lovers_getbuff(){

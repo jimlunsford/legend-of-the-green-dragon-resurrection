@@ -21,6 +21,20 @@ function resurrection_darkhorse_game(string $game): array {
         return $state;
     } catch (DomainException $error) { resurrection_darkhorse_refuse(409, 'Invalid or conflicting wager.'); }
 }
+/**
+ * A refused game request in the game's frame (Phase 6 task 28, no dead ends, part 2): the status and message, and one
+ * way out, the game's own page (runmodule.php?module=<game>, whose GET only shows the game) while the player is in the
+ * tavern; else resurrection_darkhorse_refuse()'s way (the Main Room, the forest, or the Shades for the dead).
+ */
+function resurrection_darkhorse_game_refuse(int $status, string $message, string $game, string $title): never {
+    global $session;
+    if (!empty($session['user']['alive']) && ($session['user']['specialinc'] ?? '') === 'module:darkhorse' &&
+        in_array($_SESSION['darkhorse_return'] ?? '', ['forest.php','travel.php'], true) &&
+        in_array($game, ['game_dice','game_stones','game_fivesix'], true)) {
+        resurrection_refuse_page($status, $message, $title, $message, ['Return to the game', 'runmodule.php?module=' . $game]);
+    }
+    resurrection_darkhorse_refuse($status, $message);
+}
 function resurrection_darkhorse_navigation(): void {
     $return=$_SESSION['darkhorse_return'];
     addnav('Other Games',$return.'?op=oldman');

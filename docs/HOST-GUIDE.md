@@ -615,6 +615,13 @@ value.
 names. If every player gets it at once, the server probably sees one proxy's address for all of them (section 6,
 "Behind a proxy or a CDN").
 
+**Every new character is Human and a student of the mystical powers.** Every race module, or every specialty module,
+is turned off. A player's new day then does what 1.1.2 did: it says no races (or no specialties) were installed, makes
+the player Human (or a student of the mystical powers) and goes on with one Continue, so nobody is stuck, but nobody
+chooses either. A fresh install turns on all four races and all three specialties; to give players the choice again,
+turn at least one race module and one specialty module back on in Manage Modules (`modules.php`, in the Grotto). The
+game writes nothing to the error log for this.
+
 **Every page answers 500 right after adding `.htaccess`.** The host does not allow a directive in it. Delete it
 (section 3).
 

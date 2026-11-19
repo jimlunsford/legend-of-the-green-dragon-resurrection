@@ -20,6 +20,14 @@ function dag_sortbountieslevel($x, $y) {
 	}
 }
 
+/**
+ * A refused bounty list request in the game's frame (Phase 6 task 28, no dead ends, part 2): the status and message, and
+ * one way out, the staff's bounty lists (their GET only shows them).
+ */
+function dag_manage_refuse(int $status, string $message): never {
+    resurrection_refuse_page($status, $message, "Dag's Bounty Lists", $message, ['Return to the bounty lists', 'runmodule.php?module=dag&manage=true&admin=true']);
+}
+
 function dag_manage(){
     global $session;
     require_once 'modules/dag/security.php';
@@ -34,7 +42,7 @@ function dag_manage(){
             $filter = \Resurrection\Http\Input::string($_POST,$field);
             if (strlen($filter) > 100 || !mb_check_encoding($filter,'UTF-8')) throw new InvalidArgumentException();
         }
-    } catch (InvalidArgumentException $error) { http_response_code(400); exit('Invalid bounty filter.'); }
+    } catch (InvalidArgumentException $error) { dag_manage_refuse(400, 'Invalid bounty filter. Nothing was changed.'); }
     if (httpget('op') === 'addbounty') resurrection_consume_action('dag-admin-place',(string)$session['user']['acctid']);
     if (httpget('op') === 'cleanup') resurrection_consume_action('dag-admin-cleanup',(string)$session['user']['acctid']);
     if (httpget('op') === 'closebounty') resurrection_require_post();
@@ -189,7 +197,7 @@ function dag_manage(){
             $contractname = \Resurrection\Http\Input::string($_POST,'contractname');
             $amount = \Resurrection\Http\Input::integer($_POST,'amount',0,1);
             if ($amount < 1 || $amount > 2147483647 || strlen($contractname) > 100 || !mb_check_encoding($contractname,'UTF-8')) throw new InvalidArgumentException();
-        } catch (InvalidArgumentException $error) { http_response_code(400); exit('Invalid bounty input.'); }
+        } catch (InvalidArgumentException $error) { dag_manage_refuse(400, 'Invalid bounty input. Nothing was changed.'); }
         $exact = httpget('subfinal') === '1';
         $name = $exact ? $contractname : dag_name_pattern($contractname);
         $result = db_query('SELECT acctid,name,locked FROM ' . db_prefix('accounts') . ($exact ? ' WHERE name=?' : " WHERE name LIKE ? ESCAPE '!'") . ' AND locked=0 LIMIT 101',true,[$name]);
@@ -233,7 +241,7 @@ function dag_manage(){
 			} else {
 				// All good!
 				try { dag_place_bounty((int)$row['acctid'],$amt,true); }
-                catch (DomainException $error) { http_response_code(400); exit('Bounty cannot be placed.'); }
+                catch (DomainException $error) { dag_manage_refuse(400, 'The bounty was not placed. Nothing was changed.'); }
 				output("Bounty added!");
 			}
 		}
@@ -508,11 +516,11 @@ function dag_manage(){
 	} else if ($op == "closebounty") {
 		$windate = date("Y-m-d H:i:s");
 		try { $bountyid = \Resurrection\Http\Input::integer($_GET,'id',0,1); }
-        catch (InvalidArgumentException $error) { http_response_code(400); exit('Invalid bounty ID.'); }
-        if ($bountyid < 1 || $bountyid > 2147483647) { http_response_code(400); exit('Invalid bounty ID.'); }
+        catch (InvalidArgumentException $error) { dag_manage_refuse(400, 'Invalid bounty ID. Nothing was changed.'); }
+        if ($bountyid < 1 || $bountyid > 2147483647) dag_manage_refuse(400, 'Invalid bounty ID. Nothing was changed.');
         resurrection_consume_action('dag-admin-close-'.$bountyid,(string)$session['user']['acctid']);
         if (count(db_query('SELECT bountyid FROM '.db_prefix('bounty').' WHERE bountyid=?',true,[$bountyid])) !== 1) {
-            http_response_code(404); exit('Bounty not found.');
+            dag_manage_refuse(404, 'Bounty not found. Nothing was changed.');
         }
         db_query('UPDATE ' . db_prefix('bounty') . ' SET status=1,winner=0,windate=? WHERE bountyid=? AND status=0',true,[$windate,$bountyid]);
 		output("Bounty closed.");

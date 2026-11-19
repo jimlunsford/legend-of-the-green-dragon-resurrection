@@ -128,7 +128,7 @@ function dag_run_private(){
             $contractname = \Resurrection\Http\Input::string($_POST,'contractname');
             $amount = \Resurrection\Http\Input::integer($_POST,'amount',0,1);
             if ($amount < 1 || $amount > 2147483647 || strlen($contractname) > 100 || !mb_check_encoding($contractname,'UTF-8')) throw new InvalidArgumentException();
-        } catch (InvalidArgumentException $error) { http_response_code(400); exit('Invalid bounty input.'); }
+        } catch (InvalidArgumentException $error) { dag_refuse(400, 'Invalid bounty input. Nothing was changed.'); }
         if (httpget('subfinal') === '1') {
             $result = db_query('SELECT acctid,name,login,level,locked,age,dragonkills,pk,experience FROM ' . db_prefix('accounts') . ' WHERE name=? AND locked=0',true,[$contractname]);
         } else {
@@ -204,7 +204,7 @@ function dag_run_private(){
 					output("You slide the coins towards Dag Durnick, who deftly palms them from the table.");
 					output("`7\"I'll just be takin' me %s%% listin' fee offa the top.  The word be put out that ye be wantin' `^%s`7 taken care of. Be patient, and keep yer eyes on the news.\"`n`n", $fee, $row['name']);
                     try { $cost = dag_place_bounty((int)$row['acctid'],$amt); }
-                    catch (DomainException $error) { http_response_code(400); exit('Bounty cannot be placed.'); }
+                    catch (DomainException $error) { dag_refuse(400, 'The bounty was not placed. Nothing was changed.'); }
 					debuglog("spent $cost to place a $amt bounty on {$row['name']}");
 				}
 			}
@@ -241,5 +241,15 @@ function dag_run_private(){
 	}
 	rawoutput("</span>");
 	page_footer();
+}
+
+/**
+ * A refused bounty in the game's frame (Phase 6 task 28, no dead ends, part 2): the status and message, and one way out,
+ * Dag Durnick's table (runmodule.php?module=dag), whose GET only shows it; the Shades for the dead.
+ */
+function dag_refuse(int $status, string $message): never {
+    global $session;
+    resurrection_refuse_page($status, $message, "Dag Durnick's Table", $message,
+        !empty($session['user']['alive']) ? ['Talk to Dag Durnick', 'runmodule.php?module=dag'] : null);
 }
 ?>

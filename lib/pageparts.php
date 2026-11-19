@@ -583,6 +583,8 @@ function getcharstats($buffs){
 							"value"=>"`^$val`0");
 					$charstat_str .= templatereplace("statbuff", $a2);
 				}else{
+					// A player's name as text, its codes rendered and its HTML escaped (Phase 6 task 28).
+					if ($label == "Vital Info" && $name == "Name") $val = resurrection_appoencode_closed((string)$val);
 					$a2 = array("title"=>translate_inline("`&$name`0"),
 							"value"=>"`^$val`0");
 					$charstat_str .= $sectionhead.templatereplace("statrow", $a2);
@@ -1172,6 +1174,9 @@ function resurrection_charpanel($standard, $buffs, $spirits, $modded){
 	}
 	$name = $u['name'];
 	if (($v = $changed("Vital Info", "Name")) !== null) $name = $v;
+	// The name as text, its color codes rendered and its HTML escaped, as every other page shows it (Phase 6 task 28:
+	// 1.1.2's panel printed a name's markup as HTML; the header has always shown it as text).
+	$name = resurrection_appoencode_closed((string)$name);
 	$portrait = "";
 	$art = \Resurrection\Ui\Art::portrait($race, trim(full_sanitize($racename)));
 	if ($art !== null) {

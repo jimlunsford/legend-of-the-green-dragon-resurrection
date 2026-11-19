@@ -20,6 +20,24 @@ function resurrection_race_choices(bool $lock = false): array {
     return $choices;
 }
 
+/** The race 1.1.2 gave a player when no race module was installed (lib/newday/setrace.php). */
+const RESURRECTION_RACE_FALLBACK = 'Human';
+
+/**
+ * The one Continue of a new day question that has nothing to choose (Phase 6 task 28): a POST form with this question's
+ * action token that sets 1.1.2's fallback, so the page is never a dead end and a GET changes nothing.
+ */
+function resurrection_onboarding_fallback_form(string $question, string $field, string $value, string $context): void {
+    global $resline;
+    $url = 'newday.php?continue=1' . $resline;
+    addnav('', $url);
+    rawoutput('<form method="POST" action="' . htmlspecialchars($url, ENT_QUOTES, 'UTF-8') . '">' .
+        resurrection_action_fields($question . '-onboarding', $context) .
+        '<input type="hidden" name="onboarding" value="' . $question . '"><input type="hidden" name="' . $field . '" value="' .
+        htmlspecialchars($value, ENT_QUOTES, 'UTF-8') . '"><button class="button">' .
+        htmlspecialchars(translate_inline('Continue'), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '</button></form>');
+}
+
 /** @param array<string, string> $choices */
 function resurrection_race_context(array $choices): string {
     global $session;
@@ -60,13 +78,15 @@ function resurrection_race_onboarding(): void {
         resurrection_race_eligible();
         $choices = resurrection_race_choices();
         $context = resurrection_race_context($choices);
-        page_header('A little history about yourself');
+        // With no race module active, 1.1.2 made the player Human and went on (lib/newday/setrace.php, "No Races
+        // Installed"); so does this page, by its one Continue (Phase 6 task 28).
+        page_header($choices === [] ? 'No Races Installed' : 'A little history about yourself');
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             resurrection_consume_action('race-onboarding', $context);
             if (array_diff(array_keys($_POST), ['csrf_token','action_token','onboarding','setrace']) !== [] ||
                 array_diff(array_keys($_GET), ['continue','resurrection','c']) !== []) throw new InvalidArgumentException('Unexpected field.');
             \Resurrection\Http\Input::choice($_POST, 'onboarding', ['race'], '');
-            $race = \Resurrection\Http\Input::choice($_POST, 'setrace', array_keys($choices), '');
+            $race = \Resurrection\Http\Input::choice($_POST, 'setrace', $choices === [] ? [RESURRECTION_RACE_FALLBACK] : array_keys($choices), '');
             resurrection_player_mutation(function () use ($race, $context) {
                 global $session;
                 resurrection_race_eligible();
@@ -74,15 +94,22 @@ function resurrection_race_onboarding(): void {
                 $village = db_query('SELECT value FROM ' . db_prefix('settings') . ' WHERE setting=? FOR UPDATE', true, ['villagename']);
                 if (count($village) !== 1) throw new DomainException('Village setting changed.');
                 $GLOBALS['settings']['villagename'] = $village[0]['value'];
-                if (resurrection_race_context($locked) !== $context || !isset($locked[$race])) throw new DomainException('Race state changed.');
+                if (resurrection_race_context($locked) !== $context) throw new DomainException('Race state changed.');
+                if ($locked === []) {
+                    // 1.1.2's fallback: no race module to tell, so no setrace hook.
+                    if ($race !== RESURRECTION_RACE_FALLBACK) throw new DomainException('Race state changed.');
+                } elseif (!isset($locked[$race])) throw new DomainException('Race state changed.');
                 $session['user']['race'] = $race;
                 $session['user']['location'] = getsetting('villagename', LOCATION_FIELDS);
-                modulehook('setrace', [], false, $locked[$race]);
+                if ($locked !== []) modulehook('setrace', [], false, $locked[$race]);
             });
+            // The fallback has no race's story to show: on to the rest of the new day, as 1.1.2's one Continue went.
+            if ($choices === []) redirect('newday.php?continue=1' . $resline, 'No race module active.');
             addnav('Continue', 'newday.php?continue=1' . $resline);
         } elseif ($_SERVER['REQUEST_METHOD'] === 'GET') {
             if ($choices === []) {
-                output('No active bundled races are available. Please ask an administrator to activate a race.');
+                output("No races were installed in this game. So we'll call you a 'human' and get on with it.");
+                resurrection_onboarding_fallback_form('race', 'setrace', RESURRECTION_RACE_FALLBACK, $context);
             } else {
                 output('Where do you recall growing up?`n`n');
                 foreach ($choices as $module) modulehook('chooserace', [], false, $module);

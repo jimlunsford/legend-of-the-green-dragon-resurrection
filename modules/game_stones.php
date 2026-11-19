@@ -44,10 +44,10 @@ function game_stones_run(){
     // Return locations are application-owned. Never reflect a submitted URL.
     $return = $_SESSION['darkhorse_return'] ?? '';
     if (!in_array($return, ['forest.php', 'travel.php'], true) || ($session['user']['specialinc'] ?? '') !== 'module:darkhorse') {
-        http_response_code(403); exit('Game unavailable.');
+        resurrection_darkhorse_refuse(403, 'Game unavailable. Nothing was changed.');
     }
     if (empty($session['loggedin']) || !is_module_active('darkhorse')) {
-        http_response_code(403); exit('Game unavailable.');
+        resurrection_darkhorse_refuse(403, 'Game unavailable. Nothing was changed.');
     }
     $encoded = (string)$session['user']['specialmisc'];
     $context = hash('sha256', $encoded);
@@ -56,7 +56,8 @@ function game_stones_run(){
         if (($wager['active'] ?? false) && $wager['game'] !== 'game_stones') throw new DomainException('Wrong game.');
         $stones = ($wager['active'] ?? false) ? \Resurrection\Game\StonesState::decode($wager['data']) : [];
     } catch (DomainException $error) {
-        http_response_code(409); exit('Invalid Stones state. Return to the tavern before starting a new game.');
+        // Not the game's own page, whose GET reads the same state and would refuse it again: the Main Room.
+        resurrection_darkhorse_refuse(409, 'Invalid Stones state. Nothing was changed.');
     }
     $result = null;
     if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -69,6 +70,9 @@ function game_stones_run(){
             $result = resurrection_player_mutation(function () use ($stones, $wager, $action, $side, $bet) {
                 global $session;
                 $result = \Resurrection\Game\StonesGame::act($stones, (int)$session['user']['gold'], $action, $side, $bet, 'e_rand');
+                // The bet draws the first pair, as 1.1.2's did (Phase 6 task 28): its page is the first round's result
+                // and the next round's Continue, not a round with no stones drawn.
+                if ($action === 'bet') $result = \Resurrection\Game\StonesGame::act($result['state'], $result['gold'], 'draw', '', 0, 'e_rand');
                 $owner = (int)$session['user']['acctid'];
                 $data = \Resurrection\Game\StonesState::encode($result['state']);
                 if ($action === 'choose') {
@@ -87,10 +91,10 @@ function game_stones_run(){
             });
             $stones = $result['state'];
         } catch (InvalidArgumentException|DomainException $error) {
-            http_response_code(400); exit('Invalid Stones action.');
-        } catch (RuntimeException $error) { http_response_code(503); exit('Game temporarily unavailable.'); }
+            resurrection_darkhorse_game_refuse(400, 'Invalid Stones action. Nothing was changed.', 'game_stones', 'A Game of Stones');
+        } catch (RuntimeException $error) { resurrection_darkhorse_game_refuse(503, 'Game temporarily unavailable. Nothing was changed.', 'game_stones', 'A Game of Stones'); }
     } elseif (isset($_GET['side']) || isset($_GET['bet']) || isset($_GET['action'])) {
-        http_response_code(403); exit('Use the game form.');
+        resurrection_darkhorse_game_refuse(403, 'Use the game form. Nothing was changed.', 'game_stones', 'A Game of Stones');
     }
     page_header('A Game of Stones');
     if ($result !== null && $result['drawn'] !== []) {

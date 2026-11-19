@@ -102,9 +102,9 @@ function cedrikspotions_run(){
             $wish=\Resurrection\Http\Input::integer($_POST,'wish',0,1);
             $quantity=\Resurrection\Http\Input::integer($_POST,'gemcount',0,1);
             if ($wish>5 || $wish<1 || $quantity<1 || $quantity>2147483647) throw new InvalidArgumentException();
-        } catch (InvalidArgumentException $error) { http_response_code(400); exit('Invalid potion request.'); }
+        } catch (InvalidArgumentException $error) { cedrikspotions_refuse(400, 'Invalid potion request. Nothing was changed.'); }
         $availability=[1=>'ischarm',2=>'ismax',3=>'istemp',4=>'isforget',5=>'istrans'];
-        if (!get_module_setting($availability[$wish],'cedrikspotions')) { http_response_code(400); exit('Potion unavailable.'); }
+        if (!get_module_setting($availability[$wish],'cedrikspotions')) cedrikspotions_refuse(400, 'Potion unavailable. Nothing was changed.');
     }
 	$wish = httppost('wish');
 	$op = httpget("op");
@@ -269,7 +269,7 @@ function cedrikspotions_run(){
 		}else{
             $gemcount=$quantity;
             try { $cost = cedrikspotions_price((int)$wish); }
-            catch (DomainException $error) { http_response_code(400); exit('Invalid potion cost.'); }
+            catch (DomainException $error) { cedrikspotions_refuse(400, 'Invalid potion cost. Nothing was changed.'); }
             try {
                 resurrection_player_mutation(function () use ($gemcount,$cost,$wish,$barkeep) {
                     global $session;
@@ -389,14 +389,24 @@ function cedrikspotions_run(){
                     if ($session['user']['charm']<0 || $session['user']['charm']>4294967295) throw new DomainException('Charm exceeds bounds.');
                     if (isset($session['bufflist']['transmute']['rounds']) && $session['bufflist']['transmute']['rounds']>2147483647) throw new DomainException('Potion duration exceeds bounds.');
                 });
-            } catch (DomainException|InvalidArgumentException $error) { http_response_code(400); exit('Potion purchase rejected.'); }
-            catch (Throwable $error) { \Resurrection\Http\FailureLog::record($error); http_response_code(500); exit('Potion purchase was not completed.'); }
+            } catch (DomainException|InvalidArgumentException $error) { cedrikspotions_refuse(400, 'Potion purchase rejected. Nothing was changed.'); }
+            catch (Throwable $error) { \Resurrection\Http\FailureLog::record($error); cedrikspotions_refuse(500, 'Potion purchase was not completed. Nothing was changed.'); }
 		}
 		addnav("I?Return to the Inn","inn.php");
 		villagenav();
 	}
 	rawoutput("</span>");
 	page_footer();
+}
+
+/**
+ * A refused potion request in the game's frame (Phase 6 task 28, no dead ends, part 2): the status and message, and one
+ * way out, Cedrik's potions (runmodule.php?module=cedrikspotions&op=gems), whose GET only shows the form; the Shades
+ * for the dead.
+ */
+function cedrikspotions_refuse(int $status, string $message): never {
+    require_once 'lib/inn_economy.php';
+    resurrection_inn_refuse($status, $message, ['Return to the potions', 'runmodule.php?module=cedrikspotions&op=gems']);
 }
 
 /** Persisted vitality bookkeeping is a bounded count, never an arbitrary scalar. */

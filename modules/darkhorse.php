@@ -93,7 +93,7 @@ function darkhorse_bartender($from){
     unset($_POST['i_am_a_hack']);
 	require_once 'lib/darkhorse_game.php';
 	try { $what = \Resurrection\Http\Input::choice($_GET, 'what', ['', 'colors', 'enemies'], ''); }
-    catch (InvalidArgumentException $error) { http_response_code(400); exit('Invalid request.'); }
+    catch (InvalidArgumentException $error) { resurrection_darkhorse_refuse(400, 'Invalid request. Nothing was changed.'); }
 	if ($what==""){
 		output("The grizzled old man behind the bar reminds you very much of a strip of beef jerky.`n`n");
 		$dname = translate_inline($session['user']['sex']?"lasshie":"shon");
@@ -108,8 +108,8 @@ function darkhorse_bartender($from){
 		output("He continues, \"`%To do colorsh, here'sh what you need to do.  Firsht, you ushe a &#0096; mark (found right above the tab key) followed by 1, 2, 3, 4, 5, 6, 7, !, @, #, $, %, ^, &, ), q or Q.  Each of thoshe correshpondsh with a color to look like this: `n`1&#0096;1 `2&#0096;2 `3&#0096;3 `4&#0096;4 `5&#0096;5 `6&#0096;6 `7&#0096;7 `n`!&#0096;! `@&#0096;@ `#&#0096;# `\$&#0096;\$ `%&#0096;% `^&#0096;^ `&&#0096;& `n `)&#0096;) `q&#0096;q `Q&#0096;Q `n`% got it?`0\"`n  You can practice below:", true);
 		rawoutput("<form action=\"".$from."op=bartender&what=colors\" method='POST'>");
 		try { $testtext = \Resurrection\Http\Input::string($_POST, 'testtext'); }
-        catch (InvalidArgumentException $error) { http_response_code(400); exit('Invalid text.'); }
-        if (strlen($testtext)>4096) { http_response_code(400); exit('Text too long.'); }
+        catch (InvalidArgumentException $error) { resurrection_darkhorse_refuse(400, 'Invalid text. Nothing was changed.'); }
+        if (strlen($testtext)>4096) resurrection_darkhorse_refuse(400, 'Text too long. Nothing was changed.');
 		$try = translate_inline("Try");
 		rawoutput("<input name='testtext' id='testtext'><input type='submit' class='button' value='$try'></form>");
 		addnav("",$from."op=bartender&what=colors");
@@ -121,8 +121,8 @@ function darkhorse_bartender($from){
 		output("`0`n`nThese colors can be used in your name, and in any conversations you have.");
 	}else if($what=="enemies"){
 		try { $who = \Resurrection\Http\Input::string($_GET, 'who'); }
-        catch (InvalidArgumentException $error) { http_response_code(400); exit('Invalid name.'); }
-        if (strlen($who)>25) { http_response_code(400); exit('Invalid name.'); }
+        catch (InvalidArgumentException $error) { resurrection_darkhorse_refuse(400, 'Invalid name. Nothing was changed.'); }
+        if (strlen($who)>25) resurrection_darkhorse_refuse(400, 'Invalid name. Nothing was changed.');
 		if ($who==""){
 			output("\"`7Sho, you want to learn about your enemiesh, do you?  Who do you want to know about?  Well?  Shpeak up!  It only costs `^100`7 gold per person for information.`0\"");
 			$subop = httpget('subop');
@@ -135,8 +135,8 @@ function darkhorse_bartender($from){
 				addnav("Search Again",$from."op=bartender&what=enemies");
 				$search = "%";
 				try { $name = \Resurrection\Http\Input::string($_POST, 'name'); }
-                catch (InvalidArgumentException $error) { http_response_code(400); exit('Invalid search.'); }
-                if (mb_strlen($name, 'UTF-8')>50) { http_response_code(400); exit('Invalid search.'); }
+                catch (InvalidArgumentException $error) { resurrection_darkhorse_refuse(400, 'Invalid search. Nothing was changed.'); }
+                if (mb_strlen($name, 'UTF-8')>50) resurrection_darkhorse_refuse(400, 'Invalid search. Nothing was changed.');
 				for ($i=0;$i<strlen($name);$i++){
 					$search.=substr($name,$i,1)."%";
 				}
@@ -171,7 +171,7 @@ function darkhorse_bartender($from){
                 return;
             }
             resurrection_consume_action('darkhorse_information',$context);
-            if (array_diff(array_keys($_POST),['csrf_token','action_token'])!==[]) { http_response_code(400); exit('Unknown field.'); }
+            if (array_diff(array_keys($_POST),['csrf_token','action_token'])!==[]) resurrection_darkhorse_refuse(400, 'Unknown field. Nothing was changed.');
             resurrection_player_mutation(function () use ($who) {
                 global $session;
 			if ($session['user']['gold']>=100){
@@ -312,7 +312,7 @@ function darkhorse_runevent($type, $link, $showname=true){
                 break;
             }
         } catch (DomainException|InvalidArgumentException $error) {
-            http_response_code(409); exit('Invalid or inactive wager.');
+            resurrection_darkhorse_refuse(409, 'Invalid or inactive wager. Nothing was changed.');
         }
 		darkhorse_checkday();
 		addnav("Old Man");
@@ -357,7 +357,7 @@ function darkhorse_runevent($type, $link, $showname=true){
 function darkhorse_run(){
     global $session;
     require_once 'lib/darkhorse_entry.php';
-    if (($_GET['op'] ?? '')!=='enter') { http_response_code(400); exit('Invalid tavern action.'); }
+    if (($_GET['op'] ?? '')!=='enter') resurrection_darkhorse_refuse(400, 'Invalid tavern action. Nothing was changed.');
     page_header(get_module_setting('tavernname'));
     if (resurrection_darkhorse_enter()) {
         httpset('op','tavern');

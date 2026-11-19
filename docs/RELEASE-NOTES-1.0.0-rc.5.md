@@ -1,7 +1,7 @@
 # Release notes: Legend of the Green Dragon - Resurrection 1.0.0-rc.5
 
 Draft. This test build has not been cut. Started in Phase 6 task 26 (2026-11-18) from what Jim's rc.4 server test
-found, with no dead ends, part 1, from task 27; each change is recorded in full in `docs/CHANGES-FROM-1.1.2.md`. Read with the rc.4 notes,
+found, with no dead ends, part 1, from task 27, and part 2, from task 28; each change is recorded in full in `docs/CHANGES-FROM-1.1.2.md`. Read with the rc.4 notes,
 `docs/RELEASE-NOTES-1.0.0-rc.4.md`, the rc.3 notes, `docs/RELEASE-NOTES-1.0.0-rc.3.md`, the rc.2 notes,
 `docs/RELEASE-NOTES-1.0.0-rc.2.md`, and the rc.1 notes, `docs/RELEASE-NOTES-1.0.0-rc.1.md`: everything there still
 holds unless this page says otherwise.
@@ -63,6 +63,27 @@ No dead ends, part 1 (`docs/PHASE6-TASK27-20261118.md`):
   now shows that fight, ready to go on, instead of the forest's menu. Nothing is used up. With no fight waiting, the
   forest is as before.
 
+No dead ends, part 2 (`docs/PHASE6-TASK28-20261119.md`):
+
+- **The bundled modules refuse in the game's frame too.** The Dark Horse Tavern and its three games, Cedrik's
+  potions, the drinks at the bar, the lovers, Seth's songs, Crazy Audrey, Dag's bounties and the outhouse answered an
+  old link, a form pressed twice or a choice that was no longer there with a bare line of text and no links. Now each
+  answers in the game's frame with one link onward: back to the game you were playing, Cedrik's potions, the bard,
+  the bartender, Dag's table or the Main Room of the tavern, else the inn, the village or the forest where the module
+  lives, or the Shades for the dead. Their messages say what did not happen and that nothing was changed; none asks
+  you to request a fresh form or go back and try again.
+- **Fewer clicks in the Dark Horse Tavern's games.** A game of stones took one press more than 1.1.2's: the bet drew
+  no stones, so a press of Continue came before the first pair. Now the bet draws the first pair, as it did in 1.1.2,
+  and every press after it draws one pair, until the last press settles the game. Dice (Bet, Pass, Keep) and five-six
+  (one Roll a round) already took no more presses than 1.1.2's, and each game's last page shows the result together
+  with the next round's Bet, Roll or choice of pair, where 1.1.2 needed a Play again first.
+- **Names show as written.** The character panel, the Hall of Fame and the talk on every page showed a player's name
+  as page code, so a name holding something like `<img>` showed a broken picture there. They show the name as text now,
+  with its colors, like the rest of the game. No player could choose such a name: sign-up takes letters and digits.
+- **A new day with no race or specialty goes on.** When a game has every race (or every specialty) turned off, the
+  new day's question had nothing to press. Now it does what 1.1.2 did: it makes you Human (or a student of the
+  mystical powers) and goes on with one Continue. The host guide tells the host how to give players the choice again.
+
 ## Upgrading
 
 Follow the host guide's upgrade steps (`HOST-GUIDE.md`, section 9, "Upgrade"): back up the database and the
@@ -88,15 +109,9 @@ Carried from rc.4:
   title text allows color codes; the clan-delete hook is not called on disband; the healer resets hitpoints above the
   maximum on view; the Graveyard views sober a dead player; the MoTD archive skips its first month.
 - **A 1.1.2 data oddity:** two creatures are both "Loneliness".
-- **The Dark Horse Tavern's games need many clicks on Continue** between rounds (dice, stones, five-six). To be fixed
-  before `1.0.0` (`ROADMAP.md`, task 28).
-- **The bundled modules' own pages can still refuse with a bare line of text**: the Dark Horse Tavern's games and its
-  rooms, Cedrik's potions, the Drinks, the lovers, the outhouse, Seth's songs, Crazy Audrey and the Dag's bounties.
-  An old link or a form pressed twice there can still answer with a line of text and no links; the game's next page
-  shows your last page again. To be fixed before `1.0.0` (`ROADMAP.md`, task 28).
-- **A page that only an administrator's choice can fix:** when no race (or no specialty) is active on a game, the
-  new day's question says so and asks you to contact an administrator, with nothing to press. A host who turns every
-  race or specialty off sees this; the game installs with them on.
+- **The Dark Horse Tavern's door takes one press more than 1.1.2's, each way.** Riding in on a mount and leaving the
+  tavern each show a page with one button to confirm, because the game changes your state only by a button, never by
+  a link; 1.1.2 did both with a link.
 - **Modules beyond the bundled 24** are not supported: installed module code is trusted PHP.
 - **Maintenance is not one transaction.** A failed run repeats its date-based cleanups on the next run.
 - **No 1.1.2 migration**, by design: install fresh.

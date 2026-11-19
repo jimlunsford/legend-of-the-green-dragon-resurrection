@@ -231,6 +231,21 @@ administrator; that guidance is the host's (host guide, section 12). In this rep
 `tests/tooling/test_no_bare_refusals.py` finds every bare status and text in every PHP file, bundled modules included,
 and fails on one outside its listed exceptions.
 
+Every bundled module refuses this way (Phase 6 task 28), and none is listed as an exception; a module file listed there
+would need a reason of its own. Their ways out show the order at work:
+
+- The Dark Horse games (`game_dice`, `game_stones`, `game_fivesix`): the game's own page while the tavern is open, since
+  its GET only shows the game's form (`resurrection_darkhorse_game_refuse()`); a stored wager the game cannot read goes
+  to the tavern's Main Room instead, as do the tavern's own refusals (`resurrection_darkhorse_refuse()`), or the
+  forest once the player has left it.
+- Cedrik's potions and Seth's song: their own page (the potions, the bard). The lovers: the inn, because their page's
+  GET checks the same state and would refuse again. A drink: the bartender, or the bar a race module's `drinks-text`
+  hook names. Each goes through `resurrection_inn_refuse()`, whose title is the inn's name.
+- Dag's bounty office: Dag's table. Crazy Audrey: the village. The outhouse: the forest.
+- For the dead, each of those passes `null`: the Shades.
+- The staff editors a module adds (Dag's bounty lists, the drink editor): their own list, dead or alive, as the Grotto's
+  pages are.
+
 The **scope** names the action (your module's name, or `mymodule-buy`). The **context** binds the token to the state
 it was shown for: the account and what the form does, such as the player's id and the step. Never put `authversion` or
 anything else that changes on every sign-in in a context, or a page kept from before a new sign-in can never be sent

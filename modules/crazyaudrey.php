@@ -271,12 +271,20 @@ function crazyaudrey_village_action(){
 	}
 }
 
+/**
+ * A refused visit in the game's frame (Phase 6 task 28, no dead ends, part 2): the status and message, and one way out,
+ * the village Crazy Audrey stands in (the Shades for the dead).
+ */
+function crazyaudrey_refuse(int $status, string $message): never {
+    resurrection_refuse_page($status, $message, "Crazy Audrey", $message);
+}
+
 function crazyaudrey_run(){
     global $session;
     require_once "lib/typed_editor.php";
     $op = httpget("op");
     if (!is_string($op) || !in_array($op,["pet","baskets","play","run"],true)) {
-        http_response_code(400); exit("Invalid Audrey action.");
+        crazyaudrey_refuse(400, "Invalid Audrey action. Nothing was changed.");
     }
     $context=(string)$session["user"]["acctid"].":".(string)$session["user"]["lasthit"].":".$op;
     if ($_SERVER["REQUEST_METHOD"] === "POST") resurrection_consume_action("crazyaudrey-village",$context);
@@ -314,10 +322,9 @@ function crazyaudrey_run(){
             crazyaudrey_village_action();
         }
     } catch (DomainException | InvalidArgumentException $error) {
-        http_response_code(409);
-        output("This visit is unavailable. Return to the Village and try again.");
+        crazyaudrey_refuse(409, "This visit is unavailable. Nothing was changed.");
     } catch (Throwable $error) {
-        \Resurrection\Http\FailureLog::record($error); http_response_code(500); exit("Audrey visit was not completed.");
+        \Resurrection\Http\FailureLog::record($error); crazyaudrey_refuse(500, "Audrey visit was not completed. Nothing was changed.");
     }
 	if ($op != "baskets") {
 		require_once("lib/villagenav.php");

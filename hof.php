@@ -126,7 +126,8 @@ function display_table($title, $sql, $none=false, $foot=false,
 			} else {
 				rawoutput("<tr class='".($i%2?"trlight":"trdark")."'>");
 			}
-			output_notl("<td>%s</td><td>`&%s`0</td>",($i+$from), $row['name'], true);
+			// The name as text, its codes rendered and its HTML escaped (Phase 6 task 28; 1.1.2 printed it as HTML).
+			output_notl("<td>%s</td><td>`&%s`0</td>",($i+$from), resurrection_appoencode_closed((string)$row['name']), true);
 			if ($data_header !== false) {
 				for ($j = 0; $j < count($data_header); $j++) {
 					$id = "data" . ($j+1);

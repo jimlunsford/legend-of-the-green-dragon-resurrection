@@ -69,9 +69,10 @@ function game_dice_run(){
                 $session['user']['specialmisc']=\Resurrection\Game\DarkHorseState::write($state,$owner);
                 return $state;
             });
-        } catch (DomainException|InvalidArgumentException $error) { http_response_code(400); exit('Invalid dice action.'); } catch (RuntimeException $error) { http_response_code(503); exit('Game temporarily unavailable.'); }
+        } catch (DomainException|InvalidArgumentException $error) { resurrection_darkhorse_game_refuse(400, 'Invalid dice action. Nothing was changed.', 'game_dice', 'A Game of Dice'); }
+        catch (RuntimeException $error) { resurrection_darkhorse_game_refuse(503, 'Game temporarily unavailable. Nothing was changed.', 'game_dice', 'A Game of Dice'); }
     } elseif (array_intersect(array_keys($_GET),['bet','try','what','action'])!==[]) {
-        http_response_code(403); exit('Use the game form.');
+        resurrection_darkhorse_game_refuse(403, 'Use the game form. Nothing was changed.', 'game_dice', 'A Game of Dice');
     }
     page_header('A Game of Dice');
     output('You may keep a roll or pass, up to three rolls. The old man then rolls up to three times. Higher die wins the bet; a tie returns the stake.`n');

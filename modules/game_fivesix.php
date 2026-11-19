@@ -110,9 +110,10 @@ function game_fivesix_run(){
                 $session['user']['specialmisc']=\Resurrection\Game\DarkHorseState::write($state,$owner);
                 return $state;
             });
-        } catch (DomainException|InvalidArgumentException $error) { http_response_code(400); exit('Invalid or unavailable roll.'); } catch (RuntimeException $error) { http_response_code(503); exit('Game temporarily unavailable.'); }
+        } catch (DomainException|InvalidArgumentException $error) { resurrection_darkhorse_game_refuse(400, 'Invalid or unavailable roll. Nothing was changed.', 'game_fivesix', 'A Game of Dice'); }
+        catch (RuntimeException $error) { resurrection_darkhorse_game_refuse(503, 'Game temporarily unavailable. Nothing was changed.', 'game_fivesix', 'A Game of Dice'); }
     } elseif (array_intersect(array_keys($_GET),['action','bet','try','result','jackpot'])!==[] || (isset($_GET['what']) && $_GET['what']!=='play')) {
-        http_response_code(403); exit('Use the game form.');
+        resurrection_darkhorse_game_refuse(403, 'Use the game form. Nothing was changed.', 'game_fivesix', 'A Game of Dice');
     }
     page_header('A Game of Dice');
     output('Roll five dice. Five sixes wins the jackpot; four wins ten percent, three wins five percent.`n');

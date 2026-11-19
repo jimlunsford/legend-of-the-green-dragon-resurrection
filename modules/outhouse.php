@@ -242,11 +242,20 @@ function outhouse_action(){
 	}
 	return;
 }
+/**
+ * A refused visit in the game's frame (Phase 6 task 28, no dead ends, part 2): the status and message, and one way out,
+ * the forest the outhouses stand in (forest.php, whose GET only shows it); the Shades for the dead.
+ */
+function outhouse_refuse(int $status, string $message): never {
+    global $session;
+    resurrection_refuse_page($status, $message, 'The Outhouses', $message,
+        !empty($session['user']['alive']) ? ['Return to the forest', 'forest.php'] : null);
+}
 function outhouse_run(){
     global $session;
     require_once 'lib/typed_editor.php';
     try { $op=\Resurrection\Http\Input::choice($_GET,'op',['','pay','free','washpay','washfree','nowash'],''); }
-    catch (InvalidArgumentException $error) { http_response_code(400); exit('Invalid outhouse action.'); }
+    catch (InvalidArgumentException $error) { outhouse_refuse(400, 'Invalid outhouse action. Nothing was changed.'); }
     if ($op==='') { outhouse_action(); page_footer(); }
     $url='runmodule.php?module=outhouse&op='.$op;
     $context=(string)$session['user']['acctid'].':'.(string)$session['user']['lasthit'].':'.$op;
@@ -281,8 +290,8 @@ function outhouse_run(){
             }
             outhouse_action();
         });
-    } catch (DomainException | InvalidArgumentException $error) { http_response_code(409); exit('Outhouse action rejected.'); }
-    catch (Throwable $error) { \Resurrection\Http\FailureLog::record($error); http_response_code(500); exit('Outhouse action was not completed.'); }
+    } catch (DomainException | InvalidArgumentException $error) { outhouse_refuse(409, 'Outhouse action rejected. Nothing was changed.'); }
+    catch (Throwable $error) { \Resurrection\Http\FailureLog::record($error); outhouse_refuse(500, 'Outhouse action was not completed. Nothing was changed.'); }
     page_footer();
 }
 ?>

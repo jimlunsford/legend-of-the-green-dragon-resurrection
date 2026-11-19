@@ -85,6 +85,7 @@ parameters:
         - lib/systemmail.php
         - lib/substitute.php
         - lib/villagenav.php
+        - lib/redirect.php
         - lib/taunt.php
         - lib/debuglog.php
         - lib/addnews.php

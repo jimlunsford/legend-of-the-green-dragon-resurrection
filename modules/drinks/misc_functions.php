@@ -28,18 +28,29 @@ function drinks_gettexts() {
 
 
 // Support functions
+/**
+ * A refused Drink Editor request in the game's frame (Phase 6 task 28, no dead ends, part 2): the status and message,
+ * and one way out, the editor's list of drinks (its GET only shows it) for whoever may edit drinks (staff, or a player
+ * the canedit preference names), else the village (the Shades for the dead). Signed out, the plain text.
+ */
+function drinks_editor_refuse(int $status, string $message): never {
+    global $session;
+    $editor = !empty($session['loggedin']) && (get_module_pref('canedit', 'drinks') || ($session['user']['superuser'] & SU_EDIT_USERS));
+    resurrection_refuse_page($status, $message, 'Drink Editor', $message, $editor ? ['Return to the Drink Editor', 'runmodule.php?module=drinks&act=editor&admin=true'] : null);
+}
+
 function drinks_editor(){
     global $mostrecentmodule, $session;
     require_once 'lib/player_mutation.php';
     require_once 'src/Http/DrinkInput.php';
-    if (($_GET['subop'] ?? '') !== '') { http_response_code(400); exit('No supported drink object preferences.'); }
-    if (empty($session['loggedin'])) { http_response_code(403); exit('Not authorized.'); }
+    if (($_GET['subop'] ?? '') !== '') drinks_editor_refuse(400, 'No supported drink object preferences. Nothing was changed.');
+    if (empty($session['loggedin'])) drinks_editor_refuse(403, 'Not authorized. Nothing was changed.');
     if (!get_module_pref('canedit','drinks')) check_su_access(SU_EDIT_USERS);
     try {
         $editorOp=\Resurrection\Http\Input::choice($_GET,'op',['','add','edit','save','del','activate','deactivate'],'');
         $editorId=\Resurrection\Http\Input::integer($editorOp === 'save' ? $_POST : $_GET,'drinkid',0,0);
         if ($editorId > 32767 || ($editorOp !== 'save' && in_array($editorOp,['edit','del','activate','deactivate'],true) && $editorId < 1)) throw new InvalidArgumentException();
-    } catch (InvalidArgumentException $error) { http_response_code(400); exit('Invalid drink editor input.'); }
+    } catch (InvalidArgumentException $error) { drinks_editor_refuse(400, 'Invalid drink editor input. Nothing was changed.'); }
     if (in_array($editorOp,['save','del','activate','deactivate'],true)) resurrection_consume_action('drinks-editor-'.$editorOp.($editorOp==='save'?'':'-'.$editorId),(string)$editorId);
 
 	page_header("Drink Editor");
@@ -102,7 +113,7 @@ function drinks_editor(){
 		$subop = httpget("subop");
 		if ($subop=="") {
             try { $values=\Resurrection\Http\DrinkInput::parse($_POST); }
-            catch (InvalidArgumentException $error) { http_response_code(400); exit('Invalid drink fields.'); }
+            catch (InvalidArgumentException $error) { drinks_editor_refuse(400, 'Invalid drink fields. Nothing was changed.'); }
             resurrection_player_mutation(function () use (&$drinkid,$values) {
                 if ($drinkid>0) {
                     $exists=db_query('SELECT drinkid FROM ' . db_prefix('drinks') . ' WHERE drinkid=? FOR UPDATE',true,[$drinkid]);
@@ -117,7 +128,7 @@ function drinks_editor(){
             output('`^Drink saved!');
         } else {
             // No bundled module declares prefs-drinks. Unknown namespaces are not writable.
-            http_response_code(400); exit('No supported drink object preferences.');
+            drinks_editor_refuse(400, 'No supported drink object preferences. Nothing was changed.');
         }
 		if ($drinkid) {
 			$op = "edit";
@@ -195,7 +206,7 @@ function drinks_editor(){
 		} elseif ($subop=="") {
 				$result = db_query('SELECT * FROM ' . db_prefix('drinks') . ' WHERE drinkid=?',true,[$drinkid]);
 				$row = db_fetch_assoc($result);
-                if (!$row) { http_response_code(404); exit('Drink not found.'); }
+                if (!$row) drinks_editor_refuse(404, 'Drink not found. Nothing was changed.');
 		}
 	}elseif ($op=="add"){
 		/* We're adding a new drink, make an empty row */
