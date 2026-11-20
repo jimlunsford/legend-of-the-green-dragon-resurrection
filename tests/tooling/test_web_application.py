@@ -2294,6 +2294,55 @@ function fixturefightoptions_dohook($hook,$args) { $args['fixture_injected']=1; 
             self.query("DELETE FROM settings WHERE setting IN ('enablecompanions','dropmingold','forestgemchance','instantexp')")
             for row in settings: self.query('INSERT INTO settings(setting,value) VALUES (?,?)',[row['setting'],row['value']])
 
+    def _dragon_specialty_authority_round(self, f, spec, level):
+        """One specialty at one level of the Dragon's specialty authority matrix (Phase 6 task 30 split it from
+        test_dragon_specialty_authority_matrix, case for case): the accepted round, the 21 refused cases with their
+        statuses and cleanup, and above level 1 the two insufficient-authority checks."""
+        module=f['modules'][spec]
+        with self.subTest(specialty=spec,level=level):
+            f['prepare'](spec); data=f['form'](level); stale=f['form'](level)
+            before=f['snapshot'](); status,body=f['request'](data=data)
+            self.assertEqual(200,status,body[:2000]); after=f['snapshot']()
+            self.assertNotEqual(before[0]['badguy'],after[0]['badguy'])
+            self.assertEqual(str(9-level),self.query('SELECT value FROM module_userprefs WHERE userid=? AND modulename=? AND setting=?',[f['player'],module,'uses'])[0]['value'])
+            buffs=f['decode'](after[0]['bufflist']); companions=f['decode'](after[0]['companions'])
+            if spec=='DA' and level==1:
+                self.assertTrue(companions==[] or companions['skeleton_warrior']['maxhitpoints']==60)
+            elif spec=='DA' and level==2: self.assertNotIn('da2',buffs)
+            else: self.assertEqual(4,buffs[spec.lower()+str(level)]['rounds'])
+            f['rejected'](data); f['rejected'](data); f['rejected'](stale)
+            self.assertEqual(200,f['request']('dragon.php?op=fight')[0]); self.assertEqual(after,f['snapshot']())
+        for case in ['wrong','none','inactive','skill','uses','zero','malformed','negative','excessive','missing','malformed-combat','zero-hp','negative-hp','dead','terminal','stale','csrf','invalid-csrf','unsupported','malformed-level','handler']:
+            with self.subTest(specialty=spec,level=level,case=case):
+                f['prepare'](spec); data=f['form'](level); expected=409
+                if case in ['wrong','none']:
+                    self.query('UPDATE accounts SET specialty=? WHERE acctid=?',['' if case=='none' else ('MP' if spec=='DA' else 'DA'),f['player']])
+                elif case=='inactive': self.query('UPDATE modules SET active=0 WHERE modulename=?',[module])
+                elif case=='handler': self.query("UPDATE module_hooks SET `function`='missing_handler' WHERE modulename=? AND location='apply-specialties'",[module])
+                elif case in ['skill','uses','zero','malformed','negative','excessive']:
+                    value={'skill':str(level-1),'uses':str(level-1),'zero':'0','malformed':'broken','negative':'-1','excessive':'9999999999'}[case]
+                    self.query('UPDATE module_userprefs SET value=? WHERE userid=? AND modulename=? AND setting=?',[value,f['player'],module,'skill' if case=='skill' else 'uses'])
+                elif case in ['missing','malformed-combat']:
+                    self.query('UPDATE accounts SET badguy=? WHERE acctid=?',['' if case=='missing' else 'broken',f['player']])
+                elif case in ['zero-hp','negative-hp','dead','terminal','stale']:
+                    change={'zero-hp':{'creaturehealth':0},'negative-hp':{'creaturehealth':-1},'dead':{'dead':True},'terminal':{'terminal':True},'stale':{'creaturename':'Another Dragon'}}[case]
+                    self.query('UPDATE accounts SET badguy=? WHERE acctid=?',[f['encode']({'enemies':[dict(f['enemy'],**change)],'options':{'type':'dragon','didsurprise':1}}),f['player']])
+                elif case in ['csrf','invalid-csrf']:
+                    if case=='csrf': del data['csrf_token']
+                    else: data['csrf_token']='invalid'
+                    expected=403
+                else: data['level']='4' if case=='unsupported' else '2.0'; expected=400
+                try: f['rejected'](data,expected)
+                finally:
+                    self.query('UPDATE modules SET active=1 WHERE modulename=?',[module])
+                    self.query("UPDATE module_hooks SET `function`=? WHERE modulename=? AND location='apply-specialties'",[module+'_dohook',module])
+        # Independent insufficient authority, using a currently valid lower-level form.
+        if level>1:
+            for key in ['skill','uses']:
+                f['prepare'](spec)
+                self.query('UPDATE module_userprefs SET value=? WHERE userid=? AND modulename=? AND setting=?',[str(level-1),f['player'],module,key])
+                f['rejected'](f['form'](level))
+
     def _ordinary_attack(self, request):
         url='forest.php?op=fight'
         status,body=request(url); self.assertEqual(200,status,body[:2000])
@@ -4171,57 +4220,60 @@ function fixturefightoptions_dohook($hook,$args) { $args['fixture_injected']=1; 
                 self.query('UPDATE accounts SET companions=? WHERE acctid=?',[encoded,f['player']]); before=f['snapshot']()
                 self.assertEqual(409,f['request']()[0]); self.assertEqual(before,f['snapshot']())
 
-    def test_dragon_specialty_authority_matrix(self):
+    def test_dragon_specialty_authority_signed_out(self):
         with self._specialty_accounting_fixture('dragon') as f:
             anonymous=self._security_client(login=None); before=f['snapshot']()
             for op in ['begin','fight','specialty','prologue1','godmode','restart']:
                 for fields in [None,{'level':'2','csrf_token':'forged','action_token':'forged'}]:
                     self.assertIn(anonymous('dragon.php?op='+op,fields)[0],[302,303,403]); self.assertEqual(before,f['snapshot']())
-            for spec,module in f['modules'].items():
-                for level in [1,2,3,5]:
-                    with self.subTest(specialty=spec,level=level):
-                        f['prepare'](spec); data=f['form'](level); stale=f['form'](level)
-                        before=f['snapshot'](); status,body=f['request'](data=data)
-                        self.assertEqual(200,status,body[:2000]); after=f['snapshot']()
-                        self.assertNotEqual(before[0]['badguy'],after[0]['badguy'])
-                        self.assertEqual(str(9-level),self.query('SELECT value FROM module_userprefs WHERE userid=? AND modulename=? AND setting=?',[f['player'],module,'uses'])[0]['value'])
-                        buffs=f['decode'](after[0]['bufflist']); companions=f['decode'](after[0]['companions'])
-                        if spec=='DA' and level==1:
-                            self.assertTrue(companions==[] or companions['skeleton_warrior']['maxhitpoints']==60)
-                        elif spec=='DA' and level==2: self.assertNotIn('da2',buffs)
-                        else: self.assertEqual(4,buffs[spec.lower()+str(level)]['rounds'])
-                        f['rejected'](data); f['rejected'](data); f['rejected'](stale)
-                        self.assertEqual(200,f['request']('dragon.php?op=fight')[0]); self.assertEqual(after,f['snapshot']())
-                    for case in ['wrong','none','inactive','skill','uses','zero','malformed','negative','excessive','missing','malformed-combat','zero-hp','negative-hp','dead','terminal','stale','csrf','invalid-csrf','unsupported','malformed-level','handler']:
-                        with self.subTest(specialty=spec,level=level,case=case):
-                            f['prepare'](spec); data=f['form'](level); expected=409
-                            if case in ['wrong','none']:
-                                self.query('UPDATE accounts SET specialty=? WHERE acctid=?',['' if case=='none' else ('MP' if spec=='DA' else 'DA'),f['player']])
-                            elif case=='inactive': self.query('UPDATE modules SET active=0 WHERE modulename=?',[module])
-                            elif case=='handler': self.query("UPDATE module_hooks SET `function`='missing_handler' WHERE modulename=? AND location='apply-specialties'",[module])
-                            elif case in ['skill','uses','zero','malformed','negative','excessive']:
-                                value={'skill':str(level-1),'uses':str(level-1),'zero':'0','malformed':'broken','negative':'-1','excessive':'9999999999'}[case]
-                                self.query('UPDATE module_userprefs SET value=? WHERE userid=? AND modulename=? AND setting=?',[value,f['player'],module,'skill' if case=='skill' else 'uses'])
-                            elif case in ['missing','malformed-combat']:
-                                self.query('UPDATE accounts SET badguy=? WHERE acctid=?',['' if case=='missing' else 'broken',f['player']])
-                            elif case in ['zero-hp','negative-hp','dead','terminal','stale']:
-                                change={'zero-hp':{'creaturehealth':0},'negative-hp':{'creaturehealth':-1},'dead':{'dead':True},'terminal':{'terminal':True},'stale':{'creaturename':'Another Dragon'}}[case]
-                                self.query('UPDATE accounts SET badguy=? WHERE acctid=?',[f['encode']({'enemies':[dict(f['enemy'],**change)],'options':{'type':'dragon','didsurprise':1}}),f['player']])
-                            elif case in ['csrf','invalid-csrf']:
-                                if case=='csrf': del data['csrf_token']
-                                else: data['csrf_token']='invalid'
-                                expected=403
-                            else: data['level']='4' if case=='unsupported' else '2.0'; expected=400
-                            try: f['rejected'](data,expected)
-                            finally:
-                                self.query('UPDATE modules SET active=1 WHERE modulename=?',[module])
-                                self.query("UPDATE module_hooks SET `function`=? WHERE modulename=? AND location='apply-specialties'",[module+'_dohook',module])
-                    # Independent insufficient authority, using a currently valid lower-level form.
-                    if level>1:
-                        for key in ['skill','uses']:
-                            f['prepare'](spec)
-                            self.query('UPDATE module_userprefs SET value=? WHERE userid=? AND modulename=? AND setting=?',[str(level-1),f['player'],module,key])
-                            f['rejected'](f['form'](level))
+
+    def test_dragon_specialty_authority_dark_arts_level_1(self):
+        with self._specialty_accounting_fixture('dragon') as f:
+            self._dragon_specialty_authority_round(f,'DA',1)
+
+    def test_dragon_specialty_authority_dark_arts_level_2(self):
+        with self._specialty_accounting_fixture('dragon') as f:
+            self._dragon_specialty_authority_round(f,'DA',2)
+
+    def test_dragon_specialty_authority_dark_arts_level_3(self):
+        with self._specialty_accounting_fixture('dragon') as f:
+            self._dragon_specialty_authority_round(f,'DA',3)
+
+    def test_dragon_specialty_authority_dark_arts_level_5(self):
+        with self._specialty_accounting_fixture('dragon') as f:
+            self._dragon_specialty_authority_round(f,'DA',5)
+
+    def test_dragon_specialty_authority_mystical_powers_level_1(self):
+        with self._specialty_accounting_fixture('dragon') as f:
+            self._dragon_specialty_authority_round(f,'MP',1)
+
+    def test_dragon_specialty_authority_mystical_powers_level_2(self):
+        with self._specialty_accounting_fixture('dragon') as f:
+            self._dragon_specialty_authority_round(f,'MP',2)
+
+    def test_dragon_specialty_authority_mystical_powers_level_3(self):
+        with self._specialty_accounting_fixture('dragon') as f:
+            self._dragon_specialty_authority_round(f,'MP',3)
+
+    def test_dragon_specialty_authority_mystical_powers_level_5(self):
+        with self._specialty_accounting_fixture('dragon') as f:
+            self._dragon_specialty_authority_round(f,'MP',5)
+
+    def test_dragon_specialty_authority_thieving_skills_level_1(self):
+        with self._specialty_accounting_fixture('dragon') as f:
+            self._dragon_specialty_authority_round(f,'TS',1)
+
+    def test_dragon_specialty_authority_thieving_skills_level_2(self):
+        with self._specialty_accounting_fixture('dragon') as f:
+            self._dragon_specialty_authority_round(f,'TS',2)
+
+    def test_dragon_specialty_authority_thieving_skills_level_3(self):
+        with self._specialty_accounting_fixture('dragon') as f:
+            self._dragon_specialty_authority_round(f,'TS',3)
+
+    def test_dragon_specialty_authority_thieving_skills_level_5(self):
+        with self._specialty_accounting_fixture('dragon') as f:
+            self._dragon_specialty_authority_round(f,'TS',5)
 
     def test_dragon_transitions_rewards_and_rollback(self):
         with self._specialty_accounting_fixture('dragon') as f, self._specialty_terminal_capture() as terminal:

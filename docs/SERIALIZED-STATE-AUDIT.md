@@ -462,7 +462,7 @@ navigation, preference and editor old value closures come from reading the code 
 | `lib/commentary_security.php:71` | read | other: commentary snapshot | OPEN | `is_array` then 409; keys and types unchecked before the restore INSERT; no malformed test |
 | `lib/datacache.php:35` | read | other: data cache | n/a | Not business state; an invalid file reads as a miss and is recomputed |
 | `lib/datacache.php:56` | ser | other: data cache | n/a | Not business state |
-| `lib/dragon_combat.php:69` | ser | general combat | CLOSED | Serializes what `DragonCombatState::read` returned; `DragonCombatStateTest`, `test_dragon_specialty_authority_matrix` |
+| `lib/dragon_combat.php:69` | ser | general combat | CLOSED | Serializes what `DragonCombatState::read` returned; `DragonCombatStateTest`, the `test_dragon_specialty_authority_*` tests (split from `test_dragon_specialty_authority_matrix` in Phase 6 task 30) |
 | `lib/dragon_combat.php:87` | ser | general combat | CLOSED | `DragonCombatState::victory` exact shape; `test_dragon_transitions_rewards_and_rollback` |
 | `lib/dump_item.php:12` | read | other: admin dump display | n/a | Escaped display of a stored value; a failed read shows the literal |
 | `lib/dump_item.php:28` | read | other: admin dump display | n/a | `dump_item_ascode()` has no callers |
@@ -533,7 +533,7 @@ navigation, preference and editor old value closures come from reading the code 
 | `paylog.php:37` | read | other: payment log | OPEN | GET loop writes `processdate` from an unchecked value |
 | `paylog.php:65` | read | other: payment log | OPEN | Display fields unchecked |
 | `prefs.php:310` | ser | editor old values | CLOSED | **This commit**: the hidden `oldvalues` field is no longer written; nothing reads a posted or stored `oldvalues` (posted copies are discarded unread) |
-| `src/Game/DragonCombatState.php:13` | read | general combat | CLOSED | `DragonCombatStateTest` (legacy flat format, malformed), `test_dragon_specialty_authority_matrix` |
+| `src/Game/DragonCombatState.php:13` | read | general combat | CLOSED | `DragonCombatStateTest` (legacy flat format, malformed), the `test_dragon_specialty_authority_*` tests (split from `test_dragon_specialty_authority_matrix` in Phase 6 task 30) |
 | `src/Game/DragonCombatState.php:52` | read | general combat | CLOSED | `victory()`; `test_dragon_transitions_rewards_and_rollback` |
 | `src/Game/DragonPointState.php:26` | read | other: dragon points | CLOSED | `DragonPointStateTest`, `test_dragon_points_invalid_requests_stale_and_corruption` |
 | `src/Game/DragonPointState.php:108` | ser | other: dragon points | CLOSED | Not stored: validation round trip |

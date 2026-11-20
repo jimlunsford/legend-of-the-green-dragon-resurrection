@@ -432,3 +432,35 @@ evidence doc's text.
 CI acceptance of this commit. Then Jim runs the Release cut workflow from the Actions tab with the four inputs in the
 task report (the checklist's sections 3 and 4), and tests rc.5 on his server, upgraded from rc.4. Then `1.0.0` (task
 30) and the showcase README (task 31).
+
+## Acceptance and the rc.5 cut (recorded in Phase 6 task 30, 2026-11-20)
+
+- **Accepted** at `0dfdb1d`: Modern core 44513763444 passed all 14 jobs; run wall time 20:33.
+  - PHP 8.4 / MariaDB 11.4: `checks` 2:21; `http` 1 to 5: 9:00, 11:23, 10:28, 13:25, 16:35; `result` 0:04.
+  - PHP 8.5 / MySQL 8.4: `checks` 2:49; `http` 1 to 5: 11:39, 20:25, 12:05, 11:18, 11:09; `result` 0:02.
+  - Slowest: 20:25, PHP 8.5 `http (2)`, under the 21-minute target but over task 28's largest projection (16:26). The
+    same 63 tests as task 28's run took about 40% longer on that runner (the shard's Python time 845.9 s at `4aaa47a`,
+    1174.8 s at `0dfdb1d`); this commit changed only `test_version.py` among the tests.
+    `test_dragon_specialty_authority_matrix` alone took 329.4 s (238.8 s at `4aaa47a`). Task 30 splits it.
+  - On both legs: "Release upgrade check: v1.0.0-rc.4 installed, upgraded to 0dfdb1d, and the same schema and data as a
+    fresh install (41 tables)", and the same with HEAD installed.
+- Baseline integrity 44513763427 passed.
+- **The cut**, 2026-11-19, on Jim's "start it":
+  - Release cut run 44597371544 (`workflow_dispatch`, on `main` at `0dfdb1d`): success.
+  - Tag `v1.0.0-rc.5`: tag object `5498b1c4efff4f3dc1f565d90197181f4cf8f598`, annotated, by `github-actions[bot]`, on
+    `0dfdb1d76c3ab4a0e00db695b32f66108b70c332`. Its message is 910 bytes, SHA-256
+    `df9dbfacddcfeeebbc01cdf2237cac5036c6ab80f11c74586d41c20063317f0b`, byte for byte the block in
+    `docs/RC-CUT-CHECKLIST.md`, section 3 (`cmp` equal).
+  - The pre-release `v1.0.0-rc.5`: not a draft, not latest (the repository has no latest release), with
+    `legend-of-the-green-dragon-resurrection-1.0.0-rc.5.zip`, 3,919,931 bytes, SHA-256
+    `2d8e135e1c4bff0e14b88e32f9fd8dc4cdcf4fc83e69e022e5aca07c4b55a800` (772 files), equal to this task's two builds,
+    and its `.sha256`, which names the same hash.
+  - `historical-source-1.1.2` (tag object `51cab4f…4d`) and `v1.0.0-rc.1` to `v1.0.0-rc.4` (tag objects `522be1c…`,
+    `147ad5a…`, `dec02e9…`, `f3de198…`) are unchanged, and so are their pre-releases' zip digests.
+- Checked in task 30 through the REST API: the three runs' status, conclusion, event and head commit, each Modern core
+  job's times from its start and end, the two upgrade check lines in both `checks` job logs, the tag refs and the tag
+  object, and the releases and their assets; the zip and its `.sha256` downloaded through the REST API (the asset
+  endpoint), not `gh release download`, and hashed locally.
+- **Jim's rc.5 server test** began on 2026-11-19, upgraded from rc.4. It is in progress and solid so far.
+- **Renumbered** by Jim's decision of 2026-11-20 (recorded in task 30): task 30 splits the Dragon specialty matrix test,
+  the `1.0.0` version commit is task 31, and the showcase README task 32.

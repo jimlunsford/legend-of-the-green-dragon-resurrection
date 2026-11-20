@@ -30,8 +30,9 @@ rc.2's and rc.3's records stay as history.
 For `1.0.0-rc.5` (Jim's go of 2026-11-18: rc.5 is cut and server-tested, the same way as rc.4, before `1.0.0`):
 section 0 is done, section 1 is made in Phase 6 task 29 (`docs/PHASE6-TASK29-RC5-VERSION-20261119.md`), which also
 writes rc.5's tag message in section 3 and runs the release cut workflow against a stand-in `origin`. Sections 2 to 4
-follow: CI's acceptance of the version commit, then the release cut workflow, which Jim runs. rc.1's to rc.4's records
-stay as history.
+are done (recorded in Phase 6 task 30, `docs/PHASE6-TASK30-20261120.md`): CI accepted the version commit `0dfdb1d`, and
+the release cut workflow, run on Jim's request with task 29's inputs, made the tag `v1.0.0-rc.5`, built the package and
+published the pre-release. rc.1's to rc.4's records stay as history.
 
 A cut happens only on the maintainer's explicit go (Jim). Every step that tags, publishes or attaches anything waits for
 that go, and a session never does them on its own. The steps are in order; a step that fails stops the cut.
@@ -167,7 +168,10 @@ The version commit is accepted only when, on that exact commit:
       jobs (PHP 8.4 checks 2:19, shards 10:50, 10:03, 16:31, 10:25, 10:22; PHP 8.5 checks 2:43, shards 12:00, 11:41,
       16:08, 10:45, 16:49; on both legs the release upgrade check installed `v1.0.0-rc.3` and upgraded it to `8aa67b8`,
       41 tables, and `--release-ref HEAD` matched too); Baseline integrity 44141401926 (recorded in task 26).
-- [ ] For `1.0.0-rc.5`: both of the above on task 29's version commit.
+- [x] For `1.0.0-rc.5`: both of the above on task 29's version commit, `0dfdb1d`: Modern core 44513763444, all 14
+      jobs (PHP 8.4 checks 2:21, shards 9:00, 11:23, 10:28, 13:25, 16:35; PHP 8.5 checks 2:49, shards 11:39, 20:25,
+      12:05, 11:18, 11:09; on both legs the release upgrade check installed `v1.0.0-rc.4` and upgraded it to `0dfdb1d`,
+      41 tables, and `--release-ref HEAD` matched too); Baseline integrity 44513763427 (recorded in task 30).
 
 A run that a later push cancelled is not acceptance, and no earlier commit's run stands in for it. A failed run stays on
 record. If anything fails, fix it in a new commit and start this section again on that commit; the tag goes on the
@@ -201,8 +205,11 @@ kept as recorded: docs/RELEASE-NOTES-1.0.0-rc.5.md. Hosting: docs/HOST-GUIDE.md.
 (Written in Phase 6 task 29, 2026-11-19, in rc.4's shape. Each line checked against the code and the documents at the
 version commit in its evidence doc.)
 
-- [ ] For `1.0.0-rc.5`: the tag, made by the release cut workflow after CI accepts the version commit, on Jim's
-      request, with the message above byte for byte.
+- [x] For `1.0.0-rc.5`: the tag, made by the release cut workflow (run 44597371544, started with task 29's four inputs
+      on Jim's request, 2026-11-19): tag object `5498b1c4efff4f3dc1f565d90197181f4cf8f598`, annotated, by
+      `github-actions[bot]`, on `0dfdb1d76c3ab4a0e00db695b32f66108b70c332`, with the message above byte for byte (910
+      bytes, SHA-256 `df9dbfac…7f0b`). `v1.0.0-rc.1` to `v1.0.0-rc.4` and `historical-source-1.1.2` are unchanged
+      (recorded in task 30).
 
 History: the tag message for `1.0.0-rc.4`, exactly as tagged:
 
@@ -339,6 +346,8 @@ release cut workflow (`.github/workflows/release-cut.yml`) builds the same packa
       https://github.com/jimlunsford/legend-of-the-green-dragon-resurrection/releases/tag/v1.0.0-rc.3 (a pre-release,
       not latest; the zip's digest equals the build). For `1.0.0-rc.4`, the same way:
       https://github.com/jimlunsford/legend-of-the-green-dragon-resurrection/releases/tag/v1.0.0-rc.4 (a pre-release,
+      not a draft, not latest; the zip's digest equals the build). For `1.0.0-rc.5`, the same way:
+      https://github.com/jimlunsford/legend-of-the-green-dragon-resurrection/releases/tag/v1.0.0-rc.5 (a pre-release,
       not a draft, not latest; the zip's digest equals the build).
 - [x] For `1.0.0-rc.3`: the same, by the release cut workflow from the tag. Task 23 built the version commit's package
       twice (its SHA-256 is the workflow's `package_sha256` input), installed it fresh through `setup.php`, and
@@ -350,9 +359,11 @@ release cut workflow (`.github/workflows/release-cut.yml`) builds the same packa
       upgraded the rc.3, rc.2 and rc.1 packages' installs to it. The workflow's build,
       `legend-of-the-green-dragon-resurrection-1.0.0-rc.4.zip`, 3,874,626 bytes, is `sha256:cb56e85e…97df`, the same;
       the zip downloaded back through the REST API has that SHA-256, as its `.sha256` says (recorded in task 26).
-- [ ] For `1.0.0-rc.5`: the same, by the release cut workflow from the tag. Task 29 built the version commit's package
+- [x] For `1.0.0-rc.5`: the same, by the release cut workflow from the tag. Task 29 built the version commit's package
       twice (its SHA-256 is the workflow's `package_sha256` input), installed it fresh through `setup.php`, and
-      upgraded the rc.4, rc.3, rc.2 and rc.1 packages' installs to it.
+      upgraded the rc.4, rc.3, rc.2 and rc.1 packages' installs to it. The workflow's build,
+      `legend-of-the-green-dragon-resurrection-1.0.0-rc.5.zip`, 3,919,931 bytes, is `sha256:2d8e135e…a800`, the same;
+      the zip downloaded back through the REST API has that SHA-256, as its `.sha256` says (recorded in task 30).
 
 ## 5. After the tag
 
