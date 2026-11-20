@@ -1,6 +1,27 @@
 # Licensing and provenance working position
 
-This is an engineering rights ledger and working interpretation, not a legal ruling.
+This is an engineering rights ledger and working interpretation, not a legal ruling. "Where it stands" summarizes it;
+the sections after it give the reasoning, and the dated sections record each change as it was made.
+
+## Where it stands
+
+As of Phase 6 task 31 (2026-11-20):
+
+- **The core.** LoGD 1.1.2's code and text are under Creative Commons Attribution-NonCommercial-ShareAlike 2.0 and the
+  terms in `LICENSE.txt`, which is kept byte for byte. Resurrection's modifications and additions are Copyright (c)
+  2026 Phoenix 2:33 LLC, under the same terms. The project is noncommercial.
+- **Credits.** The original authors' copyright notices and credits stay as they are. `NOTICE` states the Resurrection
+  credit as section 4(d) of the license describes it, and adds no term of its own (S9, closed by Jim's decision of
+  2026-11-12: below).
+- **Art.** The original art in `assets/scenes/`, `assets/portraits/`, `assets/icons/` and `assets/brand/`, and the
+  game's four icon files, is Copyright (c) 2026 Phoenix 2:33 LLC under CC BY-SA 4.0 (`assets/LICENSE`).
+- **Fonts.** Cinzel, Alegreya and Alegreya Sans, under the SIL Open Font License 1.1 (`THIRD-PARTY-LICENSES.md`).
+- **Development packages.** PHPUnit, PHPStan and their dependencies keep their own licenses (MIT or BSD-3-Clause).
+  Composer installs them; they are not in the repository or the release package.
+- **No file is labeled AGPL.** A clean-room rewrite under AGPL-3.0-or-later is a possible future, not started.
+- **Still open.** The inherited core images still in `images/` (four, all in use) have no asset-level ledger;
+  third-party material inside the 1.1.2 tree has not been reviewed file by file; the module archive has no blanket
+  license grant, and none of its modules is imported.
 
 ## Inherited core
 

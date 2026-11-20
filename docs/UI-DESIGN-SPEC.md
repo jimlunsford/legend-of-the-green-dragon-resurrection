@@ -1,8 +1,9 @@
 # Resurrection UI design spec
 
-The design contract every Phase 5 UI task builds to. One dark fantasy UI replaces all 1.1.2 skins
-(`PHASE5-TASK1-DIRECTION-20261030.md`); from Phase 5 task 15 it is the only template, and the skins and skin selection
-are gone (see "One template" under Components). The plan and the order of work are in `PHASE5-UI-PLAN-20261030.md`.
+The design contract every UI change builds to: written for Phase 5, and kept current since. One dark fantasy UI replaces
+all 1.1.2 skins (`PHASE5-TASK1-DIRECTION-20261030.md`); from Phase 5 task 15 it is the only template, and the skins and
+skin selection are gone (see "One template" under Components). The plan and the order of work are in
+`PHASE5-UI-PLAN-20261030.md`.
 
 Values marked **approved** are the ones Jim approved in the mockups on 2026-10-30. Use them exactly. Phase 5 task 3
 (2026-10-30) corrected the values that had drifted from the approved mockup: the radii, the page title, the story text,

@@ -1,7 +1,8 @@
 # Security status
 
-**NOT CERTIFIED FOR PUBLIC GAME HOSTING.** No release is cut, the project's public hosting gates (below) are not all
-met, and `project.json` keeps `public_game_hosting_approved` at `false`.
+**NOT CERTIFIED FOR PUBLIC GAME HOSTING.** The project's public hosting gates (below) are not all met, and
+`project.json` keeps `public_game_hosting_approved` at `false`. Resurrection is a showcase project, finished at
+`1.0.0`: the gates it does not meet belong to whoever runs a public server (`HOST-GUIDE.md`, at its start).
 
 **The rule.** This is a living record: one current row per area. A task that changes a security control updates that
 control's row in the same commit (its status, the control, the evidence and what is left over), and the public hosting
@@ -18,7 +19,9 @@ and the open item on recovery were updated at Phase 6 task 13b (2026-11-12, `PHA
 and recovery", the S11 gate and the open items on recovery and mail were updated at Phase 6
 task 13c (2026-11-13, `PHASE6-TASK13C-20261113.md`); the open item on stale form tokens, fixed in Phase 6 task 9 (accepted
 at `2a6e2a7`), was taken off the list at Phase 6 task 14 (2026-11-13); the row "Passwords" and the abuse controls gate were updated at
-Phase 6 task 18 (2026-11-14, `PHASE6-TASK18-20261114.md`). Status words:
+Phase 6 task 18 (2026-11-14, `PHASE6-TASK18-20261114.md`); the banner above and the note under "Public hosting gates"
+were brought up to date at Phase 6 task 31 (2026-11-20, `PHASE6-TASK31-20261120.md`), with no control changed. Status
+words:
 
 - **IN PLACE**: the control is in the code and CI tests it.
 - **LIMITED**: a control is in the code, with a known gap (the last column).
@@ -55,10 +58,11 @@ From `ROADMAP.md`, "Public hosting", with the items of the 2026-09-13 "Before pu
 Ticked: done in the code and tested in CI. Open: not done, or not verified on a real host. All must be ticked, and
 Jim must decide, before `public_game_hosting_approved` changes.
 
-For the rc.1 tag (`ROADMAP.md`, Phase 6): S11 is an rc.1 gate (Jim, 2026-11-12), and must land and be accepted before
-the version commit; it is built (tasks 13a, 13b and 13c) and needs task 13c's CI acceptance. S9, the legal review of the credit wording, is closed by Jim's decision of 2026-11-12 (no counsel;
-the shipped documents state the credit as section 4(d) of the license describes it, with no added term); it was not a
-security control.
+S11, account recovery and email verification, was an rc.1 gate (Jim, 2026-11-12): it was built in tasks 13a, 13b and
+13c and accepted before the rc.1 version commit. S9, the legal review of the credit wording, is closed by Jim's decision
+of 2026-11-12 (no counsel; the shipped documents state the credit as section 4(d) of the license describes it, with no
+added term); it was not a security control. The open gates below stay open at `1.0.0` (Jim's decision of 2026-11-13:
+they belong to whoever hosts).
 
 - [x] Every state change authorized server-side, a POST with CSRF, every route inventoried with 0 OPEN (row "CSRF and
   action tokens"; `ROUTE-INVENTORY-20261022.md`).

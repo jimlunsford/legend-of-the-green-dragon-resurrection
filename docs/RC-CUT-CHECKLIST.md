@@ -32,7 +32,13 @@ section 0 is done, section 1 is made in Phase 6 task 29 (`docs/PHASE6-TASK29-RC5
 writes rc.5's tag message in section 3 and runs the release cut workflow against a stand-in `origin`. Sections 2 to 4
 are done (recorded in Phase 6 task 30, `docs/PHASE6-TASK30-20261120.md`): CI accepted the version commit `0dfdb1d`, and
 the release cut workflow, run on Jim's request with task 29's inputs, made the tag `v1.0.0-rc.5`, built the package and
-published the pre-release. rc.1's to rc.4's records stay as history.
+published the pre-release. rc.1's to rc.4's records stay as history. Jim's server test of rc.5 passed on 2026-11-20
+(recorded in Phase 6 task 31).
+
+For `1.0.0` (Jim's decisions of 2026-11-20, recorded in Phase 6 task 31): the version commit is task 32. `1.0.0` is a
+full GitHub release, marked Latest; the test builds stay pre-releases. The release cut workflow
+(`.github/workflows/release-cut.yml`) makes a pre-release today, so task 32 changes it for the release, and the
+sections below that say "pre-release" apply to the test builds. Task 33 is the first commit after the tag (section 5).
 
 A cut happens only on the maintainer's explicit go (Jim). Every step that tags, publishes or attaches anything waits for
 that go, and a session never does them on its own. The steps are in order; a step that fails stops the cut.
@@ -385,7 +391,10 @@ release cut workflow (`.github/workflows/release-cut.yml`) builds the same packa
 - [x] For `1.0.0-rc.4`: the next commit's Modern core installs `v1.0.0-rc.4` and upgrades it. Modern core
       44337851502 on Phase 6 task 26's commit, `8ab8888`, both legs ("v1.0.0-rc.4 installed, upgraded to 8ab8888, and
       the same schema and data as a fresh install (41 tables)"; recorded in task 27).
-- [ ] For `1.0.0-rc.5`: the next commit's Modern core installs `v1.0.0-rc.5` and upgrades it.
+- [x] For `1.0.0-rc.5`: the next commit's Modern core installs `v1.0.0-rc.5` and upgrades it. Modern core
+      44723370052 on Phase 6 task 30's commit, `deee4e6`, both legs ("v1.0.0-rc.5 installed, upgraded to deee4e6, and
+      the same schema and data as a fresh install (41 tables)"; recorded in task 31).
 - [ ] After `v1.0.0`, the first commit on `main` sets the next number with `-dev` (`1.1.0-dev`, or `1.0.1-dev` when only
-      fixes are planned).
+      fixes are planned). For `1.0.0` that is `1.0.1-dev`, in task 33 (Jim's decision of 2026-11-20: after `1.0.0`,
+      bug fixes only).
 - [ ] Record the tag, the accepted runs and the package's SHA-256 in `ROADMAP.md` and the cut's evidence doc.

@@ -10,9 +10,10 @@ asks of a module, with the helper to use.
 Words in `code font` are functions, hooks, classes, constants, settings or files exactly as the code names them
 (`tests/tooling/test_module_author_guide.py` checks that each one exists). `mymodule` stands for your module's name.
 
-**Only the 24 bundled modules install (rc.1).** The module manager installs a module only if it is in
+**Only the 24 bundled modules install.** The module manager installs a module only if it is in
 `resurrection_bundled_modules()` (`resurrection_module_bundled()`); any other installed module may only be deactivated.
-A module you write runs on a Resurrection server only after it is admitted into the release: section 9.
+A module you write runs on a Resurrection server only after it is admitted into a release (section 9). Resurrection is
+finished at 1.0.0 and takes bug fixes only after it, so it admits no new module (`docs/MODULE-POLICY.md`).
 
 Module code is trusted PHP. It runs with the game's full rights over the database and the server, so these rules are
 what keeps a module from undoing the game's protections. They are not a sandbox.

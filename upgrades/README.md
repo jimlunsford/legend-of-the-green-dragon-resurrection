@@ -1,6 +1,6 @@
 # Upgrade steps
 
-Each file here is one numbered database upgrade step. `php scripts/upgrade.php` applies the steps a database does not have yet, in number order, and records each in the database's `upgrade_steps` table once it has fully succeeded. A fresh install records every step in this directory as applied, because its schema already has them. The design and its reasons are in `docs/PHASE4-TASK2-UPGRADE-SYSTEM-20261029.md`; operators follow `docs/MODERN-INSTALLATION.md`, "Upgrading".
+Each file here is one numbered database upgrade step. `php scripts/upgrade.php` applies the steps a database does not have yet, in number order, and records each in the database's `upgrade_steps` table once it has fully succeeded. A fresh install records every step in this directory as applied, because its schema already has them. The design and its reasons are in `docs/PHASE4-TASK2-UPGRADE-SYSTEM-20261029.md`. A host upgrades by the host guide, `docs/HOST-GUIDE.md`, section 9 ("Upgrade"); `docs/MODERN-INSTALLATION.md`, "Upgrading", covers local play and the command in more depth.
 
 The steps:
 

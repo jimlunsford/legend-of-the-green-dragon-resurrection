@@ -7,7 +7,11 @@ host: one with a shell (SSH) and one with only a hosting panel (cPanel, Plesk or
 The steps are short. Where a step depends on your kind of host, it says so. Words in `code font` are file names,
 commands, settings or values to type exactly.
 
-**Known limitations of a hosted game (rc.1).** The game sends mail only through PHP's `mail()`: there is no SMTP
+This guide is for a web server. To play on your own computer, or to work on the code, use
+`docs/MODERN-INSTALLATION.md` in the repository instead: it runs the game locally with Docker and describes the
+install and upgrade commands in more depth.
+
+**Known limitations of a hosted game.** The game sends mail only through PHP's `mail()`: there is no SMTP
 setting, so the server needs a working mail program. Mail is best effort. Password recovery by email, email
 verification and confirmed address changes work only while account mail is on, and account mail turns on only after
 the game has proved its mail arrives (section 11); until then an administrator resets passwords in the user editor.
@@ -630,11 +634,13 @@ game writes nothing to the error log for this.
 
 ## Where these facts come from
 
-This guide follows the code at the commit that added it. The evidence for each part: `docs/PHASE6-RC-READINESS-20261106.md`
+This guide follows the code of the version it ships with: a task that changes what it describes updates it in the
+same commit. The evidence for each part: `docs/PHASE6-RC-READINESS-20261106.md`
 (sections 1.3 to 1.7, 4.3 and 11), `docs/PHASE6-TASK3-HARDENING-20261106.md` (headers, `csp_mode`, the internal-file
 guard, the configuration page, `LOGD_DBCONNECT`, `vendor/`), `docs/PHASE6-TASK4-WEB-OPS-DESIGN-20261106.md` (section 7
 and its decisions), `docs/PHASE6-TASK5A-SERVICES-WEBCRON-20261106.md` (maintenance, web maintenance),
 `docs/PHASE6-TASK5B-SETUP-PAGE-20261106.md` (`setup.php`) and `docs/PHASE6-TASK6-HOST-GUIDE-20261107.md` (this guide,
 the sample rules and their checks). Section 11's account mail follows `docs/PHASE6-TASK12-ACCOUNT-MAIL-DESIGN-20261112.md`
 (section 11) and the tasks that built it: `docs/PHASE6-TASK13A-20261112.md`, `docs/PHASE6-TASK13B-20261112.md` and
-`docs/PHASE6-TASK13C-20261113.md`. Local play and development are in `docs/MODERN-INSTALLATION.md`.
+`docs/PHASE6-TASK13C-20261113.md`. The later changes are in the Phase 6 task records that made them, from task 16 on
+(`docs/README.md` lists every record). Local play and development are in `docs/MODERN-INSTALLATION.md`.

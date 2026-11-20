@@ -1,12 +1,13 @@
 # Third-party licenses
 
-Every third-party package in `composer.lock` at the commit that adds this file (2026-10-24), with the license the lock
-file records for it. This is an engineering record, not legal advice. Dependencies are not changed by it.
+Every third-party package in `composer.lock`, with the license the lock file records for it, and the fonts the game
+ships. The table follows the lock file; it was first written on 2026-10-24 and checked against the lock file again on
+2026-11-20 (Phase 6 task 31). This is an engineering record, not legal advice. Dependencies are not changed by it.
 
 ## Summary
 
-- **Runtime packages: none.** `composer.json` requires only PHP 8.4 or 8.5 and its bundled extensions (`pdo`,
-  `pdo_mysql`, `mbstring`, `json`, `session`). The game runs without any Composer package.
+- **Runtime packages: none.** `composer.json` requires only PHP 8.4 or 8.5 and its bundled extensions (`ctype`,
+  `filter`, `json`, `mbstring`, `pdo`, `pdo_mysql`, `session`). The game runs without any Composer package.
 - **Bundled fonts: 3 families** (added 2026-10-30, Phase 5 task 2): Cinzel, Alegreya and Alegreya Sans, SIL Open
   Font License 1.1, self-hosted in `assets/fonts/` for the new UI. See "Bundled fonts" below.
 - **Development packages: 26**, pulled in by `phpunit/phpunit` and `phpstan/phpstan` for tests and static analysis.

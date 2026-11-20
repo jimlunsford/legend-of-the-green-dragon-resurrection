@@ -2,6 +2,9 @@
 
 **Status: untested scaffold. Runtime execution is blocked in the foundation workspace. NOT APPROVED FOR PUBLIC GAME HOSTING.**
 
+It was never run: Resurrection checked 1.1.2's behavior by reading the source at the historical tag. The scaffold stays
+because `tests/tooling/test_lab.py` checks that its inputs fail closed. The rest of this note is kept as written.
+
 The source comes only from the annotated `historical-source-1.1.2` tag. No archive modules are added. [Runtime investigation](RUNTIME-INVESTIGATION.md) records observed blockers and candidate selection. [Characterization plan](../../docs/CHARACTERIZATION-PLAN.md) defines evidence requirements.
 
 ## Safe static preparation

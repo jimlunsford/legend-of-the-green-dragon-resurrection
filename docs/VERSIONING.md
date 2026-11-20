@@ -30,7 +30,9 @@ Gameplay, balance, text and the interface change only when a task decides it, on
 - **After the release's tag** (`v1.0.0`), the first commit on `main` sets the next number with `-dev` (`1.1.0-dev`, or `1.0.1-dev` when only fixes are planned), as above.
 - The version changes only in a version commit: a cut's, on an explicit release decision, or the one right after a release's tag (`docs/RC-CUT-CHECKLIST.md`).
 
-A test build or release gets a tag `vMAJOR.MINOR.PATCH` or `vMAJOR.MINOR.PATCH-rc.N` (for example `v1.0.0-rc.1`), only on an explicit release decision. The version commit for `1.0.0-rc.1` was made on 2026-11-13 (Jim's go), and its tag, `v1.0.0-rc.1`, is on it. The version commit for `1.0.0-rc.2` was made on 2026-11-16 (Jim's go), and its tag, `v1.0.0-rc.2`, is on it. The version commit for `1.0.0-rc.3` was made on 2026-11-16 (Jim's go), and its tag, `v1.0.0-rc.3`, is on it. The version commit for `1.0.0-rc.4` was made on 2026-11-17 (Jim's go), and its tag, `v1.0.0-rc.4`, is on it. The version commit for `1.0.0-rc.5` was made on 2026-11-19 (Jim's go of 2026-11-18); its tag, `v1.0.0-rc.5`, goes on that commit once CI accepts it (the release cut workflow, which Jim runs), and from then on `main` keeps `1.0.0-rc.5` until the next cut. `-dev` versions are never tagged.
+A test build or release gets a tag `vMAJOR.MINOR.PATCH` or `vMAJOR.MINOR.PATCH-rc.N` (for example `v1.0.0-rc.1`), only on an explicit release decision. The version commit for `1.0.0-rc.1` was made on 2026-11-13 (Jim's go), and its tag, `v1.0.0-rc.1`, is on it. The version commit for `1.0.0-rc.2` was made on 2026-11-16 (Jim's go), and its tag, `v1.0.0-rc.2`, is on it. The version commit for `1.0.0-rc.3` was made on 2026-11-16 (Jim's go), and its tag, `v1.0.0-rc.3`, is on it. The version commit for `1.0.0-rc.4` was made on 2026-11-17 (Jim's go), and its tag, `v1.0.0-rc.4`, is on it. The version commit for `1.0.0-rc.5` was made on 2026-11-19 (Jim's go of 2026-11-18), and its tag, `v1.0.0-rc.5`, is on it; `main` keeps `1.0.0-rc.5` until the `1.0.0` version commit. `-dev` versions are never tagged.
+
+Each test build is published as a GitHub pre-release by the release cut workflow (`.github/workflows/release-cut.yml`), which Jim runs from the Actions tab. `1.0.0` is a full GitHub release, marked Latest (Jim's decision of 2026-11-20); the workflow change for it comes with the `1.0.0` version commit. The first commit after the `v1.0.0` tag sets `1.0.1-dev`: after `1.0.0` the project takes bug fixes only (Jim's decision of 2026-11-13).
 
 ## Upgrades
 
@@ -39,7 +41,7 @@ A test build or release gets a tag `vMAJOR.MINOR.PATCH` or `vMAJOR.MINOR.PATCH-r
 - A database newer than the code (a downgrade) is refused, by the game and by the upgrade command. The way back is the backup taken before the upgrade.
 - No 1.1.2 database is ever upgraded or migrated. Every Resurrection install starts fresh.
 
-The upgrade steps, how they are written and how the upgrade path is tested are in `upgrades/README.md` and `docs/PHASE4-TASK2-UPGRADE-SYSTEM-20261029.md`. The release upgrade check (`scripts/release-upgrade-check.py`, in Modern core) installs the latest release tag and upgrades it to the commit under test; until the first tag it reports that there is no release yet.
+The upgrade steps, how they are written and how the upgrade path is tested are in `upgrades/README.md` and `docs/PHASE4-TASK2-UPGRADE-SYSTEM-20261029.md`. The release upgrade check (`scripts/release-upgrade-check.py`, in Modern core) installs the latest release tag (today `v1.0.0-rc.5`) and upgrades it to the commit under test; with no release tag it would report that there is no release yet.
 
 ## The historical tag
 

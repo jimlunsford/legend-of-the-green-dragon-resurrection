@@ -22,14 +22,14 @@ The source is not authenticated against a canonical upstream release archive. It
 - Root tree: `63662057e5b23b3488d45083af94cc39d89c8f69`
 - 243 files; 205 PHP files; 187 module entrypoints; 18 supporting PHP files; 37 avatar GIFs.
 
-All 37 module-tree files in core match the archive byte-for-byte. The archive adds 205 module-tree files and contains all 59 active installer recommendations. It is the historical source library for future individual module review. No additional archive module or asset is imported in this foundation.
+All 37 module-tree files in core match the archive byte-for-byte. The archive adds 205 module-tree files and contains all 59 active installer recommendations. It is historical reference material: no archive module or asset is imported, and Resurrection admits no module beyond the 24 bundled ones ([docs/MODULE-POLICY.md](docs/MODULE-POLICY.md)).
 
 ## Reconstruction limits
 
-Neither repository supplies an original server database, `dbconnect.php`, historical player data, module activation state or exact historical configuration. Synthetic lab data will reproduce observed software behavior, not claim recovery of Jim's exact old server.
+Neither repository supplies an original server database, `dbconnect.php`, historical player data, module activation state or exact historical configuration. Resurrection continues the software; it does not claim to recover Jim's exact old server, its players or its data.
 
 ## Preservation contract
 
-Neither source repository is modified by Resurrection work. Do not push branches/tags, issues, settings, releases or changes to them. Do not move/delete the new-project historical tag. Modernization belongs on Resurrection branches. Keep the baseline manifest tied to the historical tag, not evolving main.
+Neither source repository is modified by Resurrection work. Do not push branches/tags, issues, settings, releases or changes to them. Do not move/delete the new-project historical tag. Resurrection's work happens in this repository, on `main`. Keep the baseline manifest tied to the historical tag, not evolving main.
 
-See [historical-core-manifest.sha256](docs/provenance/historical-core-manifest.sha256) and [baseline.json](docs/provenance/baseline.json). The verifier checks commit, tree, file count, object type and each historical blob. Current main is allowed to evolve later.
+See [historical-core-manifest.sha256](docs/provenance/historical-core-manifest.sha256) and [baseline.json](docs/provenance/baseline.json). The verifier (`scripts/verify-historical-baseline.py`, run by both CI workflows) checks commit, tree, file count, object type and each historical blob. `main` evolves; the tag does not.
