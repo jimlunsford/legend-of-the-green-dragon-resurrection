@@ -15,10 +15,8 @@ in the living documents resolve.
 ## Start here
 
 - [HOST-GUIDE.md](HOST-GUIDE.md): how to run the game on a web server, with a shell or with only a hosting panel.
-- [RELEASE-NOTES-1.0.0-rc.5.md](RELEASE-NOTES-1.0.0-rc.5.md): the current test build, `1.0.0-rc.5` (2026-11-19): what
-  is in it, how to upgrade, and the known issues.
-- [RELEASE-NOTES-1.0.0.md](RELEASE-NOTES-1.0.0.md): the notes for `1.0.0`, a draft until its version commit (task 33):
-  what changed since rc.5, how to upgrade, and the known issues.
+- [RELEASE-NOTES-1.0.0.md](RELEASE-NOTES-1.0.0.md): the first release, `1.0.0` (2026-11-21): what Resurrection is,
+  what changed from 1.1.2 and since rc.5, how to install and upgrade, and the known issues.
 - [CHANGES-FROM-1.1.2.md](CHANGES-FROM-1.1.2.md): every deliberate change from LoGD 1.1.2 that a player, administrator
   or host can notice: the old behavior, the new behavior and why.
 
@@ -291,9 +289,12 @@ That work is over, so they are records now, among them `COMPATIBILITY-STATUS.md`
 - [PHASE6-TASK28-20261119.md](PHASE6-TASK28-20261119.md): task 28, no dead ends, part 2 (2026-11-19).
 - [PHASE6-TASK29-RC5-VERSION-20261119.md](PHASE6-TASK29-RC5-VERSION-20261119.md): task 29, the `1.0.0-rc.5` version
   commit (2026-11-19).
+- [RELEASE-NOTES-1.0.0-rc.5.md](RELEASE-NOTES-1.0.0-rc.5.md): the notes for `1.0.0-rc.5` (2026-11-19).
 - [PHASE6-TASK30-20261120.md](PHASE6-TASK30-20261120.md): task 30, the Dragon specialty test split so the CI shards
   can balance (2026-11-20).
 - [PHASE6-TASK31-20261120.md](PHASE6-TASK31-20261120.md): task 31, release polish: this index, the README and the
   living documents brought up to date (2026-11-20).
 - [PHASE6-TASK32-20261121.md](PHASE6-TASK32-20261121.md): task 32, four small fixes before `1.0.0`: the failed-flee
   message, "1 use left", the setup page's PHP check, and the skill rule for abilities recorded (2026-11-21).
+- [PHASE6-TASK33-1.0.0-VERSION-20261121.md](PHASE6-TASK33-1.0.0-VERSION-20261121.md): task 33, the `1.0.0` version
+  commit and the release cut workflow's full release (2026-11-21).

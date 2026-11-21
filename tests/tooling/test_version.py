@@ -2,6 +2,7 @@
 
 Static: runs wherever the suite runs, with or without a supported PHP (Baseline integrity too).
 """
+import importlib.util
 import json
 from pathlib import Path
 import re
@@ -46,7 +47,7 @@ def current():
 class VersionTests(unittest.TestCase):
     def test_code_project_and_docs_agree_on_a_valid_version(self):
         self.assertEqual([], problems(*current()))
-        self.assertEqual('1.0.0-rc.5', CODE.search(current()[0]).group(1))
+        self.assertEqual('1.0.0', CODE.search(current()[0]).group(1))
 
     def test_a_disagreement_or_an_invalid_version_fails(self):
         code, project, doc = current()
@@ -79,6 +80,26 @@ class VersionTests(unittest.TestCase):
         # The version shown is no longer the install marker: common.php does not compare it with a stored setting.
         self.assertNotRegex(common, r'getsetting\(\s*["\']installer_version')
         self.assertNotRegex(common, r'\$logd_version\s*[!=]=')
+
+    def test_project_json_names_the_phase_its_version_is_in(self):
+        # Phase 6 task 33: scripts/validate-project.py defines the phases. A release is "released", a test build
+        # "release-candidate"; a -dev version (development after a release) may keep either; nothing else passes.
+        spec = importlib.util.spec_from_file_location('validate_project', ROOT / 'scripts' / 'validate-project.py')
+        validator = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(validator)
+        meta = json.loads(current()[1])
+        self.assertEqual('released', meta['phase'])
+        self.assertIsNone(validator.phase_problem(meta['version'], meta['phase']))
+        for version, phase in [('1.0.0', 'released'), ('2.3.4', 'released'), ('1.0.0-rc.1', 'release-candidate'),
+                               ('1.0.0-rc.12', 'release-candidate'), ('1.0.1-dev', 'released'),
+                               ('1.1.0-dev', 'release-candidate')]:
+            with self.subTest(f'{version} {phase}'):
+                self.assertIsNone(validator.phase_problem(version, phase))
+        for version, phase in [('1.0.0', 'release-candidate'), ('1.0.0-rc.6', 'released'), ('1.0.0', 'release'),
+                               ('1.0.0', 'modern-core-engineering-in-progress'), ('1.0.1-dev', ''),
+                               ('1.0.0', None)]:
+            with self.subTest(f'{version} {phase}'):
+                self.assertIsNotNone(validator.phase_problem(version, phase))
 
 
 if __name__ == '__main__':

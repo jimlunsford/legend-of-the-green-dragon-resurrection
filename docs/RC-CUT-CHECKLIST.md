@@ -1,4 +1,4 @@
-# Cutting a test build: the checklist
+# Cutting a test build or a release: the checklist
 
 How `1.0.0-rc.1` (and any later `1.0.0-rc.N` or `1.0.0`) is cut. Written in Phase 6 task 7 (2026-11-07). For `1.0.0-rc.1`, section 0 is done and section 1 is
 made in Phase 6 task 14 (2026-11-13, `docs/PHASE6-TASK14-RC1-VERSION-20261113.md`), which also brought section 3's tag
@@ -35,10 +35,15 @@ the release cut workflow, run on Jim's request with task 29's inputs, made the t
 published the pre-release. rc.1's to rc.4's records stay as history. Jim's server test of rc.5 passed on 2026-11-20
 (recorded in Phase 6 task 31).
 
-For `1.0.0` (Jim's decisions of 2026-11-20, recorded in Phase 6 tasks 31 and 32): the version commit is task 33.
-`1.0.0` is a full GitHub release, marked Latest; the test builds stay pre-releases. The release cut workflow
-(`.github/workflows/release-cut.yml`) makes a pre-release today, so task 33 changes it for the release, and the
-sections below that say "pre-release" apply to the test builds. Task 34 is the first commit after the tag (section 5).
+For `1.0.0` (Jim's decisions of 2026-11-20, recorded in Phase 6 tasks 31 and 32): section 0 is done, section 1 is
+made in Phase 6 task 33 (`docs/PHASE6-TASK33-1.0.0-VERSION-20261121.md`), which also writes 1.0.0's tag message in
+section 3 and runs the release cut workflow against a stand-in `origin` and a stand-in `gh`. `1.0.0` is a full GitHub
+release, marked Latest; the test builds stay pre-releases. Task 33 changed the release cut workflow
+(`.github/workflows/release-cut.yml`) for it: a test build (`MAJOR.MINOR.PATCH-rc.N`) is published as a pre-release,
+not marked Latest, as before; a release (`MAJOR.MINOR.PATCH`) as a full release marked Latest, checked to be not a
+pre-release, not a draft, and what `/releases/latest` returns; any other version is refused before anything is
+written. Where a section below says "pre-release", that is what a test build gets; a release gets the full release
+instead. Sections 2 to 4 follow on Jim's go; task 34 is the first commit after the tag (section 5).
 
 A cut happens only on the maintainer's explicit go (Jim). Every step that tags, publishes or attaches anything waits for
 that go, and a session never does them on its own. The steps are in order; a step that fails stops the cut.
@@ -120,20 +125,39 @@ For `1.0.0-rc.5`:
       plain on purpose. They say an rc.4, rc.3 or rc.2 database runs no upgrade step and an rc.1 database runs 0002
       and 0003.
 
+For `1.0.0`:
+
+- [x] Jim has said go, naming the version: on 2026-11-20, "`1.0.0` is a full GitHub release, marked Latest; the rc
+      builds stay pre-releases", with everything polished before it (task 31) and the polish's four findings handled
+      first (task 32), and `1.0.0`'s version commit as task 33: the version commit first, then, after CI accepts it,
+      the tag and the GitHub release from the release cut workflow, which Jim runs (recorded in `ROADMAP.md`, Jim's
+      decisions of 2026-11-20, recorded in tasks 31 and 32).
+- [x] Every task before the cut is accepted: the matrix test split (task 30) at `deee4e6` (Modern core 44723370052,
+      all 14 jobs; Baseline integrity 44723369995), release polish (task 31) at `a2b3208` (Modern core 44805790920,
+      all 14 jobs; Baseline integrity 44805790924), and the four small fixes (task 32) at `3500e44` (Modern core
+      44851280261, all 14 jobs; Baseline integrity 44851280175), the last recorded in Phase 6 task 33.
+- [x] The release notes (`docs/RELEASE-NOTES-1.0.0.md`) list every open item a host or player can hit, checked in
+      Phase 6 task 33 against `ROADMAP.md` at `3500e44`: the after-`1.0.0` list is empty, and the only open boxes left
+      are task 33 itself, task 34 and the checklist's steps after the tag, none of which a host or player can hit; F1,
+      F3 and F4 are done and listed as changes, and F2 is listed as recorded, not changed; rc.5's known issues are all
+      still true and carried. They say an rc.5, rc.4, rc.3 or rc.2 database runs no upgrade step and an rc.1 database
+      runs 0002 and 0003.
+
 ## 1. The version commit
 
 One commit on `main`, made from the expected starting SHA, that changes the version and nothing else of substance:
 
 - `src/Version.php`: `CURRENT` to the new version (`'1.0.0-rc.1'`; `'1.0.0-rc.2'` in task 21; `'1.0.0-rc.3'` in
-  task 23; `'1.0.0-rc.4'` in task 25; `'1.0.0-rc.5'` in task 29).
-- `project.json`: `version` to the same, and `phase` to what the cut says (for example `release-candidate`).
+  task 23; `'1.0.0-rc.4'` in task 25; `'1.0.0-rc.5'` in task 29; `'1.0.0'` in task 33).
+- `project.json`: `version` to the same, and `phase` to what the version is: `release-candidate` for a test build,
+  `released` for a release (`scripts/validate-project.py` defines both since task 33).
 - `docs/VERSIONING.md`: the "Current version:" line to the same, and "No such tag exists yet" to what will be true
   after the tag.
 - `tests/tooling/test_version.py`: the pinned value in `test_code_project_and_docs_agree_on_a_valid_version` to the
   new version. That assertion exists so the version changes only on purpose; updating it here is that purpose.
 - `docs/RELEASE-NOTES-<version>.md`: drop the "Draft. This test build has not been cut." paragraph and give the date.
 - `README.md` and `SECURITY.md`: their "`main` is `1.0.0-dev`" lines to the new version, still saying it is a test
-  build and not certified for public hosting.
+  build (or, for a release, the release) and not certified for public hosting.
 - `ROADMAP.md` and `docs/CHANGES-FROM-1.1.2.md`: record the version commit.
 
 Checks before pushing it (each must pass; record the output in the cut's evidence doc):
@@ -152,7 +176,8 @@ Checks before pushing it (each must pass; record the output in the cut's evidenc
 Push with a normal, non-force `git push`. No tag yet.
 
 For `1.0.0-rc.2` these checks ran in Phase 6 task 21, for `1.0.0-rc.3` in Phase 6 task 23, for `1.0.0-rc.4` in
-Phase 6 task 25, and for `1.0.0-rc.5` in Phase 6 task 29; their output is in each task's evidence doc.
+Phase 6 task 25, for `1.0.0-rc.5` in Phase 6 task 29, and for `1.0.0` in Phase 6 task 33; their output is in each
+task's evidence doc.
 
 ## 2. CI acceptance of the version commit
 
@@ -178,6 +203,7 @@ The version commit is accepted only when, on that exact commit:
       jobs (PHP 8.4 checks 2:21, shards 9:00, 11:23, 10:28, 13:25, 16:35; PHP 8.5 checks 2:49, shards 11:39, 20:25,
       12:05, 11:18, 11:09; on both legs the release upgrade check installed `v1.0.0-rc.4` and upgraded it to `0dfdb1d`,
       41 tables, and `--release-ref HEAD` matched too); Baseline integrity 44513763427 (recorded in task 30).
+- [ ] For `1.0.0`: both of the above on task 33's version commit.
 
 A run that a later push cancelled is not acceptance, and no earlier commit's run stands in for it. A failed run stays on
 record. If anything fails, fix it in a new commit and start this section again on that commit; the tag goes on the
@@ -185,13 +211,36 @@ commit CI accepted.
 
 ## 3. The tag (only on Jim's go)
 
-An annotated tag on the accepted version commit, named `v<version>` (`v1.0.0-rc.5` for this cut). It matches the release
+An annotated tag on the accepted version commit, named `v<version>` (`v1.0.0` for this cut). It matches the release
 tag pattern the release upgrade check reads (`scripts/release-upgrade-check.py`, `vMAJOR.MINOR.PATCH` or
 `vMAJOR.MINOR.PATCH-rc.N`), so from the next commit on every Modern core run installs it and upgrades it to the commit
 under test.
 
-The tag message for `1.0.0-rc.5`, exactly. The release cut workflow takes the first fenced block after this section's
+The tag message for `1.0.0`, exactly. The release cut workflow takes the first fenced block after this section's
 heading, so this block stays first:
+
+```
+Legend of the Green Dragon - Resurrection 1.0.0
+
+The first release of Resurrection. It has had no independent security review, and it is not certified for public
+game hosting.
+
+Based on Legend of the Green Dragon 1.1.2 DragonPrime Edition by Eric Stevens and JT Traub and the DragonPrime
+Development Team. Licensed under CC BY-NC-SA 2.0 (LICENSE.txt). Resurrection's changes: Phoenix 2:33 LLC (NOTICE).
+
+Fresh installs, or an upgrade from 1.0.0-rc.5, 1.0.0-rc.4, 1.0.0-rc.3 or 1.0.0-rc.2 (no step) or 1.0.0-rc.1 (steps
+0002 and 0003); no 1.1.2 database is upgraded. Known issues, among them mail only through PHP's mail(), best effort,
+mail links in the web server's access log, abuse controls beyond sign-in throttling left to the operator, and 1.1.2
+behaviors kept as recorded: docs/RELEASE-NOTES-1.0.0.md. Hosting: docs/HOST-GUIDE.md.
+```
+
+(Written in Phase 6 task 33, 2026-11-21, in rc.5's shape. Each line checked against the code and the documents at the
+version commit in its evidence doc.)
+
+- [ ] For `1.0.0`: the tag, made by the release cut workflow on Jim's go, on task 33's version commit once CI accepts
+      it, with the message above byte for byte.
+
+History: the tag message for `1.0.0-rc.5`, exactly as tagged:
 
 ```
 Legend of the Green Dragon - Resurrection 1.0.0-rc.5
@@ -209,7 +258,7 @@ kept as recorded: docs/RELEASE-NOTES-1.0.0-rc.5.md. Hosting: docs/HOST-GUIDE.md.
 ```
 
 (Written in Phase 6 task 29, 2026-11-19, in rc.4's shape. Each line checked against the code and the documents at the
-version commit in its evidence doc.)
+version commit in its evidence doc. Moved here byte for byte in task 33.)
 
 - [x] For `1.0.0-rc.5`: the tag, made by the release cut workflow (run 44597371544, started with task 29's four inputs
       on Jim's request, 2026-11-19): tag object `5498b1c4efff4f3dc1f565d90197181f4cf8f598`, annotated, by
@@ -370,6 +419,11 @@ release cut workflow (`.github/workflows/release-cut.yml`) builds the same packa
       upgraded the rc.4, rc.3, rc.2 and rc.1 packages' installs to it. The workflow's build,
       `legend-of-the-green-dragon-resurrection-1.0.0-rc.5.zip`, 3,919,931 bytes, is `sha256:2d8e135e…a800`, the same;
       the zip downloaded back through the REST API has that SHA-256, as its `.sha256` says (recorded in task 30).
+- [ ] For `1.0.0`: the same, by the release cut workflow from the tag, published as the full GitHub release marked
+      Latest, not a pre-release and not a draft (the workflow checks all three, and that `/releases/latest` returns
+      `v1.0.0`). Task 33 built the version commit's package twice (its SHA-256 is the workflow's `package_sha256`
+      input), installed it fresh through `setup.php`, and upgraded the rc.5, rc.4, rc.3, rc.2 and rc.1 packages'
+      installs to it.
 
 ## 5. After the tag
 
@@ -381,7 +435,7 @@ release cut workflow (`.github/workflows/release-cut.yml`) builds the same packa
       `1.0.0-rc.2` until the next cut's version commit set `1.0.0-rc.3` (task 23). After `v1.0.0-rc.3`, `main` keeps
       `1.0.0-rc.3` until the next cut's version commit set `1.0.0-rc.4` (task 25). After `v1.0.0-rc.4`, `main` keeps
       `1.0.0-rc.4` until the next cut's version commit set `1.0.0-rc.5` (task 29). After `v1.0.0-rc.5`, `main` keeps
-      `1.0.0-rc.5` until the next cut sets `1.0.0`.
+      `1.0.0-rc.5` until the next cut's version commit set `1.0.0` (task 33).
 - [x] For `1.0.0-rc.2`: the next commit's Modern core installs `v1.0.0-rc.2` and upgrades it. Modern core
       43971175438 on Phase 6 task 22's commit, `088b43c`, both legs ("v1.0.0-rc.2 installed, upgraded to 088b43c, and
       the same schema and data as a fresh install (41 tables)"; recorded in task 23).
@@ -394,6 +448,7 @@ release cut workflow (`.github/workflows/release-cut.yml`) builds the same packa
 - [x] For `1.0.0-rc.5`: the next commit's Modern core installs `v1.0.0-rc.5` and upgrades it. Modern core
       44723370052 on Phase 6 task 30's commit, `deee4e6`, both legs ("v1.0.0-rc.5 installed, upgraded to deee4e6, and
       the same schema and data as a fresh install (41 tables)"; recorded in task 31).
+- [ ] For `1.0.0`: the next commit's Modern core installs `v1.0.0` and upgrades it (task 34).
 - [ ] After `v1.0.0`, the first commit on `main` sets the next number with `-dev` (`1.1.0-dev`, or `1.0.1-dev` when only
       fixes are planned). For `1.0.0` that is `1.0.1-dev`, in task 34 (Jim's decision of 2026-11-20: after `1.0.0`,
       bug fixes only).

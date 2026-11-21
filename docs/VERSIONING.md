@@ -1,6 +1,6 @@
 # Resurrection versioning
 
-Current version: `1.0.0-rc.5`
+Current version: `1.0.0`
 
 Resurrection has its own version numbers, `MAJOR.MINOR.PATCH`. They do not continue Legend of the Green Dragon 1.1.2's: the game it is built from stays "1.1.2 Dragonprime Edition", which the about page and the footer still credit.
 
@@ -8,7 +8,7 @@ Resurrection has its own version numbers, `MAJOR.MINOR.PATCH`. They do not conti
 
 `src/Version.php` sets the version, once. `project.json` and the line above must say the same; `tests/tooling/test_version.py` and `scripts/validate-project.py` fail if they disagree or if the version is not a valid semantic version in one of the forms below. Change it only when a task or release decision says to.
 
-The footer shows "Version: Resurrection 1.0.0-rc.5, based on LoGD 1.1.2 Dragonprime Edition", and the home page shows the same after "Game server running version:". The version is only shown. Whether a database needs an upgrade is decided by the upgrade steps it has applied, never by this string (`docs/MODERN-INSTALLATION.md`, "Upgrading").
+The footer shows "Version: Resurrection 1.0.0, based on LoGD 1.1.2 Dragonprime Edition", and the home page shows the same after "Game server running version:". The version is only shown. Whether a database needs an upgrade is decided by the upgrade steps it has applied, never by this string (`docs/MODERN-INSTALLATION.md`, "Upgrading").
 
 ## What each part means
 
@@ -30,9 +30,13 @@ Gameplay, balance, text and the interface change only when a task decides it, on
 - **After the release's tag** (`v1.0.0`), the first commit on `main` sets the next number with `-dev` (`1.1.0-dev`, or `1.0.1-dev` when only fixes are planned), as above.
 - The version changes only in a version commit: a cut's, on an explicit release decision, or the one right after a release's tag (`docs/RC-CUT-CHECKLIST.md`).
 
-A test build or release gets a tag `vMAJOR.MINOR.PATCH` or `vMAJOR.MINOR.PATCH-rc.N` (for example `v1.0.0-rc.1`), only on an explicit release decision. The version commit for `1.0.0-rc.1` was made on 2026-11-13 (Jim's go), and its tag, `v1.0.0-rc.1`, is on it. The version commit for `1.0.0-rc.2` was made on 2026-11-16 (Jim's go), and its tag, `v1.0.0-rc.2`, is on it. The version commit for `1.0.0-rc.3` was made on 2026-11-16 (Jim's go), and its tag, `v1.0.0-rc.3`, is on it. The version commit for `1.0.0-rc.4` was made on 2026-11-17 (Jim's go), and its tag, `v1.0.0-rc.4`, is on it. The version commit for `1.0.0-rc.5` was made on 2026-11-19 (Jim's go of 2026-11-18), and its tag, `v1.0.0-rc.5`, is on it; `main` keeps `1.0.0-rc.5` until the `1.0.0` version commit. `-dev` versions are never tagged.
+A test build or release gets a tag `vMAJOR.MINOR.PATCH` or `vMAJOR.MINOR.PATCH-rc.N` (for example `v1.0.0-rc.1`), only on an explicit release decision. The version commit for `1.0.0-rc.1` was made on 2026-11-13 (Jim's go), and its tag, `v1.0.0-rc.1`, is on it. The version commit for `1.0.0-rc.2` was made on 2026-11-16 (Jim's go), and its tag, `v1.0.0-rc.2`, is on it. The version commit for `1.0.0-rc.3` was made on 2026-11-16 (Jim's go), and its tag, `v1.0.0-rc.3`, is on it. The version commit for `1.0.0-rc.4` was made on 2026-11-17 (Jim's go), and its tag, `v1.0.0-rc.4`, is on it. The version commit for `1.0.0-rc.5` was made on 2026-11-19 (Jim's go of 2026-11-18), and its tag, `v1.0.0-rc.5`, is on it. The version commit for `1.0.0` was made on 2026-11-21 (Jim's decisions of 2026-11-20), and its tag, `v1.0.0`, goes on it once CI accepts it; after it, the first commit on `main` sets `1.0.1-dev`. `-dev` versions are never tagged.
 
-Each test build is published as a GitHub pre-release by the release cut workflow (`.github/workflows/release-cut.yml`), which Jim runs from the Actions tab. `1.0.0` is a full GitHub release, marked Latest (Jim's decision of 2026-11-20); the workflow change for it comes with the `1.0.0` version commit. The first commit after the `v1.0.0` tag sets `1.0.1-dev`: after `1.0.0` the project takes bug fixes only (Jim's decision of 2026-11-13).
+The release cut workflow (`.github/workflows/release-cut.yml`), which Jim runs from the Actions tab, publishes each test build (`-rc.N`) as a GitHub pre-release, never marked Latest, and a release (`MAJOR.MINOR.PATCH`, `1.0.0` the first) as a full GitHub release marked Latest (Jim's decision of 2026-11-20; the workflow does both since the `1.0.0` version commit). It refuses any other version before it writes anything. The first commit after the `v1.0.0` tag sets `1.0.1-dev`: after `1.0.0` the project takes bug fixes only (Jim's decision of 2026-11-13).
+
+### `project.json`'s phase
+
+`project.json`'s `phase` says what the version is: `release-candidate` for a test build (`-rc.N`), `released` for a release (`MAJOR.MINOR.PATCH`). A `-dev` version, development after a release, keeps either. `scripts/validate-project.py` defines these two and refuses any other value, or one that does not fit the version (Phase 6 task 33, when the first release made `released` needed).
 
 ## Upgrades
 

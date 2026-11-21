@@ -2,8 +2,11 @@ name: Release cut
 # Phase 6 task 15 (2026-11-13): cuts a test build or release on the maintainer's go, run by hand from the Actions tab
 # (docs/RC-CUT-CHECKLIST.md, sections 3 and 4). Sessions cannot push tags, so this workflow does it: the annotated tag
 # on the CI-accepted version commit with section 3's message byte for byte, the package built twice, and one GitHub
-# pre-release with the zip and its .sha256. Every input is checked before anything is written; a tag that already
-# exists is never moved, deleted or recreated, and an existing release is never touched.
+# release with the zip and its .sha256. Every input is checked before anything is written; a tag that already exists
+# is never moved, deleted or recreated, and an existing release is never touched.
+# Since Phase 6 task 33 (2026-11-21; Jim's decision of 2026-11-20): a test build (MAJOR.MINOR.PATCH-rc.N) is a
+# pre-release, never marked Latest; a release (MAJOR.MINOR.PATCH) is a full release marked Latest, checked to be what
+# /releases/latest returns. Any other version shape is refused in Preflight, before anything is written.
 on:
   workflow_dispatch:
     inputs:
@@ -52,10 +55,14 @@ jobs:
       - name: Preflight
         run: |
           set -euo pipefail
-          [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-rc\.[1-9][0-9]*)?$ ]] || { echo "::error::Not a release version: $VERSION"; exit 1; }
+          if [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+-rc\.[1-9][0-9]*$ ]]; then KIND=test-build
+          elif [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then KIND=release
+          else echo "::error::Not a release version (MAJOR.MINOR.PATCH or MAJOR.MINOR.PATCH-rc.N): $VERSION"; exit 1; fi
           [[ "$COMMIT" =~ ^[0-9a-f]{40}$ ]] || { echo "::error::Not a full commit SHA: $COMMIT"; exit 1; }
           [[ "$MESSAGE_SHA256" =~ ^[0-9a-f]{64}$ && "$PACKAGE_SHA256" =~ ^[0-9a-f]{64}$ ]] || { echo "::error::Not a SHA-256"; exit 1; }
           echo "TAG=v$VERSION" >> "$GITHUB_ENV"
+          echo "KIND=$KIND" >> "$GITHUB_ENV"
+          echo "$VERSION is a $KIND"
           test "$(git rev-parse HEAD)" = "$COMMIT"
           git fetch --quiet origin main
           git merge-base --is-ancestor "$COMMIT" origin/main || { echo "::error::$COMMIT is not on main"; exit 1; }
@@ -117,13 +124,18 @@ jobs:
           cmp "$RUNNER_TEMP/build1/$name" "$RUNNER_TEMP/build2/$name"
           echo "$PACKAGE_SHA256  $name" | cmp - "$RUNNER_TEMP/build1/$name.sha256"
           echo "NAME=$name" >> "$GITHUB_ENV"
-      - name: Publish the pre-release
+      - name: Publish the release (a pre-release for a test build, the full release marked Latest for a release)
         run: |
           set -euo pipefail
           if gh release view "$TAG" > /dev/null 2>&1; then echo "::error::A release for $TAG already exists; not touched."; exit 1; fi
-          case "$VERSION" in *-rc.*) ;; *) echo "::error::This workflow publishes test builds (-rc.N) only."; exit 1 ;; esac
+          case "$KIND:$VERSION" in
+            test-build:*-rc.*) flags=(--prerelease --latest=false) ;;
+            release:*-*) echo "::error::Not a release version: $VERSION"; exit 1 ;;
+            release:*) flags=(--latest) ;;
+            *) echo "::error::Not a release version: $VERSION"; exit 1 ;;
+          esac
           git show "$TAG:docs/RELEASE-NOTES-$VERSION.md" > "$RUNNER_TEMP/notes.md"
-          gh release create "$TAG" --verify-tag --prerelease --latest=false \
+          gh release create "$TAG" --verify-tag "${flags[@]}" \
             --title "Legend of the Green Dragon - Resurrection $VERSION" \
             --notes-file "$RUNNER_TEMP/notes.md" \
             "$RUNNER_TEMP/build1/$NAME" "$RUNNER_TEMP/build1/$NAME.sha256"
@@ -133,7 +145,11 @@ jobs:
           gh release view "$TAG"
           gh release view "$TAG" --json tagName,name,isPrerelease,isDraft,url,assets \
             --jq '{tagName, name, isPrerelease, isDraft, url, assets: [.assets[] | {name, size}]}'
-          test "$(gh release view "$TAG" --json isPrerelease --jq .isPrerelease)" = true
+          if [ "$KIND" = test-build ]; then
+            test "$(gh release view "$TAG" --json isPrerelease --jq .isPrerelease)" = true
+          else
+            test "$(gh release view "$TAG" --json isPrerelease --jq .isPrerelease)" = false
+          fi
           test "$(gh release view "$TAG" --json isDraft --jq .isDraft)" = false
           test "$(gh release view "$TAG" --json tagName --jq .tagName)" = "$TAG"
           test "$(gh release view "$TAG" --json assets --jq '.assets | length')" = 2
@@ -141,7 +157,7 @@ jobs:
           test "$(gh release view "$TAG" --json assets --jq ".assets[] | select(.name == \"$NAME.sha256\") | .size")" = "$(stat -c %s "$RUNNER_TEMP/build1/$NAME.sha256")"
           latest="$(gh api "repos/$GH_REPO/releases/latest" --jq .tag_name 2>/dev/null || true)"
           echo "Latest release: ${latest:-none}"
-          test "$latest" != "$TAG"
+          if [ "$KIND" = test-build ]; then test "$latest" != "$TAG"; else test "$latest" = "$TAG"; fi
           mkdir "$RUNNER_TEMP/download"
           gh release download "$TAG" --dir "$RUNNER_TEMP/download"
           (cd "$RUNNER_TEMP/download" && sha256sum "$NAME" && sha256sum -c "$NAME.sha256")

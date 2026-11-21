@@ -100,8 +100,8 @@ server the Internet can reach.
 
 ## Status
 
-- **Version:** `main` is `1.0.0-rc.5`, the fifth test build, which passed Jim's test on a real server. `1.0.0` is
-  next. Known issues: the [release notes for 1.0.0-rc.5](docs/RELEASE-NOTES-1.0.0-rc.5.md).
+- **Version:** `main` is `1.0.0`, the first release, after five test builds; the fifth passed Jim's test on a real
+  server. What is in it, how to upgrade and the known issues: the [release notes for 1.0.0](docs/RELEASE-NOTES-1.0.0.md).
 - **Not certified for public game hosting.** The project's public hosting gates are not all met. Those the code does
   not meet, such as abuse controls beyond sign-in throttling, production TLS, monitoring and an independent review,
   belong to whoever runs a public server ([security status](docs/SECURITY-STATUS.md)).

@@ -12,6 +12,21 @@ def require(condition, message):
     if not condition:
         raise ValueError(message)
 
+# project.json's "phase" (docs/VERSIONING.md, "project.json's phase"; Phase 6 task 33): what the version is. A test
+# build (-rc.N) is "release-candidate" and a release (MAJOR.MINOR.PATCH) "released"; a -dev version, development after
+# a release, keeps either.
+PHASES = ('release-candidate', 'released')
+
+def phase_problem(version, phase):
+    """Why the phase does not fit the version, or None when it does."""
+    if phase not in PHASES:
+        return 'project.json phase must be one of: ' + ', '.join(PHASES)
+    if re.fullmatch(r'[0-9]+\.[0-9]+\.[0-9]+-rc\.[1-9][0-9]*', version) and phase != 'release-candidate':
+        return 'A test build (-rc.N) has the phase release-candidate'
+    if re.fullmatch(r'[0-9]+\.[0-9]+\.[0-9]+', version) and phase != 'released':
+        return 'A release (MAJOR.MINOR.PATCH) has the phase released'
+    return None
+
 def validate():
     meta = json.loads((ROOT / 'project.json').read_text())
     require(meta['schema_version'] == 1, 'Unsupported project metadata schema')
@@ -22,6 +37,8 @@ def validate():
     code = re.findall(r"const string CURRENT = '([^']*)';", (ROOT / 'src/Version.php').read_text())
     require(len(code) == 1 and meta['version'] == code[0], 'project.json version must match src/Version.php')
     require(re.fullmatch(r'(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-dev|-rc\.[1-9][0-9]*)?', meta['version']) is not None, 'Version must be MAJOR.MINOR.PATCH, -dev or -rc.N')
+    problem = phase_problem(meta['version'], meta['phase'])
+    require(problem is None, problem)
     require(meta['public_game_hosting_approved'] is False and meta['commercial_use_approved'] is False, 'Foundation approval flags must remain false')
     require(meta['archive_modules_imported'] == 0, 'Foundation excludes extra archive modules')
     base = json.loads((ROOT / 'docs/provenance/baseline.json').read_text())
