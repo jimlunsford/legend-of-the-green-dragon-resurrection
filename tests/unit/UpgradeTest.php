@@ -172,7 +172,7 @@ final class UpgradeTest extends TestCase
     private static function guide(): string
     {
         require_once 'src/Version.php';
-        return 'https://github.com/jimlunsford/legend-of-the-green-dragon-resurrection/blob/v' . \Resurrection\Version::CURRENT . '/docs/HOST-GUIDE.md';
+        return 'https://github.com/jimlunsford/legend-of-the-green-dragon-resurrection/blob/' . \Resurrection\Version::docRef() . '/docs/HOST-GUIDE.md';
     }
 
     public function testACurrentDatabaseIsLeftUntouchedAndApplyingNeedsABackup(): void

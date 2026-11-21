@@ -124,6 +124,12 @@ def version(root=ROOT):
     return match.group(1)
 
 
+def doc_ref(current):
+    """Where the guide's address points, as the game's pages do (Version::docRef()): the version's tag, or main for a
+    -dev version, which is never tagged (Phase 6 task 34). The release cut workflow never builds a -dev version."""
+    return 'main' if current.endswith('-dev') else 'v' + current
+
+
 def install_text(root, current):
     """INSTALL.txt: docs/package/INSTALL.txt with this version's names and the guide's address at its tag."""
     text = (root / INSTALL).read_text(encoding='utf-8')
@@ -134,7 +140,7 @@ def install_text(root, current):
     notes = f'RELEASE-NOTES-{current}.md'
     listed = f'  {notes}\n      what changed, and the known issues\n' if (root / 'docs' / notes).is_file() else ''
     for marker, value in [('@VERSION@', current), ('@BUILD@', build), ('@ZIP@', f'{NAME}-{current}.zip'),
-                          ('@GUIDE_URL@', f'{REPOSITORY}/blob/v{current}/docs/HOST-GUIDE.md'), ('@NOTES@', listed)]:
+                          ('@GUIDE_URL@', f'{REPOSITORY}/blob/{doc_ref(current)}/docs/HOST-GUIDE.md'), ('@NOTES@', listed)]:
         text = text.replace(marker, value)
     if re.search(r'@[A-Z_]+@', text):
         raise Refused(f'{INSTALL} holds a marker the script does not fill.')

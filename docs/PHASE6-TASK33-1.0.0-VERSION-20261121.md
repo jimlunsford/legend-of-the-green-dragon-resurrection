@@ -615,3 +615,38 @@ The next step is CI acceptance of this commit. Then Jim runs the Release cut wor
 four inputs in the task report (the checklist's sections 3 and 4). It makes the tag `v1.0.0` and the full release
 marked Latest, and checks both. Then task 34 sets `main` to `1.0.1-dev` and records the cut. That commit's Modern core
 installs `v1.0.0` and upgrades it (the checklist's section 5).
+
+## Acceptance and the 1.0.0 cut (recorded in Phase 6 task 34, 2026-11-21)
+
+- **Accepted** at `5e97a55`: Modern core 44896133422 passed all 14 jobs (run wall time 14:18, 10:49:12Z to
+  11:03:30Z).
+  - PHP 8.4 / MariaDB 11.4: `checks` 2:20; `http` 1 to 5: 14:09, 10:58, 10:22, 10:20, 10:21; `result` 0:04.
+  - PHP 8.5 / MySQL 8.4: `checks` 2:39; `http` 1 to 5: 12:21, 11:47, 12:47, 10:59, 11:18; `result` 0:04.
+  - Slowest: 14:09, PHP 8.4 `http (1)`.
+  - On both legs: "Release upgrade check: v1.0.0-rc.5 installed, upgraded to 5e97a55, and the same schema and data as a
+    fresh install (41 tables)", and "HEAD installed, upgraded to 5e97a55, and the same schema and data as a fresh
+    install (41 tables)".
+  - Baseline integrity 44896133380 passed.
+- **The cut**, on 2026-11-21, on Jim's "start it": release cut run 44904200787 (`workflow_dispatch` on `main` at
+  `5e97a55`, 12:30:00Z to 12:30:28Z), success. Its log shows "1.0.0 is a release", the message's `sha256sum -c` OK,
+  "Tag object: d096f19302233f29a4b1ecc134f2badfd96ce28d", "Latest release: v1.0.0" and the downloaded zip's check OK.
+  - **The tag** `v1.0.0`: tag object `d096f19302233f29a4b1ecc134f2badfd96ce28d`, annotated, tagger github-actions[bot]
+    (2026-11-21T12:30:15Z), on the commit `5e97a55afd08735cbe6da58458cc6e06a87d5f13`. Its message is section 3's
+    block: 838 bytes, SHA-256 `75be9c441ce17b34788156f629bfd102b008604959a9dbac4f561763d1d91b0a`, the value above.
+  - **The release** "Legend of the Green Dragon - Resurrection 1.0.0" (release 453677215, published
+    2026-11-21T12:30:21Z by github-actions[bot]): not a pre-release, not a draft; `GET /releases/latest` returns
+    `v1.0.0`. Its body is the release notes at the tag, 10,638 bytes.
+  - **The assets:** `legend-of-the-green-dragon-resurrection-1.0.0.zip`, 3,913,079 bytes, digest
+    `sha256:bf51607d89f77b3591d8436a1946440f3621b9ad90b1aa809d6818b5e97c3c6f`, and its `.sha256`, 116 bytes. Downloaded
+    through the REST API (`Accept: application/octet-stream`) into an empty folder: the zip's SHA-256 is that value,
+    `sha256sum -c` passes, and `cmp` finds it identical to the package built in task 33 from the pushed commit.
+  - **The notes' village image,**
+    `https://raw.githubusercontent.com/jimlunsford/legend-of-the-green-dragon-resurrection/v1.0.0/docs/images/village.png`,
+    resolves: 200, `image/png`, 633,566 bytes, identical to `docs/images/village.png`.
+  - **The other tags and releases are unchanged:** `historical-source-1.1.2` is still tag object `51cab4f…` on
+    `bdc29df…`, and `v1.0.0-rc.1` to `v1.0.0-rc.5` are still the tag objects recorded at their cuts (`522be1c`,
+    `147ad5a`, `dec02e9`, `f3de198`, `5498b1c`). Their releases are still pre-releases, not drafts, and each zip still
+    has the digest recorded at its cut.
+- Checked in task 34 through the REST API: the three runs, every job's time from its start and end, the upgrade
+  check lines in both `checks` job logs, the cut job's log, the tag object, the release and its assets, and
+  `/releases/latest`. All match the brief's figures.

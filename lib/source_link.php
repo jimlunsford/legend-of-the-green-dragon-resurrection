@@ -45,7 +45,8 @@ function resurrection_source_link(): string {
 /**
  * A project document, online at this version's tag (Phase 6 task 16, R2). The documents are not on the server: they
  * ship beside the upload in the release package, never in the docroot, so a page that sends an operator to one links
- * it in the public repository at the tag the running code was cut from (`v` and src/Version.php). $path is the
+ * it in the public repository at the tag the running code was cut from (`v` and src/Version.php), or at `main` while
+ * the version is a -dev one, which is never tagged (Version::docRef(), Phase 6 task 34). $path is the
  * document's path in the repository (`docs/HOST-GUIDE.md`) and $section an optional heading anchor (`9-upgrade`).
  * tests/unit/DocLinkTest.php checks that every document linked this way exists and has that heading, and that no
  * shipped text names a document any other way.
@@ -55,7 +56,7 @@ function resurrection_doc_url(string $path, string $section = ''): string {
         throw new InvalidArgumentException('Not a project document.');
     }
     require_once __DIR__ . '/../src/Version.php';
-    return RESURRECTION_SOURCE_URL . '/blob/v' . \Resurrection\Version::CURRENT . '/' . $path . ($section !== '' ? '#' . $section : '');
+    return RESURRECTION_SOURCE_URL . '/blob/' . \Resurrection\Version::docRef() . '/' . $path . ($section !== '' ? '#' . $section : '');
 }
 
 /** The same as a link that opens in place, the label and the URL escaped. */

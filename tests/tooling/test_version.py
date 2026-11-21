@@ -47,7 +47,7 @@ def current():
 class VersionTests(unittest.TestCase):
     def test_code_project_and_docs_agree_on_a_valid_version(self):
         self.assertEqual([], problems(*current()))
-        self.assertEqual('1.0.0', CODE.search(current()[0]).group(1))
+        self.assertEqual('1.0.1-dev', CODE.search(current()[0]).group(1))
 
     def test_a_disagreement_or_an_invalid_version_fails(self):
         code, project, doc = current()
@@ -84,6 +84,7 @@ class VersionTests(unittest.TestCase):
     def test_project_json_names_the_phase_its_version_is_in(self):
         # Phase 6 task 33: scripts/validate-project.py defines the phases. A release is "released", a test build
         # "release-candidate"; a -dev version (development after a release) may keep either; nothing else passes.
+        # Phase 6 task 34: main after the v1.0.0 tag is 1.0.1-dev, still "released" (bug fixes only).
         spec = importlib.util.spec_from_file_location('validate_project', ROOT / 'scripts' / 'validate-project.py')
         validator = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(validator)

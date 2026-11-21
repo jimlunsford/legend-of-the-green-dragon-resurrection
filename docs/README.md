@@ -15,8 +15,8 @@ in the living documents resolve.
 ## Start here
 
 - [HOST-GUIDE.md](HOST-GUIDE.md): how to run the game on a web server, with a shell or with only a hosting panel.
-- [RELEASE-NOTES-1.0.0.md](RELEASE-NOTES-1.0.0.md): the first release, `1.0.0` (2026-11-21): what Resurrection is,
-  what changed from 1.1.2 and since rc.5, how to install and upgrade, and the known issues.
+- [RELEASE-NOTES-1.0.0.md](RELEASE-NOTES-1.0.0.md): the first release, `1.0.0`, released on 2026-11-21: what
+  Resurrection is, what changed from 1.1.2 and since rc.5, how to install and upgrade, and the known issues.
 - [CHANGES-FROM-1.1.2.md](CHANGES-FROM-1.1.2.md): every deliberate change from LoGD 1.1.2 that a player, administrator
   or host can notice: the old behavior, the new behavior and why.
 
@@ -225,7 +225,7 @@ That work is over, so they are records now, among them `COMPATIBILITY-STATUS.md`
 - [PHASE5-CLOSEOUT-20261105.md](PHASE5-CLOSEOUT-20261105.md): the close-out: the safe credit frame and the unused
   images (2026-11-05).
 
-### Phase 6: release readiness (2026-11-06 onward)
+### Phase 6: release readiness (2026-11-06 to 2026-11-21)
 
 - [PHASE6-RC-READINESS-20261106.md](PHASE6-RC-READINESS-20261106.md): task 1, the readiness review and its ranked gap
   list (2026-11-06).
@@ -297,4 +297,6 @@ That work is over, so they are records now, among them `COMPATIBILITY-STATUS.md`
 - [PHASE6-TASK32-20261121.md](PHASE6-TASK32-20261121.md): task 32, four small fixes before `1.0.0`: the failed-flee
   message, "1 use left", the setup page's PHP check, and the skill rule for abilities recorded (2026-11-21).
 - [PHASE6-TASK33-1.0.0-VERSION-20261121.md](PHASE6-TASK33-1.0.0-VERSION-20261121.md): task 33, the `1.0.0` version
-  commit and the release cut workflow's full release (2026-11-21).
+  commit and the release cut workflow's full release, with its acceptance and the `1.0.0` cut (2026-11-21).
+- [PHASE6-TASK34-20261121.md](PHASE6-TASK34-20261121.md): task 34, after the `v1.0.0` tag: the cut recorded, `main` to
+  `1.0.1-dev`, and Phase 6 closed (2026-11-21).

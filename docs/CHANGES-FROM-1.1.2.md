@@ -586,3 +586,15 @@ pre-release. No game behavior changes; no stored row changes, so no upgrade step
 
 What stands between `main` and the `v1.0.0` tag now: this commit's CI acceptance; then Jim runs the release cut
 workflow, which makes the tag, the package and the release (`docs/RC-CUT-CHECKLIST.md`, sections 2 to 5).
+
+### Phase 6 task 34: after the `v1.0.0` tag
+
+Task 33 is accepted at `5e97a55` (Modern core 44896133422, all 14 jobs; Baseline integrity 44896133380), and Jim cut
+`1.0.0` on 2026-11-21 (release cut run 44904200787): the tag `v1.0.0` on `5e97a55` and the full GitHub release marked
+Latest. The first commit after the tag sets the version to `1.0.1-dev` (`docs/VERSIONING.md`), so the footer and the
+home page show "Version: Resurrection 1.0.1-dev, based on LoGD 1.1.2 Dragonprime Edition". The project now takes bug
+fixes only. No game behavior changes; no stored row changes, so no upgrade step (`docs/PHASE6-TASK34-20261121.md`).
+
+| What | 1.1.2 | Resurrection | Why | Record |
+|---|---|---|---|---|
+| Where a `-dev` build links the host guide | 1.1.2 had no such links | Every page that links a document links it at `main` while the version ends in `-dev` (`Version::docRef()`), and at the version's own tag, as before, for a release or a test build | `-dev` versions are never tagged, so a link at `v1.0.1-dev` would never resolve | `PHASE6-TASK34-20261121.md` |

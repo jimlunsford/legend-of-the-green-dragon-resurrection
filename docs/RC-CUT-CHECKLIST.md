@@ -43,7 +43,9 @@ release, marked Latest; the test builds stay pre-releases. Task 33 changed the r
 not marked Latest, as before; a release (`MAJOR.MINOR.PATCH`) as a full release marked Latest, checked to be not a
 pre-release, not a draft, and what `/releases/latest` returns; any other version is refused before anything is
 written. Where a section below says "pre-release", that is what a test build gets; a release gets the full release
-instead. Sections 2 to 4 follow on Jim's go; task 34 is the first commit after the tag (section 5).
+instead. Sections 2 to 4 follow on Jim's go; task 34 is the first commit after the tag (section 5). Sections 2 to 4
+are done: Jim cut `1.0.0` on 2026-11-21 (release cut run 44904200787), recorded in Phase 6 task 34
+(`docs/PHASE6-TASK34-20261121.md`), which also sets `main` to `1.0.1-dev`.
 
 A cut happens only on the maintainer's explicit go (Jim). Every step that tags, publishes or attaches anything waits for
 that go, and a session never does them on its own. The steps are in order; a step that fails stops the cut.
@@ -203,7 +205,11 @@ The version commit is accepted only when, on that exact commit:
       jobs (PHP 8.4 checks 2:21, shards 9:00, 11:23, 10:28, 13:25, 16:35; PHP 8.5 checks 2:49, shards 11:39, 20:25,
       12:05, 11:18, 11:09; on both legs the release upgrade check installed `v1.0.0-rc.4` and upgraded it to `0dfdb1d`,
       41 tables, and `--release-ref HEAD` matched too); Baseline integrity 44513763427 (recorded in task 30).
-- [ ] For `1.0.0`: both of the above on task 33's version commit.
+- [x] For `1.0.0`: both of the above on task 33's version commit, `5e97a55`: Modern core 44896133422, all 14 jobs
+      (PHP 8.4 checks 2:20, shards 14:09, 10:58, 10:22, 10:20, 10:21; PHP 8.5 checks 2:39, shards 12:21, 11:47,
+      12:47, 10:59, 11:18; on both legs the release upgrade check installed `v1.0.0-rc.5` and upgraded it to
+      `5e97a55`, 41 tables, and `--release-ref HEAD` matched too); Baseline integrity 44896133380 (recorded in task
+      34).
 
 A run that a later push cancelled is not acceptance, and no earlier commit's run stands in for it. A failed run stays on
 record. If anything fails, fix it in a new commit and start this section again on that commit; the tag goes on the
@@ -237,8 +243,11 @@ behaviors kept as recorded: docs/RELEASE-NOTES-1.0.0.md. Hosting: docs/HOST-GUID
 (Written in Phase 6 task 33, 2026-11-21, in rc.5's shape. Each line checked against the code and the documents at the
 version commit in its evidence doc.)
 
-- [ ] For `1.0.0`: the tag, made by the release cut workflow on Jim's go, on task 33's version commit once CI accepts
-      it, with the message above byte for byte.
+- [x] For `1.0.0`: the tag, made by the release cut workflow on Jim's go, on task 33's version commit once CI accepts
+      it, with the message above byte for byte. Made on 2026-11-21 by release cut run 44904200787 on Jim's "start
+      it": `v1.0.0`, tag object `d096f19302233f29a4b1ecc134f2badfd96ce28d`, annotated, by github-actions[bot], on
+      `5e97a55afd08735cbe6da58458cc6e06a87d5f13`; its message is the block above, 838 bytes, SHA-256
+      `75be9c44…1b0a` (recorded in task 34).
 
 History: the tag message for `1.0.0-rc.5`, exactly as tagged:
 
@@ -419,11 +428,17 @@ release cut workflow (`.github/workflows/release-cut.yml`) builds the same packa
       upgraded the rc.4, rc.3, rc.2 and rc.1 packages' installs to it. The workflow's build,
       `legend-of-the-green-dragon-resurrection-1.0.0-rc.5.zip`, 3,919,931 bytes, is `sha256:2d8e135e…a800`, the same;
       the zip downloaded back through the REST API has that SHA-256, as its `.sha256` says (recorded in task 30).
-- [ ] For `1.0.0`: the same, by the release cut workflow from the tag, published as the full GitHub release marked
+- [x] For `1.0.0`: the same, by the release cut workflow from the tag, published as the full GitHub release marked
       Latest, not a pre-release and not a draft (the workflow checks all three, and that `/releases/latest` returns
       `v1.0.0`). Task 33 built the version commit's package twice (its SHA-256 is the workflow's `package_sha256`
       input), installed it fresh through `setup.php`, and upgraded the rc.5, rc.4, rc.3, rc.2 and rc.1 packages'
       installs to it.
+- [x] Done for `1.0.0` by release cut run 44904200787 (2026-11-21):
+      https://github.com/jimlunsford/legend-of-the-green-dragon-resurrection/releases/tag/v1.0.0, a full release, not a
+      pre-release and not a draft, and `/releases/latest` returns `v1.0.0`. The workflow's build,
+      `legend-of-the-green-dragon-resurrection-1.0.0.zip`, 3,913,079 bytes, is `sha256:bf51607d…3c6f`, the same as
+      task 33's builds; the zip downloaded back through the REST API has that SHA-256, as its `.sha256` says. The rc
+      releases stay pre-releases (recorded in task 34).
 
 ## 5. After the tag
 
@@ -449,7 +464,9 @@ release cut workflow (`.github/workflows/release-cut.yml`) builds the same packa
       44723370052 on Phase 6 task 30's commit, `deee4e6`, both legs ("v1.0.0-rc.5 installed, upgraded to deee4e6, and
       the same schema and data as a fresh install (41 tables)"; recorded in task 31).
 - [ ] For `1.0.0`: the next commit's Modern core installs `v1.0.0` and upgrades it (task 34).
-- [ ] After `v1.0.0`, the first commit on `main` sets the next number with `-dev` (`1.1.0-dev`, or `1.0.1-dev` when only
+- [x] After `v1.0.0`, the first commit on `main` sets the next number with `-dev` (`1.1.0-dev`, or `1.0.1-dev` when only
       fixes are planned). For `1.0.0` that is `1.0.1-dev`, in task 34 (Jim's decision of 2026-11-20: after `1.0.0`,
-      bug fixes only).
-- [ ] Record the tag, the accepted runs and the package's SHA-256 in `ROADMAP.md` and the cut's evidence doc.
+      bug fixes only). Done in Phase 6 task 34 (2026-11-21).
+- [x] Record the tag, the accepted runs and the package's SHA-256 in `ROADMAP.md` and the cut's evidence doc. For
+      `1.0.0`: in `ROADMAP.md`, `docs/PHASE6-TASK33-1.0.0-VERSION-20261121.md` ("Acceptance and the 1.0.0 cut") and
+      `docs/PHASE6-TASK34-20261121.md` (task 34).

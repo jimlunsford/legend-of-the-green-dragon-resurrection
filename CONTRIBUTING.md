@@ -1,8 +1,8 @@
 # Contributing
 
-Resurrection is a finished showcase project. Until `1.0.0` it takes only the release work on its roadmap; after `1.0.0`
-it takes bug reports and bug fixes, and no new gameplay, art or features (Jim Lunsford's decision of 2026-11-13). The
-plan and where it stands are in [ROADMAP.md](ROADMAP.md).
+Resurrection is a finished showcase project. `1.0.0`, its first release, came out on 2026-11-21. Since then it takes
+bug reports and bug fixes, and no new gameplay, art or features (Jim Lunsford's decision of 2026-11-13). The plan and
+where it stands are in [ROADMAP.md](ROADMAP.md).
 
 ## Report a bug
 

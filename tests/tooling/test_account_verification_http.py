@@ -24,6 +24,7 @@ import unittest
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from php_runtime import supported_php  # noqa: E402
+from doc_urls import host_guide_url  # noqa: E402
 from loopback_server import start_php_server  # noqa: E402
 import mail_capture  # noqa: E402
 from test_account_mail_http import (ADMIN, ADMIN_PASSWORD, ATTRIBUTION, COPYRIGHT, CSP, ERROR, EXPIRED, INLINE, LINK, SENDER, SERVER_URL,  # noqa: E402
@@ -528,8 +529,9 @@ class AccountVerificationHttpTests(unittest.TestCase):
                            r'<span class="rz-setting-locked-note" id="[^"]+">(.+?)</span></p>', body)
         self.assertIsNotNone(locked, 'requirevalidemail is not shown locked while account mail is off')
         self.assertIn('Turn on account mail first', locked.group(1))
-        # Phase 6 task 16 (R2): the note links "Mail" in the host guide, online at this version's tag.
-        self.assertIn('See <a href="https://github.com/jimlunsford/legend-of-the-green-dragon-resurrection/blob/v', locked.group(1))
+        # Phase 6 task 16 (R2): the note links "Mail" in the host guide, online at this version's tag (main for a -dev
+        # version, Phase 6 task 34).
+        self.assertIn('See <a href="' + host_guide_url() + '#11-mail">', locked.group(1))
         self.assertIn('/docs/HOST-GUIDE.md#11-mail">&quot;Mail&quot; in the host guide</a>.', locked.group(1))
         self.assertNotIn('name="requirevalidemail"', body)
         # With account mail on: a setting like any other, which saves.

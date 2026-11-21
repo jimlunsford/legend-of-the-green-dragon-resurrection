@@ -85,7 +85,12 @@ class ReleasePackageTests(unittest.TestCase):
     def test_the_documents_are_beside_upload(self):
         beside = sorted(name[len(TOP):] for name in self.all_names() if not name.startswith(UPLOAD))
         self.assertEqual(sorted([*BESIDE, 'INSTALL.txt']), beside)
-        self.assertIn(f'RELEASE-NOTES-{VERSION}.md', beside)
+        if VERSION.endswith('-dev'):
+            # Phase 6 task 34: a -dev tree is never cut (the release cut workflow refuses it) and has no notes of its
+            # own until the release's version commit writes them; the cut's version must have them, below.
+            self.assertFalse((ROOT / 'docs' / f'RELEASE-NOTES-{VERSION}.md').exists())
+        else:
+            self.assertIn(f'RELEASE-NOTES-{VERSION}.md', beside)
         for name, source in BESIDE.items():
             self.assertEqual((ROOT / source).read_bytes(), self.read(name), name)
 
@@ -96,7 +101,10 @@ class ReleasePackageTests(unittest.TestCase):
         self.assertIn('SHA-256', text)
         self.assertIn('Upload the contents of upload/ into your site\'s folder', text)
         self.assertIn('HOST-GUIDE.md', text)
-        self.assertIn(f'https://github.com/jimlunsford/legend-of-the-green-dragon-resurrection/blob/v{VERSION}/docs/HOST-GUIDE.md', text)
+        # The guide online at this version's tag, or at main for a -dev version, never tagged (Phase 6 task 34).
+        ref = 'main' if VERSION.endswith('-dev') else f'v{VERSION}'
+        self.assertIn(f'https://github.com/jimlunsford/legend-of-the-green-dragon-resurrection/blob/{ref}/docs/HOST-GUIDE.md', text)
+        self.assertNotIn('-dev/docs/', text)
         if '-rc.' in VERSION:
             self.assertIn('A test build', text)
             self.assertIn('not certified for public game hosting', text)

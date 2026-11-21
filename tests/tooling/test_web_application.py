@@ -24,6 +24,7 @@ from xml.etree import ElementTree
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from asset_urls import asset_url  # noqa: E402
+from doc_urls import host_guide_url  # noqa: E402
 from loopback_server import wait_until_ready  # noqa: E402
 import mail_capture  # noqa: E402
 
@@ -1721,8 +1722,8 @@ echo "locked\\n";fflush(STDOUT);$change=json_decode(fgets(STDIN),true,512,JSON_T
             self.assertIsNotNone(locked,'requirevalidemail is not shown locked')
             self.assertIn('aria-describedby="'+locked.group(1)+'"',body)
             self.assertIn('Locked off.',locked.group(2)); self.assertIn('Turn on account mail first',locked.group(2))
-            # Phase 6 task 16 (R2): "Mail" in the host guide, linked online at this version's tag, opening in place.
-            guide=('https://github.com/jimlunsford/legend-of-the-green-dragon-resurrection/blob/v'+re.search(r"CURRENT = '([^']+)'",(ROOT/'src'/'Version.php').read_text()).group(1)+'/docs/HOST-GUIDE.md')
+            # Phase 6 task 16 (R2): "Mail" in the host guide, linked online at this version's tag (main for -dev), opening in place.
+            guide=host_guide_url()
             self.assertIn(' See <a href="'+guide+'#11-mail">&quot;Mail&quot; in the host guide</a>.',locked.group(2)); self.assertNotIn('docs/HOST-GUIDE.md)',locked.group(2))
             fields=dict(self._user_editor_form(body,save)); self.assertNotIn('requirevalidemail',fields)
             # A form that turns it on (or sends it at all) is refused, and no setting changes.
@@ -7851,10 +7852,10 @@ function MODULE_dohook($hook,$args) {
                     self.assertIn("An administrator applies the upgrade from the server's command line; the web installer is no longer available.",shown)
                     # The operator is pointed to the upgrade command and its documentation.
                     plain=re.sub(r'\s+',' ',re.sub(r'<[^>]+>','',shown))
-                    # Phase 6 task 16 (R2): the host guide, linked online at this version's tag; no docs/ path on the page.
+                    # Phase 6 task 16 (R2): the host guide, linked online at this version's tag (main for -dev); no docs/ path on the page.
                     self.assertIn('If you are the operator: take a fresh backup, see what is pending with php scripts/upgrade.php --dry-run, then apply it with '
                                   'php scripts/upgrade.php --backup-confirmed (the host guide, "Upgrade").',plain)
-                    guide=('https://github.com/jimlunsford/legend-of-the-green-dragon-resurrection/blob/v'+re.search(r"CURRENT = '([^']+)'",(ROOT/'src'/'Version.php').read_text()).group(1)+'/docs/HOST-GUIDE.md')
+                    guide=host_guide_url()
                     self.assertEqual(2,body.count('<a href="'+guide+'#9-upgrade">'),body[-4000:]);self.assertNotIn('docs/',plain)
                     self.assertNotIn('installer.php',body)
                     # Phase 6 task 5b: one operator line names both paths, the command and setup.php for a host without a shell.

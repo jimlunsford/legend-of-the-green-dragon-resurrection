@@ -111,7 +111,10 @@ final class DocLinkTest extends TestCase
 
     public function testTheLinkIsTheRepositoryAtThisVersionsTag(): void
     {
-        $url = RESURRECTION_SOURCE_URL . '/blob/v' . \Resurrection\Version::CURRENT . '/docs/HOST-GUIDE.md';
+        // A release or test build links its own tag; a -dev version, never tagged, links main (Phase 6 task 34).
+        $version = \Resurrection\Version::CURRENT;
+        $ref = preg_match('/-dev\z/', $version) === 1 ? 'main' : 'v' . $version;
+        $url = RESURRECTION_SOURCE_URL . '/blob/' . $ref . '/docs/HOST-GUIDE.md';
         self::assertSame($url, resurrection_doc_url('docs/HOST-GUIDE.md'));
         self::assertSame($url . '#9-upgrade', resurrection_doc_url('docs/HOST-GUIDE.md', '9-upgrade'));
         self::assertSame('<a href="' . $url . '#11-mail">&quot;Mail&quot; in the host guide &amp; more</a>',
@@ -127,5 +130,17 @@ final class DocLinkTest extends TestCase
                 self::addToAssertionCount(1);
             }
         }
+    }
+
+    /** The ref for each kind of version (Phase 6 task 34): a tag for a release or a test build, main for -dev. */
+    public function testEachKindOfVersionLinksARefThatExists(): void
+    {
+        self::assertSame('v1.0.0', \Resurrection\Version::docRef('1.0.0'));
+        self::assertSame('v2.3.4', \Resurrection\Version::docRef('2.3.4'));
+        self::assertSame('v1.0.0-rc.5', \Resurrection\Version::docRef('1.0.0-rc.5'));
+        self::assertSame('main', \Resurrection\Version::docRef('1.0.1-dev'));
+        self::assertSame('main', \Resurrection\Version::docRef('1.1.0-dev'));
+        // No page links a -dev tag: none is ever made (docs/VERSIONING.md).
+        self::assertStringNotContainsString('-dev/', resurrection_doc_url('docs/HOST-GUIDE.md'));
     }
 }

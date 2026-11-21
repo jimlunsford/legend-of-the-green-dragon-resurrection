@@ -100,12 +100,16 @@ server the Internet can reach.
 
 ## Status
 
-- **Version:** `main` is `1.0.0`, the first release, after five test builds; the fifth passed Jim's test on a real
-  server. What is in it, how to upgrade and the known issues: the [release notes for 1.0.0](docs/RELEASE-NOTES-1.0.0.md).
+- **Released:** `1.0.0`, the first release, on 2026-11-21, after five test builds; the fifth passed Jim's test on a
+  real server. Download it from the
+  [releases page](https://github.com/jimlunsford/legend-of-the-green-dragon-resurrection/releases). What is in it, how
+  to upgrade and the known issues: the [release notes for 1.0.0](docs/RELEASE-NOTES-1.0.0.md).
+- **Version:** `main` is `1.0.1-dev`, the work toward the next bug-fix release. A server should run a release, not
+  `main`.
 - **Not certified for public game hosting.** The project's public hosting gates are not all met. Those the code does
   not meet, such as abuse controls beyond sign-in throttling, production TLS, monitoring and an independent review,
   belong to whoever runs a public server ([security status](docs/SECURITY-STATUS.md)).
-- **After 1.0.0, bug fixes only**: no new gameplay, art or features ([CONTRIBUTING.md](CONTRIBUTING.md)).
+- **Bug fixes only**, since 1.0.0: no new gameplay, art or features ([CONTRIBUTING.md](CONTRIBUTING.md)).
 
 ## Documents
 

@@ -14,7 +14,7 @@ final class CommandLinkTest extends TestCase
     private static function guide(): string
     {
         require_once 'src/Version.php';
-        return 'https://github.com/jimlunsford/legend-of-the-green-dragon-resurrection/blob/v' . \Resurrection\Version::CURRENT . '/docs/HOST-GUIDE.md';
+        return 'https://github.com/jimlunsford/legend-of-the-green-dragon-resurrection/blob/' . \Resurrection\Version::docRef() . '/docs/HOST-GUIDE.md';
     }
 
     /** @return array{0:int,1:string,2:string} exit code, stdout, stderr */

@@ -16,11 +16,12 @@ Say which version you tested (every page's footer shows it), what you did, what 
 only on a game you run yourself: [local play](docs/MODERN-INSTALLATION.md#play-locally) sets one up on your own
 computer. Never include a real password, real player data or anyone else's information.
 
-Fixes come as bug-fix releases: after `1.0.0` the project takes bug fixes only.
+`1.0.0` was released on 2026-11-21, and the project now takes bug fixes only. Fixes come as bug-fix releases
+(`1.0.1` and on).
 
 ## Scope
 
-In scope: the code on `main` and in the latest release or test build. That is the game's pages, its libraries and the
+In scope: the code on `main` and in the latest release (today `1.0.0`). That is the game's pages, its libraries and the
 24 bundled modules; the install and upgrade commands and `setup.php`; web maintenance (`webcron.php`); account mail;
 and the release package.
 
