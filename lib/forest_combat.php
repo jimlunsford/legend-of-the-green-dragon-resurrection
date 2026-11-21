@@ -184,7 +184,7 @@ function resurrection_forest_combat(): never {
                 output('`c`b`&You have successfully fled your opponent!`0`b`c`n');
                 return;
             }
-            if ($op==='run') output('`c`b`\$You failed to flee your opponent!`0`b`c');
+            if ($op==='run') output('`c`b`$You failed to flee your opponent!`0`b`c');
             $victory=false; $defeat=false;
             require __DIR__ . '/../battle.php';
             /** @var bool $victory */

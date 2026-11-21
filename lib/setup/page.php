@@ -122,11 +122,13 @@ function resurrection_setup_intro(string $mode): string {
  * whether set_time_limit() may be called, whether the configuration's folder is writable (install without a
  * configuration file), and whether the request came over HTTPS.
  *
+ * $phpVersion is the PHP version checked, PHP_VERSION unless a test passes another (Phase 6 task 32, F4).
+ *
  * @return list<array{label: string, value: string, state: string}> state is ok, info, warning or fail (a hard failure)
  */
-function resurrection_setup_preflight(string $mode, string $config, string $maxExecution, string $https): array {
+function resurrection_setup_preflight(string $mode, string $config, string $maxExecution, string $https, string $phpVersion = PHP_VERSION): array {
     $checks = [];
-    $checks[] = ['label' => 'PHP version', 'value' => PHP_VERSION . ' (8.4 or 8.5 needed)', 'state' => version_compare(PHP_VERSION, '8.4.0', '>=') ? 'ok' : 'fail'];
+    $checks[] = resurrection_setup_php_check($phpVersion);
     $missing = array_values(array_filter(['ctype', 'filter', 'pdo', 'pdo_mysql', 'mbstring', 'json', 'session'], static fn (string $name): bool => !extension_loaded($name)));
     $checks[] = ['label' => 'PHP extensions', 'value' => $missing === [] ? 'ctype, filter, pdo, pdo_mysql, mbstring, json and session are loaded' : 'missing: ' . implode(', ', $missing), 'state' => $missing === [] ? 'ok' : 'fail'];
     $memory = resurrection_setup_bytes((string)ini_get('memory_limit'));
@@ -144,6 +146,19 @@ function resurrection_setup_preflight(string $mode, string $config, string $maxE
     }
     $checks[] = ['label' => 'HTTPS', 'value' => $https, 'state' => 'ok'];
     return $checks;
+}
+
+/**
+ * The PHP version check (Phase 6 task 32, F4): PHP 8.4 and 8.5 are ok; older fails, as composer.json allows only these
+ * two; newer is a warning, since the project does not test it, and setup may continue.
+ *
+ * @return array{label: string, value: string, state: string}
+ */
+function resurrection_setup_php_check(string $version): array {
+    if (version_compare($version, '8.4.0', '<')) return ['label' => 'PHP version', 'value' => $version . ' (8.4 or 8.5 needed)', 'state' => 'fail'];
+    $newer = preg_match('/\A(\d+)\.(\d+)/', $version, $parts) === 1 && ((int)$parts[1] > 8 || ((int)$parts[1] === 8 && (int)$parts[2] > 5));
+    if ($newer) return ['label' => 'PHP version', 'value' => $version . ' (untested; Resurrection supports PHP 8.4 and 8.5)', 'state' => 'warning'];
+    return ['label' => 'PHP version', 'value' => $version . ' (8.4 or 8.5 needed)', 'state' => 'ok'];
 }
 
 /** An ini size ("64M", "1G", "-1") in bytes; -1 for no limit. */

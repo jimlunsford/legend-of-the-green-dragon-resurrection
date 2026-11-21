@@ -245,7 +245,8 @@ Choose one: with a shell (5.1) or without one (5.2). Both run the same install.
 4. Optional, if you can set `LOGD_DBCONNECT` (section 4): create the private folder now and set the variable. The
    configuration file and the token file then live there.
 5. Open `https://your-site/setup.php`. It checks PHP's version and extensions, `memory_limit`, `max_execution_time`,
-   whether the configuration's folder can be written, and HTTPS. Fix anything that fails, then reload.
+   whether the configuration's folder can be written, and HTTPS. Fix anything that fails, then reload. A PHP newer
+   than 8.5 is not a failure but a warning: the project does not test it (section 1).
 6. The page shows a file of two lines and the folder to put it in: the game's folder, or the `LOGD_DBCONNECT` file's
    folder when that is set. In the panel's file manager, create `resurrection-setup.php` there and paste the two lines.
    - Line 1 makes the file show nothing if anyone requests it.

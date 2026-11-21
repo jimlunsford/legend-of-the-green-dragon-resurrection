@@ -7,7 +7,8 @@ server, follow the host guide, [`HOST-GUIDE.md`](HOST-GUIDE.md); to play on your
 ## PHP
 
 PHP 8.4 or 8.5, nothing older or newer: `composer.json` allows only these two (`~8.4.0 || ~8.5.0`). The web setup
-page's check (`setup.php`) fails a PHP older than 8.4; it does not stop a newer one.
+page's check (`setup.php`) fails a PHP older than 8.4 and warns on one newer than 8.5 ("untested; Resurrection supports
+PHP 8.4 and 8.5"); after the warning, setup may continue.
 
 | Version | Tested with | PHP's active support | PHP's security support |
 |---|---|---|---|

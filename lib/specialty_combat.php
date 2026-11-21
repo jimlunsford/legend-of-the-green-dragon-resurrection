@@ -63,9 +63,10 @@ function resurrection_combat_forms(string $type = 'forest'): void {
     // Bind the committed-form state, after battle has serialized buffs/companions.
     $context = $type === 'dragon' ? resurrection_dragon_context($specialty) : resurrection_combat_context($specialty);
     $url = $type . '.php?op=specialty'; addnav('',$url);
-    // The battle screen's Special Abilities group says how many uses are left (Phase 5 task 10).
+    // The battle screen's Special Abilities group says how many uses are left (Phase 5 task 10): "1 use left", else
+    // "N uses left", each its own string to translate (Phase 6 task 32, F3).
     tlschema('battle');
-    resurrection_battle_note('special', sprintf_translate('%s uses left', $specialty['uses']));
+    resurrection_battle_note('special', (int)$specialty['uses'] === 1 ? translate_inline('1 use left') : sprintf_translate('%s uses left', $specialty['uses']));
     tlschema();
     foreach ($labels[$session['user']['specialty']] as $level=>$label) {
         if ($specialty['skill'] < $level || $specialty['uses'] < $level) continue;

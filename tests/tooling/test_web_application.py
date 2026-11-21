@@ -11768,6 +11768,51 @@ function MODULE_dohook($hook,$args) {
         self.assertIn('name="rounds" value="full"',body)
         self.assertNotIn('>Continue<',re.sub(r'<span[^>]*>.*?</span>','',body))
 
+    def test_a_failed_flee_shows_its_message_in_red_with_no_stray_code_http(self):
+        """Phase 6 task 32, F1 (found in task 31): a failed flee printed "`\\$You failed to flee your opponent!": the
+        message was written in single quotes (lib/forest_combat.php), so the backslash 1.1.2 needed in its double quotes
+        stayed, and the color code it began became an unknown code the page printed as text. Now the message shows as
+        1.1.2's did (forest.php at the tag), centered, bold and red, with no stray code. Reached by the forest's own
+        forms: the search's fight, then Run, pressed until a flee fails (each fails two times in three; a flee that
+        succeeds ends the fight, and the next search begins another)."""
+        with self._forest_fixture('FleeFails') as f:
+            self.query('UPDATE accounts SET turns=60 WHERE acctid=?',[f['player']])
+            _,village,_=f['sign_in']()
+            _,forest,_=f['follow'](village,'forest.php')
+            body=None
+            for _ in range(40):
+                if f['account']('badguy')['badguy']=='':
+                    _,search,_=f['follow'](forest,'forest.php?op=search')
+                    status,fight=f['post']('forest.php?op=search',f['form'](search,'forest.php?op=search')|{'type':''})
+                    self.assertEqual(200,status,fight[:1500]); self.assertNotEqual('',f['account']('badguy')['badguy'])
+                status,page=f['post']('forest.php?op=run',f['form'](fight,'forest.php?op=run')); self.assertEqual(200,status,page[:1500])
+                if 'You failed to flee your opponent!' in page: body=page; break
+                if f['account']('badguy')['badguy']=='':
+                    # The flee succeeded: the page's forest link, then a new search.
+                    self.assertIn('You have successfully fled your opponent!',page); _,forest,_=f['follow'](page,'forest.php')
+                else: fight=page
+            self.assertIsNotNone(body,'no flee failed in 40 presses')
+            text=html.unescape(re.sub(r'<[^>]+>','',body))
+            self.assertIn('You failed to flee your opponent!',text)
+            self.assertNotIn('`\\',text); self.assertNotIn('\\$You failed',text)
+            self.assertIn("<div class='rz-center'><b><span class='colLtRed'>You failed to flee your opponent!</span></b></div>",body)
+            # The fight goes on: its forms are on the page.
+            self._the_fights_forms(body)
+
+    def test_the_special_abilities_note_says_1_use_left_and_2_uses_left_http(self):
+        """Phase 6 task 32, F3 (found in task 31): the battle screen's Special Abilities note, "N uses left" (Phase 5 task
+        10), read "1 uses left" with one use left. Now it says "1 use left" and "2 uses left", each its own string to
+        translate. Reached by the forest's own forms: the fight with two uses of Regeneration, then the ability pressed."""
+        with self._ability_fixture('UsesNote','MP') as f:
+            body=f['fight']()
+            notes=lambda page: re.findall(r'<p class="rz-battle-note">([^<]*)</p>',page)
+            self.assertEqual(['2 uses left'],notes(body),body[-3000:])
+            forms=f['ability_forms'](body); self.assertEqual(1,len(forms))
+            status,body=f['post']('forest.php?op=specialty',self._security_fields(forms[0])|{'level':'1'})
+            self.assertEqual(200,status,body[:2000]); self.assertEqual(1,f['uses']())
+            self.assertEqual(['1 use left'],notes(body),body[-3000:])
+            self.assertNotIn('1 uses left',body)
+
     def test_a_special_ability_round_shows_the_fight_with_fight_and_run_to_the_last_use_http(self):
         """Phase 6 task 26, R13, from Jim's rc.4 server, 2026-11-18: in a forest fight, Dark Arts' Skeleton Crew pressed on
         the battle screen led to a page with only Continue; Continue led to forest.php?op=specialty, which showed only

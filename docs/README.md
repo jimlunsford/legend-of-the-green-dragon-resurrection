@@ -17,6 +17,8 @@ in the living documents resolve.
 - [HOST-GUIDE.md](HOST-GUIDE.md): how to run the game on a web server, with a shell or with only a hosting panel.
 - [RELEASE-NOTES-1.0.0-rc.5.md](RELEASE-NOTES-1.0.0-rc.5.md): the current test build, `1.0.0-rc.5` (2026-11-19): what
   is in it, how to upgrade, and the known issues.
+- [RELEASE-NOTES-1.0.0.md](RELEASE-NOTES-1.0.0.md): the notes for `1.0.0`, a draft until its version commit (task 33):
+  what changed since rc.5, how to upgrade, and the known issues.
 - [CHANGES-FROM-1.1.2.md](CHANGES-FROM-1.1.2.md): every deliberate change from LoGD 1.1.2 that a player, administrator
   or host can notice: the old behavior, the new behavior and why.
 
@@ -293,3 +295,5 @@ That work is over, so they are records now, among them `COMPATIBILITY-STATUS.md`
   can balance (2026-11-20).
 - [PHASE6-TASK31-20261120.md](PHASE6-TASK31-20261120.md): task 31, release polish: this index, the README and the
   living documents brought up to date (2026-11-20).
+- [PHASE6-TASK32-20261121.md](PHASE6-TASK32-20261121.md): task 32, four small fixes before `1.0.0`: the failed-flee
+  message, "1 use left", the setup page's PHP check, and the skill rule for abilities recorded (2026-11-21).
